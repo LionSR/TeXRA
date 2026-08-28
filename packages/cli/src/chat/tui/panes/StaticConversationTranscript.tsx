@@ -741,7 +741,6 @@ function ensureStaticSessionHeader({
 }
 
 interface BuildStaticTranscriptItemsOptions {
-  readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly childRosters?: ChildRosters;
   readonly executionLabels?: ExecutionLabels;
@@ -760,14 +759,14 @@ interface StaticTranscriptBuildResult {
   readonly trimmed: boolean;
 }
 
-/** Full rebuild path. This is the from-scratch oracle used on owner switch,
- *  hard reset, and fold rebuild; ordinary ticks use the incremental scan in
- *  {@link incrementalStaticTranscriptEntries}. */
+/** Full from-scratch build: the oracle used on owner switch, hard reset, and
+ *  fold rebuild; ordinary ticks use the incremental scan in
+ *  {@link incrementalStaticTranscriptEntries} via
+ *  {@link advanceStaticTranscriptState}. */
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
   const {
-    currentItems,
     streams,
     childRosters = new Map(),
     executionLabels,
@@ -778,65 +777,35 @@ export function buildStaticTranscriptItems(
     width,
     ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   } = options;
-  const seen = new Set(currentItems.map((item) => item.id));
-  // Copied lazily: this runs on every stream-sync tick and most ticks append
-  // nothing.
-  let nextItems: StaticTranscriptItem[] | undefined;
+  // A focused child without a model yet holds neither header nor entries;
+  // `buildStaticTranscriptState` keeps its scan cursor at zero so they are
+  // still pending when the model arrives.
   if (
     shouldWaitForChildIdentity({
-      hasHeader: seen.has(SESSION_HEADER_ID),
+      hasHeader: false,
       parentStream,
       scrollbackStreamId,
     })
   ) {
-    const totals = staticTranscriptItemsTotals(
-      currentItems,
-      width,
-      executionLabels,
-    );
-    const trimmed = trimStaticTranscriptItems(currentItems, {
-      budgets: ringBudgets,
-      executionLabels,
-      totals,
-      width,
-    });
-    return {
-      items: trimmed.items,
-      rowCount: trimmed.totals.rows,
-      byteCount: trimmed.totals.bytes,
-      trimmed: trimmed.trimmed,
-    };
+    return { items: [], rowCount: 0, byteCount: 0, trimmed: false };
   }
 
-  if (!seen.has(SESSION_HEADER_ID)) {
-    // Same insert-if-it-fits logic `advanceStaticTranscriptState` uses on
-    // ordinary ticks. This path has no running rowCount/byteCount to diff
-    // against, so the totals are computed fresh with one full walk of
-    // `currentItems` — the whole history on a cold start, the newly appended
-    // tail once a previous render has already emitted rows.
-    const totals = staticTranscriptItemsTotals(
-      currentItems,
-      width,
-      executionLabels,
-    );
-    const header = ensureStaticSessionHeader({
-      byteCount: totals.bytes,
-      childRosters,
-      executionLabels,
-      items: currentItems,
-      maxRows,
-      meta,
-      parentStream,
-      rowCount: totals.rows,
-      scrollbackStreamId,
-      streams,
-      width,
-    });
-    if (header.inserted) {
-      nextItems = [...header.items];
-      seen.add(SESSION_HEADER_ID);
-    }
-  }
+  // Same insert-if-it-fits logic `advanceStaticTranscriptState` uses on
+  // ordinary ticks, applied to an empty transcript.
+  const header = ensureStaticSessionHeader({
+    byteCount: 0,
+    childRosters,
+    executionLabels,
+    items: [],
+    maxRows,
+    meta,
+    parentStream,
+    rowCount: 0,
+    scrollbackStreamId,
+    streams,
+    width,
+  });
+  const items: StaticTranscriptItem[] = [...header.items];
 
   // Only the selected scrollback owner feeds `<Static>` output. Root focus owns
   // root history; child focus owns that child's history. Other streams stay
@@ -844,25 +813,19 @@ export function buildStaticTranscriptItems(
   const slice = scrollbackStreamId
     ? streams.get(scrollbackStreamId)
     : undefined;
-  const entries = slice?.entries ?? [];
   const orderedStaticEntries = orderedStaticTranscriptEntries(
-    entries,
+    slice?.entries ?? [],
     slice?.finalizedFrontier ?? 0,
     slice?.status,
   );
-  const appendItem = (item: StaticTranscriptItem): void => {
-    nextItems ??= [...currentItems];
-    nextItems.push(item);
-    seen.add(item.id);
-  };
-
+  // Dedupe by the entry's own stable id, as the incremental path does.
+  const seen = new Set<string>();
   for (const entry of orderedStaticEntries) {
-    if (!seen.has(entry.id)) {
-      appendItem({ id: entry.id, kind: 'entry', entry });
-    }
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    items.push({ id: entry.id, kind: 'entry', entry });
   }
 
-  const items = nextItems ?? currentItems;
   const retained = retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
     executionLabels,
@@ -930,6 +893,7 @@ function scanStaticTranscriptFromStart(
       scannedIndex: 0,
       lastScannedEntry: undefined,
       status: undefined,
+      lastAppendedKey: undefined,
     },
   ).cursor;
 }
@@ -962,7 +926,6 @@ export function buildStaticTranscriptState({
   readonly eraseRequest?: number;
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
-    currentItems: [],
     streams,
     childRosters,
     executionLabels,
@@ -1114,9 +1077,14 @@ export function advanceStaticTranscriptState(
     return current;
   }
 
-  const layoutChanged =
-    width !== current.layoutWidth ||
-    !executionLabelsEqual(executionLabels, current.executionLabels);
+  // A label-content change (a child's human label arriving after its
+  // executions row printed) rewrites rows already in scrollback, so it repaints
+  // from a known origin; a bare width change is repainted by Ink's resize path.
+  const labelsChanged = !executionLabelsEqual(
+    executionLabels,
+    current.executionLabels,
+  );
+  const layoutChanged = width !== current.layoutWidth || labelsChanged;
   let nextItems = current.items;
   let nextRowCount = current.rowCount;
   let nextByteCount = current.byteCount;
@@ -1138,7 +1106,7 @@ export function advanceStaticTranscriptState(
     nextItems = trimmed.items;
     nextRowCount = trimmed.totals.rows;
     nextByteCount = trimmed.totals.bytes;
-    if (trimmed.trimmed) {
+    if (trimmed.trimmed || labelsChanged) {
       nextRepaintEpoch += 1;
     }
   }
@@ -1266,7 +1234,6 @@ export function StaticConversationTranscript({
 
   const buildFreshItems = (): readonly StaticTranscriptItem[] =>
     buildStaticTranscriptItems({
-      currentItems: [],
       streams,
       childRosters,
       executionLabels: subagentExecutionLabels,

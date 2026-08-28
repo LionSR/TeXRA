@@ -107,7 +107,7 @@ export function allocateMiddleRows({
   };
 }
 
-export function allocateConversationBottomPanelRows({
+function allocateConversationBottomPanelRows({
   maxRows,
   sessionCount,
   childListFocused,

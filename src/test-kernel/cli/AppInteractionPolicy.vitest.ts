@@ -13,7 +13,6 @@ import {
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
-  visibleApprovalRootStreamId,
   type AppCtrlCState,
   type ForegroundSurfaceKind,
 } from '@cli/chat/tui/appInteractionPolicy';
@@ -38,7 +37,6 @@ const focusEnabled = {
 const escapeInterruptEnabled = {
   inputDisabled: false,
   reverseSearchOpen: false,
-  runPending: true,
   slashPaletteOpen: false,
 } satisfies EscapeActiveState;
 const escChordHidden = {
@@ -108,52 +106,36 @@ function foregroundInput(
 }
 
 describe('app interaction policy', () => {
-  it('folds stream-less approvals onto the root of the visible surface', () => {
-    const sessionRoot = 'session-root' as StreamTabId;
-    const scopedListRoot = 'scoped-list-root' as StreamTabId;
-
-    expect(visibleApprovalRootStreamId(sessionRoot, undefined)).toBe(
-      sessionRoot,
-    );
-    expect(visibleApprovalRootStreamId(sessionRoot, scopedListRoot)).toBe(
-      scopedListRoot,
-    );
-  });
-
   it.each([
     {
       scenario:
         'clears a non-empty draft without interrupting an active response',
       active: true,
       draft: 'unfinished',
-      expected: 'clear-draft',
       events: ['clear'],
     },
     {
       scenario: 'clears a non-empty draft without exiting while idle',
       active: false,
       draft: 'unfinished',
-      expected: 'clear-draft',
       events: ['clear'],
     },
     {
       scenario: 'interrupts an active response when the draft is empty',
       active: true,
       draft: '',
-      expected: 'interrupt',
       events: ['interrupt'],
     },
     {
       scenario: 'exits an idle chat when the draft is empty',
       active: false,
       draft: '',
-      expected: 'exit',
       events: ['exit'],
     },
-  ])('$scenario', ({ active, draft, expected, events }) => {
+  ])('$scenario', ({ active, draft, events }) => {
     const fixture = ctrlCFixture({ active, draft });
 
-    expect(triggerAppCtrlC(fixture.state)).toBe(expected);
+    triggerAppCtrlC(fixture.state);
     if (draft.length > 0) {
       expect(fixture.readDraft()).toBe('');
     }
@@ -167,8 +149,8 @@ describe('app interaction policy', () => {
       delegate: true,
     });
 
-    expect(triggerAppCtrlC(fixture.state)).toBe('clear-draft');
-    expect(triggerAppCtrlC(fixture.state)).toBe('delegate');
+    triggerAppCtrlC(fixture.state);
+    triggerAppCtrlC(fixture.state);
     expect(fixture.events).toEqual(['clear', 'delegate']);
   });
 
@@ -249,7 +231,6 @@ describe('app interaction policy', () => {
   it('only lets Escape interrupt when no foreground input owns it', () => {
     const cases = [
       [escapeInterruptEnabled, true],
-      [{ ...escapeInterruptEnabled, runPending: false }, false],
       [{ ...escapeInterruptEnabled, inputDisabled: true }, false],
       [{ ...escapeInterruptEnabled, reverseSearchOpen: true }, false],
       [{ ...escapeInterruptEnabled, slashPaletteOpen: true }, false],

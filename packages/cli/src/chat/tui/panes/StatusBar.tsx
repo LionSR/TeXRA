@@ -62,7 +62,6 @@ interface StatusBarProps {
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly foregroundInputActive?: boolean;
-  readonly shortcutsActive?: boolean;
   readonly streamFocusAvailable: boolean;
   readonly transcriptAvailable?: boolean;
 }
@@ -317,7 +316,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,
-      shortcutsActive: props.shortcutsActive,
     },
     childList: {
       focused: props.childListFocused,

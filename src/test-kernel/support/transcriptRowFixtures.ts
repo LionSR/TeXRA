@@ -10,6 +10,10 @@
 // reducer.
 
 import {
+  orderedStaticTranscriptEntries,
+  pendingTranscriptEntries,
+} from '@cli/chat/tui/panes/transcriptEntries';
+import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
@@ -17,6 +21,7 @@ import {
   type FileListEntry,
   type NormalizedToolUse,
   type StreamLogEntry,
+  type StreamPhase,
   type TaskGroup,
 } from '@shared/schemas';
 import {
@@ -212,4 +217,25 @@ export function workflowPhaseGrouping(rows: readonly TranscriptRow[]): {
     return { ...row, groupId: openPhase.id };
   });
   return { taskGroups, entries };
+}
+
+/** The CLI's two panes' rows for one slice: the settled `<Static>` prefix and
+ *  the live rows. Production reads each half from its own pane; suites that
+ *  assert on the partition read both here. */
+export function splitTranscriptEntries(
+  entries: readonly TranscriptRow[],
+  finalizedFrontier: number,
+  status: StreamPhase | undefined,
+): {
+  readonly finalized: readonly TranscriptRow[];
+  readonly pending: readonly TranscriptRow[];
+} {
+  return {
+    finalized: orderedStaticTranscriptEntries(
+      entries,
+      finalizedFrontier,
+      status,
+    ),
+    pending: pendingTranscriptEntries(entries, finalizedFrontier, status),
+  };
 }

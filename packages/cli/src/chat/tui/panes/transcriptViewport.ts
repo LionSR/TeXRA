@@ -16,15 +16,17 @@ const log = createLog('transcriptViewport');
  *  instead of once per stream-sync tick (the estimate path runs per frame). */
 const brokenEntryIdsReported = new Set<string>();
 
-function estimateEntryRows(
+// Live mode captures the pending-pane paint contract: assistant text uses its
+// capped raw tail, while rich tool rows keep one descriptor line per terminal
+// row instead of being reflowed like plain projections.
+export function estimateLiveTranscriptEntryRows(
   entry: TranscriptRow,
-  mode: 'live' | undefined,
-  width: number | undefined,
-  executionLabels: ExecutionLabels | undefined,
+  width?: number,
+  executionLabels?: ExecutionLabels,
 ): number {
   try {
     return transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, { executionLabels, mode, width }),
+      transcriptEntryLayout(entry, { executionLabels, mode: 'live', width }),
     );
   } catch (error) {
     if (!brokenEntryIdsReported.has(entry.id)) {
@@ -35,25 +37,6 @@ function estimateEntryRows(
     }
     return FAILED_ENTRY_ESTIMATE_ROWS;
   }
-}
-
-export function estimateTranscriptEntryRows(
-  entry: TranscriptRow,
-  width?: number,
-  executionLabels?: ExecutionLabels,
-): number {
-  return estimateEntryRows(entry, undefined, width, executionLabels);
-}
-
-// Live mode captures the pending-pane paint contract: assistant text uses its
-// capped raw tail, while rich tool rows keep one descriptor line per terminal
-// row instead of being reflowed like plain projections.
-export function estimateLiveTranscriptEntryRows(
-  entry: TranscriptRow,
-  width?: number,
-  executionLabels?: ExecutionLabels,
-): number {
-  return estimateEntryRows(entry, 'live', width, executionLabels);
 }
 
 interface TranscriptEntrySelection {

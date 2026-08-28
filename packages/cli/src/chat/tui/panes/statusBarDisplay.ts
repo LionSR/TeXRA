@@ -151,12 +151,8 @@ export interface StatusBarDisplayInput {
 interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
   readonly inputActive?: boolean;
-  /** Label for the foreground surface's Escape action while `shortcutsActive`
-   *  is false. */
+  /** Label for the foreground surface's Escape action while `inputActive`. */
   readonly escapeAction?: string;
-  /** False while a foreground surface owns input and global chat shortcuts
-   *  are intentionally inactive. */
-  readonly shortcutsActive?: boolean;
 }
 
 interface StatusBarChildListInput {
@@ -775,7 +771,7 @@ function childListBindingsText(
   );
 }
 
-export function ctrlCActionForFocus({
+function ctrlCActionForFocus({
   activeStreamId,
   canStopActiveRun,
   parentStream,
@@ -936,13 +932,6 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   }
   if (input.childList.focused) {
     return childListBindingsText(input.childList, ctrlCAction, maxColumns);
-  }
-  if (input.foreground.shortcutsActive === false) {
-    return foregroundBindingsText(
-      ctrlCAction,
-      maxColumns,
-      input.foreground.escapeAction,
-    );
   }
   return statusBarBindingsText(input.shortcuts, ctrlCAction, maxColumns);
 }

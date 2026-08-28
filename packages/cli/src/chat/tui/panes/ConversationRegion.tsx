@@ -4,7 +4,7 @@
 
 // Third-party imports
 import { Box } from 'ink';
-import { useLayoutEffect, useMemo, type ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
@@ -132,12 +132,8 @@ export function ConversationRegion({
     rootStreamId: snapshot.rootStreamId,
     scopedTranscript,
   });
-  const executionLabelsKey = useMemo(
-    () => JSON.stringify([...snapshot.subagentExecutionLabels]),
-    [snapshot.subagentExecutionLabels],
-  );
   const staticTranscriptRepaint = useSignal(staticTranscriptRepaintEpoch);
-  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${executionLabelsKey}:${staticTranscriptRepaint}`;
+  const staticTranscriptKey = `${scrollbackTarget.ownerKey}:${staticTranscriptRepaint}`;
 
   const activeSlice = snapshot.activeStreamId
     ? snapshot.streams.get(snapshot.activeStreamId)

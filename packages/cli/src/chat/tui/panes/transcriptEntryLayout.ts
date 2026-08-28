@@ -244,7 +244,7 @@ function wrapDisplayLines(
   return lines.flatMap((line) => wrapDisplayLine(line, columns));
 }
 
-export function liveAssistantDisplayLines({
+function liveAssistantDisplayLines({
   rows,
   text,
   width,

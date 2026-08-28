@@ -28,7 +28,6 @@ import {
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import {
-  allocateConversationBottomPanelRows,
   allocateConversationPanelRows,
   allocateMiddleRows,
   shouldShowTodosPlanPanel,
@@ -60,16 +59,15 @@ import {
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
-import {
-  estimateTranscriptEntryRows,
-  selectTranscriptEntriesForViewport,
-} from '@cli/chat/tui/panes/transcriptViewport';
+import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   isFinalizedTranscriptRow,
-  splitTranscriptEntries,
   transcriptRowHeadline,
 } from '@cli/chat/tui/panes/transcriptEntries';
-import { transcriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
+import {
+  transcriptEntryLayout,
+  transcriptEntryLayoutRows,
+} from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
@@ -115,6 +113,7 @@ import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import {
+  splitTranscriptEntries,
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
@@ -993,42 +992,45 @@ describe('CLI TUI row allocation', () => {
 
   it('hides the child list when its gap and content cannot both fit', () => {
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 5,
-        transcriptRows: 1,
+        transcriptRows: 2,
       }),
     ).toEqual({
+      conversationRows: 2,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 1,
         childListFocused: true,
         todosPlanContentRows: 0,
-        transcriptRows: 1,
+        transcriptRows: 2,
       }),
     ).toEqual({
+      conversationRows: 2,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
 
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 3,
         childListFocused: true,
         minimumSessionPanelRows: 3,
         todosPlanContentRows: 0,
-        transcriptRows: 2,
+        transcriptRows: 3,
       }),
     ).toEqual({
+      conversationRows: 3,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
@@ -1037,28 +1039,30 @@ describe('CLI TUI row allocation', () => {
 
   it('keeps the child list collapsed until it receives focus', () => {
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 0,
-        transcriptRows: 6,
+        transcriptRows: 7,
       }),
     ).toEqual({
+      conversationRows: 7,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
 
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: true,
         todosPlanContentRows: 0,
-        transcriptRows: 6,
+        transcriptRows: 7,
       }),
     ).toEqual({
+      conversationRows: 4,
       bottomPanelRows: 3,
       sessionPanelRows: 3,
       todosPlanRows: 0,
@@ -1068,26 +1072,27 @@ describe('CLI TUI row allocation', () => {
   it('reserves a separator row above the todos panel', () => {
     // 2 todos + separator = 3 rows when the transcript allows it.
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 0,
         childListFocused: false,
         todosPlanContentRows: 2,
-        transcriptRows: 8,
+        transcriptRows: 9,
       }),
     ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
   });
 
   it('hands a lone todos row back instead of rendering a dead separator', () => {
     // The grant would be exactly one row — too small for separator + content.
-    const allocation = allocateConversationBottomPanelRows({
+    const allocation = allocateConversationPanelRows({
       maxRows: 10,
       sessionCount: 0,
       childListFocused: false,
       todosPlanContentRows: 4,
-      transcriptRows: 2,
+      transcriptRows: 3,
     });
     expect(allocation).toEqual({
+      conversationRows: 3,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
@@ -1096,14 +1101,15 @@ describe('CLI TUI row allocation', () => {
 
   it('does not allocate session rows without transcript space', () => {
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 5,
-        transcriptRows: 0,
+        transcriptRows: 1,
       }),
     ).toEqual({
+      conversationRows: 1,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
@@ -3130,7 +3136,9 @@ describe('CLI transcript state', () => {
     const renderedRows = renderAnsiMarkdown(text, { width }).split('\n').length;
     const entry = textRowFixture('assistant-markdown', 'assistant', text, 0);
 
-    expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width })),
+    ).toBe(renderedRows);
   });
 
   it('does not reserve spacer rows for compact one-line tool calls', () => {
@@ -3138,7 +3146,9 @@ describe('CLI transcript state', () => {
       path: '/executions/3a780a389327/report',
     });
 
-    expect(estimateTranscriptEntryRows(entry, 80)).toBe(1);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width: 80 })),
+    ).toBe(1);
   });
 
   it('keeps pending transcript rows within their viewport budget', () => {
