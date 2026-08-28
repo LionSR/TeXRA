@@ -23,6 +23,26 @@ const WORKFLOW_PLAIN_EVENT_TYPES = [
   'result',
 ] as const satisfies readonly AgentEvent['type'][];
 
+/**
+ * Headless `texra run` is a log, not a board. A call's pre-start states are
+ * already on the TUI card and the workflow board, so the plain projection
+ * prints only what a log reader needs: that a call started, and how it ended.
+ * `awaitingApproval` stays — a run blocked on a decision is visible nowhere
+ * else in a piped log — and a new status has to be classified here to compile.
+ */
+const WORKFLOW_PLAIN_CALL_LINE = {
+  declared: false,
+  planned: false,
+  queued: false,
+  awaitingApproval: true,
+  running: true,
+  completed: true,
+  cached: true,
+  skipped: true,
+  cancelled: true,
+  failed: true,
+} as const satisfies Record<WorkflowCallProgress['status'], boolean>;
+
 interface WorkflowPlainOutputOptions {
   readonly writeLine: (line: string) => void;
   readonly beforeWrite?: () => void;
@@ -45,6 +65,7 @@ function createWorkflowStreamProjection(
   options: WorkflowPlainOutputOptions,
 ): WorkflowStreamProjection {
   const lastCallLines = new Map<string, string>();
+  const runningCalls = new Set<string>();
   let completed = false;
 
   const write = (line: string): void => {
@@ -52,6 +73,14 @@ function createWorkflowStreamProjection(
     options.writeLine(line);
   };
   const writeCall = (logId: string, call: WorkflowCallProgress): void => {
+    if (!WORKFLOW_PLAIN_CALL_LINE[call.status]) return;
+    // One `Running:` line per call, written from the first running card: the
+    // later cards that only resolve the model or the navigation target say
+    // nothing new to a log reader.
+    if (call.status === 'running') {
+      if (runningCalls.has(logId)) return;
+      runningCalls.add(logId);
+    }
     // The event carries the canonical model id; the line names it by its
     // runtime label, as the transcript projection does.
     const line = formatWorkflowCallLine(

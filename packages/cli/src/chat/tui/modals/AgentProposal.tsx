@@ -8,6 +8,7 @@ import {
 } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -18,6 +19,7 @@ import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import {
   WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowCallCardLine,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 
@@ -66,10 +68,14 @@ export function agentProposalMetadataRows({
         width,
       ) +
       wrappedRows(
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(payload.agent, payload.model),
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+          payload.agent,
+          getRuntimeModelLabel(payload.model),
+        ),
         width,
       ) +
       wrappedRows(WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning, width) +
+      wrappedRows(WORKFLOW_CALL_REVIEW_COPY.cliReviewExplanation, width) +
       wrappedRows(
         workflow.tasks.length > 0
           ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
@@ -91,17 +97,11 @@ export function agentProposalMetadataRows({
   return (
     1 +
     wrappedRows(
-      `Model: ${payload.model} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
+      `Model: ${getRuntimeModelLabel(payload.model)} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
       width,
     ) +
     (payload.workflowCall
-      ? wrappedRows(
-          `${WORKFLOW_CALL_REVIEW_COPY.callCardNote(
-            payload.workflowCall.workflowName,
-            payload.workflowCall.phase,
-          )}${payload.workflowCall.admitsPhase ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}` : ''}`,
-          width,
-        )
+      ? wrappedRows(workflowCallCardLine(payload.workflowCall), width)
       : 0) +
     (payload.workingDirectory
       ? wrappedRows(`Directory: ${payload.workingDirectory}`, width)
@@ -202,11 +202,14 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
             <Text>
               {WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
                 props.payload.agent,
-                props.payload.model,
+                getRuntimeModelLabel(props.payload.model),
               )}
             </Text>
             <Text color="yellow">
               {WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
+            </Text>
+            <Text dimColor>
+              {WORKFLOW_CALL_REVIEW_COPY.cliReviewExplanation}
             </Text>
             <Text dimColor>
               {workflowScript.tasks.length > 0
@@ -233,21 +236,13 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
           <>
             <Text>
               <Text bold>Model: </Text>
-              {props.payload.model}
+              {getRuntimeModelLabel(props.payload.model)}
               {' · '}
               <Text bold>Category: </Text>
               {agentProposalCategoryLabel(props.payload.agentCategory)}
             </Text>
             {workflowCall ? (
-              <Text dimColor>
-                {WORKFLOW_CALL_REVIEW_COPY.callCardNote(
-                  workflowCall.workflowName,
-                  workflowCall.phase,
-                )}
-                {workflowCall.admitsPhase
-                  ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}`
-                  : ''}
-              </Text>
+              <Text dimColor>{workflowCallCardLine(workflowCall)}</Text>
             ) : null}
             {props.payload.workingDirectory ? (
               <Text>
