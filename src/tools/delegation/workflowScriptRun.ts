@@ -14,6 +14,7 @@ import {
   isTerminalWorkflowCallStatus,
   RUN_OUTCOME,
   stageTitleFor,
+  TERMINAL_WORKFLOW_CALL_STATUSES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   type RunOutcome,
@@ -287,11 +288,10 @@ export async function runPersistedWorkflowScriptWithProgress(
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
 
   /**
-   * Stable stage id for a phase title, minted before the stage opens. A
-   * declared task can name the group it belongs to from the moment it is
-   * planned, while `stage.start` — which settles the divider's print order the
-   * instant it is emitted — still waits until the run actually reaches the
-   * phase, so a divider never prints above its own task rows.
+   * Stable stage id for a phase title. Cards name their group by it; the
+   * `stage.start` that opens the group — and settles the divider's print
+   * order the instant it is emitted — fires when the run enters the phase,
+   * and cards are emitted only from then on.
    */
   const phaseStageIdFor = (title: string): string => {
     const existing = phaseStageIds.get(title);
@@ -414,6 +414,16 @@ export async function runPersistedWorkflowScriptWithProgress(
     snapshot: WorkflowExecutionSnapshot,
   ): WorkflowCallProgress => {
     const phase = stageTitleFor(snapshot, call);
+    // The latest attempt describes this card only once it has begun: a
+    // re-queued call has not pushed its next attempt yet, and a cached or
+    // swept card reflects no attempt of this run.
+    const attemptCounts =
+      call.attempts.length > 1 &&
+      (status === 'running' ||
+        status === 'completed' ||
+        status === 'failed' ||
+        status === 'cancelled' ||
+        (status === 'skipped' && !call.settledBySweep));
     const identity = {
       id: call.id,
       label: call.label,
@@ -422,6 +432,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         ? { childStreamId: call.childStreamId }
         : {}),
       ...workflowCallFacts(call),
+      ...(attemptCounts && { attemptNumber: call.attempts.length }),
     };
     switch (status) {
       case 'failed': {
@@ -474,6 +485,17 @@ export async function runPersistedWorkflowScriptWithProgress(
       declaredStageTotal ??= snapshot.stages.length;
       for (const stage of snapshot.stages) {
         if (stage.lifecycle === 'waiting') continue;
+        // A declared phase the run bypassed (`phase()` jumped past it, or the
+        // script ended first) and that owns no card is nothing to show: no
+        // header, no `Phase:` line. One that owns declared cards still opens
+        // so their not-reached rows land under it.
+        if (
+          stage.lifecycle === 'skipped' &&
+          stage.startedAt === undefined &&
+          !snapshot.calls.some((call) => call.stageId === stage.id)
+        ) {
+          continue;
+        }
         const known = phases.has(stage.title);
         const phase = phaseFor(
           stage.title,
@@ -524,6 +546,13 @@ export async function runPersistedWorkflowScriptWithProgress(
           hydratedBaseline.delete(call.id);
           issuedCallIds.delete(call.id);
         }
+        // A declared card exists only under an open phase: the engine flips
+        // stage-blocked plan entries to planned the moment their phase opens,
+        // so the card is emitted then, and a phase the run never reaches has
+        // its entries swept to not-reached — emitted under the header the
+        // stage loop above opens for them. A card whose group does not exist
+        // yet is thereby unrepresentable.
+        if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
         const streamChanged =
           call.childStreamId !== undefined &&
           projected?.childStreamId !== call.childStreamId;
@@ -540,10 +569,6 @@ export async function runPersistedWorkflowScriptWithProgress(
         ) {
           continue;
         }
-        // No stage open here: `emitCall` groups a card by its minted stage id,
-        // and the stage itself opens (with its declared position) when the
-        // stage loop above sees the run enter it — planned cards must not
-        // open their phase early.
         const card = cardFor(call, status, snapshot);
         const previousStatus = projected?.status;
         emitCall(card);
@@ -569,6 +594,38 @@ export async function runPersistedWorkflowScriptWithProgress(
           }
           recordTerminalActivity(card as WorkflowCallTerminalProgress);
         }
+      }
+      // Close a phase's stage when the engine has settled it, so a finished
+      // phase reads finished (icon, duration) while later phases still run,
+      // and a failure in phase 3 cannot retroactively mark phases 1-2. The
+      // schema has no "exited but draining" lifecycle — `#settleStage` stamps
+      // completed from call statuses while calls may still run — so close
+      // only once every call of the stage is terminal; the failed card that
+      // flips a phase is then already emitted above. `end` is idempotent, so
+      // the finally sweep stays the backstop for stages the engine never
+      // settled.
+      for (const stage of snapshot.stages) {
+        const phase = phases.get(stage.title);
+        if (
+          !phase ||
+          stage.lifecycle === 'waiting' ||
+          stage.lifecycle === 'active'
+        ) {
+          continue;
+        }
+        const drained = snapshot.calls.every(
+          (call) =>
+            call.stageId !== stage.id ||
+            TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status),
+        );
+        if (!drained) continue;
+        let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
+        if (phase.failed || stage.lifecycle === 'failed') {
+          outcome = RUN_OUTCOME.FAILED;
+        } else if (stage.lifecycle === 'cancelled') {
+          outcome = RUN_OUTCOME.CANCELLED;
+        }
+        phase.handle.end(outcome);
       }
     } catch (error) {
       trace.warn(

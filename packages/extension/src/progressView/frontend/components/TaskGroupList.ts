@@ -16,12 +16,14 @@ import {
   type StreamLifecycleStatus,
   type StreamLogEntry,
   type TaskGroup,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import {
   formatWorkflowPhaseHeading,
   workflowPhaseCallProgress,
+  workflowCallFailureTally,
 } from '@shared/copy/workflowCall';
 
 // Side-effect imports - register Web Awesome components
@@ -86,6 +88,37 @@ function getStatusIcon(status: string): TeXRAIconName {
     default:
       return terminalStatusIcon('running');
   }
+}
+
+const GROUP_DOT_LIMIT = 40;
+
+function collectWorkflowCalls(node: GroupTree): WorkflowCallProgress[] {
+  return [
+    ...node.rows.flatMap((row) =>
+      row.kind === 'workflowTask' ? [row.call] : [],
+    ),
+    ...node.children.flatMap((child) => collectWorkflowCalls(child)),
+  ];
+}
+
+/** `done/total`, then `· N running` while live and `· N failed` in warning tone. */
+function renderWorkflowCallTally(
+  calls: readonly WorkflowCallProgress[],
+): TemplateResult {
+  const { done, total } = workflowPhaseCallProgress(calls);
+  const running = calls.filter((call) => call.status === 'running').length;
+  const { failed } = workflowCallFailureTally(calls);
+  return html`<span class="group-progress">${done}/${total}</span>${
+      running > 0
+        ? html`<span class="group-progress">· ${running} running</span>`
+        : nothing
+    }${
+      failed > 0
+        ? html`<span class="group-progress group-progress--failed"
+            >· ${failed} failed</span
+          >`
+        : nothing
+    }`;
 }
 
 @customElement('task-group-list')
@@ -395,9 +428,11 @@ export class TaskGroupList extends LitElement {
   }
 
   /**
-   * `done/total` for a phase header, folded from the workflow-call cards the
-   * group already holds. Nothing renders for a group with no call cards, so
-   * round and run headers are unaffected.
+   * `done/total · N running · N failed` plus one status dot per call for a
+   * phase header, folded from the workflow-call cards the group already holds
+   * — the same fold the CLI band uses, so no second owner of counts. Nothing
+   * renders for a group with no call cards, so round and run headers are
+   * unaffected.
    */
   private renderGroupProgress(
     group: TaskGroup,
@@ -407,9 +442,40 @@ export class TaskGroupList extends LitElement {
     const calls = rows.flatMap((row) =>
       row.kind === 'workflowTask' ? [row.call] : [],
     );
-    const { done, total } = workflowPhaseCallProgress(calls);
-    if (total === 0) return nothing;
-    return html`<span class="group-progress">${done}/${total}</span>`;
+    if (calls.length === 0) return nothing;
+    return html`${renderWorkflowCallTally(calls)}
+      <span class="group-dots" aria-hidden="true"
+        >${calls
+          .slice(0, GROUP_DOT_LIMIT)
+          .map(
+            (call) =>
+              html`<span class="group-dot group-dot--${call.status}"></span>`,
+          )}${
+          calls.length > GROUP_DOT_LIMIT
+            ? html`<span class="group-dots-more"
+                >+${calls.length - GROUP_DOT_LIMIT}</span
+              >`
+            : nothing
+        }</span
+      >`;
+  }
+
+  /**
+   * Whole-run tally above a multi-agent workflow's phases: the same fold as
+   * the phase headers, one level up, over rows the root already holds.
+   */
+  private renderRunBand(node: GroupTree): TemplateResult | typeof nothing {
+    if (this.isToolUse) return nothing;
+    if (!node.children.some((child) => child.group.kind === 'phase')) {
+      return nothing;
+    }
+    return html`${guard([node, this.rowGeneration], () => {
+      const calls = collectWorkflowCalls(node);
+      if (calls.length === 0) return nothing;
+      return html`<div class="log-run-band">
+        ${renderWorkflowCallTally(calls)}
+      </div>`;
+    })}`;
   }
 
   /** Render child group header inline (only called for non-root groups) */
@@ -487,7 +553,7 @@ export class TaskGroupList extends LitElement {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${this.renderGroupBody(node)}
+            ${this.renderRunBand(node)} ${this.renderGroupBody(node)}
           </div>
         </div>
       `;

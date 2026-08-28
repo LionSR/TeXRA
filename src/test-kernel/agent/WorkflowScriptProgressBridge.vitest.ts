@@ -979,12 +979,17 @@ throw new Error('script failed')`,
       ),
     ).rejects.toThrow('script failed');
 
-    for (const label of ['One', 'Two']) {
-      expect(events).toContainEqual({
-        type: 'stage.end',
-        id: stageId(events, label),
-        status: RUN_OUTCOME.FAILED,
-      });
-    }
+    // The engine settled 'One' cleanly before the script threw inside 'Two';
+    // only the phase the failure happened in reads failed.
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: stageId(events, 'One'),
+      status: RUN_OUTCOME.COMPLETED,
+    });
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: stageId(events, 'Two'),
+      status: RUN_OUTCOME.FAILED,
+    });
   });
 });

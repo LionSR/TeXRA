@@ -23,8 +23,10 @@ function statusIcon(call: WorkflowCallProgress): TemplateResult {
     case 'running':
       return waIcon(terminalStatusIcon('running'));
     case 'completed':
-    case 'cached':
       return waIcon(terminalStatusIcon('completed'));
+    case 'cached':
+      // A replayed result from an earlier attempt: nothing ran this time.
+      return waIcon('clock-rotate-left');
     case 'skipped':
     case 'cancelled':
       return waIcon(terminalStatusIcon('cancelled'));

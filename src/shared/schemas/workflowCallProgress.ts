@@ -49,6 +49,13 @@ const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
   model: z.string().min(1).optional(),
   files: WorkflowCallFilesSchema.optional(),
   /**
+   * Physical attempt number of this call across interactive retries and
+   * durable resumes (hydration keeps prior attempts), present from the second
+   * attempt on. Distinct from `attemptId`, the whole-script projection
+   * attempt. The label is never rewritten to say "retry".
+   */
+  attemptNumber: z.int().min(2).optional(),
+  /**
    * Physical workflow-script projection attempt. All progress records from one
    * run share this id; older persisted transcripts may omit it. A malformed
    * present value must fail parsing: treating corrupted attempt ownership as

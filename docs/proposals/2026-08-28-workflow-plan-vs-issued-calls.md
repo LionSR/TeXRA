@@ -165,6 +165,77 @@ extension/desktop hosts; `deriveWorkflowCounts` (delivery summary) and
 `workflowPhaseCallProgress` (headers) deliberately count "done" differently;
 dynamic-call progress ids are positional (`call-N`).
 
+## Study: ultracode resume and display vs. TeXRA (2026-08-28)
+
+A 28-agent workflow (4 readers, 2 judges, 2 adversarial verifiers per
+recommendation) compared Claude Code's Workflow tool ("ultracode") with
+TeXRA's engine, from local evidence: ultracode persists a per-run
+`journal.jsonl` of `started`/`result` lines keyed by a `v2:` content hash,
+per-agent transcripts, and a `wf_<id>.json` run record whose
+`workflow_agent` entries carry `state`, `cached`, `model`, `phaseIndex`,
+prompt/result previews and progress timestamps. Verdicts that survived
+verification:
+
+**Resume.**
+
+- Ultracode replays the longest unchanged _prefix_; one dead agent at p85 forced
+  16 re-runs in one record, an inserted call re-ran the 5 after it. TeXRA
+  replays per call (same index, same key) and its key already covers prompt,
+  id, agentName, model, schema, file paths and file bytes — broader than
+  anything the ultracode evidence can show. Keep per-call replay; do NOT
+  adopt the prefix rule or the append-only started/result protocol (it cannot
+  distinguish never-finished from a null result, and would be a second owner
+  beside the strict checkpoint + commit fence + child attempt ledger).
+- Adopt: address the journal by key only, keeping `index` as an ordering fact
+  (`runWorkflowScript.ts` `priorEntries`, `persistence.ts` uniqueness on key,
+  schema v3→v4 failing loudly). Keys are already unique per run and the
+  durable child id is already index-free, so the index buys only false misses
+  on insertion/reorder; the honest win is that a shifted identical call
+  replays from the journal instead of round-tripping the child ledger with a
+  misleading `recovered` status. Do not prune the journal on success.
+- Keep user skips and slice-2 admission denials per attempt, never journaled:
+  the journal records outcomes of the script's calls; a human verdict belongs
+  to the attempt that asked for it, and a resume is a new attempt.
+- Say it where the model reads it: resuming needs the same `meta.name` _and
+  the same agent_ — the default agent is part of the checkpoint identity, so
+  changing it silently starts a new journal.
+- Rejected: an extension/desktop attempt-boundary fold like the CLI's (the
+  double-counting it assumed does not exist).
+
+**Display.** Ultracode's default in-conversation view is one compact line;
+its phase tree lives in `/workflows` and in the mobile background-tasks view
+(run header name · elapsed · agents · tokens · description; one collapsible
+per phase with `done/total`, a status-dot strip, and an Agent / Tokens / Time
+table; future phases read "Waiting for agents…"). TeXRA's board already has
+the richer structure; its defects were in the fold, not the layout:
+
+- Phase stages never closed mid-run (only the `finally` ended them), so every
+  entered phase read running with no duration until the whole script ended,
+  and a failure in phase 3 marked phases 1-2 failed. Fixed: the projection
+  closes a stage when the engine has settled it and every call of the stage
+  is terminal (the schema has no "exited but draining" lifecycle, so the
+  terminal-calls guard is forced, not defensive).
+- Never-entered declared phases were opened at `finish()` and emitted a
+  `Phase:` line. Fixed: a bypassed phase that owns no card is never opened.
+- Declared cards for stage-blocked plan entries were emitted before their
+  phase existed; the board classified them as ungrouped in the root timeline
+  and they jumped into the phase when it opened — the literal "what is in
+  which phase" failure. Fixed: a declared card exists only under an open
+  phase (stage-blocked calls are not projected). The CLI plain output's
+  early-card buffer became unreachable and was deleted.
+- Cached (replayed) calls looked like completed ones; now a distinct icon.
+  Retries were a card going running→queued→running with no explanation; the
+  card now carries `attemptNumber` (from the second attempt on; label never
+  rewritten).
+- Phase header: `done/total · N running · N failed` plus one status dot per
+  call; a whole-run band above the phases with the same fold. Both are folds
+  over rows the board already holds — no new owner of counts (a shared
+  three-surface tally and a settled-spend segment were refuted as second
+  owners; run spend must come from the engine's tracker, not re-summed
+  cards).
+- Do NOT add `meta.phases[].detail` yet: no consumer; ultracode itself never
+  renders it in the tree.
+
 ## Rejected
 
 - **Static analysis of the script to pre-list calls** — a second, unsound

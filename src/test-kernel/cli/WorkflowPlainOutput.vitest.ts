@@ -113,7 +113,6 @@ describe('attachWorkflowPlainOutput', () => {
     const { events, lines, detach } = startProjection(beforeWrite);
     startWorkflow(events);
 
-    emit(events, readTask('planned'));
     emit(events, {
       type: 'stage.start',
       id: 'phase-map',
@@ -122,6 +121,7 @@ describe('attachWorkflowPlainOutput', () => {
       index: 0,
       total: 2,
     });
+    emit(events, readTask('planned'));
     emit(events, readTask('running'));
     // Resolving the navigation target updates the structured card but does not
     // change its human-readable line.
@@ -179,7 +179,7 @@ describe('attachWorkflowPlainOutput', () => {
     detach();
   });
 
-  it('prints phase-less calls immediately and flushes an unopened phase', () => {
+  it('prints calls as they arrive under their already-open phase', () => {
     const { events, lines, detach } = startProjection();
     startWorkflow(events);
 
@@ -206,7 +206,6 @@ describe('attachWorkflowPlainOutput', () => {
     expect(lines).toEqual([
       'Planned: Loose check',
       'Preparing the phase-less check.',
-      '◆ Write',
       'Planned: Draft proof',
       'Cancelled: proof-workflow',
     ]);
