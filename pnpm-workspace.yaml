@@ -16,6 +16,9 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   keytar: true
+  # Optional native accelerator for msgpackr (via effect); the pure-JS
+  # fallback is sufficient, so skip its node-gyp build.
+  msgpackr-extract: false
   node-pty: true
   protobufjs: true
   unrs-resolver: true
