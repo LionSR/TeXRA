@@ -82,12 +82,12 @@ export async function startRecording(): Promise<{
     ];
 
     log.info(
-      `Starting audio recording with sox: ${soxCommand?.resolvedPath ?? 'sox'} ${soxArgs.join(' ')}`,
+      `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
     );
 
     const subprocess = execa(
-      soxCommand?.command ?? 'sox',
-      [...(soxCommand?.args ?? []), ...soxArgs],
+      soxCommand.command,
+      [...soxCommand.args, ...soxArgs],
       {
         env: { ...process.env, PATH: extendEnvPath() },
         reject: false,

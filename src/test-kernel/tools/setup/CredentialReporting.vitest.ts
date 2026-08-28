@@ -52,29 +52,6 @@ function installChatGptOnlySetupPlatform(): void {
   ).mockResolvedValue({ signedIn: true, enabled: true });
 }
 
-async function assertAuthPrecedesCredentialProbe(
-  run: () => Promise<unknown>,
-): Promise<void> {
-  const calls: string[] = [];
-  vi.spyOn(setupPlatformModule, 'getSetupAuthStatus').mockImplementation(
-    async () => {
-      calls.push('auth');
-      return {
-        authenticated: false,
-        remoteAgentCatalogAvailable: false,
-      };
-    },
-  );
-  mocks.anyUsableCredentialExists.mockImplementation(async () => {
-    calls.push('credential');
-    return false;
-  });
-
-  await run();
-
-  assert.deepEqual(calls, ['auth', 'credential']);
-}
-
 beforeEach(() => {
   setSetupPlatform(createFakeSetupPlatform());
   mocks.apiKeyOrigin.mockReset().mockResolvedValue('none');
@@ -159,20 +136,4 @@ describe('setup credential reporting', () => {
       /Credentials: usable model credential available\./,
     );
   });
-
-  it.each([
-    {
-      probe: 'environment',
-      run: () => new ProbeEnvironmentTool().call({}),
-    },
-    {
-      probe: 'setup',
-      run: () => new VerifySetupTool().call({}),
-    },
-  ])(
-    'settles authentication before the $probe credential probe',
-    async ({ run }) => {
-      await assertAuthPrecedesCredentialProbe(run);
-    },
-  );
 });

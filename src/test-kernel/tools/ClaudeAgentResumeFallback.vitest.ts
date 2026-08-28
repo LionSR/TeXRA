@@ -69,6 +69,10 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', () => ({
   assertOwnedExecutionLease: vi.fn(),
+  runWithOwnedExecutionLeaseLaunchGuard: (
+    _executionId: string,
+    operation: () => unknown,
+  ) => operation(),
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({

@@ -56,7 +56,10 @@ interface SubscriptionState extends BasePollSubscriptionState {
   issue: IssueKey;
   /** `owner/repo` — used in event-message slug interpolation. */
   slug: string;
+  /** Arms the close/reopen transition gate: set at the end of every tick. */
   initialized: boolean;
+  /** Set once the comment dedup resource has been seeded from a 200 body. */
+  commentsSeeded: boolean;
   state: 'open' | 'closed' | undefined;
   comments: DedupedResource<GhIssueComment>;
   etags: { issue?: string; comments?: string };
@@ -68,6 +71,7 @@ function createInitialState(issue: IssueKey): SubscriptionState {
     slug: `${issue.owner}/${issue.repo}`,
     ...createBasePollState(),
     initialized: false,
+    commentsSeeded: false,
     state: undefined,
     comments: dedupeComments<GhIssueComment>(),
     etags: {},
@@ -160,7 +164,10 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     // advanced only after a successful parse, so a skip re-fetches next tick
     // (no If-None-Match) and lastSuccessAt still advances → no 24 h detach. A
     // bad single element triggers a whole-array skip instead of a mid-loop
-    // TypeError throw. The first tick only seeds so we never replay history
+    // TypeError throw. The skip covers this tick's comment diff ONLY:
+    // `state.initialized` still advances at the end of the tick so the
+    // close/reopen gate arms on schedule, while `commentsSeeded` stays false so
+    // the next successful fetch seeds rather than replaying the whole history
     // (handled by the shared consumeCommentList choreography).
     if (commentsRes.status === 200) {
       const parsedComments = this.validateOrSkip(
@@ -168,20 +175,22 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         GhIssueCommentArraySchema,
         `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,
       );
-      if (!parsedComments) return;
-      this.consumeCommentList(
-        parsedComments,
-        (etag) => {
-          state.etags.comments = etag;
-        },
-        state.comments,
-        (c) =>
-          this.emit(
-            state,
-            formatIssueComment(state.slug, issue.issueNumber, c),
-          ),
-        () => state.initialized,
-      );
+      if (parsedComments) {
+        this.consumeCommentList(
+          parsedComments,
+          (etag) => {
+            state.etags.comments = etag;
+          },
+          state.comments,
+          (c) =>
+            this.emit(
+              state,
+              formatIssueComment(state.slug, issue.issueNumber, c),
+            ),
+          () => state.commentsSeeded,
+        );
+        state.commentsSeeded = true;
+      }
     }
 
     state.initialized = true;

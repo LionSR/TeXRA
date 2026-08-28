@@ -59,10 +59,10 @@ export class ExtractLatexFiguresTool extends defineTool({
     );
     const header = `Figures referenced in ${display}`;
     const output = formatToolOutput(header, formattedList);
-    const summary = `Found ${formatResultCount(limitedPaths.length, 'figure file')} in ${display}.`;
+    const summary = `Found ${formatResultCount(uniqueFigures.length, 'figure file')} in ${display}.`;
 
     const fullOutput = limitReached
-      ? `${output}\n\nNote: Limited attachments to ${attachments.length} files.`
+      ? `${output}\n\nNote: Limited attachments to ${attachments.length} of ${uniqueFigures.length} files.`
       : output;
 
     return {

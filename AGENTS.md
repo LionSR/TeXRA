@@ -221,7 +221,7 @@ This project uses Zod v4. Follow these idiomatic patterns:
 - `.iso.datetime()` instead of `.string().datetime()` - ISO datetime validator
 - `.enum(MyEnum)` instead of `.nativeEnum(MyEnum)` - works with TS enums
 - `.looseObject({...})` instead of `.object({...}).passthrough()` - allows extra keys
-- `.strictObject({...})` - disallows extra keys (use for tool input schemas)
+- `.strictObject({...})` - disallows extra keys (use for tool input schemas, except discriminated-union branches - see "Tool input schemas")
 
 **Validation and refinement**
 
@@ -310,6 +310,10 @@ When passing nullish tool values to functions expecting `T | undefined` (not `T 
 // Function expects string | undefined, but .nullish() gives string | null | undefined
 const result = processPath(input.path ?? undefined);
 ```
+
+**Discriminated-union branches use `.looseObject()`, not `.strictObject()`.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `strictObject` branch rejects that as an unrecognized key regardless of nullability; `looseObject` tolerates the cross-branch leakage while still enforcing each branch's own required fields.
+
+A union-branch field with a default needs `nullishWithDefault` (`src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
 
 See: https://platform.openai.com/docs/guides/structured-outputs
 

@@ -129,10 +129,7 @@ function createBoundedOutputCapture(
 
     totalChars += pendingWhitespaceChars;
     head = appendHead(head, pendingWhitespaceHead, headChars);
-    tail =
-      pendingWhitespaceChars >= tailChars
-        ? pendingWhitespaceTail
-        : appendTail(tail, pendingWhitespaceTail, tailChars);
+    tail = appendTail(tail, pendingWhitespaceTail, tailChars);
     pendingWhitespaceHead = '';
     pendingWhitespaceTail = '';
     pendingWhitespaceChars = 0;

@@ -76,6 +76,29 @@ describe('GrepTool execution', () => {
     expect(executeSpy.mock.calls[0]?.[1]?.maxBuffer).toBe(100_000_000);
   });
 
+  it('omits the continuation hint on an exact final page', async () => {
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
+      success: true,
+      stdout: 'one\ntwo\nthree\nfour\n',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
+
+    const result = await new GrepTool().call({
+      pattern: 'item',
+      output_mode: 'content',
+      offset: 2,
+      head_limit: 2,
+    });
+
+    expect(result).toMatchObject({
+      status: 'executed',
+      summary: expect.stringContaining('Found 2 of 4 matches'),
+      output: 'three\nfour',
+    });
+  });
+
   it('reports output-limit overflow without paginating partial matches', async () => {
     vi.spyOn(execUtils, 'executeCommand').mockResolvedValue({
       success: false,

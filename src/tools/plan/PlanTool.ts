@@ -64,9 +64,14 @@ function formatGoalView(goal: Goal): string {
 /**
  * Schema for the unified plan tool input. A discriminated union over
  * `command`: 'update' carries the plan; 'pause'/'complete' carry a reason.
+ *
+ * Branches use looseObject (not strictObject): provider conversion flattens
+ * the union into one advertised object and OpenAI-compatible providers
+ * null-fill the properties belonging to the other commands. See AGENTS.md
+ * "Tool input schemas".
  */
 const PlanToolInputSchema = z.discriminatedUnion('command', [
-  z.strictObject({
+  z.looseObject({
     command: z.literal('update'),
     objective: z
       .string()
@@ -77,14 +82,14 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
           'structured steps (track those with the todo tool).',
       ),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('pause'),
     reason: z
       .string()
       .min(1)
       .describe('Why you are pausing: describe what you need from the user.'),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('complete'),
     reason: z
       .string()

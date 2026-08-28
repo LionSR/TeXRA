@@ -3,7 +3,7 @@
 
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
-import { releaseOwnedExecutionLeaseAfterFailure } from '@agent/storage/executionLease';
+import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -44,6 +44,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
@@ -228,36 +229,48 @@ export async function launchAgentCliSession(
       parentExecutionId: params.parentExecutionId,
       description: childStreamDescription(params.description),
     });
-  } catch {
-    throw new ToolError(params.registerFailedMessage);
-  }
-  let childStream: ChildStream | undefined;
-  try {
-    childStream = createChildStream(executionId, params.parentStreamId, {
-      streamPrefix: params.streamPrefix,
-      run: identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-      description: params.description,
-      config: params.config,
-    });
-    await params.startLoop({ childStream, executionId });
   } catch (error) {
-    let failure = error;
-    if (childStream) {
-      try {
-        await childStream.finalize({
-          outcome: { kind: 'failed', error },
-          persistence: { kind: 'finalize', flowRecord: 'delete' },
-        });
-      } catch (finalizeError) {
-        failure = new AggregateError(
-          [error, finalizeError],
-          `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
-        );
-      }
-    }
-    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
+    // Keep the cause: registration aggregates real store-write failures
+    // (unwritable storage root, torn record) that the per-provider prefix
+    // alone cannot diagnose.
+    throw new ToolError(
+      `${params.registerFailedMessage} ${toErrorMessage(error)}`,
+      { cause: error },
+    );
   }
+  // The launch guard owns the release-on-failure policy for every launch site
+  // (bash background, the two detached child paths, and this one): a failed
+  // launch must not leave a record that refuses a relaunch for the rest of the
+  // process's life.
+  const childStream = await runWithOwnedExecutionLeaseLaunchGuard(
+    executionId,
+    async () => {
+      const stream = createChildStream(executionId, params.parentStreamId, {
+        streamPrefix: params.streamPrefix,
+        run: identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+        description: params.description,
+        config: params.config,
+      });
+      try {
+        await params.startLoop({ childStream: stream, executionId });
+      } catch (error) {
+        try {
+          await stream.finalize({
+            outcome: { kind: 'failed', error },
+            persistence: { kind: 'finalize', flowRecord: 'delete' },
+          });
+        } catch (finalizeError) {
+          throw new AggregateError(
+            [error, finalizeError],
+            `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+          );
+        }
+        throw error;
+      }
+      return stream;
+    },
+  );
 
   return executed(
     [

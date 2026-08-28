@@ -293,10 +293,9 @@ export class LeanSession {
       rpc.notify('initialized', {});
       updateLeanServer(this.id, { status: 'running' });
     } catch (error) {
-      updateLeanServer(this.id, {
-        status: 'error',
-        errorMessage: toErrorMessage(error),
-      });
+      // No error status is recorded here: `dispose()` unregisters this server,
+      // so the row a status write would target is gone before any reader sees
+      // it. `ensureReady` rethrows and the Lean tools surface the cause.
       await this.dispose();
       throw error;
     }
