@@ -275,8 +275,9 @@ export const streamLifecycleHandlers = {
   [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) => {
     const streamId = data.stream;
 
-    // Always clear module-level caches for deleted stream
-    clearResolvedProposalIds();
+    // Module-level state scoped to the deleted stream. `resolvedProposalIds`
+    // is NOT cleared here: it is keyed by proposal requestId, not by stream,
+    // so clearing it would drop every other stream's out-of-order guard.
     deleteFollowUpInputTransientState(streamId);
     void webviewStorage.update(logListStateKey(streamId), undefined);
 

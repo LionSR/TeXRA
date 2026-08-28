@@ -435,13 +435,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       host: {
         compareFiles: (baseFile, editedFile) =>
           this.runViewCommand('texra.compare', [
-            pathToLocation(''), // inputFile unused
             pathToLocation(baseFile),
             pathToLocation(editedFile),
           ]),
         acceptEditedFile: (baseFile, editedFile, copyMeta) =>
           this.runViewCommand<boolean>('texra.acceptEdited', [
-            pathToLocation(''), // inputFile unused
             pathToLocation(baseFile),
             pathToLocation(editedFile),
             copyMeta,

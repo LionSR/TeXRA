@@ -175,10 +175,7 @@ function renderToolSection(
     case 'status':
       return buildToolUseSection(
         section.label,
-        buildStatusBadge(
-          triStateStatusIcon(section.status, 'in_progress'),
-          section.status,
-        ),
+        buildStatusBadge(triStateStatusIcon(section.status), section.status),
       );
     case 'checklist':
       return renderChecklistSection(section);

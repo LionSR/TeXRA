@@ -4,13 +4,13 @@
  * Uses `<wa-details>` for the outer panel, and — only when both the Subagents
  * and Inquiries sections are populated — a nested `.collapsible-quiet`
  * `<wa-details>` per section; a lone section renders its rows directly under
- * the outer panel. Each subagent row is clickable to navigate to
- * its stream tab — finished ones included, their tab is still there. Processes
- * don't have their own tab so they are not clickable.
+ * the outer panel. Every roster row owns a stream tab, so every row — live
+ * process (background bash) rows included — navigates to it.
  *
  * Rows are live children followed by the finished children the backend retains
- * (`ActiveChildInfo.finishedAt`); finished process (background bash) rows are
- * ephemeral and filtered out here. This panel never counts what it cannot list.
+ * (`ActiveChildInfo.finishedAt`); finished process rows are ephemeral, their
+ * tabs are gone, and they are filtered out here rather than rendered as dead
+ * links. This panel never counts what it cannot list.
  */
 
 // Third-party imports
@@ -278,7 +278,7 @@ export class BackgroundTasksPanel extends LitElement {
         ? this.subagents.filter(
             (child) =>
               !(
-                child.identity?.kind === 'process' &&
+                child.identity.kind === 'process' &&
                 child.finishedAt !== undefined
               ),
           )
@@ -437,47 +437,33 @@ export class BackgroundTasksPanel extends LitElement {
     index: number,
   ): TemplateResult {
     const icon = getTaskIcon(child);
-    // Every roster row owns a stream tab, so every row is navigable; the
-    // handlers attach only while a childStreamId is known.
+    // Every roster row owns a stream tab, so every row is navigable.
     const childStreamId = child.childStreamId;
-    const description = childStreamId
-      ? this.streamById.get(childStreamId)?.description
-      : undefined;
-    const phaseLabel = childStreamId
-      ? formatPhaseStageLabel(this.phaseStages.get(childStreamId))
-      : undefined;
+    const description = this.streamById.get(childStreamId)?.description;
+    const phaseLabel = formatPhaseStageLabel(
+      this.phaseStages.get(childStreamId),
+    );
     const badge = taskStatusBadge(child);
     const idPrefix = `background-subagent-${index}`;
-    // RunIdentity is the declared authority; agentName is only a fallback.
-    const displayName = child.identity
-      ? runIdentityDisplayName(child.identity)
-      : child.agentName;
+    const displayName = runIdentityDisplayName(child.identity);
 
     return html`
       <div class="task-header">
         ${waIcon(icon, {
-          className: `task-icon ${child.identity?.kind === 'process' ? 'task-icon--process' : 'task-icon--subagent'}`,
+          className: `task-icon ${child.identity.kind === 'process' ? 'task-icon--process' : 'task-icon--subagent'}`,
         })}
         <span
           id="${idPrefix}-name"
           class="task-name task-name--clickable"
           role="link"
           tabindex="0"
-          @click=${
-            childStreamId !== undefined
-              ? () => this.navigateToStream(childStreamId)
-              : nothing
-          }
-          @keydown=${
-            childStreamId !== undefined
-              ? (e: KeyboardEvent) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    this.navigateToStream(childStreamId);
-                  }
-                }
-              : nothing
-          }
+          @click=${() => this.navigateToStream(childStreamId)}
+          @keydown=${(e: KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              this.navigateToStream(childStreamId);
+            }
+          }}
           >${displayName}</span
         >
         <wa-tooltip for="${idPrefix}-name">Go to ${displayName}</wa-tooltip>
@@ -543,16 +529,14 @@ function renderChildElapsed(
 
 /** Pick the appropriate wa-icon name for a background task item. */
 function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
-  switch (child.identity?.kind) {
+  switch (child.identity.kind) {
     case 'process':
       return 'terminal';
     case 'agent':
       // AI agent rows — native and external-CLI-driven alike.
       return 'robot';
     case 'multiAgentWorkflow':
-    case undefined:
-      // Workflow containers and legacy emitters without an identity get the
-      // neutral agent icon.
+      // Workflow containers get the neutral agent icon.
       return 'server';
   }
 }
@@ -599,7 +583,7 @@ function taskStatusBadge(child: ActiveChildInfo): {
   // doc); the lagging display `status` may only soften HOW a retained
   // subagent row renders, and processes have no child status source at all.
   const subagentStatusStillInFlight =
-    child.identity?.kind !== 'process' &&
+    child.identity.kind !== 'process' &&
     (child.status === STREAM_PHASE.RUNNING ||
       child.status === STREAM_PHASE.WAITING);
   if (child.finishedAt === undefined || subagentStatusStillInFlight) {

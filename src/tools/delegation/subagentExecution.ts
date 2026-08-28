@@ -23,7 +23,6 @@ import {
   AgentCategory,
   TODO_STATUS,
   USER_FOLLOW_UP_SUPPORT,
-  type ExecutionId,
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';

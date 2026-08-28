@@ -336,10 +336,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     // Claiming the sidebar releases the editor panel: one surface owns
     // progress content at a time, so the panel cannot outlive its target.
     this.releaseEditorTarget({ disposePanel: true });
-    // Any target other than a sidebar already in place is a real transition
-    // that needs a permission replay — including the gap left by a panel the
-    // user just closed.
-    const placementChanged = this.target?.placement !== 'sidebar';
     this.target ??= { placement: 'sidebar', ready: false };
 
     // Focus first to ensure VS Code resolves the webview before switching content.
@@ -349,12 +345,12 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     }
     this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.PROGRESS);
 
+    // A ready sidebar target means `switchMode` found the view already showing
+    // progress and returned early, so no ready handshake follows to refresh it.
+    // A target created just above is not ready, and its handshake replays
+    // pending prompts itself (`markWebviewReady`).
     if (this.target?.ready === true) {
       this.syncFullView();
-      // Only replay permissions when switching from editor → sidebar.
-      // If already on sidebar, the webview already has the correct permissions;
-      // replaying would cause duplicates.
-      if (placementChanged) await this.replayPendingPrompts();
     }
   }
 

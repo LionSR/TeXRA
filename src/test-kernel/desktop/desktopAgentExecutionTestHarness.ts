@@ -43,11 +43,7 @@ export function createStubDesktopAgentExecutionHost(
   return {
     openPath: async () => undefined,
     openBuildDisplay: async () => undefined,
-    openDiff: async (original, proposed, title) => ({
-      original,
-      proposed,
-      title,
-    }),
+    openDiff: async () => undefined,
     confirmAcceptFile: async () => true,
     chooseTeamAvailability: async () => 'cancel',
     signInForRemoteAgentCatalog: async () => false,

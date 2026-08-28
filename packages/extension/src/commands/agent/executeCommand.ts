@@ -7,7 +7,6 @@ import {
   AgentConfigSchema,
   ModelHandlerCompatibilityKeySchema,
   runAgent,
-  type RunAgentOptions,
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { createLog } from '@logger/logUtils';

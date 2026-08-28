@@ -13,7 +13,6 @@ import type {
   GoalStatus,
   StreamStage,
   StreamState,
-  StreamSubstate,
   StreamTabInfo,
 } from '@shared/schemas';
 import {

@@ -1,7 +1,7 @@
 /** Tool edit approval request panel. */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
@@ -17,8 +17,7 @@ import {
   requestPanelSharedStyles,
 } from '@shared/styles';
 
-// Local imports - shared schemas
-import type { ToolEditPermission } from '@shared/schemas';
+// Local imports - shared helpers
 import {
   renderLabeledActionButton,
   renderLabeledActionButtonParts,
@@ -54,10 +53,9 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const diffMeta = this.renderDiffMeta(data);
     const metaParts: MetaPart[] = [];
     if (data.sourceTool) metaParts.push(`Requested by ${data.sourceTool}`);
-    if (diffMeta !== nothing) metaParts.push(diffMeta);
+    metaParts.push(this.renderDiffMeta());
 
     return this.renderRequestShell({
       prefix: 'approval-request',
@@ -116,13 +114,9 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
     `;
   }
 
-  private renderDiffMeta(
-    request: ToolEditPermission,
-  ): TemplateResult | typeof nothing {
-    const toCount = (value: number | undefined): number =>
-      value !== undefined && Number.isFinite(value) ? Math.max(0, value) : 0;
-    const added = toCount(request.addedLines);
-    const removed = toCount(request.removedLines);
+  private renderDiffMeta(): TemplateResult {
+    // `LineCountSchema` makes both counts required nonnegative integers.
+    const { addedLines: added, removedLines: removed } = this.permission.data;
     const total = added + removed;
     const lineLabel = pluralize(total, 'line');
 

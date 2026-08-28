@@ -1,7 +1,6 @@
 // Local imports - shared schemas
 import {
   AgentCategory,
-  SessionTypeSchema,
   type DocumentFileType,
   type MultipleDocumentFileType,
   type SessionType,
@@ -16,9 +15,3 @@ export const SESSION_TYPES = {
 } as const;
 
 export type { SessionType, DocumentFileType, MultipleDocumentFileType };
-
-export function parseSessionType(
-  sessionType: string | null | undefined,
-): SessionType | undefined {
-  return SessionTypeSchema.optional().catch(undefined).parse(sessionType);
-}

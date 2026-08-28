@@ -13,7 +13,6 @@ import {
 
 import {
   patchSessionMeta,
-  sessionMeta,
   setTransientNotice,
   setCliSessionModelOverride,
 } from '@cli/chat/tui/state/cliState';
