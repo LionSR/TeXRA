@@ -345,6 +345,9 @@ export interface StaticTranscriptScanCursor {
   readonly lastScannedEntry: TranscriptRow | undefined;
   /** Stream phase at scan time; a phase change forces a rescan of the tail. */
   readonly status: StreamPhase | undefined;
+  /** Order key of the last row this cursor's scans appended to scrollback.
+   *  A later suffix that sorts before it cannot be appended in place. */
+  readonly lastAppendedKey: readonly [number, number] | undefined;
 }
 
 interface StaticTranscriptScanResult {
@@ -359,6 +362,7 @@ function makeStaticTranscriptScanCursor(
   entriesRef: readonly TranscriptRow[] | undefined,
   scannedIndex: number,
   status: StreamPhase | undefined,
+  lastAppendedKey: readonly [number, number] | undefined,
 ): StaticTranscriptScanCursor {
   return {
     entriesRef,
@@ -368,6 +372,7 @@ function makeStaticTranscriptScanCursor(
         ? entriesRef[scannedIndex - 1]
         : undefined,
     status,
+    lastAppendedKey,
   };
 }
 
@@ -391,7 +396,7 @@ export function incrementalStaticTranscriptEntries(
   if (previous === undefined) {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
   }
@@ -413,7 +418,7 @@ export function incrementalStaticTranscriptEntries(
   if (!canContinue) {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
   }
@@ -460,7 +465,10 @@ export function incrementalStaticTranscriptEntries(
   }
   // Print the suffix in the same settlement order the rebuild oracle uses
   // (`orderedStaticTranscriptEntries`): a row that settled while an earlier
-  // tool was still running must not swap places across a repaint.
+  // tool was still running must not swap places across a repaint. Sorting
+  // covers a reorder inside one tick; a suffix whose first row belongs before
+  // rows an earlier tick already printed cannot be appended at all, so it
+  // falls back to the oracle rebuild (a known-origin repaint).
   const alreadyOrdered = appended.every(
     (candidate, i) =>
       i === 0 ||
@@ -474,9 +482,27 @@ export function incrementalStaticTranscriptEntries(
           left.index - right.index,
       );
 
+  const first = ordered[0];
+  if (
+    first !== undefined &&
+    previous.lastAppendedKey !== undefined &&
+    compareTranscriptOrderKeys(first.key, previous.lastAppendedKey) < 0
+  ) {
+    return {
+      appended: [],
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
+      rebuild: true,
+    };
+  }
+
   return {
     appended: ordered.map(({ entry }) => entry),
-    cursor: makeStaticTranscriptScanCursor(source, scannedIndex, status),
+    cursor: makeStaticTranscriptScanCursor(
+      source,
+      scannedIndex,
+      status,
+      ordered.at(-1)?.key ?? previous.lastAppendedKey,
+    ),
     rebuild: false,
   };
 }

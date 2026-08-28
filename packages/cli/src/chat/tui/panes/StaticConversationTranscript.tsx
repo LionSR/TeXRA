@@ -893,6 +893,7 @@ function scanStaticTranscriptFromStart(
       scannedIndex: 0,
       lastScannedEntry: undefined,
       status: undefined,
+      lastAppendedKey: undefined,
     },
   ).cursor;
 }

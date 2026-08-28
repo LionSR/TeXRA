@@ -1163,6 +1163,7 @@ describe('CLI conversation transcript', () => {
       scannedIndex: 0,
       lastScannedEntry: undefined,
       status: undefined,
+      lastAppendedKey: undefined,
     } as const;
 
     expect(
@@ -1615,6 +1616,7 @@ describe('CLI conversation transcript', () => {
       scannedIndex: 0,
       lastScannedEntry: undefined,
       status: undefined,
+      lastAppendedKey: undefined,
     } as const;
 
     const first = incrementalStaticTranscriptEntries(
@@ -1660,18 +1662,59 @@ describe('CLI conversation transcript', () => {
     ).map((row) => row.id);
     expect(oracle).toEqual(['a1', 't1']);
 
+    const emptyCursor = {
+      entriesRef: undefined,
+      scannedIndex: 0,
+      lastScannedEntry: undefined,
+      status: undefined,
+      lastAppendedKey: undefined,
+    } as const;
     const live = incrementalStaticTranscriptEntries(
       rows,
       0,
       STREAM_PHASE.RUNNING,
-      {
-        entriesRef: undefined,
-        scannedIndex: 0,
-        lastScannedEntry: undefined,
-        status: undefined,
-      },
+      emptyCursor,
     );
     expect(live.appended.map((row) => row.id)).toEqual(oracle);
+
+    // The same swap across a tick boundary: A settles late (key 20) and is
+    // printed while C still runs; then B (key 10) settles behind C. Sorting
+    // the new suffix alone would print [A, B, C] where the oracle says
+    // [B, A, C], so the scan must hand back to the oracle instead.
+    const a = {
+      ...toolEntry('a', TOOL_USE_STATUS.COMPLETED),
+      settlementSeqNo: 20,
+    };
+    const running = toolEntry('c', TOOL_USE_STATUS.IN_PROGRESS);
+    const c = {
+      ...running,
+      status: TOOL_USE_STATUS.COMPLETED,
+      settlementSeqNo: 30,
+    };
+    const b = {
+      ...entry('b', 'assistant', 'files', true),
+      settlementSeqNo: 10,
+    };
+    const tick1 = incrementalStaticTranscriptEntries(
+      [a, running],
+      0,
+      STREAM_PHASE.RUNNING,
+      emptyCursor,
+    );
+    expect(tick1.appended.map((row) => row.id)).toEqual(['a']);
+    const tick2 = incrementalStaticTranscriptEntries(
+      [a, c, b],
+      0,
+      STREAM_PHASE.RUNNING,
+      tick1.cursor,
+    );
+    expect(tick2.rebuild).toBe(true);
+    expect(tick2.appended).toEqual([]);
+    expect(
+      orderedStaticTranscriptEntries([a, c, b], 0, STREAM_PHASE.RUNNING).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['b', 'a', 'c']);
   });
 
   it('labels preset-launched sessions with team and root identity', () => {
