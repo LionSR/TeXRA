@@ -10,7 +10,7 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
-import { latestWorkflowCallsById } from '@shared/copy/workflowCall';
+import type { WorkflowPhaseHeading } from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
 import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from '../panes/SubagentListDisplay';
@@ -21,15 +21,15 @@ import {
   workflowTaskListValue,
   type ChildListValue,
 } from './childListSelection';
-import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
+import type { StreamSlice } from './cliState';
 
 export type WorkflowTaskEntry = TranscriptRowOf<'workflowTask'>;
-type WorkflowPhaseEntry = TranscriptRowOf<'phase'>;
 
 export interface WorkflowPhaseGroup {
   readonly value: ChildListValue;
   readonly label: string;
-  readonly heading?: WorkflowPhaseEntry;
+  /** The phase's own heading facts, once a phase row has named it. */
+  readonly heading?: WorkflowPhaseHeading;
   readonly tasks: readonly WorkflowTaskEntry[];
 }
 
@@ -69,8 +69,23 @@ export interface WorkflowDashboardModel {
 interface MutableWorkflowPhaseGroup {
   readonly value: ChildListValue;
   readonly label: string;
-  heading?: WorkflowPhaseEntry;
+  heading?: WorkflowPhaseHeading;
   readonly tasks: WorkflowTaskEntry[];
+}
+
+/** Heading facts of one phase row, with counts omitted by the row (a
+ *  GROUP_END row can omit them) retained from the previous heading. */
+function phaseHeading(
+  entry: TranscriptRowOf<'phase'>,
+  previous: WorkflowPhaseHeading | undefined,
+): WorkflowPhaseHeading {
+  const phaseIndex = entry.phaseIndex ?? previous?.phaseIndex;
+  const phaseTotal = entry.phaseTotal ?? previous?.phaseTotal;
+  return {
+    phaseLabel: entry.phaseLabel,
+    ...(phaseIndex !== undefined ? { phaseIndex } : {}),
+    ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+  };
 }
 
 /** Derive the dashboard rows for one workflow root at one terminal width. */
@@ -81,37 +96,19 @@ export function workflowDashboardModel(
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
   const tasks: WorkflowTaskEntry[] = [];
-  const currentAttemptId = currentWorkflowAttemptId(
-    root.workflowAttemptId,
-    root.entries,
-    root.workflowAttemptBoundaryDeclared,
-  );
-  const currentCalls = new Set(
-    latestWorkflowCallsById(
-      root.entries.flatMap((row) =>
-        row.kind === 'workflowTask' ? [row.call] : [],
-      ),
-      currentAttemptId,
-    ),
-  );
+  // The transcript fold already holds exactly the current attempt's rows
+  // (`transcriptFold.ts`), one per logical call, so no re-selection here.
   for (const entry of root.entries) {
     if (entry.kind !== 'phase' && entry.kind !== 'workflowTask') continue;
-    if (entry.kind === 'workflowTask' && !currentCalls.has(entry.call))
-      continue;
-    if (
-      entry.kind === 'phase' &&
-      currentAttemptId !== undefined &&
-      (currentAttemptId === null || entry.attemptId !== currentAttemptId)
-    ) {
-      continue;
-    }
     const phase = entry.kind === 'phase' ? entry.phaseLabel : entry.call.phase;
     let group = byPhase.get(phase);
     if (!group) {
       group = {
         value: workflowPhaseListValue(entry.id),
         label: phase ?? 'Unphased',
-        ...(entry.kind === 'phase' ? { heading: entry } : {}),
+        ...(entry.kind === 'phase'
+          ? { heading: phaseHeading(entry, undefined) }
+          : {}),
         tasks: [],
       };
       byPhase.set(phase, group);
@@ -119,15 +116,8 @@ export function workflowDashboardModel(
     } else if (entry.kind === 'phase') {
       // A rerun may retain the same phase label with revised index/total data.
       // Keep the stable first-appearance row identity, but display the latest
-      // heading facts just as the status band does. A GROUP_END row can omit
-      // counts, so retain them from the preceding heading in that one case.
-      const phaseIndex = entry.phaseIndex ?? group.heading?.phaseIndex;
-      const phaseTotal = entry.phaseTotal ?? group.heading?.phaseTotal;
-      group.heading = {
-        ...entry,
-        ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-        ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-      };
+      // heading facts just as the status band does.
+      group.heading = phaseHeading(entry, group.heading);
     }
     if (entry.kind === 'workflowTask') {
       group.tasks.push(entry);

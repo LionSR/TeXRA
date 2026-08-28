@@ -88,12 +88,10 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    expect(
-      await controller.handleAction({
-        requestId: proposal.requestId,
-        action: 'setup',
-      }),
-    ).toBe(true);
+    await controller.handleAction({
+      requestId: proposal.requestId,
+      action: 'setup',
+    });
     expect(restored).toHaveLength(1);
     expect(resolved).toStrictEqual([
       { requestId: 'proposal-1', result: { action: 'setup' } },
@@ -124,12 +122,10 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    expect(
-      await controller.handleAction({
-        requestId: proposal.requestId,
-        action: 'setup',
-      }),
-    ).toBe(true);
+    await controller.handleAction({
+      requestId: proposal.requestId,
+      action: 'setup',
+    });
     expect(opened).toStrictEqual([
       resolveWorkspaceRelativePath(
         proposal.workflowScript.scriptPath,
@@ -150,12 +146,10 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    expect(
-      await controller.handleAction({
-        requestId: proposal.requestId,
-        action: 'setup',
-      }),
-    ).toBe(false);
+    await controller.handleAction({
+      requestId: proposal.requestId,
+      action: 'setup',
+    });
     expect(resolved).toStrictEqual([
       {
         requestId: 'proposal-1',
@@ -168,7 +162,7 @@ describe('ProgressAgentProposalController', () => {
     ]);
   });
 
-  it('returns false for missing setup proposals', async () => {
+  it('reports missing setup proposals to the host', async () => {
     let missingProposalId = '';
     const { controller } = createController({
       getPendingProposal: () => undefined,
@@ -180,12 +174,10 @@ describe('ProgressAgentProposalController', () => {
       },
     });
 
-    expect(
-      await controller.handleAction({
-        requestId: 'missing-proposal',
-        action: 'setup',
-      }),
-    ).toBe(false);
+    await controller.handleAction({
+      requestId: 'missing-proposal',
+      action: 'setup',
+    });
     expect(missingProposalId).toBe('missing-proposal');
   });
 
@@ -194,12 +186,10 @@ describe('ProgressAgentProposalController', () => {
       restoreRunConfig: async () => false,
     });
 
-    expect(
-      await controller.handleAction({
-        requestId: 'proposal-1',
-        action: 'setup',
-      }),
-    ).toBe(false);
+    await controller.handleAction({
+      requestId: 'proposal-1',
+      action: 'setup',
+    });
     expect(resolved).toStrictEqual([
       {
         requestId: 'proposal-1',
@@ -214,21 +204,17 @@ describe('ProgressAgentProposalController', () => {
   it('passes approve and reject actions through without restoring state', async () => {
     const { controller, resolved } = createController();
 
-    expect(
-      await controller.handleAction({
-        requestId: 'proposal-approve',
-        action: 'approve',
-        model: 'gpt-5.4',
-        agent: 'critic',
-      }),
-    ).toBe(true);
-    expect(
-      await controller.handleAction({
-        requestId: 'proposal-reject',
-        action: 'reject',
-        feedback: 'too broad',
-      }),
-    ).toBe(true);
+    await controller.handleAction({
+      requestId: 'proposal-approve',
+      action: 'approve',
+      model: 'gpt-5.4',
+      agent: 'critic',
+    });
+    await controller.handleAction({
+      requestId: 'proposal-reject',
+      action: 'reject',
+      feedback: 'too broad',
+    });
     expect(resolved).toStrictEqual([
       {
         requestId: 'proposal-approve',

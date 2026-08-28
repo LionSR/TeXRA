@@ -55,6 +55,9 @@ vi.mock('@tools/delegation/inBandSubagentExecution', () => {
 
 vi.mock('@tools/delegation/proposalFlow', () => ({
   requireVisibleAgent: mocks.requireVisibleAgent,
+}));
+
+vi.mock('@tools/delegation/delegationAvailability', () => ({
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 

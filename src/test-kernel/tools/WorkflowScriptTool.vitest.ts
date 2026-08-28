@@ -99,8 +99,14 @@ vi.mock('@tools/approval', () => ({
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/delegation/proposalFlow')>()),
   requireWorkflowOrToolUseAgent: mocks.requireWorkflowOrToolUseAgent,
-  selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
   requestDelegationProposal: mocks.requestDelegationProposal,
+}));
+
+vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@tools/delegation/delegationAvailability')
+  >()),
+  selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';

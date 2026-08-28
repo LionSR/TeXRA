@@ -15,6 +15,7 @@ import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
+import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -43,11 +44,10 @@ import {
   assertWorkflowFilesExist,
   rejectOversizedBibAttachments,
 } from './inputFields';
-import {
-  requestDelegationProposal,
-  requireVisibleAgent,
-  selectAvailableDelegationModel,
-} from './proposalFlow';
+import { selectAvailableDelegationModel } from './delegationAvailability';
+import { requestDelegationProposal, requireVisibleAgent } from './proposalFlow';
+
+const log = createLog('workflowScriptAgentRunner');
 
 async function resolveInvocationFileList(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
@@ -392,9 +392,13 @@ export function createWorkflowScriptAgentRunner(
                 recovered: true,
               });
             }
-          } catch {
+          } catch (error) {
             // A recovered result is authoritative. Navigation metadata is
-            // optional and must not invalidate the completed computation.
+            // optional and must not invalidate the completed computation —
+            // but a failed read of a persisted record is still reported.
+            log.warn('Failed to read the recovered child stream id', {
+              data: { executionId: completed.executionId, error },
+            });
           }
         }
       }
@@ -444,7 +448,6 @@ export function createWorkflowCallAdmission(params: {
   readonly scope: Exclude<WorkflowCallReviewScope, 'none'>;
 }): NonNullable<WorkflowScriptRunOptions['admitCall']> {
   const decidedPhases = new Map<string, WorkflowCallAdmission>();
-  const { runScope } = params.parent;
   return async (request) => {
     const phaseKey = request.phase ?? '';
     const admitsPhase = params.scope === WORKFLOW_CALL_REVIEW_SCOPE.PHASE;
@@ -463,8 +466,8 @@ export function createWorkflowCallAdmission(params: {
       model: configPayload.model,
       instruction: request.prompt,
       memories: [],
-      ...(runScope.workingDirectory !== undefined && {
-        workingDirectory: runScope.workingDirectory,
+      ...(configPayload.workingDirectory !== undefined && {
+        workingDirectory: configPayload.workingDirectory,
       }),
       workflowCall: {
         workflowName: params.workflowName,

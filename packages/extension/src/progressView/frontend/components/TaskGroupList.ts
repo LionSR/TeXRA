@@ -435,13 +435,11 @@ export class TaskGroupList extends LitElement {
    * unaffected.
    */
   private renderGroupProgress(
-    group: TaskGroup,
-    rows: readonly TranscriptRow[],
+    node: GroupTree,
   ): TemplateResult | typeof nothing {
-    if (group.kind !== 'phase') return nothing;
-    const calls = rows.flatMap((row) =>
-      row.kind === 'workflowTask' ? [row.call] : [],
-    );
+    if (node.group.kind !== 'phase') return nothing;
+    // The header counts the whole subtree, exactly as renderRunBand does.
+    const calls = collectWorkflowCalls(node);
     if (calls.length === 0) return nothing;
     return html`${renderWorkflowCallTally(calls)}
       <span class="group-dots" aria-hidden="true"
@@ -479,10 +477,8 @@ export class TaskGroupList extends LitElement {
   }
 
   /** Render child group header inline (only called for non-root groups) */
-  private renderGroupHeader(
-    group: TaskGroup,
-    rows: readonly TranscriptRow[],
-  ): TemplateResult {
+  private renderGroupHeader(node: GroupTree): TemplateResult {
+    const { group } = node;
     const formattedStartTime = getTimeFormatter().format(
       new Date(group.startTime),
     );
@@ -509,7 +505,7 @@ export class TaskGroupList extends LitElement {
         })}
       </span>
       <span class="group-title">${title}</span>
-      ${this.renderGroupProgress(group, rows)}
+      ${this.renderGroupProgress(node)}
       <span class="group-time">
         <span class="group-start-time">
           ${waIcon('clock')} ${formattedStartTime}
@@ -540,7 +536,7 @@ export class TaskGroupList extends LitElement {
     node: GroupTree,
     isRoot = false,
   ): TemplateResult | typeof nothing {
-    const { group, rows } = node;
+    const { group } = node;
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
@@ -579,7 +575,7 @@ export class TaskGroupList extends LitElement {
             [`is-${group.status}`]: true,
           })}
         >
-          ${this.renderGroupHeader(group, rows)}
+          ${this.renderGroupHeader(node)}
         </div>
         <div id=${contentId} class="log-group-content">
           ${expanded ? this.renderGroupBody(node) : nothing}

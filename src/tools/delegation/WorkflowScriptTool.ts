@@ -64,11 +64,11 @@ import {
   assertWorkflowFilesExist,
   rejectOversizedBibAttachments,
 } from './inputFields';
+import { selectAvailableDelegationModel } from './delegationAvailability';
 import {
   proposalResultToToolResult,
   requestDelegationProposal,
   requireWorkflowOrToolUseAgent,
-  selectAvailableDelegationModel,
 } from './proposalFlow';
 
 const WorkflowScriptToolInputSchema = z
