@@ -905,6 +905,14 @@ describe('CLI workflow-script child-stream transcript', () => {
       ).pending,
     ).toEqual([]);
 
+    // A run's open phase is the shared stage fact, which the applier writes
+    // from the same `stage.start` this test's `openStage` emitted; the header
+    // reads it there rather than scanning for a phase row of its own.
+    boundState.getOrCreateStreamState(STREAM_ID, AgentCategory.Workflow);
+    boundState.updateStreamState(STREAM_ID, (prev) => ({
+      ...prev,
+      stage: { kind: 'phase', label: 'Draft sections' },
+    }));
     const staticItems = appendItems([], {
       childRosters: new Map([
         [

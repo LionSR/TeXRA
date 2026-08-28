@@ -27,11 +27,12 @@ import {
   parentStream as parentStreamSignal,
   sessionStateRevision,
   streamMetadataFor,
+  streamStateFor,
   type ChildRosters,
 } from '../state/childExecutions';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import { streamViewForId } from '../state/streamViews';
-import { ancestorWorkflowPhaseHeading } from '../state/workflowPhase';
+import { ancestorWorkflowPhaseLabel } from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import {
@@ -144,13 +145,12 @@ export function sessionHeaderIdentityLine(
       view.info?.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
         : 'subagent';
-    const phase = ancestorWorkflowPhaseHeading({
+    const phaseText = ancestorWorkflowPhaseLabel({
       categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
+      stageOf: (id) => streamStateFor(id)?.stage,
       parentStream,
       streamId: context.streamId,
-      streams: context.streams,
     });
-    const phaseText = phase?.heading;
     return phaseText
       ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${view.parentLabel} · model: ${model}`
       : `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;

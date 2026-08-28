@@ -105,15 +105,8 @@ export interface TranscriptFoldState {
   latestUserPos: number;
   /** Index of the last finalized model-response row with text, or -1. */
   latestResponsePos: number;
-  /** Projection-mode bits `items` was built under; a flip forces a rebuild. */
-  workflowOperationalOnly: boolean;
+  /** Projection-mode bit `items` was built under; a flip forces a rebuild. */
   projectLifecycleToTaskGroups: boolean;
-  /** Highest-seq live-activity entry (drives the thinking indicator). */
-  liveActivityEntry?: StreamLogEntry;
-  /** Latest durable workflow-attempt marker and its source order. */
-  workflowAttemptId?: string;
-  workflowAttemptBoundaryDeclared: boolean;
-  workflowAttemptSeqNo: number;
   /** Local rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly TranscriptRow[];
   /** Incremental task-group / compaction memos. Unlike the fold fields above

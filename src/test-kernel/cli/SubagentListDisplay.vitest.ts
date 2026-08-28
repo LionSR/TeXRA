@@ -63,6 +63,7 @@ import { buildChildRosters } from '@test/support/childRosters';
 import {
   fileListRowFixture,
   toolRowFixture,
+  workflowPhaseGrouping,
 } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -78,14 +79,18 @@ function session(id: string, active = false): StreamView {
   };
 }
 
+/** A workflow root as its own run emits it — see `workflowPhaseGrouping`. */
 function workflowAgentSlice(
   id: string,
   overrides: Partial<StreamSlice>,
 ): StreamSlice {
+  const grouping = workflowPhaseGrouping(overrides.entries ?? []);
   return {
     ...emptySlice(id as StreamTabId),
     status: STREAM_PHASE.COMPLETED,
     ...overrides,
+    entries: grouping.entries,
+    ...(overrides.taskGroups ? {} : { taskGroups: grouping.taskGroups }),
   };
 }
 
@@ -1077,8 +1082,16 @@ describe('CLI child list display model', () => {
     const wideOutput = await renderAtColumns(100);
     const narrowOutput = await renderAtColumns(99);
 
-    expect(wideOutput).toContain('research-workflow · Map (1/2) · 2/4 done');
-    expect(wideOutput).toContain('Map (1/2) · 0/2');
+    // The panel heading tallies the run; each phase row tallies its own calls
+    // with the same `done/total · N running · N failed` fold the board's phase
+    // headers use, so the two numbers on screen are never the same number.
+    expect(wideOutput).toContain('research-workflow · 2/4 done');
+    expect(wideOutput).toContain('Map (1/2) · 0/2 · 1 running');
+    expect(wideOutput).toContain('Write (2/2) · 2/2');
+    // Focused and unfocused phase rows start their text in the same column,
+    // and so do the task rows under them.
+    expect(wideOutput).toContain('\n › ◆ Map (1/2)');
+    expect(wideOutput).toContain('\n   ◆ Write (2/2)');
     expect(wideOutput).toContain('Duplicate · Planned');
     expect(wideOutput).toContain('Duplicate · Running');
     expect(wideOutput).toContain('exact-live-model');
@@ -1100,6 +1113,8 @@ describe('CLI child list display model', () => {
     expect(narrowOutput).toContain('↓999');
     expect(narrowOutput).toContain('$0.125');
     expect(narrowOutput).toContain('Cached without child · Saved result');
+    // The full-width list adds one marker per call beside the phase tally.
+    expect(narrowOutput).toContain('Map (1/2) · 0/2 · 1 running □☐');
     for (const [output, columns] of [
       [wideOutput, 100],
       [narrowOutput, 99],
@@ -1111,7 +1126,7 @@ describe('CLI child list display model', () => {
     }
   });
 
-  it('collapses phase labels, synthesizes missing groups, and rejects ambiguous child facts', async () => {
+  it('keeps same-named phase stages apart and collects call-less phases, rejecting ambiguous child facts', async () => {
     const run = 'grouped-run' as StreamTabId;
     const shared = 'shared-child' as StreamTabId;
     const fallback = 'fallback-child' as StreamTabId;
@@ -1253,13 +1268,18 @@ describe('CLI child list display model', () => {
       { until: (frame) => frame.includes('Fallback · Finished') },
     );
 
-    expect(wideOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
-    expect(wideOutput).toContain('Synthesis · 0/1');
-    expect(wideOutput).toContain('Unphased · 3/7');
+    // Two stages that share the label `Map` are two phases, because the run
+    // opened two of them — the board's group tree says the same. A call whose
+    // declared phase never opened a stage (`Synthesis`) belongs to no group at
+    // all, and joins the trailing collection with the phase-less ones rather
+    // than conjuring a phase nothing entered.
+    expect(wideOutput.match(/Map \(1\/2\) · 0\/0/g)).toHaveLength(1);
+    expect(wideOutput.match(/Map · 0\/1/g)).toHaveLength(1);
+    expect(wideOutput).not.toContain('Synthesis');
+    expect(wideOutput).toContain('Unphased · 3/8 · 3 running');
     expect(wideOutput).toContain('Synthesize · Planned');
-    expect(narrowOutput.match(/Map \(1\/2\) · 0\/1/g)).toHaveLength(1);
-    expect(narrowOutput).toContain('Synthesis · 0/1');
-    expect(narrowOutput).toContain('Unphased · 3/7');
+    expect(narrowOutput.match(/Map \(1\/2\) · 0\/0/g)).toHaveLength(1);
+    expect(narrowOutput).toContain('Unphased · 3/8 · 3 running');
     expect(narrowOutput).toContain('Loose · Planned');
 
     const reusedLine = narrowOutput

@@ -1726,6 +1726,13 @@ describe('CLI conversation transcript', () => {
         agentCategory: AgentCategory.Workflow,
         config: { model: 'kimi26T' },
       });
+      // The open phase is the shared stage fact every host names a phase from,
+      // not a transcript row this host happens to hold.
+      childState.getOrCreateStreamState(WORKFLOW, AgentCategory.Workflow);
+      childState.updateStreamState(WORKFLOW, (prev) => ({
+        ...prev,
+        stage: { kind: 'phase', label: 'Survey', index: 0, total: 1 },
+      }));
       childState.updateStreamMetadata(TASK, {
         config: { model: 'kimi26T' },
       });

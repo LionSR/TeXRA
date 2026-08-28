@@ -10,7 +10,10 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
-import type { WorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import {
+  workflowPhaseHeadingOfGroup,
+  type WorkflowPhaseHeading,
+} from '@shared/copy/workflowCall';
 
 // Local imports - TUI presentation constants
 import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from '../panes/SubagentListDisplay';
@@ -27,9 +30,8 @@ export type WorkflowTaskEntry = TranscriptRowOf<'workflowTask'>;
 
 export interface WorkflowPhaseGroup {
   readonly value: ChildListValue;
-  readonly label: string;
-  /** The phase's own heading facts, once a phase row has named it. */
-  readonly heading?: WorkflowPhaseHeading;
+  /** The phase's own heading facts, as its `TaskGroup` states them. */
+  readonly heading: WorkflowPhaseHeading;
   readonly tasks: readonly WorkflowTaskEntry[];
 }
 
@@ -44,7 +46,8 @@ type WorkflowChildTaskIndex = ReadonlyMap<
 export interface WorkflowDashboardModel {
   /** The workflow stream the dashboard is rooted on. */
   readonly root: StreamSlice;
-  /** Phase groups in first-appearance order; tasks stay in transcript order. */
+  /** Phase groups in the order the run opened them; tasks stay in transcript
+   *  order. */
   readonly groups: readonly WorkflowPhaseGroup[];
   /** Every task, in transcript-entry order. */
   readonly tasks: readonly WorkflowTaskEntry[];
@@ -68,62 +71,55 @@ export interface WorkflowDashboardModel {
 
 interface MutableWorkflowPhaseGroup {
   readonly value: ChildListValue;
-  readonly label: string;
-  heading?: WorkflowPhaseHeading;
+  readonly heading: WorkflowPhaseHeading;
   readonly tasks: WorkflowTaskEntry[];
 }
 
-/** Heading facts of one phase row, with counts omitted by the row (a
- *  GROUP_END row can omit them) retained from the previous heading. */
-function phaseHeading(
-  entry: TranscriptRowOf<'phase'>,
-  previous: WorkflowPhaseHeading | undefined,
-): WorkflowPhaseHeading {
-  const phaseIndex = entry.phaseIndex ?? previous?.phaseIndex;
-  const phaseTotal = entry.phaseTotal ?? previous?.phaseTotal;
-  return {
-    phaseLabel: entry.phaseLabel,
-    ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-    ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-  };
-}
-
-/** Derive the dashboard rows for one workflow root at one terminal width. */
+/** Derive the dashboard rows for one workflow root at one terminal width.
+ *
+ *  Phases are the run's own `phase` task groups, and a call joins the group
+ *  its `groupId` names — the same classification the progress view's group
+ *  tree makes (`messageIndex.rebuildTree`). Grouping by the call's `phase`
+ *  *label* instead would fuse two same-named phases and lose a phase the
+ *  script opened but never filled. */
 export function workflowDashboardModel(
   root: StreamSlice,
   columns: number,
 ): WorkflowDashboardModel {
   const groups: MutableWorkflowPhaseGroup[] = [];
-  const byPhase = new Map<string | undefined, MutableWorkflowPhaseGroup>();
-  const tasks: WorkflowTaskEntry[] = [];
-  // The transcript fold already holds exactly the current attempt's rows
-  // (`transcriptFold.ts`), one per logical call, so no re-selection here.
-  for (const entry of root.entries) {
-    if (entry.kind !== 'phase' && entry.kind !== 'workflowTask') continue;
-    const phase = entry.kind === 'phase' ? entry.phaseLabel : entry.call.phase;
-    let group = byPhase.get(phase);
-    if (!group) {
-      group = {
-        value: workflowPhaseListValue(entry.id),
-        label: phase ?? 'Unphased',
-        ...(entry.kind === 'phase'
-          ? { heading: phaseHeading(entry, undefined) }
-          : {}),
-        tasks: [],
-      };
-      byPhase.set(phase, group);
-      groups.push(group);
-    } else if (entry.kind === 'phase') {
-      // A rerun may retain the same phase label with revised index/total data.
-      // Keep the stable first-appearance row identity, but display the latest
-      // heading facts just as the status band does.
-      group.heading = phaseHeading(entry, group.heading);
-    }
-    if (entry.kind === 'workflowTask') {
-      group.tasks.push(entry);
-      tasks.push(entry);
-    }
+  const byGroupId = new Map<string, MutableWorkflowPhaseGroup>();
+  for (const group of root.taskGroups) {
+    if (group.kind !== 'phase') continue;
+    const phaseGroup: MutableWorkflowPhaseGroup = {
+      value: workflowPhaseListValue(group.id),
+      heading: workflowPhaseHeadingOfGroup(group),
+      tasks: [],
+    };
+    groups.push(phaseGroup);
+    byGroupId.set(group.id, phaseGroup);
   }
+  const tasks: WorkflowTaskEntry[] = [];
+  // A call the run issued outside any open phase has no group to sit under.
+  // The board leaves such a row ungrouped in the root timeline; the dashboard
+  // is a phase list, so it collects them into one trailing group rather than
+  // dropping rows the keyboard could otherwise never reach.
+  let ungrouped: MutableWorkflowPhaseGroup | undefined;
+  for (const entry of root.entries) {
+    if (entry.kind !== 'workflowTask') continue;
+    tasks.push(entry);
+    const group = entry.groupId ? byGroupId.get(entry.groupId) : undefined;
+    if (group) {
+      group.tasks.push(entry);
+      continue;
+    }
+    ungrouped ??= {
+      value: workflowPhaseListValue(entry.id),
+      heading: { phaseLabel: 'Unphased' },
+      tasks: [],
+    };
+    ungrouped.tasks.push(entry);
+  }
+  if (ungrouped) groups.push(ungrouped);
 
   const childTaskIndex = new Map<StreamTabId, WorkflowTaskEntry | null>();
   for (const entry of tasks) {

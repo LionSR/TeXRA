@@ -20,11 +20,7 @@
 // `./transcriptFold` remains only to cover rows persisted before that
 // landed; it is idempotent on already-redacted text.
 
-import {
-  AgentCategory,
-  MESSAGE_TYPES,
-  type StreamTabId,
-} from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { subscribeToSignalChanges } from '@shared/signals';
 import {
@@ -52,7 +48,6 @@ import {
   compactWorkflowEntries,
   createTranscriptFoldState,
   isFullLogChildStream,
-  logEntryStreamIsRunning,
   newFoldChangeFlags,
   resetTranscriptFoldState,
   workflowOperationalLatestLine,
@@ -284,7 +279,10 @@ export function syncStreamLog(
   patchStream(streamId, (slice, lifecycle) => {
     const workflowStream = metadata?.agentCategory === AgentCategory.Workflow;
     const fullLogChild = isFullLogChildStream(metadata?.identity);
-    const workflowOperationalOnly = workflowStream && !fullLogChild;
+    // Which line a workflow-agent stream reports as its live status is CLI
+    // chrome, not transcript membership: the rows themselves are the same set
+    // every host renders.
+    const workflowStatusFeed = workflowStream && !fullLogChild;
     // Run/round/session headings go to the task-group surface wherever this
     // host paints one. The single exception is a full-log child that is not a
     // workflow run — a detached process or an external-CLI session, which has
@@ -296,7 +294,6 @@ export function syncStreamLog(
     const state = slice.transcriptFold ?? createTranscriptFoldState();
     const flags = newFoldChangeFlags();
     const modeCurrent =
-      state.workflowOperationalOnly === workflowOperationalOnly &&
       state.projectLifecycleToTaskGroups === lifecycleToTaskGroups;
     // Fold continuity: same log instance, and either the buffered burst picks
     // up exactly where the state left off and reaches the log's emission
@@ -376,7 +373,6 @@ export function syncStreamLog(
         if (index < promotedCount) promotedIds.add(row.id);
       }
       resetTranscriptFoldState(state);
-      state.workflowOperationalOnly = workflowOperationalOnly;
       state.projectLifecycleToTaskGroups = lifecycleToTaskGroups;
       state.logInstanceId = log.instanceId;
       state.emissionSeq = log.emissionHead;
@@ -395,11 +391,15 @@ export function syncStreamLog(
     const compactingActive = compaction.blocks.some(
       (block) => block.status === 'running',
     );
-    const live = state.liveActivityEntry;
+    // The indicator reads the rows the transcript already holds — the newest
+    // thinking row, still streaming — rather than a second tracker over raw
+    // log entries. A thinking block the producer opened but never wrote text
+    // into projects no row, and so lights nothing up.
+    const lastThinkingRow = state.items.findLast(
+      (item) => item.rendered.kind === 'thinking',
+    )?.rendered;
     const thinkingActive =
-      live !== undefined &&
-      live.messageType === MESSAGE_TYPES.THINKING &&
-      logEntryStreamIsRunning(live);
+      lastThinkingRow?.kind === 'thinking' && lastThinkingRow.streaming;
 
     // Transcript-derived live status only. The shared metadata `description`
     // is the runtime's own one-liner and is never written from here.
@@ -408,7 +408,7 @@ export function syncStreamLog(
       latestUserPos >= 0
         ? transcriptRowHeadline(state.items[latestUserPos].rendered)
         : undefined;
-    const latestLine = workflowOperationalOnly
+    const latestLine = workflowStatusFeed
       ? (workflowOperationalLatestLine(state.items) ?? slice.latestLine)
       : ((state.latestResponsePos > latestUserPos
           ? transcriptRowHeadline(state.items[state.latestResponsePos].rendered)
