@@ -204,6 +204,8 @@ export class LitSessionRenderer implements SessionRendererPort {
         // Lit surfaces pause via the goal chip (`goalStateChanged`); no
         // transcript notice, unlike the TUI.
         return;
+      case 'subagents':
+        return this.updateStreamMetadata(streamId);
     }
     assertNever(slice, 'Unhandled session render slice');
   }
@@ -224,10 +226,6 @@ export class LitSessionRenderer implements SessionRendererPort {
       return;
     }
     this.sendIfActive(streamId, () => this.updateStreamMetadata(streamId));
-  }
-
-  onBadgesChanged(streamId: StreamTabId): void {
-    this.updateStreamMetadata(streamId);
   }
 
   onRunUsageChanged(

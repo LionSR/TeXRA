@@ -400,7 +400,9 @@ class HeadlessPort implements SessionRendererPort {
 
   dispose(): void {}
 
-  invalidate(_streamId: StreamTabId, _slice: SessionRenderSlice): void {}
+  invalidate(streamId: StreamTabId, slice: SessionRenderSlice): void {
+    if (slice === 'subagents') this.renderer.refreshFor(streamId, true);
+  }
 
   onStreamMetadataChanged(
     streamId: StreamTabId,
@@ -433,10 +435,6 @@ class HeadlessPort implements SessionRendererPort {
 
   onStageChanged(streamId: StreamTabId, _stage: StreamStage): void {
     this.renderer.refreshFor(streamId);
-  }
-
-  onBadgesChanged(streamId: StreamTabId): void {
-    this.renderer.refreshFor(streamId, true);
   }
 
   onRunUsageChanged(

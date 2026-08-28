@@ -94,10 +94,12 @@ class TuiSessionRenderer implements SessionRendererPort {
       case 'parentStreamId':
       case 'queuedFollowUps':
       case 'contextState':
+      case 'subagents':
         // The applier already landed the edge / the session-owned queue /
-        // the model handler's context snapshot on `SessionState`; the CLI's
-        // topology snapshot, `queuedFollowUpsFor`, and the status bar's
-        // `streamStateFor` read re-derive from there at paint.
+        // the model handler's context snapshot / the child-activity roster
+        // on `SessionState`; the CLI's topology snapshot, `queuedFollowUpsFor`,
+        // and the status bar's `streamStateFor` read re-derive from there at
+        // paint.
         return invalidateChildStreams();
       case 'goalPaused':
         return appendLocalAssistantTranscript(
@@ -147,13 +149,6 @@ class TuiSessionRenderer implements SessionRendererPort {
   onStageChanged(_streamId: StreamTabId, _stage: StreamStage): void {
     // `StreamExecutionState.stage` is written by the applier before this
     // callback; renderers re-read it.
-    invalidateChildStreams();
-  }
-
-  onBadgesChanged(_streamId: StreamTabId): void {
-    // The shared applier already landed this roster on `SessionState` — live
-    // rows plus the finished children it retains for display (phase-merged,
-    // 200-capped). The CLI reads it there; only the snapshots re-derive.
     invalidateChildStreams();
   }
 
