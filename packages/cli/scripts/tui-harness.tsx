@@ -271,7 +271,6 @@ const AGENT_PROPOSAL_INSTRUCTION =
     '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
-const CAN_SELECT_AGENT = process.env.HARNESS_CAN_SELECT_AGENT === '1';
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const DISABLED_MODEL_SWITCHES = new Set(
   parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
@@ -2393,7 +2392,9 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 registerBuiltinSlashCommands({
-  canSelectAgent: () => CAN_SELECT_AGENT,
+  // Mirror `texra chat`: agent selection is open exactly while no root run
+  // is pending, the same fact the status bar's `/agent` hint derives from.
+  canSelectAgent: () => !rootRunPending.get(),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
   getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
