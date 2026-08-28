@@ -87,8 +87,7 @@ async function listFiles(
 
 /**
  * List the workspace files of one listable type under the current file-list
- * settings. Empty when no workspace is open or the type has no configured
- * rules.
+ * settings. Empty when no workspace is open.
  */
 export async function listDesktopWorkspaceFiles(
   fileType: ListableFileType,
@@ -98,7 +97,7 @@ export async function listDesktopWorkspaceFiles(
   workspacePath: string | undefined,
 ): Promise<string[]> {
   const config = getFileListConfig(fileType, loadFileListSettings());
-  if (!workspacePath || !config) return [];
+  if (!workspacePath) return [];
   return listFiles(workspacePath, config);
 }
 
@@ -216,9 +215,7 @@ export function createDesktopFileSelection(
           // Electron's dialog filter extensions must not include the leading
           // dot (unlike getFileListConfig's `.tex`-style entries); the VS
           // Code picker gets this right via getFilterExtensions.
-          extensions: (listConfig?.include ?? ['*']).map((ext) =>
-            ext.replace(/^\./, ''),
-          ),
+          extensions: listConfig.include.map((ext) => ext.replace(/^\./, '')),
         },
       ],
     });

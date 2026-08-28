@@ -99,7 +99,6 @@ async function loadWorkspaceMatcher(gitignore: string) {
 type Matcher = Awaited<ReturnType<typeof loadMatcher>>;
 
 function expectEmptyMatcher(matcher: Matcher): void {
-  expect(matcher.hasRules).toBe(false);
   expect(matcher.ignoreFiles).toEqual([]);
   expect(matcher.ignores('paper.tex')).toBe(false);
 }

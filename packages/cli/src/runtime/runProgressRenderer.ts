@@ -439,8 +439,6 @@ class HeadlessPort implements SessionRendererPort {
     this.renderer.refreshFor(streamId, true);
   }
 
-  onMissingOutputsChanged(_streamId: StreamTabId): void {}
-
   onRunUsageChanged(
     _streamId: StreamTabId,
     _storageKey: string,

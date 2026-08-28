@@ -1056,9 +1056,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       // compacted items' input tokens. `applyTokenCountFailureFallback()`
       // prefers this value over the chain's cumulative count, and on the Codex
       // profile it is load-bearing: token counting
-      // is unavailable and `failWhenFallbackOutputBudgetIsReduced` fails the
-      // request locally when the estimate + budget overflow the context window,
-      // so an output-token underestimate could let through a request the backend
+      // is unavailable and the route-input-limit guard fails the request
+      // locally when the estimate + safety buffer overflow that limit, so an
+      // output-token underestimate could let through a request the backend
       // then rejects.
       tokensAfter: this.estimateResentInputTokens(compactedMessages),
       sourceMessages: messages,
@@ -1278,28 +1278,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
-   * Some Responses-compatible routes deliberately omit `max_output_tokens` from
-   * the wire request. When token counting is unavailable, a fallback estimate
-   * can detect that the requested output budget would exceed the context window,
-   * but such routes cannot enforce a reduced budget. They should fail locally
-   * instead of sending a request that the backend will reject opaquely.
-   */
-  protected shouldFailWhenFallbackOutputBudgetIsReduced(
-    inputEstimate: number,
-    _maxOutputTokens: number,
-    contextWindow: number,
-    buffer: number,
-  ): boolean {
-    if (
-      !this.getOpenAIResponseCapabilities()
-        ?.failWhenFallbackOutputBudgetIsReduced
-    ) {
-      return false;
-    }
-    return inputEstimate + buffer >= contextWindow;
-  }
-
-  /**
    * Estimates token count using OpenAI's native /responses/input_tokens endpoint.
    * This provides exact pre-flight token counts for the Responses API.
    *
@@ -1377,24 +1355,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       maxOutputTokens,
     );
     if (capped === maxOutputTokens) return maxOutputTokens;
-
-    if (
-      this.shouldFailWhenFallbackOutputBudgetIsReduced(
-        inputEstimate,
-        maxOutputTokens,
-        contextWindow,
-        buffer,
-      )
-    ) {
-      const error = new Error(
-        `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) + safety buffer (${buffer}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
-      );
-      // Tag with a typed marker so isContextWindowError() recognizes this
-      // internal case without depending on the message wording above, which
-      // this method (not a third-party provider) owns and may reword freely.
-      attachContextWindowError(error);
-      throw error;
-    }
 
     this.logger.debug('Fallback: adjusting max_output_tokens', {
       data: { before: maxOutputTokens, after: capped, inputEstimate },

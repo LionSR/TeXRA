@@ -326,7 +326,6 @@ export class ProgressBackend {
     ]);
     this.inFlightActivationGenerations.delete(generation);
     const transcriptLeaseResult = hydration[0];
-    const snapshotLeaseResult = hydration[1];
     const failures = hydration.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
@@ -350,10 +349,10 @@ export class ProgressBackend {
         `Failed to hydrate stream ${stream}`,
       );
     }
+    // Narrows the union for the .value reads below; the failures check above
+    // has already thrown for any rejection.
     if (transcriptLeaseResult.status !== 'fulfilled')
       throw transcriptLeaseResult.reason;
-    if (snapshotLeaseResult.status !== 'fulfilled')
-      throw snapshotLeaseResult.reason;
 
     const previousStream = this.presentation.activeStream;
     const previousTranscriptLease = this.transcriptPresentationLease;

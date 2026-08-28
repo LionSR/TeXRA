@@ -116,7 +116,6 @@ function buildMainViewExecutionRequest(
           file && isPastedImage(file) ? getPastedImageFullPath(file) : file,
         )
         .filter(filterNotNull),
-      editedFile: null,
     },
   });
 

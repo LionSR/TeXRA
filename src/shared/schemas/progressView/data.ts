@@ -105,7 +105,6 @@ export type NormalizedToolUse = {
   toolName: string;
   errorText: string;
   outputText: string;
-  spillPath?: string;
   exitCode?: number;
   userInstructionText: string;
   input: unknown;

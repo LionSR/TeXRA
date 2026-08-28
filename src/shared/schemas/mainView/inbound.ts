@@ -153,7 +153,6 @@ const InstructionMessages = [
       inputFiles: true,
       contextFiles: true,
       mediaFiles: true,
-      outputFiles: true,
     }).shape,
   }),
   z.object({

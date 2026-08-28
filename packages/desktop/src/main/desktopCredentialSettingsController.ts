@@ -34,9 +34,10 @@ import {
   type SettingsViewInboundHandlerRegistry,
   type SubscriptionUsageProvider,
   type SubscriptionUsageSnapshots,
+  type UpdateChatGptAuthStatusMessage,
+  type UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -119,19 +120,19 @@ const SUBSCRIPTION_STATUS_ROWS: Record<
   }
 > = {
   chatgpt: {
-    buildStatusMessage: () =>
-      buildAuthStatusMessage(
-        SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        getChatGptAuthStatus,
-      ),
+    buildStatusMessage: async () =>
+      ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+        status: await getChatGptAuthStatus(),
+      }) satisfies UpdateChatGptAuthStatusMessage,
     usageProvider: 'chatgpt',
   },
   grok: {
-    buildStatusMessage: () =>
-      buildAuthStatusMessage(
-        SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        getGrokAuthStatus,
-      ),
+    buildStatusMessage: async () =>
+      ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+        status: await getGrokAuthStatus(),
+      }) satisfies UpdateGrokAuthStatusMessage,
   },
 };
 

@@ -96,7 +96,6 @@ describe('provider capabilities', () => {
         storesResponsesServerSide: false,
         supportsInlineInputFileUpload: false,
         supportsToolResultFileUpload: false,
-        failWhenFallbackOutputBudgetIsReduced: true,
       },
     });
   });

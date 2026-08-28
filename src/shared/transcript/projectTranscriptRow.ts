@@ -400,7 +400,6 @@ export function projectTranscriptRow(
             : {}),
           parsedOutput: entry.data.output,
         }),
-        ...(toolUse.spillPath ? { spillPath: toolUse.spillPath } : {}),
       };
     }
 

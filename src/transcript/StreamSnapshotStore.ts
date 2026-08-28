@@ -602,9 +602,6 @@ export class StreamSnapshotStore {
   }
 
   private kv(streamId: StreamTabId): KVStore {
-    // Record creation on read-only access stays deliberate:
-    // hasDiskProvenance() keys off record presence.
-    this.getOrCreateRecord(streamId);
     // A handle holds only the storage-root-relative directory and every
     // operation re-resolves the root, so constructing one per access is
     // equivalent to caching it and never goes stale.

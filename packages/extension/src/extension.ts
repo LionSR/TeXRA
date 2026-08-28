@@ -17,11 +17,7 @@ import {
   teardownDefaultSession,
 } from '@agent/runtime';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
-import {
-  getAuthCallbackUri,
-  setExternalAuthCallbackResolver,
-  setRuntimeExtensionId,
-} from '@auth/config';
+import { setRuntimeExtensionId } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
@@ -454,21 +450,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   try {
     setRuntimeExtensionId(context.extension.id);
-    setExternalAuthCallbackResolver(async () => {
-      const baseCallbackUri = vscode.Uri.parse(
-        getAuthCallbackUri(vscode.env.uriScheme),
-      );
-      const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-
-      // asExternalUri adds a ?state= routing token in Codespaces; carrying it on
-      // fullUrl (used as redirectTo) is what routes the callback back into the
-      // editor. skipEncoding (toString(true)) so auth-js's encodeURIComponent
-      // over redirectTo does not double-encode the already percent-encoded
-      // token; double-encoding corrupts it and the callback never returns
-      // (silent timeout).
-      return { fullUrl: externalUri.toString(true) };
-    });
-
     const authProvider = new SupabaseAuthProvider({
       showError: (msg) => void vscode.window.showErrorMessage(msg),
       showInfo: (msg) => void vscode.window.showInformationMessage(msg),

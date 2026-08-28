@@ -169,7 +169,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       typeof import('@agent/runtime/streamApprovalQueue')
     >('@agent/runtime/streamApprovalQueue');
     // Session-owned approval state (bypass reads) for the fake run session.
-    const approvals = createSessionApprovals();
+    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     return {
       ...actual,
       tryUseRunContext: vi.fn(() =>

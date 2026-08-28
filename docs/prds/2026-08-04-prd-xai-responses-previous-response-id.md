@@ -106,18 +106,17 @@ Optional thin subclass responsibilities only:
 
 Use the existing `openAIResponses` profile knobs (name is historical):
 
-| Flag                                    | xAI MVP                                                  |
-| --------------------------------------- | -------------------------------------------------------- |
-| `supportsResponseChaining`              | `true`                                                   |
-| `storesResponsesServerSide`             | `true`                                                   |
-| `backgroundMode`                        | `disabled`                                               |
-| `streaming`                             | `base` (normal streaming)                                |
-| `webSocket`                             | off / never selected for non-OpenAI base URL             |
-| `supportsTokenCounting`                 | `false` until `/responses/input_tokens` verified         |
-| `supportsManualCompaction`              | `true` only after compact smoke; else client path or off |
-| `supportsInlineInputFileUpload`         | `false` until proven                                     |
-| `supportsToolResultFileUpload`          | `false` until proven                                     |
-| `failWhenFallbackOutputBudgetIsReduced` | start `false`; tighten if needed                         |
+| Flag                            | xAI MVP                                                  |
+| ------------------------------- | -------------------------------------------------------- |
+| `supportsResponseChaining`      | `true`                                                   |
+| `storesResponsesServerSide`     | `true`                                                   |
+| `backgroundMode`                | `disabled`                                               |
+| `streaming`                     | `base` (normal streaming)                                |
+| `webSocket`                     | off / never selected for non-OpenAI base URL             |
+| `supportsTokenCounting`         | `false` until `/responses/input_tokens` verified         |
+| `supportsManualCompaction`      | `true` only after compact smoke; else client path or off |
+| `supportsInlineInputFileUpload` | `false` until proven                                     |
+| `supportsToolResultFileUpload`  | `false` until proven                                     |
 
 ### 5.3 Request shape (MVP)
 
