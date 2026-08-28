@@ -56,6 +56,7 @@ import { getBasename } from '@utils/core';
 import { BaseApprovalPanel } from './BaseApprovalPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
+import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 
@@ -369,10 +370,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       ${repeat(
         flags,
         (flag) => flag,
-        (flag) =>
-          html`<wa-badge variant="neutral" appearance="filled"
-            >${waIcon('image')} ${flag}</wa-badge
-          >`,
+        (flag) => buildStatusBadge('image', flag),
       )}
     </div>`;
   }
