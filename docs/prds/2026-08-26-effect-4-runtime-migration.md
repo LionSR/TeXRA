@@ -1,6 +1,6 @@
 ---
 created: 2026-08-26
-updated: 2026-08-27
+updated: 2026-08-28
 ---
 
 # PRD: Effect 4 as the TeXRA backend runtime
@@ -193,6 +193,35 @@ These structures should not all be rewritten as PocketFlow graphs, and they
 should not all become Effect schedules. They do, however, share three runtime
 needs: scoped execution, typed exits, and a durable activity boundary for
 external work.
+
+### 2.5 Second survey: repeated mechanism families
+
+A follow-up survey on 2026-08-28 read, file by file, the backend zones the
+first pass covered only through counters: `src/tools`, the model handlers,
+transcript and storage persistence, the CLI and desktop host backends,
+controllers, and auth. Its strongest result is not any single site. It is
+that the same small runtime mechanism is re-implemented independently, with
+slightly different correctness conditions, in subsystems that share no code.
+
+| Family                                                               | Independent hand implementations (verified examples)                                                                                                                                                                                                                                                          | Replacement                                                                                                            |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| One-shot settlement: captured resolver plus a settled/identity guard | Three deferreds in the CLI headless-run skeleton (`runExecution.ts`); the pending-approval registry (`ApprovalRequestHandler.ts`); session-claim reservations (`agentCliSessionRegistry.ts`); lease release (`executionLease.ts`); two `settled` flags in the OpenAI WebSocket transport                      | `Deferred`; once-only settlement is the built-in invariant, so every guard deletes                                     |
+| Single-flight memo with a generation counter or identity CAS         | `SupabaseSession.refreshPromise`; `runtimeModelRegistry.ts`; `ModelCell.ts`; `StreamLogStore.ensureLoaded`; `coalesceAsync`                                                                                                                                                                                   | `SynchronizedRef` plus cached effects; the counters exist only because a promise memo cannot be atomically invalidated |
+| Per-key queue with an idle-GC epilogue                               | Five slightly different "delete the queue from its map once idle" epilogues: `jsonStore.ts`, `TexraTranscriptRecorder.ts`, `executionLease.ts`, `StreamSnapshotStore.ts`, `executionRegistry.ts` — beside `perKeyQueue.ts`, which factors out only the creation half                                          | Keyed semaphore under `Scope`; lifetime is the scope, not an epilogue                                                  |
+| Timers and backoff with injected clock seams                         | `annotationFetchBudget.ts`, a hand-rolled token bucket whose header documents its injectable clock and `resetForTests`; `deviceCodePoll.ts` `now`/`sleep` injection; the `PollingSourceBase.ts` per-subscription failure ledger; `BackgroundPoller.ts` deadline arithmetic; `directLspAdapter.ts` idle timers | `Schedule` and one clock; the injection seams and `resetForTests` delete                                               |
+| Cancellation races and normalization                                 | `abandonOnAbort` (`tools/support/rateLimiter.ts`); `waitWithTimeout` (`ExecutionsTool.ts`); hand-minted `DOMException`s in the retry gate and WebSocket transport; `isUserAbort` re-derivation at roughly ten sites; a regex over error messages classifying disposal (`lean/direct/jsonRpc.ts`)              | Interruption as the one cancellation channel; `Cause` distinguishes it by construction                                 |
+| Streaming finalize choreography                                      | Six near-identical provider blocks (Anthropic, OpenAI, OpenAI Responses, Google, VS Code LM, OpenRouter), one carrying an explicit `streamsFinalized` flag so `finally` cannot overwrite the success path                                                                                                     | Scoped stream handles with an `Exit` fold; error-path finalization becomes automatic                                   |
+| Hand-built pools, breakers, and sagas                                | The ref-counted keyed Lean LSP session pool (`directLspAdapter.ts`, ~330 lines); the per-route circuit breaker (`ModelRetryGate.ts`, 348 lines); staged two-phase stream deletion (`StagedDeletionCoordinator.ts`, 644 lines); the API-key routing rollback saga (`ProgressApiKeyRetryController.ts`)         | `RcMap`, `acquireUseRelease` with an `Exit` fold, rate limiting, LIFO finalizers                                       |
+| Polling for an in-process fact                                       | A 25 ms poll loop for the stream id whose own comment states the queue library "doesn't have an 'await predicate' primitive" (`chatSubmitDriver.ts`); the diff-host quiescence detector (`desktopDiffHost.ts`); the session-claim respin (`agentCliShared.ts`)                                                | `Deferred` and fiber joins; waiting for an in-process fact is never polling                                            |
+
+These findings change no decision in this PRD. They widen the Phase 3 and
+Phase 5 deletion pool, provide concrete inputs for the Phase 0 catch and
+installer censuses, and sharpen phase acceptance: when a phase completes, its
+rows here must name deleted code, not surviving parallels. Two of the sites
+carry the survey's conclusion in their own comments — a poll loop written for
+want of an awaitable predicate, and a token bucket written for want of a
+controllable clock. Contributors are already paying for the missing runtime
+one workaround at a time.
 
 ## 3. Problems to solve
 
@@ -1209,7 +1238,9 @@ must have become unreachable.
 
 ### Phase 5 — coordination, time, and resilience
 
-Migrate one subsystem at a time, in this order:
+The §2.5 family table names the verified sites behind each subphase; those
+rows are this phase's deletion checklist. Migrate one subsystem at a time,
+in this order:
 
 1. deferred follow-up and interaction waits;
 2. retry and timeout helpers;
