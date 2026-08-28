@@ -15,7 +15,7 @@
 
 import { signal } from '@lit-labs/signals';
 
-export interface TerminalCapabilities {
+interface TerminalCapabilities {
   /** Kitty keyboard progressive enhancement protocol (`CSI ? u`). */
   readonly kittyKeyboard: boolean;
   /** OSC 4 (color table) is honored — proxy for OSC-family support. */
@@ -54,7 +54,7 @@ const RESPONSE_MARKERS = {
 const DA1_RESPONSE = /\[\?[\d;]*c/;
 /* eslint-enable no-control-regex */
 
-export interface DiscoveryStreams {
+interface DiscoveryStreams {
   readonly stdin: NodeJS.ReadStream;
   readonly stdout: NodeJS.WriteStream;
 }

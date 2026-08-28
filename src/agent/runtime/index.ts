@@ -91,9 +91,6 @@ export type {
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
-// executionRegistry
-export type { ManualCompactionRequestResult } from './executionRegistry';
-
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';
 export type { FileContext } from './textEnhancement';
