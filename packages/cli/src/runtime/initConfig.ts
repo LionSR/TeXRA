@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import writeFileAtomic from 'write-file-atomic';
 
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 
@@ -46,12 +46,15 @@ export function serializeInitConfig(config: InitConfigShape): string {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
-export async function configFileExists(filePath: string): Promise<boolean> {
+/** `false` only for a genuinely absent path; any other failure (EACCES, EIO)
+ *  propagates instead of being reported as "absent". */
+export async function pathExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    if (isFileNotFoundError(error) || isNotADirectoryError(error)) return false;
+    throw error;
   }
 }
 

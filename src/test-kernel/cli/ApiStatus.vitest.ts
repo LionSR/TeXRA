@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatCliApiStatusActionHint,
-  formatCliAuthStatusLine,
-} from '@cli/runtime/apiStatus';
+import { formatCliAuthStatusLine } from '@cli/runtime/apiStatus';
 
 describe('CLI API status text', () => {
   it.each<[Parameters<typeof formatCliAuthStatusLine>[0], string]>([
@@ -24,31 +21,5 @@ describe('CLI API status text', () => {
     [{ authenticated: false }, 'auth: signed out'],
   ])('formats auth status %j as "%s"', (status, expected) => {
     expect(formatCliAuthStatusLine(status)).toBe(expected);
-  });
-
-  it.each<
-    [
-      Parameters<typeof formatCliApiStatusActionHint>[0],
-      Parameters<typeof formatCliApiStatusActionHint>[1],
-      string,
-    ]
-  >([
-    [
-      { authenticated: true },
-      undefined,
-      'actions: choose Model access below; `texra logout` signs out',
-    ],
-    [
-      { authenticated: false },
-      undefined,
-      'actions: choose Model access below, add a provider key, or sign in with Researcher Access',
-    ],
-    [
-      { authenticated: false },
-      { hasPersonalKey: true },
-      'actions: choose Model access below; provider keys are configured',
-    ],
-  ])('formats the action hint (%#)', (auth, options, expected) => {
-    expect(formatCliApiStatusActionHint(auth, options)).toBe(expected);
   });
 });

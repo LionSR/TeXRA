@@ -15,7 +15,7 @@ import {
 } from '../runtime/modelAccess';
 import {
   buildInitConfig,
-  configFileExists,
+  pathExists,
   ensureTexraGitignored,
   writeInitConfig,
   type GitignoreOutcome,
@@ -168,7 +168,7 @@ async function runInit(
   await initCliPlatform({ ...context, quietLogs: true });
 
   const filePath = workspaceTexraConfigPath(context.cwd);
-  if (!opts.force && (await configFileExists(filePath))) {
+  if (!opts.force && (await pathExists(filePath))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );

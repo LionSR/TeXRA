@@ -78,11 +78,6 @@ interface CliExecuteOptions {
   readonly canAdvertiseInterruptedExecution?: (
     resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
   ) => boolean;
-  /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
-   *  runtime-host lifecycle into the caller. */
-  readonly wrap?: (
-    run: () => Promise<ExecuteAgentResult>,
-  ) => Promise<ExecuteAgentResult>;
 }
 
 type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
@@ -224,8 +219,8 @@ export async function executeCliToolUseConfig(
 
 /**
  * Shared headless-execution skeleton for `run`, `agents run`, and
- * `multi-agent run`: stand up a runtime host, run the request (optionally
- * wrapped), always close the host, and resolve the terminal outcome.
+ * `multi-agent run`: stand up a runtime host, run the request, always close
+ * the host, and resolve the terminal outcome.
  * Centralizing this stops the three runners from drifting apart on host
  * lifecycle and outcome handling, which is how their behavior diverged before.
  *
@@ -524,7 +519,7 @@ export async function executeCliRequest(
     await presentationHost.close();
   };
   try {
-    const result = await (options.wrap ? options.wrap(invoke) : invoke());
+    const result = await invoke();
     runResult = { ok: true, result };
   } catch (err) {
     // Only a classified, already-handled AgentError resolves to a non-zero

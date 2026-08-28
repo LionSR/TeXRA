@@ -139,10 +139,7 @@ import {
   resolveCliModelAccessRoute,
 } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
-import {
-  formatCliApiStatusActionHint,
-  formatCliAuthStatusLine,
-} from '../src/runtime/apiStatus';
+import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
 import {
   buildCliAgentItems,
   buildCliOrchestrationItems,
@@ -630,7 +627,6 @@ function harnessOrchestrationStatusLines(): readonly string[] {
   return [
     `api: ${formatCliModelAccessRouteInline('personal')}`,
     formatCliAuthStatusLine(profile),
-    formatCliApiStatusActionHint(profile),
   ];
 }
 

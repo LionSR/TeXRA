@@ -1,10 +1,11 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { pathExists } from '../runtime/initConfig';
 import { tryOpenBrowser } from '../runtime/browser';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
@@ -98,15 +99,6 @@ interface InstallOptions {
   readonly base: string | undefined;
   readonly force: boolean;
   readonly openPr: boolean;
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await stat(target);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function compareUrl(slug: GitHubSlug, base: string, branch: string): string {

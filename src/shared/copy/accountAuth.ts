@@ -90,8 +90,6 @@ export const RESEARCHER_ACCESS_AUTH = {
   logoutDescription: `Sign out of your ${RESEARCHER_ACCESS.label} account`,
   /** `/login` slash-command description. */
   slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label} or ${RESEARCHER_ACCESS.label}`,
-  /** Longer launcher action hint when keys are also an option. */
-  actionHintLoginOrKey: `choose Model access below, add a provider key, or sign in with ${RESEARCHER_ACCESS.label}`,
   startingDevice: `Starting ${RESEARCHER_ACCESS.label} device-code sign-in.`,
   startingNoBrowser: (provider: string): string =>
     `Starting ${RESEARCHER_ACCESS.label} ${provider} sign-in.`,
