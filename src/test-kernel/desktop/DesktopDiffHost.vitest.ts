@@ -35,14 +35,14 @@ vi.mock('node:timers/promises', async (importOriginal) => {
   return {
     ...original,
     setTimeout: vi.fn(
-      (_delay: number, _value?: unknown, options?: { signal?: AbortSignal }) =>
-        new Promise<void>((resolve, reject) => {
+      (delay: number, value?: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise<unknown>((resolve, reject) => {
           const signal = options?.signal;
           if (signal?.aborted) {
             reject(signal.reason ?? new Error('Aborted'));
             return;
           }
-          const timer = setTimeout(() => resolve(), _delay);
+          const timer = setTimeout(() => resolve(value), delay);
           signal?.addEventListener(
             'abort',
             () => {
