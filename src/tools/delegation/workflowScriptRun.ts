@@ -131,8 +131,13 @@ function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
 
 type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
 
+/**
+ * Keys are unique per run (the engine faults duplicates), so the key alone
+ * identifies an attempt; a replayed entry re-journaled at a new index still
+ * matches the attempt that produced it.
+ */
 function workflowAttemptIdentity(invocation: WorkflowAttemptIdentity): string {
-  return `${invocation.index}:${invocation.key}`;
+  return invocation.key;
 }
 
 interface WorkflowAttemptCostTracker {

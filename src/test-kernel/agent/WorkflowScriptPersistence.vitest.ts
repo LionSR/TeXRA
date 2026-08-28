@@ -892,9 +892,9 @@ return 'guest success'`,
       runAgent: retryRunner,
     });
 
-    // 'first' is unchanged (same index + prompt hash) so it replays free;
-    // only the drifted second call executes live, and the evolved script
-    // becomes the stored one.
+    // 'first' is unchanged (same prompt hash) so it replays free; only the
+    // drifted second call executes live, and the evolved script becomes the
+    // stored one.
     expect(retryRunner).toHaveBeenCalledTimes(1);
     expect(evolved.result).toEqual(['v1:first', 'v2:changed']);
     await expect(
@@ -905,6 +905,41 @@ return 'guest success'`,
     ).resolves.toMatchObject({
       script: expect.stringContaining(`agent('changed')`),
     });
+  });
+
+  it('replays a call that moved because a sibling was inserted before it', async () => {
+    const store = getExecutionStore(executionId);
+    await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'moved-call',
+      script,
+      runAgent: async ({ prompt }) => `v1:${prompt}`,
+    });
+
+    clearStoreCache();
+    const retryRunner = vi.fn(
+      async ({ prompt }: { prompt: string }) => `v2:${prompt}`,
+    );
+    const evolved = await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: 'moved-call',
+      script: script.replace(
+        `const second = await agent('second')`,
+        `await agent('inserted')\nconst second = await agent('second')`,
+      ),
+      runAgent: retryRunner,
+    });
+
+    // Identity is the content key, not the position: 'second' now runs third
+    // and still replays; only the inserted call executes.
+    expect(retryRunner).toHaveBeenCalledTimes(1);
+    expect(evolved.result).toEqual(['v1:first', 'v1:second']);
+    expect(retryRunner.mock.calls[0]?.[0]?.prompt).toBe('inserted');
+    const checkpoint = await readWorkflowScriptCheckpoint(
+      getExecutionStore(executionId),
+      'moved-call',
+    );
+    expect(checkpoint?.journal.map((entry) => entry.index)).toEqual([0, 1, 2]);
   });
 
   it('round-trips an undefined agent result explicitly', async () => {

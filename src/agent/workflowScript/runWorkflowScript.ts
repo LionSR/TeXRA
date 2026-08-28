@@ -37,9 +37,10 @@ import {
 /**
  * Stable execution identity for one agent() call. Current keys exclude
  * display-only labels and phases, so editing a declarative task plan does not
- * invalidate otherwise identical completed work. A prior entry at the same
- * call index with a matching key replays its cached result. sha256 (truncated)
- * makes a collision that replays the wrong result impractical.
+ * invalidate otherwise identical completed work. A prior entry with a
+ * matching key replays its cached result wherever the call now sits in the
+ * script. sha256 (truncated) makes a collision that replays the wrong result
+ * impractical.
  */
 function journalKey(
   prompt: string,
@@ -309,7 +310,7 @@ function raceWithAbort<T>(
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
  * as plain code with zero model round-trips between steps; every agent()
  * call is bounded by one shared p-queue concurrency limit and journaled for
- * resume (same call index + same prompt/execution options → cached result).
+ * resume (same prompt/execution options → cached result, at any position).
  *
  * On wall-clock timeout the sandbox preempts guest execution, fires the run's
  * AbortSignal (passed to every runAgent invocation), and refuses new calls.
@@ -331,8 +332,13 @@ export async function runWorkflowScript(
 
   const { meta, body } = parseWorkflowScript(options.script);
   const timeoutMs = options.timeoutMs ?? meta.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const priorEntries = new Map<number, WorkflowJournalEntry>(
-    (options.journal ?? []).map((entry) => [entry.index, entry]),
+  // Journal identity is the content key alone: keys are unique within a run
+  // (a duplicate is a contract fault below) and the durable child id is
+  // already index-free, so a call that moved because the script inserted,
+  // removed, or reordered a sibling still replays. `index` stays on every
+  // entry as an ordering fact for the resume journal and cost attribution.
+  const priorEntries = new Map<string, WorkflowJournalEntry>(
+    (options.journal ?? []).map((entry) => [entry.key, entry]),
   );
   const journal = new Map<number, WorkflowJournalEntry>();
   const queue = new PQueue({ concurrency });
@@ -667,8 +673,8 @@ export async function runWorkflowScript(
 
     // `key` still holds journalKey(prompt, callOptions, dependencyFingerprint)
     // here: refreshDependencyIdentity only runs at launch time, below.
-    const prior = priorEntries.get(index);
-    if (prior && prior.key === key) {
+    const prior = priorEntries.get(key);
+    if (prior) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
         'Cached agent() result',
