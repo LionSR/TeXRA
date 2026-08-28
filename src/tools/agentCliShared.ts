@@ -102,6 +102,7 @@ function requireCallerOwnership(
 }
 
 async function queueAgentCliFollowUp(
+  registry: AgentCliSessionRegistry,
   stored: AgentCliSessionEntry,
   params: {
     id: string;
@@ -114,8 +115,12 @@ async function queueAgentCliFollowUp(
   // Ownership is a live-handle fact: a detached or re-parented child must not
   // accept follow-ups from its former orchestrator. A missing handle falls
   // through to submitFollowUp's no-session outcome below.
-  const handle = stored.executions.getHandle(stored.executionId);
-  requireCallerOwnership(id, callerStreamId, handle, labels);
+  requireCallerOwnership(
+    id,
+    callerStreamId,
+    registry.getHandle(stored),
+    labels,
+  );
 
   const result = await submitFollowUp(stored.childStreamId, prompt, {
     session: currentSession(),
@@ -176,7 +181,7 @@ async function resumeOrLaunchAgentCliSession(
 
     const stored = await store.waitForActive(id);
     if (!stored) continue;
-    return queueAgentCliFollowUp(stored, {
+    return queueAgentCliFollowUp(store, stored, {
       id,
       prompt: params.prompt,
       callerStreamId: params.callerStreamId,
@@ -349,11 +354,10 @@ export function dispatchAgentCliTool(params: {
     const registry = store(currentSession());
     const callerStreamId = getRunContextStreamId(runContext);
     if (sourceId) {
-      const source = registry.lookup(sourceId);
       requireCallerOwnership(
         sourceId,
         callerStreamId,
-        source?.executions.getHandle(source.executionId),
+        registry.getHandle(registry.lookup(sourceId)),
         labels,
       );
     }
@@ -409,8 +413,6 @@ interface AgentCliLoopParams<TTurn> {
     ports: ChildRunPorts,
     abortController: AbortController,
   ) => Promise<TTurn>;
-  /** Build the store entry to register/track for the currently active session. */
-  buildEntry: (session: SessionHandle) => AgentCliSessionEntry;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
    * entries (not-yet-known ids) are skipped.
@@ -458,7 +460,6 @@ export function startAgentCliLoop<TTurn>(
     store,
     releaseFallbackClaim,
     runProviderTurn,
-    buildEntry,
     resolveSessionIds,
     getUsage,
     buildUsageStats,
@@ -473,12 +474,16 @@ export function startAgentCliLoop<TTurn>(
   // `startChildRunLoop` captures for its strategy callbacks below.
   const registry = store(currentSession());
 
+  // The one entry this loop registers and tracks: the child run's identity
+  // and follow-up address. Live handles are resolved by the registry itself.
+  const target: AgentCliSessionEntry = { childStreamId, executionId };
+
   // Fresh and resumed session/thread ids are registered after the first
   // successful turn is persisted, immediately before its result reaches the
   // parent.
-  const registerSessionId = (id: string, session: SessionHandle): void => {
+  const registerSessionId = (id: string): void => {
     if (registry.lookup(id)) return;
-    registry.register(id, buildEntry(session));
+    registry.register(id, target);
   };
 
   // The joined prompt text for whichever turn is currently in flight —
@@ -507,12 +512,12 @@ export function startAgentCliLoop<TTurn>(
     getUsage,
     isTurnError,
     onTurnError,
-    onLoopStart: (session) => {
-      registry.trackInFlight(buildEntry(session));
+    onLoopStart: () => {
+      registry.trackInFlight(target);
     },
-    onTurnSuccess: (turn, session) => {
+    onTurnSuccess: (turn) => {
       for (const id of resolveSessionIds(turn)) {
-        if (id) registerSessionId(id, session);
+        if (id) registerSessionId(id);
       }
     },
     publishUsage: (turn) => {

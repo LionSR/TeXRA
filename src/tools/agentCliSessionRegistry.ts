@@ -1,6 +1,7 @@
 import pDefer from 'p-defer';
 
 import { getExecutionStore } from '@agent/storage';
+import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -27,15 +28,16 @@ const DEFAULT_DEPENDENCIES: AgentCliSessionRegistryDependencies = {
 };
 
 /**
- * Everything the registry tracks about one live agent-CLI session. Provider
- * specifics (codex thread, claude model/permission mode/…) stay with the
- * provider's own loop closure — the registry only ever needs the identity it
- * interrupts and looks up by.
+ * What the registry tracks about one live agent-CLI session: the child run's
+ * identity and its follow-up address. Live handles are resolved on demand
+ * through the session's own {@link ExecutionRegistry}, injected once at
+ * construction — entries carry no registry pointer of their own, so an entry
+ * can never point across sessions. Provider specifics (codex thread, claude
+ * model/permission mode/…) stay with the provider's own loop closure.
  */
 export interface AgentCliSessionEntry {
   childStreamId: StreamTabId;
   executionId: ExecutionId;
-  executions: ExecutionRegistry;
 }
 
 type AgentCliSessionState =
@@ -52,6 +54,7 @@ export class AgentCliSessionRegistry {
 
   constructor(
     private readonly persistedSessionKey: string,
+    private readonly executions: ExecutionRegistry,
     private readonly dependencies: AgentCliSessionRegistryDependencies = DEFAULT_DEPENDENCIES,
   ) {}
 
@@ -114,6 +117,18 @@ export class AgentCliSessionRegistry {
     return state?.kind === 'active' ? state.entry : undefined;
   }
 
+  /**
+   * Live handle for an entry, resolved through the one execution registry
+   * this session's agent-CLI children run under. Ownership and follow-up
+   * checks read the live handle rather than a stored pointer, so a detached
+   * or re-parented child answers with its current state.
+   */
+  getHandle(
+    entry: AgentCliSessionEntry | undefined,
+  ): AgentExecutionHandle | undefined {
+    return entry && this.executions.getHandle(entry.executionId);
+  }
+
   /** Wait for a reserved id to become active, or for its owner to release it. */
   async waitForActive(
     sessionId: string,
@@ -147,8 +162,9 @@ export class AgentCliSessionRegistry {
     const interrupted = new Set<ExecutionId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
       if (interrupted.has(entry.executionId)) return;
-      const { childStreamId, executions } = entry;
-      const handle = executions.getAgentHandleByStream(childStreamId);
+      const handle = this.executions.getAgentHandleByStream(
+        entry.childStreamId,
+      );
       if (!handle) return;
       interrupted.add(entry.executionId);
       handle.interrupt();

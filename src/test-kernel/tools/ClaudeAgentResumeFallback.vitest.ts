@@ -57,8 +57,16 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 
 // Session-keyed registries: the suite pins one fake session and reads the
 // registry that dispatch resolves for it through the same accessor.
+// The session-keyed registry resolves live handles through its session's
+// ExecutionRegistry. Tests stage a handle here for the lookups they exercise;
+// unset slots miss, like an untracked execution.
+const sessionHandles: { byExecution?: unknown; byStream?: unknown } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
+  executions: {
+    getHandle: () => sessionHandles.byExecution,
+    getAgentHandleByStream: () => sessionHandles.byStream,
+  },
 } as unknown as SessionHandle;
 const ClaudeAgentSessions = claudeAgentSessionsFor(testSession);
 
@@ -401,14 +409,13 @@ describe('claude_agent tool launch and resume fallback', () => {
       prompt: 'start a long initial turn',
     });
 
-    const executions = {
-      getAgentHandleByStream: () => ({ interrupt }),
-    } as any;
-    captured.strategy?.onLoopStart?.({ executions } as any);
+    sessionHandles.byStream = { interrupt };
+    captured.strategy?.onLoopStart?.(testSession);
     ClaudeAgentSessions.interruptAll();
 
     expect(interrupt).toHaveBeenCalledOnce();
     captured.strategy?.releaseSessionOwnership?.();
+    delete sessionHandles.byStream;
   });
 
   it('lets a waiting caller own the fallback after the first launch fails', async () => {
@@ -616,10 +623,8 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.register('foreign-session', {
       childStreamId,
       executionId: sourceExecutionId,
-      executions: {
-        getHandle: () => handle,
-      } as any,
     });
+    sessionHandles.byExecution = handle;
 
     const result = await new ClaudeAgentTool().call({
       prompt: 'read a foreign branch',
@@ -633,5 +638,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     });
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
     ClaudeAgentSessions.release('foreign-session');
+    delete sessionHandles.byExecution;
   });
 });

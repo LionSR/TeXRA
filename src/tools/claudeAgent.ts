@@ -470,11 +470,6 @@ function startClaudeAgentLoop(params: {
       }
       return turn;
     },
-    buildEntry: (session) => ({
-      childStreamId: childStream.childStreamId,
-      executionId,
-      executions: session.executions,
-    }),
     resolveSessionIds: (turn) => [fallbackSessionId, turn.sessionId],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>

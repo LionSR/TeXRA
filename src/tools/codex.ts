@@ -420,11 +420,6 @@ function startCodexLoop(params: {
         logger,
         abortController.signal,
       ),
-    buildEntry: (session) => ({
-      childStreamId,
-      executionId,
-      executions: session.executions,
-    }),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>
