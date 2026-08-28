@@ -105,8 +105,9 @@ function validateOutputFileCount(
 
 /**
  * Agent configuration schema with output file count validation.
- * Wrapped in `z.preprocess` so old execution records persisted before
- * the reference/auxiliary → context rename keep parsing on read.
+ * Wrapped in `z.preprocess` so a record that omits `agentCategory` gets the
+ * historical Workflow default materialized before the discriminated union
+ * selects a variant.
  */
 export const AgentConfigSchema = z.preprocess(
   normalizeAgentConfigInput,

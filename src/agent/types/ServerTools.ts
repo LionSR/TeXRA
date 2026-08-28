@@ -44,12 +44,8 @@ export const WebSearchResultEntrySchema = z.object({
   url: z.string(),
   /** Title of the page */
   title: z.string(),
-  /** Text snippet/description (may be encrypted for Anthropic) */
-  snippet: z.string().optional(),
   /** Domain extracted from URL */
   domain: z.string().optional(),
-  /** Page age/freshness hint (Anthropic only) */
-  pageAge: z.string().optional(),
 });
 
 /** A single web search result entry - derived from schema. */
@@ -269,8 +265,6 @@ export function mapAnthropicWebSearchEntries(
     .map((r) => ({
       url: r.url,
       title: r.title,
-      snippet: r.encrypted_content,
-      pageAge: r.page_age ?? undefined,
       domain: extractDomain(r.url),
     }));
 }

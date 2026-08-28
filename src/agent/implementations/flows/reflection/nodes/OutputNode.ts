@@ -6,9 +6,7 @@ import {
   type AgentFileLocation,
   type CompileFailure,
   type CompileResult,
-  type FileLocation,
 } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   hasCompileFailures,
@@ -24,7 +22,6 @@ import { checkExpectedOutputs } from '../output/outputValidation';
 import { summarizeRound, type RoundSummary } from '../output/roundSummary';
 import { formatCompileFailureRoundContext } from '../output/compileFailureRoundContext';
 import { tryOperation } from '../output/outputOperations';
-import type { LatexDiffManager } from '../output/LatexDiffManager';
 import type { CompiledPdfArtifact } from '../output/compiledPdfArtifacts';
 import type { RoundFileMapping } from '../output/types';
 
@@ -110,15 +107,15 @@ export class OutputNode extends BaseNode<
         );
         mapping = roundMapping;
 
-        await tryOperation(async () => {
-          const diffArtifacts = await this.handleLatexdiff(
+        // `handleLatexdiffOfOutput` already wraps its whole body in
+        // `tryOperation`, so a second recover layer here would only ever see
+        // its own push.
+        compiledArtifacts.push(
+          ...(await diffManager.handleLatexdiffOfOutput(
             currentRound,
-            diffBaseFiles,
             roundMapping,
-            diffManager,
-          );
-          compiledArtifacts.push(...diffArtifacts);
-        }, this.recoverWarn('Latexdiff'));
+          )),
+        );
 
         await tryOperation(async () => {
           const hadCompileFailures = hasCompileFailures(
@@ -151,7 +148,6 @@ export class OutputNode extends BaseNode<
       outputLocation,
       currentRound,
       {
-        endTurn,
         mapping,
         isRewrite: setting.isRewrite,
         baseFiles: diffBaseFiles,
@@ -172,7 +168,7 @@ export class OutputNode extends BaseNode<
     error: Error,
   ): Promise<OutputExecResult> {
     const { logger, outputState, setting } = this.services;
-    const { outputLocation, currentRound, endTurn } = prepRes;
+    const { outputLocation, currentRound } = prepRes;
     logger.warn(`Output processing failed: ${error.message}`, { data: error });
 
     // Still summarize what we can for post() side effects
@@ -183,7 +179,7 @@ export class OutputNode extends BaseNode<
         this.services,
         outputLocation,
         currentRound,
-        { endTurn, isRewrite: setting.isRewrite },
+        { isRewrite: setting.isRewrite },
       );
     } catch (summaryError) {
       // Double-fault: summarizeRound failed during fallback, so we drop the
@@ -308,24 +304,5 @@ export class OutputNode extends BaseNode<
       messageType: MESSAGE_TYPES.DEFAULT,
       recover: () => undefined,
     };
-  }
-
-  private async handleLatexdiff(
-    currentRound: number,
-    baseFiles: FileLocation[],
-    mapping: RoundFileMapping,
-    diffManager: LatexDiffManager,
-  ): Promise<CompiledPdfArtifact[]> {
-    const { logger } = this.services;
-
-    const existingBase = await Promise.all(
-      baseFiles.map((base) => AbsoluteFS.exists(base.absolutePath)),
-    );
-    if (!existingBase.some(Boolean)) {
-      logger.debug('No base files found for latexdiff');
-      return [];
-    }
-
-    return diffManager.handleLatexdiffOfOutput(currentRound, mapping);
   }
 }

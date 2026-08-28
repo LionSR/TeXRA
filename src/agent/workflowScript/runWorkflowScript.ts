@@ -231,7 +231,17 @@ class CoalescedSnapshotWriter {
   }
 
   async flush(): Promise<void> {
-    while (this.#running) await this.#running;
+    // `#drain()` can settle synchronously — a synchronous `onSnapshot` throw
+    // runs the whole body, `catch` and `finally` included, before `publish`'s
+    // `??=` stores the handle, so `#running` ends up holding an already
+    // settled promise that nothing will clear. Stop once the handle stops
+    // changing, or that stale handle spins this loop forever and the run
+    // hangs instead of reporting its `kind: 'checkpoint'` failure.
+    let awaited: Promise<void> | undefined;
+    while (this.#running && this.#running !== awaited) {
+      awaited = this.#running;
+      await awaited;
+    }
   }
 
   throwIfFailed(): void {
@@ -264,10 +274,10 @@ class CoalescedSnapshotWriter {
       this.#pending = undefined;
       this.#onFailure(failure);
     } finally {
+      // The loop exits only with `#pending` already undefined (the `catch`
+      // clears it too) and nothing awaits between that test and here, so
+      // there is never a leftover snapshot left to re-drain.
       this.#running = undefined;
-      if (this.#pending && this.#failure === undefined) {
-        this.#running = this.#drain();
-      }
     }
   }
 }

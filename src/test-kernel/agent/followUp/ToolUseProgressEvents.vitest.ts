@@ -108,17 +108,13 @@ function createErrorLoggerNode(): {
 type CycleOutcome = Parameters<ToolUseCycleNode['post']>[2];
 
 // Runs ToolUseCycleNode.post against a prepared workspace with only the
-// onCycleResponse service wired, returning the spy and mutated shared state.
+// onCycleResponse service wired, returning the spy.
 async function runCyclePost(options: {
   assemblyText?: string;
   shouldSkipCycle: boolean;
   prepBaseline?: string;
-  sharedLastResponse?: string;
   result: CycleOutcome;
-}): Promise<{
-  onCycleResponse: ReturnType<typeof vi.fn>;
-  shared: ToolUseRunShared;
-}> {
+}): Promise<{ onCycleResponse: ReturnType<typeof vi.fn> }> {
   const workspaceState = AgentWorkspaceState.create();
   if (options.assemblyText !== undefined) {
     workspaceState.assembly.lastResponse = options.assemblyText;
@@ -128,18 +124,14 @@ async function runCyclePost(options: {
     options.shouldSkipCycle,
     options.prepBaseline ?? '',
   );
-  const shared = (
-    options.sharedLastResponse === undefined
-      ? {}
-      : { lastResponse: options.sharedLastResponse }
-  ) as ToolUseRunShared;
+  const shared = {} as ToolUseRunShared;
   const onCycleResponse = vi.fn();
   const node = new ToolUseCycleNode().setServices({
     onCycleResponse,
   } as unknown as ToolUseServices);
 
   await node.post(shared, prepRes, options.result);
-  return { onCycleResponse, shared };
+  return { onCycleResponse };
 }
 
 function createCycleNode(
@@ -284,10 +276,9 @@ describe('tool-use progress events', () => {
   });
 
   it('reports partial assistant text from a failed non-skipped cycle', async () => {
-    const { onCycleResponse, shared } = await runCyclePost({
+    const { onCycleResponse } = await runCyclePost({
       assemblyText: 'same response',
       shouldSkipCycle: false,
-      sharedLastResponse: 'same response',
       result: {
         outcome: 'failed',
         lastError: { message: 'stream failed', userRetryable: true },
@@ -295,7 +286,6 @@ describe('tool-use progress events', () => {
     });
 
     expect(onCycleResponse).toHaveBeenCalledWith('same response');
-    expect(shared.lastResponse).toBe('same response');
   });
 
   it('does not report restored assembly text from a skipped prepare cycle', async () => {
@@ -310,17 +300,14 @@ describe('tool-use progress events', () => {
 
   it.each<{
     name: string;
-    sharedLastResponse?: string;
     result: CycleOutcome;
   }>([
     {
       name: 'completed',
-      sharedLastResponse: 'previous turn response',
       result: { outcome: 'completed', messages: [] },
     },
     {
       name: 'failed',
-      sharedLastResponse: undefined,
       result: {
         outcome: 'failed',
         lastError: { message: 'stream failed', userRetryable: true },
@@ -328,26 +315,24 @@ describe('tool-use progress events', () => {
     },
   ])(
     'does not return the previous cycle response for an answerless $name cycle',
-    async ({ sharedLastResponse, result }) => {
+    async ({ result }) => {
       // Assembly text unchanged since prep is historical: the cycle produced no
       // new assistant response, so it must not become this cycle's result (#9531).
-      const { onCycleResponse, shared } = await runCyclePost({
+      const { onCycleResponse } = await runCyclePost({
         assemblyText: 'previous turn response',
         shouldSkipCycle: false,
         prepBaseline: 'previous turn response',
-        sharedLastResponse,
         result,
       });
 
       expect(onCycleResponse).not.toHaveBeenCalled();
-      expect(shared.lastResponse).toBeUndefined();
     },
   );
 
   it('reports assembly text written during the cycle over the prep baseline', async () => {
     // The failure path in exec copies this cycle's partial text into assembly;
     // differing from the prep-time baseline is what makes it reportable.
-    const { onCycleResponse, shared } = await runCyclePost({
+    const { onCycleResponse } = await runCyclePost({
       assemblyText: 'partial cycle text',
       shouldSkipCycle: false,
       prepBaseline: 'previous turn response',
@@ -358,7 +343,6 @@ describe('tool-use progress events', () => {
     });
 
     expect(onCycleResponse).toHaveBeenCalledWith('partial cycle text');
-    expect(shared.lastResponse).toBe('partial cycle text');
   });
 
   it('persists a completed cycle structured result in shared state', async () => {
