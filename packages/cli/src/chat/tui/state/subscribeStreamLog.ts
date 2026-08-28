@@ -395,13 +395,11 @@ export function syncStreamLog(
     // thinking row, still streaming — rather than a second tracker over raw
     // log entries. A thinking block the producer opened but never wrote text
     // into projects no row, and so lights nothing up.
-    let thinkingActive = false;
-    for (let index = state.items.length - 1; index >= 0; index -= 1) {
-      const row = state.items[index]!.rendered;
-      if (row.kind !== 'thinking') continue;
-      thinkingActive = row.streaming;
-      break;
-    }
+    const lastThinkingRow = state.items.findLast(
+      (item) => item.rendered.kind === 'thinking',
+    )?.rendered;
+    const thinkingActive =
+      lastThinkingRow?.kind === 'thinking' && lastThinkingRow.streaming;
 
     // Transcript-derived live status only. The shared metadata `description`
     // is the runtime's own one-liner and is never written from here.
