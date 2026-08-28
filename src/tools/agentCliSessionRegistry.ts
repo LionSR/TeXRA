@@ -1,3 +1,5 @@
+import pDefer from 'p-defer';
+
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { createLog } from '@logger/logUtils';
@@ -61,15 +63,11 @@ export class AgentCliSessionRegistry {
   claim(sessionId: string): (() => void) | undefined {
     if (this.sessions.has(sessionId)) return undefined;
 
-    let settleReservation:
-      ((entry: AgentCliSessionEntry | undefined) => void) | undefined;
-    const ready = new Promise<AgentCliSessionEntry | undefined>((settle) => {
-      settleReservation = settle;
-    });
+    const ready = pDefer<AgentCliSessionEntry | undefined>();
     const reservation: AgentCliSessionState = {
       kind: 'reserved',
-      ready,
-      resolve: (entry) => settleReservation?.(entry),
+      ready: ready.promise,
+      resolve: ready.resolve,
     };
     this.sessions.set(sessionId, reservation);
     return () => {

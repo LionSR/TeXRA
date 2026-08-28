@@ -78,6 +78,7 @@
     "lru-cache": "^11.5.2",
     "markdown-it": "^15.0.0",
     "node-pty": "^1.0.0",
+    "p-defer": "^4.0.1",
     "p-queue": "^9.3.3",
     "picocolors": "^1.1.1",
     "react": "^19.2.8",

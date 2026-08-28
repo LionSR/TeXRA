@@ -5,6 +5,7 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
+import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
@@ -298,12 +299,9 @@ export class ExecutionRegistry {
   ): Promise<T> {
     this.assertActive();
     const lane = this.laneFor(executionId);
-    let settle!: (result: Promise<T>) => void;
-    let refuse!: (error: Error) => void;
-    const handedOut = new Promise<Promise<T>>((resolve, reject) => {
-      settle = resolve;
-      refuse = reject;
-    });
+    const handedOut = pDefer<Promise<T>>();
+    const settle: (result: Promise<T>) => void = handedOut.resolve;
+    const { reject: refuse } = handedOut;
     lane.waiting.add(refuse);
     void lane.queue
       .add(async () => {
@@ -321,7 +319,7 @@ export class ExecutionRegistry {
         if (run.hold) await settled(run.hold);
       })
       .finally(() => this.forgetIdleLane(executionId, lane));
-    return handedOut.then((result) => result);
+    return handedOut.promise.then((result) => result);
   }
 
   private laneFor(executionId: string): ExecutionLane {
