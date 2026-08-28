@@ -6,7 +6,6 @@ import { notifyFollowUpSent } from '@agent/followUp';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
-import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
   activeSubagentsFor,
   childRosters,
@@ -189,11 +188,28 @@ export async function showCliSessionStatus(
 }
 
 export function requestCliSessionCompaction(): void {
-  requestCliCompaction({
-    streamId: activeStreamIdSignal.get(),
-    requestManualCompaction: (streamId) =>
-      defaultSession().executions.requestManualCompaction(streamId),
-    notifyFollowUpSent,
-    appendTranscript: appendLocalAssistantTranscript,
-  });
+  const result = defaultSession().executions.requestManualCompaction(
+    activeStreamIdSignal.get(),
+  );
+  switch (result.kind) {
+    case 'no_active_tool_use':
+      appendLocalAssistantTranscript(
+        'No active tool-use session found for context compaction.',
+        result.streamId,
+      );
+      return;
+    case 'unsupported':
+      appendLocalAssistantTranscript(
+        'Manual context compaction is not available for this model.',
+        result.streamId,
+      );
+      return;
+    case 'requested':
+      notifyFollowUpSent(result.streamId, result.session);
+      appendLocalAssistantTranscript(
+        'Context compaction requested. The agent will process it on the next model call.',
+        result.streamId,
+      );
+      return;
+  }
 }

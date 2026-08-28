@@ -15,6 +15,7 @@ import {
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
@@ -24,10 +25,7 @@ import {
   type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import type {
-  ApprovalBypassKind,
-  ApprovalDecision,
-} from '../state/approvalQueue';
+import type { ApprovalDecision } from '../state/approvalQueue';
 
 /** Rejection-note prompt for every ConfirmCard-based approval modal. */
 export const CONFIRM_CARD_FEEDBACK_PLACEHOLDER =

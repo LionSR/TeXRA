@@ -14,7 +14,7 @@ import {
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
   hasUsableApiKey: vi.fn(),
-  handleExternalInquiryAction: vi.fn(),
+  handleExternalInquiryAction: vi.fn(async () => {}),
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
@@ -379,7 +379,7 @@ afterEach(() => {
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
-  mocks.handleExternalInquiryAction.mockReset();
+  mocks.handleExternalInquiryAction.mockClear();
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
