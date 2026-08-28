@@ -14,9 +14,12 @@ Three read-only survey agents, one per domain — the TUI state layer
 (`packages/cli/src/chat/tui/panes/`, `modals/`, `App.tsx`), and the runtime
 and command layer (`packages/cli/src/runtime/`, `commands/`) — followed by one
 adversarial verifier per domain that applied every candidate alone in a
-throwaway worktree on `origin/main` and ran the CLI typecheck (both
-`tsconfig.json` and `tsconfig.scripts.json`), the test-kernel typecheck, and
-`vitest src/test-kernel/cli` before returning a measured verdict. The three
+throwaway worktree on `origin/main` and ran the CLI typecheck, the
+test-kernel typecheck, and `vitest src/test-kernel/cli` before returning a
+measured verdict. Only the runtime verifier also ran
+`packages/cli/tsconfig.scripts.json`; the state and panes verifiers ran
+`packages/cli/tsconfig.json` alone, which is the gap the next paragraph
+records. The three
 implementers then re-ran those gates plus scoped eslint and the dead-code
 ratchet. Every count below is the measured `git diff --stat`, not the
 survey's estimate.
@@ -123,6 +126,14 @@ byte-identical Ink render proof; `splitTranscriptEntries.finalized` dropped
   turning it into a crash before resume starts is not an acceptable trade.
 - **`toolDisplaySpanTextProps`, `slashSubmitText` un-export (panes P8)** —
   retargeting needs an Ink colour render / driving `InputBar`; not cheap.
+- **The denial path's inquiry write is still unowned** —
+  `denyExternalInquiryIfNoHumanInput` in
+  `packages/cli/src/runtime/approval/settleApprovals.ts` still runs
+  `void handleExternalInquiryAction(...)` without a rejection handler, so a
+  failed persist of a policy-denied external inquiry can still surface as an
+  unhandled rejection. C5 owned only the TUI's `subscribeApprovals` call;
+  this site needs the same `.catch` plus the `async` mock in
+  `ApprovalAdapter.vitest.ts`. Batch B.
 - **`streamViewForId` double `streamTabInfoFor` (state C7-3)** — the count
   claim was wrong (two calls, not three; the third is the parent lookup);
   net ≈ 0 LoC; deferred to Batch B.
