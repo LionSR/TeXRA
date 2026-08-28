@@ -1,11 +1,12 @@
 # Simplification survey: CLI TUI, state, and runtime (2026-08-28)
 
-Status: implemented across #11546 (state layer), #11547 (runtime and
-commands), and #11548 (panes and rendering), grounded on `origin/main` at
-`daa6efd601` and rebased onto `7fd7894d86` (#11544). Companion to
-`2026-08-15-single-substrate-hosts-as-renderers.md` — the two host-parity PRs
-(#11545 transcript plane; #11550 state plane) moved the CLI onto the shared
-session state first; this sweep removed what the CLI kept for itself.
+Status: implemented across #11546 (state layer, batch A), #11547 (runtime and
+commands), #11548 (panes and rendering), and #11554 (state layer, batch B),
+grounded on `origin/main` at `daa6efd601` and rebased onto `7fd7894d86`
+(#11544). Companion to `2026-08-15-single-substrate-hosts-as-renderers.md` —
+the two host-parity PRs (#11545 transcript plane; #11550 state plane) moved
+the CLI onto the shared session state first; this sweep removed what the CLI
+kept for itself.
 
 ## Scope and method
 
@@ -62,6 +63,11 @@ resize is a full repaint from a known origin), #11497's `quietLogs` ruling,
   `handleExternalInquiryAction` does file writes and the CLI has no
   `unhandledRejection` handler, so a rejection crashed the process. One
   action value, one owned `.catch` that logs.
+- **The denial path's inquiry write was unowned** (batch B):
+  `denyExternalInquiryIfNoHumanInput` in `settleApprovals.ts` ran
+  `void handleExternalInquiryAction(...)` with no rejection handler, so a
+  failed persist of a policy-denied external inquiry crashed the CLI. Same
+  owned `.catch` as C5.
 - **Two silent catches** (state C6): `approvalQueue.onPresent` swallowed
   anything the presenter threw; the inquiry `'unavailable'` fallback never
   logged its cause. Both now `logWarning` with the cause (+10 LoC, stated as
@@ -104,6 +110,13 @@ maxRows=estimate>` folded into `<TranscriptEntry fillWidth>` after a 54/54
 byte-identical Ink render proof; `splitTranscriptEntries.finalized` dropped
 (sole caller read `.pending`).
 
+State layer, batch B (#11554, 14 files, +44/−73): `rootRunStartAvailable`
+deleted — it was provably `=== !rootRunPending`, and `StatusBar` already
+subscribed to that signal; the two `*ForTest` pass-throughs in
+`subscribeStreamLog.ts` deleted with their suites retargeted (knip baseline
+−2); five zero-consumer type exports dropped; and the denial-path inquiry
+write in `settleApprovals.ts` now owns its promise (see the defects list).
+
 ## Refuted or deferred (with the reason)
 
 - **`resolveLocalTranscriptStreamId` inline (state C7-2)** — refuted by the
@@ -126,21 +139,10 @@ byte-identical Ink render proof; `splitTranscriptEntries.finalized` dropped
   turning it into a crash before resume starts is not an acceptable trade.
 - **`toolDisplaySpanTextProps`, `slashSubmitText` un-export (panes P8)** —
   retargeting needs an Ink colour render / driving `InputBar`; not cheap.
-- **The denial path's inquiry write is still unowned** —
-  `denyExternalInquiryIfNoHumanInput` in
-  `packages/cli/src/runtime/approval/settleApprovals.ts` still runs
-  `void handleExternalInquiryAction(...)` without a rejection handler, so a
-  failed persist of a policy-denied external inquiry can still surface as an
-  unhandled rejection. C5 owned only the TUI's `subscribeApprovals` call;
-  this site needs the same `.catch` plus the `async` mock in
-  `ApprovalAdapter.vitest.ts`. Batch B.
 - **`streamViewForId` double `streamTabInfoFor` (state C7-3)** — the count
-  claim was wrong (two calls, not three; the third is the parent lookup);
-  net ≈ 0 LoC; deferred to Batch B.
-- **Batch B (state C1 `rootRunStartAvailable`, C4 `*ForTest`
-  pass-throughs, C7-4 remainder in `sessionRunState.ts`/`streamViews.ts`)** —
-  sound, measured (−17, −20, ≈ −10), held because the files overlap the
-  state-plane host-parity PR; land after it merges.
+  claim was wrong (two calls, not three; the third is the parent lookup),
+  and at HEAD `streamLabelForId` has four other callers, so the dedup would
+  duplicate its root-label rule for net +1 LoC. Refuted.
 - **The `rebuildTree` phase grouping in the CLI dashboard** was measured
   against the board's (65 L nested + orphan re-rooting vs 18 L flat) and left
   host-local by #11545 — extraction net-adds; only the heading copy was
