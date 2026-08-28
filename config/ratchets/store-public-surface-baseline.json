@@ -42,6 +42,7 @@
       "getRunUsage",
       "getWorkPlan",
       "hasPersistedWorkPlan",
+      "hasProvenance",
       "listPersistedStreams",
       "listStagedDeletions",
       "load",

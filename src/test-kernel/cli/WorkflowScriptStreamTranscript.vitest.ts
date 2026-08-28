@@ -27,7 +27,6 @@ import {
   patchStream,
   resetCliState,
   streams,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -48,6 +47,7 @@ import {
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { splitTranscriptEntries } from '@test/support/transcriptRowFixtures';
@@ -174,7 +174,7 @@ function streamSlice() {
 }
 
 function setStatus(status: StreamPhase): void {
-  setStreamStatusInCliState({ streamId: STREAM_ID, status });
+  setCliStreamPhase({ streamId: STREAM_ID, status });
 }
 
 function streamEntries(): readonly TranscriptRow[] {

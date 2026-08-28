@@ -46,9 +46,9 @@ import {
   emptySlice,
   resetCliState,
   patchStream,
+  streamPhaseFor,
   streams,
   type StreamSlice,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -72,6 +72,7 @@ import {
 } from '@shared/schemas';
 import type { ToolRow, TranscriptRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import {
   loadInk,
   renderOutputAtTerminalSize,
@@ -384,11 +385,8 @@ describe('CLI conversation transcript', () => {
   // syncStreamLog derives finalizeDeferred, otherwise the next run's
   // in-flight entries get finalized early and lose later chunks.
   it('clears a stale final status before the next run streams', () => {
-    // Twice: the first reset retires STREAM_ID from the previous test, and a
-    // retired identity cannot take a status.
     resetCliState();
-    resetCliState();
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: STREAM_ID,
       status: STREAM_PHASE.WAITING,
     });
@@ -401,7 +399,7 @@ describe('CLI conversation transcript', () => {
         'resume',
       );
 
-      expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_PHASE.RUNNING);
+      expect(streamPhaseFor(STREAM_ID)?.phase).toBe(STREAM_PHASE.RUNNING);
     } finally {
       dispose();
     }
@@ -725,12 +723,7 @@ describe('CLI conversation transcript', () => {
   it('keeps a live prompt out of static scrollback until a continuation exists', () => {
     const user = entry('u1', 'user', 'what is this repo about', true);
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        STREAM_ID,
-        sliceWithEntries(STREAM_ID, [user], {
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ],
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [user])],
     ]);
 
     const split = splitTranscriptEntries([user], 0, STREAM_PHASE.RUNNING);
@@ -740,6 +733,7 @@ describe('CLI conversation transcript', () => {
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
       streams,
+      status: STREAM_PHASE.RUNNING,
       meta: SESSION_META,
     }).items;
     expect(items.map((item) => item.id)).toEqual(['session-header']);
@@ -749,12 +743,7 @@ describe('CLI conversation transcript', () => {
     const user = entry('u1', 'user', 'what is this repo about', true);
     const tool = toolEntry('t1', 'in_progress');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        STREAM_ID,
-        sliceWithEntries(STREAM_ID, [user, tool], {
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ],
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [user, tool])],
     ]);
 
     const split = splitTranscriptEntries([user, tool], 0, STREAM_PHASE.RUNNING);
@@ -764,6 +753,7 @@ describe('CLI conversation transcript', () => {
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
       streams,
+      status: STREAM_PHASE.RUNNING,
       meta: SESSION_META,
     }).items;
     expect(items.map((item) => item.id)).toEqual(['session-header', 'u1']);

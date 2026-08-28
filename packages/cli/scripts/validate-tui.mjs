@@ -2774,7 +2774,7 @@ const SCENARIOS = [
       },
       {
         // A late resume-transition attempt is the one status fact that would
-        // otherwise reach `setStreamStatusInCliState` (a repeated terminal
+        // otherwise reach the CLI adapter's fold (a repeated terminal
         // transition is a same-value no-op the status machine drops before
         // it gets there) — it must still stay suppressed by the removal
         // tombstone.

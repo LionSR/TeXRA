@@ -39,6 +39,7 @@ import {
   patchStream,
   registerCliStateResetHook,
   setTransientNotice,
+  streamPhaseFor,
   streams,
 } from './cliState';
 import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
@@ -276,7 +277,10 @@ export function syncStreamLog(
     currentActiveStreamId === undefined || currentActiveStreamId === streamId;
 
   const metadata = streamMetadataFor(streamId);
-  patchStream(streamId, (slice, lifecycle) => {
+  const streamSettled = isTranscriptSettlementPhase(
+    streamPhaseFor(streamId)?.phase,
+  );
+  patchStream(streamId, (slice) => {
     const workflowStream = metadata?.agentCategory === AgentCategory.Workflow;
     const fullLogChild = isFullLogChildStream(metadata?.identity);
     // Which line a workflow-agent stream reports as its live status is CLI
@@ -289,7 +293,6 @@ export function syncStreamLog(
     // no task-group renderer and whose verbatim log is the point of opening
     // it, so its headings stay transcript rows.
     const lifecycleToTaskGroups = workflowStream || !fullLogChild;
-    const streamSettled = isTranscriptSettlementPhase(lifecycle.status);
     const streamFinal = options.forceFinal === true || streamSettled;
     const state = slice.transcriptFold ?? createTranscriptFoldState();
     const flags = newFoldChangeFlags();
@@ -508,7 +511,9 @@ export function releaseInactiveStreamTranscript(
     return;
   }
   const slice = streams.get().get(streamId);
-  if (slice?.status === undefined || isActivePhase(slice.status)) return;
+  if (!slice) return;
+  const phase = streamPhaseFor(streamId)?.phase;
+  if (phase === undefined || isActivePhase(phase)) return;
   store.requestEviction(streamId);
   const fold = slice.transcriptFold;
   if (fold) {

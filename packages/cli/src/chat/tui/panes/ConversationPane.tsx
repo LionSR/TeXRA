@@ -16,6 +16,7 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
   activeStreamId as activeStreamIdSignal,
+  streamPhaseFor,
   streams as streamsSignal,
   type StreamSlice,
 } from '../state/cliState';
@@ -223,7 +224,7 @@ export function ConversationPane(
   const displayEntries = pendingTranscriptEntries(
     entries,
     slice?.finalizedFrontier ?? 0,
-    slice?.status,
+    slice && streamPhaseFor(activeStreamId)?.phase,
   );
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;

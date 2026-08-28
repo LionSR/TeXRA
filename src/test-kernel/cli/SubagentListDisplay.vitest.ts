@@ -53,12 +53,20 @@ import {
   AgentCategory,
   STREAM_PHASE,
   WORKFLOW_TASK_STATUS_LABEL,
+  type ExecutionId,
+  type StreamPhase,
   type StreamStage,
   type StreamTabId,
+  type TokenUsageStats,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
+import {
+  clearAllStreamStatusesForTest,
+  seedStreamStatusForTest,
+} from '@test/support/streamStatusTestUtils';
 import { buildChildRosters } from '@test/support/childRosters';
 import {
   fileListRowFixture,
@@ -79,18 +87,43 @@ function session(id: string, active = false): StreamView {
   };
 }
 
-/** A workflow root as its own run emits it — see `workflowPhaseGrouping`. */
+/**
+ * A workflow root as its own run emits it — see `workflowPhaseGrouping`. The
+ * lifecycle phase (status machine) and cumulative usage (snapshot store) are
+ * seeded on the shared substrate beside the slice, which carries neither.
+ */
 function workflowAgentSlice(
   id: string,
-  overrides: Partial<StreamSlice>,
+  overrides: Partial<StreamSlice> & {
+    readonly status?: StreamPhase;
+    readonly runStartedAt?: number;
+    readonly usage?: TokenUsageStats;
+  },
 ): StreamSlice {
-  const grouping = workflowPhaseGrouping(overrides.entries ?? []);
+  const {
+    status = STREAM_PHASE.COMPLETED,
+    runStartedAt,
+    usage,
+    ...sliceOverrides
+  } = overrides;
+  const streamId = id as StreamTabId;
+  seedStreamStatusForTest(defaultSession().status, streamId, {
+    phase: status,
+    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+  });
+  if (usage) {
+    snapshotFacts(defaultSession().snapshots).addUsage(
+      streamId,
+      `${id}-usage` as ExecutionId,
+      usage,
+    );
+  }
+  const grouping = workflowPhaseGrouping(sliceOverrides.entries ?? []);
   return {
-    ...emptySlice(id as StreamTabId),
-    status: STREAM_PHASE.COMPLETED,
-    ...overrides,
+    ...emptySlice(streamId),
+    ...sliceOverrides,
     entries: grouping.entries,
-    ...(overrides.taskGroups ? {} : { taskGroups: grouping.taskGroups }),
+    ...(sliceOverrides.taskGroups ? {} : { taskGroups: grouping.taskGroups }),
   };
 }
 
@@ -105,6 +138,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   unbindChildStreamState(sessionState);
+  streamsSignal.set(new Map());
+  clearAllStreamStatusesForTest(defaultSession().status);
 });
 
 function seedStream(
@@ -180,6 +215,17 @@ async function renderSubagentList(
   options: { readonly until?: (frame: string) => boolean } = {},
 ): Promise<string> {
   const { ink, React } = await loadInk();
+  // In production the list's `streams` prop is the signal itself, and the row
+  // renderers read lifecycle phase through `streamPhaseFor`, which paints only
+  // identities that signal holds. Publish the fixture's slices so a rendered
+  // row can reach its phase.
+  const published = new Map(props.streams ?? []);
+  for (const session of props.sessions ?? []) {
+    if (!published.has(session.id)) {
+      published.set(session.id, session.slice ?? emptySlice(session.id));
+    }
+  }
+  streamsSignal.set(published);
   return renderOutputAtTerminalSize(
     ink,
     React.createElement(SubagentList, props),
@@ -545,8 +591,7 @@ describe('CLI child list display model', () => {
   it('renders held media in the live pending pane behind an unfinished tool', async () => {
     const { ink, React } = await loadInk();
     const streamId = 'media-holder' as StreamTabId;
-    const slice: StreamSlice = {
-      ...emptySlice(streamId),
+    const slice: StreamSlice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
       entries: [
         toolRowFixture('blocking-tool', {
@@ -563,7 +608,7 @@ describe('CLI child list display model', () => {
           },
         ]),
       ],
-    };
+    });
     activeStreamId.set(streamId);
     streamsSignal.set(new Map([[streamId, slice]]));
 
@@ -583,8 +628,7 @@ describe('CLI child list display model', () => {
   it('renders held workflow phases in the live pending pane behind an unfinished tool', async () => {
     const { ink, React } = await loadInk();
     const streamId = 'phase-holder' as StreamTabId;
-    const slice: StreamSlice = {
-      ...emptySlice(streamId),
+    const slice: StreamSlice = workflowAgentSlice(streamId, {
       status: STREAM_PHASE.RUNNING,
       entries: [
         toolRowFixture('blocking-tool', {
@@ -598,7 +642,7 @@ describe('CLI child list display model', () => {
           phaseTotal: 2,
         }),
       ],
-    };
+    });
     activeStreamId.set(streamId);
     streamsSignal.set(new Map([[streamId, slice]]));
 

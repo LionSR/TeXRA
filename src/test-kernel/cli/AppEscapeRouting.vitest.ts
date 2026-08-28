@@ -25,7 +25,6 @@ import {
   resetCliState,
   rootRunStartAvailable,
   rootStreamId,
-  setStreamStatusInCliState,
   streams,
 } from '@cli/chat/tui/state/cliState';
 import {
@@ -44,6 +43,7 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
   loadInk,
@@ -86,7 +86,7 @@ const CHORD_WINDOW_EXPIRED_MS = ESC_META_CHORD_INTERRUPT_DELAY_MS + 100;
 // layout assertions) exists only while it is set.
 function setRunning(...streamIds: StreamTabId[]): void {
   for (const streamId of streamIds) {
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.RUNNING,
       runStartedAt: Date.now(),
@@ -196,7 +196,7 @@ function seedChildHierarchy(): void {
 
 function finishNestedHierarchyAndFocusRoot(): void {
   for (const streamId of [GRANDCHILD, CHILD]) {
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.COMPLETED,
     });
@@ -659,7 +659,7 @@ describe('App foreground Escape ownership', () => {
     },
   ])('$name', async ({ childStatus }) => {
     seedChildHierarchy();
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: CHILD,
       status: childStatus,
     });
@@ -688,7 +688,7 @@ describe('App foreground Escape ownership', () => {
     'resolves deferred child back before %s',
     async (_name, arrowInput) => {
       seedChildHierarchy();
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId: CHILD,
         status: STREAM_PHASE.COMPLETED,
       });
@@ -1022,7 +1022,7 @@ describe('App foreground Escape ownership', () => {
     'keeps the composer enabled for a %s tool-use agent child',
     async (status) => {
       seedChildHierarchy();
-      setStreamStatusInCliState({ streamId: CHILD, status });
+      setCliStreamPhase({ streamId: CHILD, status });
       focusStream(CHILD);
       const onSubmit = vi.fn();
       const { instance, stdin } = await renderWithInterrupt({ onSubmit });
@@ -1182,7 +1182,7 @@ describe('App foreground Escape ownership', () => {
   it('returns keyboard ownership to prompt history after stopping the root', async () => {
     seedRootStream();
     const onInterruptStream = vi.fn((streamId: StreamTabId) => {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId: streamId,
         status: STREAM_PHASE.CANCELLED,
       });

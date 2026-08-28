@@ -18,7 +18,6 @@ import {
   activeStreamId,
   patchStream,
   resetCliState,
-  setStreamStatusInCliState,
   streams,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
@@ -49,6 +48,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import {
   appendTranscriptEntry,
   appendTranscriptText,
@@ -445,7 +445,7 @@ describe('transcript fold vs from-scratch oracle', () => {
         configureStreams(config);
         activeStreamId.set(undefined);
         for (const streamId of MIRRORED) {
-          setStreamStatusInCliState({
+          setCliStreamPhase({
             streamId,
             status: STREAM_PHASE.RUNNING,
           });
@@ -460,14 +460,14 @@ describe('transcript fold vs from-scratch oracle', () => {
           const statusRoll = rng();
           if (statusRoll < 0.05) {
             for (const streamId of MIRRORED) {
-              setStreamStatusInCliState({
+              setCliStreamPhase({
                 streamId,
                 status: STREAM_PHASE.WAITING,
               });
             }
           } else if (statusRoll < 0.1) {
             for (const streamId of MIRRORED) {
-              setStreamStatusInCliState({
+              setCliStreamPhase({
                 streamId,
                 status: STREAM_PHASE.RUNNING,
               });
@@ -493,7 +493,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       // dashboard selection. Status stays RUNNING so no release path fires.
       activeStreamId.set(OTHER_STREAM);
       for (const streamId of MIRRORED) {
-        setStreamStatusInCliState({ streamId, status: STREAM_PHASE.RUNNING });
+        setCliStreamPhase({ streamId, status: STREAM_PHASE.RUNNING });
       }
 
       for (let step = 0; step < 120; step += 1) {
@@ -596,7 +596,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       configureStreams(CONFIGS[0]);
       activeStreamId.set(undefined);
       for (const streamId of MIRRORED) {
-        setStreamStatusInCliState({ streamId, status: STREAM_PHASE.RUNNING });
+        setCliStreamPhase({ streamId, status: STREAM_PHASE.RUNNING });
         appendTranscriptEntry(store, streamId, {
           id: 'u1',
           type: STREAM_LOG_ENTRY_TYPES.LOG,

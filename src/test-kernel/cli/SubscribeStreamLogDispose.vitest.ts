@@ -18,9 +18,14 @@ import {
 import {
   activeStreamId,
   resetCliState,
+  streamPhaseFor,
   streams,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
+import {
+  bindChildStreamState,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
+import { SessionState } from '@controllers/session/SessionState';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -28,7 +33,9 @@ import {
   STREAM_PHASE,
   type StreamTabId,
 } from '@shared/schemas';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
+import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import type { StreamLogStore } from '@transcript';
 
 const streamA = 'stream-a' as StreamTabId;
@@ -58,6 +65,10 @@ function appendUserMessage(
 }
 
 describe('subscribeStreamLog batching and dispose', () => {
+  // Transcript release reads the stream's phase off the session status
+  // machine, which reaches the CLI through the bound `SessionState`.
+  let sessionState: SessionState;
+
   beforeEach(async () => {
     // No separate default-store export to swap in anymore (#7694) —
     // `subscribeStreamLog(defaultSession())` reads the default session's own `transcripts`
@@ -67,10 +78,14 @@ describe('subscribeStreamLog batching and dispose', () => {
     // the second starts the lifetime with no retired identity.
     resetCliState();
     resetCliState();
+    clearAllStreamStatusesForTest(defaultSession().status);
+    sessionState = new SessionState(defaultSession());
+    bindChildStreamState(sessionState);
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    unbindChildStreamState(sessionState);
     vi.useRealTimers();
   });
 
@@ -125,7 +140,7 @@ describe('subscribeStreamLog batching and dispose', () => {
   it('releases a completed transcript whose focus load finishes late', async () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamA, 'a-1', 'loaded late');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: streamA,
       status: STREAM_PHASE.COMPLETED,
     });
@@ -177,15 +192,15 @@ describe('subscribeStreamLog batching and dispose', () => {
     expect(streams.get().get(streamB)).toMatchObject({
       latestLine: 'starting',
       entries: [],
-      status: undefined,
     });
+    expect(streamPhaseFor(streamB)).toBeUndefined();
     expect(requestEviction).not.toHaveBeenCalledWith(streamB);
   });
 
   it('requests bounded residency for a hidden WAITING transcript', () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamB, 'b-1', 'waiting for retry');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: streamB,
       status: STREAM_PHASE.WAITING,
     });
@@ -200,7 +215,7 @@ describe('subscribeStreamLog batching and dispose', () => {
   it('never releases the focused stream, nor anything while focus is unset', () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamA, 'a-1', 'done but focused');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: streamA,
       status: STREAM_PHASE.COMPLETED,
     });
@@ -236,7 +251,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     // eviction and must drop the projection state too, or it outlives the
     // store's own retention and keeps the whole transcript reachable
     // indefinitely.
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: streamB,
       status: STREAM_PHASE.COMPLETED,
     });
