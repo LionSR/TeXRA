@@ -30,7 +30,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
-import { flushNdjsonStdout, writeTextStderr } from './logSinks';
+import {
+  flushNdjsonStdout,
+  flushTextStderr,
+  writeTextStderr,
+} from './logSinks';
 import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
@@ -105,6 +109,11 @@ export async function runCliPlatformShutdownSequence(
     await lifecycle?.runShutdown();
   } catch {
     // Signal shutdown is best effort; output still gets one final flush.
+  }
+  try {
+    await flushTextStderr();
+  } catch {
+    // A closed stderr pipe must not prevent signal-based termination.
   }
   try {
     await flushNdjsonStdout();

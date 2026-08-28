@@ -195,17 +195,24 @@ async function runInstallGithubAction(
     return CliExitCode.Usage;
   }
 
+  const baseRef = branchExists ? base : resolveBaseRef(root, base);
+  if (!baseRef) {
+    writeTextStderr(
+      `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
+    );
+    return CliExitCode.Usage;
+  }
+
+  // Only once the command is committed to writing the workflow file: the
+  // guards above still abort having done nothing, so they must not leave an
+  // installer tab open behind them. Open it before checkout so interruption
+  // during the launch cannot strand the user on the target branch.
+  await openGitHubAppInstaller(slug);
+
   let checkout: ExecResult;
   if (branchExists) {
     checkout = git(root, 'checkout', branch);
   } else {
-    const baseRef = resolveBaseRef(root, base);
-    if (!baseRef) {
-      writeTextStderr(
-        `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
-      );
-      return CliExitCode.Usage;
-    }
     checkout = git(root, 'checkout', '-b', branch, baseRef);
   }
   if (!checkout.success) {
@@ -214,11 +221,6 @@ async function runInstallGithubAction(
     );
     return CliExitCode.AgentError;
   }
-
-  // Only once the command is committed to writing the workflow file: the two
-  // guards above still abort having done nothing, so they must not leave an
-  // installer tab open behind them.
-  await openGitHubAppInstaller(slug);
 
   // Report the failure, put the user back on the branch they started from, and
   // hand back the error exit code.
