@@ -59,16 +59,15 @@ import {
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
-import {
-  estimateTranscriptEntryRows,
-  selectTranscriptEntriesForViewport,
-} from '@cli/chat/tui/panes/transcriptViewport';
+import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   isFinalizedTranscriptRow,
-  splitTranscriptEntries,
   transcriptRowHeadline,
 } from '@cli/chat/tui/panes/transcriptEntries';
-import { transcriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
+import {
+  transcriptEntryLayout,
+  transcriptEntryLayoutRows,
+} from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
@@ -114,6 +113,7 @@ import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import {
+  splitTranscriptEntries,
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
@@ -3136,7 +3136,9 @@ describe('CLI transcript state', () => {
     const renderedRows = renderAnsiMarkdown(text, { width }).split('\n').length;
     const entry = textRowFixture('assistant-markdown', 'assistant', text, 0);
 
-    expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width })),
+    ).toBe(renderedRows);
   });
 
   it('does not reserve spacer rows for compact one-line tool calls', () => {
@@ -3144,7 +3146,9 @@ describe('CLI transcript state', () => {
       path: '/executions/3a780a389327/report',
     });
 
-    expect(estimateTranscriptEntryRows(entry, 80)).toBe(1);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width: 80 })),
+    ).toBe(1);
   });
 
   it('keeps pending transcript rows within their viewport budget', () => {

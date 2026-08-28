@@ -272,24 +272,22 @@ export function orderedStaticTranscriptEntries(
   return ordered.map(({ entry }) => entry);
 }
 
-export function splitTranscriptEntries(
+/**
+ * Non-finalized entries in original stream order — the live pane's rows. The
+ * renderer must walk this list (rather than rendering tool rows and the live
+ * assistant as separate buckets) so that text emitted before a tool call
+ * appears above the tool row instead of below it. Tool entries defer
+ * finalization until the stream itself finalizes — promoting them earlier
+ * would let a fast tool jump ahead of still-streaming assistant text in
+ * `<Static>` scrollback, where insertion order is fixed. The complement (the
+ * settled prefix) is {@link orderedStaticTranscriptEntries}.
+ */
+export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
   finalizedFrontier: number,
   status: StreamPhase | undefined,
-): {
-  readonly finalized: TranscriptRow[];
-  /** Non-finalized entries in original stream order. The renderer must
-   *  walk this list (rather than rendering tool rows and the live
-   *  assistant as separate buckets) so that text emitted before a tool
-   *  call appears above the tool row instead of below it. Tool entries
-   *  defer finalization until the stream itself finalizes — promoting
-   *  them earlier would let a fast tool jump ahead of still-streaming
-   *  assistant text in `<Static>` scrollback, where insertion order is
-   *  fixed. */
-  readonly pending: TranscriptRow[];
-} {
+): TranscriptRow[] {
   const showLiveAssistant = isActivePhase(status);
-  const finalized: TranscriptRow[] = [];
   const pending: TranscriptRow[] = [];
   let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
@@ -310,7 +308,7 @@ export function splitTranscriptEntries(
       continue;
     }
     if (entryFinalized) {
-      (canPromoteToStatic ? finalized : pending).push(entry);
+      if (!canPromoteToStatic) pending.push(entry);
       continue;
     }
     if (
@@ -328,7 +326,7 @@ export function splitTranscriptEntries(
       pending.push(entry);
     }
   }
-  return { finalized, pending };
+  return pending;
 }
 
 const EMPTY_TRANSCRIPT_ENTRIES: readonly TranscriptRow[] = Object.freeze([]);
@@ -432,7 +430,11 @@ export function incrementalStaticTranscriptEntries(
     }
   }
 
-  const appended: TranscriptRow[] = [];
+  const appended: Array<{
+    entry: TranscriptRow;
+    index: number;
+    key: readonly [number, number];
+  }> = [];
   let scannedIndex = start;
   for (let index = 0; index < suffix.length; index += 1) {
     const entry = suffix[index]!;
@@ -450,11 +452,30 @@ export function incrementalStaticTranscriptEntries(
       !hasLaterRenderable[index];
     if (defersLiveUserPrompt) break;
     scannedIndex = start + index + 1;
-    appended.push(entry);
+    appended.push({
+      entry,
+      index: start + index,
+      key: transcriptOrderKey(entry, start + index),
+    });
   }
+  // Print the suffix in the same settlement order the rebuild oracle uses
+  // (`orderedStaticTranscriptEntries`): a row that settled while an earlier
+  // tool was still running must not swap places across a repaint.
+  const alreadyOrdered = appended.every(
+    (candidate, i) =>
+      i === 0 ||
+      compareTranscriptOrderKeys(appended[i - 1]!.key, candidate.key) <= 0,
+  );
+  const ordered = alreadyOrdered
+    ? appended
+    : appended.toSorted(
+        (left, right) =>
+          compareTranscriptOrderKeys(left.key, right.key) ||
+          left.index - right.index,
+      );
 
   return {
-    appended,
+    appended: ordered.map(({ entry }) => entry),
     cursor: makeStaticTranscriptScanCursor(source, scannedIndex, status),
     rebuild: false,
   };

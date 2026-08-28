@@ -35,10 +35,9 @@ import {
   TranscriptEntry,
 } from './TranscriptEntry';
 import { ToolUseRow } from './ToolUseRow';
-import { splitTranscriptEntries } from './transcriptEntries';
+import { pendingTranscriptEntries } from './transcriptEntries';
 import {
   estimateLiveTranscriptEntryRows,
-  estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from './transcriptViewport';
 import {
@@ -100,6 +99,10 @@ function renderConversationPaneEntry({
       case 'log':
         return <LiveTranscriptEntry entry={entry} width={width} />;
       case 'user':
+      case 'compactionActivity':
+      case 'error':
+      case 'fileList':
+      case 'workflowTask':
         return (
           <TranscriptEntry
             colorEnabled={colorEnabled}
@@ -113,22 +116,6 @@ function renderConversationPaneEntry({
           <TranscriptEntry
             colorEnabled={colorEnabled}
             entry={entry}
-            width={width}
-          />
-        );
-      case 'compactionActivity':
-      case 'error':
-      case 'fileList':
-      case 'workflowTask':
-        return (
-          <BoundedTranscriptEntry
-            colorEnabled={colorEnabled}
-            entry={entry}
-            maxRows={estimateTranscriptEntryRows(
-              entry,
-              width,
-              subagentExecutionLabels,
-            )}
             width={width}
           />
         );
@@ -233,11 +220,11 @@ export function ConversationPane(
   const artifacts =
     activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const displayEntries = splitTranscriptEntries(
+  const displayEntries = pendingTranscriptEntries(
     entries,
     slice?.finalizedFrontier ?? 0,
     slice?.status,
-  ).pending;
+  );
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =
