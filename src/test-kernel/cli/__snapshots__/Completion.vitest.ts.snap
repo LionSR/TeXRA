@@ -143,7 +143,6 @@ _texra() {
     completion) subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --color --no-color --no-input' ;;
     version) subcommands=''; flags='--print -p --quiet -q --cwd --output-format --approval-policy --color --no-color --no-input' ;;
     help) subcommands=''; flags='' ;;
-    *) subcommands='orchestrate chat clone run resume setup init config install-github-action history memory agents skills tools multi-agent models login logout auth doctor completion version help'; flags='' ;;
   esac
 
   if [[ "$path" == 'run' && "$cur" != -* ]]; then

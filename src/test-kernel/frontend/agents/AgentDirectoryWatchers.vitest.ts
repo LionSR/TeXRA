@@ -149,7 +149,7 @@ describe('agent directory watcher rebuilds', () => {
     mocks.heldReads.clear();
     mocks.createHandlers.clear();
     mocks.getAllLocal.mockReset();
-    agentDirectories.initialize({} as vscode.ExtensionContext);
+    agentDirectories.initialize();
   });
 
   function subscribe(): vscode.Disposable {

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   prepareMainViewExecutionLaunch: vi.fn(),
   showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
+  warn: vi.fn(),
   pathToLocation: vi.fn((absolutePath: string) => ({
     kind: 'external' as const,
     absolutePath,
@@ -65,7 +66,7 @@ vi.mock('@logger/logUtils', () => ({
   createLog: () => ({
     debug: vi.fn(),
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: mocks.warn,
     error: vi.fn(),
   }),
   info: vi.fn(),
@@ -96,8 +97,15 @@ describe('MainView execution handlers', () => {
     expect(mocks.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('presents launch information before executing the prepared request', async () => {
+  it('dispatches before launch information settles and logs its rejection', async () => {
     const request = { agentName: 'team-root' };
+    let settleInfo!: (value: void | PromiseLike<void>) => void;
+    let rejectInfo!: (reason?: unknown) => void;
+    const infoPromise = new Promise<void>((resolve, reject) => {
+      settleInfo = resolve;
+      rejectInfo = reject;
+    });
+    mocks.showInformationMessage.mockReturnValue(infoPromise);
     mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
       status: 'prepared',
       preparation: { valid: true, request },
@@ -113,6 +121,14 @@ describe('MainView execution handlers', () => {
       'texra.execute',
       request,
     );
+
+    rejectInfo(new Error('toast dismissed unexpectedly'));
+    await vi.waitFor(() => {
+      expect(mocks.warn).toHaveBeenCalledExactlyOnceWith(
+        'Information notification failed: toast dismissed unexpectedly',
+      );
+    });
+    settleInfo();
   });
 
   it.each([
@@ -125,14 +141,15 @@ describe('MainView execution handlers', () => {
       editedFile: '/tmp/edited.tex',
     });
 
+    // Two calls, not three: the dead leading `inputFile` argument (passed as a
+    // duplicate of baseFile, and documented "inputFile unused" at the other
+    // caller) left compare/acceptEdited with their parameter.
     expect(mocks.pathToLocation.mock.calls).toEqual([
-      ['/workspace/main.tex'],
       ['/workspace/main.tex'],
       ['/tmp/edited.tex'],
     ]);
     expect(mocks.executeCommand).toHaveBeenCalledExactlyOnceWith(
       `texra.${command}`,
-      { kind: 'external', absolutePath: '/workspace/main.tex' },
       { kind: 'external', absolutePath: '/workspace/main.tex' },
       { kind: 'external', absolutePath: '/tmp/edited.tex' },
     );

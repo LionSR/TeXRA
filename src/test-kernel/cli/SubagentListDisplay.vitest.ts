@@ -354,115 +354,6 @@ describe('CLI child list display model', () => {
     ).toEqual(['muted', 'muted', 'warning']);
   });
 
-  it('uses the latest logical task state when a workflow is rerun', () => {
-    const slice = workflowAgentSlice('rerun', {
-      entries: [
-        phaseEntry('phase-verify-old', 'Verify', {
-          phaseIndex: 1,
-          phaseTotal: 2,
-          attemptId: 'prior',
-        }),
-        workflowTaskEntry('task-verify-old', 'Failed: Verify', {
-          id: 'verification',
-          label: 'Verify',
-          phase: 'Verify',
-          status: 'failed',
-          error: 'Invalid first attempt.',
-          attemptId: 'prior',
-        }),
-        phaseEntry('phase-verify-current', 'Verify', {
-          phaseIndex: 1,
-          phaseTotal: 2,
-          attemptId: 'current',
-        }),
-        workflowTaskEntry('task-verify-current', 'Running: Verify', {
-          id: 'verification',
-          label: 'Verify',
-          phase: 'Verify',
-          status: 'running',
-          attemptId: 'current',
-        }),
-      ],
-    });
-
-    expect(
-      workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
-        (segment) => segment.text,
-      ),
-    ).toEqual(['Verify (2/2)', '0/1 done']);
-  });
-
-  it('does not combine a prior phase heading with a phase-less rerun', () => {
-    const slice = workflowAgentSlice('phase-removed', {
-      entries: [
-        phaseEntry('phase-old', 'Verify', {
-          phaseIndex: 1,
-          phaseTotal: 2,
-          attemptId: 'prior',
-        }),
-        workflowTaskEntry('task-old', 'Failed: Verify', {
-          id: 'verification',
-          label: 'Verify',
-          phase: 'Verify',
-          status: 'failed',
-          error: 'Old failure.',
-          attemptId: 'prior',
-        }),
-        workflowTaskEntry('task-current', 'Running: Direct check', {
-          id: 'direct-check',
-          label: 'Direct check',
-          status: 'running',
-          attemptId: 'current',
-        }),
-      ],
-    });
-
-    expect(
-      workflowRunStatusSummary(slice, AgentCategory.Workflow),
-    ).toBeUndefined();
-  });
-
-  it('clears the prior status when a new attempt has not emitted work', () => {
-    const slice = workflowAgentSlice('empty-rerun', {
-      workflowAttemptId: 'current',
-      entries: [
-        phaseEntry('phase-old', 'Verify', { attemptId: 'prior' }),
-        workflowTaskEntry('task-old', 'Finished: Verify', {
-          id: 'verification',
-          label: 'Verify',
-          phase: 'Verify',
-          status: 'completed',
-          attemptId: 'prior',
-        }),
-      ],
-    });
-
-    expect(
-      workflowRunStatusSummary(slice, AgentCategory.Workflow),
-    ).toBeUndefined();
-  });
-
-  it('does not infer status after a malformed declared attempt boundary', () => {
-    const slice = workflowAgentSlice('invalid-rerun', {
-      workflowAttemptBoundaryDeclared: true,
-      workflowAttemptId: undefined,
-      entries: [
-        phaseEntry('phase-old', 'Verify', { attemptId: 'prior' }),
-        workflowTaskEntry('task-old', 'Finished: Verify', {
-          id: 'verification',
-          label: 'Verify',
-          phase: 'Verify',
-          status: 'completed',
-          attemptId: 'prior',
-        }),
-      ],
-    });
-
-    expect(
-      workflowRunStatusSummary(slice, AgentCategory.Workflow),
-    ).toBeUndefined();
-  });
-
   it('tallys failures across the whole run, not just the current phase', () => {
     // A failure in an earlier phase must persist in the band after the run
     // advances, unlike the current-phase done/total. The whole-run tally keeps
@@ -1101,6 +992,7 @@ describe('CLI child list display model', () => {
           phase: 'Map',
           status: 'running',
           childStreamId: exactChild,
+          model: 'exact-live-model',
         }),
         phaseEntry('phase-write', 'Write', { phaseIndex: 1, phaseTotal: 2 }),
         workflowTaskEntry(
@@ -1278,7 +1170,8 @@ describe('CLI child list display model', () => {
             id: 'labelled-model',
             label: 'Labelled model',
             status: 'completed',
-            model: 'deepseekT',
+            // Rows carry the runtime label the fold already projected.
+            model: 'DeepSeek V4 Flash (Thinking)',
           },
           1,
         ),
@@ -1387,7 +1280,6 @@ describe('CLI child list display model', () => {
       .split('\n')
       .find((line) => line.includes('Labelled model · Finished'));
     expect(labelledModelLine).toContain('DeepSeek V4 Flash (Thinking)');
-    expect(labelledModelLine).not.toContain('deepseekT');
     const missingLine = narrowOutput
       .split('\n')
       .find((line) => line.includes('Missing · Running'));
@@ -1396,10 +1288,8 @@ describe('CLI child list display model', () => {
     const fallbackLine = narrowOutput
       .split('\n')
       .find((line) => line.includes('Fallback · Finished'));
-    expect(fallbackLine).toContain('fallback-model');
     expect(fallbackLine).toContain('edit');
     expect(fallbackLine).toContain('↓321');
-    expect(fallbackLine).toContain('$0.007');
     expect(fallbackLine).not.toContain('5s');
   });
 

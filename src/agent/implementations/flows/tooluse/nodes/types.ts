@@ -61,8 +61,6 @@ export const ToolUseRunSharedSchema = z.object({
   userCancelledRetry: z.boolean().optional(),
   /** Distinguishes failure from cancellation during resume. */
   lastError: RetryErrorInfoSchema.optional(),
-  /** Last assistant response without the full assembly buffers. */
-  lastResponse: z.string().optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });

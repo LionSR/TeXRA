@@ -7,7 +7,6 @@ import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
-  latestWorkflowCallsById,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
@@ -15,7 +14,6 @@ import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
   activeStreamId as activeStreamIdSignal,
-  currentWorkflowAttemptId,
   streams as streamsSignal,
   type StreamSlice,
 } from '../state/cliState';
@@ -177,15 +175,8 @@ export function workflowRunStatusSummary(
 ): readonly WorkflowStatusSegment[] | undefined {
   if (!slice || category !== AgentCategory.Workflow) return undefined;
   const phase = currentWorkflowPhaseHeading(slice, category);
-  const currentCalls = latestWorkflowCallsById(
-    slice.entries.flatMap((row) =>
-      row.kind === 'workflowTask' ? [row.call] : [],
-    ),
-    currentWorkflowAttemptId(
-      slice.workflowAttemptId,
-      slice.entries,
-      slice.workflowAttemptBoundaryDeclared,
-    ),
+  const currentCalls = slice.entries.flatMap((row) =>
+    row.kind === 'workflowTask' ? [row.call] : [],
   );
   const { done, total } = workflowPhaseCallProgress(
     phase ? currentCalls.filter((call) => call.phase === phase.phaseLabel) : [],

@@ -11,10 +11,7 @@ import {
   type UpdateProfileMessage,
 } from '@shared/schemas';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
-import {
-  PROVIDER_DISPLAY_NAMES,
-  PROVIDER_URLS,
-} from '@shared/constants/providers';
+import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import {
   getGlobalStreaming,
   getProviderDisplayName,
@@ -89,7 +86,7 @@ export class SettingsProfileController {
     return {
       ...base,
       authenticated: true,
-      user: { email: user?.email ?? storedEmail ?? 'N/A' },
+      user: { email: user?.email ?? storedEmail ?? '' },
       sessionProblem,
     };
   }
@@ -102,8 +99,7 @@ export class SettingsProfileController {
   }
 
   getProviderKeyUrl(provider: string): string | undefined {
-    const defaultUrl = PROVIDER_URLS[provider];
-    return defaultUrl ? getProviderKeyUrl(provider, defaultUrl) : undefined;
+    return getProviderKeyUrl(provider);
   }
 
   /**

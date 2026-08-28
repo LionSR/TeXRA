@@ -13,10 +13,8 @@ import {
   foregroundSurfaceKind,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
-  triggerEscapeInterrupt,
   visibleApprovalRootStreamId,
   type AppCtrlCState,
-  type EscapeInterruptState,
   type ForegroundSurfaceKind,
 } from '@cli/chat/tui/appInteractionPolicy';
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
@@ -293,45 +291,6 @@ describe('app interaction policy', () => {
     for (const [value, expected] of cases) {
       expect(digitFromMetaShortcut(value)).toBe(expected);
     }
-  });
-
-  it('runs Escape interrupt from the supplied current state', () => {
-    const interrupted: StreamTabId[] = [];
-    const target = 'focused-child' as StreamTabId;
-    const baseState = {
-      inputDisabled: false,
-      reverseSearchOpen: false,
-      slashPaletteOpen: false,
-      onInterruptStream: (streamId: StreamTabId) => interrupted.push(streamId),
-    } satisfies Omit<EscapeInterruptState, 'canInterruptStream'>;
-    const cases = [
-      [true, true, 1],
-      [false, false, 1],
-    ] satisfies readonly (readonly [boolean, boolean, number])[];
-
-    for (const [canInterrupt, expected, expectedInterrupts] of cases) {
-      expect(
-        triggerEscapeInterrupt(
-          {
-            ...baseState,
-            canInterruptStream: (streamId) =>
-              streamId === target && canInterrupt,
-          },
-          target,
-        ),
-      ).toBe(expected);
-      expect(interrupted).toHaveLength(expectedInterrupts);
-    }
-    expect(interrupted).toEqual([target]);
-    expect(
-      triggerEscapeInterrupt(
-        {
-          ...baseState,
-          canInterruptStream: () => true,
-        },
-        undefined,
-      ),
-    ).toBe(false);
   });
 
   it('lets approvals preempt only a busy form', () => {

@@ -107,6 +107,7 @@ export function workflowExecutionView(
         label: compactWorkflowText(call.label),
         stageId: compactWorkflowText(call.stageId),
         stageTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
+        ...(call.issued && { issued: true, kind: call.kind }),
         agent: compactWorkflowText(call.agent),
         model: compactWorkflowText(call.model),
         files: {
@@ -123,7 +124,7 @@ export function workflowExecutionView(
           omittedAttempts: call.attempts.length - WORKFLOW_SUMMARY_MAX_ATTEMPTS,
         }),
         status: call.status,
-        blockedReason: compactWorkflowText(call.blockedReason),
+        ...(call.settledBySweep && { settledBySweep: true }),
         error: compactWorkflowText(call.error),
         costUsd: call.costUsd,
         timestamps: call.timestamps,

@@ -21,6 +21,8 @@ export function createStubDesktopSettingsUiHost(
     openPath: noOp,
     revealStream: async () => 'revealed',
     getStreamLabel: () => undefined,
+    promptForSecret: async () => undefined,
+    openExternal: noOp,
     showInfoMessage: noOp,
     showErrorMessage: noOp,
     confirmAction: async () => true,
@@ -85,7 +87,6 @@ export function createStubDesktopCredentialSettingsController(
     refreshAfterProviderSettingChange: noOp,
     refreshAuthDependentData: noOp,
     signInChatGpt: noOp,
-    signInGrok: noOp,
     ...overrides,
   };
 }

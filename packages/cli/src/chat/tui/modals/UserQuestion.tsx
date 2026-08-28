@@ -214,16 +214,11 @@ export function boundedUserQuestionPromptLines({
 
   if (questionLines.length >= maxDisplayLines) {
     const visibleQuestionLines = questionLines.slice(0, maxDisplayLines);
-    const hiddenRows =
-      contextLines.length + questionLines.length - visibleQuestionLines.length;
-    if (hiddenRows <= 0) return visibleQuestionLines;
+    const hiddenRows = lines.length - maxDisplayLines;
     return [
       userQuestionInlineClipIndicator({
         hiddenRows,
-        line: visibleQuestionLines[0] ?? {
-          kind: 'overflow',
-          text: '',
-        },
+        line: visibleQuestionLines[0],
         width: wrapWidth,
       }),
       ...visibleQuestionLines.slice(1),
@@ -487,10 +482,6 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   }
 
   function submitAnswer(answer: string | string[] | undefined): void {
-    if (!question) {
-      onDecide(userQuestionDecision(answers));
-      return;
-    }
     const nextAnswers = updateUserQuestionAnswers(answers, question, answer);
     if (index + 1 >= questions.length) {
       onDecide(userQuestionDecision(nextAnswers));

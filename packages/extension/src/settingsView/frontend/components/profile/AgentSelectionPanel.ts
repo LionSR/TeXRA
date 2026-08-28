@@ -394,19 +394,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
       .map((action) => renderLabeledActionButton(action.button));
   }
 
-  private renderDetail(): TemplateResult {
-    const agent = this.selectedAgent;
-
-    if (!agent) {
-      return html`
-        <div class="agent-detail-pane">
-          <div class="agent-detail-empty">
-            <em class="text-secondary">Select an agent to view details</em>
-          </div>
-        </div>
-      `;
-    }
-
+  private renderDetail(agent: AgentSelectionItem): TemplateResult {
     const { displayName, badge } = sourceMeta(agent.source);
 
     return html`
@@ -469,7 +457,10 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   }
 
   override render(): TemplateResult {
-    if (this.agents.length === 0) {
+    // `willUpdate` keeps `selectedKey` pointing at a live row whenever the
+    // roster is non-empty, so a missing agent means an empty roster.
+    const agent = this.selectedAgent;
+    if (!agent) {
       return html` <em class="text-secondary">No agents available.</em> `;
     }
 
@@ -477,7 +468,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
     return html`
       <div class="agent-split-panel">
-        ${this.renderList()} ${this.renderDetail()}
+        ${this.renderList()} ${this.renderDetail(agent)}
       </div>
       <div class="agent-count">
         ${enabledCount}/${this.agents.length}

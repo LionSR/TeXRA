@@ -19,6 +19,7 @@ import { OnboardingFunnelStateSchema } from '../onboarding';
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
+  SessionTypeSchema,
   TeamOptionDataSchema,
   WorkspaceRootOptionDataSchema,
 } from './state';
@@ -137,7 +138,7 @@ export const SetBannerMessageSchema = z.object({
 const SetSelectedAgentMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT),
   agentId: z.string().nullish(),
-  sessionType: z.string().nullish(),
+  sessionType: SessionTypeSchema.nullish(),
 });
 
 /** Host → webview push of the derived onboarding-funnel state. */

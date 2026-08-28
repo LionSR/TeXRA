@@ -14,7 +14,7 @@ import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { StreamTabId } from '@shared/schemas';
 import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 
-import { SessionHostInteractions } from './HostInteractions';
+import type { SessionHostInteractions } from './HostInteractions';
 import type PQueue from 'p-queue';
 
 /**
@@ -240,10 +240,7 @@ export interface SessionApprovals {
 }
 
 export function createSessionApprovals(
-  interactions: Pick<
-    SessionHostInteractions,
-    'setApprovalBypassState'
-  > = new SessionHostInteractions(),
+  interactions: Pick<SessionHostInteractions, 'setApprovalBypassState'>,
 ): SessionApprovals {
   // One ancestry graph: "who is this stream's parent" is kind-independent.
   // The per-kind split lives in the bypass *values* — each

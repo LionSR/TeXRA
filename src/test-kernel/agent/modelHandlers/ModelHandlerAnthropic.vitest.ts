@@ -27,6 +27,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
 import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
@@ -496,8 +497,10 @@ class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
     this.mediaContent = content;
   }
 
-  protected override async createMediaMessage(): Promise<any[]> {
-    return this.mediaContent;
+  protected override async createMediaMessage(): Promise<
+    CreatedMedia<ContentBlockParam>
+  > {
+    return { media: this.mediaContent, entries: [] };
   }
 }
 

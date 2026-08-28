@@ -37,19 +37,17 @@ interface DesktopLatestRelease {
 }
 
 /** Fetch the latest release's version, or undefined on any failure. */
-async function fetchLatestDesktopRelease(options?: {
-  timeoutMs?: number;
-  fetchImpl?: typeof fetch;
-}): Promise<DesktopLatestRelease | undefined> {
+async function fetchLatestDesktopRelease(): Promise<
+  DesktopLatestRelease | undefined
+> {
   const tag = await fetchJsonStringField({
     url: RELEASES_API_URL,
     field: 'tag_name',
-    timeoutMs: options?.timeoutMs ?? FETCH_TIMEOUT_MS,
+    timeoutMs: FETCH_TIMEOUT_MS,
     headers: {
       accept: 'application/vnd.github+json',
       'user-agent': GITHUB_USER_AGENT,
     },
-    fetchImpl: options?.fetchImpl,
   });
   return tag ? { version: tag.replace(/^v/, '') } : undefined;
 }

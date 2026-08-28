@@ -78,12 +78,22 @@ export function createAgentProposalTransport(options: {
 
   return {
     show(proposal) {
+      // Only a plain delegation honors an approve-time model/agent override
+      // (proposeAndExecute). A multi-agent workflow proposal and each of its
+      // per-call review cards settle to a bare approve/skip, so option data
+      // there would offer a pick the backend discards.
+      const acceptsOverrides =
+        proposal.workflowCall === undefined &&
+        (proposal.agentCategory !== AgentCategory.Workflow ||
+          proposal.workflowScript === undefined);
       renderer.showPermission({
         kind: PERMISSION_KIND.PROPOSAL,
         data: proposal,
-        modelOptionsData: buildVisibleBasicModelOptionsData(),
+        ...(acceptsOverrides && {
+          modelOptionsData: buildVisibleBasicModelOptionsData(),
+        }),
       });
-      void sendResolvedOptions(proposal);
+      if (acceptsOverrides) void sendResolvedOptions(proposal);
     },
     dismiss(requestId) {
       renderer.resolvePermission(PERMISSION_KIND.PROPOSAL, requestId);

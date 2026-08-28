@@ -18,8 +18,9 @@ type WorkflowExecutionLifecycle = z.infer<
 export const WORKFLOW_CALL_STATUS = {
   PLANNED: 'planned',
   STAGE_BLOCKED: 'stageBlocked',
+  /** Issued, held for the user's per-call or per-phase review before queueing. */
+  AWAITING_APPROVAL: 'awaitingApproval',
   QUEUED: 'queued',
-  STARTING: 'starting',
   RUNNING: 'running',
   COMPLETED: 'completed',
   FAILED: 'failed',
@@ -46,7 +47,6 @@ export type WorkflowControlAction = 'skip' | 'retry';
 
 const WorkflowExecutionTimestampsSchema = z.strictObject({
   createdAt: z.iso.datetime(),
-  queuedAt: z.iso.datetime().optional(),
   startedAt: z.iso.datetime().optional(),
   updatedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
@@ -68,17 +68,39 @@ const WorkflowExecutionAttemptSchema = z.strictObject({
   startedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
 });
-const WorkflowExecutionCallShape = z.strictObject({
+export const WORKFLOW_CALL_KIND = {
+  /** Whole-document workflow-agent run: file inputs in, edited files out. */
+  DOCUMENT: 'document',
+  /** Tool-use run that finishes by submitting a schema-validated value. */
+  STRUCTURED: 'structured',
+} as const;
+const WorkflowCallKindSchema = z.enum(WORKFLOW_CALL_KIND);
+export type WorkflowCallKind = z.infer<typeof WorkflowCallKindSchema>;
+
+/** File basenames one issued call was handed, by workflow-agent role. */
+export const WorkflowCallFilesSchema = z.strictObject({
+  input: z.array(z.string()),
+  context: z.array(z.string()),
+  media: z.array(z.string()),
+});
+
+const WorkflowExecutionCallSchema = z.strictObject({
   id: z.string().min(1),
   label: z.string(),
   stageId: z.string().min(1).optional(),
+  /**
+   * Set the moment the script actually issues `agent()` for this call. A
+   * call without it is a `meta.tasks` plan label the run has not reached —
+   * first-class, so no consumer infers "declared only" from empty files or
+   * an absent agent (both also true of a structured call).
+   */
+  issued: z.literal(true).optional(),
+  /** Result contract of the call; absent until the call is issued. */
+  kind: WorkflowCallKindSchema.optional(),
   agent: z.string().optional(),
+  /** Declared by the script at issue time, then the host-resolved model. */
   model: z.string().optional(),
-  files: z.strictObject({
-    input: z.array(z.string()),
-    context: z.array(z.string()),
-    media: z.array(z.string()),
-  }),
+  files: WorkflowCallFilesSchema,
   childExecutionId: ExecutionIdSchema.optional(),
   childStreamId: StreamTabIdSchema.optional(),
   attempts: z.array(WorkflowExecutionAttemptSchema),
@@ -91,28 +113,10 @@ const WorkflowExecutionCallShape = z.strictObject({
    * own path.
    */
   settledBySweep: z.literal(true).optional(),
-  blockedReason: z.string().optional(),
   error: z.string().optional(),
   costUsd: z.number().nonnegative().optional(),
   timestamps: WorkflowExecutionTimestampsSchema,
 });
-/**
- * `stageTitle` was removed as a denormalized duplicate of the referenced
- * stage's title (resolve it with `stageTitleFor` instead). Strip it here,
- * ahead of the strict shape, so a `meta.json` snapshot persisted before that
- * removal — e.g. by an interrupted run `hydrate()` must still recover —
- * keeps parsing instead of failing strictObject's unrecognized-key check.
- */
-const WorkflowExecutionCallSchema = z.preprocess((value) => {
-  if (value && typeof value === 'object' && 'stageTitle' in value) {
-    const { stageTitle: _stageTitle, ...rest } = value as Record<
-      string,
-      unknown
-    >;
-    return rest;
-  }
-  return value;
-}, WorkflowExecutionCallShape);
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
 type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
@@ -135,7 +139,8 @@ export function deriveWorkflowCounts(
   for (const call of calls) byStatus[call.status] += 1;
   return {
     total: calls.length,
-    waiting: byStatus.planned + byStatus.stageBlocked,
+    waiting:
+      byStatus.planned + byStatus.stageBlocked + byStatus.awaitingApproval,
     ...byStatus,
   };
 }

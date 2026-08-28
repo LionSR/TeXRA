@@ -7,6 +7,7 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -14,6 +15,11 @@ import {
   type AgentProposalPermission,
 } from '@shared/schemas';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+import {
+  WORKFLOW_CALL_REVIEW_COPY,
+  WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowScriptPlanSummary,
+} from '@shared/copy/workflowScriptProposal';
 
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -36,9 +42,7 @@ function wrappedRows(text: string, width: number): number {
 }
 
 function fileGroupText(label: string, files: readonly string[]): string {
-  const visible = files.slice(0, FILE_LIMIT);
-  const hidden = files.length - visible.length;
-  return `${label}: ${visible.join(', ')}${hidden > 0 ? `, +${hidden} more` : ''}`;
+  return formatAgentProposalFileGroup(label, files, FILE_LIMIT);
 }
 
 export function agentProposalMetadataRows({
@@ -56,11 +60,31 @@ export function agentProposalMetadataRows({
   ) {
     const workflow = payload.workflowScript;
     return (
-      3 +
+      1 +
       wrappedRows(
-        `${workflow.name} · ${workflow.tasks.length} tasks · ${workflow.phases.length} phases`,
+        `${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
         width,
       ) +
+      wrappedRows(
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(payload.agent, payload.model),
+        width,
+      ) +
+      wrappedRows(WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning, width) +
+      wrappedRows(
+        workflow.tasks.length > 0
+          ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+          : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote,
+        width,
+      ) +
+      (fileGroups.length > 0
+        ? 1 +
+          fileGroups.reduce(
+            (rows, group) =>
+              rows +
+              wrappedRows(fileGroupText(group.label, group.files), width),
+            0,
+          )
+        : 0) +
       wrappedRows(`Script: ${workflow.scriptPath}`, width)
     );
   }
@@ -70,6 +94,15 @@ export function agentProposalMetadataRows({
       `Model: ${payload.model} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
       width,
     ) +
+    (payload.workflowCall
+      ? wrappedRows(
+          `${WORKFLOW_CALL_REVIEW_COPY.callCardNote(
+            payload.workflowCall.workflowName,
+            payload.workflowCall.phase,
+          )}${payload.workflowCall.admitsPhase ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}` : ''}`,
+          width,
+        )
+      : 0) +
     (payload.workingDirectory
       ? wrappedRows(`Directory: ${payload.workingDirectory}`, width)
       : 0) +
@@ -107,9 +140,13 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
     props.payload.agentCategory === AgentCategory.Workflow
       ? props.payload.workflowScript
       : undefined;
-  const title = workflowScript
-    ? `Approve multi-agent workflow ${workflowScript.name}?`
-    : `Spawn ${props.payload.agent}?`;
+  const workflowCall = props.payload.workflowCall;
+  let title = `Spawn ${props.payload.agent}?`;
+  if (workflowScript) {
+    title = `Approve multi-agent workflow ${workflowScript.name}?`;
+  } else if (workflowCall) {
+    title = `Run workflow call ${workflowCall.label}?`;
+  }
   const instructionWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
@@ -135,6 +172,22 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         kind: 'superYolo',
         label: DELEGATION_APPROVAL_COPY.cliAction,
       }}
+      extraActions={
+        workflowScript
+          ? [
+              {
+                key: 'p',
+                label: WORKFLOW_CALL_REVIEW_COPY.phase,
+                decision: { accepted: true, callReview: 'phase' },
+              },
+              {
+                key: 'c',
+                label: WORKFLOW_CALL_REVIEW_COPY.call,
+                decision: { accepted: true, callReview: 'call' },
+              },
+            ]
+          : []
+      }
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
@@ -144,16 +197,36 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
             <Text>
               <Text bold>{workflowScript.name}</Text>
               {' · '}
-              {workflowScript.tasks.length} tasks ·{' '}
-              {workflowScript.phases.length} phases
+              {workflowScriptPlanSummary(workflowScript)}
             </Text>
             <Text>
-              <Text bold>Default: </Text>
-              {props.payload.agent} ({props.payload.model})
+              {WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+                props.payload.agent,
+                props.payload.model,
+              )}
             </Text>
             <Text color="yellow">
-              May run tasks concurrently and incur high model cost.
+              {WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
             </Text>
+            <Text dimColor>
+              {workflowScript.tasks.length > 0
+                ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+                : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote}
+            </Text>
+            {fileGroups.length > 0 ? (
+              <Box flexDirection="column">
+                <Text dimColor>
+                  {WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:
+                </Text>
+                {fileGroups.map((group) => (
+                  <FileGroup
+                    key={group.label}
+                    label={group.label}
+                    files={group.files}
+                  />
+                ))}
+              </Box>
+            ) : null}
             <Text dimColor>Script: {workflowScript.scriptPath}</Text>
           </>
         ) : (
@@ -165,6 +238,17 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
               <Text bold>Category: </Text>
               {agentProposalCategoryLabel(props.payload.agentCategory)}
             </Text>
+            {workflowCall ? (
+              <Text dimColor>
+                {WORKFLOW_CALL_REVIEW_COPY.callCardNote(
+                  workflowCall.workflowName,
+                  workflowCall.phase,
+                )}
+                {workflowCall.admitsPhase
+                  ? ` ${WORKFLOW_CALL_REVIEW_COPY.phaseAdmitsNote}`
+                  : ''}
+              </Text>
+            ) : null}
             {props.payload.workingDirectory ? (
               <Text>
                 <Text bold>Directory: </Text>

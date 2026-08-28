@@ -87,7 +87,6 @@ type WorkspaceScopedCore = AgentCore & { workspace: AgentWorkspaceState };
 export type CycleDebugFileOptions = {
   continuationCount: number;
   baseName: string;
-  outputFile?: string;
 };
 
 export async function saveCycleDebug(

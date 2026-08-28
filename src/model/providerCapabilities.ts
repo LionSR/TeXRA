@@ -20,7 +20,6 @@ export interface OpenAIResponseProviderCapabilities {
   readonly storesResponsesServerSide: boolean;
   readonly supportsInlineInputFileUpload: boolean;
   readonly supportsToolResultFileUpload: boolean;
-  readonly failWhenFallbackOutputBudgetIsReduced: boolean;
 }
 
 export interface ProviderCapabilityProfile {
@@ -127,7 +126,6 @@ export function resolveCodexSubscriptionProfile({
       storesResponsesServerSide: false,
       supportsInlineInputFileUpload: false,
       supportsToolResultFileUpload: false,
-      failWhenFallbackOutputBudgetIsReduced: true,
     },
   };
 }

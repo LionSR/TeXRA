@@ -685,7 +685,7 @@ const CORE_SETTING_ROWS: Record<
   // assistant's host-neutral `update_config` writer is recorded separately so
   // a CLI-written value is recognized without mislabeling the writer as a reader.
   'git.numberOfCommitsToShow': {
-    schema: z.number().min(1).max(100).prefault(20),
+    schema: z.number().min(1).max(1000).prefault(20),
     description:
       'Number of recent commits to show in the commit selection dropdown',
     honoredBy: {

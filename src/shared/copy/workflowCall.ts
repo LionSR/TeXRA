@@ -1,71 +1,70 @@
 import {
   isTerminalWorkflowCallProgress,
   WORKFLOW_TASK_STATUS_LABEL,
+  type WorkflowCallKind,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
-/** Latest physical workflow attempt named by an append-ordered projection. */
-export function latestWorkflowAttemptId(
-  attemptIds: readonly (string | undefined)[],
-): string | undefined {
-  return attemptIds.findLast((attemptId) => attemptId !== undefined);
-}
+/** Result-contract label of one issued call, shared by every host. */
+const WORKFLOW_CALL_KIND_LABEL = {
+  document: 'Document',
+  structured: 'Structured',
+} as const satisfies Record<WorkflowCallKind, string>;
+
+const CALL_FILE_PREVIEW_LIMIT = 3;
 
 /**
- * Select the current state of each logical workflow call.
- *
- * Durable script reruns append progress under a fresh attempt id so the
- * earlier attempt remains available in transcript history. Current writers
- * stamp every call; older persisted transcripts without that fact fall back
- * to their latest record per logical id. A `null` declared attempt means a
- * durable boundary was present but invalid, so inference must remain disabled.
+ * The files one issued call was handed, as a single clause: the editable
+ * inputs by name (bounded), then how many read-only context/media files ride
+ * along. Empty for a declared plan label and for a structured call, which by
+ * contract carries no files.
  */
-export function latestWorkflowCallsById(
-  calls: readonly WorkflowCallProgress[],
-  declaredAttemptId?: string | null,
-): WorkflowCallProgress[] {
-  if (declaredAttemptId === null) return [];
-  const currentAttemptId =
-    declaredAttemptId ??
-    latestWorkflowAttemptId(calls.map((call) => call.attemptId));
-  const candidates = currentAttemptId
-    ? calls.filter((call) => call.attemptId === currentAttemptId)
-    : calls;
-  const seen = new Set<string>();
-  return candidates
-    .toReversed()
-    .filter((call) => {
-      if (seen.has(call.id)) return false;
-      seen.add(call.id);
-      return true;
-    })
-    .toReversed();
+function formatWorkflowCallFiles(
+  files: WorkflowCallProgress['files'],
+): string | undefined {
+  if (!files) return undefined;
+  const visible = files.input.slice(0, CALL_FILE_PREVIEW_LIMIT);
+  const hiddenInputs = files.input.length - visible.length;
+  const parts = [
+    visible.length > 0
+      ? `${visible.join(', ')}${hiddenInputs > 0 ? ` +${hiddenInputs}` : ''}`
+      : undefined,
+    files.context.length > 0 ? `${files.context.length} context` : undefined,
+    files.media.length > 0 ? `${files.media.length} media` : undefined,
+  ].filter(filterNotNullish);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 /**
- * Canonical metadata copy for terminal workflow-call progress on every host.
+ * Canonical metadata copy for workflow-call progress on every host: what the
+ * call is (kind · agent · model · files) as soon as the script issues it, and
+ * what it cost (duration · spend) once it settles. A declared plan label has
+ * neither, so its row stays a bare label.
  */
 export function formatWorkflowCallMetadataParts(
   call: WorkflowCallProgress,
 ): string[] {
-  const hasTerminalMetadata =
+  const terminal =
     call.status === 'completed' ||
     call.status === 'failed' ||
     call.status === 'cancelled' ||
     (call.status === 'skipped' && call.reason === 'user');
-  if (!hasTerminalMetadata) {
-    return [];
-  }
   return [
+    call.kind === undefined ? undefined : WORKFLOW_CALL_KIND_LABEL[call.kind],
+    call.agent,
     call.model,
-    call.durationMs === undefined
+    call.attemptNumber === undefined
       ? undefined
-      : formatCompactDuration(call.durationMs),
-    call.totalCostUsd === undefined
-      ? undefined
-      : formatCostUsd(call.totalCostUsd),
+      : `attempt ${call.attemptNumber}`,
+    formatWorkflowCallFiles(call.files),
+    terminal && call.durationMs !== undefined
+      ? formatCompactDuration(call.durationMs)
+      : undefined,
+    terminal && call.totalCostUsd !== undefined
+      ? formatCostUsd(call.totalCostUsd)
+      : undefined,
   ].filter(filterNotNullish);
 }
 
@@ -133,7 +132,7 @@ export function formatWorkflowPhaseHeading(
  * trace cards the run's progress projection settles. Two spellings of one
  * sentence is drift, not two facts.
  */
-export const WORKFLOW_CALL_NOT_REACHED_NOTE =
+const WORKFLOW_CALL_NOT_REACHED_NOTE =
   'The workflow ended before this call was reached.';
 export const WORKFLOW_CALL_UNFINISHED_NOTE =
   'The workflow ended before this call completed.';

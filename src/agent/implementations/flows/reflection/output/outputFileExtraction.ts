@@ -28,17 +28,6 @@ import {
 } from './outputState';
 import type { XmlOutputManager } from './XmlOutputManager';
 
-/** Waits for run workspace preparation to complete, clearing the promise once settled. */
-async function prepareRunWorkspaceIfNeeded(
-  state: OutputState,
-  deps: OutputDependencies,
-): Promise<void> {
-  if (!state.runPreparation) return;
-
-  await state.runPreparation;
-  state.runPreparation = null;
-}
-
 /**
  * Base files for the unlabeled-fence similarity fallback. Rounds after the
  * first revise the previous round's outputs, so compare against those, not
@@ -139,7 +128,11 @@ export async function extractFilesFromXml(
     `Process files r${currRound}`,
     undefined,
     async () => {
-      await prepareRunWorkspaceIfNeeded(state, deps);
+      // Wait for run workspace preparation, clearing the promise once settled.
+      if (state.runPreparation) {
+        await state.runPreparation;
+        state.runPreparation = null;
+      }
 
       const data = ensureRoundData(state, currRound);
       data.rawOutput ??= outputLocation;

@@ -75,7 +75,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 }
 
 class VscodeToolEditPreview implements ToolEditPreview {
-  private diffSession: DiffSession;
+  private readonly diffSession: DiffSession;
   private tabCloseListener: vscode.Disposable | undefined;
 
   constructor(
@@ -100,7 +100,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   async present(): Promise<void> {
-    this.diffSession = await this.openDiff();
+    await this.openDiff();
     this.watchForTabClose();
     try {
       await this.revealFirstChange();
@@ -110,12 +110,11 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   async showDiff(): Promise<void> {
-    const reopened = await this.openDiff();
+    await this.openDiff();
     if (this.context.isSettled()) {
-      await this.diffViewHost.closeDiff(reopened);
+      await this.diffViewHost.closeDiff(this.diffSession);
       return;
     }
-    this.diffSession = reopened;
     await this.revealFirstChange();
   }
 
@@ -137,7 +136,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     await this.staged.cleanup();
   }
 
-  private openDiff(): Promise<DiffSession> {
+  private openDiff(): Promise<void> {
     return this.diffViewHost.openDiff(
       this.diffSession.original,
       this.diffSession.proposed,

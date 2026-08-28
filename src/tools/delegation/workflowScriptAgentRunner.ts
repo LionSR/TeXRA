@@ -8,16 +8,26 @@ import {
   type WorkflowAgentCallOptions,
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
+  type WorkflowCallAdmission,
+  type WorkflowScriptRunOptions,
 } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
-import { AgentCategory } from '@shared/schemas';
+import { createLog } from '@logger/logUtils';
+import {
+  AgentCategory,
+  DEFAULT_TOOL_CONFIG,
+  ToolUseAgentProposalSchema,
+  WORKFLOW_CALL_REVIEW_SCOPE,
+  WorkflowAgentProposalSchema,
+} from '@shared/schemas';
 import type {
   ExecutionId,
   RunStorageFileLocation,
   StreamTabId,
+  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -34,10 +44,10 @@ import {
   assertWorkflowFilesExist,
   rejectOversizedBibAttachments,
 } from './inputFields';
-import {
-  requireVisibleAgent,
-  selectAvailableDelegationModel,
-} from './proposalFlow';
+import { selectAvailableDelegationModel } from './delegationAvailability';
+import { requestDelegationProposal, requireVisibleAgent } from './proposalFlow';
+
+const log = createLog('workflowScriptAgentRunner');
 
 async function resolveInvocationFileList(
   parentExecutionId: LaunchRunContext['runScope']['executionId'],
@@ -125,7 +135,7 @@ export async function fingerprintWorkflowAgentDependencies(
 }
 
 async function workflowScriptModelSelection(
-  invocation: WorkflowAgentInvocation,
+  invocation: Pick<WorkflowAgentInvocation, 'options'>,
   parent: LaunchRunContext,
 ): Promise<string> {
   const requestedModel = invocation.options.model;
@@ -159,6 +169,118 @@ async function workflowScriptModelSelection(
 interface WorkflowRunIdentity {
   readonly executionId: ExecutionId;
   readonly streamId: StreamTabId;
+}
+
+/**
+ * Resolve what one issued `agent()` call actually runs — agent, model, result
+ * contract, and files — from the options the script declared. One owner for
+ * both the launch (`prepare`) and the per-call review a host shows before
+ * admitting the call, so the card the user approves is the config that runs.
+ */
+async function resolveWorkflowCallConfig(
+  call: Pick<WorkflowAgentInvocation, 'prompt' | 'options'>,
+  parent: LaunchRunContext,
+  defaultAgent: AgentEntry,
+  runExecutionId: ExecutionId,
+): Promise<{ configPayload: AgentConfigPayload; agentName: string }> {
+  const { runScope } = parent;
+  const sharedConfigFields = {
+    instruction: call.prompt,
+    ...(runScope.workingDirectory !== undefined && {
+      workingDirectory: runScope.workingDirectory,
+    }),
+    ...(runScope.delegationAgentScope && {
+      delegationAgentScope: runScope.delegationAgentScope,
+    }),
+  };
+  let configPayload: AgentConfigPayload;
+  let agentName: string;
+
+  if (call.options.schema !== undefined) {
+    const agent = requireVisibleAgent(
+      AgentCategory.ToolUse,
+      call.options.agentName,
+      runScope.delegationAgentScope ?? undefined,
+    );
+    const model = await workflowScriptModelSelection(call, parent);
+    agentName = agent.name;
+    configPayload = {
+      ...sharedConfigFields,
+      agent: agent.name,
+      agentSource: agent.source,
+      model,
+      agentCategory: AgentCategory.ToolUse,
+      outputSchema: call.options.schema,
+    };
+  } else {
+    const agent =
+      call.options.agentName === undefined
+        ? defaultAgent
+        : requireVisibleAgent(
+            AgentCategory.Workflow,
+            call.options.agentName,
+            runScope.delegationAgentScope ?? undefined,
+          );
+    if (agent.category !== AgentCategory.Workflow) {
+      throw new WorkflowRunAbortError(
+        `Agent '${agent.name}' is a ${agent.category} agent but was ` +
+          `launched as workflow. Use delegate_agent instead.`,
+      );
+    }
+    // Model resolves before any file I/O so an unavailable/invalid
+    // declared model fails the call without touching the filesystem.
+    const model = await workflowScriptModelSelection(call, parent);
+    const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
+      resolveInvocationFileList(
+        runExecutionId,
+        'Input file',
+        call.options.inputFiles ?? [],
+      ),
+      resolveInvocationFileList(
+        runExecutionId,
+        'Context file',
+        call.options.contextFiles ?? [],
+      ),
+      resolveInvocationFileList(
+        runExecutionId,
+        'Media file',
+        call.options.mediaFiles ?? [],
+      ),
+    ]);
+    const oversizedBibRejection =
+      await rejectOversizedBibAttachments(contextFiles);
+    if (oversizedBibRejection) {
+      throw new WorkflowRunAbortError(oversizedBibRejection.error);
+    }
+    // Run-storage references can disappear during recovery. Validate
+    // the resolved inputs, not merely the paths supplied by the script,
+    // so a stale reference cannot launch a useless empty-envelope run.
+    // Run-fatal, not a per-call failure: a plain error would resolve
+    // this agent() to null inside parallel(), silently
+    // filtering away the very misuse this guard exists to surface.
+    if (
+      inputFiles.length === 0 &&
+      (agent.defaultOutputFiles ?? []).length === 0
+    ) {
+      throw new WorkflowRunAbortError(
+        `Workflow agent '${agent.name}' edits files: pass options.inputFiles ` +
+          `with files that still exist (its result carries output files and ` +
+          `diffs, not response text).`,
+      );
+    }
+    agentName = agent.name;
+    configPayload = {
+      ...sharedConfigFields,
+      agent: agent.name,
+      agentSource: agent.source,
+      model,
+      inputFiles,
+      contextFiles,
+      mediaFiles,
+      agentCategory: AgentCategory.Workflow,
+    };
+  }
+  return { configPayload, agentName };
 }
 
 /** Build the production `agent()` adapter for one workflow-script run. */
@@ -199,109 +321,12 @@ export function createWorkflowScriptAgentRunner(
           invocation.report?.({ childExecutionId: executionId });
         },
         prepare: async () => {
-          const sharedConfigFields = {
-            instruction: invocation.prompt,
-            ...(runScope.workingDirectory !== undefined && {
-              workingDirectory: runScope.workingDirectory,
-            }),
-            ...(runScope.delegationAgentScope && {
-              delegationAgentScope: runScope.delegationAgentScope,
-            }),
-          };
-          let configPayload: AgentConfigPayload;
-          let agentName: string;
-
-          if (invocation.options.schema !== undefined) {
-            const agent = requireVisibleAgent(
-              AgentCategory.ToolUse,
-              invocation.options.agentName,
-              runScope.delegationAgentScope ?? undefined,
-            );
-            const model = await workflowScriptModelSelection(
-              invocation,
-              parent,
-            );
-            agentName = agent.name;
-            configPayload = {
-              ...sharedConfigFields,
-              agent: agent.name,
-              agentSource: agent.source,
-              model,
-              agentCategory: AgentCategory.ToolUse,
-              outputSchema: invocation.options.schema,
-            };
-          } else {
-            const agent =
-              invocation.options.agentName === undefined
-                ? defaultAgent
-                : requireVisibleAgent(
-                    AgentCategory.Workflow,
-                    invocation.options.agentName,
-                    runScope.delegationAgentScope ?? undefined,
-                  );
-            if (agent.category !== AgentCategory.Workflow) {
-              throw new WorkflowRunAbortError(
-                `Agent '${agent.name}' is a ${agent.category} agent but was ` +
-                  `launched as workflow. Use delegate_agent instead.`,
-              );
-            }
-            // Model resolves before any file I/O so an unavailable/invalid
-            // declared model fails the call without touching the filesystem.
-            const model = await workflowScriptModelSelection(
-              invocation,
-              parent,
-            );
-            const [inputFiles, contextFiles, mediaFiles] = await Promise.all([
-              resolveInvocationFileList(
-                run.executionId,
-                'Input file',
-                invocation.options.inputFiles ?? [],
-              ),
-              resolveInvocationFileList(
-                run.executionId,
-                'Context file',
-                invocation.options.contextFiles ?? [],
-              ),
-              resolveInvocationFileList(
-                run.executionId,
-                'Media file',
-                invocation.options.mediaFiles ?? [],
-              ),
-            ]);
-            const oversizedBibRejection =
-              await rejectOversizedBibAttachments(contextFiles);
-            if (oversizedBibRejection) {
-              throw new WorkflowRunAbortError(oversizedBibRejection.error);
-            }
-            // Run-storage references can disappear during recovery. Validate
-            // the resolved inputs, not merely the paths supplied by the script,
-            // so a stale reference cannot launch a useless empty-envelope run.
-            // Run-fatal, not a per-call failure: a plain error would resolve
-            // this agent() to null inside parallel(), silently
-            // filtering away the very misuse this guard exists to surface.
-            if (
-              inputFiles.length === 0 &&
-              (agent.defaultOutputFiles ?? []).length === 0
-            ) {
-              throw new WorkflowRunAbortError(
-                `Workflow agent '${agent.name}' edits files: pass options.inputFiles ` +
-                  `with files that still exist (its result carries output files and ` +
-                  `diffs, not response text).`,
-              );
-            }
-            agentName = agent.name;
-            configPayload = {
-              ...sharedConfigFields,
-              agent: agent.name,
-              agentSource: agent.source,
-              model,
-              inputFiles,
-              contextFiles,
-              mediaFiles,
-              agentCategory: AgentCategory.Workflow,
-            };
-          }
-
+          const { configPayload, agentName } = await resolveWorkflowCallConfig(
+            invocation,
+            parent,
+            defaultAgent,
+            run.executionId,
+          );
           // Surface the resolved child model so the engine can attach it to
           // this call's `agent:end` progress event.
           invocation.report?.({ model: configPayload.model, agent: agentName });
@@ -367,9 +392,13 @@ export function createWorkflowScriptAgentRunner(
                 recovered: true,
               });
             }
-          } catch {
+          } catch (error) {
             // A recovered result is authoritative. Navigation metadata is
-            // optional and must not invalidate the completed computation.
+            // optional and must not invalidate the completed computation —
+            // but a failed read of a persisted record is still reported.
+            log.warn('Failed to read the recovered child stream id', {
+              data: { executionId: completed.executionId, error },
+            });
           }
         }
       }
@@ -399,5 +428,77 @@ export function createWorkflowScriptAgentRunner(
       }
       throw error;
     }
+  };
+}
+
+/**
+ * Per-call admission for a workflow run the user chose to review call by call
+ * or phase by phase. Each issued call is resolved exactly as launch resolves
+ * it and shown through the ordinary delegation proposal on the run's stream —
+ * the same card, the same reject-with-feedback, and the same "approve all
+ * delegated work" bypass, which then admits the rest. Under phase review the
+ * first call of each phase decides for the phase; a rejected call is skipped
+ * alone, its siblings unaffected.
+ */
+export function createWorkflowCallAdmission(params: {
+  readonly parent: LaunchRunContext;
+  readonly defaultAgent: AgentEntry;
+  readonly run: WorkflowRunIdentity;
+  readonly workflowName: string;
+  readonly scope: Exclude<WorkflowCallReviewScope, 'none'>;
+}): NonNullable<WorkflowScriptRunOptions['admitCall']> {
+  const decidedPhases = new Map<string, WorkflowCallAdmission>();
+  return async (request) => {
+    const phaseKey = request.phase ?? '';
+    const admitsPhase = params.scope === WORKFLOW_CALL_REVIEW_SCOPE.PHASE;
+    const decided = admitsPhase ? decidedPhases.get(phaseKey) : undefined;
+    if (decided !== undefined) return decided;
+
+    const { configPayload } = await resolveWorkflowCallConfig(
+      request,
+      params.parent,
+      params.defaultAgent,
+      params.run.executionId,
+    );
+    const shared = {
+      agent: configPayload.agent,
+      agentSource: configPayload.agentSource,
+      model: configPayload.model,
+      instruction: request.prompt,
+      memories: [],
+      ...(configPayload.workingDirectory !== undefined && {
+        workingDirectory: configPayload.workingDirectory,
+      }),
+      workflowCall: {
+        workflowName: params.workflowName,
+        callId: request.progressId,
+        label: request.label,
+        ...(request.phase !== undefined && { phase: request.phase }),
+        ...(admitsPhase && { admitsPhase: true as const }),
+      },
+    };
+    const proposal =
+      configPayload.agentCategory === AgentCategory.ToolUse
+        ? ToolUseAgentProposalSchema.parse({
+            ...shared,
+            agentCategory: AgentCategory.ToolUse,
+          })
+        : WorkflowAgentProposalSchema.parse({
+            ...shared,
+            agentCategory: AgentCategory.Workflow,
+            inputFiles: configPayload.inputFiles ?? [],
+            contextFiles: configPayload.contextFiles ?? [],
+            mediaFiles: configPayload.mediaFiles ?? [],
+            outputFiles: [],
+            toolConfig: DEFAULT_TOOL_CONFIG,
+          });
+    const decision = await requestDelegationProposal(
+      proposal,
+      params.run.streamId,
+    );
+    const admission: WorkflowCallAdmission =
+      decision.result.action === 'approve' ? 'run' : 'skip';
+    if (admitsPhase) decidedPhases.set(phaseKey, admission);
+    return admission;
   };
 }

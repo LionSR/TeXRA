@@ -21,7 +21,9 @@ import {
   type WorkflowScriptRunResult,
 } from './types';
 
-const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 3;
+// v4: journal identity is the content key; v3 records could hold one key at
+// two indices after script drift and fail loudly rather than being translated.
+const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 4;
 
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('undefined') }),
@@ -43,20 +45,18 @@ const WorkflowScriptCheckpointSchema = z
     journal: z.array(PersistedWorkflowJournalEntrySchema),
   })
   .superRefine(({ journal }, context) => {
-    const indices = new Set<number>();
+    const keys = new Set<string>();
     for (const entry of journal) {
-      if (indices.has(entry.index)) {
+      if (keys.has(entry.key)) {
         context.addIssue({
           code: 'custom',
-          message: `Duplicate workflow journal index ${entry.index}`,
+          message: `Duplicate workflow journal key ${entry.key}`,
           path: ['journal'],
         });
       }
-      indices.add(entry.index);
+      keys.add(entry.key);
     }
   });
-
-const CheckpointIdSchema = z.string().min(1).max(256);
 
 type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
 
@@ -76,15 +76,6 @@ export class WorkflowScriptPersistenceError extends Error {
     super(message, options);
     this.name = 'WorkflowScriptPersistenceError';
   }
-}
-
-function parseCheckpointId(checkpointId: string): string {
-  const parsed = CheckpointIdSchema.safeParse(checkpointId);
-  if (parsed.success) return parsed.data;
-  throw new WorkflowScriptPersistenceError(
-    'Workflow checkpoint id must be a non-empty string of at most 256 characters.',
-    { cause: parsed.error },
-  );
 }
 
 export interface PersistedWorkflowScriptRunOptions extends Omit<
@@ -145,14 +136,13 @@ export async function readWorkflowScriptCheckpoint(
   store: ExecutionKVStore,
   checkpointId: string,
 ): Promise<WorkflowScriptCheckpoint | null> {
-  const id = parseCheckpointId(checkpointId);
-  const raw = await store.read(workflowScriptCheckpointKvKey(id));
+  const raw = await store.read(workflowScriptCheckpointKvKey(checkpointId));
   if (raw === undefined) return null;
 
   const parsed = WorkflowScriptCheckpointSchema.safeParse(raw);
   if (!parsed.success) {
     throw new WorkflowScriptPersistenceError(
-      `Workflow checkpoint ${id} is malformed.`,
+      `Workflow checkpoint ${checkpointId} is malformed.`,
       { cause: parsed.error },
     );
   }
@@ -171,7 +161,6 @@ export async function writeWorkflowScriptCheckpoint(
   checkpointId: string,
   checkpoint: WorkflowScriptCheckpoint,
 ): Promise<void> {
-  const id = parseCheckpointId(checkpointId);
   let persisted: z.infer<typeof WorkflowScriptCheckpointSchema>;
   try {
     persisted = WorkflowScriptCheckpointSchema.parse({
@@ -183,11 +172,11 @@ export async function writeWorkflowScriptCheckpoint(
     });
   } catch (error) {
     throw new WorkflowScriptPersistenceError(
-      `Workflow checkpoint ${id} cannot be persisted.`,
+      `Workflow checkpoint ${checkpointId} cannot be persisted.`,
       { cause: error },
     );
   }
-  await store.write(workflowScriptCheckpointKvKey(id), persisted);
+  await store.write(workflowScriptCheckpointKvKey(checkpointId), persisted);
 }
 
 /**
@@ -197,20 +186,18 @@ export async function writeWorkflowScriptCheckpoint(
 export async function runPersistedWorkflowScript(
   options: PersistedWorkflowScriptRunOptions,
 ): Promise<WorkflowScriptRunResult> {
-  const checkpointId = parseCheckpointId(options.checkpointId);
-  const lockKey = `${options.store.getExecutionId()}:${checkpointId}`;
+  const lockKey = `${options.store.getExecutionId()}:${options.checkpointId}`;
   return checkpointMutex.runExclusive(lockKey, () =>
-    runPersistedWorkflowScriptLocked(options, checkpointId),
+    runPersistedWorkflowScriptLocked(options),
   );
 }
 
 async function runPersistedWorkflowScriptLocked(
   options: PersistedWorkflowScriptRunOptions,
-  checkpointId: string,
 ): Promise<WorkflowScriptRunResult> {
   const {
     store,
-    checkpointId: _checkpointId,
+    checkpointId,
     script: requestedScript,
     args: requestedArgs,
     files: requestedFiles,
@@ -220,9 +207,12 @@ async function runPersistedWorkflowScriptLocked(
   // A named checkpoint outlives one tool call, and callers legitimately
   // evolve the script between attempts (a model retrying after a timeout
   // rarely reproduces its source byte-for-byte). Adopt the requested script
-  // and args, keep the journal: an entry replays only on a matching call
-  // index and prompt/execution-options hash, so drifted calls re-execute
-  // while presentation-only edits and unchanged calls stay free.
+  // and args, keep the journal: an entry replays only on a matching
+  // prompt/execution-options hash, so drifted calls re-execute while
+  // presentation-only edits, unchanged calls, and calls that merely moved
+  // stay free. The union is monotone by key — a re-visited key overwrites
+  // its entry (and its position); entries this run never reached remain, so
+  // an args-driven branch taken again later still replays.
   const script = requestedScript ?? prior?.script;
   if (script === undefined) {
     throw new WorkflowScriptPersistenceError(
@@ -249,52 +239,42 @@ async function runPersistedWorkflowScriptLocked(
       ? WorkflowScriptFilesSchema.parse(requestedFiles ?? {})
       : prior.files;
 
-  const journalByIndex = new Map(
-    (prior?.journal ?? []).map((entry) => [entry.index, entry]),
+  const journalByKey = new Map(
+    (prior?.journal ?? []).map((entry) => [entry.key, entry]),
   );
   const persistCheckpoint = (): Promise<void> =>
     writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args,
       files,
-      journal: orderedJournal(journalByIndex.values()),
+      journal: orderedJournal(journalByKey.values()),
     });
 
-  let acceptingEntries = true;
+  // Serializes concurrent entry writes. Every entry write is awaited inside
+  // the engine's journal commit fence, which is sealed and drained before the
+  // run settles, so no write can still be queued once runWorkflowScript
+  // returns or throws.
   const writeQueue = new PQueue({ concurrency: 1 });
   const persistEntry = async (entry: WorkflowJournalEntry): Promise<void> => {
-    if (!acceptingEntries) return;
-    journalByIndex.set(entry.index, entry);
+    journalByKey.set(entry.key, entry);
     await writeQueue.add(persistCheckpoint);
   };
 
-  try {
-    // Establish the checkpoint once before execution. Snapshot transitions are
-    // persisted separately and never rewrite script or journal metadata.
-    await persistCheckpoint();
-    const result = await runWorkflowScript({
-      ...runOptions,
-      script,
-      args,
-      files,
-      journal: prior?.journal,
-      // `...runOptions` carries the caller's own `onSnapshot`: snapshots
-      // belong to the detached execution that owns their writes, while this
-      // checkpoint store may belong to its orchestrator.
-      onJournalEntry: persistEntry,
-    });
-    acceptingEntries = false;
-    for (const entry of result.journal) journalByIndex.set(entry.index, entry);
-    await writeQueue.onIdle();
-    await persistCheckpoint();
-    return result;
-  } catch (error) {
-    acceptingEntries = false;
-    // L2 cleanup: each journal write is awaited by the engine before it can
-    // continue, so this rejection is the error already leaving the run.
-    // `onIdle` never rejects, so draining here can't produce a duplicate
-    // unhandled-rejection report.
-    await writeQueue.onIdle();
-    throw error;
-  }
+  // Establish the checkpoint once before execution. Snapshot transitions are
+  // persisted separately and never rewrite script or journal metadata.
+  await persistCheckpoint();
+  const result = await runWorkflowScript({
+    ...runOptions,
+    script,
+    args,
+    files,
+    journal: prior?.journal,
+    // `...runOptions` carries the caller's own `onSnapshot`: snapshots
+    // belong to the detached execution that owns their writes, while this
+    // checkpoint store may belong to its orchestrator.
+    onJournalEntry: persistEntry,
+  });
+  for (const entry of result.journal) journalByKey.set(entry.key, entry);
+  await persistCheckpoint();
+  return result;
 }

@@ -284,8 +284,8 @@ export class SupabaseClient {
     try {
       return await this.authProvider.getStoredAccountLabel();
     } catch (error) {
-      // Callers render "N/A" for null, so a failed read would otherwise be
-      // indistinguishable from "no session stored".
+      // A failed read is otherwise indistinguishable from "no session
+      // stored", and both collapse to the generic account label in the UI.
       log.warn(`Error reading stored account label: ${toErrorMessage(error)}`);
       return null;
     }

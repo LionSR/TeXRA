@@ -153,7 +153,12 @@ export function createDesktopShortcutRegistry(
       listener: (entries: readonly DesktopShortcutEntry[]) => void,
     ): () => void {
       listeners.add(listener);
-      listener(entries());
+      try {
+        listener(entries());
+      } catch (error) {
+        listeners.delete(listener);
+        throw error;
+      }
       return () => listeners.delete(listener);
     },
     update,

@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { loadAgents } from '@agent/index';
 import { AgentConfigSchema, defaultSession, runAgent } from '@agent/runtime';
-import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   resolveSetupLaunchModel,

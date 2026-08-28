@@ -211,7 +211,7 @@ function appProps(
     onSubmit: vi.fn(),
     onKillExecution: vi.fn(),
     onWorkflowControl: vi.fn(),
-    canInterruptActiveRun: () => true,
+    canStopActiveRun: () => true,
     canInterruptStream: () => true,
     onInterruptActive: vi.fn(),
     onInterruptStream,
@@ -675,7 +675,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write('\r');
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
-      expect(onSubmit).toHaveBeenCalledWith('q', undefined);
+      expect(onSubmit).toHaveBeenCalledWith('q', undefined, undefined);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -887,7 +887,11 @@ describe('App foreground Escape ownership', () => {
       stdin.write('\r');
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
-      expect(onSubmit).toHaveBeenCalledWith('preserved root draft', undefined);
+      expect(onSubmit).toHaveBeenCalledWith(
+        'preserved root draft',
+        undefined,
+        undefined,
+      );
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -1024,7 +1028,11 @@ describe('App foreground Escape ownership', () => {
       try {
         stdin.write('child follow-up\r');
         await waitFor(() => onSubmit.mock.calls.length === 1);
-        expect(onSubmit).toHaveBeenCalledWith('child follow-up', undefined);
+        expect(onSubmit).toHaveBeenCalledWith(
+          'child follow-up',
+          undefined,
+          undefined,
+        );
       } finally {
         instance.unmount();
       }

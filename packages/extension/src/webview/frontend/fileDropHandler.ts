@@ -6,7 +6,7 @@ import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
 import type { MultipleDocumentFileType } from '@shared/schemas';
-import { tryParseUrl, unique } from '@utils/core';
+import { tryParseUrl } from '@utils/core';
 
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
@@ -181,13 +181,15 @@ export class FileDropController implements ReactiveController {
 export function postDroppedFiles(
   paths: string[],
   target?: MultipleDocumentFileType,
-): boolean {
-  const uniquePaths = unique(paths.filter(Boolean));
-  if (uniquePaths.length === 0) return false;
+): void {
+  // `extractDroppedFilePaths` accumulates into a Set of non-empty paths, and
+  // the host re-resolves, re-filters and re-dedupes anyway
+  // (`planMainViewDroppedFileAttachments`), so nothing is cleaned here. An
+  // empty list still means "the drop yielded nothing" and must not post.
+  if (paths.length === 0) return;
 
   postMessage(MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES, {
-    paths: uniquePaths,
+    paths,
     ...(target ? { target } : {}),
   });
-  return true;
 }

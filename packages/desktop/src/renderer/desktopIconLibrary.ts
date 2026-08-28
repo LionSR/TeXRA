@@ -6,6 +6,14 @@
 //
 // Names are the existing `TeXRAIconName` values, so no call site changes: every
 // `waIcon('file-code')` in the shared components silently upgrades.
+//
+// Independent from docs/.vitepress/theme/webAwesomeIcons.js by necessity, not
+// by drift: that module resolves a wider codicon-style alias vocabulary to
+// Font Awesome glyphs for the statically-built VitePress site, which cannot
+// import this Electron-only module or its Lucide geometry. Keep the two
+// tables' canonical-name overlap in sync by hand — see
+// docs/proposals/2026-08-25-simplification-survey-49-candidates.md and issue
+// #11424 for the last reconciliation pass.
 
 import {
   registerIconLibrary,

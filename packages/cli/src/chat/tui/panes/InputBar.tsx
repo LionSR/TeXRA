@@ -44,6 +44,7 @@ import {
   reverseSearchOpen as reverseSearchOpenSignal,
   setTransientNotice,
   slashPaletteOpen,
+  takeDraftRestoreRequests,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import type { CursorEdit } from '../input/textInputEditing';
@@ -54,7 +55,11 @@ const CSI_SEQUENCE_TAIL_RE = /^\[[0-?]*[ -/]*[@-~]$/u;
 interface InputBarProps {
   /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
    *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
-  readonly onSubmit: (value: string, mediaFiles?: readonly string[]) => void;
+  readonly onSubmit: (
+    value: string,
+    mediaFiles?: readonly string[],
+    images?: readonly PastedImageEntry[],
+  ) => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
   /** Inline reason shown when the disabled input remains visible. */
@@ -195,29 +200,45 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     [setValue],
   );
   // A refused follow-up hands its text back: the draft is the user's until
-  // the session admits it. Image chips are rebuilt from the entries captured
-  // at submit; anything typed since the send is kept and the restored text
-  // is appended below it.
-  const lastSubmittedImagesRef = useRef<readonly PastedImageEntry[]>([]);
-  const draftRestore = useSignal(draftRestoreRequest);
+  // the session admits it. Image chips are rebuilt from the entries carried by
+  // that restore request; anything typed since the send is kept and the
+  // restored text is appended below it.
+  const draftRestores = useSignal(draftRestoreRequest);
   useEffect(() => {
-    if (!draftRestore) return;
-    draftRestoreRequest.set(null);
-    // The submitted text still carries its `[Image #N]` tokens (only pasted
-    // text is expanded at submit); revive each one as a fresh chip, in order,
-    // so no placeholder is duplicated or left dangling.
+    if (draftRestores.length === 0) return;
+    const requests = takeDraftRestoreRequests();
     const store = attachmentsRef.current;
-    const images = [...lastSubmittedImagesRef.current];
-    const restored = draftRestore.text.replaceAll(
-      /\[Image #\d+\]/g,
-      (token) => {
-        const image = images.shift();
-        return image ? store.addPastedImage(image) : token;
-      },
-    );
-    const current = draftValueRef.current;
-    setValue(current.length > 0 ? `${current}\n${restored}` : restored);
-  }, [draftRestore, setValue]);
+    let next = draftValueRef.current;
+    for (const request of requests) {
+      // The submitted text still carries its `[Image #N]` tokens (only pasted
+      // text is expanded at submit). Match by the original chip id so an
+      // orphaned token cannot steal another attachment; duplicate references
+      // reuse the same newly-created chip.
+      const imagesById = new Map(
+        request.images.map((image) => [image.id, image] as const),
+      );
+      const restoredChips = new Map<number, string>();
+      const restored = request.text.replaceAll(
+        /\[Image #(\d+)\]/g,
+        (token, idText: string) => {
+          const id = Number(idText);
+          const existing = restoredChips.get(id);
+          if (existing) return existing;
+          const image = imagesById.get(id);
+          if (!image) return token;
+          const chip = store.addPastedImage({
+            path: image.path,
+            mediaType: image.mediaType,
+            displayName: image.displayName,
+          });
+          restoredChips.set(id, chip);
+          return chip;
+        },
+      );
+      next = next.length > 0 ? `${next}\n${restored}` : restored;
+    }
+    setValue(next);
+  }, [draftRestores, setValue]);
   const transformPaste = useCallback((text: string): string => {
     if (!shouldCollapsePaste(text)) return text;
     return attachmentsRef.current.addPastedText(text);
@@ -274,7 +295,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       }
       const images = store.resolveImages(submitted);
       const mediaFiles = images.map((image) => image.path);
-      lastSubmittedImagesRef.current = images;
       const historyText = store.expandTextForHistory(submitted).trim();
       clearDraft();
       // Persisting history is best-effort — a disk failure (read-only fs,
@@ -289,7 +309,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           `texra: failed to persist input history: ${String(err)}`,
         );
       });
-      onSubmit(trimmed, mediaFiles.length > 0 ? mediaFiles : undefined);
+      onSubmit(
+        trimmed,
+        mediaFiles.length > 0 ? mediaFiles : undefined,
+        images.length > 0 ? images : undefined,
+      );
     },
     [clearDraft, onSubmit],
   );

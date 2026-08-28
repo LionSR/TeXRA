@@ -12,15 +12,11 @@ import {
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const WorkflowScriptPhaseTitleSchema = z
+/** One title form for `meta.phases` entries and runtime `phase()` calls. */
+export const WorkflowScriptPhaseTitleSchema = z
   .string()
   .trim()
   .min(1, 'Workflow phase title must not be blank.');
-
-/** Normalize every executable phase-title input to the metadata schema form. */
-export function normalizeWorkflowScriptPhaseTitle(title: string): string {
-  return WorkflowScriptPhaseTitleSchema.parse(title);
-}
 
 const WorkflowScriptPhaseSchema = z.union([
   z.strictObject({ title: WorkflowScriptPhaseTitleSchema }),
@@ -246,7 +242,7 @@ export type WorkflowAgentCallOptions = z.infer<
 >;
 
 export interface WorkflowAgentInvocation {
-  /** 0-based call sequence number; also the journal key position. */
+  /** 0-based call sequence number: ordering only, never identity. */
   index: number;
   /** Stable logical call identity within the workflow execution snapshot. */
   progressId: WorkflowScriptProgressId;
@@ -301,6 +297,23 @@ export interface WorkflowAttemptFacts {
 }
 
 /**
+ * One issued call presented for the user's admission before it queues:
+ * everything the script declared for it. The host resolves agent, model, and
+ * files from these options exactly as its runner will at launch.
+ */
+interface WorkflowCallAdmissionRequest {
+  readonly index: number;
+  readonly progressId: WorkflowScriptProgressId;
+  readonly label: string;
+  readonly phase?: string;
+  readonly prompt: string;
+  readonly options: WorkflowAgentCallOptions;
+}
+
+/** `'skip'` resolves the call to the skipped sentinel; it is never journaled. */
+export type WorkflowCallAdmission = 'run' | 'skip';
+
+/**
  * Host-provided executor for one `agent()` call. Tests use a fake; a
  * production host wires this to the in-band subagent execution path so the
  * engine receives the typed AgentFinalResult envelope, never the XML
@@ -310,7 +323,12 @@ export type WorkflowAgentRunner = (
   invocation: WorkflowAgentInvocation,
 ) => Promise<unknown>;
 
-/** One completed agent() call, cached for resume. */
+/**
+ * One completed agent() call, cached for resume. Identity is `key` alone;
+ * `index` records where the call sat in the run that journaled it, for
+ * ordering and cost attribution, and is rewritten when a resumed run replays
+ * the entry at a new position.
+ */
 export interface WorkflowJournalEntry {
   index: number;
   /** Stable call hash including host-resolved dependency fingerprints. */
@@ -331,12 +349,6 @@ type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
  * transient activity, not run state.
  */
 export type WorkflowScriptEvent = { type: 'log'; message: string };
-
-/** Synchronous transition metadata that is intentionally not persisted. */
-export type WorkflowExecutionTransition = {
-  readonly type: 'call-issued';
-  readonly callId: string;
-};
 
 /**
  * Guest-visible result of a call cancelled via `control(childExecutionId,
@@ -376,6 +388,17 @@ export interface WorkflowScriptRunOptions {
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
   ) => Promise<string>;
+  /**
+   * Per-call admission gate, awaited after journal replay is ruled out and
+   * before the call takes a concurrency slot — so a pending review never holds
+   * a slot, charges the live-call cap, or reserves a child attempt. The run's
+   * abort signal ends the wait. A decision is control-plane only: never
+   * journaled, so a resumed run asks again. Absent means every call runs.
+   */
+  admitCall?: (
+    request: WorkflowCallAdmissionRequest,
+    signal: AbortSignal,
+  ) => Promise<WorkflowCallAdmission>;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. Default 4. */
@@ -403,10 +426,7 @@ export interface WorkflowScriptRunOptions {
    * propagates into the engine and aborts the run, so consumers guard their
    * own folds.
    */
-  onTransition?: (
-    snapshot: WorkflowExecutionSnapshot,
-    transition?: WorkflowExecutionTransition,
-  ) => void;
+  onTransition?: (snapshot: WorkflowExecutionSnapshot) => void;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script

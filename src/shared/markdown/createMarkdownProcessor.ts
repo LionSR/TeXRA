@@ -10,7 +10,10 @@ import MarkdownIt, { type StateBlock } from 'markdown-it';
 
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
-import type { MarkdownItInstance } from './createMarkdownRenderer';
+import {
+  MARKDOWN_PARSER_OPTIONS,
+  type MarkdownItInstance,
+} from './createMarkdownRenderer';
 
 const MAX_CACHE_ENTRIES = 2000;
 const MAX_CACHE_ENTRY_CHARS = 200_000;
@@ -263,19 +266,9 @@ interface BegEndEnvironmentProbe {
 // what lets `10. Formula:\n    \begin{align}` open an environment on the
 // indented continuation line. The probe returns true to consume a match (but
 // pushes no token), so the recorded match set follows texmath's parse exactly.
-function createProbeMarkdownIt(options: {
-  readonly breaks: boolean;
-  readonly linkify: boolean;
-  readonly html: boolean;
-}): MarkdownItInstance {
-  const probe = new MarkdownIt({
-    breaks: options.breaks,
-    linkify: options.linkify,
-    html: options.html,
-  });
-  if (options.linkify) {
-    probe.linkify.set({ fuzzyLink: true, urlAuth: true });
-  }
+function createProbeMarkdownIt(): MarkdownItInstance {
+  const probe = new MarkdownIt({ ...MARKDOWN_PARSER_OPTIONS });
+  probe.linkify.set({ fuzzyLink: true, urlAuth: true });
   return probe;
 }
 
@@ -731,7 +724,7 @@ export function protectLatexMathSpansForNormalize(content: string): {
 } {
   const source = content.replaceAll(/\r\n?/g, '\n');
   normalizeEnvironmentProbe ??= createBegEndEnvironmentProbe(
-    createProbeMarkdownIt({ breaks: false, linkify: true, html: false }),
+    createProbeMarkdownIt(),
   );
   return protectLatexMathSpansWithEnvironment(
     source,
@@ -749,14 +742,24 @@ export function protectLatexMathSpansForNormalize(content: string): {
 // `\_` `\*` etc., which carry real markdown-escape semantics.
 const LATEX_MACRO = /\\([,;:!(){}[\]])/g;
 
-/** FNV-1a hash → base-36 string. Cheap, no crypto needs here. */
+/**
+ * Two FNV-1a lanes → one base-36 key. Cheap, no crypto needs here — but the
+ * digest is the cache's identity key, so a collision would render one message
+ * as another. 32 bits is not enough for that over a long session (a 2000-entry
+ * window churns far more than 2000 distinct bodies), so two lanes run with
+ * different primes and are joined by a delimiter (concatenating two
+ * variable-length forms would re-import collisions across the boundary), with
+ * the length folded in as a third component.
+ */
 function hashContent(str: string): string {
-  let hash = 2166136261;
+  let a = 2166136261;
+  let b = 2166136261;
   for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = (hash * 16777619) >>> 0;
+    const code = str.charCodeAt(i);
+    a = ((a ^ code) * 16777619) >>> 0;
+    b = ((b ^ code) * 16777639) >>> 0;
   }
-  return hash.toString(36);
+  return `${a.toString(36)}.${b.toString(36)}.${str.length.toString(36)}`;
 }
 
 export function createMarkdownProcessor(
@@ -800,11 +803,7 @@ export function createMarkdownProcessor(
       ? protectLatexMathSpansWithEnvironment(
           refProtected,
           (environmentProbe ??= createBegEndEnvironmentProbe(
-            createProbeMarkdownIt({
-              breaks: config.renderer.options.breaks,
-              linkify: config.renderer.options.linkify,
-              html: config.renderer.options.html,
-            }),
+            createProbeMarkdownIt(),
           )),
           DISPLAY_MATH_SPAN_PATTERNS,
           protectRenderInlineDollarSpans,

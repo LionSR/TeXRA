@@ -57,11 +57,12 @@ interface BackgroundPollOptions<TResponse> {
   /** Optional abort signal propagated to `delay` and `retrieve`. */
   readonly signal?: AbortSignal;
   /**
-   * Absolute wall-clock deadline for a polling lifetime that began before
-   * this invocation. When absent, this invocation receives the configured
-   * maximum duration.
+   * Absolute wall-clock deadline for the polling lifetime, which may have
+   * begun before this invocation (a resumed poll continues the original
+   * budget). Owned by the caller — {@link BackgroundRunLifecycle} keeps it
+   * alongside the pending run id.
    */
-  readonly deadlineAtMs?: number;
+  readonly deadlineAtMs: number;
   /**
    * Optional callback invoked on abort (best-effort). Handlers use this to
    * cancel the in-flight job server-side or clear local tracking state.
@@ -153,6 +154,7 @@ function safeExtraData<TResponse>(
  *   extractId: (r) => r.id,
  *   extractStatus: (r) => r.status ?? 'unknown',
  *   signal,
+ *   deadlineAtMs: Date.now() + 3 * 60 * 60 * 1000,
  *   providerLabel: 'OpenAI',
  * });
  * ```
@@ -189,19 +191,14 @@ export class BackgroundPoller<TResponse> {
 
     const { pollIntervalMs, maxDurationMs, isPending } = this.config;
     const logger = () => resolveLogger(this.config.logger);
-    const startTime =
-      deadlineAtMs === undefined ? Date.now() : deadlineAtMs - maxDurationMs;
+    const startTime = deadlineAtMs - maxDurationMs;
     let current = initialResponse;
     let pollCount = 0;
 
     const throwIfTimedOut = async (response: TResponse): Promise<void> => {
       const now = Date.now();
+      if (now < deadlineAtMs) return;
       const elapsedMs = now - startTime;
-      const timedOut =
-        deadlineAtMs === undefined
-          ? elapsedMs >= maxDurationMs
-          : now >= deadlineAtMs;
-      if (!timedOut) return;
 
       const stats = {
         responseId,
@@ -273,23 +270,21 @@ export class BackgroundPoller<TResponse> {
           throw err;
         }
 
-        if (deadlineAtMs !== undefined) signal?.throwIfAborted();
+        signal?.throwIfAborted();
         await throwIfTimedOut(current);
 
         let retrieved: TResponse;
         try {
           retrieved = await retrieve(responseId, signal);
         } catch (err) {
-          if (deadlineAtMs !== undefined && !isUserAbort(err)) {
+          if (!isUserAbort(err)) {
             signal?.throwIfAborted();
             await throwIfTimedOut(current);
           }
           throw err;
         }
-        if (deadlineAtMs !== undefined) {
-          signal?.throwIfAborted();
-          await throwIfTimedOut(retrieved);
-        }
+        signal?.throwIfAborted();
+        await throwIfTimedOut(retrieved);
         current = retrieved;
 
         const polledStatus = extractStatus(current);

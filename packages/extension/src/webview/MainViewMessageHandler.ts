@@ -7,7 +7,7 @@ import { loadOptions } from '@frontend/agents/optionsLoader';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { isDebugModeEnabled } from '@logger/logUtils';
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,

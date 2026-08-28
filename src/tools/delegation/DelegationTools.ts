@@ -49,11 +49,8 @@ import {
 } from './subagentResults';
 
 // Local file imports
-import {
-  proposeAndExecute,
-  requireVisibleAgent,
-  selectAvailableDelegationModel,
-} from './proposalFlow';
+import { selectAvailableDelegationModel } from './delegationAvailability';
+import { proposeAndExecute, requireVisibleAgent } from './proposalFlow';
 import {
   assertWorkflowFilesExist,
   memoriesField,

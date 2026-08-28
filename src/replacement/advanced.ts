@@ -11,7 +11,7 @@ const log = createLog('ReplacementEngine');
 /**
  * Applies LaTeX quotes formatting to a LaTeX document.
  * Converts regular double quotes to LaTeX-style quotes (``'') for quoted text
- * that is between 3 and 15 characters long, while avoiding:
+ * that is between 3 and 16 characters long, while avoiding:
  * - Text within tikzpicture environments
  * - Escaped quotes like those in Schr{\"o}dinger
  * - Quotes within braces like in {\"o}
@@ -72,9 +72,13 @@ export function applyLatexQuotesFormatting(text: string): string {
       );
       totalReplacements += replacementCount;
 
-      // Restore tikzpicture environments
+      // Restore tikzpicture environments. The function replaceValue is
+      // required: a string replaceValue applies $-substitution, so a stashed
+      // body containing $& / $$ / $` / $' would splice the placeholder back
+      // into the document instead of being restored verbatim.
       const restoredContent = tikzEnvironments.reduce(
-        (content, env, i) => content.replace(`__TIKZ_PLACEHOLDER_${i}__`, env),
+        (content, env, i) =>
+          content.replace(`__TIKZ_PLACEHOLDER_${i}__`, () => env),
         processedContent,
       );
 

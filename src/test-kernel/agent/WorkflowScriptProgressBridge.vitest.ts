@@ -207,6 +207,78 @@ return await agent('Inspect', { id: 'inspect' })`,
     );
   });
 
+  it('separates declared plan labels from the calls the script issues', async () => {
+    const { trace, events } = recordingTrace();
+    await runScript(
+      trace,
+      'declared-vs-issued',
+      `export const meta = {
+  name: 'declared-vs-issued',
+  description: 'one declared item, one structured call, one document call',
+  phases: [{ title: 'Investigate' }, { title: 'Revise' }],
+  tasks: [
+    { id: 'claims', label: 'Extract claims', phase: 'Investigate' },
+    { id: 'intro', label: 'Rewrite introduction', phase: 'Revise' },
+    { id: 'never', label: 'Never issued', phase: 'Revise' },
+  ],
+}
+phase('Investigate')
+await agent('Extract', {
+  id: 'claims',
+  agentName: 'researcher',
+  model: 'gpt56',
+  schema: { type: 'object', properties: { claims: { type: 'array' } } },
+})
+phase('Revise')
+return await agent('Rewrite', {
+  id: 'intro',
+  agentName: 'polish',
+  inputFiles: ['paper/introduction.tex'],
+  contextFiles: ['paper/main.tex'],
+})`,
+      {
+        fingerprintAgentDependencies: async () => 'fingerprint',
+        runAgent: async (invocation: WorkflowAgentInvocation) => {
+          invocation.report?.({
+            agent: invocation.options.agentName,
+            model: invocation.options.model ?? 'gemini37f',
+          });
+          return 'done';
+        },
+      },
+    );
+
+    // A plan label carries no invocation facts until the script issues it…
+    const declared = workflowCallEvent(events, 'Extract claims', 'declared');
+    expect(declared?.call).not.toHaveProperty('kind');
+    expect(declared?.call).not.toHaveProperty('files');
+    // …and the issued call reports its real contract, agent, model, and files.
+    expect(
+      workflowCallEvent(events, 'Extract claims', 'queued')?.call,
+    ).toMatchObject({
+      kind: 'structured',
+      agent: 'researcher',
+      model: 'gpt56',
+      files: { input: [], context: [], media: [] },
+    });
+    // The host-resolved model lands on the card once the runner reports it.
+    expect(
+      latestWorkflowCallEvents(events).find(
+        (event) => event.call.label === 'Rewrite introduction',
+      )?.call,
+    ).toMatchObject({
+      status: 'completed',
+      kind: 'document',
+      agent: 'polish',
+      model: 'gemini37f',
+      files: { input: ['introduction.tex'], context: ['main.tex'], media: [] },
+    });
+    // The never-issued label ends as not-reached and stays a bare label.
+    const unreached = workflowCallEvent(events, 'Never issued', 'skipped');
+    expect(unreached?.call).toMatchObject({ reason: 'not-reached' });
+    expect(unreached?.call).not.toHaveProperty('kind');
+  });
+
   it('marks declared tasks not reached by the script as skipped', async () => {
     const { trace, events } = recordingTrace();
     const { activities, onActivity } = collectActivities();
@@ -227,7 +299,7 @@ return await agent('Run one', { id: 'used' })`,
       { onActivity },
     );
 
-    const unusedPlanned = workflowCallEvent(events, 'Unused task', 'planned');
+    const unusedPlanned = workflowCallEvent(events, 'Unused task', 'declared');
     expect(workflowCallEvent(events, 'Used task', 'completed')).toBeDefined();
     expect(workflowCallEvent(events, 'Unused task', 'skipped')).toMatchObject({
       logId: unusedPlanned?.logId,
@@ -424,6 +496,50 @@ return await agent('Read', { phase: 'Review' })`;
       stageId: phaseId,
     });
     expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
+  });
+
+  it('re-emits a cached card on a second durable resume', async () => {
+    const script = `${meta}
+phase('Review')
+return await agent('Read', { id: 'read' })`;
+    const store = () => getExecutionStore(executionId);
+    const first = await runScript(
+      recordingTrace().trace,
+      'twice-resumed',
+      script,
+      { runAgent: async () => 'saved' },
+    );
+
+    clearStoreCache();
+    const runner = vi.fn(() => Promise.reject(new Error('must not run')));
+    const second = await runPersistedWorkflowScriptWithProgress(
+      recordingTrace().trace,
+      {
+        store: store(),
+        checkpointId: 'twice-resumed',
+        runAgent: runner,
+        initialSnapshot: first.snapshot,
+      },
+    );
+    expect(second.snapshot.calls[0]?.status).toBe('cached');
+
+    // The second resume hydrates an already-cached call. Re-issuing it must
+    // still project a card: a host that starts watching here would otherwise
+    // never see the call at all.
+    clearStoreCache();
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: store(),
+      checkpointId: 'twice-resumed',
+      runAgent: runner,
+      initialSnapshot: second.snapshot,
+    });
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
+      type: 'workflow.call',
+      stageId: stageId(events, 'Review'),
+    });
   });
 
   it('reissues hydrated calls when hydration and issue share a timestamp', async () => {
@@ -627,7 +743,9 @@ return await agent('Draft')`,
     expect(logIds.size).toBe(1);
     expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
     expect(activities).toContainEqual(
-      expect.stringMatching(/^Finished: Draft · deepseekT · .+ · \$0\.020$/),
+      expect.stringMatching(
+        /^Finished: Draft · Document · deepseekT · .+ · \$0\.020$/,
+      ),
     );
   });
 
@@ -706,7 +824,9 @@ return await agent('Late skip')`,
     });
     expect(activities).toContain('Running: Late skip');
     expect(activities).toContainEqual(
-      expect.stringMatching(/^Skipped: Late skip · kimiK2 · .+ · \$0\.040$/),
+      expect.stringMatching(
+        /^Skipped: Late skip · Document · kimiK2 · .+ · \$0\.040$/,
+      ),
     );
   });
 
@@ -829,7 +949,7 @@ return await agent('Abort', { phase: 'Execution' })`,
     });
     expect(activities).toContainEqual(
       expect.stringMatching(
-        /^Failed: Abort · abort-model · .+ · \$0\.060 — fatal runner error$/,
+        /^Failed: Abort · Document · abort-model · .+ · \$0\.060 — fatal runner error$/,
       ),
     );
   });
@@ -882,7 +1002,7 @@ return 'guest success'`,
       });
       expect(activities).toContain('Running: Orphaned');
       expect(activities).toContain(
-        'Failed: Orphaned · $0.030 — The workflow ended before this call completed.',
+        'Failed: Orphaned · Document · $0.030 — The workflow ended before this call completed.',
       );
     } finally {
       vi.useRealTimers();
@@ -903,12 +1023,17 @@ throw new Error('script failed')`,
       ),
     ).rejects.toThrow('script failed');
 
-    for (const label of ['One', 'Two']) {
-      expect(events).toContainEqual({
-        type: 'stage.end',
-        id: stageId(events, label),
-        status: RUN_OUTCOME.FAILED,
-      });
-    }
+    // The engine settled 'One' cleanly before the script threw inside 'Two';
+    // only the phase the failure happened in reads failed.
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: stageId(events, 'One'),
+      status: RUN_OUTCOME.COMPLETED,
+    });
+    expect(events).toContainEqual({
+      type: 'stage.end',
+      id: stageId(events, 'Two'),
+      status: RUN_OUTCOME.FAILED,
+    });
   });
 });

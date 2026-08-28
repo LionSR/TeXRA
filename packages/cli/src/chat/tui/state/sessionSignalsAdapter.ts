@@ -83,6 +83,7 @@ class TuiSessionRenderer implements SessionRendererPort {
     switch (slice) {
       case 'files':
       case 'compileFailures':
+      case 'missingOutputs':
         // Renderers read `StreamArtifactProjection` directly. The write itself
         // is proof of established provenance for this session — a live fact
         // must not wait on the focus-driven disk preload
@@ -154,13 +155,6 @@ class TuiSessionRenderer implements SessionRendererPort {
     // rows plus the finished children it retains for display (phase-merged,
     // 200-capped). The CLI reads it there; only the snapshots re-derive.
     invalidateChildStreams();
-  }
-
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly; a disk-restored
-    // clear invalidates the memo like any other change. See `invalidate` for
-    // why the write marks the stream hydrated rather than only bumping.
-    markArtifactStreamHydrated(streamId);
   }
 
   onRunUsageChanged(

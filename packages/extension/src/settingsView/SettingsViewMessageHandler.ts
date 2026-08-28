@@ -75,7 +75,6 @@ import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 
 import {
   applyStateSettingUpdate,
@@ -183,21 +182,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(
       'chatgpt',
-      () =>
-        buildAuthStatusMessage(
-          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-          getChatGptAuthStatus,
-        ),
+      async () => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+        status: await getChatGptAuthStatus(),
+      }),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
-      () =>
-        buildAuthStatusMessage(
-          SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-          getGrokAuthStatus,
-        ),
+      async () => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+        status: await getGrokAuthStatus(),
+      }),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange(),
     );

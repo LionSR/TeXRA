@@ -124,6 +124,13 @@ export class MediaAttachmentProcessor {
     if (pdfResult === null) {
       throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
     }
+    if (pdfResult.length < pageCount) {
+      // Reaches the run transcript, unlike the module logger inside
+      // processPdf2Png: the model is about to see a truncated document.
+      this.logger.warn(
+        `Attached only pages 1-${pdfResult.length} of ${pageCount} from ${mediaFile}`,
+      );
+    }
     return { kind: 'image', mediaType: 'image/png', data: pdfResult };
   }
 

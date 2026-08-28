@@ -187,14 +187,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: async (command, failureMessage, action) => {
-        if (
-          command === SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML ||
-          command === SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE
-        ) {
-          await action();
-          return;
-        }
+      run: async (failureMessage, action) => {
         try {
           await action();
         } catch (error) {

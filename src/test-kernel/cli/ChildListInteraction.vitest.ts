@@ -201,6 +201,7 @@ describe('CLI child list interaction', () => {
         onSelectionChange: vi.fn(),
         selectedValue: childStreamListValue(child),
         selectedChildStreamId: child,
+        selectedChildWorkflowControllable: true,
         sessions: [session(root, true), session(child)],
       }),
     );

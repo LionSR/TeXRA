@@ -277,21 +277,35 @@ export function registerLatexdiffCommands(
   ]);
 }
 
+/**
+ * The file a latexdiff run compares against: the picked base file, falling
+ * back to the primary input the webview sends beside it. Both arrive as bare
+ * `z.string()` wire fields and clearing the base picker writes `''`, so `||`
+ * — not `??` — is what makes the fallback the producer already pays for
+ * actually fire. Reports once and returns undefined when neither is set.
+ */
+async function resolveDiffBase(
+  inputFile: string,
+  baseFile: string,
+): Promise<string | undefined> {
+  const fileToUse = baseFile || inputFile;
+  if (fileToUse) return fileToUse;
+  await showLoggedMessageWithDocs(
+    CHANNEL,
+    'No base file specified for latexdiff',
+    'latex-diff',
+    'Latexdiff Docs',
+  );
+  return undefined;
+}
+
 async function handleLatexdiff(
   inputFile: string,
   baseFile: string,
   editedFile: string,
 ): Promise<void> {
-  const fileToUse = baseFile ?? inputFile;
-  if (!fileToUse) {
-    await showLoggedMessageWithDocs(
-      CHANNEL,
-      'No base file specified for latexdiff',
-      'latex-diff',
-      'Latexdiff Docs',
-    );
-    return;
-  }
+  const fileToUse = await resolveDiffBase(inputFile, baseFile);
+  if (!fileToUse) return;
   if (!editedFile) {
     await showLoggedMessageWithDocs(
       CHANNEL,
@@ -320,7 +334,8 @@ async function handleLatexdiffvc(
   baseFile: string,
   commitHash: string,
 ): Promise<void> {
-  const fileToUse = baseFile ?? inputFile;
+  const fileToUse = await resolveDiffBase(inputFile, baseFile);
+  if (!fileToUse) return;
   await withLatexdiffTool('latexdiff-vc', 'Error creating LaTeX diff', () => {
     const fileToUseLocation = pathToLocation(fileToUse);
     return runDiffAndOpen('latexdiff-vc', (mathMarkup) =>
@@ -342,7 +357,8 @@ async function handlePackLatexdiffvc(
       log.debug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
       );
-      const fileToUse = baseFile ?? inputFile;
+      const fileToUse = await resolveDiffBase(inputFile, baseFile);
+      if (!fileToUse) return;
       reportLatexdiff(await runPackLatexdiffvc(fileToUse, commitHash, clean));
     },
   );
@@ -360,7 +376,8 @@ async function handleCleanLatexdiffvc(
       log.debug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
       );
-      const fileToUse = baseFile ?? inputFile;
+      const fileToUse = await resolveDiffBase(inputFile, baseFile);
+      if (!fileToUse) return;
       reportLatexdiff(await runPackLatexdiffvc(fileToUse, commitHash, true));
     },
   );

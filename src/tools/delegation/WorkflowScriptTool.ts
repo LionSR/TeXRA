@@ -31,6 +31,7 @@ import {
   RUN_OUTCOME,
   ToolError,
   USER_FOLLOW_UP_SUPPORT,
+  WORKFLOW_CALL_REVIEW_SCOPE,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
@@ -51,7 +52,10 @@ import {
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
-import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
+import {
+  createWorkflowCallAdmission,
+  createWorkflowScriptAgentRunner,
+} from './workflowScriptAgentRunner';
 import {
   createWorkflowScriptStrategy,
   formatWorkflowScriptReference,
@@ -60,11 +64,11 @@ import {
   assertWorkflowFilesExist,
   rejectOversizedBibAttachments,
 } from './inputFields';
+import { selectAvailableDelegationModel } from './delegationAvailability';
 import {
   proposalResultToToolResult,
   requestDelegationProposal,
   requireWorkflowOrToolUseAgent,
-  selectAvailableDelegationModel,
 } from './proposalFlow';
 
 const WorkflowScriptToolInputSchema = z
@@ -72,7 +76,9 @@ const WorkflowScriptToolInputSchema = z
     agent: z
       .string()
       .min(1)
-      .describe('Default workflow agent used when agent() omits agentName.'),
+      .describe(
+        'Default workflow agent used when agent() omits agentName. Part of the checkpoint identity with meta.name: resume with the same value; a different agent starts a new journal.',
+      ),
     args: z
       .unknown()
       .nullish()
@@ -241,7 +247,7 @@ return await agent('Merge the corrected drafts.', {
   inputFiles: correctedFiles,
 })
 
-Durability: the journal is keyed by meta.name within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name: completed agent() calls replay for free (the script may be revised; only changed or unfinished calls execute). Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
+Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
   schema: WorkflowScriptToolInputSchema,
 }) {
   protected async execute(input: WorkflowScriptToolInput): Promise<ToolResult> {
@@ -419,6 +425,11 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
       proposal,
     );
     if (declined) return withScriptReference(declined, scriptPath);
+    const callReview =
+      proposalDecision.result.action === 'approve'
+        ? (proposalDecision.result.callReview ??
+          WORKFLOW_CALL_REVIEW_SCOPE.NONE)
+        : WORKFLOW_CALL_REVIEW_SCOPE.NONE;
 
     // Capture any prior workflow snapshot *before* registerExecution overwrites
     // meta.json. Deterministic meta.name reuses the same execution id, so a
@@ -471,7 +482,7 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
         return withScriptReference(
           executed(
             [
-              `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name if it did not complete.`,
+              `A workflow script run for meta.name '${meta.name}' is already in progress (or finishing); its result arrives as a follow-up. Do not launch a competing run: wait for it, then resume with the same meta.name and agent if it did not complete.`,
               `Execution ID: ${runExecutionId}`,
               `To check progress or collect the result: executions tool with path=/executions/${runExecutionId} and action=wait (returns immediately if it already finished).`,
             ].join('\n'),
@@ -544,6 +555,18 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
                 files,
                 name: meta.name,
                 workflowControls: runScope.session.workflowControls,
+                ...(callReview !== WORKFLOW_CALL_REVIEW_SCOPE.NONE && {
+                  admitCall: createWorkflowCallAdmission({
+                    parent,
+                    defaultAgent,
+                    run: {
+                      executionId: runExecutionId,
+                      streamId: childStream.childStreamId,
+                    },
+                    workflowName: meta.name,
+                    scope: callReview,
+                  }),
+                }),
                 initialSnapshot,
                 onSnapshot: (snapshot) =>
                   writeWorkflowExecutionSnapshot(runExecutionId, snapshot),
@@ -601,9 +624,10 @@ Durability: the journal is keyed by meta.name within this session. If the run ti
           [
             `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
             `Execution ID: ${runExecutionId}`,
+            `Agent: ${defaultAgent.name} (part of the checkpoint identity with meta.name)`,
             `Stream tab: ${runChildStreamId}`,
             `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runExecutionId}; use action=wait only when you cannot proceed without it.`,
-            `To resume after a timeout or interruption: call this tool again with the same meta.name.`,
+            `To resume after a timeout or interruption: call this tool again with the same meta.name and agent.`,
           ].join('\n'),
           `Launched workflow script '${meta.name}' (async)`,
         ),

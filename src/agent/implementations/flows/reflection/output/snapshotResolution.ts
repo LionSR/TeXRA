@@ -17,9 +17,8 @@ import { getOriginalSnapshotPath } from '@utils/files/runStorageFs';
  *  Non-workspace files and missing snapshots pass through unchanged. */
 export async function resolveBaseFilesForDiff(
   baseFiles: FileLocation[],
-  executionId: ExecutionId | undefined,
+  executionId: ExecutionId,
 ): Promise<FileLocation[]> {
-  if (executionId === undefined) return baseFiles;
   return Promise.all(
     baseFiles.map(async (loc) => {
       if (loc.kind !== 'workspace') return loc;

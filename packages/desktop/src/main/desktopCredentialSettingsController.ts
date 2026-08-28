@@ -32,10 +32,12 @@ import {
 import {
   SUBSCRIPTION_USAGE_PROVIDERS,
   type SettingsViewInboundHandlerRegistry,
+  type SubscriptionUsageProvider,
   type SubscriptionUsageSnapshots,
+  type UpdateChatGptAuthStatusMessage,
+  type UpdateGrokAuthStatusMessage,
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -102,6 +104,38 @@ type DesktopGrokHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION
 >;
 
+/**
+ * The settings-view half of a subscription provider, which the host-neutral
+ * `SUBSCRIPTION_PROVIDERS` catalog deliberately does not carry: the outbound
+ * status message this renderer listens for, and the usage snapshot (ChatGPT
+ * only) that an auth change invalidates. Kept host-side because the catalog
+ * also serves the CLI, which has no settings view. Adding a third provider is
+ * one row here, not another pair of hand-copied methods below.
+ */
+const SUBSCRIPTION_STATUS_ROWS: Record<
+  SubscriptionProviderId,
+  {
+    readonly buildStatusMessage: () => Promise<unknown>;
+    readonly usageProvider?: SubscriptionUsageProvider;
+  }
+> = {
+  chatgpt: {
+    buildStatusMessage: async () =>
+      ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+        status: await getChatGptAuthStatus(),
+      }) satisfies UpdateChatGptAuthStatusMessage,
+    usageProvider: 'chatgpt',
+  },
+  grok: {
+    buildStatusMessage: async () =>
+      ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+        status: await getGrokAuthStatus(),
+      }) satisfies UpdateGrokAuthStatusMessage,
+  },
+};
+
 export interface DesktopCredentialSettingsController {
   readonly profileHandlers: DesktopProfileHandlers;
   readonly chatGptHandlers: DesktopChatGptHandlers;
@@ -115,7 +149,6 @@ export interface DesktopCredentialSettingsController {
   refreshAfterProviderSettingChange(key: string): Promise<void>;
   refreshAuthDependentData(): Promise<void>;
   signInChatGpt(): Promise<void>;
-  signInGrok(): Promise<void>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
@@ -190,33 +223,23 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
     this.chatGptHandlers = {
       signInChatGpt: () => this.signInChatGpt(),
-      signOutChatGpt: () =>
-        this.signOutSubscription('chatgpt', () =>
-          this.refreshAfterChatGptAuthChange(),
-        ),
+      signOutChatGpt: () => this.signOutSubscription('chatgpt'),
       setChatGptPreferSubscription: (message) =>
-        this.setSubscriptionPreference('chatgpt', message.enabled, () =>
-          this.refreshAfterChatGptAuthChange(),
-        ),
+        this.setSubscriptionPreference('chatgpt', message.enabled),
     };
     this.grokHandlers = {
-      signInGrok: () => this.signInGrok(),
-      signOutGrok: () =>
-        this.signOutSubscription('grok', () =>
-          this.refreshAfterGrokAuthChange(),
-        ),
+      signInGrok: () => this.signInSubscription('grok'),
+      signOutGrok: () => this.signOutSubscription('grok'),
       setGrokPreferSubscription: (message) =>
-        this.setSubscriptionPreference('grok', message.enabled, () =>
-          this.refreshAfterGrokAuthChange(),
-        ),
+        this.setSubscriptionPreference('grok', message.enabled),
     };
   }
 
   async postStartupData(): Promise<void> {
     await Promise.all([
       this.postProfileData(),
-      this.postChatGptAuthStatus(),
-      this.postGrokAuthStatus(),
+      this.postAuthStatus('chatgpt'),
+      this.postAuthStatus('grok'),
     ]);
   }
 
@@ -306,7 +329,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
 
   private async signInSubscription(
     providerId: SubscriptionProviderId,
-    refresh: () => Promise<void>,
   ): Promise<void> {
     const provider = subscriptionProvider(providerId);
     try {
@@ -324,20 +346,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       );
       this.options.onError(error);
     } finally {
-      await refresh();
+      await this.refreshAfterSubscriptionAuthChange(providerId);
     }
   }
 
+  /** Also driven by the desktop welcome card, not just the Settings view. */
   async signInChatGpt(): Promise<void> {
-    await this.signInSubscription('chatgpt', () =>
-      this.refreshAfterChatGptAuthChange(),
-    );
-  }
-
-  async signInGrok(): Promise<void> {
-    await this.signInSubscription('grok', () =>
-      this.refreshAfterGrokAuthChange(),
-    );
+    await this.signInSubscription('chatgpt');
   }
 
   /**
@@ -369,13 +384,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   private async refreshAfterSubscriptionAuthChange(
-    postStatus: () => Promise<void>,
-    usageProvider?: 'chatgpt',
+    providerId: SubscriptionProviderId,
   ): Promise<void> {
+    const { usageProvider } = SUBSCRIPTION_STATUS_ROWS[providerId];
     invalidateModelOptionsCache();
     if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
     await Promise.all([
-      postStatus(),
+      this.postAuthStatus(providerId),
       this.postModelSelectionData(),
       this.postMainModelOptionsData(),
       ...(usageProvider ? [this.postSubscriptionUsage()] : []),
@@ -383,22 +398,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
-  private refreshAfterChatGptAuthChange(): Promise<void> {
-    return this.refreshAfterSubscriptionAuthChange(
-      () => this.postChatGptAuthStatus(),
-      'chatgpt',
-    );
-  }
-
-  private refreshAfterGrokAuthChange(): Promise<void> {
-    return this.refreshAfterSubscriptionAuthChange(() =>
-      this.postGrokAuthStatus(),
-    );
-  }
-
   private async signOutSubscription(
     providerId: SubscriptionProviderId,
-    refresh: () => Promise<void>,
   ): Promise<void> {
     const provider = subscriptionProvider(providerId);
     try {
@@ -415,14 +416,13 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       );
       this.options.onError(error);
     } finally {
-      await refresh();
+      await this.refreshAfterSubscriptionAuthChange(providerId);
     }
   }
 
   private async setSubscriptionPreference(
     providerId: SubscriptionProviderId,
     enabled: boolean,
-    refresh: () => Promise<void>,
   ): Promise<void> {
     const provider = subscriptionProvider(providerId);
     try {
@@ -438,7 +438,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       );
       this.options.onError(error);
     } finally {
-      await refresh();
+      await this.refreshAfterSubscriptionAuthChange(providerId);
     }
   }
 
@@ -448,21 +448,11 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     );
   }
 
-  private async postChatGptAuthStatus(): Promise<void> {
+  private async postAuthStatus(
+    providerId: SubscriptionProviderId,
+  ): Promise<void> {
     this.options.renderer.postToRenderer(
-      await buildAuthStatusMessage(
-        SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-        getChatGptAuthStatus,
-      ),
-    );
-  }
-
-  private async postGrokAuthStatus(): Promise<void> {
-    this.options.renderer.postToRenderer(
-      await buildAuthStatusMessage(
-        SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-        getGrokAuthStatus,
-      ),
+      await SUBSCRIPTION_STATUS_ROWS[providerId].buildStatusMessage(),
     );
   }
 

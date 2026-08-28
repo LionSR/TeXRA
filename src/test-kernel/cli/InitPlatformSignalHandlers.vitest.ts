@@ -6,9 +6,9 @@ const mocks = vi.hoisted(() => ({
   flushNdjsonStdout: vi.fn<() => Promise<void>>(),
 }));
 
-vi.mock('@cli/runtime/logSinks', () => ({
+vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/logSinks')>()),
   flushNdjsonStdout: mocks.flushNdjsonStdout,
-  writeTextStderr: vi.fn(),
 }));
 
 /** Captures the SIGINT/SIGTERM listeners the runtime installs via `process.once`. */
@@ -110,6 +110,57 @@ describe('CLI platform signal handlers', () => {
     removed.length = 0;
     handOffCliShutdownSignalHandlers();
     expect(removed).toEqual([]);
+  });
+
+  it('waits for persistent stderr writes before shutdown resolves', async () => {
+    vi.resetModules();
+    const order: string[] = [];
+    const stderrCallbacks: Array<(error?: Error | null) => void> = [];
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((
+      ...args: unknown[]
+    ) => {
+      const callback = args.find(
+        (arg): arg is (error?: Error | null) => void =>
+          typeof arg === 'function',
+      );
+      if (callback) stderrCallbacks.push(callback);
+      return true;
+    }) as typeof process.stderr.write);
+    mocks.flushNdjsonStdout.mockImplementation(async () => {
+      order.push('ndjson');
+    });
+    const { runCliPlatformShutdownSequence } =
+      await import('@cli/runtime/initPlatform');
+    const { writeTextStderr } = await import('@cli/runtime/logSinks');
+    const runShutdown = vi.fn(async () => {
+      order.push('shutdown');
+      writeTextStderr('lifecycle diagnostic');
+    });
+
+    let resolved = false;
+    const shutdown = runCliPlatformShutdownSequence(
+      fakeLifecycle(runShutdown),
+    ).then(() => {
+      resolved = true;
+    });
+    await vi.waitFor(() => expect(stderrCallbacks).toHaveLength(2));
+
+    expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
+      'lifecycle diagnostic\n',
+      '',
+    ]);
+    expect(order).toEqual(['shutdown']);
+    expect(resolved).toBe(false);
+
+    stderrCallbacks[0]?.();
+    await Promise.resolve();
+    expect(order).toEqual(['shutdown']);
+    expect(resolved).toBe(false);
+
+    stderrCallbacks[1]?.();
+    await shutdown;
+    expect(order).toEqual(['shutdown', 'ndjson']);
+    expect(resolved).toBe(true);
   });
 
   it('runCliPlatformShutdownSequence runs lifecycle shutdown then the NDJSON flush, best-effort', async () => {

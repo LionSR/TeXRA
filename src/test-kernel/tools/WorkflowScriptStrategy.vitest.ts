@@ -5,10 +5,10 @@ import { TraceEmitter } from '@agent/trace';
 import {
   deriveWorkflowScriptCheckpointId,
   runPersistedWorkflowScript,
-  WORKFLOW_SKIPPED_RESULT,
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
 } from '@agent/workflowScript';
+import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import type { ExecutionId } from '@shared/schemas';

@@ -107,44 +107,6 @@ export function allocateMiddleRows({
   };
 }
 
-export function allocateSidePanelRows({
-  subagentContentRows,
-  todosPlanContentRows,
-  rows,
-}: {
-  readonly subagentContentRows: number;
-  readonly todosPlanContentRows: number;
-  readonly rows: number;
-}): {
-  readonly subagentRows: number;
-  readonly todosPlanRows: number;
-} {
-  const available = Math.max(0, rows);
-  const subagentNeed = Math.max(0, subagentContentRows);
-  const todosNeed = Math.max(0, todosPlanContentRows);
-  if (available === 0 || subagentNeed + todosNeed === 0) {
-    return { subagentRows: 0, todosPlanRows: 0 };
-  }
-  // Everything fits: each panel gets exactly what its content needs.
-  if (subagentNeed + todosNeed <= available) {
-    return { subagentRows: subagentNeed, todosPlanRows: todosNeed };
-  }
-  // Over budget: a panel with no content gets nothing, a lone panel takes all.
-  if (subagentNeed === 0) return { subagentRows: 0, todosPlanRows: available };
-  if (todosNeed === 0) return { subagentRows: available, todosPlanRows: 0 };
-  // Both present and over budget: keep at least one row each, split the rest
-  // proportionally to need. At a single row the todo/plan panel wins.
-  if (available === 1) return { subagentRows: 0, todosPlanRows: 1 };
-  const subagentRows = Math.min(
-    available - 1,
-    Math.max(
-      1,
-      Math.round((subagentNeed / (subagentNeed + todosNeed)) * available),
-    ),
-  );
-  return { subagentRows, todosPlanRows: available - subagentRows };
-}
-
 export function allocateConversationBottomPanelRows({
   maxRows,
   sessionCount,
@@ -164,81 +126,29 @@ export function allocateConversationBottomPanelRows({
   readonly sessionPanelRows: number;
   readonly todosPlanRows: number;
 } {
-  // Child sessions already have a compact count and navigation affordance in
-  // the status bar. Keep their rows collapsed until the user focuses the
-  // list; a large workflow must not take transcript space merely because it
-  // is running in the background.
-  const childListRowCount = childListFocused ? sessionCount : 0;
-  // The expanded child list owns one blank separator row above its Select.
-  const sessionPanelContentRows =
-    childListRowCount > 0 ? childListRowCount + 1 : 0;
-  // The todos/plan panel likewise owns a separator row above its checklist.
-  const todosPanelContentRows =
-    todosPlanContentRows > 0 ? todosPlanContentRows + 1 : 0;
-  const minimumSessionRows =
-    childListRowCount > 0 ? minimumSessionPanelRows : 0;
   const availableTranscriptRows = Math.max(0, transcriptRows);
-  let panelTranscriptLimit: number;
+  const none = { bottomPanelRows: 0, sessionPanelRows: 0, todosPlanRows: 0 };
+  // Exactly one bottom panel exists at a time. Child sessions already have a
+  // compact count and navigation affordance in the status bar, so their list
+  // stays collapsed until the user focuses it — a large workflow must not take
+  // transcript space merely because it is running in the background — and the
+  // todos/plan panel hides while the list has focus
+  // (`shouldShowTodosPlanPanel`). Each panel owns one separator row above its
+  // content, and a lone row cannot hold separator plus content.
   if (childListFocused) {
-    panelTranscriptLimit = availableTranscriptRows;
-  } else if (availableTranscriptRows === 0) {
-    panelTranscriptLimit = 0;
-  } else {
-    const unfocusedLimit = Math.floor(availableTranscriptRows / 2);
-    panelTranscriptLimit =
-      availableTranscriptRows >= minimumSessionRows
-        ? Math.max(minimumSessionRows, unfocusedLimit)
-        : unfocusedLimit;
+    if (sessionCount === 0) return none;
+    const rows = Math.min(maxRows, sessionCount + 1, availableTranscriptRows);
+    if (rows < minimumSessionPanelRows) return none;
+    return { bottomPanelRows: rows, sessionPanelRows: rows, todosPlanRows: 0 };
   }
-  if (
-    sessionPanelContentRows > 0 &&
-    todosPanelContentRows === 0 &&
-    panelTranscriptLimit < minimumSessionRows
-  ) {
-    return {
-      bottomPanelRows: 0,
-      sessionPanelRows: 0,
-      todosPlanRows: 0,
-    };
-  }
-  const bottomPanelRows = Math.min(
+  if (todosPlanContentRows === 0) return none;
+  const rows = Math.min(
     maxRows,
-    sessionPanelContentRows + todosPanelContentRows,
-    panelTranscriptLimit,
+    todosPlanContentRows + 1,
+    Math.floor(availableTranscriptRows / 2),
   );
-  const allocated = allocateSidePanelRows({
-    subagentContentRows: sessionPanelContentRows,
-    todosPlanContentRows: todosPanelContentRows,
-    rows: bottomPanelRows,
-  });
-  const sessionPanelRows =
-    allocated.subagentRows > 0 &&
-    bottomPanelRows >= minimumSessionRows &&
-    (childListRowCount > 0 || childListFocused) &&
-    sessionPanelContentRows > 0
-      ? Math.max(minimumSessionRows, allocated.subagentRows)
-      : 0;
-  let finalBottomPanelRows = bottomPanelRows;
-  let finalSessionPanelRows = sessionPanelRows;
-  let todosPlanRows = bottomPanelRows - sessionPanelRows;
-  // A lone row cannot hold the separator plus content; hand it back instead
-  // of rendering a dead blank line under the child list. When the child list
-  // has rows above its own minimum, transfer one first so both panels remain
-  // useful under a proportional split.
-  if (todosPanelContentRows > 0 && todosPlanRows === 1) {
-    if (sessionPanelRows > minimumSessionRows) {
-      finalSessionPanelRows -= 1;
-      todosPlanRows = 2;
-    } else {
-      finalBottomPanelRows -= 1;
-      todosPlanRows = 0;
-    }
-  }
-  return {
-    bottomPanelRows: finalBottomPanelRows,
-    sessionPanelRows: finalSessionPanelRows,
-    todosPlanRows,
-  };
+  if (rows < 2) return none;
+  return { bottomPanelRows: rows, sessionPanelRows: 0, todosPlanRows: rows };
 }
 
 export function allocateConversationPanelRows({
@@ -329,15 +239,18 @@ export function staticScrollbackTarget({
 }
 
 export function shouldShowTodosPlanPanel({
+  childListFocused,
   foregroundOpen,
   hasPlan,
   todos,
 }: {
+  /** The focused child list is the only bottom panel; todos yield to it. */
+  readonly childListFocused: boolean;
   readonly foregroundOpen: boolean;
   readonly hasPlan: boolean;
   readonly todos: readonly TodoItem[];
 }): boolean {
-  if (foregroundOpen) return false;
+  if (foregroundOpen || childListFocused) return false;
   if (hasPlan) return true;
   return todos.some((todo) => todo.status !== TODO_STATUS.COMPLETED);
 }

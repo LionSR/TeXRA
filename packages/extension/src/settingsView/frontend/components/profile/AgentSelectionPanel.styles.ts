@@ -71,8 +71,9 @@ export const agentSelectionPanelStyles: CSSResult = css`
   /*
    * Source-tinted left rail — uses existing WA semantic colours so each
    * group gets a quiet identity cue without introducing a new palette.
-   * Built-in = brand, inline = warning, custom = success, remote = neutral.
-   * The hairline shows on hover/selected so the resting state stays calm.
+   * Inline = warning, custom = success, remote = neutral; built-in rows fall
+   * through to the brand rail below, which shows only while selected. The
+   * hairline shows on hover/selected so the resting state stays calm.
    */
   .agent-list-item[data-source='inline']:hover,
   .agent-list-item[data-source='inline'].selected {
@@ -135,13 +136,6 @@ export const agentSelectionPanelStyles: CSSResult = css`
     overflow-y: auto;
     padding: var(--wa-space-s);
     min-width: 0;
-  }
-
-  .agent-detail-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
   }
 
   .agent-detail-header {

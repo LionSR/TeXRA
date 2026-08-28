@@ -26,11 +26,10 @@ import {
 } from './supabaseAuthDeviceCode';
 
 /**
- * Channel-logger contract used by the CLI auth coordinator and supporting
- * helpers. Shape-compatible with `* as logger from '@logger/logUtils'` so
- * callers can pass that module directly, but also allows a custom object
- * literal (e.g. the deferred forwarder below) without depending on the
- * platform layer.
+ * Channel-logger contract used by the CLI auth coordinator. Shape-compatible
+ * with `* as logger from '@logger/logUtils'` so callers can pass that module
+ * directly, but also allows a custom object literal (e.g. the deferred
+ * forwarder below) without depending on the platform layer.
  */
 export interface LogBackend {
   debug(channel: string, message: string): void;
@@ -58,7 +57,6 @@ interface CliLoginOptions {
   openBrowser?: boolean;
   selectAccount?: boolean;
   loginHint?: string;
-  log?: LogBackend;
   onAuthUrl?: (url: string) => void;
   manualBrowserHint?: string;
   signal?: AbortSignal;
@@ -131,7 +129,6 @@ export async function signInCliSupabase(
     if (options.openBrowser ?? true) {
       const browserLaunch = openBrowser(
         authUrl,
-        options.log,
         options.manualBrowserHint ?? 'texra login --no-browser',
       );
       // A completed callback supersedes the launcher result, while callback

@@ -139,6 +139,11 @@ export function writeTextStderrAndWait(text: string): Promise<void> {
   return writeRawAndWait('stderr', `${text}\n`);
 }
 
+/** Wait until every stderr write queued before this call has completed. */
+export function flushTextStderr(): Promise<void> {
+  return writeRawAndWait('stderr', '');
+}
+
 /**
  * Write a caught error's human-readable message to stderr. Folds the
  * `writeTextStderr(toErrorMessage(error))` pair every command's catch block

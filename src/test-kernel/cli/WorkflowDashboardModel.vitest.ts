@@ -88,19 +88,6 @@ function workflowRoot(
   };
 }
 
-/** Mark every task and phase row of a slice as belonging to a prior attempt. */
-function markPriorAttempt(
-  entries: StreamSlice['entries'],
-): readonly TranscriptRow[] {
-  return entries.map((entry) => {
-    if (entry.kind === 'workflowTask') {
-      return { ...entry, call: { ...entry.call, attemptId: 'prior' } };
-    }
-    if (entry.kind === 'phase') return { ...entry, attemptId: 'prior' };
-    return entry;
-  });
-}
-
 /** Two phases, two tasks each, in the order the transcript emitted them. */
 const TWO_PHASE_ROOT = workflowRoot(
   ['Map', 'Reduce'],
@@ -251,70 +238,6 @@ describe('workflow dashboard model', () => {
     ).toBeUndefined();
   });
 
-  it('shows only the latest row for a logical task after a rerun', () => {
-    const root = workflowRoot(
-      ['Verify'],
-      [{ id: 'verification', phase: 'Verify' }],
-    );
-    const original = root.entries.find(
-      (entry) => entry.kind === 'workflowTask',
-    );
-    expect(original?.kind).toBe('workflowTask');
-    if (original?.kind !== 'workflowTask') return;
-    const current = {
-      ...original,
-      id: 'task-verification-current',
-      line: 'Running: verification again',
-      call: { ...original.call },
-    };
-
-    const model = workflowDashboardModel(
-      { ...root, entries: [...root.entries, current] },
-      WIDE_COLUMNS,
-    );
-
-    expect(model.tasks).toStrictEqual([current]);
-    expect(model.groups[0]?.tasks).toStrictEqual([current]);
-  });
-
-  it('drops tasks and phases absent from the latest attempt', () => {
-    const prior = workflowRoot(
-      ['Draft', 'Verify'],
-      [
-        { id: 'draft', phase: 'Draft' },
-        { id: 'verification', phase: 'Verify' },
-      ],
-    );
-    const current = workflowRoot(
-      ['Verify'],
-      [{ id: 'verification', phase: 'Verify' }],
-    );
-    const priorEntries = markPriorAttempt(prior.entries);
-    const currentEntries = current.entries.map((entry) => {
-      if (entry.kind === 'workflowTask') {
-        return {
-          ...entry,
-          id: `current-${entry.id}`,
-          call: { ...entry.call, attemptId: 'current' },
-        };
-      }
-      if (entry.kind === 'phase') {
-        return { ...entry, id: `current-${entry.id}`, attemptId: 'current' };
-      }
-      return { ...entry, id: `current-${entry.id}` };
-    });
-
-    const model = workflowDashboardModel(
-      { ...prior, entries: [...priorEntries, ...currentEntries] },
-      WIDE_COLUMNS,
-    );
-
-    expect(model.tasks.map((entry) => entry.call.id)).toStrictEqual([
-      'verification',
-    ]);
-    expect(model.groups.map((group) => group.label)).toStrictEqual(['Verify']);
-  });
-
   it('uses the latest heading facts when a rerun retains a phase label', () => {
     const root = workflowRoot(
       ['Verify'],
@@ -337,7 +260,11 @@ describe('workflow dashboard model', () => {
       WIDE_COLUMNS,
     );
 
-    expect(model.groups[0]?.heading).toStrictEqual(currentHeading);
+    expect(model.groups[0]?.heading).toStrictEqual({
+      phaseLabel: 'Verify',
+      phaseIndex: 2,
+      phaseTotal: 3,
+    });
   });
 
   it('fills only the heading count omitted by the latest phase row', () => {
@@ -366,9 +293,8 @@ describe('workflow dashboard model', () => {
     });
   });
 
-  it('renders a current empty dynamic phase while dropping prior attempts', async () => {
-    const root = workflowRoot(['Prior'], [{ id: 'old', phase: 'Prior' }]);
-    const entries = markPriorAttempt(root.entries);
+  it('renders a current empty dynamic phase', async () => {
+    const root = workflowRoot([], []);
     const currentPhase: TranscriptRowOf<'phase'> = {
       kind: 'phase',
       id: 'phase-current',
@@ -380,18 +306,18 @@ describe('workflow dashboard model', () => {
     };
 
     const model = workflowDashboardModel(
-      { ...root, entries: [...entries, currentPhase] },
+      { ...root, entries: [currentPhase] },
       WIDE_COLUMNS,
     );
 
     expect(model.groups).toHaveLength(1);
     expect(model.groups[0]).toMatchObject({
       label: 'Explore',
-      heading: currentPhase,
+      heading: { phaseLabel: 'Explore' },
       tasks: [],
     });
     const narrowModel = workflowDashboardModel(
-      { ...root, entries: [...entries, currentPhase] },
+      { ...root, entries: [currentPhase] },
       NARROW_COLUMNS,
     );
     expect(narrowModel.listValues).toStrictEqual([
@@ -437,41 +363,6 @@ describe('workflow dashboard model', () => {
     } finally {
       narrowInstance.unmount();
     }
-  });
-
-  it('drops the prior dashboard at the next attempt boundary', () => {
-    const prior = workflowRoot(
-      ['Verify'],
-      [{ id: 'verification', phase: 'Verify' }],
-    );
-    const entries = markPriorAttempt(prior.entries);
-
-    const model = workflowDashboardModel(
-      { ...prior, workflowAttemptId: 'current', entries },
-      WIDE_COLUMNS,
-    );
-
-    expect(model.groups).toStrictEqual([]);
-    expect(model.tasks).toStrictEqual([]);
-  });
-
-  it('does not revive prior rows after a malformed declared boundary', () => {
-    const prior = workflowRoot(
-      ['Verify'],
-      [{ id: 'verification', phase: 'Verify' }],
-    );
-
-    const model = workflowDashboardModel(
-      {
-        ...prior,
-        workflowAttemptId: undefined,
-        workflowAttemptBoundaryDeclared: true,
-      },
-      WIDE_COLUMNS,
-    );
-
-    expect(model.groups).toStrictEqual([]);
-    expect(model.tasks).toStrictEqual([]);
   });
 
   it('renders exactly the narrow row values the reducer reconciles against', async () => {

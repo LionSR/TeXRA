@@ -118,12 +118,6 @@ type SettledInBandTurn = Parameters<
   NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
 >[0];
 
-interface CompletedInBandSubagent {
-  readonly executionId: ExecutionId;
-  readonly result: AgentFinalResult;
-  readonly delivery: string;
-}
-
 type StableAttemptInspection =
   | { readonly kind: 'absent' }
   | { readonly kind: 'advance' }
@@ -330,24 +324,6 @@ async function throwRetryableDurabilityError(
   throw error;
 }
 
-function recordCost(
-  onCost: InBandSubagentExecutionBaseOptions['onCost'],
-  totalCostUsd: number | undefined,
-): void {
-  try {
-    const observed = onCost?.(totalCostUsd);
-    void Promise.resolve(observed).catch((error: unknown) => {
-      log.warn('Subagent cost observer rejected', {
-        data: error,
-      });
-    });
-  } catch (error) {
-    log.warn('Subagent cost observer failed', {
-      data: error,
-    });
-  }
-}
-
 /**
  * Execute one child through the one shared driver and read its typed result
  * back from the durable record. The child runs under the same detached
@@ -369,7 +345,7 @@ async function executeInBand(
   mode: PersistenceMode,
   executionId: ExecutionId,
   stableAttempt?: StableSubagentAttempt,
-): Promise<CompletedInBandSubagent> {
+): Promise<InBandSubagentDeliveryResult> {
   options.signal?.throwIfAborted();
 
   const config = AgentConfigSchema.parse(options.configPayload);
@@ -403,7 +379,7 @@ async function executeInBand(
       parentStreamId: options.parentStreamId,
       childStreamId,
       agentName: options.agentName,
-      recordCost: (totalCostUsd) => recordCost(options.onCost, totalCostUsd),
+      recordCost: options.onCost,
       // The parent is blocked awaiting this child, so it rides the parent's
       // budget slot (child-run budget design note).
       budgeted: false,
@@ -474,7 +450,7 @@ async function executeInBand(
             workingDirectory,
             executionMode: 'single-cycle',
             resultOnly: mode === 'required-result',
-            onStreamResolved: options.onStreamResolved ?? (() => {}),
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           }),
         };
       },
@@ -600,11 +576,7 @@ async function executeInBand(
       throw childError();
     }
 
-    return {
-      executionId,
-      result,
-      delivery: turnMessage,
-    };
+    return { executionId, result, delivery: turnMessage };
   })();
 
   // Post-run cancellation deliberately observes a terminal record: stable
@@ -738,9 +710,15 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
-    // The completed record always carries the child's delivery message; the
-    // required-result contract simply does not expose it.
-    return executeInBand(prepared, 'required-result', executionId, attempt);
+    // The typed-result contract carries no delivery: a required-result child
+    // renders none (`resultOnly`), and a recovered attempt has none to give.
+    const completed = await executeInBand(
+      prepared,
+      'required-result',
+      executionId,
+      attempt,
+    );
+    return { executionId: completed.executionId, result: completed.result };
   });
 }
 

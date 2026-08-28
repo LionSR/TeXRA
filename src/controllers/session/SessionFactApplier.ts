@@ -196,7 +196,7 @@ export class SessionFactApplier {
     addOutputFiles: (_streamId, event) =>
       this.renderer.invalidate(event.streamId, 'files'),
     updateMissingOutputs: (_streamId, event) =>
-      this.renderer.onMissingOutputsChanged(event.streamId),
+      this.renderer.invalidate(event.streamId, 'missingOutputs'),
     updateCompileFailures: (_streamId, event) =>
       this.renderer.invalidate(event.streamId, 'compileFailures'),
     goalPaused: (_streamId, event) =>

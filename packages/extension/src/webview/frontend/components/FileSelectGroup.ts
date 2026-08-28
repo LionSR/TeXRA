@@ -79,12 +79,6 @@ export class FileSelectGroup extends LitElement {
       ),
   );
 
-  protected override updated(changedProps: Map<string, unknown>): void {
-    if (changedProps.has('config')) {
-      this.sortableController.reinitialize();
-    }
-  }
-
   private get listId(): `${DocumentFileType}Files` {
     return `${this.config.type}Files`;
   }

@@ -1,7 +1,3 @@
-// Third-party imports
-import stableStringify from 'safe-stable-stringify';
-
-// Local imports
 import { truncatedHexId } from '@utils/core/idHash';
 
 const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
@@ -21,14 +17,16 @@ export function deriveWorkflowScriptCheckpointId(identity: {
   readonly defaultAgent: string;
   readonly parentExecutionId: string;
 }): string {
-  // safe-stable-stringify returns undefined only for undefined/symbol/function
-  // input; a typed record binding selects its string-returning overload.
-  const source: Record<string, string> = {
-    defaultAgent: identity.defaultAgent,
-    name: identity.name,
-    parentExecutionId: identity.parentExecutionId,
-  };
-  return truncatedHexId(stableStringify(source), 32);
+  // Key order is part of the persisted identity: keep it alphabetical, the
+  // order the original stable-stringify derivation produced.
+  return truncatedHexId(
+    JSON.stringify({
+      defaultAgent: identity.defaultAgent,
+      name: identity.name,
+      parentExecutionId: identity.parentExecutionId,
+    }),
+    32,
+  );
 }
 
 /** Build the execution-KV key owned by one workflow invocation. */

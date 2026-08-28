@@ -153,6 +153,12 @@ export class LitSessionRenderer implements SessionRendererPort {
             rounds: nonEmptyRounds(
               this.state.snapshots.getOutputFiles(streamId),
             ),
+            // Replace, don't merge: the store deletes a round whose output-file
+            // list goes empty (ROUND_FIELD_NORMALIZERS), and the read above
+            // already includes the fact that triggered this invalidation, since
+            // the store subscribes to session events in SessionHandle's
+            // constructor, before any host applier.
+            reset: true,
           }),
         );
       case 'compileFailures':
@@ -166,6 +172,16 @@ export class LitSessionRenderer implements SessionRendererPort {
             reset: true,
           }),
         );
+      case 'missingOutputs':
+        return this.sendIfActive(streamId, () => {
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+            stream: streamId,
+            rounds: nonEmptyRounds(
+              this.state.snapshots.getMissingOutputs(streamId),
+            ),
+          });
+        });
       case 'queuedFollowUps':
         return this.sendIfActive(streamId, () =>
           this.sendMessage({
@@ -212,18 +228,6 @@ export class LitSessionRenderer implements SessionRendererPort {
 
   onBadgesChanged(streamId: StreamTabId): void {
     this.updateStreamMetadata(streamId);
-  }
-
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    this.sendIfActive(streamId, () => {
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-        stream: streamId,
-        rounds: nonEmptyRounds(
-          this.state.snapshots.getMissingOutputs(streamId),
-        ),
-      });
-    });
   }
 
   onRunUsageChanged(

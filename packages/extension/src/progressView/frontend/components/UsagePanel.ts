@@ -173,11 +173,10 @@ export class UsagePanel extends LitElement {
     );
   }
 
+  /** `ContextStateDataSchema` requires both gauge fields, so presence is all
+   *  there is to test. `renderContext` owns visibility from here. */
   private get hasContext(): boolean {
-    return (
-      (this.contextState?.contextWindow ?? 0) > 0 &&
-      this.contextState?.utilizationPercent !== undefined
-    );
+    return this.contextState != null;
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -187,11 +186,7 @@ export class UsagePanel extends LitElement {
 
     return html`
       <div class="usage-summary-footer">
-        <span
-          id=${ELEMENT_IDS.CONTEXT_STATE}
-          class="context-state"
-          ?hidden=${!this.hasContext}
-        >
+        <span id=${ELEMENT_IDS.CONTEXT_STATE} class="context-state">
           ${this.renderContext()}
         </span>
         <span

@@ -18,6 +18,21 @@ export const BaseProposalFieldsSchema = z.object({
   memories: z.array(z.string()).prefault([]),
   /** Working directory override (e.g. a git worktree path). */
   workingDirectory: z.string().nullish(),
+  /**
+   * Present when this proposal reviews one call a multi-agent workflow script
+   * has issued (per-call or per-phase review), so the card can say which
+   * workflow and phase the call belongs to. Absent on ordinary delegations.
+   */
+  workflowCall: z
+    .strictObject({
+      workflowName: z.string().min(1),
+      callId: z.string().min(1),
+      label: z.string(),
+      phase: z.string().min(1).optional(),
+      /** Phase review: approving this call admits every later call of its phase. */
+      admitsPhase: z.literal(true).optional(),
+    })
+    .optional(),
 });
 
 const FileFieldsSchema = z.object(requiredFileListFields);

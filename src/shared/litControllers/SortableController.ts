@@ -2,11 +2,6 @@
 import Sortable from 'sortablejs';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-interface SortableControllerConfig {
-  /** Animation duration in ms (default: 150) */
-  animation?: number;
-}
-
 interface SortableReorderResult {
   /** Original index before drag */
   oldIndex: number;
@@ -36,28 +31,17 @@ type SortableReorderCallback = (result: SortableReorderResult) => void;
  *     MainViewEvents.filesReordered({ listId: this.listId, files: result.items })
  *   ),
  * );
- *
- * protected override updated(changedProps: Map<string, unknown>): void {
- *   if (changedProps.has('config')) {
- *     this.sortableController.reinitialize();
- *   }
- * }
  * ```
  */
 export class SortableController implements ReactiveController {
   private sortable: Sortable | null = null;
-  private readonly config: Required<SortableControllerConfig>;
 
   constructor(
     private readonly host: ReactiveControllerHost,
     private readonly getElement: () => HTMLElement | undefined,
     private readonly getItems: () => string[],
     private readonly onReorder: SortableReorderCallback,
-    config: SortableControllerConfig = {},
   ) {
-    this.config = {
-      animation: config.animation ?? 150,
-    };
     this.host.addController(this);
   }
 
@@ -69,15 +53,6 @@ export class SortableController implements ReactiveController {
     this.destroy();
   }
 
-  /**
-   * Force reinitialization of Sortable (e.g., when config changes).
-   * Call this from the host's updated() when relevant properties change.
-   */
-  reinitialize(): void {
-    this.destroy();
-    // Will be initialized on next hostUpdated call
-  }
-
   private initialize(): void {
     if (this.sortable) return;
 
@@ -85,7 +60,7 @@ export class SortableController implements ReactiveController {
     if (!element) return;
 
     this.sortable = new Sortable(element, {
-      animation: this.config.animation,
+      animation: 150,
       onEnd: ({ oldIndex, newIndex }) => this.handleSortEnd(oldIndex, newIndex),
     });
   }

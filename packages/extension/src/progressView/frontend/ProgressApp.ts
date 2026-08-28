@@ -32,7 +32,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
 import {
-  activeStreamId$,
   displayedActiveStreamId$,
   childStreamsByParent$,
   diffStatusAnnouncement,

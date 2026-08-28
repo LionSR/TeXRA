@@ -12,7 +12,6 @@ import {
   type CopilotModelRoute,
 } from '@model/runtimeModelRegistry';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
-import { isGpt5ModelName } from '@model/modelNames';
 import {
   computeModelOptionsData,
   getEnabledModels,

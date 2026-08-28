@@ -69,6 +69,9 @@ interface ConversationRegionSnapshot {
   readonly selectedChildValue: ChildListValue | undefined;
   /** Stream `selectedChildValue` points at, resolved once by `App`. */
   readonly selectedChildStreamId: StreamTabId | undefined;
+  /** Whether that stream is a skip/retry-able workflow-script grandchild —
+   *  the fact the status bar's `s`/`r` hint reads. */
+  readonly selectedChildWorkflowControllable: boolean;
   /** Dashboard rows for a workflow-script list root, derived once by `App`. */
   readonly workflowDashboard: WorkflowDashboardModel | undefined;
   readonly workflowDashboardRootHasApproval: boolean;
@@ -175,6 +178,7 @@ export function ConversationRegion({
         rows,
       });
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
+    childListFocused: snapshot.childListFocused,
     foregroundOpen,
     hasPlan: activePlan != null,
     todos: activeTodos,
@@ -191,10 +195,9 @@ export function ConversationRegion({
     slashPaletteOpen: snapshot.slashPaletteOpen,
     staticTranscriptRows: staticTranscriptRows ?? 0,
   });
-  // The subagent/todos panels live at the bottom of the same vertical column.
-  // Reserve only as many rows as the panels actually need. Child sessions stay
-  // behind the status-bar navigation affordance until the list has focus, so a
-  // background workflow cannot expand over the conversation by default.
+  // One bottom panel at a time in the same vertical column: the child list
+  // while it has focus, otherwise the todos/plan panel. Reserve only as many
+  // rows as that panel actually needs.
   const todosPlanContentRows =
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeTodos, activePlan)
@@ -296,6 +299,9 @@ export function ConversationRegion({
               listRootStreamId={snapshot.childListTarget.streamId}
               dashboard={snapshot.workflowDashboard}
               selectedChildStreamId={snapshot.selectedChildStreamId}
+              selectedChildWorkflowControllable={
+                snapshot.selectedChildWorkflowControllable
+              }
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               streams={snapshot.streams}

@@ -11,7 +11,7 @@ type PollSubscriber = () => void;
 const pollSubscribers = new Map<number, Set<PollSubscriber>>();
 const pollTimers = new Map<number, ReturnType<typeof setInterval>>();
 
-function subscribeToPolling(
+export function subscribeToPolling(
   intervalMs: number,
   subscriber: PollSubscriber,
 ): () => void {
@@ -29,13 +29,17 @@ function subscribeToPolling(
     pollTimers.set(intervalMs, timer);
   }
   return () => {
-    subscribers.delete(subscriber);
-    if (subscribers.size === 0) {
-      const timer = pollTimers.get(intervalMs);
-      if (timer !== undefined) clearInterval(timer);
-      pollTimers.delete(intervalMs);
-      pollSubscribers.delete(intervalMs);
-    }
+    // Re-read the live entry rather than the Set captured at subscribe time:
+    // a stale disposer called twice must not clear a later generation's timer
+    // out from under its subscribers.
+    const live = pollSubscribers.get(intervalMs);
+    if (live === undefined) return;
+    live.delete(subscriber);
+    if (live.size > 0) return;
+    const timer = pollTimers.get(intervalMs);
+    if (timer !== undefined) clearInterval(timer);
+    pollTimers.delete(intervalMs);
+    pollSubscribers.delete(intervalMs);
   };
 }
 

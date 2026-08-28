@@ -6,7 +6,7 @@
 // over text a producer wrote. Nothing here truncates the model.
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
-import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
+import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { redactSecrets } from '@logger/redaction';
 import {
   elideText,
@@ -63,7 +63,7 @@ function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
   const mediaByPath = new Map(row.media.map((ref) => [ref.path, ref.media]));
   return row.files.map((file) => {
     const media = mediaByPath.get(file.path);
-    const marker = file.ok ? '✓' : '✗';
+    const marker = file.ok ? TICK : CROSS;
     const name = file.varName ? `${file.varName}: ` : '';
     const source = file.sourceDisplay ? ` (${file.sourceDisplay})` : '';
     const size = media
@@ -118,7 +118,7 @@ export function transcriptRowBodyLines(
       case 'latexdiff':
         return row.entries.map(
           (entry) =>
-            `${entry.status === 'success' ? '✓' : '✗'} ${entry.displayName}${
+            `${entry.status === 'success' ? TICK : CROSS} ${entry.displayName}${
               entry.message ? ` — ${entry.message}` : ''
             }`,
         );

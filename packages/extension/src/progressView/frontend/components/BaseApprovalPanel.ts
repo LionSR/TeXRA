@@ -8,6 +8,8 @@ import { classMap } from 'lit/directives/class-map.js';
 import './ApproveSplitButton';
 
 // Local imports - base class
+import type { WorkflowCallReviewScope } from '@shared/schemas';
+
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 // Local imports - progress view events
@@ -46,6 +48,16 @@ export abstract class BaseApprovalPanel<
 
   /** Emit the proposal approve-all decision; a no-op unless overridden. */
   protected approveAllDelegatedWorkHandler(): void {}
+
+  /** Workflow-script proposals: approve but review issued calls. */
+  protected get canReviewWorkflowCalls(): boolean {
+    return false;
+  }
+
+  /** Emit the approve-with-review decision; a no-op unless overridden. */
+  protected reviewWorkflowCallsHandler(
+    _scope: Exclude<WorkflowCallReviewScope, 'none'>,
+  ): void {}
 
   override handleKeyboardShortcut(key: string): boolean {
     if (key === 'y') {
@@ -121,6 +133,9 @@ export abstract class BaseApprovalPanel<
         .canBypass=${this.canBypass}
         .bypassAction=${this.bypassAction}
         .canApproveAllDelegatedWork=${this.canApproveAllDelegatedWork}
+        .canReviewWorkflowCalls=${this.canReviewWorkflowCalls}
+        @approve-review-phase=${() => this.reviewWorkflowCallsHandler('phase')}
+        @approve-review-call=${() => this.reviewWorkflowCallsHandler('call')}
         .disabled=${this.archived}
         @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-session=${() => this.approveSessionHandler()}

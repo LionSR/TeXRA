@@ -506,6 +506,18 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].reasoning_effort, 'max');
   });
 
+  it('preserves temperature for Grok reasoning models', async () => {
+    const handler = createXaiHandler({
+      name: 'grok45',
+      fullName: 'grok-4.5',
+      capabilities: { supportsReasoning: true },
+    });
+
+    const { createCalls } = await sendRequest(handler);
+
+    assert.equal(createCalls[0].temperature, 0);
+  });
+
   it('passes medium reasoning effort through for current Grok models', async () => {
     const handler = createXaiHandler({
       name: 'grok45',

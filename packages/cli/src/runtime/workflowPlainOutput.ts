@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   MESSAGE_TYPES,
   STREAM_PHASE,
@@ -8,10 +9,11 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import {
+  formatWorkflowCallLine,
+  formatWorkflowPhaseHeading,
+} from '@shared/copy/workflowCall';
 import { assertNever } from '@utils/core';
-
-import { formatCliWorkflowCallLine } from './workflowCallText';
 
 const WORKFLOW_PLAIN_EVENT_TYPES = [
   'run.start',
@@ -38,63 +40,10 @@ interface WorkflowStreamProjection {
   readonly complete: (outcome: RunOutcome) => void;
 }
 
-interface PendingCall {
-  readonly stageId: string;
-  readonly logId: string;
-  readonly call: WorkflowCallProgress;
-}
-
-function pendingCallKey(stageId: string, logId: string): string {
-  return `${stageId}\u0000${logId}`;
-}
-
-/** Workflow calls that arrived before their stage opened, keyed by
- *  `stageId`+`logId` so a stage's calls stay a flat lookup instead of a
- *  nested `Map<stageId, Map<logId, call>>`. */
-class PendingCallsByStage {
-  private readonly calls = new Map<string, PendingCall>();
-
-  add(stageId: string, logId: string, call: WorkflowCallProgress): void {
-    this.calls.set(pendingCallKey(stageId, logId), { stageId, logId, call });
-  }
-
-  /** Removes and returns the calls pending for `stageId`, if any, in
-   *  arrival order. */
-  take(stageId: string): PendingCall[] {
-    const matches = [...this.calls.values()].filter(
-      (pending) => pending.stageId === stageId,
-    );
-    for (const pending of matches) {
-      this.calls.delete(pendingCallKey(pending.stageId, pending.logId));
-    }
-    return matches;
-  }
-
-  /** Removes and returns every still-pending call, grouped by stageId in
-   *  first-seen order. */
-  takeAllByStage(): Array<[string, PendingCall[]]> {
-    const stageOrder: string[] = [];
-    const byStage = new Map<string, PendingCall[]>();
-    for (const pending of this.calls.values()) {
-      let bucket = byStage.get(pending.stageId);
-      if (!bucket) {
-        bucket = [];
-        byStage.set(pending.stageId, bucket);
-        stageOrder.push(pending.stageId);
-      }
-      bucket.push(pending);
-    }
-    this.calls.clear();
-    return stageOrder.map((stageId) => [stageId, byStage.get(stageId) ?? []]);
-  }
-}
-
 function createWorkflowStreamProjection(
   agentName: string,
   options: WorkflowPlainOutputOptions,
 ): WorkflowStreamProjection {
-  const openedPhases = new Set<string>();
-  const pendingCalls = new PendingCallsByStage();
   const lastCallLines = new Map<string, string>();
   let completed = false;
 
@@ -103,7 +52,13 @@ function createWorkflowStreamProjection(
     options.writeLine(line);
   };
   const writeCall = (logId: string, call: WorkflowCallProgress): void => {
-    const line = formatCliWorkflowCallLine(call);
+    // The event carries the canonical model id; the line names it by its
+    // runtime label, as the transcript projection does.
+    const line = formatWorkflowCallLine(
+      'model' in call && call.model !== undefined
+        ? { ...call, model: getRuntimeModelLabel(call.model) }
+        : call,
+    );
     if (lastCallLines.get(logId) === line) return;
     lastCallLines.set(logId, line);
     write(line);
@@ -111,9 +66,6 @@ function createWorkflowStreamProjection(
   const openPhase = (
     phase: Extract<AgentEvent, { type: 'stage.start' }>,
   ): void => {
-    const stageId = phase.id;
-    if (openedPhases.has(stageId)) return;
-    openedPhases.add(stageId);
     write(
       `◆ ${formatWorkflowPhaseHeading({
         phaseLabel: phase.label,
@@ -121,25 +73,10 @@ function createWorkflowStreamProjection(
         phaseTotal: phase.total,
       })}`,
     );
-    const pending = pendingCalls.take(stageId);
-    for (const { logId, call } of pending) {
-      writeCall(logId, call);
-    }
-  };
-  const flushPendingPhases = (): void => {
-    for (const [stageId, pending] of pendingCalls.takeAllByStage()) {
-      if (openedPhases.has(stageId)) continue;
-      const phaseLabel = pending[0]?.call.phase;
-      if (phaseLabel !== undefined) write(`◆ ${phaseLabel}`);
-      for (const { logId, call } of pending) {
-        writeCall(logId, call);
-      }
-    }
   };
   const finish = (outcome: RunOutcome): void => {
     if (completed) return;
     completed = true;
-    flushPendingPhases();
     write(completionLine(outcome, agentName));
   };
 
@@ -150,15 +87,9 @@ function createWorkflowStreamProjection(
           if (event.kind === 'phase') openPhase(event);
           break;
         case 'workflow.call':
-          if (
-            event.call.phase !== undefined &&
-            event.stageId !== undefined &&
-            !openedPhases.has(event.stageId)
-          ) {
-            pendingCalls.add(event.stageId, event.logId, event.call);
-          } else {
-            writeCall(event.logId, event.call);
-          }
+          // The projection emits a card only once its phase's `stage.start`
+          // has been emitted, so the ◆ divider always precedes its rows.
+          writeCall(event.logId, event.call);
           break;
         case 'log':
           if (

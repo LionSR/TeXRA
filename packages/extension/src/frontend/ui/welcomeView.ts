@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
@@ -30,8 +29,6 @@ function renderWelcomeHtml(): string {
   const createSample = `command:${EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT}`;
   const openWalkthrough = `command:${EXTENSION_COMMANDS.OPEN_GETTING_STARTED}`;
   const docs = 'https://texra.ai';
-  // CSP nonces must be unpredictable — nanoid is crypto-random.
-  const nonce = nanoid();
 
   return /* html */ `
 <!DOCTYPE html>
@@ -40,7 +37,7 @@ function renderWelcomeHtml(): string {
   <meta charset="UTF-8" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"
+    content="default-src 'none'; style-src 'unsafe-inline';"
   />
   <style>
     body {

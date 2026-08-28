@@ -223,8 +223,9 @@ copy, no LLM involvement. Rounds that emitted nothing leave symlinks
 
 ### 6. Resume via call journal
 
-Every completed `agent()` call is journaled by its call index and a hash of
-the prompt plus execution-affecting options. Display labels and phases are
+Every completed `agent()` call is journaled by a hash of the prompt plus
+execution-affecting options (its position is recorded, not part of its
+identity — changed 2026-08-28). Display labels and phases are
 excluded, so revising a declarative task plan does not repeat completed model
 work. Re-running with a prior journal replays matching calls from cache and
 re-runs only edited or new calls; failed and cancelled calls are not journaled,

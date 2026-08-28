@@ -65,6 +65,15 @@ return await parallel(
   show pending work before execution and update one call progress record in
   place.
   Scripts whose call set is data-dependent may omit the plan.
+  A plan entry is a **label, not a call**: it carries no agent, model, files,
+  or result contract, and nothing guarantees the script reaches it. The
+  execution snapshot keeps the two apart — a call is stamped `issued` (with
+  its `kind`, declared `model`, agent, and file basenames) only when the
+  script actually issues `agent()`; an unissued plan entry projects as a
+  `declared` card and settles as not-reached. Hosts must not present plan
+  entries as resolved calls, nor infer parallelism or dependencies from
+  shared phase membership — the snapshot's `queued`/`running` calls are the
+  only source of real concurrency.
 - `agent(prompt, opts?)` — one subagent run; resolves to the host runner's
   typed result, `null` on failure, or the truthy
   `'__WORKFLOW_SKIPPED__'` sentinel when an interactive user skips it. Exclude
@@ -77,6 +86,15 @@ return await parallel(
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
   validated object rather than edited files.
+- Admission (`WorkflowScriptRunOptions.admitCall`) — an optional per-call
+  gate the host installs when the user approved the workflow with call or
+  phase review. The engine awaits it after journal replay is ruled out and
+  before the call takes a concurrency slot, so a pending review holds no
+  slot, charges no cap, and reserves no child attempt; the run abort ends the
+  wait. `'skip'` takes the interactive-skip path (skipped sentinel, never
+  journaled — a resumed run asks again). The production host resolves the
+  call exactly as launch will and shows it through the ordinary delegation
+  proposal on the run's stream (`createWorkflowCallAdmission`).
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
 - Ordinary JavaScript loops and awaited `agent()` calls own sequential control
@@ -114,8 +132,13 @@ return await parallel(
   stays readable, but readers predating the committed phase reject newer
   markers outright, downgrade or mixed-version recovery is unsupported, and
   unknown present values fail closed rather than being defaulted or coerced.
-  Checkpoints use the strict version-3 schema; malformed or
+  Checkpoints use the strict version-4 schema; malformed or
   older records fail instead of being translated into the current journal.
+  Deliberately NOT an append-only started/result journal (the shape Claude
+  Code's Workflow tool uses): such a log cannot distinguish "never
+  finished" from a `null` result, and beside the checkpoint, the commit
+  fence, and the child attempt ledger it would be a second owner of the
+  same fact. Ruled 2026-08-28 (docs/proposals/2026-08-28-workflow-plan-vs-issued-calls.md §Study).
 - **Cost ownership**: child costs remain in the persisted typed results. The
   future tool surface must aggregate the final journal at its tool-result
   boundary, rather than mutating parent totals during child launch; this keeps
@@ -145,13 +168,21 @@ return await parallel(
 - **Determinism**: `Date.now()`, `Math.random()`, and argless `new Date()`
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
-  same call sequence: each `agent()` call is journaled by (call index,
-  prompt/execution-options hash), and a rerun with a prior journal replays
-  matching calls from cache, re-running only edited or new calls. File-backed
+  same calls: each `agent()` call is journaled by its prompt/execution-options
+  hash — its position is recorded, not part of its identity — and a rerun
+  with a prior journal replays matching calls from cache wherever they now
+  sit, re-running only edited or new calls (per call, never the
+  longest-unchanged-prefix rule Claude Code's Workflow tool applies, which
+  re-runs every call after the first change). File-backed
   calls also hash the current bytes of their input, context, and media files,
   so editing a referenced path invalidates both its cached result and stable
   child identity. Display labels and phases do not participate in identity.
-  Failed and cancelled calls are not journaled, so resume retries them.
+  Failed and cancelled calls are not journaled, so resume retries them; so
+  are a user's skip and a per-call admission denial — the journal records
+  outcomes of the script's calls, a human verdict belongs to the attempt
+  that asked for it, and a resume is a new attempt. The checkpoint identity
+  is `meta.name` plus the default agent: resuming under a different agent
+  starts a new journal.
   Otherwise-identical calls must provide distinct `id` options; ambiguous
   duplicates fail before launch.
 - **Budgets**: one concurrency semaphore (default 4) across all `agent()`

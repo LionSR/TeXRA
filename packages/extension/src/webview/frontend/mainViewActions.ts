@@ -28,7 +28,6 @@ import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState
 // Local imports - main view
 import {
   SESSION_TYPES,
-  parseSessionType,
   type DocumentFileType,
   type MultipleDocumentFileType,
   type SessionType,
@@ -208,8 +207,7 @@ export function setBaseFile(value: string): void {
 // Session / agent / model changes (user-driven)
 // ---------------------------------------------------------------------------
 
-export function changeSessionType(value: string): void {
-  const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
+export function changeSessionType(parsed: SessionType): void {
   const prev = sessionType$.get();
 
   // Workflows run a single workflow agent, so a team launch target cannot
@@ -326,7 +324,6 @@ function buildExecuteMessage(): MainViewExecuteMessage {
     agent: agent$.get(),
     model: model$.get(),
     instruction: instruction$.get(),
-    singleFiles: singleFiles$.get(),
     multiFiles: multiFiles$.get(),
     checkboxValues: checkboxValues$.get(),
     session: {

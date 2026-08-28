@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  WORKFLOW_SKIPPED_RESULT,
-  runWorkflowScript,
-  type WorkflowAgentInvocation,
-  type WorkflowScriptControl,
+import type {
+  WorkflowAgentInvocation,
+  WorkflowScriptControl,
 } from '@agent/workflowScript';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
+import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
   WorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
@@ -134,18 +134,15 @@ return await agent('work', { id: 'work-call' })`,
       candidate.calls[0]!.attempts[0]!.id = '' as ExecutionId;
     });
 
-    // A meta.json persisted before stageTitle was removed still carries the
-    // key on disk; the read path must tolerate it rather than fail closed.
+    // A meta.json persisted by an older build with a retired key fails
+    // loudly: there is no compatibility reader, by policy.
     const legacy = structuredClone(result.snapshot) as unknown as {
       calls: Array<Record<string, unknown>>;
     };
     legacy.calls[0]!.stageTitle = 'Work';
-    const legacyParsed = WorkflowExecutionSnapshotSchema.safeParse(legacy);
-    expect(legacyParsed.success).toBe(true);
-    expect(
-      (legacyParsed.data?.calls[0] as { stageTitle?: unknown } | undefined)
-        ?.stageTitle,
-    ).toBeUndefined();
+    expect(WorkflowExecutionSnapshotSchema.safeParse(legacy).success).toBe(
+      false,
+    );
 
     const active = structuredClone(
       snapshots.find(
@@ -477,9 +474,7 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
     expect(terminal.lifecycle).toBe('cancelled');
     const terminalCounts = deriveWorkflowCounts(terminal.calls);
     expect(terminalCounts.cancelled).toBe(1);
-    expect(
-      terminalCounts.running + terminalCounts.starting + terminalCounts.queued,
-    ).toBe(0);
+    expect(terminalCounts.running + terminalCounts.queued).toBe(0);
     expect(
       terminalCounts.completed +
         terminalCounts.failed +

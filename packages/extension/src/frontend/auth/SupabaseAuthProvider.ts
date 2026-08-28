@@ -10,8 +10,8 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AUTH_BRIDGE_URL,
   DEFAULT_OAUTH_PROVIDER,
+  getAuthCallbackUri,
   getExtensionId,
-  getExternalAuthCallbackInfo,
   AUTH_CALLBACK_TIMEOUT_MS,
   isOAuthProvider,
   type OAuthProvider,
@@ -49,11 +49,6 @@ interface ExtensionAuthAttempt {
   readonly nonce: string;
   readonly createdAt: number;
   cancel(): void;
-}
-
-interface ClaimedAuthCallback {
-  attempt: ExtensionAuthAttempt;
-  flowId: string;
 }
 
 /** Notification operations injected at construction so tests can stub them. */
@@ -190,10 +185,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return values[0];
   }
 
+  /** Claim a persisted callback and hand back its PKCE flow id. */
   private async claimCallback(
     query: string,
     expectedAttempt?: ExtensionAuthAttempt,
-  ): Promise<ClaimedAuthCallback | null> {
+  ): Promise<string | null> {
     return this.callbackClaimQueue.add(async () => {
       const nonce = this.callbackNonce(query);
       if (!nonce || (expectedAttempt && expectedAttempt.nonce !== nonce)) {
@@ -222,20 +218,19 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           return null;
         }
 
-        const attempt = expectedAttempt ?? {
-          nonce,
-          createdAt: pending.createdAt,
-          cancel: () => {},
-        };
         await this.clearPendingAttempt(nonce);
-        if (expectedAttempt && this.activeAttempt !== attempt) return null;
-        return { attempt, flowId: pending.flowId };
+        // Re-check after the await: `activeAttempt` is mutated off-queue by
+        // `invalidateActiveAttempt`, so this is not a repeat of the check above.
+        if (expectedAttempt && this.activeAttempt !== expectedAttempt) {
+          return null;
+        }
+        return pending.flowId;
       } catch {
         throw new Error(
           'OAuth callback state could not be verified. Try again.',
         );
       }
-    }) as Promise<ClaimedAuthCallback | null>;
+    }) as Promise<string | null>;
   }
 
   private invalidateActiveAttempt(): void {
@@ -300,8 +295,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     if (nonce && this.activeAttempt?.nonce === nonce) return;
 
     try {
-      const claimed = await this.claimCallback(uri.query);
-      if (!claimed) return;
+      const flowId = await this.claimCallback(uri.query);
+      if (!flowId) return;
 
       const existingSession = await this.sessionCoordinator.loadSession();
       if (existingSession) return;
@@ -309,7 +304,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const result = await SupabaseClient.runPkceOperation(() =>
         this.sessionCoordinator.createSessionFromCallback(
           { path: uri.path, query: uri.query },
-          claimed.flowId,
+          flowId,
         ),
       );
 
@@ -398,7 +393,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     nonce: string,
   ): Promise<{ redirectTo: string }> {
     if (vscode.env.uiKind === vscode.UIKind.Web) {
-      const callbackInfo = await getExternalAuthCallbackInfo();
+      const externalUri = await vscode.env.asExternalUri(
+        vscode.Uri.parse(getAuthCallbackUri(vscode.env.uriScheme)),
+      );
+      // asExternalUri adds a ?state= routing token in Codespaces; carrying it on
+      // the redirect URL is what routes the callback back into the editor.
+      // skipEncoding (toString(true)) so auth-js's encodeURIComponent over
+      // redirectTo does not double-encode the already percent-encoded token;
+      // double-encoding corrupts it and the callback never returns (silent
+      // timeout).
+      const fullUrl = externalUri.toString(true);
       // In Codespaces/web the tunnel routing token must ride on redirect_to
       // (fullUrl already carries ?state=TUNNEL). Passing it as queryParams.state
       // instead overwrites GoTrue's own OAuth state on /authorize, which makes
@@ -407,10 +411,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // so this is also correct for plain web.
       // PKCE flow: the callback carries a one-time ?code= (query), which the
       // shared createSessionFromCallback exchanges for a session.
-      const separator = callbackInfo.fullUrl.includes('?') ? '&' : '?';
-      return {
-        redirectTo: `${callbackInfo.fullUrl}${separator}app_nonce=${nonce}`,
-      };
+      const separator = fullUrl.includes('?') ? '&' : '?';
+      return { redirectTo: `${fullUrl}${separator}app_nonce=${nonce}` };
     }
 
     // Desktop: redirect GoTrue to the https bridge page instead of straight to
@@ -647,14 +649,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       const subscription = uriHandler.onDidReceiveCallback(async (uri) => {
         try {
-          const claimed = await this.claimCallback(uri.query, attempt);
-          if (!claimed) return;
+          const flowId = await this.claimCallback(uri.query, attempt);
+          if (!flowId) return;
           cleanupListeners();
 
           const result = await SupabaseClient.runPkceOperation(() =>
             this.sessionCoordinator.createSessionFromCallback(
               { path: uri.path, query: uri.query },
-              claimed.flowId,
+              flowId,
             ),
           );
 

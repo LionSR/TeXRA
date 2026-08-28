@@ -8,7 +8,7 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
-import type { DiffSession, DiffSource } from '@hosts/uiHosts';
+import type { DiffSource } from '@hosts/uiHosts';
 
 import type { ToolEditPermission } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -169,7 +169,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       typeof import('@agent/runtime/streamApprovalQueue')
     >('@agent/runtime/streamApprovalQueue');
     // Session-owned approval state (bypass reads) for the fake run session.
-    const approvals = createSessionApprovals();
+    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     return {
       ...actual,
       tryUseRunContext: vi.fn(() =>
@@ -440,10 +440,10 @@ describe('desktop tool edit approval', () => {
       const openPath = vi.fn(async (_filePath: string) => {});
       const openDiff = vi.fn(
         async (
-          original: DiffSource,
-          proposed: DiffSource,
-          title: string,
-        ): Promise<DiffSession> => ({ original, proposed, title }),
+          _original: DiffSource,
+          _proposed: DiffSource,
+          _title: string,
+        ): Promise<void> => undefined,
       );
       const { requestToolEditApproval, controller, interactions } =
         await createApprovalFixture({
