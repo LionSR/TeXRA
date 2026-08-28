@@ -16,7 +16,7 @@ vi.mock('@agent/workflowScript', async (importOriginal) => ({
 
 function snapshot(
   lifecycle: 'waiting' | 'active',
-  status: 'planned' | 'starting',
+  status: 'planned' | 'running',
 ): WorkflowExecutionSnapshot {
   return {
     stages: [
@@ -33,6 +33,8 @@ function snapshot(
         label: 'Retry review',
         stageId: 'stage-review',
         status,
+        // The engine stamps the call issued when the script reaches it.
+        ...(lifecycle === 'active' && { issued: true }),
         attempts: [{}],
         files: {},
         timestamps: {
@@ -45,17 +47,14 @@ function snapshot(
 }
 
 describe('workflow-script projection failure recovery', () => {
-  it('retains call-issued admission when that fold fails before projection', async () => {
+  it('projects the issued call after a fold fails before projection', async () => {
     const construction = snapshot('waiting', 'planned');
     const issued = snapshot('active', 'planned');
-    const running = snapshot('active', 'starting');
+    const running = snapshot('active', 'running');
     mocks.runPersistedWorkflowScript.mockImplementationOnce(
       async (options: PersistedWorkflowScriptRunOptions) => {
         options.onTransition?.(construction);
-        options.onTransition?.(issued, {
-          type: 'call-issued',
-          callId: 'retry-review',
-        });
+        options.onTransition?.(issued);
         options.onTransition?.(running);
         await options.onSnapshot?.(running);
         return { snapshot: running } as never;

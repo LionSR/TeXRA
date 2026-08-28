@@ -21,7 +21,6 @@ export const WORKFLOW_CALL_STATUS = {
   /** Issued, held for the user's per-call or per-phase review before queueing. */
   AWAITING_APPROVAL: 'awaitingApproval',
   QUEUED: 'queued',
-  STARTING: 'starting',
   RUNNING: 'running',
   COMPLETED: 'completed',
   FAILED: 'failed',
@@ -48,7 +47,6 @@ export type WorkflowControlAction = 'skip' | 'retry';
 
 const WorkflowExecutionTimestampsSchema = z.strictObject({
   createdAt: z.iso.datetime(),
-  queuedAt: z.iso.datetime().optional(),
   startedAt: z.iso.datetime().optional(),
   updatedAt: z.iso.datetime(),
   completedAt: z.iso.datetime().optional(),
@@ -115,27 +113,37 @@ const WorkflowExecutionCallShape = z.strictObject({
    * own path.
    */
   settledBySweep: z.literal(true).optional(),
-  blockedReason: z.string().optional(),
   error: z.string().optional(),
   costUsd: z.number().nonnegative().optional(),
   timestamps: WorkflowExecutionTimestampsSchema,
 });
 /**
- * `stageTitle` was removed as a denormalized duplicate of the referenced
- * stage's title (resolve it with `stageTitleFor` instead). Strip it here,
- * ahead of the strict shape, so a `meta.json` snapshot persisted before that
- * removal — e.g. by an interrupted run `hydrate()` must still recover —
- * keeps parsing instead of failing strictObject's unrecognized-key check.
+ * Shapes an older build persisted, normalized here ahead of the strict shape
+ * so a `meta.json` snapshot of an interrupted run `hydrate()` must still
+ * recover keeps parsing instead of failing strictObject's unrecognized-key
+ * check. Dropped keys: `stageTitle` (a denormalized duplicate of the
+ * referenced stage's title — resolve it with `stageTitleFor`), `blockedReason`
+ * (derivable from `status`, the stage, and `settledBySweep`), and
+ * `timestamps.queuedAt` (never read). Dropped value: the transient `starting`
+ * call status, folded into `running`.
  */
 const WorkflowExecutionCallSchema = z.preprocess((value) => {
-  if (value && typeof value === 'object' && 'stageTitle' in value) {
-    const { stageTitle: _stageTitle, ...rest } = value as Record<
-      string,
-      unknown
-    >;
-    return rest;
+  if (!value || typeof value !== 'object') return value;
+  const {
+    stageTitle: _stageTitle,
+    blockedReason: _blockedReason,
+    timestamps,
+    ...rest
+  } = value as Record<string, unknown>;
+  if (rest.status === 'starting') rest.status = WORKFLOW_CALL_STATUS.RUNNING;
+  if (!timestamps || typeof timestamps !== 'object') {
+    return { ...rest, timestamps };
   }
-  return value;
+  const { queuedAt: _queuedAt, ...keptTimestamps } = timestamps as Record<
+    string,
+    unknown
+  >;
+  return { ...rest, timestamps: keptTimestamps };
 }, WorkflowExecutionCallShape);
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 

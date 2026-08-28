@@ -124,7 +124,7 @@ export function workflowExecutionView(
           omittedAttempts: call.attempts.length - WORKFLOW_SUMMARY_MAX_ATTEMPTS,
         }),
         status: call.status,
-        blockedReason: compactWorkflowText(call.blockedReason),
+        ...(call.settledBySweep && { settledBySweep: true }),
         error: compactWorkflowText(call.error),
         costUsd: call.costUsd,
         timestamps: call.timestamps,

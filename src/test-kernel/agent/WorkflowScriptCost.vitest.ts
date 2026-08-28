@@ -4,16 +4,13 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  runWorkflowScript,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
 } from '@agent/workflowScript';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  createWorkflowAttemptCostTracker,
-  WorkflowJournalCostError,
-} from '@tools/delegation/workflowScriptRun';
+import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
 const executionId = '7154costtest' as ExecutionId;
 const key = '0000000000000000';
@@ -189,7 +186,7 @@ return await agent('retry cost')`,
 
     expect(tracker.record({ index: 0, key: 'live' }, 0.2)).toBe(0.2);
     expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
-      WorkflowJournalCostError,
+      /is not an agent final result/,
     );
   });
 });
@@ -217,7 +214,7 @@ describe('workflow-script completed journal cost', () => {
     ['negative cost', entry(7, workflowResult(-1))],
   ])('rejects %s with the journal index', (_label, invalidEntry) => {
     expect(() => settleJournalCost([invalidEntry])).toThrow(
-      WorkflowJournalCostError,
+      /is not an agent final result/,
     );
     expect(() => settleJournalCost([invalidEntry])).toThrow(
       new RegExp(`entry ${invalidEntry.index}`),

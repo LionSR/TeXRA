@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  WORKFLOW_SKIPPED_RESULT,
-  runWorkflowScript,
-  type WorkflowAgentInvocation,
-  type WorkflowScriptControl,
+import type {
+  WorkflowAgentInvocation,
+  WorkflowScriptControl,
 } from '@agent/workflowScript';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
+import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
   WorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
@@ -477,9 +477,7 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
     expect(terminal.lifecycle).toBe('cancelled');
     const terminalCounts = deriveWorkflowCounts(terminal.calls);
     expect(terminalCounts.cancelled).toBe(1);
-    expect(
-      terminalCounts.running + terminalCounts.starting + terminalCounts.queued,
-    ).toBe(0);
+    expect(terminalCounts.running + terminalCounts.queued).toBe(0);
     expect(
       terminalCounts.completed +
         terminalCounts.failed +

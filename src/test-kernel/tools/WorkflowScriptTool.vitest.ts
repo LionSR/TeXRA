@@ -3,10 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
-import {
-  deriveWorkflowScriptCheckpointId,
-  writeWorkflowScriptCheckpoint,
-} from '@agent/workflowScript';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
+import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { getExecutionStore } from '@agent/storage';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';

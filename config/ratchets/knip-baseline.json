@@ -1496,42 +1496,6 @@
       "name": "MCP_STOP"
     },
     {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runWorkflowScript"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WORKFLOW_SKIPPED_RESULT"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workflowScriptCheckpointKvKey"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WorkflowScriptParseError"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WorkflowScriptPersistenceError"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "writeWorkflowScriptCheckpoint"
-    },
-    {
       "file": "src/agent/workflowScript/persistence.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -2136,12 +2100,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "computeAndWriteWorkflowDiffs"
-    },
-    {
-      "file": "src/tools/delegation/workflowScriptRun.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WorkflowJournalCostError"
     },
     {
       "file": "src/tools/DiagnosticsTool.ts",

@@ -3,10 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  runWorkflowScript,
-  workflowScriptCheckpointKvKey,
-  WorkflowScriptPersistenceError,
-  writeWorkflowScriptCheckpoint,
   type WorkflowScriptControl,
 } from '@agent/workflowScript';
 import {
@@ -14,6 +10,12 @@ import {
   getExecutionStore,
   type ExecutionKVStore,
 } from '@agent/storage';
+import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
+import {
+  WorkflowScriptPersistenceError,
+  writeWorkflowScriptCheckpoint,
+} from '@agent/workflowScript/persistence';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import {
   WorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
@@ -347,7 +349,6 @@ return await agent('run planned call', { id: 'planned-call' })`;
       expect(runner).toHaveBeenCalledOnce();
       expect(call.status).toBe('completed');
       expect(call.timestamps.createdAt).toBe(prior.timestamps.createdAt);
-      expect(call.timestamps.queuedAt).toBe('2026-01-02T00:00:00.000Z');
       expect(call.timestamps.startedAt).toBe('2026-01-02T00:00:00.000Z');
       expect(call.timestamps.completedAt).toBe('2026-01-02T00:00:00.000Z');
     } finally {
@@ -409,7 +410,6 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
       expect(resumed.result).toBe('resumed result');
       expect(call.status).toBe('completed');
       expect(call.timestamps.createdAt).toBe(prior.timestamps.createdAt);
-      expect(call.timestamps.queuedAt).toBe('2026-02-02T00:00:00.000Z');
       expect(call.timestamps.startedAt).toBe('2026-02-02T00:00:00.000Z');
       expect(call.timestamps.completedAt).toBe('2026-02-02T00:00:00.000Z');
     } finally {
@@ -504,9 +504,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       await runnerStarted.promise;
       await Promise.resolve();
       const rerunSnapshots = snapshots.filter((snapshot) =>
-        ['queued', 'starting', 'running'].includes(
-          snapshot.calls[0]?.status ?? '',
-        ),
+        ['queued', 'running'].includes(snapshot.calls[0]?.status ?? ''),
       );
       const running = rerunSnapshots.find(
         (snapshot) => snapshot.calls[0]?.status === 'running',
@@ -533,13 +531,11 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       }
       expect(running?.timestamps).toEqual({
         createdAt: prior.timestamps.createdAt,
-        queuedAt: '2026-03-02T00:00:00.000Z',
         startedAt: '2026-03-02T00:00:00.000Z',
         updatedAt: '2026-03-02T00:00:00.000Z',
       });
       expect(call.timestamps).toEqual({
         createdAt: prior.timestamps.createdAt,
-        queuedAt: '2026-03-02T00:00:00.000Z',
         startedAt: '2026-03-02T00:00:00.000Z',
         updatedAt: '2026-03-02T00:00:00.000Z',
         completedAt: '2026-03-02T00:00:00.000Z',
