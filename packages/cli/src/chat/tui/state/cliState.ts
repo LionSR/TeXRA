@@ -19,7 +19,6 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
 import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
@@ -36,25 +35,6 @@ import type { PastedImageEntry } from '../input/draftAttachments';
 // `progressState` shape — same primitives (`@lit-labs/signals`), same shape
 // (one record per stream + an `activeStreamId`) so future feature parity is a
 // port, not a rewrite.
-
-/** Resolve the current workflow attempt from session state, with a legacy transcript fallback. */
-export function currentWorkflowAttemptId(
-  declaredAttemptId: string | undefined,
-  rows: readonly TranscriptRow[],
-  boundaryDeclared: boolean,
-): string | null | undefined {
-  if (boundaryDeclared) return declaredAttemptId ?? null;
-  return (
-    declaredAttemptId ??
-    latestWorkflowAttemptId(
-      rows.map((row) => {
-        if (row.kind === 'workflowTask') return row.call.attemptId;
-        if (row.kind === 'phase') return row.attemptId;
-        return undefined;
-      }),
-    )
-  );
-}
 
 /**
  * One transcript-projection candidate: a rendered row plus the ordering key
@@ -185,10 +165,6 @@ export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
-  /** Latest physical workflow attempt declared by the durable stream. */
-  readonly workflowAttemptId?: string | undefined;
-  /** Whether the stream declared an attempt boundary, valid or malformed. */
-  readonly workflowAttemptBoundaryDeclared: boolean;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
   /** Run-window start mirrored verbatim from the `status` fact — the session
@@ -243,8 +219,6 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     runStartedAt: undefined,
     latestLine: undefined,
     taskGroups: [],
-    workflowAttemptId: undefined,
-    workflowAttemptBoundaryDeclared: false,
     thinkingActive: false,
     compactingActive: false,
     usage: undefined,

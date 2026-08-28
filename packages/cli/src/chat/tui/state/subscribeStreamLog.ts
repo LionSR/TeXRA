@@ -458,9 +458,6 @@ export function syncStreamLog(
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
-      slice.workflowAttemptId === state.workflowAttemptId &&
-      slice.workflowAttemptBoundaryDeclared ===
-        state.workflowAttemptBoundaryDeclared &&
       slice.taskGroups === taskGroups
     ) {
       return slice;
@@ -473,8 +470,6 @@ export function syncStreamLog(
       finalizedFrontier,
       thinkingActive,
       compactingActive,
-      workflowAttemptId: state.workflowAttemptId,
-      workflowAttemptBoundaryDeclared: state.workflowAttemptBoundaryDeclared,
       taskGroups,
     };
   });

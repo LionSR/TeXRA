@@ -112,7 +112,8 @@ function equalLines(
   );
 }
 
-function formatAgentProposalFileGroup(
+/** `label: a, b, +N more`, bounded to `maxFiles` names. */
+export function formatAgentProposalFileGroup(
   label: string,
   files: readonly string[],
   maxFiles = AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,

@@ -94,11 +94,11 @@ describe('CLI agent proposal approval layout', () => {
       },
     } as AgentProposalPermission;
 
-    // name/plan · defaults · cost warning · plan-label note (wraps once) ·
-    // script path.
+    // margin · name/plan · defaults · cost warning · plan-label note (wraps
+    // once) · script path.
     expect(
       agentProposalMetadataRows({ fileGroups: [], payload, width: 76 }),
-    ).toBe(6);
+    ).toBe(7);
   });
 
   it('includes the pulse prefix when a dynamic proposal title reaches the width boundary', () => {

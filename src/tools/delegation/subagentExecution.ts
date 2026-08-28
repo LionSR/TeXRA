@@ -185,18 +185,20 @@ export async function executeSubagent(
   const executionId = generateExecutionId();
   const startedAt = Date.now();
   const config = AgentConfigSchema.parse(childConfigPayload);
+  const isToolUse = config.agentCategory === AgentCategory.ToolUse;
+  // One decision for the child's follow-up capability: the roster row it
+  // registers under and the run it launches must agree.
+  const userFollowUpSupport = isToolUse
+    ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
+    : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   const { childStreamId } = await registerChildExecution({
     executionId,
     config,
     agentName,
-    userFollowUpSupport:
-      config.agentCategory === AgentCategory.ToolUse
-        ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-        : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    userFollowUpSupport,
     parentExecutionId,
   });
 
-  const isToolUse = config.agentCategory === AgentCategory.ToolUse;
   const strategyParams = {
     config,
     agentCategoryExplicit: childConfigPayload.agentCategory !== undefined,
@@ -211,6 +213,7 @@ export async function executeSubagent(
     onApprovalPolicyDenial: parentContext.onApprovalPolicyDenial,
     runtimeUnavailableTools: parentContext.runtimeUnavailableTools,
     onStreamResolved: inheritChildStreamApprovals,
+    userFollowUpSupport,
   };
 
   await startDetachedChildRunLoop({

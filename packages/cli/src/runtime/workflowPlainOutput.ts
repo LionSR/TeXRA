@@ -1,5 +1,6 @@
 import type { AgentEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime';
+import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   MESSAGE_TYPES,
   STREAM_PHASE,
@@ -8,10 +9,11 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import {
+  formatWorkflowCallLine,
+  formatWorkflowPhaseHeading,
+} from '@shared/copy/workflowCall';
 import { assertNever } from '@utils/core';
-
-import { formatCliWorkflowCallLine } from './workflowCallText';
 
 const WORKFLOW_PLAIN_EVENT_TYPES = [
   'run.start',
@@ -42,7 +44,6 @@ function createWorkflowStreamProjection(
   agentName: string,
   options: WorkflowPlainOutputOptions,
 ): WorkflowStreamProjection {
-  const openedPhases = new Set<string>();
   const lastCallLines = new Map<string, string>();
   let completed = false;
 
@@ -51,7 +52,13 @@ function createWorkflowStreamProjection(
     options.writeLine(line);
   };
   const writeCall = (logId: string, call: WorkflowCallProgress): void => {
-    const line = formatCliWorkflowCallLine(call);
+    // The event carries the canonical model id; the line names it by its
+    // runtime label, as the transcript projection does.
+    const line = formatWorkflowCallLine(
+      'model' in call && call.model !== undefined
+        ? { ...call, model: getRuntimeModelLabel(call.model) }
+        : call,
+    );
     if (lastCallLines.get(logId) === line) return;
     lastCallLines.set(logId, line);
     write(line);
@@ -59,9 +66,6 @@ function createWorkflowStreamProjection(
   const openPhase = (
     phase: Extract<AgentEvent, { type: 'stage.start' }>,
   ): void => {
-    const stageId = phase.id;
-    if (openedPhases.has(stageId)) return;
-    openedPhases.add(stageId);
     write(
       `◆ ${formatWorkflowPhaseHeading({
         phaseLabel: phase.label,

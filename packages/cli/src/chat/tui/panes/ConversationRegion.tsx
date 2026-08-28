@@ -69,6 +69,9 @@ interface ConversationRegionSnapshot {
   readonly selectedChildValue: ChildListValue | undefined;
   /** Stream `selectedChildValue` points at, resolved once by `App`. */
   readonly selectedChildStreamId: StreamTabId | undefined;
+  /** Whether that stream is a skip/retry-able workflow-script grandchild —
+   *  the fact the status bar's `s`/`r` hint reads. */
+  readonly selectedChildWorkflowControllable: boolean;
   /** Dashboard rows for a workflow-script list root, derived once by `App`. */
   readonly workflowDashboard: WorkflowDashboardModel | undefined;
   readonly workflowDashboardRootHasApproval: boolean;
@@ -296,6 +299,9 @@ export function ConversationRegion({
               listRootStreamId={snapshot.childListTarget.streamId}
               dashboard={snapshot.workflowDashboard}
               selectedChildStreamId={snapshot.selectedChildStreamId}
+              selectedChildWorkflowControllable={
+                snapshot.selectedChildWorkflowControllable
+              }
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               streams={snapshot.streams}

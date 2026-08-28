@@ -23,9 +23,10 @@ export const DELEGATION_TOOLS: ReadonlySet<string> = new Set(
 );
 
 /**
- * Maps each proposal-bearing delegation tool to the agent category it launches.
- * Single source of truth for routing raw delegation tool input to the matching
- * proposal schema.
+ * Maps each delegation tool whose input is a child run config to the agent
+ * category it launches. Single source of truth for routing raw delegation tool
+ * input to the matching proposal schema. `delegate_multi_agents` is absent on
+ * purpose: it runs a saved script and has no run config to restore.
  */
 export const DELEGATION_TOOL_CATEGORY: Readonly<Record<string, AgentCategory>> =
   {
