@@ -8,7 +8,7 @@ import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 /** Result-contract label of one issued call, shared by every host. */
-export const WORKFLOW_CALL_KIND_LABEL = {
+const WORKFLOW_CALL_KIND_LABEL = {
   document: 'Document',
   structured: 'Structured',
 } as const satisfies Record<WorkflowCallKind, string>;
@@ -21,7 +21,7 @@ const CALL_FILE_PREVIEW_LIMIT = 3;
  * along. Empty for a declared plan label and for a structured call, which by
  * contract carries no files.
  */
-export function formatWorkflowCallFiles(
+function formatWorkflowCallFiles(
   files: WorkflowCallProgress['files'],
 ): string | undefined {
   if (!files) return undefined;
