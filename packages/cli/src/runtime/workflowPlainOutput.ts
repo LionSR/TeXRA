@@ -78,8 +78,10 @@ function createWorkflowStreamProjection(
     // later cards that only resolve the model or the navigation target say
     // nothing new to a log reader.
     if (call.status === 'running') {
-      if (runningCalls.has(logId)) return;
-      runningCalls.add(logId);
+      // Keyed by attempt: a retried call runs again under the same log id.
+      const attemptKey = `${logId}#${call.attemptNumber ?? 1}`;
+      if (runningCalls.has(attemptKey)) return;
+      runningCalls.add(attemptKey);
     }
     // The event carries the canonical model id; the line names it by its
     // runtime label, as the transcript projection does.
