@@ -322,11 +322,16 @@ export class ModelHandlerOpenAI<
         : { max_tokens: effectiveMaxTokens }),
     };
 
-    if (this.configuresEndTagStopSequence) {
-      if (endTag) {
-        baseParams.stop = [endTag];
-      }
+    // Only the o-series rejects `temperature`. Grok reasoning models take it
+    // (they reject `stop`, which is what configuresEndTagStopSequence is for),
+    // so the two decisions no longer ride on one flag — c70dd4cc96 widened the
+    // stop guard and dropped temperature for xAI as collateral.
+    if (!this.isOReasoningModel) {
       baseParams.temperature = temperature;
+    }
+
+    if (this.configuresEndTagStopSequence && endTag) {
+      baseParams.stop = [endTag];
     }
 
     const reasoningEffort = this.getReasoningEffortParameter();

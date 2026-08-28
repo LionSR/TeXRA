@@ -601,16 +601,21 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (response.usage?.input_tokens) {
       this.chainState.setCumulativeInputTokens(response.usage.input_tokens);
     } else {
-      // Not silent degradation: the chain anchor was already refused above
-      // (hasInputTokens gates safeToChain), this records that the context
-      // baseline could not be advanced for this turn.
+      // Reached when usage is absent OR input_tokens is 0 — deliberately a
+      // truthiness check, not the `hasInputTokens` typeof check above: a zero
+      // is a baseline that cannot be advanced, not a chain anchor to refuse.
+      // The previous cumulativeInputTokens is carried forward on purpose (see
+      // the invalidateChain rationale above), so a proxy that zeroes usage
+      // can't disable compaction — canCompactRoute() requires it to be > 0.
+      // Not silent degradation: the fact is recorded here with the raw value.
       this.logger.debug(
-        'Response usage missing input_tokens; context usage not tracked',
+        'Response usage missing or zero input_tokens; compaction baseline carried forward',
         {
           data: {
             responseId: response.id,
             responseStatus: response.status,
             hasUsage: !!response.usage,
+            inputTokens: response.usage?.input_tokens,
           },
         },
       );
@@ -1167,8 +1172,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       ? 'system'
       : 'user';
 
-    if (requestRole === 'user' && messages.length > 0) {
-      this.appendInputText(messages.at(-1)!, userRequest);
+    if (requestRole === 'user') {
+      userContent.push(createInputText(userRequest));
     } else {
       const requestMessage: ResponseInputItem.Message = {
         type: 'message',
@@ -2808,26 +2813,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // undefined.
     const text = contentToText(message.content, '');
     return text.length > 0 ? text : undefined;
-  }
-
-  private appendInputText(message: ResponseInputItem, text: string): void {
-    if (!isMessageItem(message)) {
-      return;
-    }
-
-    const content = message.content;
-
-    if (Array.isArray(content)) {
-      content.push(createInputText(text));
-      return;
-    }
-
-    if (typeof content === 'string') {
-      message.content = [createInputText(content), createInputText(text)];
-      return;
-    }
-
-    message.content = [createInputText(text)];
   }
 
   private appendAssistantText(

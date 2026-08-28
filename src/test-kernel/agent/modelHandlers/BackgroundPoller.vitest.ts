@@ -65,6 +65,7 @@ describe('BackgroundPoller', () => {
       retrieve: vi.fn(),
       extractId,
       extractStatus,
+      deadlineAtMs: Date.now() + 1000,
       providerLabel: 'OpenAI',
     });
 
@@ -85,6 +86,8 @@ describe('BackgroundPoller', () => {
         retrieve: vi.fn(),
         extractId,
         extractStatus,
+        // Already expired: mirrors the configured maxDurationMs of -1.
+        deadlineAtMs: Date.now() - 1,
         providerLabel: 'OpenAI',
         formatTimeoutError: ({ responseId, maxDurationMs }) =>
           `Cancel ${responseId} after ${maxDurationMs} ms with provider API.`,
@@ -207,7 +210,7 @@ describe('BackgroundPoller', () => {
     },
   );
 
-  it('times out the default poller exactly at its duration boundary', async () => {
+  it('times out exactly at the duration boundary', async () => {
     vi.useFakeTimers({ now: FROZEN_NOW });
     const retrieve = vi.fn(async () => ({
       id: 'resp-boundary',
@@ -220,6 +223,7 @@ describe('BackgroundPoller', () => {
       retrieve,
       extractId,
       extractStatus,
+      deadlineAtMs: Date.now(),
     });
     const rejection = expect(polling).rejects.toThrow(
       'exceeded maximum polling duration',
@@ -245,6 +249,7 @@ describe('BackgroundPoller', () => {
       extractId,
       extractStatus,
       signal: controller.signal,
+      deadlineAtMs: Date.now() + 10_000,
       providerLabel: 'Google Interactions',
       resourceLabel: 'interaction',
     });
@@ -277,6 +282,7 @@ describe('BackgroundPoller', () => {
       })),
       extractId,
       extractStatus,
+      deadlineAtMs: Date.now() + 1000,
       providerLabel: 'OpenAI',
       extraFinishData: (response) => ({ usage: response.usage }),
       onFinished: (_response, stats) => {
