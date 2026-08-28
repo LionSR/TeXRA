@@ -93,6 +93,9 @@ export function formatWorkflowCallMetadataParts(
     call.kind === undefined ? undefined : WORKFLOW_CALL_KIND_LABEL[call.kind],
     call.agent,
     call.model,
+    call.attemptNumber === undefined
+      ? undefined
+      : `attempt ${call.attemptNumber}`,
     formatWorkflowCallFiles(call.files),
     terminal && call.durationMs !== undefined
       ? formatCompactDuration(call.durationMs)

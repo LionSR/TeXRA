@@ -71,6 +71,63 @@ export const groupStyles = css`
     margin-inline-start: var(--wa-space-2xs);
   }
 
+  .group-progress--failed {
+    color: var(--color-error);
+  }
+
+  /* One dot per call: what a phase holds, at a glance. */
+  .group-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-inline-start: var(--wa-space-xs);
+  }
+
+  .group-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--wa-color-surface-border);
+  }
+
+  .group-dot--awaitingApproval {
+    background: var(--wa-color-warning-border-loud);
+  }
+
+  .group-dot--running {
+    background: var(--wa-color-focus);
+  }
+
+  .group-dot--completed,
+  .group-dot--cached {
+    background: var(--color-success);
+  }
+
+  .group-dot--failed {
+    background: var(--color-error);
+  }
+
+  .group-dot--skipped,
+  .group-dot--cancelled {
+    background: transparent;
+    border: 1px solid var(--wa-color-surface-border);
+  }
+
+  .group-dots-more {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .log-run-band {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    border-block-end: var(--border-thin) solid var(--wa-color-surface-border);
+  }
+
   .group-time {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);
