@@ -377,8 +377,10 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write('\t');
+      // The panel heading tallies the run; the phase row tallies its phase.
+      await waitFor(() => stdout.output.includes('workflow · 0/2 done'));
       await waitFor(() =>
-        stdout.output.includes('workflow · Map (1/1) · 0/2 done'),
+        stdout.output.includes('Map (1/1) · 0/2 · 2 running'),
       );
       stdin.write('\r');
       await waitFor(() => stdout.output.includes('Inspect · Running'));

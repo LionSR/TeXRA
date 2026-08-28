@@ -14,7 +14,11 @@ import {
   uniqueWorkflowChildStreamId,
   workflowDashboardModel,
 } from '@cli/chat/tui/state/workflowDashboardModel';
-import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
+import {
+  type StreamTabId,
+  type TaskGroup,
+  type WorkflowCallProgress,
+} from '@shared/schemas';
 import type { TranscriptRow, TranscriptRowOf } from '@shared/transcript';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
@@ -34,20 +38,17 @@ interface TaskSpec {
   readonly childStreamId?: StreamTabId;
 }
 
-function phaseRow(
-  phaseLabel: string,
-  phaseIndex: number,
-  phaseTotal: number,
-): TranscriptRowOf<'phase'> {
+/** A phase as the run's own lifecycle rows record it — the container both
+ *  hosts group by. */
+function phaseGroup(name: string, index: number, total: number): TaskGroup {
   return {
+    id: `phase-${name}`,
+    name,
+    startTime: 0,
+    status: 'running',
     kind: 'phase',
-    id: `phase-${phaseLabel}`,
-    timestamp: 0,
-    level: 'info',
-    heading: phaseLabel,
-    phaseLabel,
-    phaseIndex,
-    phaseTotal,
+    index,
+    total,
   };
 }
 
@@ -66,6 +67,7 @@ function taskRow(task: TaskSpec): TranscriptRowOf<'workflowTask'> {
     id: `task-${task.id}`,
     timestamp: 0,
     level: 'info',
+    ...(task.phase === undefined ? {} : { groupId: `phase-${task.phase}` }),
     call,
     line: `Running: ${task.id}`,
     statusLabel: 'Running',
@@ -79,12 +81,10 @@ function workflowRoot(
 ): StreamSlice {
   return {
     ...emptySlice(ROOT),
-    entries: [
-      ...phases.map((phaseLabel, phaseIndex) =>
-        phaseRow(phaseLabel, phaseIndex, phases.length),
-      ),
-      ...tasks.map(taskRow),
-    ],
+    taskGroups: phases.map((name, index) =>
+      phaseGroup(name, index, phases.length),
+    ),
+    entries: tasks.map(taskRow),
   };
 }
 
@@ -185,10 +185,9 @@ describe('workflow dashboard model', () => {
   it('orders phase rows by first appearance and task rows by transcript order', () => {
     const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
 
-    expect(model.groups.map((group) => group.label)).toStrictEqual([
-      'Map',
-      'Reduce',
-    ]);
+    expect(model.groups.map((group) => group.heading.phaseLabel)).toStrictEqual(
+      ['Map', 'Reduce'],
+    );
     expect(model.tasks.map((entry) => entry.call.label)).toStrictEqual([
       'inspect',
       'extract',
@@ -238,88 +237,48 @@ describe('workflow dashboard model', () => {
     ).toBeUndefined();
   });
 
-  it('uses the latest heading facts when a rerun retains a phase label', () => {
+  it('reads a phase heading from its task group, closed or open', () => {
+    // The shared task-group projection already carries index/total across a
+    // `GROUP_END` upsert, so the dashboard has no counts of its own to inherit.
     const root = workflowRoot(
       ['Verify'],
       [{ id: 'verification', phase: 'Verify' }],
     );
-    const currentHeading: TranscriptRowOf<'phase'> = {
-      kind: 'phase',
-      id: 'phase-verify-current',
-      timestamp: 0,
-      level: 'info',
-      heading: 'Verify',
-      phaseLabel: 'Verify',
-      phaseIndex: 2,
-      phaseTotal: 3,
-      attemptId: 'current',
+    const closed: TaskGroup = {
+      ...root.taskGroups[0]!,
+      status: 'completed',
+      endTime: 5,
     };
 
-    const model = workflowDashboardModel(
-      { ...root, entries: [...root.entries, currentHeading] },
-      WIDE_COLUMNS,
-    );
-
-    expect(model.groups[0]?.heading).toStrictEqual({
-      phaseLabel: 'Verify',
-      phaseIndex: 2,
-      phaseTotal: 3,
-    });
-  });
-
-  it('fills only the heading count omitted by the latest phase row', () => {
-    const root = workflowRoot(
-      ['Verify'],
-      [{ id: 'verification', phase: 'Verify' }],
-    );
-    const currentHeading: TranscriptRowOf<'phase'> = {
-      kind: 'phase',
-      id: 'phase-verify-partial',
-      timestamp: 0,
-      level: 'info',
-      heading: 'Verify',
-      phaseLabel: 'Verify',
-      phaseIndex: 2,
-    };
-
-    const model = workflowDashboardModel(
-      { ...root, entries: [...root.entries, currentHeading] },
-      WIDE_COLUMNS,
-    );
-
-    expect(model.groups[0]?.heading).toMatchObject({
-      phaseIndex: 2,
-      phaseTotal: 1,
-    });
+    expect(
+      workflowDashboardModel(root, WIDE_COLUMNS).groups[0]?.heading,
+    ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });
+    expect(
+      workflowDashboardModel({ ...root, taskGroups: [closed] }, WIDE_COLUMNS)
+        .groups[0]?.heading,
+    ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });
   });
 
   it('renders a current empty dynamic phase', async () => {
     const root = workflowRoot([], []);
-    const currentPhase: TranscriptRowOf<'phase'> = {
-      kind: 'phase',
+    // A phase the script opened dynamically carries no declared position.
+    const currentPhase: TaskGroup = {
       id: 'phase-current',
-      timestamp: 0,
-      level: 'info',
-      heading: 'Explore',
-      phaseLabel: 'Explore',
-      attemptId: 'current',
+      name: 'Explore',
+      startTime: 0,
+      status: 'running',
+      kind: 'phase',
     };
+    const withPhase = { ...root, taskGroups: [currentPhase] };
 
-    const model = workflowDashboardModel(
-      { ...root, entries: [currentPhase] },
-      WIDE_COLUMNS,
-    );
+    const model = workflowDashboardModel(withPhase, WIDE_COLUMNS);
 
     expect(model.groups).toHaveLength(1);
     expect(model.groups[0]).toMatchObject({
-      label: 'Explore',
       heading: { phaseLabel: 'Explore' },
       tasks: [],
     });
-    const narrowModel = workflowDashboardModel(
-      { ...root, entries: [currentPhase] },
-      NARROW_COLUMNS,
-    );
+    const narrowModel = workflowDashboardModel(withPhase, NARROW_COLUMNS);
     expect(narrowModel.listValues).toStrictEqual([
       narrowModel.groups[0]?.value,
     ]);
@@ -339,7 +298,8 @@ describe('workflow dashboard model', () => {
     );
     try {
       await waitFor(() => stdout.output.includes('Explore · 0/0'));
-      expect(stdout.output).toContain('Workflow · Explore · 0/0 done');
+      // The panel heading counts the run; the phase row counts the phase.
+      expect(stdout.output).toContain('Workflow · 0/0 done');
     } finally {
       instance.unmount();
     }

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### CLI
+
+#### Improvements
+
+- **The terminal shows the same run the progress view does** — a workflow
+  agent's transcript no longer hides its reasoning, replies, and prompts, a
+  relaunched workflow keeps its earlier attempt on screen as a closed group,
+  and phases are the phases the run actually opened rather than rows grouped by
+  a repeated label.
+- **Workflow dashboard rows read like the board's** — each phase shows
+  `done/total · N running · N failed` plus one marker per call, the panel
+  heading's tally is labelled as the whole run, a call's status word no longer
+  gets clipped by its metadata, and phase and task rows line up in one column.
+
 ## [0.40.5] - 2026-08-26
 
 ### Shared (all surfaces)

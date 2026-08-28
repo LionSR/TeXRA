@@ -12,6 +12,7 @@
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   TOOL_USE_STATUS,
   type FileListEntry,
   type NormalizedToolUse,
@@ -169,4 +170,46 @@ export function projectTaskGroupsFromStreamLog(
     upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
   }
   return taskGroups;
+}
+
+/**
+ * A workflow root's rows as its own run emits them: phase divider rows in
+ * emission order, each call carrying the phase it was issued in.
+ *
+ * The recorder records the open phase stage as a task group and stamps that
+ * stage's id onto the calls issued inside it, and both hosts group calls by
+ * that `groupId`. Deriving both here lets a fixture state a phase once. A call
+ * whose declared phase is not the open one carries no group, exactly as a
+ * stage-blocked call does.
+ */
+export function workflowPhaseGrouping(rows: readonly TranscriptRow[]): {
+  readonly taskGroups: TaskGroup[];
+  readonly entries: TranscriptRow[];
+} {
+  const taskGroups: TaskGroup[] = [];
+  let openPhase: TranscriptRowOf<'phase'> | undefined;
+  const entries = rows.map((row) => {
+    if (row.kind === 'phase') {
+      openPhase = row;
+      taskGroups.push({
+        id: row.id,
+        name: row.phaseLabel,
+        startTime: row.timestamp,
+        status: STREAM_PHASE.RUNNING,
+        kind: 'phase',
+        ...(row.phaseIndex !== undefined ? { index: row.phaseIndex } : {}),
+        ...(row.phaseTotal !== undefined ? { total: row.phaseTotal } : {}),
+      });
+      return row;
+    }
+    if (
+      row.kind !== 'workflowTask' ||
+      openPhase === undefined ||
+      row.call.phase !== openPhase.phaseLabel
+    ) {
+      return row;
+    }
+    return { ...row, groupId: openPhase.id };
+  });
+  return { taskGroups, entries };
 }

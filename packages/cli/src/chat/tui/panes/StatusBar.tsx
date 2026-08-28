@@ -40,7 +40,7 @@ import {
   visibleSubagentRows,
 } from '../state/childExecutions';
 import { streamLabelForId } from '../state/streamViews';
-import { ancestorWorkflowPhaseHeading } from '../state/workflowPhase';
+import { ancestorWorkflowPhaseLabel } from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -277,12 +277,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const focusedPhaseHeading =
     focusedStreamId === undefined
       ? undefined
-      : ancestorWorkflowPhaseHeading({
+      : ancestorWorkflowPhaseLabel({
           categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
+          stageOf: (id) => streamStateFor(id)?.stage,
           parentStream,
           streamId: focusedStreamId,
-          streams,
-        })?.heading;
+        });
 
   const display = buildStatusBarDisplay({
     status: statusSlice?.status,

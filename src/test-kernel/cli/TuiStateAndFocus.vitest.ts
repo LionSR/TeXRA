@@ -2252,17 +2252,17 @@ describe('CLI transcript state', () => {
     expect(transcriptRowHeadline(entries[0]!)).toBe('');
   });
 
-  it('tracks hidden thinking activity without rendering thinking text', () => {
+  it('follows the thinking row for the reasoning indicator', () => {
     const logger = runTrace(root);
     const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
 
-    // Opening the stream alone marks the phase — hidden reasoning (e.g.
-    // gpt-5 without summaries) may never produce a text delta.
+    // The indicator reads the transcript's own rows. An opened stream with no
+    // text delta yet (hidden reasoning — e.g. gpt-5 without summaries) has no
+    // row, so it lights nothing up until the first delta arrives.
     syncStreamLog(defaultSession(), root);
 
     let slice = streams.get().get(root);
-    expect(slice?.thinkingActive).toBe(true);
-    // An opened stream with no delta says nothing yet, so it has no row.
+    expect(slice?.thinkingActive).toBe(false);
     expect(slice?.entries).toEqual([]);
 
     thinking.append('private reasoning summary');
@@ -2291,7 +2291,7 @@ describe('CLI transcript state', () => {
     expect(entryTexts(root)).toEqual(['Thinking', 'Visible answer.']);
   });
 
-  it('projects workflow tools and errors while excluding thinking and raw model prose', () => {
+  it('projects the same rows on a workflow-agent stream as every other host', () => {
     markWorkflow(root);
     const logger = runTrace(root);
     const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
@@ -2333,18 +2333,23 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(defaultSession(), root);
 
+    // Membership is the shared projector's single allowlist: a workflow-agent
+    // stream withholds nothing the progress view would show. Which line the
+    // CLI's status chrome quotes is a separate, paint-time choice.
     const slice = streams.get().get(root);
     expect(slice?.entries.map(({ kind }) => kind)).toEqual([
+      'thinking',
+      'assistant',
       'tool',
       'error',
+      'user',
+      'assistant',
       'error',
     ]);
     expect(JSON.stringify(slice)).toContain('workflow provider failed');
     expect(JSON.stringify(slice)).toContain('synthetic workflow error');
-    expect(JSON.stringify(slice)).not.toContain('private workflow reasoning');
-    expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
-    expect(JSON.stringify(slice)).not.toContain('synthetic workflow prompt');
-    expect(JSON.stringify(slice)).not.toContain('synthetic workflow response');
+    expect(JSON.stringify(slice)).toContain('private workflow reasoning');
+    expect(JSON.stringify(slice)).toContain('raw workflow model response');
     expect(slice?.latestLine).toBe('synthetic workflow error');
   });
 
@@ -2368,14 +2373,15 @@ describe('CLI transcript state', () => {
     expect(slice?.latestLine).not.toContain('\u001b');
     expect(slice?.latestLine).not.toContain('\u0007');
     expect(slice?.entries).toMatchObject([
+      { kind: 'user', messageType: MESSAGE_TYPES.USER_MESSAGE },
       { kind: 'log', messageType: MESSAGE_TYPES.DEFAULT },
+      { kind: 'assistant', messageType: MESSAGE_TYPES.MODEL_RESPONSE },
     ]);
     expect(entryTexts(child1)).toEqual([
+      'workflow prompt',
       'Preparing proof audit API_KEY=[redacted]',
-    ]);
-    expect(JSON.stringify(slice?.entries)).not.toContain(
       'raw workflow model response',
-    );
+    ]);
 
     logToolUse(logger, {
       toolName: 'bash',
@@ -2416,21 +2422,21 @@ describe('CLI transcript state', () => {
     slice = streams.get().get(child1);
     expect(slice?.latestLine).toBe('Proof audit failed');
     expect(slice?.entries.map(({ kind }) => kind)).toEqual([
+      'user',
       'log',
+      'assistant',
       'tool',
       'tool',
       'phase',
       'error',
     ]);
-    expect(JSON.stringify(slice)).not.toContain('workflow prompt');
     // The ordinary log line survives the later rows, and it still paints
     // safely: terminal control sequences are stripped by the headline the
     // painter reads, not stored pre-stripped on the row.
-    expect(entryTexts(child1)[0]).toBe(
+    expect(entryTexts(child1)[1]).toBe(
       'Preparing proof audit API_KEY=[redacted]',
     );
     expect(JSON.stringify(slice)).not.toContain(secret);
-    expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
   });
 
   it('updates dormant workflow summaries while retaining only dashboard rows', () => {
@@ -2493,7 +2499,12 @@ describe('CLI transcript state', () => {
         },
       ],
     });
-    expect(JSON.stringify(slice)).not.toContain('raw dormant workflow prose');
+    // The compact selection an unfocused workflow keeps is a residency cap on
+    // what the dashboard paints, not a membership rule: the full transcript is
+    // still folded behind it and comes back when the stream is focused.
+    expect(JSON.stringify(slice?.entries)).not.toContain(
+      'raw dormant workflow prose',
+    );
   });
 
   it('bounds dormant workflow dashboard rows while preserving source order', () => {

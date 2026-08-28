@@ -85,7 +85,7 @@ interface StreamConfig {
 
 const CONFIGS: readonly StreamConfig[] = [
   { name: 'tool-use transcript', category: AgentCategory.ToolUse },
-  { name: 'workflow operational feed', category: AgentCategory.Workflow },
+  { name: 'workflow agent transcript', category: AgentCategory.Workflow },
   {
     name: 'workflow full-log child',
     category: AgentCategory.Workflow,
@@ -503,71 +503,31 @@ describe('transcript fold vs from-scratch oracle', () => {
     });
   });
 
-  it('folds a hidden workflow-attempt marker into projection state', () => {
+  it("keeps a relaunched workflow's prior attempt as a closed group", () => {
+    // Parity with the progress view: a relaunch appends a fresh attempt's
+    // rows, and the board keeps the previous attempt's cards on screen (each
+    // relaunch carries fresh stage ids and fresh `workflow-task-*` log ids, so
+    // nothing is double-counted). The terminal shows the same rows. The
+    // attempt marker itself is an `internal` entry, which the shared projector
+    // gives no row on either host.
     withStreamSubscription(() => {
-      configureStreams(CONFIGS[1]);
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-current',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'current-attempt' },
-      });
+      const attemptMarker = (
+        id: string,
+        attemptId: string,
+        timestamp: number,
+      ) =>
+        appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+          id,
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp,
+          messageType: MESSAGE_TYPES.INTERNAL,
+          text: '',
+          data: { kind: 'workflowAttempt', attemptId },
+        });
 
-      syncStreamLog(defaultSession(), FOLD_STREAM);
-
-      const slice = streams.get().get(FOLD_STREAM);
-      expect(slice?.transcriptFold?.workflowAttemptId).toBe('current-attempt');
-      expect(slice?.transcriptFold?.workflowAttemptBoundaryDeclared).toBe(true);
-      expect(slice?.entries).toEqual([]);
-
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'unrelated-internal',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 2,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'otherInternalRecord' },
-      });
-      syncStreamLog(defaultSession(), FOLD_STREAM);
-      expect(
-        streams.get().get(FOLD_STREAM)?.transcriptFold?.workflowAttemptId,
-      ).toBe('current-attempt');
-
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-malformed',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 3,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: '' },
-      });
-      syncStreamLog(defaultSession(), FOLD_STREAM);
-      const invalidSlice = streams.get().get(FOLD_STREAM);
-      expect(invalidSlice?.transcriptFold?.workflowAttemptId).toBeUndefined();
-      expect(
-        invalidSlice?.transcriptFold?.workflowAttemptBoundaryDeclared,
-      ).toBe(true);
-      expect(invalidSlice?.entries).toEqual([]);
-    });
-  });
-
-  it('evicts a failed prior attempt when a new workflow attempt starts', () => {
-    withStreamSubscription(() => {
       configureStreams(CONFIGS[2]);
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-old',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'attempt-old' },
-      });
+      attemptMarker('workflow-attempt-old', 'attempt-old', 1);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'old-failed',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -597,17 +557,9 @@ describe('transcript fold vs from-scratch oracle', () => {
           .get()
           .get(FOLD_STREAM)
           ?.entries.map((entry) => entry.id),
-      ).toEqual(expect.arrayContaining(['old-failed', 'survey-complete-old']));
+      ).toEqual(['old-failed', 'survey-complete-old']);
 
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-new',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 4,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'attempt-new' },
-      });
+      attemptMarker('workflow-attempt-new', 'attempt-new', 4);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'new-running',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -624,14 +576,12 @@ describe('transcript fold vs from-scratch oracle', () => {
       });
       syncStreamLog(defaultSession(), FOLD_STREAM);
 
-      const ids =
+      expect(
         streams
           .get()
           .get(FOLD_STREAM)
-          ?.entries.map((entry) => entry.id) ?? [];
-      expect(ids).not.toContain('old-failed');
-      expect(ids).not.toContain('survey-complete-old');
-      expect(ids).toContain('new-running');
+          ?.entries.map((entry) => entry.id),
+      ).toEqual(['old-failed', 'survey-complete-old', 'new-running']);
     });
   });
 

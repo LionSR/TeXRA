@@ -33,7 +33,6 @@ import {
   formatWorkflowPhaseHeading,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
-  type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
@@ -77,7 +76,10 @@ import {
   CHILD_STATUS_MARKER,
   childRowMetadataText,
   childStatusColor,
+  dashboardMarkerCell,
   pendingApprovalRowDisplay,
+  workflowPhaseStatusStrip,
+  workflowPhaseTallyText,
 } from './SubagentListDisplay';
 import { useSignal } from '../state/useSignal';
 import type { PendingApprovalKind } from '../state/approvalQueue';
@@ -86,28 +88,65 @@ import type { StreamView } from '../state/streamViews';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
-interface PhaseHeaderDetails extends WorkflowPhaseHeading {
-  readonly progress?: string;
-}
-
+/**
+ * One phase row of the dashboard, in both layouts: name, the phase's own
+ * `done/total · N running · N failed`, and one glyph per issued call — the
+ * same three things the progress view's phase header shows, folded from the
+ * same call cards. The tally reads as the phase because the phase names it;
+ * the panel heading's tally reads as the run for the same reason.
+ *
+ * The marker cell is shared with the task rows, so a phase and the tasks under
+ * it start their text in the same screen column whether or not the row is
+ * focused.
+ */
 function PhaseHeader({
-  details,
+  group,
   focused = false,
+  showStatusStrip,
 }: {
-  readonly details: PhaseHeaderDetails;
+  readonly group: WorkflowPhaseGroup;
   readonly focused?: boolean;
+  /** The strip is the phase row's own account of its calls, so it belongs to
+   *  the full-width list. The two-column layout paints one marker per call in
+   *  the task column beside it and gives the narrow phase column to the name. */
+  readonly showStatusStrip: boolean;
 }): React.JSX.Element {
-  const inlineProgress = details.progress ? ` · ${details.progress}` : '';
+  const calls = group.tasks.map((entry) => entry.call);
+  const strip = showStatusStrip ? workflowPhaseStatusStrip(calls) : undefined;
   return (
-    <Box flexDirection="row" flexGrow={1} minWidth={0}>
-      <Box minWidth={0} flexShrink={1}>
-        <Text aria-hidden dimColor>
-          {focused ? `${POINTER} ${STATUS_DIAMOND} ` : `    ${STATUS_DIAMOND} `}
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      height={1}
+      minWidth={0}
+      overflowY="hidden"
+    >
+      {/* One rigid gutter: Ink trims leading whitespace off a row it has to
+          wrap, so the pointer and marker only keep their columns while they
+          sit in a box that never shrinks. */}
+      <Box flexShrink={0}>
+        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
+          {focused ? POINTER : ' '}
         </Text>
-        <Text dimColor wrap="truncate-end">
-          {`${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
+        <Text aria-hidden dimColor>
+          {dashboardMarkerCell(STATUS_DIAMOND)}
         </Text>
       </Box>
+      <Box minWidth={0} flexShrink={1}>
+        <Text dimColor wrap="truncate-end">
+          {formatWorkflowPhaseHeading(group.heading)}
+        </Text>
+      </Box>
+      <Box minWidth={0} flexShrink={2}>
+        <Text dimColor wrap="truncate-end">
+          {` · ${workflowPhaseTallyText(calls)}`}
+        </Text>
+      </Box>
+      {strip ? (
+        <Box minWidth={0} flexShrink={3}>
+          <Text dimColor wrap="truncate-end">{` ${strip}`}</Text>
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -289,13 +328,24 @@ function WorkflowTaskRow({
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-        {focused ? POINTER : ' '}
-      </Text>
-      <Text aria-hidden color={style.color}>{` ${style.marker} `}</Text>
+      <Box flexShrink={0}>
+        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
+          {focused ? POINTER : ' '}
+        </Text>
+        <Text aria-hidden color={style.color}>
+          {dashboardMarkerCell(style.marker)}
+        </Text>
+      </Box>
+      <Box minWidth={0} flexShrink={1}>
+        <Text wrap="truncate-end">{entry.call.label}</Text>
+      </Box>
+      {/* The status word outranks the metadata column: it is its own segment
+          at the label's shrink weight, so a wide row sheds metadata (weight 2)
+          long before it clips `· Running`, instead of the two sharing one
+          truncating box where the status was always the half that was cut. */}
       <Box minWidth={0} flexShrink={1}>
         <Text wrap="truncate-end">
-          {entry.call.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}
+          {` · ${WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}`}
         </Text>
       </Box>
       {approval ? (
@@ -356,7 +406,7 @@ function WorkflowDashboard({
     }),
   );
   const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
-    label: group.label,
+    label: group.heading.phaseLabel,
     value: group.value,
   }));
   const taskItems: SelectItem<ChildListValue>[] = (
@@ -367,7 +417,7 @@ function WorkflowDashboard({
   }));
   const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
     {
-      label: group.label,
+      label: group.heading.phaseLabel,
       value: group.value,
       disabled: group.tasks.length > 0,
     },
@@ -417,19 +467,16 @@ function WorkflowDashboard({
   ) {
     return null;
   }
-  const headingPhase = activeGroup?.heading
-    ? formatWorkflowPhaseHeading(activeGroup.heading)
-    : undefined;
   // The heading leads with the run identity's display name — for a
   // multi-agent workflow root that is the workflow name, matching what the
-  // retired slice `agent` field carried from `run.config`.
+  // retired slice `agent` field carried from `run.config`. Its tally is the
+  // whole run's; each phase row carries its own, so the two numbers on screen
+  // are never the same number twice.
   const rootIdentity = streamMetadataFor(model.root.streamId)?.identity;
   const rootAgent = rootIdentity
     ? runIdentityDisplayName(rootIdentity)
     : undefined;
-  const heading = headingPhase
-    ? `${rootAgent ?? 'Workflow'} · ${headingPhase} · ${done}/${total} done`
-    : `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
+  const heading = `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
   const { failed } = workflowCallFailureTally(calls);
   const renderTask = (
     item: SelectItem<ChildListValue>,
@@ -455,15 +502,18 @@ function WorkflowDashboard({
       />
     );
   };
-  const groupDetails = (group: WorkflowPhaseGroup): PhaseHeaderDetails => {
-    const progress = workflowPhaseCallProgress(
-      group.tasks.map((entry) => entry.call),
-    );
-    return {
-      phaseLabel: group.label,
-      ...group.heading,
-      progress: `${progress.done}/${progress.total}`,
-    };
+  const renderPhase = (
+    item: SelectItem<ChildListValue>,
+    state: { readonly focused: boolean },
+  ): React.JSX.Element | null => {
+    const group = groupByValue.get(item.value);
+    return group ? (
+      <PhaseHeader
+        group={group}
+        focused={state.focused}
+        showStatusStrip={!wide}
+      />
+    ) : null;
   };
   const selectProps = {
     hotkeys: false,
@@ -512,7 +562,7 @@ function WorkflowDashboard({
       </Box>
       {wide ? (
         <Box flexDirection="row" height={contentRows} minWidth={0}>
-          <Box flexDirection="column" width="32%" paddingRight={1}>
+          <Box flexDirection="column" width="36%" paddingRight={1}>
             <Select
               {...selectProps}
               isActive={keyboardActive && selectedTask === undefined}
@@ -520,23 +570,10 @@ function WorkflowDashboard({
               items={phaseItems}
               onHighlightChange={(value) => onSelectionChange?.(value)}
               onSelect={enterPhase}
-              renderItem={(item, state) => {
-                const group = groupByValue.get(item.value);
-                if (!group) return null;
-                const details = groupDetails(group);
-                return (
-                  <Box minWidth={0}>
-                    <Text aria-hidden>{state.focused ? POINTER : ' '}</Text>
-                    <Text wrap="truncate-end">
-                      {' '}
-                      {formatWorkflowPhaseHeading(details)} · {details.progress}
-                    </Text>
-                  </Box>
-                );
-              }}
+              renderItem={renderPhase}
             />
           </Box>
-          <Box flexDirection="column" minWidth={0} width="68%">
+          <Box flexDirection="column" minWidth={0} width="64%">
             <Select
               {...selectProps}
               isActive={keyboardActive && selectedTask !== undefined}
@@ -556,17 +593,9 @@ function WorkflowDashboard({
           items={narrowItems}
           onHighlightChange={(value) => onSelectionChange?.(value)}
           onSelect={selectTask}
-          renderItem={(item, state) => {
-            const group = groupByValue.get(item.value);
-            return group ? (
-              <PhaseHeader
-                details={groupDetails(group)}
-                focused={state.focused}
-              />
-            ) : (
-              renderTask(item, state)
-            );
-          }}
+          renderItem={(item, state) =>
+            renderPhase(item, state) ?? renderTask(item, state)
+          }
         />
       )}
     </Box>
