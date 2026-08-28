@@ -113,6 +113,7 @@ function createHandlers(): AgentHandlers {
         warn: mocks.logWarn,
       },
       withActiveWebview: vi.fn(),
+      postMessageToActiveWebview: vi.fn(),
     },
     mocks.refreshAfterAgentMutation,
   );

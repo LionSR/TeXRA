@@ -19,8 +19,31 @@ export class SubscriptionUsageHttpError extends Error {
   }
 }
 
-export function assertSubscriptionUsageResponse(response: Response): void {
+function assertSubscriptionUsageResponse(response: Response): void {
   if (!response.ok) throw new SubscriptionUsageHttpError(response.status);
+}
+
+/**
+ * The one subscription-usage request every provider adapter makes. Only the
+ * URL and headers differ per provider, so the GET, the abort wiring, and the
+ * non-OK status assertion live here; the decoded body goes back to the
+ * adapter's own `parseX`.
+ */
+export async function fetchSubscriptionUsage(
+  http: SubscriptionUsageHttp,
+  request: {
+    readonly url: string;
+    readonly headers: Record<string, string>;
+    readonly signal: AbortSignal;
+  },
+): Promise<unknown> {
+  const response = await http(request.url, {
+    method: 'GET',
+    headers: request.headers,
+    signal: request.signal,
+  });
+  assertSubscriptionUsageResponse(response);
+  return response.json();
 }
 
 export function asObject(value: unknown): JsonObject | undefined {

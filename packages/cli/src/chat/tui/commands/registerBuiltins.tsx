@@ -457,40 +457,6 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
-  function MemoryListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <MemoryListForm
-        availableRows={props.availableRows}
-        onSelect={formSelectionHandler<string>({
-          action: (value) => options?.onMemorySelect?.(value),
-          onDone: props.onDone,
-          onError: options?.onError,
-          completion: 'beforeAction',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function ResumeListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <ResumeListForm
-        availableRows={props.availableRows}
-        onSelect={formSelectionHandler<ExecutionId>({
-          action: (id) => options?.onResumeSelect?.(id),
-          onDone: props.onDone,
-          onError: options?.onError,
-          completion: 'beforeAction',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  }
-
   function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <ToolsListForm
@@ -500,12 +466,22 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
-  function SkillsListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <SkillsListForm
+  // The plain list pickers differ only by their form and their selection
+  // action; the completion mode, error routing, and persistence plumbing are
+  // one shape, owned here rather than copied per command.
+  function makeSelectFormAdapter<T>(
+    Form: React.ComponentType<{
+      readonly availableRows?: number;
+      readonly onSelect: (value: T) => void;
+      readonly onClose: () => void;
+    }>,
+    action: (value: T) => FormActionResult,
+  ): React.ComponentType<SlashFormProps> {
+    return (props) => (
+      <Form
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<SkillActivation>({
-          action: (value) => options?.onSkillSelect?.(value),
+        onSelect={formSelectionHandler<T>({
+          action,
           onDone: props.onDone,
           onError: options?.onError,
           completion: 'beforeAction',
@@ -516,6 +492,19 @@ export function registerBuiltinSlashCommands(options?: {
       />
     );
   }
+
+  const MemoryListFormAdapter = makeSelectFormAdapter(
+    MemoryListForm,
+    (value: string) => options?.onMemorySelect?.(value),
+  );
+  const ResumeListFormAdapter = makeSelectFormAdapter(
+    ResumeListForm,
+    (id: ExecutionId) => options?.onResumeSelect?.(id),
+  );
+  const SkillsListFormAdapter = makeSelectFormAdapter(
+    SkillsListForm,
+    (value: SkillActivation) => options?.onSkillSelect?.(value),
+  );
 
   registerSlashCommand({
     name: 'help',

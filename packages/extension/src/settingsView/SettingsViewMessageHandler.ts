@@ -128,6 +128,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       log: this.log,
       extensionContext: context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
+      postMessageToActiveWebview: (message) =>
+        this.postMessageToActiveWebview(message),
     };
 
     // Must build inside the constructor: the platform is initialized by
@@ -768,13 +770,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async openExternalUrl(url: string): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(url));
-  }
-
-  private async postMessageToActiveWebview(message: unknown): Promise<void> {
-    if (message == null) return;
-    await this.withActiveWebview(async (webview) => {
-      await webview.postMessage(message);
-    });
   }
 
   private async setModelEnabled(

@@ -90,12 +90,7 @@ export class SettingsViewProvider extends BaseWebviewProvider {
 
       this.cleanupView();
       this._view = panel;
-      panel.webview.html = this.contentProvider.getHtmlContent(panel.webview);
-      this._viewDisposables.add(
-        panel.webview.onDidReceiveMessage((message) =>
-          this.messageHandler.handleMessage(message, panel),
-        ),
-      );
+      this._viewDisposables.add(this.setupWebviewContent(panel));
       this._viewDisposables.add(
         panel.onDidDispose(this.cleanupView.bind(this)),
       );
