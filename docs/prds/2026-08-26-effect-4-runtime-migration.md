@@ -367,6 +367,38 @@ hiding a defect. Cancellation can therefore be caught as an ordinary error,
 the same failure can be logged at several levels, and local catch blocks must
 manually preserve primary-error precedence.
 
+### P13. Status, settlement, and ownership are arbitrated, not owned
+
+Several run-lifecycle concepts exist to arbitrate plural authority over one
+fact rather than to model the domain: the stream status machine's `reserved`
+entries with `rollbackTo` state, the escalation ladders that fabricate
+intermediate RUNNING transitions to satisfy the transition table (visibly —
+hosts reset per-run display state one tick before the terminal event),
+`transitionStopBeforeRunStart`, the `TerminalState` claim gate whose own
+comment explains that two finalizers "racing across await points" must not
+both win, the `terminating` suspension state, the interaction-ownership
+generation index that reconstructs a reference count by observing registry
+events and reserves `pendingActivations` so a sync-start/async-handle gap
+does not read as idle, and the status-generation and hold staleness fences.
+
+The plural authorities are concrete: two writers of terminal status (the
+registry stop path and the lifecycle arms), two persistence authorities
+after a crash (stream phase versus the flow-resume record), and runs whose
+identity spans await points with no structural owner. The repository has
+already diagnosed this pattern itself: the 2026-08-16 census
+(`docs/proposals/2026-08-16-define-out-of-existence.md`) ruled eighteen of
+nineteen race guards deletable and named the remaining two structural. The
+domain kernels are real — one run per stream tab, one terminal outcome per
+run, interaction surfaces outliving a root turn, per-execution lanes,
+cross-process holds — but each is currently wrapped in async-gap
+bookkeeping that structured ownership renders unnecessary: an owner fiber
+per run produces one `Exit`, so exactly-once settlement is a construction
+fact; a WAITING run is a parked fiber rather than a returned function that
+left a teardown closure behind; stream phase becomes a single-writer
+projection of local fiber state, durable run records, and cross-process
+leases; and interaction-surface lifetime becomes a host scope kept alive by
+the fibers forked under it, deleting the observer-reconstructed index.
+
 ## 4. Problems this migration does not solve
 
 Effect is not an answer to every difficult part of the runtime.
@@ -942,21 +974,22 @@ contract not already covered.
 The following is the intended net architecture, not merely a list of possible
 library substitutions:
 
-| Present mechanisms                                                                 | Target                                         | Required deletion or absorption                                                  |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
-| `Platform` global reader plus copied flow services                                 | Process services and one run service           | `platform()` access in migrated zones, `setServices()`, and service spreading    |
-| `AgentLaunchContext`, `RunScope`, `RunContext`, `AgentCore`, `BaseFlowContextInit` | Plain launch inputs plus `AgentRun`            | Mirrored fields, ALS projection helpers, and the `bare` production fallback path |
-| `prep`, `exec`, `execFallback`, `post`                                             | One `FlowNode.run` Effect                      | Generic phase dispatcher and untyped intermediate transport                      |
-| `Flow` and `PersistedFlow` orchestration loops                                     | One transition kernel with a commit policy     | Duplicate graph walking and specialized subclasses with no domain semantics      |
-| `RoundPersistedFlow`, response finalization callbacks, and cursor rewind           | Durable round transition plus scoped stage     | Third interpreter subclass and duplicate round-finalization fallback             |
-| Stable-subagent, in-band, child-loop, and workflow `agent()` launch paths          | One durable child-call operation               | Parallel reservation, launch, interruption, result, and commit choreography      |
-| Workflow queue, timeout, abort map, pending-call drain, and first-fault ledger     | One scoped workflow-run Effect                 | Generic Promise runtime inside the deterministic script engine                   |
-| Abort-controller trees, timeout wrappers, and sticky cancellation flags            | Root fiber interruption with SDK-edge signals  | Internal abort choreography and cancellation normalization layers                |
-| `DisposableStore`, manual `finally` blocks, teardown ledgers                       | Effect scopes and one terminal `Exit` fold     | Duplicate resource ownership and cleanup aggregation code                        |
-| `p-retry`, `p-timeout`, delay callbacks, fake-time seams                           | `Schedule`, timeout combinators, and one clock | Package-specific error wrappers and injected clock plumbing                      |
-| Deferred promises, listener cleanup, and wait abort controllers                    | Scoped `Deferred`/`Queue` programs             | Hand-built settlement and unsubscribe protocols                                  |
-| ALS run context plus separately propagated trace fields                            | `AgentRun` and fiber-local trace annotations   | Duplicate context projection and accessor families                               |
-| Boundary translation, cleanup, sentinel, aggregation, and logging catch clauses    | Typed adapters, recovery, scopes, and `Exit`   | Raw catch sites whose meaning is supplied only by local control flow             |
+| Present mechanisms                                                                                                          | Target                                                         | Required deletion or absorption                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `Platform` global reader plus copied flow services                                                                          | Process services and one run service                           | `platform()` access in migrated zones, `setServices()`, and service spreading                                   |
+| `AgentLaunchContext`, `RunScope`, `RunContext`, `AgentCore`, `BaseFlowContextInit`                                          | Plain launch inputs plus `AgentRun`                            | Mirrored fields, ALS projection helpers, and the `bare` production fallback path                                |
+| `prep`, `exec`, `execFallback`, `post`                                                                                      | One `FlowNode.run` Effect                                      | Generic phase dispatcher and untyped intermediate transport                                                     |
+| `Flow` and `PersistedFlow` orchestration loops                                                                              | One transition kernel with a commit policy                     | Duplicate graph walking and specialized subclasses with no domain semantics                                     |
+| `RoundPersistedFlow`, response finalization callbacks, and cursor rewind                                                    | Durable round transition plus scoped stage                     | Third interpreter subclass and duplicate round-finalization fallback                                            |
+| Stable-subagent, in-band, child-loop, and workflow `agent()` launch paths                                                   | One durable child-call operation                               | Parallel reservation, launch, interruption, result, and commit choreography                                     |
+| Workflow queue, timeout, abort map, pending-call drain, and first-fault ledger                                              | One scoped workflow-run Effect                                 | Generic Promise runtime inside the deterministic script engine                                                  |
+| Abort-controller trees, timeout wrappers, and sticky cancellation flags                                                     | Root fiber interruption with SDK-edge signals                  | Internal abort choreography and cancellation normalization layers                                               |
+| `DisposableStore`, manual `finally` blocks, teardown ledgers                                                                | Effect scopes and one terminal `Exit` fold                     | Duplicate resource ownership and cleanup aggregation code                                                       |
+| `p-retry`, `p-timeout`, delay callbacks, fake-time seams                                                                    | `Schedule`, timeout combinators, and one clock                 | Package-specific error wrappers and injected clock plumbing                                                     |
+| Deferred promises, listener cleanup, and wait abort controllers                                                             | Scoped `Deferred`/`Queue` programs                             | Hand-built settlement and unsubscribe protocols                                                                 |
+| ALS run context plus separately propagated trace fields                                                                     | `AgentRun` and fiber-local trace annotations                   | Duplicate context projection and accessor families                                                              |
+| Boundary translation, cleanup, sentinel, aggregation, and logging catch clauses                                             | Typed adapters, recovery, scopes, and `Exit`                   | Raw catch sites whose meaning is supplied only by local control flow                                            |
+| Status reservations with rollback, escalation ladders, terminal claim gates, and the interaction-ownership generation index | One owner fiber per run plus a single-writer status projection | Phase-arbitration guards, synthetic transitions, claim flags, and observer-reconstructed reference counts (P13) |
 
 Queues and mutexes are not collapsed merely because Effect supplies similarly
 named primitives. A queue representing a real domain protocol remains a domain
@@ -1241,6 +1274,14 @@ Stage 3a — lifecycle and carriers, no durable format change:
 - Move attachments, stages, model handlers, follow-up waits, and flow-record
   disposition under scopes without changing their domain decisions.
 - Replace ordinary internal abort-controller trees with fiber interruption.
+- Collapse terminal-outcome arbitration onto the run fiber's single `Exit`
+  fold and make stream phase a single-writer projection; delete the status
+  reservation's rollback entry, the escalation ladders,
+  `transitionStopBeforeRunStart`, and the interaction-ownership generation
+  index once the per-stream owner fiber makes the races they guard
+  unconstructible. The domain kernels P13 names survive as facts, not
+  guards; the dual persistence authority (phase versus flow record) is
+  Stage 3b's to unify.
 - Preserve the explicit detached-subagent policy.
 - Delete the manual teardown-failure ledger once the common finalizer policy
   covers it.
