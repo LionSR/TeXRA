@@ -488,7 +488,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           error: longError,
           timestamps: {
             createdAt: timestamp,
-            queuedAt: timestamp,
             startedAt: timestamp,
             updatedAt: timestamp,
             completedAt: timestamp,
@@ -647,7 +646,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           status: 'running',
           timestamps: {
             createdAt: timestamp,
-            queuedAt: timestamp,
             startedAt: timestamp,
             updatedAt: timestamp,
           },

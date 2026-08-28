@@ -13,6 +13,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -148,6 +149,7 @@ function baseParams(
     session: parentSession,
     startedAt: Date.now(),
     onStreamResolved: vi.fn(),
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
   };
 }
 
@@ -472,13 +474,15 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(params);
     const turn = toolUseTurnResult('completed', params.executionId) as never;
 
-    const built = await strategy.buildResult(turn);
+    const built = await strategy.buildResultMeta?.(turn, false, 1000);
     mocks.throwDeliveryFormatting = true;
 
     await expect(strategy.formatDelivery(turn, 1000)).rejects.toThrow(
       'delivery formatting failed',
     );
-    await expect(strategy.buildResult(turn)).resolves.toBe(built);
+    await expect(strategy.buildResultMeta?.(turn, false, 1000)).resolves.toBe(
+      built,
+    );
   });
 
   it('does not format prose for a typed-result-only child', async () => {
@@ -488,7 +492,9 @@ describe('NativeSubagentStrategy', () => {
     mocks.throwDeliveryFormatting = true;
 
     await expect(strategy.formatDelivery(turn, 1000)).resolves.toBe('');
-    await expect(strategy.buildResult(turn)).resolves.toBeDefined();
+    await expect(
+      strategy.buildResultMeta?.(turn, false, 1000),
+    ).resolves.toBeDefined();
   });
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {

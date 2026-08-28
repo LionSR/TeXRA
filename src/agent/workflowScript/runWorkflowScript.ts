@@ -25,7 +25,7 @@ import { WorkflowExecutionState } from './workflowExecutionState';
 import {
   WORKFLOW_SKIPPED_RESULT,
   WorkflowAgentCallOptionsSchema,
-  normalizeWorkflowScriptPhaseTitle,
+  WorkflowScriptPhaseTitleSchema,
   type WorkflowAgentCallOptions,
   type WorkflowCallAdmission,
   type WorkflowJournalEntry,
@@ -77,6 +77,7 @@ type WorkflowFailedCallStatus =
  * the action can never outlive or precede the attempt it belongs to.
  */
 interface InFlightAgentCall {
+  readonly index: number;
   readonly controller: AbortController;
   action?: WorkflowControlAction;
 }
@@ -217,7 +218,6 @@ class CoalescedSnapshotWriter {
   #pending: WorkflowExecutionSnapshot | undefined;
   #running: Promise<void> | undefined;
   #failure: WorkflowRunAbortError | undefined;
-  #sealed = false;
 
   constructor(
     write: WorkflowScriptRunOptions['onSnapshot'],
@@ -228,7 +228,7 @@ class CoalescedSnapshotWriter {
   }
 
   publish(snapshot: WorkflowExecutionSnapshot): void {
-    if (!this.#write || this.#failure !== undefined || this.#sealed) return;
+    if (!this.#write || this.#failure !== undefined) return;
     this.#pending = snapshot;
     this.#running ??= this.#drain();
   }
@@ -249,13 +249,6 @@ class CoalescedSnapshotWriter {
 
   throwIfFailed(): void {
     if (this.#failure !== undefined) throw this.#failure;
-  }
-
-  seal(): void {
-    if (this.#running || this.#pending) {
-      throw new Error('Cannot seal workflow snapshot writes before flush.');
-    }
-    this.#sealed = true;
   }
 
   async #drain(): Promise<void> {
@@ -283,26 +276,6 @@ class CoalescedSnapshotWriter {
       this.#running = undefined;
     }
   }
-}
-
-/** Resolve with the promise, or reject with the signal's reason first. */
-function raceWithAbort<T>(
-  promise: Promise<T>,
-  signal: AbortSignal,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const detach = onAbort(signal, () => reject(signal.reason));
-    promise.then(
-      (value) => {
-        detach();
-        resolve(value);
-      },
-      (error: unknown) => {
-        detach();
-        reject(error);
-      },
-    );
-  });
 }
 
 /**
@@ -359,19 +332,16 @@ export async function runWorkflowScript(
         cause: error,
       }),
     );
-  // One record per in-flight call, keyed by call index and linked to runAbort
-  // (a run abort cascades to every entry; a per-call abort leaves the others
-  // running). skip()/retry() target a single entry; the entry is removed as
-  // soon as its call settles, and the attempt reads its own requested action
+  // Live child execution id → the in-flight attempt that launched it, linked
+  // to runAbort (a run abort cascades to every entry; a per-call abort leaves
+  // the others running). The runner reports the id it actually launched
+  // (attempt-specific after a durable retry), so a host targets exactly the
+  // child it can see; skip()/retry() act on that one record, entries die with
+  // the attempt that stamped them, so a stale id can never reach the fresh
+  // attempt a retry starts, and the attempt reads its own requested action
   // from the record it still holds. Control state is control-plane only —
   // never journaled, so resume identity is untouched.
-  const inFlightCalls = new Map<number, InFlightAgentCall>();
-  // Live child execution id → the call index that attempt belongs to. The
-  // runner reports the id it actually launched (attempt-specific after a
-  // durable retry), so a host targets exactly the child it can see; entries die
-  // with the attempt that stamped them, so a stale id can never reach the fresh
-  // attempt a retry starts.
-  const callIndexByChildExecution = new Map<ExecutionId, number>();
+  const inFlightCalls = new Map<ExecutionId, InFlightAgentCall>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -398,8 +368,8 @@ export async function runWorkflowScript(
     // Live projections observe every transition synchronously; the durable
     // writer behind onSnapshot coalesces under backpressure. Same source,
     // two delivery guarantees.
-    publish: (snapshot, transition) => {
-      options.onTransition?.(snapshot, transition);
+    publish: (snapshot) => {
+      options.onTransition?.(snapshot);
       snapshotWriter.publish(snapshot);
     },
   });
@@ -407,15 +377,13 @@ export async function runWorkflowScript(
   snapshotWriter.throwIfFailed();
 
   const control: WorkflowScriptControl = (childExecutionId, action) => {
-    const index = callIndexByChildExecution.get(childExecutionId);
-    // No-op when the id belongs to no live attempt of this run, or when the
-    // call it named is no longer in flight (already settled).
-    if (index === undefined) return;
-    const call = inFlightCalls.get(index);
+    // No-op when the id belongs to no live attempt of this run (already
+    // settled, or never registered).
+    const call = inFlightCalls.get(childExecutionId);
     if (!call) return;
     call.action = action;
     call.controller.abort(
-      new Error(`Workflow agent() call ${index} ${action}.`),
+      new Error(`Workflow agent() call ${call.index} ${action}.`),
     );
   };
   onControl?.(control);
@@ -695,7 +663,7 @@ export async function runWorkflowScript(
       executionState.awaitAdmission(progressId);
       let admission: WorkflowCallAdmission;
       try {
-        admission = await raceWithAbort(
+        admission = await pTimeout(
           admitCall(
             {
               index,
@@ -709,7 +677,7 @@ export async function runWorkflowScript(
             },
             runAbort.signal,
           ),
-          runAbort.signal,
+          { milliseconds: Number.POSITIVE_INFINITY, signal: runAbort.signal },
         );
       } catch (error) {
         if (runAbort.signal.aborted) throw runAbort.signal.reason;
@@ -739,12 +707,11 @@ export async function runWorkflowScript(
     // logical call key and eventual journal entry remain index-scoped.
     for (;;) {
       const callController = new AbortController();
-      const call: InFlightAgentCall = { controller: callController };
+      const call: InFlightAgentCall = { index, controller: callController };
       // Link this call to the run: any run-level abort cascades to it, so a
       // runner watching invocation.signal still stops on timeout/cap.
       const cascade = () => callController.abort(runAbort.signal.reason);
       const detachCascade = onAbort(runAbort.signal, cascade);
-      inFlightCalls.set(index, call);
       let result: unknown;
       let attemptError: { readonly error: unknown } | undefined;
       try {
@@ -767,9 +734,6 @@ export async function runWorkflowScript(
             );
           }
           executionState.beginAttempt(progressId);
-          executionState.updateCall(progressId, {
-            status: WORKFLOW_CALL_STATUS.RUNNING,
-          });
           const launch = () => {
             callController.signal.throwIfAborted();
             return runAgent({
@@ -789,10 +753,7 @@ export async function runWorkflowScript(
                   // out: their result is already authoritative, so a stale
                   // skip/retry must not be able to discard or re-run it
                   // during the recovery path's async metadata reads.
-                  callIndexByChildExecution.set(
-                    attemptFacts.childExecutionId,
-                    index,
-                  );
+                  inFlightCalls.set(attemptFacts.childExecutionId, call);
                 }
                 if (
                   Object.values(attemptFacts).some((fact) => fact !== undefined)
@@ -821,16 +782,11 @@ export async function runWorkflowScript(
         attemptError = { error };
       } finally {
         detachCascade();
-        if (inFlightCalls.get(index) === call) {
-          inFlightCalls.delete(index);
-        }
         // This attempt's child ids are dead the moment it settles: a retry
         // launches under a fresh id, and a stale one must no-op. Deleting
         // during for...of is spec-safe for Map iterators.
-        for (const [childExecutionId, callIndex] of callIndexByChildExecution) {
-          if (callIndex === index) {
-            callIndexByChildExecution.delete(childExecutionId);
-          }
+        for (const [childExecutionId, inFlight] of inFlightCalls) {
+          if (inFlight === call) inFlightCalls.delete(childExecutionId);
         }
       }
 
@@ -956,7 +912,7 @@ export async function runWorkflowScript(
               return undefined;
             },
             phase: (args) => {
-              const nextPhase = normalizeWorkflowScriptPhaseTitle(
+              const nextPhase = WorkflowScriptPhaseTitleSchema.parse(
                 String(args[0]),
               );
               try {
@@ -1046,7 +1002,6 @@ export async function runWorkflowScript(
   }
 
   snapshotWriter.throwIfFailed();
-  snapshotWriter.seal();
 
   // Guest code may catch an agent() rejection, and an abandoned call can
   // reject while the final drain is running. Checkpoint failure is a run-level

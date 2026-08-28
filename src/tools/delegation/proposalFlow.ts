@@ -13,7 +13,6 @@ import {
   classifyRejection,
   type ProposalResult,
 } from '@agent/runtime/HostInteractions';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import type {
   AgentDelegationScope,
   StreamTabId,
@@ -28,10 +27,9 @@ import { assertNever, generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  availableModelNamesFromOptions,
   getDelegationAgent,
   getDelegationAgents,
-  selectDelegationModelFromAvailableNames,
+  selectAvailableDelegationModel,
 } from './delegationAvailability';
 
 // Local file imports
@@ -42,17 +40,6 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
-
-export async function selectAvailableDelegationModel(input: {
-  readonly requestedModel?: string | null;
-  readonly parentModel?: string | null;
-}): Promise<string> {
-  const modelOptions = await computeModelOptionsData();
-  return selectDelegationModelFromAvailableNames({
-    ...input,
-    availableModels: availableModelNamesFromOptions(modelOptions),
-  });
-}
 
 /**
  * Return the visible agent entry, or throw with the current visible list. The

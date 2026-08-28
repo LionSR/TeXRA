@@ -840,6 +840,7 @@ export function App(props: AppProps): React.JSX.Element {
           sessionViews,
           selectedChildValue,
           selectedChildStreamId,
+          selectedChildWorkflowControllable,
           workflowDashboard,
           workflowDashboardRootHasApproval,
           streams,

@@ -7,46 +7,8 @@ import {
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
-/** Latest physical workflow attempt named by an append-ordered projection. */
-export function latestWorkflowAttemptId(
-  attemptIds: readonly (string | undefined)[],
-): string | undefined {
-  return attemptIds.findLast((attemptId) => attemptId !== undefined);
-}
-
-/**
- * Select the current state of each logical workflow call.
- *
- * Durable script reruns append progress under a fresh attempt id so the
- * earlier attempt remains available in transcript history. Current writers
- * stamp every call; older persisted transcripts without that fact fall back
- * to their latest record per logical id. A `null` declared attempt means a
- * durable boundary was present but invalid, so inference must remain disabled.
- */
-export function latestWorkflowCallsById(
-  calls: readonly WorkflowCallProgress[],
-  declaredAttemptId?: string | null,
-): WorkflowCallProgress[] {
-  if (declaredAttemptId === null) return [];
-  const currentAttemptId =
-    declaredAttemptId ??
-    latestWorkflowAttemptId(calls.map((call) => call.attemptId));
-  const candidates = currentAttemptId
-    ? calls.filter((call) => call.attemptId === currentAttemptId)
-    : calls;
-  const seen = new Set<string>();
-  return candidates
-    .toReversed()
-    .filter((call) => {
-      if (seen.has(call.id)) return false;
-      seen.add(call.id);
-      return true;
-    })
-    .toReversed();
-}
-
 /** Result-contract label of one issued call, shared by every host. */
-export const WORKFLOW_CALL_KIND_LABEL = {
+const WORKFLOW_CALL_KIND_LABEL = {
   document: 'Document',
   structured: 'Structured',
 } as const satisfies Record<WorkflowCallKind, string>;
@@ -59,7 +21,7 @@ const CALL_FILE_PREVIEW_LIMIT = 3;
  * along. Empty for a declared plan label and for a structured call, which by
  * contract carries no files.
  */
-export function formatWorkflowCallFiles(
+function formatWorkflowCallFiles(
   files: WorkflowCallProgress['files'],
 ): string | undefined {
   if (!files) return undefined;
@@ -170,12 +132,10 @@ export function formatWorkflowPhaseHeading(
  * trace cards the run's progress projection settles. Two spellings of one
  * sentence is drift, not two facts.
  */
-export const WORKFLOW_CALL_NOT_REACHED_NOTE =
+const WORKFLOW_CALL_NOT_REACHED_NOTE =
   'The workflow ended before this call was reached.';
 export const WORKFLOW_CALL_UNFINISHED_NOTE =
   'The workflow ended before this call completed.';
-export const WORKFLOW_CALL_AWAITING_APPROVAL_NOTE =
-  'Waiting for your review before this call runs.';
 
 /**
  * The one explanatory-clause rule for a workflow call, shared by every host: a

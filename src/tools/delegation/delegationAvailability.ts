@@ -30,6 +30,7 @@ import {
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import type {
   AgentCategory,
@@ -204,13 +205,20 @@ function formatAvailableModelsLine(
   return `Available models: ${modelNames.join(', ')}`;
 }
 
-export function selectDelegationModelFromAvailableNames(input: {
+/**
+ * Decide which model a delegated run uses: an explicit override, else the
+ * parent run's model, else the first model the user has access to — checked
+ * against the live availability list so an unavailable choice fails here rather
+ * than after launch.
+ */
+export async function selectAvailableDelegationModel(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
-  readonly availableModels: readonly string[];
-}): string {
+}): Promise<string> {
   const availableModels = unique(
-    input.availableModels.map((model) => model.trim()).filter(Boolean),
+    availableModelNamesFromOptions(await computeModelOptionsData())
+      .map((model) => model.trim())
+      .filter(Boolean),
   );
   if (availableModels.length === 0) {
     throw new Error(NO_DELEGATION_MODELS_MESSAGE);

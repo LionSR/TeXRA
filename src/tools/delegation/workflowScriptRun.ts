@@ -5,7 +5,6 @@ import {
   type PersistedWorkflowScriptRunOptions,
   type WorkflowAgentInvocation,
   type WorkflowJournalEntry,
-  type WorkflowExecutionTransition,
   type WorkflowScriptEvent,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
@@ -67,7 +66,6 @@ function projectWorkflowCallStatus(
       return 'awaitingApproval';
     case WORKFLOW_CALL_STATUS.QUEUED:
       return 'queued';
-    case WORKFLOW_CALL_STATUS.STARTING:
     case WORKFLOW_CALL_STATUS.RUNNING:
       return 'running';
     case WORKFLOW_CALL_STATUS.COMPLETED:
@@ -77,23 +75,6 @@ function projectWorkflowCallStatus(
     case WORKFLOW_CALL_STATUS.CANCELLED:
       return call.status;
   }
-}
-
-/**
- * The invocation facts a card carries once the script has issued the call.
- * Read from the snapshot call, the one owner, so a declared stub (no `issued`)
- * yields nothing and can never look like a resolved call.
- */
-function workflowCallFacts(
-  call: WorkflowExecutionCall | undefined,
-): Pick<WorkflowCallProgress, 'kind' | 'agent' | 'model' | 'files'> {
-  if (!call?.issued) return {};
-  return {
-    ...(call.kind !== undefined && { kind: call.kind }),
-    ...(call.agent !== undefined && { agent: call.agent }),
-    ...(call.model !== undefined && { model: call.model }),
-    files: call.files,
-  };
 }
 
 interface PhaseStage {
@@ -110,22 +91,13 @@ interface ProjectedWorkflowCall {
   model?: WorkflowCallProgress['model'];
 }
 
-export class WorkflowJournalCostError extends Error {
-  constructor(index: number, options?: ErrorOptions) {
-    super(
-      `Workflow journal entry ${index} is not an agent final result.`,
-      options,
-    );
-    this.name = 'WorkflowJournalCostError';
-  }
-}
-
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   const result = AgentFinalResultSchema.safeParse(entry.result);
   if (!result.success) {
-    throw new WorkflowJournalCostError(entry.index, {
-      cause: result.error,
-    });
+    throw new Error(
+      `Workflow journal entry ${entry.index} is not an agent final result.`,
+      { cause: result.error },
+    );
   }
   return result.data.cost;
 }
@@ -206,50 +178,6 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
 }
 
 /**
- * One terminal card for a call this projection last saw live, restating what the
- * engine's own `finish()` decided that call became. The snapshot is the single
- * authority for the outcome — status, error, and spend — while the card keeps
- * the identity this projection already recorded, so settling can never rename a
- * card or move it between phase groups.
- */
-function settledWorkflowCall(
-  projected: ProjectedWorkflowCall,
-  settled: WorkflowExecutionCall | undefined,
-): WorkflowCallTerminalProgress {
-  const identity = {
-    ...projected.definition,
-    ...(projected.childStreamId !== undefined && {
-      childStreamId: projected.childStreamId,
-    }),
-    ...workflowCallFacts(settled),
-  };
-  const spent =
-    settled?.costUsd === undefined ? {} : { totalCostUsd: settled.costUsd };
-  switch (settled?.status) {
-    case WORKFLOW_CALL_STATUS.COMPLETED:
-      return { ...identity, status: 'completed', ...spent };
-    case WORKFLOW_CALL_STATUS.CACHED:
-      return { ...identity, status: 'cached' };
-    case WORKFLOW_CALL_STATUS.CANCELLED:
-      return { ...identity, status: 'cancelled', ...spent };
-    case WORKFLOW_CALL_STATUS.SKIPPED:
-      // The sweep settles not-reached plans; a user skip settles itself.
-      return settled.settledBySweep
-        ? { ...identity, status: 'skipped', reason: 'not-reached' }
-        : { ...identity, status: 'skipped', reason: 'user', ...spent };
-    default:
-      // Failed and the non-terminal states left behind when the snapshot could not be
-      // persisted at all.
-      return {
-        ...identity,
-        status: 'failed',
-        error: settled?.error ?? WORKFLOW_CALL_UNFINISHED_NOTE,
-        ...spent,
-      };
-  }
-}
-
-/**
  * Run a durable workflow script and project its progress onto the parent trace.
  */
 export async function runPersistedWorkflowScriptWithProgress(
@@ -259,7 +187,6 @@ export async function runPersistedWorkflowScriptWithProgress(
   const { onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
   const phases = new Map<string, PhaseStage>();
-  const phaseStageIds = new Map<string, string>();
   // A deterministic workflow stream appends every relaunch to one transcript.
   // Keep one card identity through this projection's state transitions without
   // colliding with the same logical call in an earlier attempt.
@@ -284,22 +211,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
   >();
   let constructionEmissionSeen = false;
-  const issuedCallIds = new Set<WorkflowCallProgress['id']>();
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
-
-  /**
-   * Stable stage id for a phase title. Cards name their group by it; the
-   * `stage.start` that opens the group — and settles the divider's print
-   * order the instant it is emitted — fires when the run enters the phase,
-   * and cards are emitted only from then on.
-   */
-  const phaseStageIdFor = (title: string): string => {
-    const existing = phaseStageIds.get(title);
-    if (existing) return existing;
-    const id = generateShortId();
-    phaseStageIds.set(title, id);
-    return id;
-  };
 
   const phaseFor = (
     title: string,
@@ -310,7 +222,6 @@ export async function runPersistedWorkflowScriptWithProgress(
     if (existing) return existing;
     const phase = {
       handle: trace.openStage(title, {
-        id: phaseStageIdFor(title),
         kind: 'phase',
         parentId: parentStageId,
         index,
@@ -370,11 +281,13 @@ export async function runPersistedWorkflowScriptWithProgress(
     projected.agent = call.agent;
     projected.model = call.model;
     const phase = projected.definition.phase;
+    // Cards are emitted only once the fold (or the settle sweep) has opened
+    // their phase, so the group is the stage handle that already exists.
     trace.emit({
       type: 'workflow.call',
       logId: projected.logId,
       call: { ...call, phase, attemptId: projectionId },
-      stageId: phase === undefined ? parentStageId : phaseStageIdFor(phase),
+      stageId: phase === undefined ? parentStageId : phaseFor(phase).handle.id,
     });
   };
   const markPhaseFailed = (
@@ -431,7 +344,15 @@ export async function runPersistedWorkflowScriptWithProgress(
       ...(call.childStreamId !== undefined
         ? { childStreamId: call.childStreamId }
         : {}),
-      ...workflowCallFacts(call),
+      // The invocation facts a card carries once the script has issued the
+      // call, read from the snapshot call — the one owner — so a declared stub
+      // never looks like a resolved call.
+      ...(call.issued && {
+        ...(call.kind !== undefined && { kind: call.kind }),
+        ...(call.agent !== undefined && { agent: call.agent }),
+        ...(call.model !== undefined && { model: call.model }),
+        files: call.files,
+      }),
       ...(attemptCounts && { attemptNumber: call.attempts.length }),
     };
     switch (status) {
@@ -473,13 +394,31 @@ export async function runPersistedWorkflowScriptWithProgress(
    * everything is read here, nothing retained. A projection fault must never
    * abort the run, so the fold guards itself and reports on the run trace.
    */
-  const fold = (
-    snapshot: WorkflowExecutionSnapshot,
-    transition?: WorkflowExecutionTransition,
-  ): void => {
+  const fold = (snapshot: WorkflowExecutionSnapshot): void => {
     if (closed) return;
-    if (transition?.type === 'call-issued') {
-      issuedCallIds.add(transition.callId);
+    // A call carried into the construction emission is hydrated history, not
+    // this attempt's activity. Reusable calls are terminal here; failed or
+    // cancelled calls were reset to planned, but retain an earlier creation
+    // timestamp or attempt record. Record either shape silently, ahead of any
+    // projection work, so a fault below can never promote history to current
+    // work. Emitting a hydrated dynamic call would freeze the identity before
+    // `issueCall` restores its phase, and a call absent from this script
+    // would appear as current-attempt not-reached work.
+    if (!constructionEmissionSeen) {
+      constructionEmissionSeen = true;
+      for (const call of snapshot.calls) {
+        const status = projectWorkflowCallStatus(call);
+        if (
+          isTerminalWorkflowCallStatus(status) ||
+          call.attempts.length > 0 ||
+          call.timestamps.createdAt !== call.timestamps.updatedAt
+        ) {
+          hydratedBaseline.set(call.id, {
+            status,
+            childStreamId: call.childStreamId,
+          });
+        }
+      }
     }
     try {
       declaredStageTotal ??= snapshot.stages.length;
@@ -511,32 +450,15 @@ export async function runPersistedWorkflowScriptWithProgress(
         // A retry re-queues a running call; the card follows it to `queued`
         // because that wait is real when another call took the freed slot.
         const status = projectWorkflowCallStatus(call);
-        // A call carried into the construction emission is hydrated history,
-        // not this attempt's activity. Reusable calls are terminal here;
-        // failed/cancelled calls were reset to planned, but retain an earlier
-        // creation timestamp or attempt record. Record either shape silently.
-        // Emitting a hydrated dynamic call would freeze the identity before
-        // `issueCall` restores its phase, and a call absent from this script
-        // would appear as current-attempt not-reached work.
-        const hydratedHistory =
-          isTerminalWorkflowCallStatus(status) ||
-          call.attempts.length > 0 ||
-          call.timestamps.createdAt !== call.timestamps.updatedAt;
-        if (!constructionEmissionSeen && !projected && hydratedHistory) {
-          hydratedBaseline.set(call.id, {
-            status,
-            childStreamId: call.childStreamId,
-          });
-          continue;
-        }
         const baseline = projected ? undefined : hydratedBaseline.get(call.id);
         if (baseline !== undefined) {
-          // A reset historical call is current only after issueCall explicitly
-          // identifies it as issued by this attempt. This cannot collapse when
-          // hydration and reissue occur within the same clock tick. Sweep-only
-          // terminalization of an omitted call therefore stays silent.
+          // A reset historical call is current only once `issueCall` stamps
+          // it issued by this attempt (hydration clears the stamp), which
+          // cannot collapse when hydration and reissue share a clock tick.
+          // Sweep-only terminalization of an omitted call therefore stays
+          // silent.
           if (baseline.status === 'declared') {
-            if (!issuedCallIds.has(call.id)) continue;
+            if (!call.issued) continue;
           } else if (
             baseline.status === status &&
             baseline.childStreamId === call.childStreamId
@@ -544,7 +466,6 @@ export async function runPersistedWorkflowScriptWithProgress(
             continue;
           }
           hydratedBaseline.delete(call.id);
-          issuedCallIds.delete(call.id);
         }
         // A declared card exists only under an open phase: the engine flips
         // stage-blocked plan entries to planned the moment their phase opens,
@@ -632,8 +553,6 @@ export async function runPersistedWorkflowScriptWithProgress(
         `Workflow progress projection failed for one transition: ${toErrorMessage(error)}`,
         { data: error },
       );
-    } finally {
-      constructionEmissionSeen = true;
     }
   };
 
@@ -655,23 +574,38 @@ export async function runPersistedWorkflowScriptWithProgress(
     runOutcome = RUN_OUTCOME.COMPLETED;
     return result;
   } finally {
-    closed = true;
     if (lastSnapshot?.lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED) {
       runOutcome = RUN_OUTCOME.CANCELLED;
     }
-    const settledById = new Map(
-      (lastSnapshot?.calls ?? []).map((call) => [call.id, call]),
-    );
+    // The engine's `finish()` publishes its terminal snapshot synchronously
+    // through the fold, so every card is normally terminal here. Fold the
+    // terminal snapshot the writer landed once more — a no-op unless a
+    // projection fault dropped a transition — then settle whatever is still
+    // live as unfinished. A writer failure leaves `lastSnapshot` stale and
+    // non-terminal; re-folding stale state could move a card backwards, so
+    // only a terminal snapshot is re-folded.
+    if (
+      lastSnapshot !== undefined &&
+      lastSnapshot.lifecycle !== WORKFLOW_EXECUTION_LIFECYCLE.WAITING &&
+      lastSnapshot.lifecycle !== WORKFLOW_EXECUTION_LIFECYCLE.ACTIVE
+    ) {
+      fold(lastSnapshot);
+    }
+    closed = true;
     for (const projected of projectedCalls.values()) {
       if (isTerminalWorkflowCallStatus(projected.status)) continue;
-      // Open the declared phase the run never reached so its settled cards
-      // still land under a header; the loop below then closes it.
+      // Open the declared phase the run never reached so the settled card
+      // still lands under a header; the loop below then closes it.
       openPhaseStage(projected.definition.phase);
-      const call = settledWorkflowCall(
-        projected,
-        settledById.get(projected.definition.id),
-      );
-      if (call.status === 'failed') markPhaseFailed(projected.definition.phase);
+      markPhaseFailed(projected.definition.phase);
+      const call: WorkflowCallTerminalProgress = {
+        ...projected.definition,
+        ...(projected.childStreamId !== undefined && {
+          childStreamId: projected.childStreamId,
+        }),
+        status: 'failed',
+        error: WORKFLOW_CALL_UNFINISHED_NOTE,
+      };
       emitCall(call);
       recordTerminalActivity(call);
     }

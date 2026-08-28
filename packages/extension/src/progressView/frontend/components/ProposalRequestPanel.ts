@@ -99,14 +99,19 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     }
   }
 
+  // Setup restores the proposal into the main view for a manual run. A
+  // per-call review card decides only whether the script's call runs now
+  // (admission is run|skip), so it offers no Setup.
+  private get canSetup(): boolean {
+    return this.permission.data.workflowCall === undefined;
+  }
+
   protected override handleExtraKey(key: string): boolean {
-    switch (key) {
-      case 's':
-        this.emitAction({ action: 'setup' });
-        return true;
-      default:
-        return false;
+    if (key === 's' && this.canSetup) {
+      this.emitAction({ action: 'setup' });
+      return true;
     }
+    return false;
   }
 
   // Proposals carry a stronger approval action than the edit/bash bypass.
@@ -151,8 +156,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     }
     const currentModel = this.selectedModel ?? data.model;
     const currentAgent = this.selectedAgent ?? data.agent;
-    const hasModelOptions = !workflowScript && modelOptions.length > 0;
-    const hasAgentOptions = !workflowScript && agentOptions.length > 0;
+    // The transport ships option data only for proposals whose approval
+    // honors a model/agent override; the dropdowns render iff it arrived.
+    const hasModelOptions = modelOptions.length > 0;
+    const hasAgentOptions = agentOptions.length > 0;
 
     return this.renderRequestShell({
       prefix: 'workflow-proposal',
@@ -204,7 +211,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
         ${this.renderWorkflowCallContext(data)}
         ${
           workflowScript
-            ? this.renderWorkflowScriptSummary(data)
+            ? this.renderWorkflowScriptSummary(data, workflowScript)
             : html`${this.renderInstruction(data.instruction)}
               ${isWorkflow ? this.renderExtractFlags(data) : nothing}
               ${this.renderProposalFiles(data)}`
@@ -212,14 +219,16 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       `,
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
-      trailingActions: renderLabeledActionButton({
-        id: 'proposal-setup-button',
-        icon: 'reply',
-        text: 'Setup',
-        tooltip: 'Setup (s)',
-        action: 'setup',
-        onClick: () => this.emitAction({ action: 'setup' }),
-      }),
+      trailingActions: this.canSetup
+        ? renderLabeledActionButton({
+            id: 'proposal-setup-button',
+            icon: 'reply',
+            text: 'Setup',
+            tooltip: 'Setup (s)',
+            action: 'setup',
+            onClick: () => this.emitAction({ action: 'setup' }),
+          })
+        : nothing,
     });
   }
 
@@ -229,11 +238,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
 
   private renderWorkflowScriptSummary(
     data: AgentProposalPermission,
-  ): TemplateResult | typeof nothing {
-    if (data.agentCategory !== AgentCategory.Workflow || !data.workflowScript) {
-      return nothing;
-    }
-    const workflow = data.workflowScript;
+    workflow: NonNullable<WorkflowAgentProposalPermission['workflowScript']>,
+  ): TemplateResult {
     const fullName = `${workflow.name}: ${workflow.description}`;
     const declaredGroups = workflowScriptDeclaredItemsByPhase(workflow);
 

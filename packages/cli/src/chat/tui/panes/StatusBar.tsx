@@ -40,10 +40,7 @@ import {
   visibleSubagentRows,
 } from '../state/childExecutions';
 import { streamLabelForId } from '../state/streamViews';
-import {
-  ancestorWorkflowPhaseHeading,
-  focusedSessionLocationText,
-} from '../state/workflowPhase';
+import { ancestorWorkflowPhaseHeading } from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -266,6 +263,27 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     [childRosters, displayStreamId],
   );
 
+  // Nested-session location: the nearest workflow-script ancestor's open
+  // phase, then the focused stream's label.
+  const focusedStreamId = target.isChildStream ? displayStreamId : undefined;
+  const focusedLabel =
+    focusedStreamId === undefined
+      ? undefined
+      : streamLabelForId({
+          childRosters,
+          parentStream,
+          streamId: focusedStreamId,
+        });
+  const focusedPhaseHeading =
+    focusedStreamId === undefined
+      ? undefined
+      : ancestorWorkflowPhaseHeading({
+          categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
+          parentStream,
+          streamId: focusedStreamId,
+          streams,
+        })?.heading;
+
   const display = buildStatusBarDisplay({
     status: statusSlice?.status,
     substate: statusSlice?.substate,
@@ -293,26 +311,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
-    location: focusedSessionLocationText({
-      isChildStream: target.isChildStream,
-      label:
-        target.displayStreamId === undefined
-          ? ''
-          : streamLabelForId({
-              childRosters,
-              parentStream,
-              streamId: target.displayStreamId,
-            }),
-      phaseHeading:
-        target.displayStreamId === undefined
-          ? undefined
-          : ancestorWorkflowPhaseHeading({
-              categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
-              parentStream,
-              streamId: target.displayStreamId,
-              streams,
-            })?.heading,
-    }),
+    location: focusedPhaseHeading
+      ? `${focusedPhaseHeading} › ${focusedLabel}`
+      : focusedLabel,
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,

@@ -107,9 +107,6 @@ function projectedView(slice: StreamSlice | undefined): unknown {
     thinkingActive: slice?.thinkingActive ?? false,
     compactingActive: slice?.compactingActive ?? false,
     taskGroups: slice?.taskGroups ?? [],
-    workflowAttemptId: slice?.workflowAttemptId,
-    workflowAttemptBoundaryDeclared:
-      slice?.workflowAttemptBoundaryDeclared ?? false,
   };
 }
 
@@ -522,8 +519,8 @@ describe('transcript fold vs from-scratch oracle', () => {
       syncStreamLog(defaultSession(), FOLD_STREAM);
 
       const slice = streams.get().get(FOLD_STREAM);
-      expect(slice?.workflowAttemptId).toBe('current-attempt');
-      expect(slice?.workflowAttemptBoundaryDeclared).toBe(true);
+      expect(slice?.transcriptFold?.workflowAttemptId).toBe('current-attempt');
+      expect(slice?.transcriptFold?.workflowAttemptBoundaryDeclared).toBe(true);
       expect(slice?.entries).toEqual([]);
 
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
@@ -536,9 +533,9 @@ describe('transcript fold vs from-scratch oracle', () => {
         data: { kind: 'otherInternalRecord' },
       });
       syncStreamLog(defaultSession(), FOLD_STREAM);
-      expect(streams.get().get(FOLD_STREAM)?.workflowAttemptId).toBe(
-        'current-attempt',
-      );
+      expect(
+        streams.get().get(FOLD_STREAM)?.transcriptFold?.workflowAttemptId,
+      ).toBe('current-attempt');
 
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'workflow-attempt-malformed',
@@ -551,8 +548,10 @@ describe('transcript fold vs from-scratch oracle', () => {
       });
       syncStreamLog(defaultSession(), FOLD_STREAM);
       const invalidSlice = streams.get().get(FOLD_STREAM);
-      expect(invalidSlice?.workflowAttemptId).toBeUndefined();
-      expect(invalidSlice?.workflowAttemptBoundaryDeclared).toBe(true);
+      expect(invalidSlice?.transcriptFold?.workflowAttemptId).toBeUndefined();
+      expect(
+        invalidSlice?.transcriptFold?.workflowAttemptBoundaryDeclared,
+      ).toBe(true);
       expect(invalidSlice?.entries).toEqual([]);
     });
   });

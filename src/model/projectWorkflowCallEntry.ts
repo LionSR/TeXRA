@@ -9,8 +9,9 @@ import {
  * Webview/browser-facing copy of one transcript entry. The stream-log store
  * keeps the canonical `WorkflowCallProgress.model` id; only the copy that
  * crosses the progress-view boundary projects it through the runtime model
- * registry. This mirrors `formatCliWorkflowCallLine` while keeping
- * `@model/runtimeModelRegistry` out of the browser frontend import graph.
+ * registry (the CLI's headless workflow output does the same at its write
+ * site), keeping `@model/runtimeModelRegistry` out of the browser frontend
+ * import graph.
  *
  * Shared by the live `WebviewBridge` LOG_DELTA path and the host-side trace
  * exporters so exported/archived traces show the same runtime label as the

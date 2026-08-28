@@ -12,15 +12,11 @@ import {
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const WorkflowScriptPhaseTitleSchema = z
+/** One title form for `meta.phases` entries and runtime `phase()` calls. */
+export const WorkflowScriptPhaseTitleSchema = z
   .string()
   .trim()
   .min(1, 'Workflow phase title must not be blank.');
-
-/** Normalize every executable phase-title input to the metadata schema form. */
-export function normalizeWorkflowScriptPhaseTitle(title: string): string {
-  return WorkflowScriptPhaseTitleSchema.parse(title);
-}
 
 const WorkflowScriptPhaseSchema = z.union([
   z.strictObject({ title: WorkflowScriptPhaseTitleSchema }),
@@ -354,12 +350,6 @@ type WorkflowScriptProgressId = WorkflowCallIdentity['id'];
  */
 export type WorkflowScriptEvent = { type: 'log'; message: string };
 
-/** Synchronous transition metadata that is intentionally not persisted. */
-export type WorkflowExecutionTransition = {
-  readonly type: 'call-issued';
-  readonly callId: string;
-};
-
 /**
  * Guest-visible result of a call cancelled via `control(childExecutionId,
  * 'skip')`: a first-class sentinel distinct from a failed call's `null`, so a
@@ -436,10 +426,7 @@ export interface WorkflowScriptRunOptions {
    * propagates into the engine and aborts the run, so consumers guard their
    * own folds.
    */
-  onTransition?: (
-    snapshot: WorkflowExecutionSnapshot,
-    transition?: WorkflowExecutionTransition,
-  ) => void;
+  onTransition?: (snapshot: WorkflowExecutionSnapshot) => void;
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**
    * Handed the per-call control handle once, synchronously, before the script

@@ -19,7 +19,6 @@ import {
 } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
@@ -30,15 +29,14 @@ import {
   type WorkflowControlAction,
 } from '@shared/schemas';
 import {
-  formatWorkflowCallFiles,
+  formatWorkflowCallMetadataParts,
   formatWorkflowPhaseHeading,
-  WORKFLOW_CALL_KIND_LABEL,
   workflowCallFailureTally,
   workflowPhaseCallProgress,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
-import { formatCompactTokenCount } from '@utils/core';
+import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -246,42 +244,27 @@ function SessionRow({
 function workflowTaskMetadata(
   call: WorkflowCallProgress,
   child: StreamSlice | undefined,
-  configModel: string | undefined,
   streamId: StreamTabId | undefined,
   nowMs: number,
 ): string | undefined {
-  const terminal = isTerminalWorkflowCallProgress(call);
+  // The shared parts name the call (kind · agent · model · attempt · files)
+  // and, once it settles, what it cost; the live segments below cover the
+  // in-flight window the card itself cannot: elapsed, generated tokens, and
+  // the running spend read off the child stream.
+  const live = !isTerminalWorkflowCallProgress(call);
   const usage = streamPreferredUsage(streamId, child);
-  let elapsed: string | undefined;
-  let cost: number | undefined;
-  // The call's own record names the model the host resolved for it (or the
-  // script declared); the stream config only fills in for older records. A
-  // declared plan label has no model and must not borrow the stream's.
-  const model =
-    call.status === 'declared' ? undefined : (call.model ?? configModel);
-  if (terminal) {
-    if ('durationMs' in call && call.durationMs !== undefined) {
-      elapsed = formatCompactDuration(call.durationMs);
-    }
-    cost =
-      ('totalCostUsd' in call ? call.totalCostUsd : undefined) ?? usage?.cost;
-  } else {
-    if (child?.runStartedAt !== undefined) {
-      elapsed = formatCompactDuration(nowMs - child.runStartedAt);
-    }
-    cost = usage?.cost;
-  }
   const parts = [
-    call.kind === undefined ? undefined : WORKFLOW_CALL_KIND_LABEL[call.kind],
-    call.agent,
-    model ? getRuntimeModelLabel(model) : undefined,
-    formatWorkflowCallFiles(call.files),
-    elapsed,
+    ...formatWorkflowCallMetadataParts(call),
+    live && child?.runStartedAt !== undefined
+      ? formatCompactDuration(nowMs - child.runStartedAt)
+      : undefined,
     usage && usage.outputTokens > 0
       ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`
       : undefined,
-    cost !== undefined && cost > 0 ? formatCostUsd(cost) : undefined,
-  ].filter((part): part is string => part !== undefined);
+    live && usage?.cost !== undefined && usage.cost > 0
+      ? formatCostUsd(usage.cost)
+      : undefined,
+  ].filter(filterNotNullish);
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
@@ -302,19 +285,7 @@ function WorkflowTaskRow({
 }): React.JSX.Element {
   useSignal(sessionStateRevision);
   const style = WORKFLOW_TASK_STATUS_STYLE[entry.call.status];
-  // The resolved model rides the task's stream metadata, not the slice; a
-  // terminal call's own recorded model still wins inside the formatter.
-  const configModel =
-    streamId === undefined
-      ? undefined
-      : streamMetadataFor(streamId)?.config?.model;
-  const metadata = workflowTaskMetadata(
-    entry.call,
-    child,
-    configModel,
-    streamId,
-    nowMs,
-  );
+  const metadata = workflowTaskMetadata(entry.call, child, streamId, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -447,15 +418,7 @@ function WorkflowDashboard({
     return null;
   }
   const headingPhase = activeGroup?.heading
-    ? formatWorkflowPhaseHeading({
-        phaseLabel: activeGroup.label,
-        ...(activeGroup.heading.phaseIndex !== undefined
-          ? { phaseIndex: activeGroup.heading.phaseIndex }
-          : {}),
-        ...(activeGroup.heading.phaseTotal !== undefined
-          ? { phaseTotal: activeGroup.heading.phaseTotal }
-          : {}),
-      })
+    ? formatWorkflowPhaseHeading(activeGroup.heading)
     : undefined;
   // The heading leads with the run identity's display name — for a
   // multi-agent workflow root that is the workflow name, matching what the
@@ -498,12 +461,7 @@ function WorkflowDashboard({
     );
     return {
       phaseLabel: group.label,
-      ...(group.heading?.phaseIndex !== undefined
-        ? { phaseIndex: group.heading.phaseIndex }
-        : {}),
-      ...(group.heading?.phaseTotal !== undefined
-        ? { phaseTotal: group.heading.phaseTotal }
-        : {}),
+      ...group.heading,
       progress: `${progress.done}/${progress.total}`,
     };
   };
@@ -659,6 +617,9 @@ export interface SubagentListProps {
   /** Stream `selectedValue` points at, resolved once by `App` — the same
    *  stream the status bar advertises as killable. */
   readonly selectedChildStreamId?: StreamTabId;
+  /** Whether `selectedChildStreamId` is a skip/retry-able workflow-script
+   *  grandchild, resolved once by `App` alongside the status bar's hint. */
+  readonly selectedChildWorkflowControllable?: boolean;
   /** Stream the list is rooted on — its row never shows a summary. */
   readonly listRootStreamId?: StreamTabId;
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
@@ -718,15 +679,12 @@ export function SubagentList(
       const streamId = props.selectedChildStreamId;
       if (!streamId) return;
       const pressed = input.toLowerCase();
-      // Kill/skip/retry target only a focused subagent stream (a
-      // workflow-script grandchild); the session control registry no-ops for
-      // any execution id that is not an in-flight grandchild, so non-workflow
-      // rows are inert.
       if (pressed !== 'k' && pressed !== 's' && pressed !== 'r') return;
       const executionId = props.activeSubagentExecutionIds?.get(streamId);
       if (!executionId) return;
       if (pressed === 'k') props.onKillExecution?.(executionId);
-      else
+      // Skip/retry fire only where the status bar advertises them.
+      else if (props.selectedChildWorkflowControllable)
         props.onWorkflowControl?.(executionId, WORKFLOW_CONTROL_KEYS[pressed]);
     },
     { isActive: props.keyboardActive ?? false },

@@ -10,25 +10,18 @@
  * cleanup imports that leaf predicate directly so listing history does not
  * evaluate the QuickJS engine and embedded Wasm graph through this barrel.
  */
-export {
-  deriveWorkflowScriptCheckpointId,
-  workflowScriptCheckpointKvKey,
-} from './checkpointKey';
-export { parseWorkflowScript, WorkflowScriptParseError } from './parseScript';
-export { runWorkflowScript, WorkflowRunAbortError } from './runWorkflowScript';
+export { deriveWorkflowScriptCheckpointId } from './checkpointKey';
+export { parseWorkflowScript } from './parseScript';
+export { WorkflowRunAbortError } from './runWorkflowScript';
 export {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  WorkflowScriptPersistenceError,
-  writeWorkflowScriptCheckpoint,
 } from './persistence';
 export type { PersistedWorkflowScriptRunOptions } from './persistence';
-export { WORKFLOW_SKIPPED_RESULT } from './types';
 export type {
   WorkflowAgentCallOptions,
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
-  WorkflowExecutionTransition,
   WorkflowJournalEntry,
   WorkflowScriptControl,
   WorkflowScriptEvent,

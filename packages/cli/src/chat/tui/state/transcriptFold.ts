@@ -585,15 +585,15 @@ function retrackLiveActivityEntry(
     );
 }
 
-/** Tagged rows from an earlier attempt, or any tagged row after a malformed
- *  current-attempt boundary. Untagged legacy rows stay. */
+/** Once a boundary is declared only rows stamped with the current attempt
+ *  are current: rows from an earlier attempt, rows without a stamp, and every
+ *  row after a malformed boundary are superseded. Streams without a boundary
+ *  (ordinary workflow agents) keep every row. */
 function isSupersededAttemptId(
   state: TranscriptFoldState,
   attemptId: string | undefined,
 ): boolean {
-  if (!state.workflowAttemptBoundaryDeclared || attemptId === undefined) {
-    return false;
-  }
+  if (!state.workflowAttemptBoundaryDeclared) return false;
   return (
     state.workflowAttemptId === undefined ||
     attemptId !== state.workflowAttemptId

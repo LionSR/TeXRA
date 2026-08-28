@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   parseWorkflowScript,
-  runWorkflowScript,
-  WORKFLOW_SKIPPED_RESULT,
   WorkflowRunAbortError,
-  WorkflowScriptParseError,
   type WorkflowAgentInvocation,
   type WorkflowScriptControl,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
+import { WorkflowScriptParseError } from '@agent/workflowScript/parseScript';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
+import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
 import { deriveWorkflowCounts, type ExecutionId } from '@shared/schemas';
 import { delay } from '@utils/core';

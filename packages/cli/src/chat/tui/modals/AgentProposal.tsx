@@ -7,6 +7,7 @@ import {
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -41,9 +42,7 @@ function wrappedRows(text: string, width: number): number {
 }
 
 function fileGroupText(label: string, files: readonly string[]): string {
-  const visible = files.slice(0, FILE_LIMIT);
-  const hidden = files.length - visible.length;
-  return `${label}: ${visible.join(', ')}${hidden > 0 ? `, +${hidden} more` : ''}`;
+  return formatAgentProposalFileGroup(label, files, FILE_LIMIT);
 }
 
 export function agentProposalMetadataRows({
@@ -61,6 +60,7 @@ export function agentProposalMetadataRows({
   ) {
     const workflow = payload.workflowScript;
     return (
+      1 +
       wrappedRows(
         `${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
         width,

@@ -498,6 +498,50 @@ return await agent('Read', { phase: 'Review' })`;
     expect(workflowCallEvent(events, 'Read', 'running')).toBeUndefined();
   });
 
+  it('re-emits a cached card on a second durable resume', async () => {
+    const script = `${meta}
+phase('Review')
+return await agent('Read', { id: 'read' })`;
+    const store = () => getExecutionStore(executionId);
+    const first = await runScript(
+      recordingTrace().trace,
+      'twice-resumed',
+      script,
+      { runAgent: async () => 'saved' },
+    );
+
+    clearStoreCache();
+    const runner = vi.fn(() => Promise.reject(new Error('must not run')));
+    const second = await runPersistedWorkflowScriptWithProgress(
+      recordingTrace().trace,
+      {
+        store: store(),
+        checkpointId: 'twice-resumed',
+        runAgent: runner,
+        initialSnapshot: first.snapshot,
+      },
+    );
+    expect(second.snapshot.calls[0]?.status).toBe('cached');
+
+    // The second resume hydrates an already-cached call. Re-issuing it must
+    // still project a card: a host that starts watching here would otherwise
+    // never see the call at all.
+    clearStoreCache();
+    const { trace, events } = recordingTrace();
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: store(),
+      checkpointId: 'twice-resumed',
+      runAgent: runner,
+      initialSnapshot: second.snapshot,
+    });
+
+    expect(runner).not.toHaveBeenCalled();
+    expect(workflowCallEvent(events, 'Read', 'cached')).toMatchObject({
+      type: 'workflow.call',
+      stageId: stageId(events, 'Review'),
+    });
+  });
+
   it('reissues hydrated calls when hydration and issue share a timestamp', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-15T20:00:00.000Z'));
