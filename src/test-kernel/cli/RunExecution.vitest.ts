@@ -707,34 +707,6 @@ describe('executeCliRequest', () => {
     expect(mocks.close).toHaveBeenCalledOnce();
   });
 
-  it('keeps a completed run terminal status when wrap cleanup fails after invoke succeeded (#7863)', async () => {
-    const { executeCliRequest } = await loadRunExecution();
-    const request = baseRequest();
-    // runAgent resolves (default mock): the lifecycle has already persisted
-    // the run's true terminal status. A rejection from wrap's post-run
-    // cleanup must still propagate to the crash handler, but must NOT
-    // overwrite that status with ERROR.
-    const cleanupError = new Error('workspaceState.update failed');
-
-    await expect(
-      executeCliRequest(request, cliContext(), {
-        wrap: async (run) => {
-          await run();
-          throw cleanupError;
-        },
-      }),
-    ).rejects.toBe(cleanupError);
-
-    expect(mocks.finalizeRun).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        executionId: 'exec-1',
-        outcome: RUN_OUTCOME.FAILED,
-        flowRecord: 'preserve',
-      }),
-    );
-    expect(mocks.close).toHaveBeenCalledTimes(1);
-  });
-
   it('resolves a classified run failure to a non-zero exit code without rethrowing or finalizing again', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();

@@ -7,7 +7,6 @@ import {
   resolveKnownCliModelId,
 } from './cliConfig';
 import { CliUsageError, type CliContext } from './cliContext';
-import { initCliPlatform } from './initPlatform';
 import { writeTextStderr } from './logSinks';
 import { selectCliRunnableModel } from './modelAccess';
 import { shouldRenderRunProgress } from './runProgressRenderer';
@@ -49,7 +48,6 @@ export async function selectCliRunModel(
   modelOverride: string | undefined,
   role: 'chat' | 'run',
 ): Promise<string> {
-  await initCliPlatform({ ...context, quietLogs: true });
   try {
     const resolution = await selectCliRunnableModel(
       cliRunModelCandidates(context, modelOverride, role),

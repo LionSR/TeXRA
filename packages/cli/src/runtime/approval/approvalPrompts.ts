@@ -268,17 +268,13 @@ export async function askApproval(
       const parsed = parseApprovalAnswer(answer);
       let feedback = parsed.feedback;
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
-        try {
-          hooks.beforePrompt?.();
-          const feedbackAnswer = await askCliApprovalQuestion(context, {
-            kind: 'approval',
-            summary: '',
-            prompt: 'Rejection feedback (optional, Enter to skip): ',
-          });
-          feedback = feedbackAnswer.trim() || undefined;
-        } catch {
-          feedback = undefined;
-        }
+        hooks.beforePrompt?.();
+        const feedbackAnswer = await askCliApprovalQuestion(context, {
+          kind: 'approval',
+          summary: '',
+          prompt: 'Rejection feedback (optional, Enter to skip): ',
+        });
+        feedback = feedbackAnswer.trim() || undefined;
       }
 
       return {

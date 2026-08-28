@@ -58,8 +58,7 @@ type CliSkillSourceArgsDef = {
 };
 
 function formatCommaList(items: readonly string[]): string {
-  if (items.length <= 2) return items.join(' and ');
-  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(items);
 }
 
 export const GLOBAL_ARGS: CliGlobalArgsDef = {

@@ -14,8 +14,6 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  parseTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TexraApprovalPolicySchema,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -125,7 +123,15 @@ const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
   ['outputFormat', OutputFormatSchema],
-  ['approvalPolicy', TexraApprovalPolicySchema],
+  // Same normalization the catalog row (`stateSettings.ts`) applies for the
+  // other hosts, so a hand-edited " Yolo" reads the same way in all three.
+  [
+    'approvalPolicy',
+    z.preprocess(
+      (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
+      TexraApprovalPolicySchema,
+    ),
+  ],
 ];
 
 /** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command
@@ -392,20 +398,12 @@ export async function loadUserApprovalPolicy(
   if (result.status === 'missing') return { warnings: [] };
   if (result.status === 'warning') return { warnings: [result.warning] };
 
-  const stored = result.parsed[TEXRA_APPROVAL_POLICY_CONFIG_KEY];
-  if (stored === undefined) return { warnings: [] };
-  // Same normalization the catalog row applies for every other host, so a
-  // hand-edited " Yolo" reads the same way in all three.
-  const policy =
-    typeof stored === 'string' ? parseTexraApprovalPolicy(stored) : undefined;
-  if (!policy) {
-    return {
-      warnings: [
-        `Ignoring invalid ${filePath} key "${TEXRA_APPROVAL_POLICY_CONFIG_KEY}".`,
-      ],
-    };
-  }
-  return { value: policy, warnings: [] };
+  const { values, warnings } = parseCliConfigValues(result.parsed, filePath, {
+    reportUnknownKeys: false,
+    topLevelFields: new Set(['approvalPolicy']),
+    sections: new Set(),
+  });
+  return { value: values.approvalPolicy, warnings };
 }
 
 /**
