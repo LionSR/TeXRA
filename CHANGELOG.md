@@ -4,6 +4,103 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.6] - 2026-08-28
+
+### Shared (all surfaces)
+
+#### Breaking Changes
+
+- **Saved multi-agent workflow checkpoints must be restarted** — checkpoints
+  created by TeXRA 0.40.5 use an older journal format that 0.40.6 no longer
+  loads. New checkpoints remain reusable when calls are inserted, removed, or
+  reordered.
+
+#### Features
+
+- **Review multi-agent work one phase or call at a time** — before an issued
+  call starts, you can inspect its resolved agent, model, files, and output
+  contract, then approve, reject with feedback, or skip it. Approving all
+  delegated work still admits the remaining calls at once.
+- **Live workflow progress distinguishes plans from actual calls** — declared
+  plan labels, queued calls, active work, cached results, retries, and phase
+  totals now have distinct states instead of appearing as one flat list.
+- **GLM reasoning controls match each model** — supported effort levels,
+  including Minimal where available, are shown per model; GLM-5.3 keeps its
+  required reasoning enabled, and GLM-5.3 Flash joins the preferred list.
+
+#### Bug Fixes
+
+- **Multi-agent resumes reuse the right completed work** — unchanged calls are
+  recovered after script edits or reordering, remain visible across repeated
+  resumes, and no longer depend on their previous list position.
+- **Workflow phases keep accurate status and timing** — completed phases retain
+  their own finish times, failures do not mark earlier successful phases as
+  failed, and phases that never ran no longer appear as active work.
+- **Interrupted and high-volume runs preserve their state reliably** — an abort
+  during startup no longer destroys an existing checkpoint, snapshot flushing
+  cannot spin indefinitely, and large history deletions use bounded work.
+- **Model requests retain provider-specific controls** — Grok honors the chosen
+  temperature, GLM reasoning survives compaction, and OpenRouter reasoning
+  details are replayed exactly once across tool follow-ups.
+- **LaTeX replacements preserve operators and document text** — math-operator
+  subscripts, escaped spacing and delimiter commands, rho notation, and TikZ
+  content containing replacement markers are no longer corrupted.
+- **Agent output and previews fail less mysteriously** — single-document XML
+  output parses normally, between-round LaTeX diffs no longer depend on an
+  unrelated base file, and stale approval previews are not substituted for
+  unreadable files.
+- **Tool calls tolerate provider-compatible optional fields** — Plan, inquiry,
+  memory, media, and other multi-command tools now accept the nullable fields
+  emitted by OpenAI-compatible providers without rejecting the selected action.
+- **Tool results point to the right next step** — execution details advertise
+  their result view, paginated search no longer links to an empty page, figure
+  extraction reports the full discovered count, and Lean errors give
+  host-appropriate setup guidance.
+- **Polling and launch failures retain useful state** — malformed GitHub comment
+  data no longer hides the next issue close or reopen, Lean startup failures
+  reach the dashboard, and agent-launch errors keep their underlying cause.
+- **Storage and rendering failures are reported instead of hidden** — TeXRA now
+  surfaces failed transcript writes, workspace preparation, credential reads,
+  and cleanup while preserving work that already completed successfully.
+
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Team launches no longer wait for informational messages** — partial-team
+  and launch-error notifications cannot hold the run until their message is
+  dismissed.
+- **Progress controls and answers stay tied to the right run** — deleting one
+  stream no longer resets proposal ordering for every stream, running Codex
+  turns show an active indicator, and typed question responses preserve checked
+  options.
+- **Round output refreshes and compares correctly** — deleted files disappear
+  from the current round, and “Compare with previous round” is available when
+  the rounds differ.
+- **Credential-probe failures no longer look like an empty setup** — transient
+  credential errors are reported instead of permanently completing onboarding
+  with the wrong answer or blanking the launcher.
+
+### Desktop
+
+#### Bug Fixes
+
+- **The interface fully recovers after an initial renderer failure** — workspace
+  files, keyboard shortcuts, and the command palette are restored when startup
+  succeeds on retry.
+- **Settings actions cannot fail silently** — unavailable Git actions now report
+  an error, and subscription usage colors use desktop-compatible theme tokens.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Getting-started actions work before a folder is open** — walkthrough
+  buttons now explain the workspace requirement and offer to open a folder or
+  create a sample project instead of silently doing nothing.
+- **Grok sign-in is available from the Command Palette** — the command is now
+  exposed whenever TeXRA is active.
+
 ### CLI
 
 #### Features
@@ -15,11 +112,34 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Queued follow-ups survive a root run ending early** — a submission waiting
+  for its stream assignment is retained instead of being silently discarded.
+- **Account changes recover cleanly** — cancelling a coding-plan credential
+  update restores the prior setting, and Grok appears in the login and logout
+  pickers.
+- **The focused subagent list gets the available space** — the to-do and plan
+  panel stays hidden while the child-session list has focus.
+- **Commands validate before opening external pages** — GitHub Action setup
+  finishes its local checks before opening the GitHub App installer, and
+  narrow terminal layouts reserve enough room for the full TeXRA header.
+- **Shutdown and export failures are visible** — transcript, usage, lifecycle,
+  and trace-viewer read failures are reported with their actual cause.
 - **The terminal shows the same run the progress view does** — a workflow
   agent's transcript no longer hides its reasoning, replies, and prompts, a
   relaunched workflow keeps its earlier attempt on screen as a closed group,
   and phases are the phases the run actually opened rather than rows grouped by
   a repeated label.
+- **Workflow review prompts remain clear and reliable** — review keys stay
+  visible in narrow terminals, cards show readable model names and approval
+  scope, failed inquiry persistence no longer crashes the CLI, and prompt
+  failures are reported instead of being mistaken for feedback-free rejection.
+- **Configuration and help commands follow their documented inputs** — approval
+  policies tolerate surrounding whitespace and case differences, global flags
+  no longer confuse `texra help`, and unreadable setup paths are reported
+  instead of being treated as absent.
+- **Live transcript ordering remains stable after repainting** — completed tool
+  and file rows keep the same order after a resize, label update, or scrollback
+  trim.
 
 ## [0.40.5] - 2026-08-26
 
