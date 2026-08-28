@@ -206,18 +206,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     await this._mainViewProvider?.refreshOnboardingFunnel();
   }
 
-  public getContentProvider(): BundledViewContentProvider {
-    return this.contentProvider;
-  }
-
-  /** Routes a sidebar message to the progress view message handler. */
-  public handleSidebarMessage(
-    message: unknown,
-    view: vscode.WebviewView,
-  ): void {
-    void this.messageHandler.handleMessage(message, view);
-  }
-
   /** The sidebar stopped showing progress content; its handshake is void. */
   public resetSidebarReady(): void {
     if (this.target?.placement === 'sidebar') this.target.ready = false;
@@ -225,15 +213,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public static getInstance(): ProgressViewProvider | undefined {
     return this._instance;
-  }
-
-  private setupWebviewContent(
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): vscode.Disposable {
-    view.webview.html = this.contentProvider.getHtmlContent(view.webview);
-    return view.webview.onDidReceiveMessage((message) =>
-      this.messageHandler.handleMessage(message, view),
-    );
   }
 
   public syncFullView(): void {

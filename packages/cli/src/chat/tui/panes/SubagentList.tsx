@@ -88,6 +88,61 @@ import type { StreamView } from '../state/streamViews';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
+/** Emphasis a row segment inherits from its host row: the dashboard heading
+ *  renders bold and warning-colored, plain rows do neither. */
+interface SegmentStyle {
+  readonly bold?: boolean;
+  readonly color?: string;
+}
+
+/** One inline segment of a single-line row: a cell that may shrink to nothing
+ *  and truncates rather than wrapping. `flexShrink` carries the significance
+ *  order — higher numbers yield first as the row narrows. */
+function RowSegment({
+  bold,
+  children,
+  color,
+  dimColor,
+  flexShrink,
+}: SegmentStyle & {
+  readonly children: React.ReactNode;
+  readonly dimColor?: boolean;
+  readonly flexShrink: number;
+}): React.JSX.Element {
+  return (
+    <Box minWidth={0} flexShrink={flexShrink}>
+      <Text bold={bold} color={color} dimColor={dimColor} wrap="truncate-end">
+        {children}
+      </Text>
+    </Box>
+  );
+}
+
+/** The ` · <kind>` pending-approval suffix shared by session rows, workflow
+ *  task rows, and the dashboard heading. The kind is actionable so it never
+ *  shrinks; the overflow count is informational and yields early. */
+function ApprovalSegments({
+  approval,
+  bold,
+  color,
+}: SegmentStyle & {
+  readonly approval: ReturnType<typeof pendingApprovalRowDisplay>;
+}): React.JSX.Element | null {
+  if (!approval) return null;
+  return (
+    <>
+      <Box flexShrink={0}>
+        <Text bold={bold} color={color}>{` · ${approval.label}`}</Text>
+      </Box>
+      {approval.overflow ? (
+        <RowSegment bold={bold} color={color} flexShrink={3}>
+          {` ${approval.overflow}`}
+        </RowSegment>
+      ) : null}
+    </>
+  );
+}
+
 /**
  * One phase row of the dashboard, in both layouts: name, the phase's own
  * `done/total · N running · N failed`, and one glyph per issued call — the
@@ -234,36 +289,23 @@ function SessionRow({
       <Text aria-hidden color={childStatusColor(status)}>
         {CHILD_STATUS_MARKER}
       </Text>
-      <Box minWidth={0} flexShrink={1}>
-        <Text bold={active} wrap="truncate-end">
-          {session.label}
-          {statusLabel ? ` ${statusLabel}` : ''}
-          {stageLabel ? ` · ${stageLabel}` : ''}
-          {modelLabel ? ` · ${modelLabel}` : ''}
-          {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
-        </Text>
-      </Box>
+      <RowSegment bold={active} flexShrink={1}>
+        {session.label}
+        {statusLabel ? ` ${statusLabel}` : ''}
+        {stageLabel ? ` · ${stageLabel}` : ''}
+        {modelLabel ? ` · ${modelLabel}` : ''}
+        {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
+      </RowSegment>
       {summary ? (
-        <Box minWidth={0} flexShrink={2}>
-          <Text dimColor wrap="truncate-end">
-            {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
-          </Text>
-        </Box>
+        <RowSegment dimColor flexShrink={2}>
+          {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
+        </RowSegment>
       ) : null}
-      {approval ? (
-        <Box flexShrink={0}>
-          <Text>{` · ${approval.label}`}</Text>
-        </Box>
-      ) : null}
-      {approval?.overflow ? (
-        <Box minWidth={0} flexShrink={3}>
-          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
-        </Box>
-      ) : null}
+      <ApprovalSegments approval={approval} />
       {focused && hiddenRowSummary ? (
-        <Box minWidth={0} flexShrink={4}>
-          <Text dimColor wrap="truncate-end">{` · ${hiddenRowSummary}`}</Text>
-        </Box>
+        <RowSegment dimColor flexShrink={4}>
+          {` · ${hiddenRowSummary}`}
+        </RowSegment>
       ) : null}
       {metadataText ? (
         <>
@@ -333,32 +375,17 @@ function WorkflowTaskRow({
           {dashboardMarkerCell(style.marker)}
         </Text>
       </Box>
-      <Box minWidth={0} flexShrink={1}>
-        <Text wrap="truncate-end">{entry.call.label}</Text>
-      </Box>
+      <RowSegment flexShrink={1}>{entry.call.label}</RowSegment>
       {/* The status word outranks the metadata column: it is its own segment
           at the label's shrink weight, so a wide row sheds metadata (weight 2)
           long before it clips `· Running`, instead of the two sharing one
           truncating box where the status was always the half that was cut. */}
-      <Box minWidth={0} flexShrink={1}>
-        <Text wrap="truncate-end">
-          {` · ${WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}`}
-        </Text>
-      </Box>
-      {approval ? (
-        <Box flexShrink={0}>
-          <Text>{` · ${approval.label}`}</Text>
-        </Box>
-      ) : null}
-      {approval?.overflow ? (
-        <Box minWidth={0} flexShrink={3}>
-          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
-        </Box>
-      ) : null}
+      <RowSegment flexShrink={1}>
+        {` · ${WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}`}
+      </RowSegment>
+      <ApprovalSegments approval={approval} />
       {metadata ? (
-        <Box minWidth={0} flexShrink={2}>
-          <Text dimColor wrap="truncate-end">{`  ${metadata}`}</Text>
-        </Box>
+        <RowSegment dimColor flexShrink={2}>{`  ${metadata}`}</RowSegment>
       ) : null}
     </Box>
   );
@@ -520,34 +547,21 @@ function WorkflowDashboard({
       width={columns}
     >
       <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-        <Box minWidth={0} flexShrink={1}>
-          <Text bold wrap="truncate-end">
-            {heading}
-          </Text>
-        </Box>
+        <RowSegment bold flexShrink={1}>
+          {heading}
+        </RowSegment>
         {failed > 0 ? (
           // A pending approval needs action, so this tally yields before the
           // fixed approval suffix when the two cannot both fit.
-          <Box minWidth={0} flexShrink={2}>
-            <Text bold color={COLOR_WARNING} wrap="truncate-end">
-              {` · ${failed} failed`}
-            </Text>
-          </Box>
+          <RowSegment bold color={COLOR_WARNING} flexShrink={2}>
+            {` · ${failed} failed`}
+          </RowSegment>
         ) : null}
-        {sessionApproval ? (
-          <Box flexShrink={0}>
-            <Text bold color={COLOR_WARNING}>
-              {` · ${sessionApproval.label}`}
-            </Text>
-          </Box>
-        ) : null}
-        {sessionApproval?.overflow ? (
-          <Box minWidth={0} flexShrink={3}>
-            <Text bold color={COLOR_WARNING} wrap="truncate-end">
-              {` ${sessionApproval.overflow}`}
-            </Text>
-          </Box>
-        ) : null}
+        <ApprovalSegments
+          approval={sessionApproval}
+          bold
+          color={COLOR_WARNING}
+        />
       </Box>
       {wide ? (
         <Box flexDirection="row" height={contentRows} minWidth={0}>

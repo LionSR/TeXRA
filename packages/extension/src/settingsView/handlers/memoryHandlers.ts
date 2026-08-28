@@ -100,8 +100,9 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      await this.settingsHost.deleteMemory(data, (message) =>
-        this.postMessageToActiveWebview(message),
+      await this.settingsHost.deleteMemory(
+        data,
+        this.ctx.postMessageToActiveWebview,
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -115,8 +116,10 @@ export class MemoryHandlers {
 
   async setMemoryPinned(storagePath: string, pinned: boolean): Promise<void> {
     try {
-      await this.settingsHost.setMemoryPinned(storagePath, pinned, (message) =>
-        this.postMessageToActiveWebview(message),
+      await this.settingsHost.setMemoryPinned(
+        storagePath,
+        pinned,
+        this.ctx.postMessageToActiveWebview,
       );
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
@@ -126,12 +129,5 @@ export class MemoryHandlers {
         error,
       );
     }
-  }
-
-  private async postMessageToActiveWebview(message: unknown): Promise<void> {
-    if (message == null) return;
-    await this.ctx.withActiveWebview(async (webview) => {
-      await webview.postMessage(message);
-    });
   }
 }
