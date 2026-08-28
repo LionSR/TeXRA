@@ -409,32 +409,30 @@ function createWindow(options: {
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with
-  // TEXRA_NO_UPDATE_CHECK=1. Gated on owning the
-  // single-instance lock so an "open folder in new window" launch (which
-  // deliberately runs as its own process) never duplicates the check or
-  // dialog alongside the primary process.
-  if (protocolLifecycle.ownsSingleInstanceLock) {
-    checkForDesktopUpdate({
-      currentVersion: app.getVersion(),
-      globalState: platform().globalState,
-      isPackaged: app.isPackaged,
-      notify: async (release) => {
-        const { response } = await dialog.showMessageBox(window, {
-          type: 'info',
-          message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-          buttons: ['Download', 'Later'],
-          defaultId: 0,
-          cancelId: 1,
-        });
-        if (response === 0) {
-          // Open the known-constant releases page rather than any
-          // network-provided URL, so an unauthenticated API response can
-          // never influence what shell.openExternal opens.
-          await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
-        }
-      },
-    }).catch(reportBackgroundError);
-  }
+  // TEXRA_NO_UPDATE_CHECK=1. `createWindow` only ever runs inside the
+  // `app.whenReady()` block, which the lock-losing process never reaches, so
+  // no extra single-instance gate is needed here; `checkForDesktopUpdate`
+  // itself dedupes concurrent calls and window reopens.
+  checkForDesktopUpdate({
+    currentVersion: app.getVersion(),
+    globalState: platform().globalState,
+    isPackaged: app.isPackaged,
+    notify: async (release) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'info',
+        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+        buttons: ['Download', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (response === 0) {
+        // Open the known-constant releases page rather than any
+        // network-provided URL, so an unauthenticated API response can
+        // never influence what shell.openExternal opens.
+        await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
+      }
+    },
+  }).catch(reportBackgroundError);
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
@@ -1216,7 +1214,7 @@ function createWindow(options: {
   void window.loadFile(join(desktopMainDir, '../renderer/index.html'));
 }
 
-if (protocolLifecycle.shouldContinue) {
+if (protocolLifecycle.ownsSingleInstanceLock) {
   app
     .whenReady()
     .then(async () => {

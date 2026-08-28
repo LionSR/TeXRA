@@ -81,10 +81,8 @@ import {
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
 import { DESKTOP_ONBOARDING_COMMANDS } from '../shared/desktopOnboardingMessages';
-import {
-  createDesktopCommandPalette,
-  type CommandPaletteController,
-} from './desktopCommandPalette';
+import { createDesktopCommandPalette } from './desktopCommandPalette';
+import { createDesktopShortcutBootstrap } from './desktopShortcutBootstrap';
 import {
   createDesktopShortcutRegistry,
   desktopCommandPaletteShortcut,
@@ -154,16 +152,16 @@ const startupTeamPanel = createStartupTeamPanel({
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
   openMultiAgent: () => openSettingsTab('multi-agent'),
-  // Lazy by necessity: the panel is constructed above the shortcut registry's
+  // Lazy by necessity: the panel is constructed above the shortcut bootstrap's
   // declaration (which lands much later at module scope), so an eager or
-  // captured read is a TDZ throw, and a bootstrap failure leaves the registry
-  // `undefined` forever. Reading at render time is also what lets a user
-  // override (registry `localStorage`) reach the hint; the construction-time
-  // default only ever printed cmd/ctrl+K.
+  // captured read is a TDZ throw, and a bootstrap failure leaves its registry
+  // absent until a recovery installs it. Reading at render time is also what
+  // lets a user override (registry `localStorage`) reach the hint; the
+  // construction-time default only ever printed cmd/ctrl+K.
   commandsHint: () => {
-    const entry = shortcutRegistry
-      ?.entries()
-      .find((entry) => entry.id === DESKTOP_COMMAND_PALETTE_ID);
+    const entry = shortcutBootstrap
+      .entries()
+      ?.find((entry) => entry.id === DESKTOP_COMMAND_PALETTE_ID);
     const accelerator = formatDesktopAccelerator(
       entry
         ? entry.accelerator
@@ -1194,16 +1192,11 @@ function recoverFromBootstrapFallback(): void {
     bootstrapComplete = false;
     logsController.rerenderViewer();
     rerenderShell();
-    // Recovery must wire rail tabs / conversation events and install the
-    // signal watcher. Without these the recovered shell renders but stays
+    // Recovery must install the signal watcher and then redo the whole normal
+    // bootstrap tail. Without these the recovered shell renders but stays
     // inert (rail clicks ignored, signal changes don't trigger rerenders).
-    wireRailTabs();
-    wireConversation();
     installShellSignalWatcher();
-    postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
-    postWebviewReady();
-    document.body.dataset.desktopReady = 'true';
-    bootstrapComplete = true;
+    completeBootstrap();
   } catch (recoveryError) {
     console.error('TeXRA desktop renderer recovery failed', recoveryError);
     bootstrapFailed = true;
@@ -1321,33 +1314,44 @@ const desktopRendererCommandActions: DesktopCommandActions = {
     );
   },
 };
-let commandPalette: CommandPaletteController | undefined;
-const shortcutRegistry = bootstrapFailed
-  ? undefined
-  : createDesktopShortcutRegistry({
+const shortcutBootstrap = createDesktopShortcutBootstrap({
+  createRegistry: (openCommands) =>
+    createDesktopShortcutRegistry({
       document,
       actions: desktopRendererCommandActions,
-      openCommands: () => commandPalette?.open(),
-    });
-if (shortcutRegistry) {
-  commandPalette = createDesktopCommandPalette({
-    document,
-    actions: desktopRendererCommandActions,
-    getStreams: () => streams$.get(),
-    getShortcuts: () => shortcutRegistry.entries(),
-  });
-  document.body.append(commandPalette.element);
-}
-const disposeShortcutHints = shortcutRegistry?.subscribe((entries) => {
-  shortcutAcceleratorsById.clear();
-  for (const entry of entries) {
-    shortcutAcceleratorsById.set(entry.id, entry.accelerator);
-  }
-  rerenderShell();
+      openCommands,
+    }),
+  createPalette: (registry) =>
+    createDesktopCommandPalette({
+      document,
+      actions: desktopRendererCommandActions,
+      getStreams: () => streams$.get(),
+      getShortcuts: () => registry.entries(),
+    }),
+  appendPalette: (element) => document.body.append(element),
+  onShortcutsChanged: (entries) => {
+    shortcutAcceleratorsById.clear();
+    for (const entry of entries) {
+      shortcutAcceleratorsById.set(entry.id, entry.accelerator);
+    }
+    rerenderShell();
+  },
 });
 
+/**
+ * Install the keyboard shortcuts, the command palette and the accelerator-hint
+ * subscription, exactly once. Driven from `completeBootstrap` rather than
+ * module scope so a shell that recovers from a bootstrap failure gets them
+ * too: the previous `const` was gated on `bootstrapFailed` and could never be
+ * re-evaluated, leaving a recovered shell with no shortcuts and a permanently
+ * inert command palette while the startup panel still advertised cmd/ctrl+K.
+ */
+function ensureShortcutRegistry(): void {
+  shortcutBootstrap.ensure();
+}
+
 function openCommandPalette(): void {
-  commandPalette?.open();
+  shortcutBootstrap.open();
 }
 
 function switchToStream(streamId: StreamTabId): void {
@@ -1490,14 +1494,25 @@ function wireConversation(): void {
   }
 }
 
-if (!bootstrapFailed) {
+/**
+ * Everything "finish starting up" means, in one place: the module-scope path
+ * below and `recoverFromBootstrapFallback` both run it, so the two can no
+ * longer drift (recovery used to skip the workspace file refresh and never
+ * installed shortcuts at all). Every step is idempotent.
+ */
+function completeBootstrap(): void {
   wireRailTabs();
   wireConversation();
+  ensureShortcutRegistry();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
   postWebviewReady();
   if (hasWorkspace) void editorPane.refresh();
   document.body.dataset.desktopReady = 'true';
   bootstrapComplete = true;
+}
+
+if (!bootstrapFailed) {
+  completeBootstrap();
 }
 
 // Sole owner of "the workspace has unsaved editor changes": the main process
@@ -1508,8 +1523,7 @@ window.addEventListener(
   'unload',
   () => {
     surfaceResizeObserver?.disconnect();
-    disposeShortcutHints?.();
-    shortcutRegistry?.dispose();
+    shortcutBootstrap.dispose();
     editorPane.dispose();
     terminalPane.disposeAll();
   },

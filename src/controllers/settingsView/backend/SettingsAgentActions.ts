@@ -54,7 +54,6 @@ interface SettingsAgentActionsOptions {
   readonly showErrorMessage: (message: string) => Promise<void>;
   readonly refreshAfterMutation: () => Promise<void>;
   readonly run: (
-    command: AgentFileCommand,
     failureMessage: string,
     action: () => Promise<void>,
   ) => Promise<void>;
@@ -86,7 +85,7 @@ export function createSettingsAgentActions(
   const run = (
     command: AgentFileCommand,
     action: () => Promise<void>,
-  ): Promise<void> => options.run(command, FAILURE_MESSAGES[command], action);
+  ): Promise<void> => options.run(FAILURE_MESSAGES[command], action);
 
   return {
     openAgentYaml: (message) =>
