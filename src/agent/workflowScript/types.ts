@@ -246,7 +246,7 @@ export type WorkflowAgentCallOptions = z.infer<
 >;
 
 export interface WorkflowAgentInvocation {
-  /** 0-based call sequence number; also the journal key position. */
+  /** 0-based call sequence number: ordering only, never identity. */
   index: number;
   /** Stable logical call identity within the workflow execution snapshot. */
   progressId: WorkflowScriptProgressId;
@@ -327,7 +327,12 @@ export type WorkflowAgentRunner = (
   invocation: WorkflowAgentInvocation,
 ) => Promise<unknown>;
 
-/** One completed agent() call, cached for resume. */
+/**
+ * One completed agent() call, cached for resume. Identity is `key` alone;
+ * `index` records where the call sat in the run that journaled it, for
+ * ordering and cost attribution, and is rewritten when a resumed run replays
+ * the entry at a new position.
+ */
 export interface WorkflowJournalEntry {
   index: number;
   /** Stable call hash including host-resolved dependency fingerprints. */

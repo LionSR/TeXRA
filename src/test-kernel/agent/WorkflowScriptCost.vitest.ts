@@ -164,27 +164,6 @@ return await agent('retry cost')`,
     expect(tracker.total([cheapJournal])).toBeCloseTo(0.5);
   });
 
-  it('separates sequential duplicate keys when only the first call is live', () => {
-    const live = entry(0, workflowResult(0.4), 'duplicate');
-    const recovered = entry(1, workflowResult(0.7), 'duplicate');
-    const tracker = createWorkflowAttemptCostTracker();
-
-    tracker.record(live, 0.4);
-    expect(tracker.total([live, recovered])).toBe(0.4);
-  });
-
-  it('separates parallel duplicate keys when only one call retries', () => {
-    const retried = entry(0, workflowResult(0.5), 'duplicate');
-    const singleAttempt = entry(1, workflowResult(0.4), 'duplicate');
-    const tracker = createWorkflowAttemptCostTracker();
-
-    // Interleaved callback order models parallel calls. Only index 0 retries.
-    tracker.record(retried, 0.1);
-    tracker.record(singleAttempt, 0.4);
-    tracker.record(retried, 0);
-    expect(tracker.total([retried, singleAttempt])).toBeCloseTo(1);
-  });
-
   it('settles zero for empty-baseline stable recovery with no callback', () => {
     const recovered = entry(0, workflowResult(0.5), 'recovered');
     const tracker = createWorkflowAttemptCostTracker();

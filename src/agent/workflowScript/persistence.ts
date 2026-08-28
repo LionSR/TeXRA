@@ -21,7 +21,9 @@ import {
   type WorkflowScriptRunResult,
 } from './types';
 
-const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 3;
+// v4: journal identity is the content key; v3 records could hold one key at
+// two indices after script drift and fail loudly rather than being translated.
+const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 4;
 
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('undefined') }),
@@ -43,16 +45,16 @@ const WorkflowScriptCheckpointSchema = z
     journal: z.array(PersistedWorkflowJournalEntrySchema),
   })
   .superRefine(({ journal }, context) => {
-    const indices = new Set<number>();
+    const keys = new Set<string>();
     for (const entry of journal) {
-      if (indices.has(entry.index)) {
+      if (keys.has(entry.key)) {
         context.addIssue({
           code: 'custom',
-          message: `Duplicate workflow journal index ${entry.index}`,
+          message: `Duplicate workflow journal key ${entry.key}`,
           path: ['journal'],
         });
       }
-      indices.add(entry.index);
+      keys.add(entry.key);
     }
   });
 
@@ -220,9 +222,12 @@ async function runPersistedWorkflowScriptLocked(
   // A named checkpoint outlives one tool call, and callers legitimately
   // evolve the script between attempts (a model retrying after a timeout
   // rarely reproduces its source byte-for-byte). Adopt the requested script
-  // and args, keep the journal: an entry replays only on a matching call
-  // index and prompt/execution-options hash, so drifted calls re-execute
-  // while presentation-only edits and unchanged calls stay free.
+  // and args, keep the journal: an entry replays only on a matching
+  // prompt/execution-options hash, so drifted calls re-execute while
+  // presentation-only edits, unchanged calls, and calls that merely moved
+  // stay free. The union is monotone by key — a re-visited key overwrites
+  // its entry (and its position); entries this run never reached remain, so
+  // an args-driven branch taken again later still replays.
   const script = requestedScript ?? prior?.script;
   if (script === undefined) {
     throw new WorkflowScriptPersistenceError(
@@ -249,22 +254,22 @@ async function runPersistedWorkflowScriptLocked(
       ? WorkflowScriptFilesSchema.parse(requestedFiles ?? {})
       : prior.files;
 
-  const journalByIndex = new Map(
-    (prior?.journal ?? []).map((entry) => [entry.index, entry]),
+  const journalByKey = new Map(
+    (prior?.journal ?? []).map((entry) => [entry.key, entry]),
   );
   const persistCheckpoint = (): Promise<void> =>
     writeWorkflowScriptCheckpoint(store, checkpointId, {
       script,
       args,
       files,
-      journal: orderedJournal(journalByIndex.values()),
+      journal: orderedJournal(journalByKey.values()),
     });
 
   let acceptingEntries = true;
   const writeQueue = new PQueue({ concurrency: 1 });
   const persistEntry = async (entry: WorkflowJournalEntry): Promise<void> => {
     if (!acceptingEntries) return;
-    journalByIndex.set(entry.index, entry);
+    journalByKey.set(entry.key, entry);
     await writeQueue.add(persistCheckpoint);
   };
 
@@ -284,7 +289,7 @@ async function runPersistedWorkflowScriptLocked(
       onJournalEntry: persistEntry,
     });
     acceptingEntries = false;
-    for (const entry of result.journal) journalByIndex.set(entry.index, entry);
+    for (const entry of result.journal) journalByKey.set(entry.key, entry);
     await writeQueue.onIdle();
     await persistCheckpoint();
     return result;

@@ -358,7 +358,7 @@ export function createWorkflowScriptStrategy(
           executionId: params.executionId,
         },
         {
-          message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
+          message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}' for this agent; rerunning that file with the same agent resumes without repeating them (failed, cancelled, and skipped calls run again).`,
           lines: [formatSummaryLine('failed', errorCause)],
         },
       );
