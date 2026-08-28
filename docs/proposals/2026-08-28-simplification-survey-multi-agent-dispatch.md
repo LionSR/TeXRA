@@ -45,8 +45,11 @@ design, the QuickJS bridge shape, per-call replay.
 - **The multi-agent proposal card's row budget was one row short** (the
   workflow branch of `agentProposalMetadataRows` omitted the outer margin
   row), overflowing by one row in feedback mode.
-- **A persisted `status: 'starting'` snapshot would fail resume loudly** once
-  the status is removed; the existing preprocess strip maps it to `running`.
+- **A persisted `status: 'starting'` snapshot fails resume loudly** once
+  the status is removed. The compatibility preprocess that briefly mapped it
+  (and stripped `stageTitle`/`blockedReason`/`queuedAt`) was deleted the same
+  day — intermediate-era data is disposable, not age-gated; an interrupted
+  run's `meta.json` from an older build is rejected loudly on resume.
 - Three silent catches in the delegation layer made loud (§15 M2/M4).
 
 ## Landed simplifications (measured)
