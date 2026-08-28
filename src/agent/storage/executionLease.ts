@@ -13,7 +13,7 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
-import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 
 import {
   currentLeaseOwner,
@@ -655,11 +655,11 @@ export async function runWithExecutionLeaseWriteFence<T>(
   if (lease) return runWithValidatedOwnership(lease, operation);
   // Unleased writers in this process take turns, so that two of them never
   // refuse each other over the maintenance claim the first one holds.
-  const queue = getOrCreatePQueue(unleasedWriteQueues, key);
-  const claimed = (await queue.add(() =>
+  // `runOnPerKeyQueue` also drops the idle queue when the operation throws,
+  // which the previous inline epilogue skipped (a small leak on failure).
+  const claimed = await runOnPerKeyQueue(unleasedWriteQueues, key, () =>
     runWithInactiveExecutionLease(executionId, operation),
-  )) as InactiveExecutionLeaseResult<T>;
-  if (queue.size === 0 && queue.pending === 0) unleasedWriteQueues.delete(key);
+  );
   if (claimed.status === 'active') {
     throw new ExecutionLeaseLostError(executionId);
   }

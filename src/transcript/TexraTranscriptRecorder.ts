@@ -58,7 +58,7 @@ import {
   isObject,
   type FlushableDebounce,
 } from '@utils/core';
-import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 import type PQueue from 'p-queue';
 
 import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
@@ -276,21 +276,14 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    const queue = getOrCreatePQueue(spillQueues, path);
-    const pending = queue
-      .add(() => spillWriter.write(path, text))
+    const pending = runOnPerKeyQueue(spillQueues, path, () =>
+      spillWriter.write(path, text),
+    )
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })
       .finally(() => {
         pendingSpills.delete(pending);
-        if (
-          queue.pending === 0 &&
-          queue.size === 0 &&
-          spillQueues.get(path) === queue
-        ) {
-          spillQueues.delete(path);
-        }
       });
     pendingSpills.add(pending);
     return path;

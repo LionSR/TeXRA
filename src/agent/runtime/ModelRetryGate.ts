@@ -1,3 +1,5 @@
+import pDefer from 'p-defer';
+
 import { jitteredExponentialBackoffMs } from '@utils/core';
 
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
@@ -200,25 +202,25 @@ export class ModelRetryGate {
 
     const delayMs = Math.max(0, state.retryAt - Date.now());
     options.onWait?.(delayMs);
-    return new Promise<RetryPermit>((resolve, reject) => {
-      const waiter: WaitingAttempt = {
-        resolve,
-        reject,
-        signal: options.signal,
-        onAbort: () => {
-          const index = state.waiters.indexOf(waiter);
-          if (index >= 0) state.waiters.splice(index, 1);
-          if (state.waiters.length === 0 && state.timer) {
-            clearTimeout(state.timer);
-            state.timer = undefined;
-          }
-          reject(abortReason(options.signal));
-        },
-      };
-      options.signal.addEventListener('abort', waiter.onAbort, { once: true });
-      state.waiters.push(waiter);
-      this.scheduleProbe(state);
-    });
+    const permit = pDefer<RetryPermit>();
+    const waiter: WaitingAttempt = {
+      resolve: permit.resolve,
+      reject: permit.reject,
+      signal: options.signal,
+      onAbort: () => {
+        const index = state.waiters.indexOf(waiter);
+        if (index >= 0) state.waiters.splice(index, 1);
+        if (state.waiters.length === 0 && state.timer) {
+          clearTimeout(state.timer);
+          state.timer = undefined;
+        }
+        permit.reject(abortReason(options.signal));
+      },
+    };
+    options.signal.addEventListener('abort', waiter.onAbort, { once: true });
+    state.waiters.push(waiter);
+    this.scheduleProbe(state);
+    return permit.promise;
   }
 
   private acquireHealthy(route: string): RetryPermit | undefined {

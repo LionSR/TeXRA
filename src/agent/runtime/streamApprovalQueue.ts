@@ -12,7 +12,7 @@
 
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { StreamTabId } from '@shared/schemas';
-import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
 
 import type { SessionHostInteractions } from './HostInteractions';
 import type PQueue from 'p-queue';
@@ -156,24 +156,11 @@ function createStreamApprovalController(
       streamId: StreamTabId | undefined,
       approval: QueuedApproval<T>,
     ): Promise<T> {
-      const queue = getOrCreatePQueue(queues, streamId);
-
-      // `add` widens to `T | void` to cover abort via signal/timeout; we pass
-      // neither, so the task always runs and resolves with `T`.
-      const task = queue.add(async () =>
+      return runOnPerKeyQueue(queues, streamId, async () =>
         streamId && bypass.isBypassed(streamId)
           ? approval.bypassed()
           : approval.prompt(),
-      ) as Promise<T>;
-      return task.finally(() => {
-        if (
-          queue.pending === 0 &&
-          queue.size === 0 &&
-          queues.get(streamId) === queue
-        ) {
-          queues.delete(streamId);
-        }
-      });
+      );
     },
   };
 }

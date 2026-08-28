@@ -54,6 +54,12 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 // registry that dispatch resolves for it through the same accessor.
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
+  // The session-keyed registry resolves live handles through its session's
+  // ExecutionRegistry; this suite never tracks real handles, so lookups miss.
+  executions: {
+    getHandle: () => undefined,
+    getAgentHandleByStream: () => undefined,
+  },
 } as unknown as SessionHandle;
 const CodexThreads = codexThreadsFor(testSession);
 

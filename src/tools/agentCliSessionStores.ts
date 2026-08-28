@@ -26,7 +26,10 @@ function sessionRegistries(persistedSessionKey: string) {
     for: (session: SessionHandle): AgentCliSessionRegistry => {
       let registry = registries.get(session);
       if (!registry) {
-        registry = new AgentCliSessionRegistry(persistedSessionKey);
+        registry = new AgentCliSessionRegistry(
+          persistedSessionKey,
+          session.executions,
+        );
         registries.set(session, registry);
       }
       return registry;

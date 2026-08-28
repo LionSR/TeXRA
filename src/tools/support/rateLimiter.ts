@@ -5,6 +5,7 @@ import pThrottle from 'p-throttle';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError } from '@shared/schemas';
 import { wrapApiCall } from '@tools/utils';
+import { onAbort } from '@utils/core';
 
 const limiters = new Map<
   string,
@@ -83,32 +84,20 @@ export async function abandonOnAbort<T>(
   what: string,
 ): Promise<T> {
   if (!signal) return operation;
-  const cancelled = () => new ToolError(`Cancelled ${what}.`);
-  // Register the abort listener BEFORE reading signal.aborted. In today's
-  // single-threaded flow nothing runs between the two, but registering first
-  // is the robust idiom: it stays correct even if a future edit inserts an
-  // await between the aborted-check and the Promise.race, which would
-  // otherwise open a window where an abort fires with no listener attached
-  // and the race never rejects.
-  let removeListener = () => {};
+  let detach = (): void => {};
   const abortRace = new Promise<never>((_, reject) => {
-    const onAbort = () => reject(cancelled());
-    signal.addEventListener('abort', onAbort, { once: true });
-    removeListener = () => signal.removeEventListener('abort', onAbort);
+    // `onAbort` fires immediately for an already-aborted signal, so the race
+    // below rejects at once — no separate aborted-check window to guard.
+    detach = onAbort(signal, () => reject(new ToolError(`Cancelled ${what}.`)));
   });
-  if (signal.aborted) {
-    removeListener();
-    // Abandoned operation: swallow its eventual rejection (if any) so the
-    // orphaned promise never surfaces as an unhandled rejection.
-    operation.catch(() => {});
-    throw cancelled();
-  }
   try {
     return await Promise.race([operation, abortRace]);
   } catch (error) {
+    // Abandoned operation: swallow its eventual rejection (if any) so the
+    // orphaned promise never surfaces as an unhandled rejection.
     operation.catch(() => {});
     throw error;
   } finally {
-    removeListener();
+    detach();
   }
 }

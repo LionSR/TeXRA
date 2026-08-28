@@ -1,3 +1,4 @@
+import pDefer from 'p-defer';
 import {
   attachTerminalResultToast,
   runAgent,
@@ -329,20 +330,9 @@ export async function executeCliRequest(
     launchVerdict.finalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
-  let settleLeaseAcquired: (
-    executionId: ExecutionId | undefined,
-  ) => void = () => undefined;
-  const leaseAcquired = new Promise<ExecutionId | undefined>((resolve) => {
-    settleLeaseAcquired = resolve;
-  });
-  let settleShutdownFinalization: () => void = () => undefined;
-  const shutdownFinalizationDone = new Promise<void>((resolve) => {
-    settleShutdownFinalization = resolve;
-  });
-  let settleRecoveryNoticeStarted: () => void = () => undefined;
-  const recoveryNoticeStarted = new Promise<void>((resolve) => {
-    settleRecoveryNoticeStarted = resolve;
-  });
+  const leaseAcquired = pDefer<ExecutionId | undefined>();
+  const shutdownFinalizationDone = pDefer<void>();
+  const recoveryNoticeStarted = pDefer<void>();
   let shutdownStatusFinalized: Promise<boolean> | undefined;
   // Both callbacks enter on this event loop, and neither yields between the
   // check and assignment. Exactly one can therefore own the terminal verdict.
@@ -354,7 +344,7 @@ export async function executeCliRequest(
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
-      const executionId = await leaseAcquired;
+      const executionId = await leaseAcquired.promise;
       if (!executionId) return false;
       try {
         const terminalStatusPersisted = (
@@ -376,7 +366,7 @@ export async function executeCliRequest(
           options.onInterruptedExecutionFinalized !== undefined &&
           (options.canAdvertiseInterruptedExecution?.(resumability) ?? true)
         ) {
-          settleRecoveryNoticeStarted();
+          recoveryNoticeStarted.resolve();
           await options.onInterruptedExecutionFinalized(executionId);
         }
         return true;
@@ -447,20 +437,24 @@ export async function executeCliRequest(
           true) &&
         options.onInterruptedExecutionFinalized
       ) {
-        await shutdownFinalizationDone;
+        await shutdownFinalizationDone.promise;
         return;
       }
       const first = await Promise.race([
-        shutdownFinalizationDone.then(() => 'finalized' as const),
+        shutdownFinalizationDone.promise.then(() => 'finalized' as const),
         new Promise<'deadline'>((resolve) =>
           onAbort(shutdownDeadline, () => resolve('deadline')),
         ),
         ...(options.onInterruptedExecutionFinalized
-          ? [recoveryNoticeStarted.then(() => 'recovery-started' as const)]
+          ? [
+              recoveryNoticeStarted.promise.then(
+                () => 'recovery-started' as const,
+              ),
+            ]
           : []),
       ]);
       if (first === 'recovery-started') {
-        await shutdownFinalizationDone;
+        await shutdownFinalizationDone.promise;
       }
     },
   );
@@ -491,7 +485,7 @@ export async function executeCliRequest(
         },
         onExecutionLeaseAcquired: (executionId) => {
           ownedExecutionId = executionId;
-          settleLeaseAcquired(executionId);
+          leaseAcquired.resolve(executionId);
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
@@ -508,7 +502,7 @@ export async function executeCliRequest(
     } finally {
       // Unblock an in-flight shutdown when acquisition failed before a scope
       // became available. Promise resolution is one-shot after success.
-      settleLeaseAcquired(undefined);
+      leaseAcquired.resolve(undefined);
     }
   };
 
@@ -573,7 +567,7 @@ export async function executeCliRequest(
   } catch (error) {
     cleanupFailures.push(error);
   } finally {
-    settleShutdownFinalization();
+    shutdownFinalizationDone.resolve();
     if (!runResult.ok || !finalizationCompleted) {
       try {
         await detachPresentation();
