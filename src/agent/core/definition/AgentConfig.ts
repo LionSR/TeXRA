@@ -95,6 +95,11 @@ const LEGACY_CLI_FIELD_NAMES = [
  * the schema entrance, so downstream code only ever sees the nested shape.
  * A no-op once a `cli` object is already present, or when none of the legacy
  * fields are.
+ *
+ * Introduced 2026-08-28. Retire three months after this ships (see AGENTS.md
+ * "Compatibility and format retirement"): once no execution on disk still
+ * predates it, delete this function, `LEGACY_CLI_FIELD_NAMES`, and the
+ * migration branch in {@link normalizeAgentConfigInput}.
  */
 function migrateLegacyCliFields(
   input: Record<string, unknown>,
