@@ -40,6 +40,7 @@ export class ProgressAgentProposalController {
           action: 'approve',
           ...(input.model ? { model: input.model } : {}),
           ...(input.agent ? { agent: input.agent } : {}),
+          ...(input.callReview ? { callReview: input.callReview } : {}),
         });
         return true;
       case 'reject':

@@ -18,6 +18,8 @@ function statusIcon(call: WorkflowCallProgress): TemplateResult {
     case 'planned':
     case 'queued':
       return waIcon('circle-dot');
+    case 'awaitingApproval':
+      return waIcon('circle-question');
     case 'running':
       return waIcon(terminalStatusIcon('running'));
     case 'completed':

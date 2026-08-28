@@ -171,6 +171,8 @@ export const WORKFLOW_CALL_NOT_REACHED_NOTE =
   'The workflow ended before this call was reached.';
 export const WORKFLOW_CALL_UNFINISHED_NOTE =
   'The workflow ended before this call completed.';
+export const WORKFLOW_CALL_AWAITING_APPROVAL_NOTE =
+  'Waiting for your review before this call runs.';
 
 /**
  * The one explanatory-clause rule for a workflow call, shared by every host: a

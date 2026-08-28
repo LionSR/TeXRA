@@ -2088,6 +2088,58 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
     ]);
   });
 
+  it('admits each issued call before it takes a slot; a denied call is skipped and never journaled', async () => {
+    const requests: string[] = [];
+    const runner = vi.fn(async (invocation: WorkflowAgentInvocation) => {
+      return `done:${invocation.index}`;
+    });
+    const run = await runWorkflowScript({
+      script: `${META}return await parallel([
+  () => agent('a', { id: 'a', model: 'declared-model' }),
+  () => agent('b', { id: 'b' }),
+])`,
+      runAgent: runner,
+      concurrency: 1,
+      admitCall: async (request) => {
+        requests.push(`${request.progressId}:${request.options.model ?? '-'}`);
+        return request.progressId === 'b' ? 'skip' : 'run';
+      },
+    });
+
+    expect(requests).toEqual(['a:declared-model', 'b:-']);
+    expect(runner).toHaveBeenCalledOnce();
+    expect(run.result).toEqual(['done:0', WORKFLOW_SKIPPED_RESULT]);
+    expect(run.journal.map((entry) => entry.index)).toEqual([0]);
+    expect(run.snapshot.calls).toMatchObject([
+      { id: 'a', status: 'completed' },
+      { id: 'b', status: 'skipped' },
+    ]);
+    expect(run.snapshot.calls[1]?.settledBySweep).toBeUndefined();
+  });
+
+  it('ends a pending admission when the run aborts, without launching the call', async () => {
+    const controller = new AbortController();
+    const runner = vi.fn(async () => 'never');
+    let awaiting = false;
+    const runPromise = runWorkflowScript({
+      script: `${META}return await agent('a', { id: 'a' })`,
+      runAgent: runner,
+      signal: controller.signal,
+      admitCall: (_request, signal) =>
+        new Promise((_resolve, reject) => {
+          awaiting = true;
+          signal.addEventListener('abort', () => reject(signal.reason), {
+            once: true,
+          });
+        }),
+    });
+
+    await vi.waitFor(() => expect(awaiting).toBe(true));
+    controller.abort(new Error('user stopped the run'));
+    await expect(runPromise).rejects.toThrow();
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it('makes a call controllable the moment its child id is reported', async () => {
     // Control is keyed by the child id the runner reports, so the earliest a
     // host can target an attempt is the instant that id exists — which is

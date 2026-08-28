@@ -21,6 +21,17 @@ export const WORKFLOW_SCRIPT_PROPOSAL_COPY = {
     `Defaults: ${agent} (${model}) — each call may name its own agent and model.`,
 } as const;
 
+/** Approve-menu items and CLI keys for reviewing a workflow's issued calls. */
+export const WORKFLOW_CALL_REVIEW_COPY = {
+  phase: 'Approve, review the first call of each phase',
+  call: 'Approve, review each call',
+  callCardNote: (workflowName: string, phase: string | undefined): string =>
+    phase === undefined
+      ? `Issued by workflow ${workflowName}`
+      : `Issued by workflow ${workflowName} · phase ${phase}`,
+  phaseAdmitsNote: 'Approving admits every later call this phase issues.',
+} as const;
+
 /**
  * `2 phases · 3 declared items`, `2 phases · calls issued at runtime`, or the
  * bare tail when the script declares no phases. Never a fake `0 tasks`.

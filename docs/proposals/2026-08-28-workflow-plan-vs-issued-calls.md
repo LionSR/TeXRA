@@ -1,7 +1,9 @@
 # Multi-agent workflow UI: declared plan vs. issued calls
 
-Status: slice 1 implemented 2026-08-28 (this PR); slice 2 designed below,
-not started. Grounded on `origin/main` at `6fa2f8a2dd`.
+Status: slice 1 implemented 2026-08-28 (PR #11498); slice 2 implemented
+2026-08-28 on top of it (engine `admitCall` gate, `awaitingApproval` status,
+`callReview` on the proposal approve action, per-call review through the
+existing proposal panel in both hosts) — the design below is what landed. Grounded on `origin/main` at `6fa2f8a2dd`.
 
 ## Problem
 

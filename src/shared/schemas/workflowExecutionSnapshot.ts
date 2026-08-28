@@ -18,6 +18,8 @@ type WorkflowExecutionLifecycle = z.infer<
 export const WORKFLOW_CALL_STATUS = {
   PLANNED: 'planned',
   STAGE_BLOCKED: 'stageBlocked',
+  /** Issued, held for the user's per-call or per-phase review before queueing. */
+  AWAITING_APPROVAL: 'awaitingApproval',
   QUEUED: 'queued',
   STARTING: 'starting',
   RUNNING: 'running',
@@ -157,7 +159,8 @@ export function deriveWorkflowCounts(
   for (const call of calls) byStatus[call.status] += 1;
   return {
     total: calls.length,
-    waiting: byStatus.planned + byStatus.stageBlocked,
+    waiting:
+      byStatus.planned + byStatus.stageBlocked + byStatus.awaitingApproval,
     ...byStatus,
   };
 }

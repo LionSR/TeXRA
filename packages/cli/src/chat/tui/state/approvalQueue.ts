@@ -23,6 +23,7 @@ import type {
   PlanApprovalAction,
   ProgressPermissionKind,
   StreamTabId,
+  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { assertNever } from '@utils/core';
 
@@ -89,6 +90,8 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly disableQuotaRoute?: QuotaFallbackRouteId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
+  /** Multi-agent workflow proposals: approve, but review issued calls. */
+  readonly callReview?: Exclude<WorkflowCallReviewScope, 'none'>;
 }
 
 export interface PendingApproval {

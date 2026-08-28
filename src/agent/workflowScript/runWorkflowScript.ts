@@ -27,6 +27,7 @@ import {
   WorkflowAgentCallOptionsSchema,
   normalizeWorkflowScriptPhaseTitle,
   type WorkflowAgentCallOptions,
+  type WorkflowCallAdmission,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
   type WorkflowScriptRunOptions,
@@ -283,6 +284,26 @@ class CoalescedSnapshotWriter {
   }
 }
 
+/** Resolve with the promise, or reject with the signal's reason first. */
+function raceWithAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const detach = onAbort(signal, () => reject(signal.reason));
+    promise.then(
+      (value) => {
+        detach();
+        resolve(value);
+      },
+      (error: unknown) => {
+        detach();
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Runs a workflow script: deterministic JS orchestration over host-executed
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
@@ -302,6 +323,7 @@ export async function runWorkflowScript(
     onEvent,
     onJournalEntry,
     onControl,
+    admitCall,
   } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   // This is the one total physical attempt bound. Cached replays are free.
@@ -656,6 +678,50 @@ export async function runWorkflowScript(
         status: WORKFLOW_CALL_STATUS.CACHED,
       });
       return payload;
+    }
+    // Per-call admission sits here on purpose: after replay (a cached result
+    // costs nothing to return) and before `queue.add` (a pending review must
+    // hold no slot, charge no cap, and reserve no child attempt). The run
+    // abort ends the wait; a skip takes the same never-journaled path as an
+    // interactive skip. A host that cannot answer is a runner fault — the
+    // silent alternative would run work the user was asked about.
+    if (admitCall) {
+      executionState.awaitAdmission(progressId);
+      let admission: WorkflowCallAdmission;
+      try {
+        admission = await raceWithAbort(
+          admitCall(
+            {
+              index,
+              progressId,
+              label,
+              ...(callOptions.phase !== undefined && {
+                phase: callOptions.phase,
+              }),
+              prompt,
+              options: callOptions,
+            },
+            runAbort.signal,
+          ),
+          runAbort.signal,
+        );
+      } catch (error) {
+        if (runAbort.signal.aborted) throw runAbort.signal.reason;
+        const fault = failRun(
+          new WorkflowRunAbortError(
+            `Workflow call admission failed: ${toErrorMessage(error)}`,
+            { kind: 'runner', cause: error },
+          ),
+        );
+        failCall(fault);
+        throw fault;
+      }
+      if (admission === 'skip') {
+        executionState.settleCall(progressId, {
+          status: WORKFLOW_CALL_STATUS.SKIPPED,
+        });
+        return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
+      }
     }
     // The execution snapshot solely owns the queued fact (QUEUED status); no
     // event duplicates it.

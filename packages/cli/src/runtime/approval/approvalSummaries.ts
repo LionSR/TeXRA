@@ -10,6 +10,7 @@ import {
   type RetryPermission,
 } from '@shared/schemas';
 import {
+  WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
@@ -152,6 +153,11 @@ function agentProposalApprovalSummary(
           proposal.agentCategory,
         )})`,
         `Model: ${proposal.model}`,
+        ...(proposal.workflowCall
+          ? [
+              `Workflow call: ${proposal.workflowCall.label} — ${WORKFLOW_CALL_REVIEW_COPY.callCardNote(proposal.workflowCall.workflowName, proposal.workflowCall.phase)}`,
+            ]
+          : []),
       ];
   return [
     ...header,
