@@ -104,7 +104,7 @@ const LEGACY_CLI_FIELD_NAMES = [
 function migrateLegacyCliFields(
   input: Record<string, unknown>,
 ): Record<string, unknown> {
-  if ('cli' in input && input.cli !== undefined) return input;
+  if ('cli' in input && input.cli != null) return input;
   if (!LEGACY_CLI_FIELD_NAMES.some((name) => name in input)) return input;
 
   const {
