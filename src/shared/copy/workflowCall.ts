@@ -1,6 +1,7 @@
 import {
   isTerminalWorkflowCallProgress,
   WORKFLOW_TASK_STATUS_LABEL,
+  type WorkflowCallKind,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
@@ -44,28 +45,61 @@ export function latestWorkflowCallsById(
     .toReversed();
 }
 
+/** Result-contract label of one issued call, shared by every host. */
+export const WORKFLOW_CALL_KIND_LABEL = {
+  document: 'Document',
+  structured: 'Structured',
+} as const satisfies Record<WorkflowCallKind, string>;
+
+const CALL_FILE_PREVIEW_LIMIT = 3;
+
 /**
- * Canonical metadata copy for terminal workflow-call progress on every host.
+ * The files one issued call was handed, as a single clause: the editable
+ * inputs by name (bounded), then how many read-only context/media files ride
+ * along. Empty for a declared plan label and for a structured call, which by
+ * contract carries no files.
+ */
+export function formatWorkflowCallFiles(
+  files: WorkflowCallProgress['files'],
+): string | undefined {
+  if (!files) return undefined;
+  const visible = files.input.slice(0, CALL_FILE_PREVIEW_LIMIT);
+  const hiddenInputs = files.input.length - visible.length;
+  const parts = [
+    visible.length > 0
+      ? `${visible.join(', ')}${hiddenInputs > 0 ? ` +${hiddenInputs}` : ''}`
+      : undefined,
+    files.context.length > 0 ? `${files.context.length} context` : undefined,
+    files.media.length > 0 ? `${files.media.length} media` : undefined,
+  ].filter(filterNotNullish);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
+/**
+ * Canonical metadata copy for workflow-call progress on every host: what the
+ * call is (kind · agent · model · files) as soon as the script issues it, and
+ * what it cost (duration · spend) once it settles. A declared plan label has
+ * neither, so its row stays a bare label.
  */
 export function formatWorkflowCallMetadataParts(
   call: WorkflowCallProgress,
 ): string[] {
-  const hasTerminalMetadata =
+  const terminal =
     call.status === 'completed' ||
     call.status === 'failed' ||
     call.status === 'cancelled' ||
     (call.status === 'skipped' && call.reason === 'user');
-  if (!hasTerminalMetadata) {
-    return [];
-  }
   return [
+    call.kind === undefined ? undefined : WORKFLOW_CALL_KIND_LABEL[call.kind],
+    call.agent,
     call.model,
-    call.durationMs === undefined
-      ? undefined
-      : formatCompactDuration(call.durationMs),
-    call.totalCostUsd === undefined
-      ? undefined
-      : formatCostUsd(call.totalCostUsd),
+    formatWorkflowCallFiles(call.files),
+    terminal && call.durationMs !== undefined
+      ? formatCompactDuration(call.durationMs)
+      : undefined,
+    terminal && call.totalCostUsd !== undefined
+      ? formatCostUsd(call.totalCostUsd)
+      : undefined,
   ].filter(filterNotNullish);
 }
 

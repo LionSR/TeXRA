@@ -107,6 +107,7 @@ export function workflowExecutionView(
         label: compactWorkflowText(call.label),
         stageId: compactWorkflowText(call.stageId),
         stageTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
+        ...(call.issued && { issued: true, kind: call.kind }),
         agent: compactWorkflowText(call.agent),
         model: compactWorkflowText(call.model),
         files: {

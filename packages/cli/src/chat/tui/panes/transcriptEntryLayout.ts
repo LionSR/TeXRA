@@ -161,7 +161,9 @@ export const COMPACTION_ACTIVITY_STATUS_STYLE = {
 >;
 
 export const WORKFLOW_TASK_STATUS_STYLE = {
+  declared: { marker: TODO_PENDING, color: COLOR_BORDER },
   planned: { marker: TODO_PENDING, color: undefined },
+  queued: { marker: TODO_PENDING, color: undefined },
   running: { marker: TODO_ACTIVE, color: COLOR_HINT },
   completed: { marker: TODO_DONE, color: COLOR_SUCCESS },
   cached: { marker: TICK, color: COLOR_SUCCESS },

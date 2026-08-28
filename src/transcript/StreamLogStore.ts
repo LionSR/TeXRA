@@ -1180,21 +1180,22 @@ export class StreamLogStore {
 
         const call = nonterminalWorkflowCall(entry);
         if (call) {
-          const recoveredCall =
-            call.status === 'planned'
-              ? {
-                  ...call,
-                  status: 'skipped' as const,
-                  reason: 'not-reached' as const,
-                }
-              : {
-                  ...call,
-                  status: 'failed' as const,
-                  error:
-                    'The previous host stopped before this call completed.',
-                };
+          // Only a running call had model work in flight; a declared,
+          // planned, or queued call was never launched.
+          const launched = call.status === 'running';
+          const recoveredCall = launched
+            ? {
+                ...call,
+                status: 'failed' as const,
+                error: 'The previous host stopped before this call completed.',
+              }
+            : {
+                ...call,
+                status: 'skipped' as const,
+                reason: 'not-reached' as const,
+              };
           const updated = logInstance.settle(entry.id, {
-            level: call.status === 'planned' ? 'info' : 'error',
+            level: launched ? 'error' : 'info',
             data: recoveredCall,
           });
           if (updated) updatedAny = true;
