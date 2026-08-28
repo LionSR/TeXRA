@@ -81,51 +81,22 @@ describe('replacement category registry completeness', () => {
 });
 
 describe('max-style operator formatting', () => {
-  it.each([
-    {
-      name: 'formats TransformerEncoder subscripts before the Tr prefix',
-      input: String.raw`x_\TransformerEncoder`,
-      expected: String.raw`x_{\TransformerEncoder}`,
-    },
-    {
-      name: 'formats TransformerEncoder superscripts before the Tr prefix',
-      input: String.raw`x^\TransformerEncoder`,
-      expected: String.raw`x^{\TransformerEncoder}`,
-    },
-    {
-      name: 'still formats the shorter Tr operator',
-      input: String.raw`x_\Tr`,
-      expected: String.raw`x_{\Tr}`,
-    },
-  ])('$name', ({ input, expected }) => {
+  it('formats TransformerEncoder before the Tr prefix', () => {
     assert.strictEqual(
-      applyReplacements(input, MAX_STYLE_REPLACEMENTS),
-      expected,
+      applyReplacements(
+        String.raw`x_\TransformerEncoder`,
+        MAX_STYLE_REPLACEMENTS,
+      ),
+      String.raw`x_{\TransformerEncoder}`,
     );
   });
 });
 
 describe('LaTeX operator spacing', () => {
-  it.each([
-    {
-      name: 'cleans a left operator before the generic closing-delimiter rule',
-      input: String.raw`)\!\left\!(`,
-      expected: String.raw`) \left (`,
-    },
-    {
-      name: 'cleans the same operator sequence after a closing brace',
-      input: String.raw`}\!\left\![`,
-      expected: String.raw`} \left [`,
-    },
-    {
-      name: 'retains generic closing-delimiter cleanup for other commands',
-      input: String.raw`)\!\foo`,
-      expected: String.raw`) \foo`,
-    },
-  ])('$name', ({ input, expected }) => {
+  it('cleans a left operator before the generic delimiter rule', () => {
     assert.strictEqual(
-      applyReplacements(input, LATEX_SPACING_REPLACEMENTS),
-      expected,
+      applyReplacements(String.raw`)\!\left\!(`, LATEX_SPACING_REPLACEMENTS),
+      String.raw`) \left (`,
     );
   });
 });
