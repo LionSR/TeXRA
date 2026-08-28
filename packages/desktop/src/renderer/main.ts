@@ -81,15 +81,12 @@ import {
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
 import { DESKTOP_ONBOARDING_COMMANDS } from '../shared/desktopOnboardingMessages';
-import {
-  createDesktopCommandPalette,
-  type CommandPaletteController,
-} from './desktopCommandPalette';
+import { createDesktopCommandPalette } from './desktopCommandPalette';
+import { createDesktopShortcutBootstrap } from './desktopShortcutBootstrap';
 import {
   createDesktopShortcutRegistry,
   desktopCommandPaletteShortcut,
   DESKTOP_COMMAND_PALETTE_ID,
-  type DesktopShortcutRegistry,
 } from './desktopShortcutRegistry';
 import { createStartupTeamPanel } from './desktopOnboarding';
 import { createEditorPane } from './editorPane';
@@ -155,16 +152,16 @@ const startupTeamPanel = createStartupTeamPanel({
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
   openMultiAgent: () => openSettingsTab('multi-agent'),
-  // Lazy by necessity: the panel is constructed above the shortcut registry's
+  // Lazy by necessity: the panel is constructed above the shortcut bootstrap's
   // declaration (which lands much later at module scope), so an eager or
-  // captured read is a TDZ throw, and a bootstrap failure leaves the registry
-  // `undefined` until a recovery installs it. Reading at render time is also
-  // what lets a user override (registry `localStorage`) reach the hint; the
+  // captured read is a TDZ throw, and a bootstrap failure leaves its registry
+  // absent until a recovery installs it. Reading at render time is also what
+  // lets a user override (registry `localStorage`) reach the hint; the
   // construction-time default only ever printed cmd/ctrl+K.
   commandsHint: () => {
-    const entry = shortcutRegistry
-      ?.entries()
-      .find((entry) => entry.id === DESKTOP_COMMAND_PALETTE_ID);
+    const entry = shortcutBootstrap
+      .entries()
+      ?.find((entry) => entry.id === DESKTOP_COMMAND_PALETTE_ID);
     const accelerator = formatDesktopAccelerator(
       entry
         ? entry.accelerator
@@ -1317,9 +1314,29 @@ const desktopRendererCommandActions: DesktopCommandActions = {
     );
   },
 };
-let commandPalette: CommandPaletteController | undefined;
-let shortcutRegistry: DesktopShortcutRegistry | undefined;
-let disposeShortcutHints: (() => void) | undefined;
+const shortcutBootstrap = createDesktopShortcutBootstrap({
+  createRegistry: (openCommands) =>
+    createDesktopShortcutRegistry({
+      document,
+      actions: desktopRendererCommandActions,
+      openCommands,
+    }),
+  createPalette: (registry) =>
+    createDesktopCommandPalette({
+      document,
+      actions: desktopRendererCommandActions,
+      getStreams: () => streams$.get(),
+      getShortcuts: () => registry.entries(),
+    }),
+  appendPalette: (element) => document.body.append(element),
+  onShortcutsChanged: (entries) => {
+    shortcutAcceleratorsById.clear();
+    for (const entry of entries) {
+      shortcutAcceleratorsById.set(entry.id, entry.accelerator);
+    }
+    rerenderShell();
+  },
+});
 
 /**
  * Install the keyboard shortcuts, the command palette and the accelerator-hint
@@ -1330,31 +1347,11 @@ let disposeShortcutHints: (() => void) | undefined;
  * inert command palette while the startup panel still advertised cmd/ctrl+K.
  */
 function ensureShortcutRegistry(): void {
-  if (shortcutRegistry) return;
-  const registry = createDesktopShortcutRegistry({
-    document,
-    actions: desktopRendererCommandActions,
-    openCommands: () => commandPalette?.open(),
-  });
-  shortcutRegistry = registry;
-  commandPalette = createDesktopCommandPalette({
-    document,
-    actions: desktopRendererCommandActions,
-    getStreams: () => streams$.get(),
-    getShortcuts: () => registry.entries(),
-  });
-  document.body.append(commandPalette.element);
-  disposeShortcutHints = registry.subscribe((entries) => {
-    shortcutAcceleratorsById.clear();
-    for (const entry of entries) {
-      shortcutAcceleratorsById.set(entry.id, entry.accelerator);
-    }
-    rerenderShell();
-  });
+  shortcutBootstrap.ensure();
 }
 
 function openCommandPalette(): void {
-  commandPalette?.open();
+  shortcutBootstrap.open();
 }
 
 function switchToStream(streamId: StreamTabId): void {
@@ -1526,8 +1523,7 @@ window.addEventListener(
   'unload',
   () => {
     surfaceResizeObserver?.disconnect();
-    disposeShortcutHints?.();
-    shortcutRegistry?.dispose();
+    shortcutBootstrap.dispose();
     editorPane.dispose();
     terminalPane.disposeAll();
   },
