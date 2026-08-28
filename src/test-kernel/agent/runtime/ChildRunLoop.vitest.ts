@@ -314,7 +314,10 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('unwinds provider ownership and loop resources when synchronous setup fails', () => {
     const { childStreamId, executionId } = loopIds('setup-failure');
-    const registry = new AgentCliSessionRegistry('test_session_id');
+    const registry = new AgentCliSessionRegistry(
+      'test_session_id',
+      session.executions,
+    );
     const releaseSessionOwnership = vi.fn(() =>
       registry.releaseByExecutionId(executionId),
     );
@@ -337,12 +340,8 @@ describe('childRunLoop E2E fixtures', () => {
           { childStreamId, executionId },
           {
             ...strategy,
-            onLoopStart: (runSession) => {
-              registry.trackInFlight({
-                childStreamId,
-                executionId,
-                executions: runSession.executions,
-              });
+            onLoopStart: () => {
+              registry.trackInFlight({ childStreamId, executionId });
             },
             releaseSessionOwnership,
           },
@@ -375,7 +374,6 @@ describe('childRunLoop E2E fixtures', () => {
         codexThreadsFor(runSession).trackInFlight({
           childStreamId,
           executionId,
-          executions: runSession.executions,
         }),
       interruptAll: () => codexThreadsFor(session).interruptAll(),
       release: (executionId: ExecutionId) =>
@@ -391,7 +389,6 @@ describe('childRunLoop E2E fixtures', () => {
         claudeAgentSessionsFor(runSession).trackInFlight({
           childStreamId,
           executionId,
-          executions: runSession.executions,
         }),
       interruptAll: () => claudeAgentSessionsFor(session).interruptAll(),
       release: (executionId: ExecutionId) =>

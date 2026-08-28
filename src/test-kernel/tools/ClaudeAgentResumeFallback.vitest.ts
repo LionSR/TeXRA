@@ -458,7 +458,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.register('sess-resumed', {
       childStreamId,
       executionId,
-      executions: stubExecutions(),
     });
 
     const result = await new ClaudeAgentTool().call({
@@ -475,7 +474,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.register('source-session', {
       childStreamId,
       executionId,
-      executions: stubExecutions(),
     });
     let queryIndex = 0;
     mocks.query.mockImplementation(() => {
@@ -551,7 +549,6 @@ describe('claude_agent tool launch and resume fallback', () => {
     ClaudeAgentSessions.register('source-session', {
       childStreamId,
       executionId,
-      executions: stubExecutions(),
     });
     mocks.query.mockImplementation(() =>
       (async function* () {

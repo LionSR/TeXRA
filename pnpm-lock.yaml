@@ -463,6 +463,9 @@ importers:
       diff-match-patch:
         specifier: ^1.0.5
         version: 1.0.5
+      effect:
+        specifier: 4.0.0-rc.112
+        version: 4.0.0-rc.112
       escape-string-regexp:
         specifier: ^5.0.0
         version: 5.0.0
