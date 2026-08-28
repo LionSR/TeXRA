@@ -334,8 +334,6 @@ export function focusStream(
 
 /** The top-level stream the current session rooted at. */
 export const rootStreamId = signal<StreamTabId | undefined>(undefined);
-/** Whether starting a new root run is currently available. */
-export const rootRunStartAvailable = signal<boolean>(true);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session
  *  run-state reactively instead of calling impure session closures that
@@ -718,7 +716,6 @@ export function resetCliState(
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);
   streams.set(new Map());
-  rootRunStartAvailable.set(true);
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);

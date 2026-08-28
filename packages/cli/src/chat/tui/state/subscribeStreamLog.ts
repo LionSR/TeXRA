@@ -98,31 +98,6 @@ export function transcriptFoldCountersForTest(): {
   };
 }
 
-/** Test-only: drop a stream's fold state so the next sync rebuilds from
- *  scratch — the production resync path, used as the equivalence oracle. */
-export function invalidateTranscriptFoldForTest(streamId: StreamTabId): void {
-  const fold = streams.get().get(streamId)?.transcriptFold;
-  if (fold) resetTranscriptFoldState(fold);
-}
-
-/** Test-only: per-stream projection-state occupancy, for eviction-path regression coverage. */
-export function streamRenderCacheSizesForTest(): {
-  readonly taskGroups: number;
-  readonly compaction: number;
-  readonly render: number;
-} {
-  let taskGroups = 0;
-  let compaction = 0;
-  let render = 0;
-  for (const slice of streams.get().values()) {
-    const fold = slice.transcriptFold;
-    if (fold?.taskGroupProjection) taskGroups += 1;
-    if (fold?.compactionProjection) compaction += 1;
-    if (fold?.hydrated) render += 1;
-  }
-  return { taskGroups, compaction, render };
-}
-
 // ---------------------------------------------------------------------------
 // Subscription + sync entry points
 // ---------------------------------------------------------------------------

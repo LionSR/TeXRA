@@ -31,11 +31,11 @@ import {
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import {
-  invalidateTranscriptFoldForTest,
   subscribeStreamLog,
   syncStreamLog,
   transcriptFoldCountersForTest,
 } from '@cli/chat/tui/state/subscribeStreamLog';
+import { resetTranscriptFoldState } from '@cli/chat/tui/state/transcriptFold';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
@@ -383,7 +383,10 @@ function syncBothAndCompare(
   const active = activeStreamId.get();
   syncStreamLog(defaultSession(), FOLD_STREAM, options);
   activeStreamId.set(active);
-  invalidateTranscriptFoldForTest(ORACLE_STREAM);
+  // Drop the oracle's fold state so its next sync rebuilds from scratch —
+  // the production resync path, used as the equivalence oracle.
+  const oracleFold = streams.get().get(ORACLE_STREAM)?.transcriptFold;
+  if (oracleFold) resetTranscriptFoldState(oracleFold);
   syncStreamLog(defaultSession(), ORACLE_STREAM, options);
   activeStreamId.set(active);
   const fold = projectedView(streams.get().get(FOLD_STREAM));

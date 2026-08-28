@@ -11,7 +11,6 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   releaseInactiveStreamTranscript,
-  streamRenderCacheSizesForTest,
   subscribeStreamLog,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
@@ -62,6 +61,21 @@ function appendUserMessage(
     messageType: MESSAGE_TYPES.USER_MESSAGE,
     text,
   });
+}
+
+/** Per-stream projection-state occupancy, for the eviction-path check. */
+function streamRenderCacheSizes(): {
+  taskGroups: number;
+  compaction: number;
+  render: number;
+} {
+  const sizes = { taskGroups: 0, compaction: 0, render: 0 };
+  for (const { transcriptFold: fold } of streams.get().values()) {
+    if (fold?.taskGroupProjection) sizes.taskGroups += 1;
+    if (fold?.compactionProjection) sizes.compaction += 1;
+    if (fold?.hydrated) sizes.render += 1;
+  }
+  return sizes;
 }
 
 describe('subscribeStreamLog batching and dispose', () => {
@@ -241,7 +255,7 @@ describe('subscribeStreamLog batching and dispose', () => {
 
     // This sync is what seeds streamB's per-stream projection state.
     syncStreamLog(defaultSession(), streamB);
-    expect(streamRenderCacheSizesForTest()).toEqual({
+    expect(streamRenderCacheSizes()).toEqual({
       taskGroups: 1,
       compaction: 1,
       render: 1,
@@ -257,7 +271,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     });
     releaseInactiveStreamTranscript(defaultSession().transcripts, streamB);
 
-    expect(streamRenderCacheSizesForTest()).toEqual({
+    expect(streamRenderCacheSizes()).toEqual({
       taskGroups: 0,
       compaction: 0,
       render: 0,
