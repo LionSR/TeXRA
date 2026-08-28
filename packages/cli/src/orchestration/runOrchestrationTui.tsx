@@ -142,6 +142,9 @@ interface OrchestrationLauncherLayoutInput {
 const ORCHESTRATION_SELECT_MARGIN_ROWS = 1;
 const ORCHESTRATION_KEY_HINT_ROWS = 2;
 const ORCHESTRATION_TARGET_VISIBLE_ITEMS = 4;
+// Shared by the launcher's branded header render and the row measurement that
+// budgets around it, so the two can never disagree about the header's width.
+const LAUNCHER_BRAND = '{ T } TeXRA';
 
 function orchestrationLinesRowCost(
   lines: readonly string[],
@@ -196,7 +199,7 @@ function orchestrationLauncherLayoutCandidates(
       });
     }
   }
-  candidates.push({ statusLines: [], footerHints: [] });
+  // No empty-detail candidate: the caller's post-loop fallback is that layout.
   return candidates;
 }
 
@@ -314,7 +317,7 @@ export function OrchestrationApp(
       break;
     case 'launcher':
       // The launcher renders its own branded header; measure the same rows.
-      title = `TeXRA v${props.version}`;
+      title = `${LAUNCHER_BRAND} v${props.version}`;
       subtitle = 'Start a session or configure model access.';
       itemCount = items.length;
       break;
@@ -479,7 +482,7 @@ export function OrchestrationApp(
         step.kind === 'launcher' ? (
           <Box gap={1}>
             <Text bold color={COLOR_HINT}>
-              {'{ T } TeXRA'}
+              {LAUNCHER_BRAND}
             </Text>
             <Text dimColor>v{props.version}</Text>
           </Box>

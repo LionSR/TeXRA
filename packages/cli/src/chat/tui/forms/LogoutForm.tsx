@@ -3,7 +3,11 @@ import { Text } from 'ink';
 import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
-import { CHATGPT_AUTH, RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import {
+  CHATGPT_AUTH,
+  GROK_AUTH,
+  RESEARCHER_ACCESS_AUTH,
+} from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 
@@ -20,6 +24,11 @@ const LOGOUT_FORM_ITEMS = [
     description: CHATGPT_AUTH.logoutDescription,
   },
   {
+    value: 'grok',
+    label: GROK_AUTH.label,
+    description: GROK_AUTH.logoutDescription,
+  },
+  {
     value: 'texra',
     label: RESEARCHER_ACCESS.label,
     description: RESEARCHER_ACCESS_AUTH.logoutDescription,
@@ -27,7 +36,7 @@ const LOGOUT_FORM_ITEMS = [
   {
     value: 'all',
     label: 'All accounts',
-    description: 'Sign out of both accounts',
+    description: 'Sign out of every signed-in account',
   },
 ] as const satisfies ReadonlyArray<SelectItem<CliLogoutTarget>>;
 

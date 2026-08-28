@@ -4,13 +4,19 @@ import type { SelectItem } from '@cli/tui/ui/Select';
 import {
   CHATGPT_AUTH,
   DEVICE_CODE_DESCRIPTION,
+  GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
 } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 
 export type LoginFormValue =
-  'texra' | 'chatgpt' | 'texra --device' | 'chatgpt --device';
+  | 'texra'
+  | 'chatgpt'
+  | 'grok'
+  | 'texra --device'
+  | 'chatgpt --device'
+  | 'grok --device';
 
 export interface LoginFormProps {
   readonly availableRows?: number;
@@ -25,6 +31,11 @@ export const LOGIN_FORM_ITEMS = [
     description: CHATGPT_AUTH.subscriptionDescription,
   },
   {
+    value: 'grok',
+    label: GROK_AUTH.subscriptionLabel,
+    description: GROK_AUTH.subscriptionDescription,
+  },
+  {
     value: 'texra',
     label: RESEARCHER_ACCESS.label,
     description: RESEARCHER_ACCESS_AUTH.loginDescription,
@@ -32,6 +43,11 @@ export const LOGIN_FORM_ITEMS = [
   {
     value: 'chatgpt --device',
     label: CHATGPT_AUTH.deviceCodeLabel,
+    description: DEVICE_CODE_DESCRIPTION,
+  },
+  {
+    value: 'grok --device',
+    label: GROK_AUTH.deviceCodeLabel,
     description: DEVICE_CODE_DESCRIPTION,
   },
   {

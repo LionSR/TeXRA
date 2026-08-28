@@ -184,7 +184,6 @@ function commandCaseBlock(command: CompletionCommand): string {
 }
 
 export function bashCompletion(commands: readonly CompletionCommand[]): string {
-  const root = commands.find((command) => command.path.length === 0);
   const fixedValueCases = fixedFlagValueCases(commands);
   const dynamicValueCases = dynamicFlagValueCases(commands);
   const genericValueCases = genericFlagValueCases(commands);
@@ -254,7 +253,6 @@ _texra() {
   path="$(_texra_completion_path)"
   case "$path" in
     ${commands.map(commandCaseBlock).join('\n    ')}
-    *) subcommands='${root?.subcommands.join(' ') ?? ''}'; flags='' ;;
   esac
 
 ${positionalCompletionBlocks()}

@@ -497,10 +497,9 @@ export async function runChat(
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
-      onSubmit={(line, mediaFiles) =>
-        void submitDriver.handleSubmittedLine(line, mediaFiles)
+      onSubmit={(line, mediaFiles, images) =>
+        void submitDriver.handleSubmittedLine(line, mediaFiles, images)
       }
-      canInterruptActiveRun={canInterruptActiveRun}
       canInterruptStream={(streamId) =>
         (streamId === session.streamId && canInterruptActiveRun()) ||
         runtimeSession.status.isInFlight(streamId)

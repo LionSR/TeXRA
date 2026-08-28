@@ -30,7 +30,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
-import { flushNdjsonStdout, writeTextStderr } from './logSinks';
+import {
+  flushNdjsonStdout,
+  flushTextStderr,
+  writeTextStderr,
+} from './logSinks';
 import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
@@ -74,6 +78,13 @@ function showPersistentConfigWarning(message: string): void {
   writeTextStderr(`[warn] [cli.config] ${message}`);
 }
 
+// A shutdown-handler failure is actionable degradation by the same rule, so it
+// bypasses quietLogs too — every CLI command passes quietLogs:true, and routing
+// this through logAt would make the cross-host parity below unreachable.
+function showLifecycleError(message: string): void {
+  writeTextStderr(`[error] [cli.lifecycle] ${message}`);
+}
+
 const cliPlatformLog: LogBackend = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
@@ -98,6 +109,11 @@ export async function runCliPlatformShutdownSequence(
     await lifecycle?.runShutdown();
   } catch {
     // Signal shutdown is best effort; output still gets one final flush.
+  }
+  try {
+    await flushTextStderr();
+  } catch {
+    // A closed stderr pipe must not prevent signal-based termination.
   }
   try {
     await flushNdjsonStdout();
@@ -256,9 +272,7 @@ export async function initCliPlatform(
     // handler failure is an error everywhere, not a warning in one host.
     const lifecycle = createLifecycleHost({
       onError: (phase, error) => {
-        logAt(
-          'error',
-          'cli.lifecycle',
+        showLifecycleError(
           `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },

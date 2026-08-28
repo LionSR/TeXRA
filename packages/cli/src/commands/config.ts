@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 import {
   createWorkspaceAgentRosterController,
   InvalidAgentTeamError,
+  loadAgents,
 } from '@agent/index';
 import { agentKeyOf, CLI_STATE_SETTINGS } from '@shared/schemas';
 import { readSetting } from '@shared/config/settingsAccess';
@@ -95,7 +96,9 @@ async function configureAgentRoster(
   },
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  await readCliAgentRoster();
+  // The controller below resolves agent keys, so the registry must be loaded
+  // first; the honest roster read happens once, later, where it is emitted.
+  await loadAgents({ includeRemote: false });
   const roster = createWorkspaceAgentRosterController();
   const customRequested =
     input.workflow !== undefined || input.toolUse !== undefined;

@@ -11,11 +11,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 
-import {
-  isCliSupportedModelId,
-  knownCliModelIds,
-  resolveKnownCliModelId,
-} from './cliConfig';
+import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
 export interface CliEnabledModelRow {
   readonly id: string;
@@ -67,7 +63,7 @@ export async function setCliModelEnabled(
   readonly list: readonly string[];
 }> {
   const model = resolveKnownCliModelId(modelInput);
-  if (!model || !isCliSupportedModelId(model)) {
+  if (!model) {
     throw new Error(
       `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
     );
