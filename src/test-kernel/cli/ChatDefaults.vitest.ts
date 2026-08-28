@@ -224,7 +224,7 @@ describe('CLI chat defaults', () => {
     // `texra chat` defaults — fall back to the built-ins instead.
     mockedListExecutions.mockResolvedValueOnce([
       historyEntry('leanOrchestrator', {
-        cliMultiAgentPresetId: 'lean-project',
+        cli: { multiAgentPresetId: 'lean-project' },
       }),
     ]);
 
@@ -267,7 +267,7 @@ describe('CLI chat defaults', () => {
       historyEntry(
         'orchestrator',
         {
-          cliMultiAgentPresetId: 'physicist',
+          cli: { multiAgentPresetId: 'physicist' },
         },
         '2026-05-21T08:02:00.000Z',
       ),

@@ -199,7 +199,7 @@ export function createChatSubmitDriver(
           workingDirectory: cwd,
           ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
           ...(meta.cliMultiAgentPresetId
-            ? { cliMultiAgentPresetId: meta.cliMultiAgentPresetId }
+            ? { cli: { multiAgentPresetId: meta.cliMultiAgentPresetId } }
             : {}),
           ...(meta.delegationAgentScope
             ? { delegationAgentScope: meta.delegationAgentScope }

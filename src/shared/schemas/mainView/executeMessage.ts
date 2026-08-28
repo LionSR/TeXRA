@@ -28,8 +28,12 @@ export const MainViewExecuteMessageSchema = z.object({
   session: z
     .object({
       workingDirectory: z.string().nullish(),
-      cliOutputFile: z.string().nullish(),
-      cliMultiAgentPresetId: z.string().nullish(),
+      cli: z
+        .object({
+          outputFile: z.string().nullish(),
+          multiAgentPresetId: z.string().nullish(),
+        })
+        .nullish(),
       // Team runs send team identity only; hosts resolve the roster at the
       // execution boundary where catalog/auth state is authoritative.
       launchTarget: LaunchTargetSchema.nullish(),

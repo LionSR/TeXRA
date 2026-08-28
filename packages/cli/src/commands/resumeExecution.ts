@@ -173,7 +173,7 @@ export async function runResumeExecution(
             output,
             outputDir,
             expectedOutputFiles:
-              workflowConfig.cliExpectedOutputFiles ?? undefined,
+              workflowConfig.cli?.expectedOutputFiles ?? undefined,
             recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
               workflowConfig,
               context.cwd,

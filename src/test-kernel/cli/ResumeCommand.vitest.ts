@@ -225,8 +225,10 @@ describe('runResumeExecution', () => {
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
       workingDirectory,
-      cliOutputDirectory: outputDirectory,
-      cliExpectedOutputFiles: ['paper.tex', 'appendix.tex'],
+      cli: {
+        outputDirectory,
+        expectedOutputFiles: ['paper.tex', 'appendix.tex'],
+      },
     });
     await stubWorkflowResume(workflowConfig);
 
@@ -248,7 +250,7 @@ describe('runResumeExecution', () => {
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
       workingDirectory,
-      cliOutputDirectory: outputDirectory,
+      cli: { outputDirectory },
     });
     await stubWorkflowResume(workflowConfig);
 
@@ -268,7 +270,7 @@ describe('runResumeExecution', () => {
     const workflowConfig = AgentConfigSchema.parse({
       ...WORKFLOW_CONFIG,
       workingDirectory,
-      cliOutputDirectory: path.join(workingDirectory, 'out'),
+      cli: { outputDirectory: path.join(workingDirectory, 'out') },
     });
     await stubWorkflowResume(workflowConfig);
     mocks.assertOutputDirAvailable.mockRejectedValue(

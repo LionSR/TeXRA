@@ -511,7 +511,7 @@ export function formatCliHistoryDetailsText(
   const { config, meta } = details;
   const model = details.currentModel ?? config?.model;
   const teamPreset = teamPresetId(config);
-  const cliOutputFile = config?.cliOutputFile?.trim();
+  const cliOutputFile = config?.cli?.outputFile?.trim();
   const lines = [
     `Execution: ${details.id}`,
     `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
@@ -585,5 +585,5 @@ async function toCliHistoryEntry(
 }
 
 function teamPresetId(config: AgentConfig | null): string | undefined {
-  return config?.cliMultiAgentPresetId?.trim() || undefined;
+  return config?.cli?.multiAgentPresetId?.trim() || undefined;
 }

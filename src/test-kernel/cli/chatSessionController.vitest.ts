@@ -1143,7 +1143,7 @@ describe('createChatSessionController', () => {
 
   it('retains the configuration of a manually resumed conversation', async () => {
     const config = makeResumeConfig({
-      cliMultiAgentPresetId: 'physicist',
+      cli: { multiAgentPresetId: 'physicist' },
       delegationAgentScope: {
         workflow: ['builtInWorkflow:physicsReviewer'],
         toolUse: ['builtInToolUse:orchestrator'],

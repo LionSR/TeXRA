@@ -70,7 +70,7 @@ describe('MainViewExecutionController', () => {
       {
         agent: 'stale-renderer-agent',
         model: 'gpt-5.4',
-        session: { cliMultiAgentPresetId: 'stale-preset' },
+        session: { cli: { multiAgentPresetId: 'stale-preset' } },
       },
       {
         agent: 'builtInToolUse:lead',
@@ -78,7 +78,7 @@ describe('MainViewExecutionController', () => {
           workflow: ['builtInWorkflow:writer'],
           toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
-        cliMultiAgentPresetId: 'custom-team',
+        cli: { multiAgentPresetId: 'custom-team' },
       },
     );
 
@@ -92,7 +92,7 @@ describe('MainViewExecutionController', () => {
         workflow: ['builtInWorkflow:writer'],
         toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
       },
-      cliMultiAgentPresetId: 'custom-team',
+      cli: { multiAgentPresetId: 'custom-team' },
     });
   });
 
@@ -103,7 +103,7 @@ describe('MainViewExecutionController', () => {
         workflow: ['builtInWorkflow:writer'],
         toolUse: ['builtInToolUse:lead'],
       },
-      cliMultiAgentPresetId: 'custom-team',
+      cli: { multiAgentPresetId: 'custom-team' },
     };
 
     expect(

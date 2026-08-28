@@ -73,8 +73,7 @@ function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
     toolConfig: DEFAULT_TOOL_CONFIG,
     memories: [],
     workingDirectory: '/workspace',
-    cliOutputFile: null,
-    cliMultiAgentPresetId: null,
+    cli: { outputFile: null, multiAgentPresetId: null },
     ...overrides,
   };
 }

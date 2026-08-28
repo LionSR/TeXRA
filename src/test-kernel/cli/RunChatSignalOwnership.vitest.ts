@@ -465,7 +465,7 @@ describe('runChat signal ownership wiring', () => {
       agent: 'orchestrator',
       model: 'gpt-test',
       agentCategory: 'toolUse',
-      cliMultiAgentPresetId: 'physicist',
+      cli: { multiAgentPresetId: 'physicist' },
       delegationAgentScope,
     });
     const { runChat } = await import('@cli/chat/tui/runChatTui');
@@ -502,7 +502,7 @@ describe('runChat signal ownership wiring', () => {
         agentCategory: 'toolUse',
         workingDirectory: '/tmp/texra-chat',
         mediaFiles: ['/tmp/diagram.png'],
-        cliMultiAgentPresetId: 'physicist',
+        cli: { multiAgentPresetId: 'physicist' },
         delegationAgentScope,
       });
     } finally {
