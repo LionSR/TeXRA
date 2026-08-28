@@ -31,7 +31,7 @@ export interface StreamView {
   readonly active: boolean;
 }
 
-export type ActiveStreamScope =
+type ActiveStreamScope =
   | { readonly kind: 'none' }
   | { readonly kind: 'root'; readonly streamId: StreamTabId }
   | {
@@ -40,12 +40,12 @@ export type ActiveStreamScope =
       readonly streamId: StreamTabId;
     };
 
-export interface ActiveStreamAncestor<T> {
+interface ActiveStreamAncestor<T> {
   readonly streamId: StreamTabId;
   readonly value: T;
 }
 
-export interface ActiveStreamTreeEntry {
+interface ActiveStreamTreeEntry {
   readonly id: StreamTabId;
   readonly shortcutIndex?: number;
 }

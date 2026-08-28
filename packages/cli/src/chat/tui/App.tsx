@@ -66,7 +66,6 @@ import {
 import {
   activeStreamId as activeStreamIdSignal,
   focusStream,
-  rootRunStartAvailable as rootRunStartAvailableSignal,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
@@ -177,7 +176,6 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
-  const rootRunStartAvailable = useSignal(rootRunStartAvailableSignal);
   // Render reads shared stream metadata through `streamMetadataFor`; the
   // revision signal re-renders on metadata changes the roster signal misses.
   useSignal(sessionStateRevision);
@@ -802,7 +800,6 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
-              agentSelectionAvailable={rootRunStartAvailable}
               chatInputAvailable={!childInputHidden}
               commandName={props.commandName}
               foregroundEscapeAction={foregroundEscapeAction({

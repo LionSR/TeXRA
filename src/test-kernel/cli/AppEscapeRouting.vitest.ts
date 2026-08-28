@@ -23,7 +23,7 @@ import {
   openInfoPane,
   patchStream,
   resetCliState,
-  rootRunStartAvailable,
+  rootRunPending,
   rootStreamId,
   streams,
 } from '@cli/chat/tui/state/cliState';
@@ -175,7 +175,7 @@ function seedParentEdge(
 
 function seedRootStream(): void {
   rootStreamId.set(ROOT);
-  rootRunStartAvailable.set(false);
+  rootRunPending.set(true);
   setRunning(ROOT);
   focusStream(ROOT);
 }
@@ -1186,7 +1186,7 @@ describe('App foreground Escape ownership', () => {
         streamId: streamId,
         status: STREAM_PHASE.CANCELLED,
       });
-      rootRunStartAvailable.set(true);
+      rootRunPending.set(false);
     });
     const { instance, stdin, stdout } = await renderApp({
       ...appProps(onInterruptStream),

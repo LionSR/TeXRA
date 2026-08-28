@@ -16,7 +16,6 @@ import {
   infoPane,
   openInfoPane,
   rootRunPending,
-  rootRunStartAvailable,
   rootRunStreamId,
   rootStreamId,
   removeStream,
@@ -1293,7 +1292,6 @@ describe('CLI TUI row allocation', () => {
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
-    expect(rootRunStartAvailable.get()).toBe(false);
     expect(rootRunPending.get()).toBe(true);
     expect(rootRunStreamId.get()).toBeUndefined();
   });
@@ -1309,13 +1307,11 @@ describe('CLI TUI row allocation', () => {
 
     expect(rootRunStreamId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunStartAvailable.get()).toBe(false);
 
     session.markRunCompleted();
 
     expect(rootRunStreamId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(false);
-    expect(rootRunStartAvailable.get()).toBe(true);
   });
 
   it('restores root run availability when clearing session run state', () => {
@@ -1330,7 +1326,6 @@ describe('CLI TUI row allocation', () => {
     session.clearRunState();
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
-    expect(rootRunStartAvailable.get()).toBe(true);
     expect(rootRunPending.get()).toBe(false);
     expect(rootRunStreamId.get()).toBeUndefined();
   });

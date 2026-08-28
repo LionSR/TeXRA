@@ -557,18 +557,6 @@
       "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "invalidateTranscriptFoldForTest"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamRenderCacheSizesForTest"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "transcriptFoldCountersForTest"
     },
     {

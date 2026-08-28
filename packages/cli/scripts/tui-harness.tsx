@@ -102,7 +102,6 @@ import {
 import {
   activeStreamId as activeStreamIdSignal,
   rootRunPending,
-  rootRunStartAvailable,
   rootRunStreamId,
   rootStreamId,
   resetCliState,
@@ -2438,7 +2437,6 @@ registerBuiltinSlashCommands({
     );
   },
 });
-rootRunStartAvailable.set(CAN_SELECT_AGENT);
 // Mirror the real publisher's run facts: an interruptible harness run is a
 // pending root-run claim on the harness stream, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.

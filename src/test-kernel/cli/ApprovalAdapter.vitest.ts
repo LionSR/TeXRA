@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
+const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn(async () => {}));
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
 
