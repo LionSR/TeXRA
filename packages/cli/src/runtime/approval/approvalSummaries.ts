@@ -9,7 +9,10 @@ import {
   type AgentProposalPermission,
   type RetryPermission,
 } from '@shared/schemas';
-import { workflowScriptPlanSummary } from '@shared/copy/workflowScriptProposal';
+import {
+  WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowScriptPlanSummary,
+} from '@shared/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
@@ -125,25 +128,39 @@ function agentProposalApprovalSummary(
   boundFileGroups: boolean,
 ): string {
   const workingDirectory = proposal.workingDirectory?.trim();
+  const workflow =
+    proposal.agentCategory === AgentCategory.Workflow
+      ? proposal.workflowScript
+      : undefined;
+  const fileGroups = getProposalFileGroups(proposal).map((group) =>
+    boundFileGroups
+      ? formatAgentProposalFileGroup(group.label, group.files)
+      : formatAgentProposalFileGroup(group.label, group.files, Infinity),
+  );
+  // A multi-agent workflow is a container, not one agent run: its agent and
+  // model are defaults each call may override, and its files are what the
+  // script may hand to calls, not every call's inputs.
+  const header = workflow
+    ? [
+        `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(proposal.agent, proposal.model),
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
+        `Script: ${workflow.scriptPath}`,
+      ]
+    : [
+        `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
+          proposal.agentCategory,
+        )})`,
+        `Model: ${proposal.model}`,
+      ];
   return [
-    `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
-      proposal.agentCategory,
-    )})`,
-    `Model: ${proposal.model}`,
-    ...(proposal.agentCategory === AgentCategory.Workflow &&
-    proposal.workflowScript
-      ? [
-          `Multi-agent workflow: ${proposal.workflowScript.name} · ${workflowScriptPlanSummary(proposal.workflowScript)}`,
-          `Script: ${proposal.workflowScript.scriptPath}`,
-        ]
-      : []),
+    ...header,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
-    ...getProposalFileGroups(proposal).map((group) =>
-      boundFileGroups
-        ? formatAgentProposalFileGroup(group.label, group.files)
-        : formatAgentProposalFileGroup(group.label, group.files, Infinity),
-    ),
-    'Instruction:',
+    ...(workflow && fileGroups.length > 0
+      ? [`${WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:`]
+      : []),
+    ...fileGroups,
+    workflow ? 'Description:' : 'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
 }

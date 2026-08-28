@@ -479,12 +479,9 @@ export async function runPersistedWorkflowScriptWithProgress(
       }
       for (const call of snapshot.calls) {
         const projected = projectedCalls.get(call.id);
-        let status = projectWorkflowCallStatus(call);
-        // A retry re-queues a running call; keep its card running rather than
-        // flickering back to queued (the old start-latch behavior).
-        if (status === 'queued' && projected?.status === 'running') {
-          status = 'running';
-        }
+        // A retry re-queues a running call; the card follows it to `queued`
+        // because that wait is real when another call took the freed slot.
+        const status = projectWorkflowCallStatus(call);
         // A call carried into the construction emission is hydrated history,
         // not this attempt's activity. Reusable calls are terminal here;
         // failed/cancelled calls were reset to planned, but retain an earlier

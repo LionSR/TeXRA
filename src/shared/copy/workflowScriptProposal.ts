@@ -35,9 +35,11 @@ export function workflowScriptPlanSummary(plan: WorkflowScriptPlan): string {
 }
 
 /**
- * Declared items grouped under their declared phase, in phase order; items
- * with no phase come last under no heading. Grouping is by declaration only —
- * it says nothing about which calls run together or depend on one another.
+ * Declared phases in order, each with the declared items assigned to it —
+ * a phase with none still appears, since a runtime-driven script declares
+ * phases and no items. Items with no phase come last under no heading.
+ * Grouping is by declaration only — it says nothing about which calls run
+ * together or depend on one another.
  */
 export function workflowScriptDeclaredItemsByPhase(plan: WorkflowScriptPlan): {
   readonly phase?: string;
@@ -48,8 +50,5 @@ export function workflowScriptDeclaredItemsByPhase(plan: WorkflowScriptPlan): {
     items: plan.tasks.filter((task) => task.phase === phase.title),
   }));
   const unphased = plan.tasks.filter((task) => task.phase === undefined);
-  return [
-    ...groups.filter((group) => group.items.length > 0),
-    ...(unphased.length > 0 ? [{ items: unphased }] : []),
-  ];
+  return [...groups, ...(unphased.length > 0 ? [{ items: unphased }] : [])];
 }

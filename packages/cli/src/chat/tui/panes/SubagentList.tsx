@@ -255,8 +255,10 @@ function workflowTaskMetadata(
   let elapsed: string | undefined;
   let cost: number | undefined;
   // The call's own record names the model the host resolved for it (or the
-  // script declared); the stream config only fills in for older records.
-  const model = call.model ?? configModel;
+  // script declared); the stream config only fills in for older records. A
+  // declared plan label has no model and must not borrow the stream's.
+  const model =
+    call.status === 'declared' ? undefined : (call.model ?? configModel);
   if (terminal) {
     if ('durationMs' in call && call.durationMs !== undefined) {
       elapsed = formatCompactDuration(call.durationMs);

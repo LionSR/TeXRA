@@ -518,8 +518,10 @@ function resetRecoveredLiveFields(
   return (
     !reusable && {
       // Not yet issued by this attempt: the script re-issues (and re-stamps)
-      // every call it reaches.
+      // every invocation fact of each call it reaches.
       issued: undefined,
+      kind: undefined,
+      agent: undefined,
       childExecutionId: undefined,
       childStreamId: undefined,
       model: undefined,
