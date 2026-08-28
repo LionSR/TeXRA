@@ -54,6 +54,7 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createOutputFile } from '@test/support/ProgressControllerHarnesses';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 import {
@@ -966,6 +967,78 @@ describe('DesktopProgressBridge', () => {
     expect(lastStreamSync(messages)).toMatchObject({
       activeStream: 'parent',
       streams: [expect.objectContaining({ name: 'parent' })],
+    });
+  });
+
+  it('snapshots latexdiff outputs before later snapshot mutations', async () => {
+    const streamId = 'latexdiff-snapshot' as StreamTabId;
+    const executionId = 'ec00d1' as ExecutionId;
+    const bridge = await createBridge([]);
+    const initialOutput = createOutputFile({ round: 1 });
+    const laterOutput = createOutputFile({ round: 2 });
+    const config = workflowConfig();
+    emitRunEvent(bridge, streamId, {
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
+    });
+    emitRunConfigFact(bridge, { streamId, executionId, config });
+    emitRunEvent(bridge, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 1: [initialOutput] },
+    });
+    activateStream(bridge, streamId);
+    await settleProgressEvents();
+
+    const actionGate = createDeferred();
+    const contextCaptured = createDeferred<unknown>();
+    const fileActions = bridge as unknown as {
+      fileActions: {
+        diffAcceptedFilePair(
+          baseFile: string,
+          editedFile: string,
+          context: unknown,
+        ): Promise<void>;
+      };
+    };
+    vi.spyOn(
+      fileActions.fileActions,
+      'diffAcceptedFilePair',
+    ).mockImplementation(async (_baseFile, _editedFile, context) => {
+      contextCaptured.resolve(context);
+      await actionGate.promise;
+    });
+    const latexdiffFile = assertSupported(
+      bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE],
+    );
+    const action = latexdiffFile({
+      command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+      file: '/workspace/paper.tex',
+      base: '/workspace/base.tex',
+    });
+    const context = await contextCaptured.promise;
+    emitRunEvent(bridge, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 2: [laterOutput] },
+    });
+    expect(bridgeSnapshots(bridge).getOutputFiles(streamId)).toEqual({
+      1: [initialOutput],
+      2: [laterOutput],
+    });
+    actionGate.resolve();
+    await action;
+
+    expect(context).toEqual({
+      outputsByRound: { 1: [initialOutput] },
+      executionId,
+      workspaceScan: {
+        agent: config.agent,
+        model: config.model,
+        inputFile: '/workspace/paper.tex',
+      },
     });
   });
 
