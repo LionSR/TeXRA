@@ -396,7 +396,7 @@ describe('CLI history runtime', () => {
   it('labels multi-agent team runs by preset in history lists', async () => {
     const teamConfig = toolUseAgentConfig({
       agent: 'engineer',
-      cliMultiAgentPresetId: ' software-engineer ',
+      cli: { multiAgentPresetId: ' software-engineer ' },
     });
     mocks.listExecutions.mockResolvedValue([
       runListEntry('team1', {
@@ -589,7 +589,7 @@ describe('CLI history runtime', () => {
         agent: 'engineer',
         model: 'sonnet46T',
         agentCategory: 'toolUse',
-        cliMultiAgentPresetId: ' software-engineer ',
+        cli: { multiAgentPresetId: ' software-engineer ' },
       }),
     );
 
@@ -605,7 +605,7 @@ describe('CLI history runtime', () => {
     mocks.readConfig.mockResolvedValue(
       AgentConfigSchema.parse({
         ...config,
-        cliOutputFile: ' /tmp/texra-output/polished.tex ',
+        cli: { outputFile: ' /tmp/texra-output/polished.tex ' },
       }),
     );
 

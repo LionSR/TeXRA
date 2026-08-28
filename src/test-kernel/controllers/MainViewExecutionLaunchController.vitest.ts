@@ -122,7 +122,7 @@ describe('main-view execution launch controller', () => {
         workflowAgentKeys: ['workflow:critic'],
         toolUseAgentKeys: ['toolUse:team-root'],
       },
-      cliMultiAgentPresetId: 'physicist',
+      cli: { multiAgentPresetId: 'physicist' },
     };
     const preparation = { valid: false as const, message: 'invalid model' };
     mocks.resolveTeamLaunch.mockResolvedValue({

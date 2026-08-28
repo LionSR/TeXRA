@@ -250,7 +250,7 @@ export async function runMultiAgentPreset(
         displayInstruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.ToolUse,
-        cliMultiAgentPresetId: plan.preset.id,
+        cli: { multiAgentPresetId: plan.preset.id },
         delegationAgentScope: byCategory((category) => [
           ...plan.agentKeys[category],
         ]),

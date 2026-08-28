@@ -154,7 +154,7 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
         entry.record.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a
         // sensible default for a plain single-agent chat session.
-        !entry.record.cliMultiAgentPresetId,
+        !entry.record.cli?.multiAgentPresetId,
     ),
     (item) => item.timestamp,
   );

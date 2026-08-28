@@ -491,9 +491,11 @@ describe('CLI workflow run command', () => {
       expect(config).toMatchObject({
         inputFiles: ['paper.tex'],
         outputFiles: [],
-        cliOutputFile: path.join(root, 'polished.tex'),
-        cliOutputDirectory: undefined,
-        cliExpectedOutputFiles: undefined,
+        cli: {
+          outputFile: path.join(root, 'polished.tex'),
+          outputDirectory: undefined,
+          expectedOutputFiles: undefined,
+        },
       });
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
@@ -554,9 +556,11 @@ describe('CLI workflow run command', () => {
 
       expect(exitCode).toBe(0);
       expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
-        cliOutputFile: undefined,
-        cliOutputDirectory: path.join(workspace, 'out'),
-        cliExpectedOutputFiles: ['paper.tex'],
+        cli: {
+          outputFile: undefined,
+          outputDirectory: path.join(workspace, 'out'),
+          expectedOutputFiles: ['paper.tex'],
+        },
       });
       await expect(
         fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),

@@ -275,7 +275,7 @@ export async function runChat(
     resumeExecution: chatController.resume,
   });
   const initialPresetId = initialResume
-    ? (initialResume.config.cliMultiAgentPresetId ?? undefined)
+    ? (initialResume.config.cli?.multiAgentPresetId ?? undefined)
     : init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,

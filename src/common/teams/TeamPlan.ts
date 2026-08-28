@@ -207,14 +207,14 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
 ): {
   agent: string;
   delegationAgentScope: AgentDelegationScope;
-  cliMultiAgentPresetId: string;
+  cli: { multiAgentPresetId: string };
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
     delegationAgentScope: byCategory((category) => [
       ...plan.agentKeys[category],
     ]),
-    cliMultiAgentPresetId: plan.preset.id,
+    cli: { multiAgentPresetId: plan.preset.id },
   };
 }
 

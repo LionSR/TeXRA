@@ -354,7 +354,7 @@ export function resumeWorkflowOutputFile(
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
-  const cliOutputFile = config.cliOutputFile;
+  const cliOutputFile = config.cli?.outputFile;
   if (isNonEmptyString(cliOutputFile)) {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError(
@@ -381,7 +381,7 @@ export function resumeWorkflowOutputDirectory(
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
-  const outputDirectory = config.cliOutputDirectory;
+  const outputDirectory = config.cli?.outputDirectory;
   if (!isNonEmptyString(outputDirectory)) return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError(

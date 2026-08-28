@@ -66,7 +66,6 @@ function storedConfig(
     inputFiles: ['paper.tex'],
     contextFiles: [],
     outputFiles: [],
-    cliOutputFile: undefined,
     instruction: undefined,
     workingDirectory: '/tmp/project',
     agentCategory: AgentCategory.Workflow,
@@ -883,7 +882,7 @@ describe('CLI root argument routing', () => {
     expect(
       resumeWorkflowOutputFile(
         storedConfig({
-          cliOutputFile: '/tmp/elsewhere/paper.polished.tex',
+          cli: { outputFile: '/tmp/elsewhere/paper.polished.tex' },
           outputFiles: ['paper.polished.tex'],
         }),
       ),
@@ -894,7 +893,7 @@ describe('CLI root argument routing', () => {
     expect(() =>
       resumeWorkflowOutputFile(
         storedConfig({
-          cliOutputFile: 'out/paper.polished.tex',
+          cli: { outputFile: 'out/paper.polished.tex' },
           outputFiles: ['paper.polished.tex'],
         }),
       ),
@@ -910,7 +909,7 @@ describe('CLI root argument routing', () => {
       resumeWorkflowOutputFile(
         storedConfig({
           workingDirectory,
-          cliOutputFile: outputFile,
+          cli: { outputFile },
         }),
       ),
     ).toBe(outputFile);
@@ -949,7 +948,7 @@ describe('CLI root argument routing', () => {
   it('rejects a non-absolute stored CLI output directory', () => {
     expect(() =>
       resumeWorkflowOutputDirectory(
-        storedConfig({ cliOutputDirectory: 'out/polished' }),
+        storedConfig({ cli: { outputDirectory: 'out/polished' } }),
       ),
     ).toThrow('Stored workflow output directory is not absolute: out/polished');
   });

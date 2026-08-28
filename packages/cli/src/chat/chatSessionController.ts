@@ -213,20 +213,19 @@ export function createChatSessionController(
   const beginRunContext = (
     config: Pick<
       AgentConfig,
-      'agent' | 'model' | 'cliMultiAgentPresetId' | 'delegationAgentScope'
+      'agent' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
   ): CliContext => {
     const sessionContext = getSessionContext(config.model);
+    const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
     patchSessionMeta({
       agent: config.agent,
       model: config.model,
       ...(modelSource ? { modelSource } : {}),
       canDelegate: chatAgentSupportsDelegation(config.agent),
-      teamName: readCliMultiAgentPresetName(
-        config.cliMultiAgentPresetId ?? undefined,
-      ),
-      cliMultiAgentPresetId: config.cliMultiAgentPresetId ?? undefined,
+      teamName: readCliMultiAgentPresetName(cliMultiAgentPresetId),
+      cliMultiAgentPresetId,
       delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
     return sessionContext;

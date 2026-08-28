@@ -120,22 +120,33 @@ export async function runWorkflowAgent(
       const expectedOutputFiles = init.outputDir
         ? expectedOutputFilesForOutputDir(agent, inputFiles)
         : undefined;
+      // Persist CLI destinations absolutely so resumption has one path
+      // representation and never reconstructs output locations.
+      const cliOutputFile = absoluteOutputDestination(
+        init.output,
+        runContext.cwd,
+      );
+      const cliOutputDirectory = absoluteOutputDestination(
+        init.outputDir,
+        runContext.cwd,
+      );
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
         inputFiles,
         contextFiles,
         outputFiles: [],
-        // Persist CLI destinations absolutely so resumption has one path
-        // representation and never reconstructs output locations.
-        cliOutputFile: absoluteOutputDestination(init.output, runContext.cwd),
-        cliOutputDirectory: absoluteOutputDestination(
-          init.outputDir,
-          runContext.cwd,
-        ),
-        cliExpectedOutputFiles: expectedOutputFiles
-          ? [...expectedOutputFiles]
-          : undefined,
+        ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
+          ? {
+              cli: {
+                outputFile: cliOutputFile,
+                outputDirectory: cliOutputDirectory,
+                expectedOutputFiles: expectedOutputFiles
+                  ? [...expectedOutputFiles]
+                  : undefined,
+              },
+            }
+          : {}),
         instruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.Workflow,
