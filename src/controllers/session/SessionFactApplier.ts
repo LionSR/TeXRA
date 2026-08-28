@@ -792,7 +792,7 @@ export class SessionFactApplier {
       return { ...prev, subagents: [...live, ...retained] };
     });
 
-    this.renderer.onBadgesChanged(parentStreamId);
+    this.renderer.invalidate(parentStreamId, 'subagents');
   }
 
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
@@ -808,7 +808,7 @@ export class SessionFactApplier {
           withEventErrorHandling(
             'SessionFacts',
             `failed to notify roster changes for ${parent}`,
-            () => this.renderer.onBadgesChanged(parent),
+            () => this.renderer.invalidate(parent, 'subagents'),
           );
         }
       },

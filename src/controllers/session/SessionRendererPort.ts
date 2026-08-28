@@ -20,10 +20,10 @@ export type PresentedStreamId = StreamTabId | '';
  * rather than receiving on the wire. Each key names the field the host reads
  * (`outputs.files`, `outputs.missingOutputs`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
  * `SessionStreamMetadata.parentStreamId`,
- * `StreamExecutionState.contextState`) or the fact it reacts to
- * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
- * carries real delta semantics — `onStageChanged`'s phase-vs-round split —
- * keep their own method.
+ * `StreamExecutionState.contextState`, `SessionState.getStreamState(streamId).subagents`)
+ * or the fact it reacts to (`goalPaused`); nothing here is new vocabulary.
+ * Slices whose notification carries real delta semantics —
+ * `onStageChanged`'s phase-vs-round split — keep their own method.
  */
 export type SessionRenderSlice =
   | 'files'
@@ -32,7 +32,8 @@ export type SessionRenderSlice =
   | 'queuedFollowUps'
   | 'parentStreamId'
   | 'contextState'
-  | 'goalPaused';
+  | 'goalPaused'
+  | 'subagents';
 
 /**
  * Host-renderer notifications from {@link SessionFactApplier}.
@@ -83,10 +84,6 @@ export interface SessionRendererPort {
    * other hosts project the slot verbatim.
    */
   onStageChanged(streamId: StreamTabId, stage: StreamStage): void;
-
-  /** The stream's child-activity roster changed; hosts re-read
-   *  `SessionState.getStreamState(streamId).subagents`. */
-  onBadgesChanged(streamId: StreamTabId): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,
