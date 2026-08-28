@@ -83,6 +83,7 @@ import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { CommandId } from '@shared/commands/catalog';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { UsageLogService } from '@telemetry/UsageLogService';
@@ -190,6 +191,42 @@ async function refreshApiKeyStatus() {
   }
 }
 
+/**
+ * Commands the getting-started walkthrough exposes as buttons. The walkthrough
+ * opens right after install even when no folder is open — the state where
+ * activation stops at the welcome view and never reaches `registerCommands` —
+ * so without fallbacks every one of these buttons is a dead click. Each
+ * fallback says why nothing can run yet and offers the two ways forward.
+ */
+const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
+  AUTH_COMMANDS.SIGN_IN,
+  'texra.auth.chatgpt.signIn',
+  EXTENSION_COMMANDS.SET_API_KEY,
+  EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
+  'texra.showMultiAgent',
+  'texra.showMainView',
+  'texra.extractTikzFigures',
+  'texra.execute',
+  'texra.showProgressView',
+  'texra.cleanOutput',
+  'texra.cleanBuild',
+] as const satisfies readonly CommandId[];
+
+async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
+  const openFolder = 'Open Folder';
+  const createSample = 'Create Sample Project';
+  const choice = await vscode.window.showInformationMessage(
+    'TeXRA activates once a single folder is open. Open your LaTeX project folder or create the sample project, then sign in and run agents from there.',
+    openFolder,
+    createSample,
+  );
+  if (choice === openFolder) {
+    await vscode.commands.executeCommand('workbench.action.files.openFolder');
+  } else if (choice === createSample) {
+    await createSampleProjectWithoutWorkspace(extensionPath);
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   try {
     await activateExtension(context);
@@ -226,6 +263,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand(
         EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
         () => openGettingStarted(context.extension.id),
+      ),
+      ...WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE.map((command) =>
+        vscode.commands.registerCommand(command, () =>
+          explainWorkspaceRequired(context.extensionPath),
+        ),
       ),
     );
     return;
