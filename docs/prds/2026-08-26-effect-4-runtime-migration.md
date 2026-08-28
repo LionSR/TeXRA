@@ -1083,12 +1083,59 @@ runtime disposal registers into it rather than beside it.
 
 ## 10. Migration plan
 
+### Execution strategy
+
+The phase list is a dependency order for authority switches, not a calendar.
+Three rules keep the intermediate state short and make leftovers structurally
+impossible rather than a matter of reviewer memory:
+
+1. **Boundary inversion, once.** From Phase 1, each host enters Effect at its
+   process entry, and unmigrated Promise code runs inside the runtime through
+   adapters. Adaptation is therefore one-directional. No chain may take the
+   shape Promise → Effect → Promise: a function converts together with its
+   whole call chain, leaf to root, or its subsystem waits. Sandwich layers
+   are where adapters accumulate and stay.
+2. **One pass per file.** When a phase converts a file, every §2.5 mechanism
+   in that file converts in the same PR — its deferreds, timers, queues, and
+   cancellation races together. A file is not revisited once per family;
+   Phase 5 exists for subsystems no earlier phase touched, not as a second
+   visit to converted code.
+3. **Leftovers fail CI, not review.** Phase 1 lands counting ratchets beside
+   the existing ratchet machinery: `platform()`, `setServices()`,
+   `new AbortController(`, superseded package imports, and raw catch clauses
+   in migrated zones, as baselines that may only shrink. Every temporary
+   adapter carries an `@adapter-until <date>` marker enforced by a check.
+   The PR that zeroes a ratchet deletes the ratchet.
+
+Phases land complete on `main` as short, dense PR trains; the migration has
+no long-lived integration branch to rot against the tree's churn. The
+conversion recipe — the idiom table from §2.5, the boundary rules, the
+validation commands — is recorded as a repository skill so conversions stay
+uniform and parallelizable across contributors and agents. Only Stage 3b
+deliberately trades speed for care: it is the one step whose failure can
+cost user sessions.
+
 ### Phase 0 — feasibility and cost gate
 
 Pin the current RC exactly with
 `corepack pnpm add -w --save-exact effect@rc`. On the survey date the tag
 resolves to `4.0.0-rc.112`; implementation must record the version actually
 resolved on its day.
+
+A first worked exemplar landed with this PRD on 2026-08-28: `effect` pinned
+at `4.0.0-rc.112` resolves and type-checks under the repository's TypeScript
+settings, and `src/auth/oauth/loopbackLogin.ts` now runs on a scoped server,
+a `Deferred` callback wait, an Effect timeout, and interruption at one
+`runPromiseExit` boundary — with its Promise API, its error identities, and
+all 143 auth-kernel tests unchanged. Its measured cost is itself Phase 0
+evidence: code-only lines rose from 164 to 204, because a leaf module pays
+the run boundary itself and reproduces one launcher-ordering quirk
+explicitly. The deleted machinery — the callback timer and its five clear
+sites, the abort-listener pairing, the hand-built cancellation promise, and
+the `finally` ledger — confirms the complexity claim, while the line count
+confirms R10's premise: net deletion comes from the shared host boundary
+(Phase 1) and from choreography-heavy files, not from leaf conversions, and
+a wrapper-only migration would grow the tree.
 
 Build a throwaway, non-product spike that proves:
 
