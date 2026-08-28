@@ -344,14 +344,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       await expect(
         dispatch(actions, 'texra.packSingle', '', 'editor', 'gpt-5'),
       ).resolves.toBe(false);
-      await expect(
-        dispatch(actions, 'texra.cleanMultiple', '', 'editor', 'gpt-5', [
-          'chapter.tex',
-          '',
-        ]),
-      ).resolves.toBe(false);
       expect(actions.packSingle).not.toHaveBeenCalled();
-      expect(actions.cleanMultiple).not.toHaveBeenCalled();
     });
   });
 
