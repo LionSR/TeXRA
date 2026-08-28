@@ -3,8 +3,8 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
-import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { listExecutions } from '@agent/storage';
+import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
 import { assembleTrace, injectStandaloneTrace } from '@transcript';
