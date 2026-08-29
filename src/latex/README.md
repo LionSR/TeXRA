@@ -13,8 +13,8 @@ The files have distinct roles:
   type-level membership check — it catches a renamed/removed shared tool, not
   a new one added there that this list doesn't yet cover; `latexLogging.ts`
   defines the shared log channel that `texcount.ts` and the `formatter/`
-  backends log under. `latexdiff/`'s
-  service instead takes a caller-supplied channel (agent runs use their
+  backends log under. `latexdiff/`'s service instead takes a caller-supplied
+  channel (agent runs use their
   stream id; desktop and the tool-approval preview use their own) — only the
   extension's own latexdiff command group reuses this shared channel.
 - **Content extraction** — `extractFigure.ts` pulls figure paths out of LaTeX
@@ -23,8 +23,8 @@ The files have distinct roles:
   loads the actual entries from those referenced `.bib` files
   (`loadBibliographyEntries`) — the two stages have different inputs, don't
   conflate them. `extractFileDependencies.ts` resolves
-  `\input`/`\include`/`\bibliography` targets so `LatexMediaManager` can
-  mirror them into run storage.
+  `\input`/`\include`/`\bibliography`/`\addbibresource` targets so
+  `LatexMediaManager` can mirror them into run storage.
   `latexParsingUtils.ts` holds comment-stripping (shared by all three
   extractors above) and the bibliography-directive matching that
   `extractBibliography.ts` and `extractFileDependencies.ts` specifically share
@@ -75,9 +75,13 @@ The files have distinct roles:
   port lets `latex` stay out of `@agent/storage`), then builds and dispatches
   the diff operations via `diffOperations.ts`/`diffCommandExecutor.ts`, naming
   output files with `diffFileNameManager.ts` (math markup options come from
-  `mathMarkup.ts`). `service.ts` holds the shared `latexdiffService` singleton
-  (used only by the extension's own command group — see the Compilation
-  bullet above), `types.ts` the types those pieces share, and
+  `mathMarkup.ts`). `diffFileProcessor.ts` is the post-processor
+  `LaTeXdiffService` itself calls after generating a direct or VC diff, to
+  restore flattened bibliography directives and sanitize latexdiff's
+  `\DIFadd`/`\DIFdel` markup. `service.ts` holds the shared
+  `latexdiffService` singleton (used only by the extension's own command
+  group — see the Compilation bullet above), `types.ts` the types those
+  pieces share, and
   `latexdiffCopy.ts` the user-facing outcome strings both host commands print
   so they can't disagree on wording.
 
