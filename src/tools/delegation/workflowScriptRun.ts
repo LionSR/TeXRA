@@ -126,7 +126,7 @@ interface WorkflowAttemptCostTracker {
 
 /**
  * Track one tool invocation's physical attempts in callback order per journal
- * index+key identity. The production child runner emits exactly one callback for every
+ * key. The production child runner emits exactly one callback for every
  * physical attempt, including `undefined` cost (normalized to zero), and emits
  * none for replay or stable recovery. For a completed key, all callbacks but
  * the last are discarded retries; only the last can correspond to the journal

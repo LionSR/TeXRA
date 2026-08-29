@@ -704,7 +704,7 @@ export async function runWorkflowScript(
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
     // Every physical model attempt is charged against liveCallCounter; the
-    // logical call key and eventual journal entry remain index-scoped.
+    // logical call key stays stable while its current index records order.
     for (;;) {
       const callController = new AbortController();
       const call: InFlightAgentCall = { index, controller: callController };
