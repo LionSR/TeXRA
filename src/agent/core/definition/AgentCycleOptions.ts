@@ -168,17 +168,36 @@ const UserVariableChannelRecordSchema = z
   .looseObject(UserVariableValueSchemas)
   .partial();
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+  );
+}
+
 /**
- * User variable channels for template rendering.
+ * User variables for template rendering: one mutable record.
  *
- * Two-channel design:
- * - input: Frozen base variables (readonly, set at initialization)
- * - transient: Runtime modifications (mutable copy of base)
+ * It used to be two channels — a frozen `input` copy plus a mutable
+ * `transient` one — but every write to `transient` was an overwrite (never a
+ * delete or a key-dropping replacement), so `transient` always superseded
+ * `input` and no reader ever took a value from `input` that `transient` did
+ * not already carry. The pair only cost every tool-use checkpoint a second
+ * full copy of the record, `ALL_INPUTS`/`INPUT_CONTENT` file bodies included.
+ *
+ * Checkpoints written before the collapse are normalized here, at the one
+ * parse boundary, by merging the legacy pair the way the reflection flow
+ * already merged it at read time. Shape-detected rather than tried as a union
+ * member: the canonical record is loose, so a legacy record with one malformed
+ * variable would otherwise fall through and parse as a flat record carrying
+ * two junk keys instead of failing.
  */
-export const UserVariableChannelsSchema = z.object({
-  input: UserVariableChannelRecordSchema.readonly(),
-  transient: UserVariableChannelRecordSchema,
-});
+export const UserVariableChannelsSchema = z.preprocess((value) => {
+  if (!isPlainRecord(value)) return value;
+  const { input, transient } = value;
+  return isPlainRecord(input) && isPlainRecord(transient)
+    ? { ...input, ...transient }
+    : value;
+}, UserVariableChannelRecordSchema);
 
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;

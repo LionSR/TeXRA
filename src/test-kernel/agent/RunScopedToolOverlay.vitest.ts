@@ -107,10 +107,7 @@ describe('run-scoped tool overlay', () => {
             setting: AgentToolUseSettingSchema.parse({}),
             prompt: AgentPromptSchema.parse({}),
             logger,
-            userVarChannels: {
-              input: Object.freeze({ MODEL: CONFIG.model }),
-              transient: {},
-            },
+            userVarChannels: { MODEL: CONFIG.model },
             modelCell,
             toolPolicy: createToolPolicy(),
             onModelChanged: () => {},
@@ -181,10 +178,7 @@ describe('run-scoped tool overlay', () => {
           }),
           prompt: AgentPromptSchema.parse({}),
           logger: noopTrace,
-          userVarChannels: {
-            input: Object.freeze({ MODEL: config.model }),
-            transient: {},
-          },
+          userVarChannels: { MODEL: config.model },
           modelCell,
           toolPolicy: createToolPolicy({
             approvalPromptsUnavailable: true,

@@ -161,11 +161,7 @@ export async function runReflectionFlow(
     fileService,
   );
 
-  const promptBuilder = new PromptBuilder(
-    prompt,
-    userVarChannels.transient,
-    logger,
-  );
+  const promptBuilder = new PromptBuilder(prompt, userVarChannels, logger);
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 

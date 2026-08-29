@@ -82,7 +82,7 @@ export class ToolUseCycleNode extends BaseNode<
         ? this.services.finalTool
         : undefined;
 
-    const instruction = prepRes.userChannels.transient[USER_VAR_INSTRUCTION];
+    const instruction = prepRes.userChannels[USER_VAR_INSTRUCTION];
     const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
@@ -169,7 +169,7 @@ export class ToolUseCycleNode extends BaseNode<
     } finally {
       sessionStage.end(sessionOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
-        prepRes.userChannels.transient[USER_VAR_INSTRUCTION] =
+        prepRes.userChannels[USER_VAR_INSTRUCTION] =
           roundShared.currentUserInstruction;
       }
       prepRes.workspaceState.workPlan.clearOnUpdate();

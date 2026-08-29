@@ -94,10 +94,7 @@ class ResponsePrepNode extends BaseNode<
     const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(prompt.systemPrompt, {
-          ...userVarChannels.input,
-          ...userVarChannels.transient,
-        });
+      : await getSystemPromptWithRules(prompt.systemPrompt, userVarChannels);
 
     return { interrupted, exists, systemPrompt };
   }

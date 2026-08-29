@@ -265,11 +265,8 @@ export async function runToolUseFlow(
     liveShared.stateSlices = {
       ...liveShared.stateSlices,
       userChannels: {
-        input: liveShared.stateSlices.userChannels.input,
-        transient: {
-          ...liveShared.stateSlices.userChannels.transient,
-          [USER_VAR_MODEL]: model,
-        },
+        ...liveShared.stateSlices.userChannels,
+        [USER_VAR_MODEL]: model,
       },
     };
     await flow.setShared(liveShared);
