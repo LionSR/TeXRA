@@ -9,10 +9,12 @@ The files have distinct roles:
 
 - **Compilation** — `texTools.ts` builds the kpathsea search path and runs
   `compileLatex2Pdf`; `latexToolchain.ts` lists the core CLI tools TeXRA
-  depends on, kept in sync with `@shared/constants/latex`'s SSOT by a
-  type-level check; `latexLogging.ts` defines the one shared log channel
-  every tool-shell-out module (tex-fmt, latexindent, texcount, latexdiff, …)
-  logs under.
+  depends on, kept in sync with `@shared/constants/latexToolchain`'s SSOT by a
+  type-level check; `latexLogging.ts` defines the shared log channel that
+  `texcount.ts` and the `formatter/` backends log under. `latexdiff/`'s
+  service instead takes a caller-supplied channel (agent runs use their
+  stream id; desktop and the tool-approval preview use their own) — only the
+  extension's own latexdiff command group reuses this shared channel.
 - **Content extraction** — `extractFigure.ts` and `extractBibliography.ts`
   pull figure paths and bibliography entries out of LaTeX source;
   `extractFileDependencies.ts` resolves `\input`/`\include`/`\bibliography`
