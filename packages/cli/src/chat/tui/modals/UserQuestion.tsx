@@ -360,7 +360,8 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
         selectedValues={multi ? selectedValues : undefined}
         onToggle={
           multi
-            ? (label) => setSelected((s) => toggleUserQuestionSelection(s, label))
+            ? (label: string) =>
+                setSelected((s) => toggleUserQuestionSelection(s, label))
             : undefined
         }
         onSelect={multi ? () => props.onSubmit([...selected]) : props.onSubmit}
