@@ -7,6 +7,8 @@ import {
   type CompileFailure,
   type CompileResult,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   hasCompileFailures,
@@ -212,8 +214,7 @@ export class OutputNode extends BaseNode<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { logger, outputState, workflowOutputPolicy, runScope } =
-      this.services;
+    const { logger, outputState, runScope } = this.services;
     const { streamId } = runScope;
     const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
@@ -237,7 +238,10 @@ export class OutputNode extends BaseNode<
       interactions.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
-    if (endTurn && workflowOutputPolicy.shouldAutoOpenPdfOrLog()) {
+    if (
+      endTurn &&
+      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
+    ) {
       if (execRes.compileFailures.length > 0) {
         for (const failure of execRes.compileFailures) {
           interactions.emit('requestOpenFile', {
@@ -279,7 +283,9 @@ export class OutputNode extends BaseNode<
     shared.roundOutputs = roundsToPersisted(outputState);
     const compileFailureContext =
       execRes.compileResult &&
-      workflowOutputPolicy.shouldRejectOnCompileFailure()
+      readPlatformSetting<boolean>(
+        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      )
         ? formatCompileFailureRoundContext(execRes.compileResult)
         : undefined;
     if (compileFailureContext) {

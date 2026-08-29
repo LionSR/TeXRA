@@ -6,7 +6,11 @@ export interface RoundFileEntry {
   base?: FileLocation;
   /** Previous-round FileLocation for between-round diffs. */
   prev?: FileLocation;
-  /** Original base FileLocation for lineage tracking. */
+  /**
+   * Original base FileLocation for lineage tracking. `traceFileLineage`
+   * coalesces `base: origin ?? …`, so `origin` set implies `base` set — do
+   * not reintroduce an "origin but no base" fallback.
+   */
   origin?: FileLocation;
 }
 

@@ -175,7 +175,6 @@ export async function scanRunDirForOutputs(
           lineage: {
             original: originalLocation,
             diffBase: null,
-            diffFile: null,
           },
           diff: null,
         });

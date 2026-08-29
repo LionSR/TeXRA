@@ -131,10 +131,12 @@ const OutputFileSchema = z.strictObject({
   location: FileLocationSchema,
 });
 
-const FileLineageSchema = z.strictObject({
+// Non-strict on purpose: persisted round data predating the removal of the
+// write-only `diffFile` member still carries that key, and a strict object
+// would make those historical rows fail to parse instead of stripping it.
+const FileLineageSchema = z.object({
   original: FileLocationSchema.nullable(),
   diffBase: FileLocationSchema.nullable(),
-  diffFile: FileLocationSchema.nullable(),
 });
 type FileLineage = z.infer<typeof FileLineageSchema>;
 

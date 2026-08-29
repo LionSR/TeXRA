@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { AgentWorkflowSettingSchema } from '@agent/core/definition/AgentDataclass';
 import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
 import {
   resolveWorkspaceSourceDir,
@@ -17,7 +16,6 @@ import {
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import {
@@ -63,11 +61,8 @@ vi.mock(
 
 function createDiffCompiler(executionId: ExecutionId, logger: AgentTrace) {
   const manager = new LatexDiffManager(
-    AgentWorkflowSettingSchema.parse({
-      agentCategory: AgentCategory.Workflow,
-    }),
+    false,
     () => ({}),
-    [],
     logger,
     'diff-stream',
     new TaskRunFileService(executionId),

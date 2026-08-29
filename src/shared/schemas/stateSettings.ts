@@ -1312,7 +1312,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
     honoredBy: webviewHosts(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
     ),
     surfaces: { settingsView: 'latex' },
   }),
