@@ -652,6 +652,13 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: ['src/replacement/**/*.{ts,tsx}'],
+    rules: {
+      'no-useless-escape': 'error',
+    },
+  },
+
   // Production core code must not reach back into host-owned layers; import
   // declarations are forbidden.
   {
