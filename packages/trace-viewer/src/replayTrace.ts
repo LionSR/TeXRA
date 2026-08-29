@@ -8,7 +8,6 @@ import type {
 import {
   AgentCategory,
   END_GROUP_STATUS,
-  executionStatusToRunOutcome,
   STREAM_PHASE,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
@@ -78,15 +77,15 @@ function findRootStageId(
 }
 
 /**
- * Maps the persisted-history `ExecutionStatus` onto the `StreamLifecycleStatus`
- * vocabulary `StreamMetadataSchema.status` renders. `executionStatusToRunOutcome`
- * is the sanctioned inverse of `runOutcomeToExecutionStatus` — its `RunOutcome`
- * result (`completed`/`cancelled`/`failed`) is structurally identical to
- * `StreamPhase`'s values, so it's already a valid `StreamLifecycleStatus`.
+ * The `StreamLifecycleStatus` that `StreamMetadataSchema.status` renders for
+ * this trace. The embedded `meta.outcome` is the one terminal fact the
+ * document carries; its `RunOutcome` values (`completed`/`cancelled`/`failed`)
+ * are structurally identical to `StreamPhase`'s, so it is already a valid
+ * `StreamLifecycleStatus`.
  *
- * `terminalStatus` is `null` for traces that predate outcome tracking (or
- * never reached a terminal state). For those legacy traces, derive status from
- * the persisted transcript's last terminal group row before falling back to the
+ * `meta.outcome` is absent for traces that predate outcome tracking (or that
+ * never reached a terminal state). For those, derive status from the
+ * persisted transcript's last terminal group row before falling back to the
  * older snapshot-status escape hatch (already normalized to `StreamPhase` at
  * trace parse — `StreamSnapshotSchema.status`'s legacy-inbound member maps the
  * retired 7-value vocabulary, with legacy `ready` parsing to `undefined`). Only
@@ -105,10 +104,7 @@ function findRootStageId(
  * works for freshly assembled documents and historical exported files alike.
  */
 function toStreamLifecycleStatus(trace: TraceDocument): StreamLifecycleStatus {
-  if (trace.terminalStatus !== null) {
-    const outcome = executionStatusToRunOutcome(trace.terminalStatus);
-    if (outcome) return outcome;
-  }
+  if (trace.meta?.outcome) return trace.meta.outcome;
   const rootStageId = findRootStageId(trace.entries);
   for (const entry of trace.entries.toReversed()) {
     if (entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END) continue;

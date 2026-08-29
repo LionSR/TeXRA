@@ -94,9 +94,6 @@ function legacyTrace(
       streamId,
       status: snapshotStatus,
     }),
-    // The bug under test: `null` is what real traces recorded before outcome
-    // tracking (or that never reached a terminal state) persist here.
-    terminalStatus: null,
   };
 }
 
@@ -173,7 +170,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     const result = await assembleTrace(executionId);
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
-    expect(result.trace.terminalStatus).toBeNull();
+    expect(result.trace.meta?.outcome).toBeUndefined();
     expect(result.trace.snapshot.status).toBeUndefined();
 
     replayTrace(result.trace);
@@ -332,7 +329,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     },
   );
 
-  it('still reports READY when neither terminalStatus nor snapshot.status is set', () => {
+  it('still reports READY when neither meta.outcome nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);
 
     replayTrace(trace);

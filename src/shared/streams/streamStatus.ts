@@ -37,7 +37,7 @@ export function deriveRunOutcome(facts: {
 
 /**
  * Project the canonical outcome onto the frozen public execution-status
- * vocabulary (trace document `terminalStatus`, CLI NDJSON history status).
+ * vocabulary (persisted `ExecutionMeta`, CLI NDJSON history status).
  * The only production mapping — flows and hosts must not hand-roll their
  * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
  * fails with a named error instead of an undefined-property crash

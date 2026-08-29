@@ -73,6 +73,7 @@ const TRANSCRIPT_TRUNCATION_MARKER =
 const LIVE_TOOL_TRUNCATION_MARKER =
   '\n\n… output truncated while the tool is running …\n\n';
 const UTF8_ENCODER = new TextEncoder();
+const UTF8_DECODER = new TextDecoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -214,48 +215,28 @@ function boundedTranscriptPreview(
   return `${head}${marker}${tail}`;
 }
 
+/**
+ * The longest prefix of `text` that encodes within `byteBudget` UTF-8 bytes.
+ * `encodeInto` reports how many source code units fit whole into the
+ * destination, which is exactly the code-point boundary we want.
+ */
 function utf8Prefix(text: string, byteBudget: number): string {
-  let bytes = 0;
-  let end = 0;
-  for (const character of text) {
-    const characterBytes = utf8CharacterBytes(character);
-    if (bytes + characterBytes > byteBudget) break;
-    bytes += characterBytes;
-    end += character.length;
-  }
-  return text.slice(0, end);
+  if (byteBudget <= 0) return '';
+  const { read } = UTF8_ENCODER.encodeInto(text, new Uint8Array(byteBudget));
+  return text.slice(0, read);
 }
 
+/**
+ * The longest suffix of `text` that encodes within `byteBudget` UTF-8 bytes,
+ * found by walking the encoded bytes back past any `10xxxxxx` continuation
+ * bytes to the nearest code-point boundary.
+ */
 function utf8Suffix(text: string, byteBudget: number): string {
-  let bytes = 0;
-  let start = text.length;
-  while (start > 0) {
-    let characterStart = start - 1;
-    const codeUnit = text.charCodeAt(characterStart);
-    if (
-      codeUnit >= 0xdc00 &&
-      codeUnit <= 0xdfff &&
-      characterStart > 0 &&
-      text.charCodeAt(characterStart - 1) >= 0xd800 &&
-      text.charCodeAt(characterStart - 1) <= 0xdbff
-    ) {
-      characterStart -= 1;
-    }
-    const character = text.slice(characterStart, start);
-    const characterBytes = utf8CharacterBytes(character);
-    if (bytes + characterBytes > byteBudget) break;
-    bytes += characterBytes;
-    start = characterStart;
-  }
-  return text.slice(start);
-}
-
-function utf8CharacterBytes(character: string): number {
-  const codePoint = character.codePointAt(0) ?? 0;
-  if (codePoint <= 0x7f) return 1;
-  if (codePoint <= 0x7ff) return 2;
-  if (codePoint <= 0xffff) return 3;
-  return 4;
+  const bytes = UTF8_ENCODER.encode(text);
+  if (bytes.length <= byteBudget) return text;
+  let start = Math.max(0, bytes.length - byteBudget);
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
+  return UTF8_DECODER.decode(bytes.subarray(start));
 }
 
 export function attachTranscriptRecorder(
@@ -356,7 +337,12 @@ export function attachTranscriptRecorder(
     if (!state.enabled) return;
 
     if (!state.created) {
-      const entry = {
+      // A state is only ever created by the `stream.start` arm, which flushes
+      // it synchronously with `ended: false`, so this row is always the
+      // still-running opener. An ended-before-created variant would be the one
+      // write path that persists `state.buffer` raw, bypassing
+      // `boundModelResponse`'s bounding and spill.
+      writer.append({
         id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
         level: 'info',
@@ -364,11 +350,9 @@ export function attachTranscriptRecorder(
         groupId: state.groupId,
         messageType: state.messageType,
         text: redactSecrets(state.buffer),
-        data: { status: state.ended ? 'completed' : 'running' },
+        data: { status: 'running' },
         verbose: isDebugModeEnabled(),
-      } satisfies StreamLogAppendInput;
-      if (state.ended) writer.appendSettled(entry);
-      else writer.append(entry);
+      } satisfies StreamLogAppendInput);
       state.created = true;
       return;
     }

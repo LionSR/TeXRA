@@ -148,7 +148,7 @@ export async function hydrateStreamArtifacts(
           (field) => error.authoritativeFields[field],
         ),
       );
-      if (Object.values(error.authoritativeFields).every(Boolean)) {
+      if (error.authoritativeFields.complete) {
         bumpStreamArtifactRevision();
       }
       return {
