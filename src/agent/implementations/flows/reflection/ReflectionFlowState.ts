@@ -27,13 +27,13 @@ import {
  * after 2026-11-29 once persisted wrapped-context rounds have aged out.
  */
 const RoundConversationSchema = z.union([
+  ProviderMessageArraySchema,
   z
     .object({
       messages: ProviderMessageArraySchema,
       stateRoundSnapshot: z.unknown(),
     })
     .transform((legacy) => legacy.messages),
-  ProviderMessageArraySchema,
 ]);
 
 export const ReflectionFlowStateSchema = z.object({

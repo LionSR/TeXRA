@@ -27,6 +27,9 @@ describe('UserVariableChannelsSchema', () => {
     assert.strictEqual(parsed.CUSTOM_FILE, 'notes.md');
   });
 
+  // Supported-window coverage for the legacy reader in
+  // UserVariableChannelsSchema; delete this case together with that reader
+  // after 2026-11-29.
   it('merges a legacy two-channel record, newer transient values winning', () => {
     const parsed = UserVariableChannelsSchema.parse({
       input: { MODEL: 'gpt54', IS_OPENAI_MODEL: true },

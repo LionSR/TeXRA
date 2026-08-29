@@ -134,6 +134,8 @@ const OutputFileSchema = z.strictObject({
 // Non-strict on purpose: persisted round data predating the removal of the
 // write-only `diffFile` member still carries that key, and a strict object
 // would make those historical rows fail to parse instead of stripping it.
+// Relaxation introduced 2026-08-29 with the removal (#11568); restore
+// strictObject after 2026-11-29 once `diffFile`-bearing rows have aged out.
 const FileLineageSchema = z.object({
   original: FileLocationSchema.nullable(),
   diffBase: FileLocationSchema.nullable(),
