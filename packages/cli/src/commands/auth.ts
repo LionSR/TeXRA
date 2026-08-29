@@ -300,9 +300,6 @@ const AUTH_SUBCOMMANDS = {
   grok: grokAuthCommand,
 } as const;
 
-export const AUTH_SUBCOMMAND_NAMES: readonly string[] =
-  Object.keys(AUTH_SUBCOMMANDS);
-
 export const authCommand = defineCommand({
   meta: {
     name: 'auth',
