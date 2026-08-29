@@ -25,9 +25,11 @@ The files have distinct roles:
   conflate them. `extractFileDependencies.ts` resolves
   `\input`/`\include`/`\bibliography` targets so `LatexMediaManager` can
   mirror them into run storage.
-  `latexParsingUtils.ts` holds the comment-stripping and bibliography-directive
-  matching those two extractors share — add new shared parsing there rather
-  than duplicating it in either extractor. `labelSearch.ts` scans files for a
+  `latexParsingUtils.ts` holds comment-stripping (shared by all three
+  extractors above) and the bibliography-directive matching that
+  `extractBibliography.ts` and `extractFileDependencies.ts` specifically share
+  — add new shared parsing there rather than duplicating it in an extractor.
+  `labelSearch.ts` scans files for a
   `\label{}` definition. `criticismParser.ts` parses `\criticize{}` review
   annotations (the counterpart that strips them lives in
   `replacement/advanced.ts`, both built on the same shared brace-balanced
