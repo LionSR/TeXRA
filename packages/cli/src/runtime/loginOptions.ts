@@ -41,6 +41,17 @@ export type CliLoginSlashArgs =
 
 export type CliLogoutTarget = 'chatgpt' | 'grok' | 'texra' | 'all';
 
+/** Account & access form sign-in rows: a provider plus its sign-in transport
+ *  (browser by default, `--device` for the device-code flow). Every value
+ *  parses through `parseChatLoginSlashArgs`. */
+export type LoginFormValue =
+  | 'texra'
+  | 'chatgpt'
+  | 'grok'
+  | 'texra --device'
+  | 'chatgpt --device'
+  | 'grok --device';
+
 const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
 const GROK_LOGIN_TARGETS = new Set(['grok', 'xai', 'supergrok']);
 

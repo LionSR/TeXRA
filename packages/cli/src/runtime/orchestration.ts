@@ -6,7 +6,6 @@ import {
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf, agentName } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -30,7 +29,9 @@ import {
   type CliModelPickerItem,
 } from './modelAccess';
 import {
-  formatCliModelAccessSummary,
+  buildCliAccountAccessRows,
+  buildCliModelAccessItems,
+  formatCliAccountAccessSummary,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -48,14 +49,13 @@ export type CliOrchestrationAction =
   | { readonly kind: 'browse-resumes' }
   | { readonly kind: 'browse-agents' }
   | { readonly kind: 'browse-teams' }
-  | { readonly kind: 'browse-accounts' }
+  | { readonly kind: 'browse-account-access' }
   | { readonly kind: 'configure-settings' }
   | {
       readonly kind: 'account';
       readonly provider: CliAccountProvider;
       readonly operation: CliAccountOperation;
     }
-  | { readonly kind: 'configure-model-access' }
   | {
       readonly kind: 'set-model-access';
       readonly access: CliModelAccessSelection;
@@ -88,8 +88,7 @@ export interface BuildCliOrchestrationItemsInput {
    */
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
-  readonly modelAccess?: CliModelAccessStatus;
-  readonly account?: CliAccountStatus;
+  readonly accountAccess?: CliAccountStatus;
   readonly presetLaunchBlockReason?: CliPresetLaunchBlockReason;
 }
 
@@ -185,14 +184,11 @@ export function buildCliOrchestrationItems(
       description: 'Choose one agent',
     });
   }
-  if (input.modelAccess) {
-    items.push(modelAccessItem(input.modelAccess));
-  }
-  if (input.account) {
+  if (input.accountAccess) {
     items.push({
-      value: { kind: 'browse-accounts' },
-      label: 'Account',
-      description: accountSummary(input.account),
+      value: { kind: 'browse-account-access' },
+      label: 'Account & access',
+      description: formatCliAccountAccessSummary(input.accountAccess),
     });
   }
   items.push({
@@ -208,82 +204,31 @@ export function buildCliOrchestrationItems(
   return items;
 }
 
-function accountSummary(status: CliAccountStatus): string {
-  const signed: string[] = [];
-  if (status.texraSignedIn) {
-    signed.push('TeXRA');
-  }
-  if (status.chatGptSignedIn) signed.push('ChatGPT');
-  if (status.grokSignedIn) signed.push('Grok');
-  if (signed.length === 0) return 'Sign in or manage accounts';
-  if (signed.length === 1) {
-    if (status.chatGptSignedIn) {
-      return `ChatGPT · ${status.chatGptAccountLabel ?? 'signed in'}`;
-    }
-    if (status.grokSignedIn) {
-      return `Grok · ${status.grokAccountLabel ?? 'signed in'}`;
-    }
-    return `TeXRA · ${status.texraAccountLabel ?? 'signed in'}`;
-  }
-  // Oxford list for 3+ accounts ("A, B, and C"), plain "A and B" for two.
-  return `${new Intl.ListFormat('en', { type: 'conjunction' }).format(signed)} signed in`;
-}
-
-export function buildCliAccountItems(
+export function buildCliAccountAccessItems(
   status: CliAccountStatus,
 ): CliOrchestrationItem[] {
-  const items: CliOrchestrationItem[] = [];
-  if (status.chatGptSignedIn) {
-    items.push({
+  const toggleItems = buildCliModelAccessItems({
+    kind: 'loaded',
+    access: status,
+  }).map((item) => ({
+    value: { kind: 'set-model-access' as const, access: item.value },
+    label: item.label,
+    description: item.description,
+    ...(item.disabled === true ? { disabled: true } : {}),
+  }));
+  const items: CliOrchestrationItem[] = [
+    ...toggleItems,
+    ...buildCliAccountAccessRows(status).map((row) => ({
       value: {
-        kind: 'account',
-        provider: 'chatgpt',
-        operation: 'sign-out',
+        kind: 'account' as const,
+        provider: row.provider,
+        operation: row.operation,
       },
-      label: CHATGPT_AUTH.signOutLabel,
-      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
-    });
-  } else {
-    items.push({
-      value: {
-        kind: 'account',
-        provider: 'chatgpt',
-        operation: 'sign-in',
-      },
-      label: CHATGPT_AUTH.signInLabel,
-      description: 'Use a ChatGPT subscription',
-    });
-  }
-
-  if (status.grokSignedIn) {
-    items.push({
-      value: {
-        kind: 'account',
-        provider: 'grok',
-        operation: 'sign-out',
-      },
-      label: GROK_AUTH.signOutLabel,
-      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
-    });
-  } else {
-    items.push({
-      value: {
-        kind: 'account',
-        provider: 'grok',
-        operation: 'sign-in',
-      },
-      label: GROK_AUTH.signInLabel,
-      description: 'Use a Grok / SuperGrok subscription',
-    });
-  }
-
-  if (status.texraSignedIn) {
-    items.push({
-      value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
-      label: 'Log out of TeXRA',
-      description: '',
-    });
-  } else {
+      label: row.label,
+      description: row.description,
+    })),
+  ];
+  if (!status.texraSignedIn) {
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       label: 'Log in to TeXRA',
@@ -312,14 +257,6 @@ export function buildCliAgentItems(
       label: agent.name,
       description: agent.description ?? 'Tool-use agent',
     }));
-}
-
-function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
-  return {
-    value: { kind: 'configure-model-access' },
-    label: 'Model access',
-    description: formatCliModelAccessSummary(status),
-  };
 }
 
 export function buildCliResumeItems(

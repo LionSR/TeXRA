@@ -28,7 +28,6 @@ import {
   defaultSession,
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -148,6 +147,7 @@ import {
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
 import {
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
@@ -229,7 +229,6 @@ const SHOW_ORCHESTRATION_HISTORY =
   process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
-const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
@@ -532,14 +531,18 @@ const HARNESS_MODEL_ACCESS =
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
         grokSignedIn: false,
+        texraSignedIn: false,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
   toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-  modelAccess: HARNESS_MODEL_ACCESS,
+  accountAccess: HARNESS_MODEL_ACCESS,
 });
+const HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS = HARNESS_MODEL_ACCESS
+  ? buildCliAccountAccessItems(HARNESS_MODEL_ACCESS)
+  : undefined;
 const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
   HARNESS_ORCHESTRATION_HISTORY,
 );
@@ -620,14 +623,9 @@ function harnessOrchestrationModels(): readonly CliModelAccess[] {
 }
 
 function harnessOrchestrationStatusLines(): readonly string[] {
-  const authenticated = HARNESS_AUTHENTICATED === '1';
-  const profile = {
-    authenticated,
-    accountLabel: authenticated ? 'harness@example.edu' : undefined,
-  };
   return [
     `api: ${formatCliModelAccessRouteInline('personal')}`,
-    formatCliAuthStatusLine(profile),
+    formatCliAuthStatusLine({ authenticated: false }),
   ];
 }
 
@@ -639,7 +637,7 @@ if (SHOW_ORCHESTRATION) {
       agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
       teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
       models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
-      modelAccess={HARNESS_MODEL_ACCESS}
+      accountAccessItems={HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS}
       version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
@@ -657,18 +655,6 @@ if (SHOW_ORCHESTRATION) {
   );
   await instance.waitUntilExit();
   process.exit(0);
-}
-
-if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
-  const accessToken = HARNESS_AUTHENTICATED === '1' ? 'harness-token' : null;
-  SupabaseClient.setAuthProvider({
-    whenReady: async () => {},
-    ensureFreshToken: async () => accessToken,
-    getStoredSessionState: async () =>
-      accessToken === null ? 'none' : 'authenticated',
-    getStoredAccountLabel: async () => null,
-    getLastRefreshFailure: () => null,
-  });
 }
 
 /** A settled text row the way the fold hands one to the painter. `seqNo` and

@@ -58,6 +58,8 @@ function formatAccountStatusLine(
 export interface CliModelAccessOverview {
   readonly access: CliModelAccessStatus;
   readonly lines: readonly string[];
+  /** Stale-metadata warning from the auth profile, when any. */
+  readonly note?: string;
 }
 
 /** Read both account sessions and the effective model-access route. */
@@ -82,8 +84,13 @@ export async function loadCliModelAccessOverview(): Promise<CliModelAccessOvervi
   ];
   if (profile.note) lines.push(profile.note);
   return {
-    access: { ...access, texraSignedIn: profile.authenticated },
+    access: {
+      ...access,
+      texraSignedIn: profile.authenticated,
+      texraAccountLabel: profile.accountLabel,
+    },
     lines,
+    note: profile.note,
   };
 }
 
