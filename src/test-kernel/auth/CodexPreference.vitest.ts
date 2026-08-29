@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
-  CODEX_PREFER_SUBSCRIPTION_KEY,
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
 import { platform } from '@platform/platform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
+
+const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 
 describe('Codex subscription preference', () => {
   it('writes workspace preference when workspace config already controls it', async () => {

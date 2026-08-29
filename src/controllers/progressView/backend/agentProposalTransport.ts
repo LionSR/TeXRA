@@ -1,9 +1,10 @@
 import { computeAgentOptionsData } from '@agent/index';
 import { createLog } from '@logger/logUtils';
 import {
-  buildVisibleBasicModelOptionsData,
   computeModelOptionsData,
+  getEnabledModels,
 } from '@model/computeModelOptions';
+import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import {
   AgentCategory,
   agentName,
@@ -40,6 +41,12 @@ export function createAgentProposalTransport(options: {
   // appears if availability loading fails. Agent options have no static
   // equivalent, so the agent dropdown is omitted when the registry fetch
   // fails.
+  //
+  // `buildBasicModelOptionsData` is secret-free by design (no key reads), so
+  // it cannot resolve credential-dependent routing: a dual-backend model like
+  // `kimi3` shows its canonical provider home (Moonshot), and only the async
+  // `computeModelOptionsData` refines it to Kimi Code when "Prefer Kimi Code"
+  // plus a stored key actually reroute it.
   const sendResolvedOptions = async (
     proposal: AgentProposalPermission,
   ): Promise<void> => {
@@ -58,7 +65,7 @@ export function createAgentProposalTransport(options: {
         log.debug(
           `Model options fetch failed; falling back to the static visible-model list: ${toErrorMessage(error)}`,
         );
-        return buildVisibleBasicModelOptionsData();
+        return buildBasicModelOptionsData(getEnabledModels());
       }),
       loadAgentOptions().catch((error) => {
         log.debug(
@@ -90,7 +97,7 @@ export function createAgentProposalTransport(options: {
         kind: PERMISSION_KIND.PROPOSAL,
         data: proposal,
         ...(acceptsOverrides && {
-          modelOptionsData: buildVisibleBasicModelOptionsData(),
+          modelOptionsData: buildBasicModelOptionsData(getEnabledModels()),
         }),
       });
       if (acceptsOverrides) void sendResolvedOptions(proposal);

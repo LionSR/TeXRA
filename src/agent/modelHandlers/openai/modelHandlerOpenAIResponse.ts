@@ -43,7 +43,7 @@ import {
   getSdkErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
+import { isGpt5ModelName } from '@model/modelNames';
 import type {
   OpenAIResponseProviderCapabilities,
   ProviderCapabilityProfile,
@@ -440,7 +440,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * on per-step streaming.
    */
   private isBackgroundModeEligible(): boolean {
-    return isGptFamilyModelName(this.config.name) && this.isWorkflowMode();
+    return (
+      this.config.name.toLowerCase().startsWith('gpt') && this.isWorkflowMode()
+    );
   }
 
   /** The `previous_response_id` chain anchor + conversation bookkeeping. See

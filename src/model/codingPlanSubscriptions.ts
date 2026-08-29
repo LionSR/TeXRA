@@ -31,7 +31,6 @@ export interface CodingPlanSubscriptionRuntime {
   readonly setEnabled: (enabled: boolean) => Promise<void>;
   /** Restore a captured preference without changing a newer competing route. */
   readonly restoreEnabled: (enabled: boolean) => Promise<void>;
-  readonly isActiveForModel: (modelId: string) => Promise<boolean>;
 }
 
 async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
@@ -87,7 +86,15 @@ const RUNTIME_BY_ID = {
   },
 } as const satisfies Record<
   CodingPlanSubscription['id'],
-  Omit<CodingPlanSubscriptionRuntime, 'descriptor'>
+  Omit<CodingPlanSubscriptionRuntime, 'descriptor'> & {
+    /**
+     * Whether this plan currently serves the model. Module-private: the one
+     * reader is {@link activeCodingPlanForModel}, which
+     * {@link activeSubscriptionUsageRoute} owns as the single public answer to
+     * "which subscription serves this model next".
+     */
+    readonly isActiveForModel: (modelId: string) => Promise<boolean>;
+  }
 >;
 
 /** Runtime catalog consumed by retry policy and host route presentation. */
@@ -101,7 +108,7 @@ export const codingPlanSubscriptionRuntimes = Object.freeze(
 );
 
 /** Resolve the coding plan currently serving a model, if any. */
-export async function activeCodingPlanForModel(
+async function activeCodingPlanForModel(
   modelId: string,
 ): Promise<CodingPlanSubscriptionRuntime | undefined> {
   const active = await Promise.all(
