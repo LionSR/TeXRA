@@ -251,7 +251,6 @@ export function createChatSessionController(
     ];
   };
 
-  // A cancelled root can publish completion just before its run promise
   /** One owner of the "claimed but never handed off" invariant: a recovery
    *  lease this controller took and never passed to a run must go back as
    *  `'recoverable'`, or the follow-ups typed during the interruption are
@@ -269,6 +268,7 @@ export function createChatSessionController(
     }
   };
 
+  // A cancelled root can publish completion just before its run promise
   // settles. During that narrow interval its teardown can still overwrite a
   // successor's root-slot state. Retain every unsettled interrupted generation
   // so a later interruption cannot discard an earlier blocker.

@@ -301,7 +301,7 @@ function staticTranscriptItemBaseMetrics(
 
 /** Only the previous entry's bottom margin participates in collapse, so
  *  callers pass that one number rather than laying the previous item out
- *  again. `undefined` means there is no entry above. */
+ *  again. `0` (the default) means there is no entry above. */
 function staticTranscriptItemMetricsForPrevious(
   base: StaticTranscriptItemMetrics,
   previousMarginBottomRows = 0,
