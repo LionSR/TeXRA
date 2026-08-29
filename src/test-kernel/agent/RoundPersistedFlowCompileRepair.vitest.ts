@@ -108,6 +108,18 @@ async function runFlow(overrides: Partial<FakeShared>): Promise<{
   return { shared: (await flow.getShared())!, stages };
 }
 
+async function expectFlowDidNotResume(
+  flow: RoundPersistedFlow<FakeShared>,
+  kv: ReturnType<typeof createFakeKv>,
+  stages: unknown[],
+): Promise<void> {
+  expect((await flow.getShared())?.roundsRun).toEqual([]);
+  expect(stages).toEqual([]);
+  await expect(
+    kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
+  ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
+}
+
 describe('RoundPersistedFlow compile-failure round limit', () => {
   it('passes compile-failure feedback into a remaining configured round', async () => {
     const { shared } = await runFlow({ failingRounds: [0] });
@@ -158,11 +170,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
 
     await expect(flow.run(persisted)).resolves.toBe(RUN_OUTCOME.COMPLETED);
 
-    expect((await flow.getShared())?.roundsRun).toEqual([]);
-    expect(stages).toEqual([]);
-    await expect(
-      kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
-    ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
+    await expectFlowDidNotResume(flow, kv, stages);
   });
 
   it('does not resume a persisted round excluded by a lowered round count', async () => {
@@ -179,11 +187,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
 
     await expect(flow.run(synced)).resolves.toBe(RUN_OUTCOME.COMPLETED);
 
-    expect((await flow.getShared())?.roundsRun).toEqual([]);
-    expect(stages).toEqual([]);
-    await expect(
-      kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
-    ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
+    await expectFlowDidNotResume(flow, kv, stages);
   });
 
   it('still resumes a valid persisted cursor within the configured limit', async () => {
