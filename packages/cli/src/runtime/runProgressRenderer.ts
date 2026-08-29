@@ -11,7 +11,6 @@ import type {
 } from '@agent/runtime';
 import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import type {
-  PresentedStreamId,
   SessionRendererPort,
   SessionRenderSlice,
 } from '@controllers/session/SessionRendererPort';
@@ -445,8 +444,6 @@ class HeadlessPort implements SessionRendererPort {
     this.renderer.applyStatus(streamId, status);
   }
 
-  onActiveStreamChanged(_streamId: PresentedStreamId): void {}
-
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void {
     this.renderer.applyStreamDescription(streamId, description);
   }
@@ -481,8 +478,6 @@ class HeadlessPort implements SessionRendererPort {
   ): void {}
 
   clearPendingConversationProgress(_streamId: StreamTabId): void {}
-
-  syncStreamContent(_stream: PresentedStreamId): void {}
 }
 
 function formatInputLabel(files: readonly string[]): string | undefined {

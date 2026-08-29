@@ -176,8 +176,6 @@ class TuiSessionRenderer implements SessionRendererPort {
     _active: boolean,
     _details?: { status?: GoalStatus; objective?: string },
   ): void {}
-
-  syncStreamContent(_stream: PresentedStreamId): void {}
 }
 
 /** Attach the shared session view-model to CLI signals for one TUI session. */
