@@ -86,6 +86,7 @@ interface ProjectedWorkflowCall {
   readonly logId: string;
   readonly definition: Pick<WorkflowCallProgress, 'id' | 'label' | 'phase'>;
   status: WorkflowCallProgress['status'];
+  attemptNumber?: WorkflowCallProgress['attemptNumber'];
   childStreamId?: WorkflowCallProgress['childStreamId'];
   agent?: WorkflowCallProgress['agent'];
   model?: WorkflowCallProgress['model'];
@@ -280,6 +281,11 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
     projected.agent = call.agent;
     projected.model = call.model;
+    if (call.attemptNumber === undefined) {
+      delete projected.attemptNumber;
+    } else {
+      projected.attemptNumber = call.attemptNumber;
+    }
     const phase = projected.definition.phase;
     // Cards are emitted only once the fold (or the settle sweep) has opened
     // their phase, so the group is the stage handle that already exists.
@@ -600,6 +606,9 @@ export async function runPersistedWorkflowScriptWithProgress(
       markPhaseFailed(projected.definition.phase);
       const call: WorkflowCallTerminalProgress = {
         ...projected.definition,
+        ...(projected.attemptNumber !== undefined && {
+          attemptNumber: projected.attemptNumber,
+        }),
         ...(projected.childStreamId !== undefined && {
           childStreamId: projected.childStreamId,
         }),
