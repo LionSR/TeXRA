@@ -21,6 +21,7 @@ import {
   type TaskGroup,
   type WorkflowCallIdentity,
   type WorkflowCallProgress,
+  type WorkflowDeclaredPlan,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
@@ -131,7 +132,7 @@ export interface WorkflowRunModelInput {
   /** The stream's rows; the model picks the `workflowTask` ones. */
   readonly rows: readonly TranscriptRow[];
   /** The newest attempt's declared plan, if the transcript recorded one. */
-  readonly plan: WorkflowPlanMarker | undefined;
+  readonly plan: WorkflowDeclaredPlan | undefined;
   /** True once the run has ended: plan-only phases it never reached are then
    *  nothing to show (the projection's settle sweep has housed every declared
    *  card under a stage, so an empty plan-only phase is its own
@@ -172,7 +173,7 @@ function tallyOf(
  */
 function unionWithDeclaredPlan(
   opened: readonly MutablePhase[],
-  plan: WorkflowPlanMarker,
+  plan: WorkflowDeclaredPlan,
   cards: readonly WorkflowTaskRow[],
   runSettled: boolean,
 ): readonly MutablePhase[] {
@@ -194,7 +195,7 @@ function unionWithDeclaredPlan(
   );
   const ordered: MutablePhase[] = [];
   const placed = new Set<MutablePhase>();
-  for (const declared of plan.phases) {
+  for (const [index, declared] of plan.phases.entries()) {
     const declaredTasks = declaredByPhase.get(declared.title) ?? [];
     let phase = byTitle.get(declared.title);
     if (!phase) {
@@ -203,7 +204,7 @@ function unionWithDeclaredPlan(
         key: `declared-${declared.title}`,
         heading: {
           phaseLabel: declared.title,
-          phaseIndex: declared.index,
+          phaseIndex: index,
           phaseTotal: plan.phases.length,
         },
         tasks: [],

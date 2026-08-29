@@ -436,10 +436,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           type: 'workflow.plan',
           attemptId: projectionId,
           stageId: parentStageId,
-          phases: snapshot.stages.map((stage) => ({
-            title: stage.title,
-            index: stage.order,
-          })),
+          phases: snapshot.stages.map((stage) => ({ title: stage.title })),
           // A resumed run's reusable results (completed or cached) are
           // history, not plan: they are never re-emitted as cards, so listing
           // them here would show finished work as declared.
