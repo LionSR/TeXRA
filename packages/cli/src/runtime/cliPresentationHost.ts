@@ -93,9 +93,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         // actions as fields instead, and `StderrTextSink` drops `fields`, so
         // one call serves both.
         runProgress?.preserve();
-        const hint = ndjson
-          ? ''
-          : formatInstructionActionHint(payload.actions, 'cli');
+        const hint = ndjson ? '' : formatInstructionActionHint(payload.actions);
         ensureLogger().info(`${payload.message}${hint}`, {
           key: payload.key,
           actions: payload.actions,

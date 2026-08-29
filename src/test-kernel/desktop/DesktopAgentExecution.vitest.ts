@@ -37,6 +37,7 @@ import {
 } from '@shared/schemas';
 import type {
   ExecutionId,
+  InstructionAction,
   OutputFileInfo,
   StreamPhase,
   StreamTabId,
@@ -293,6 +294,10 @@ type CreateBridgeOptions = {
   repairRestartedStreams?: RepairRestartedStreamsMock;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
+  showInstructionDialog?: (
+    message: string,
+    actions: readonly InstructionAction[] | undefined,
+  ) => Promise<void>;
   onRunCompleted?: () => void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   /** Seeds the fake filesystem (e.g. a transcript spill artifact). */
@@ -548,6 +553,9 @@ async function createBridge(
         : {}),
       ...(options.showInfoMessage
         ? { showInfoMessage: options.showInfoMessage }
+        : {}),
+      ...(options.showInstructionDialog
+        ? { showInstructionDialog: options.showInstructionDialog }
         : {}),
       ...(options.onRunCompleted
         ? { onRunCompleted: options.onRunCompleted }
@@ -1099,9 +1107,11 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const showErrorMessage = vi.fn();
     const showInfoMessage = vi.fn();
+    const showInstructionDialog = vi.fn();
     const bridge = await createBridge(messages, {
       showErrorMessage,
       showInfoMessage,
+      showInstructionDialog,
     });
     messages.length = 0;
 
@@ -1137,30 +1147,32 @@ describe('DesktopProgressBridge', () => {
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
     expect(showErrorMessage).toHaveBeenCalledTimes(1);
     // Instructions are actionable guidance, not failures: they use the info
-    // dialog, with action tokens rendered as trailing hint text.
-    expect(showInfoMessage).toHaveBeenCalledWith(
-      'API key not found. Set your API key in Settings and run again. ' +
-        '(set your API key in Settings, see the configuration guide)',
+    // dialog, with action tokens rendered as real buttons (not trailing hint
+    // text — desktop's dialog has no click target for hint text).
+    expect(showInfoMessage).not.toHaveBeenCalled();
+    expect(showInstructionDialog).toHaveBeenCalledWith(
+      'API key not found. Set your API key in Settings and run again.',
+      ['set-api-key', 'open-configuration-guide'],
     );
   });
 
   it('observes the instruction dialog promise before reporting delivery', async () => {
-    // The concrete showInfoMessage awaits dialog.showMessageBox, which can
-    // reject while its window is being torn down. Delivery must be reported
-    // from that promise's settlement — not synchronously — so a rejected
-    // dialog reads as non-delivery instead of an unhandled rejection plus a
-    // falsely "presented" launch error (#10399).
+    // The concrete showInstructionDialog awaits dialog.showMessageBox, which
+    // can reject while its window is being torn down. Delivery must be
+    // reported from that promise's settlement — not synchronously — so a
+    // rejected dialog reads as non-delivery instead of an unhandled
+    // rejection plus a falsely "presented" launch error (#10399).
     const messages: unknown[] = [];
     let resolveDialog: (() => void) | undefined;
     let rejectDialog: ((error: unknown) => void) | undefined;
-    const showInfoMessage = vi.fn(
+    const showInstructionDialog = vi.fn(
       () =>
         new Promise<void>((resolve, reject) => {
           resolveDialog = resolve;
           rejectDialog = reject;
         }),
     );
-    const bridge = await createBridge(messages, { showInfoMessage });
+    const bridge = await createBridge(messages, { showInstructionDialog });
 
     const instruction = {
       key: 'modelNotRecognized',
@@ -1171,7 +1183,7 @@ describe('DesktopProgressBridge', () => {
       'requestShowInstruction',
       instruction,
     );
-    expect(showInfoMessage).toHaveBeenCalledOnce();
+    expect(showInstructionDialog).toHaveBeenCalledOnce();
 
     // Nothing is reported until the dialog settles.
     const settled: unknown[] = [];

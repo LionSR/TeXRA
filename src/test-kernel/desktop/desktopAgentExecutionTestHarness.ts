@@ -50,6 +50,7 @@ export function createStubDesktopAgentExecutionHost(
     showErrorMessage: async () => undefined,
     showWarningMessage: async () => undefined,
     showInfoMessage: async () => undefined,
+    showInstructionDialog: async () => undefined,
     pickTranscriptExportFormat: async () => undefined,
     onRunCompleted: () => undefined,
     ...overrides,

@@ -45,7 +45,13 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
+import {
+  AgentCategory,
+  agentKeyOf,
+  INSTRUCTION_ACTION,
+  type AgentSource,
+  type InstructionAction,
+} from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
@@ -127,7 +133,10 @@ import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
-import { DESKTOP_DOCS_URL } from '../shared/desktopCommandSurface.js';
+import {
+  DESKTOP_DOCS_URL,
+  postDesktopSettingsView,
+} from '../shared/desktopCommandSurface.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -443,6 +452,58 @@ function createWindow(options: {
     // external viewer (`shell.openPath`) so previews never silently disappear.
     postToRenderer: postToRendererIfAlive,
   });
+  // Button labels for the instruction dialog below. Desktop has one settings
+  // home (Settings tab), so SET_API_KEY opens it directly rather than the
+  // extension's separate "enter a key" quick pick.
+  const INSTRUCTION_ACTION_BUTTON_LABELS: Record<InstructionAction, string> = {
+    [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API Key',
+    [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
+    [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
+  };
+  const dispatchInstructionAction = (action: InstructionAction): void => {
+    switch (action) {
+      case INSTRUCTION_ACTION.SET_API_KEY:
+        postDesktopSettingsView(postToRendererIfAlive, 'models');
+        return;
+      case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
+        previewHost
+          .openExternal('https://texra.ai/guide/configuration.html')
+          .catch(reportBackgroundError);
+        return;
+      case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
+        previewHost
+          .openExternal('https://texra.ai/guide/models.html')
+          .catch(reportBackgroundError);
+        return;
+    }
+  };
+  /**
+   * Instructions (e.g. a missing API key) are actionable guidance, not
+   * failures, so this stays an 'info' dialog — but each action token now
+   * renders as a real button instead of degrading to trailing hint text with
+   * nothing to click. `showSuppress` still has no affordance to attach to: a
+   * native dialog has no persistent "never remind again" control.
+   */
+  const showInstructionDialog = async (
+    message: string,
+    actions: readonly InstructionAction[] | undefined,
+  ): Promise<void> => {
+    const tokens = actions ?? [];
+    const buttons = [
+      ...tokens.map((token) => INSTRUCTION_ACTION_BUTTON_LABELS[token]),
+      'Dismiss',
+    ];
+    const dismissId = buttons.length - 1;
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'info',
+      message,
+      buttons,
+      defaultId: dismissId,
+      cancelId: dismissId,
+    });
+    const action = tokens[response];
+    if (action) dispatchInstructionAction(action);
+  };
   let teamSignInPending = false;
   const refreshDesktopAuthSurfaces = async () => {
     const authenticated = await SupabaseClient.isAuthenticated();
@@ -559,6 +620,7 @@ function createWindow(options: {
     showWarningMessage,
     showErrorMessage: (message) =>
       showErrorMessage(message).catch(reportBackgroundError),
+    showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
         await import('@controllers/progressView/exportTranscript');
