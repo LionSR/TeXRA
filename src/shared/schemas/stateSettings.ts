@@ -34,7 +34,9 @@ import {
   CodexSandboxModeSchema,
 } from '@shared/schemas/agentCliSettings';
 import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  ChatgptCodexContextWindowSchema,
   ChildRunConcurrencyBudgetSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -561,8 +563,21 @@ const CORE_SETTING_ROWS: Record<
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
-      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
+      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272,000-token input budget; use chatgptCodex.contextWindow to override it.',
     honoredBy: everyHost('src/model/codex/codexPreference.ts'),
+  },
+  'chatgptCodex.contextWindow': {
+    schema: ChatgptCodexContextWindowSchema,
+    title: 'Subscription input token budget',
+    description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
+    category: 'model',
+    honoredBy: everyHost('src/model/providerCapabilities.ts', {
+      command:
+        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+      through:
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
+    }),
+    surfaces: { cliConfig: true },
   },
   'xaiGrok.preferSubscription': {
     schema: z.boolean().prefault(false),

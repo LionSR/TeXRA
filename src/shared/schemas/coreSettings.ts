@@ -64,6 +64,15 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
     "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
 } as const);
 
+export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
+  configKey: 'texra.chatgptCodex.contextWindow',
+  defaultValue: 272_000,
+  min: 1,
+  max: 872_000,
+  description:
+    "Input token budget for ChatGPT-subscription (Codex) routing, mirroring Codex CLI's model_context_window. The default 272,000 matches the Codex default; GPT-5.6 models accept up to 872,000. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+} as const);
+
 /**
  * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
  * number of live native child model conversations one session runs at once.
@@ -94,6 +103,12 @@ export const ModelCompactionThresholdPercentSchema = z
   .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
   .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
   .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
+
+export const ChatgptCodexContextWindowSchema = z
+  .int()
+  .min(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min)
+  .max(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.max)
+  .prefault(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue);
 
 export const ChildRunConcurrencyBudgetSchema = z
   .int()
