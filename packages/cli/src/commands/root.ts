@@ -28,19 +28,14 @@ import { getExitCode, resetExitCode } from './_helpers/exitCode';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
-import {
-  AUTH_SUBCOMMAND_NAMES,
-  authCommand,
-  loginCommand,
-  logoutCommand,
-} from './auth';
+import { authCommand, loginCommand, logoutCommand } from './auth';
 import { chatCommand } from './chat';
 import { cloneCommand } from './clone';
 import { completionCommand } from './completion';
 import { configCommand } from './config';
 import { doctorCommand } from './doctor';
 import { helpCommand } from './help';
-import { HISTORY_SUBCOMMAND_NAMES, historyCommand } from './history';
+import { historyCommand } from './history';
 import { initCommand } from './init';
 import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
@@ -151,14 +146,7 @@ export async function runCli(
   let rawArgs = reorderGlobalFlags(
     normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
-  rawArgs = reorderNestedGlobalFlags(rawArgs, {
-    command: 'auth',
-    subCommands: AUTH_SUBCOMMAND_NAMES,
-  });
-  rawArgs = reorderNestedGlobalFlags(rawArgs, {
-    command: 'history',
-    subCommands: HISTORY_SUBCOMMAND_NAMES,
-  });
+  rawArgs = await reorderNestedGlobalFlags(rootCommand, rawArgs);
   setUsageColorOverrideFromRawArgs(rawArgs);
 
   const unknownCommand = await detectUnknownCliCommand(rootCommand, rawArgs);

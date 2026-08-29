@@ -155,11 +155,6 @@ _texra() {
     return
   fi
 
-  if [[ "$path" == 'completion' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W 'bash zsh fish' -- "$cur") )
-    return
-  fi
-
   if [[ "$path" == 'agents show' && "$cur" != -* ]]; then
     COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
     return
@@ -167,6 +162,11 @@ _texra() {
 
   if [[ "$path" == 'models show' && "$cur" != -* ]]; then
     COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") )
+    return
+  fi
+
+  if [[ "$path" == 'completion' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W 'bash zsh fish' -- "$cur") )
     return
   fi
 

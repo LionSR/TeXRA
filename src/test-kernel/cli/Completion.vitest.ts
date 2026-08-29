@@ -6,12 +6,10 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { rootCommand } from '@cli/commands/root';
-import {
-  CLI_COMPLETION_SHELLS,
-  generateCompletionScript,
-} from '@cli/runtime/completion';
+import { generateCompletionScript } from '@cli/runtime/completion';
 import { bashCompletion } from '@cli/runtime/completionBash';
 import {
+  CLI_COMPLETION_SHELLS,
   collectCommands,
   type CompletionCommand,
 } from '@cli/runtime/completionCommandTree';

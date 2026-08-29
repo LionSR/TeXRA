@@ -24,8 +24,6 @@ export function resolveCliResourcesPath(anchorUrl = import.meta.url): string {
     path.resolve(currentDir, '../resources'),
     path.resolve(packageDir, 'dist/resources'),
     path.resolve(packageDir, '../extension/resources'),
-    path.resolve(currentDir, '../../../extension/resources'),
-    path.resolve(currentDir, '../../extension/resources'),
   ];
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }

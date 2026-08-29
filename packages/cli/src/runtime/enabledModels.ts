@@ -6,10 +6,12 @@
  * every host. This module only resolves CLI argument spellings and shapes the
  * rows `texra models enabled` and the `/models` form print.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
+import {
+  getRuntimeModelConfig,
+  getRuntimeModelLabel,
+} from '@model/runtimeModelRegistry';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
@@ -21,11 +23,6 @@ export interface CliEnabledModelRow {
   readonly deprecated: boolean;
 }
 
-function modelLabel(id: string): string {
-  const config = MODEL_CONFIGS[id];
-  return config?.label ?? config?.fullName ?? id;
-}
-
 /**
  * Full catalog for enable/disable UIs: every non-retired CLI-supported model,
  * marked with whether it is currently enabled.
@@ -35,10 +32,10 @@ export function listCliEnabledModelCatalog(): readonly CliEnabledModelRow[] {
   return knownCliModelIds()
     .filter((id) => !isRetiredModel(id))
     .map((id) => {
-      const config = MODEL_CONFIGS[id];
+      const config = getRuntimeModelConfig(id);
       return {
         id,
-        label: modelLabel(id),
+        label: getRuntimeModelLabel(id),
         provider: config?.provider ?? 'unknown',
         enabled: enabled.has(id),
         deprecated: isDeprecatedModel(id),

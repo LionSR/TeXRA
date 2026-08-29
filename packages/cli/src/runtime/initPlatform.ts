@@ -6,6 +6,7 @@ import {
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
@@ -38,7 +39,6 @@ import {
 import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
-import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
 let supabaseAuthInitialized = false;
@@ -57,7 +57,7 @@ const installedShutdownHandlers: Partial<
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  'cwd' | 'helperModel' | 'resourcesPath' | 'skillSourceOptions' | 'version'
+  'cwd' | 'resourcesPath' | 'skillSourceOptions' | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
@@ -85,7 +85,7 @@ function showLifecycleError(message: string): void {
   writeTextStderr(`[error] [cli.lifecycle] ${message}`);
 }
 
-const cliPlatformLog: LogBackend = {
+const cliPlatformLog: SupabaseSessionLog = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
   warn: (channel, message) => logAt('warn', channel, message),
@@ -379,7 +379,6 @@ export async function initCliPlatform(
     },
   });
 
-  await setCliHelperModel(context.helperModel);
   initializeBundledPrompts(context.resourcesPath);
 
   await bootstrapNodeAgentDirectories({

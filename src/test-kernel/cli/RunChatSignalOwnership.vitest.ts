@@ -263,7 +263,6 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
-      agentSource: 'default',
       model: 'gpt-test',
       modelSource: 'default',
     });

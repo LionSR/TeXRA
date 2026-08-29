@@ -42,7 +42,7 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
 }
 
 /** Stable, pretty JSON with a trailing newline (matches editor/formatter output). */
-export function serializeInitConfig(config: InitConfigShape): string {
+function serializeInitConfig(config: InitConfigShape): string {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
@@ -84,7 +84,7 @@ export async function writeInitConfig(
  * when it is already covered. Appends a single `.texra/` entry, preserving any
  * existing content and a single trailing newline.
  */
-export function gitignoreWithTexra(existing: string): string | null {
+function gitignoreWithTexra(existing: string): string | null {
   const entry = `${TEXRA_STORAGE_DIR_NAME}/`;
   const present = existing
     .split('\n')

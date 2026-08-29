@@ -20,10 +20,6 @@ import {
   CLI_MODEL_ACCESS_DESCRIPTION,
   type CliModelAccessStatus,
 } from '../runtime/modelAccessRoute';
-import {
-  AUTH_SIGNED_IN_LINE_PREFIX,
-  AUTH_STATUS_SEGMENT_SEPARATOR,
-} from '../runtime/apiStatus';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 interface OrchestrationAppProps {
@@ -80,7 +76,7 @@ function orchestrationStepKeyHints(
   ];
 }
 
-export function orchestrationKeyHints(): readonly KeyHint[] {
+function orchestrationKeyHints(): readonly KeyHint[] {
   return orchestrationStepKeyHints('open', 'exit');
 }
 
@@ -99,10 +95,7 @@ export function orchestrationFooterHints(
   return hints;
 }
 
-export function orchestrationWrappedLineRows(
-  line: string,
-  columns: number,
-): number {
+function orchestrationWrappedLineRows(line: string, columns: number): number {
   return Math.max(
     1,
     wrapAnsiToWidth(line, Math.max(1, columns)).split('\n').length,
@@ -110,7 +103,7 @@ export function orchestrationWrappedLineRows(
 }
 
 /** Rows a marginTop=1 block of lines occupies (wrapped lines plus the margin). */
-export function orchestrationBlockRowCost(
+function orchestrationBlockRowCost(
   lines: readonly string[],
   columns: number,
 ): number {
@@ -156,35 +149,15 @@ function orchestrationLinesRowCost(
   );
 }
 
-function compactOrchestrationStatusLines(
-  statusLines: readonly string[],
-): readonly string[] {
-  return statusLines.map((line) => {
-    if (!line.startsWith(AUTH_SIGNED_IN_LINE_PREFIX)) return line;
-    const suffix = line.indexOf(AUTH_STATUS_SEGMENT_SEPARATOR);
-    return suffix < 0 ? line : line.slice(0, suffix);
-  });
-}
-
 function orchestrationLauncherLayoutCandidates(
   statusLines: readonly string[],
   footerHints: readonly string[],
 ): OrchestrationLauncherLayoutCandidate[] {
-  const compactStatusLines = compactOrchestrationStatusLines(statusLines);
-  const hasCompactFallback = compactStatusLines.some(
-    (line, index) => line !== statusLines[index],
-  );
   const candidates: OrchestrationLauncherLayoutCandidate[] = [
     { statusLines, footerHints },
   ];
-  if (hasCompactFallback) {
-    candidates.push({ statusLines: compactStatusLines, footerHints });
-  }
   if (footerHints.length > 0) {
     candidates.push({ statusLines, footerHints: [] });
-    if (hasCompactFallback) {
-      candidates.push({ statusLines: compactStatusLines, footerHints: [] });
-    }
   }
 
   for (let count = statusLines.length - 1; count > 0; count -= 1) {
@@ -192,12 +165,6 @@ function orchestrationLauncherLayoutCandidates(
       statusLines: statusLines.slice(0, count),
       footerHints: [],
     });
-    if (hasCompactFallback) {
-      candidates.push({
-        statusLines: compactStatusLines.slice(0, count),
-        footerHints: [],
-      });
-    }
   }
   // No empty-detail candidate: the caller's post-loop fallback is that layout.
   return candidates;

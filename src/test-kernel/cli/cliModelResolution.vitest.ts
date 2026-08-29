@@ -144,14 +144,12 @@ describe('selectCliRunModel precedence', () => {
 });
 
 describe('buildHeadlessRunContext', () => {
-  it('preserves the helper model, quiets logs, and enables progress for text output', () => {
+  it('quiets logs and enables progress for text output', () => {
     const context = makeContext({
-      helperModel: 'configured-helper',
       outputFormat: 'text',
       quietLogs: false,
     });
     const runContext = buildHeadlessRunContext(context);
-    expect(runContext.helperModel).toBe('configured-helper');
     expect(runContext.quietLogs).toBe(true);
     expect(runContext.renderRunProgress).toBe(true);
   });

@@ -10,15 +10,15 @@ import { flowKey } from '@agent/node/persistedFlow';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
-  CLI_HISTORY_RESUMABLE_STATUS,
   formatCliHistoryDetailsText,
-  resumableCliHistoryEntries,
+  listResumableCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
 import {
   EXECUTION_META_SCHEMA_VERSION,
   EXECUTION_STATUS,
   AgentCategory,
+  HISTORY_RUN_STATUS,
   resolveHistoryRunStatus,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -82,18 +82,18 @@ describe('CLI history status formatting', () => {
         outcome: 'cancelled',
         resumable: true,
       }),
-    ).toBe(CLI_HISTORY_RESUMABLE_STATUS);
+    ).toBe(HISTORY_RUN_STATUS.RESUMABLE);
   });
 
   it('marks flow records without a terminal outcome as resumable', () => {
     expect(resolveHistoryRunStatus({ resumable: true })).toBe(
-      CLI_HISTORY_RESUMABLE_STATUS,
+      HISTORY_RUN_STATUS.RESUMABLE,
     );
   });
 
   it('filters history entries by the resumable flag, not the status', () => {
     expect(
-      resumableCliHistoryEntries([
+      listResumableCliHistoryEntries([
         { id: 'resume-me', resumable: true },
         { id: 'done', resumable: false },
         { id: 'errored-with-checkpoint', resumable: true },
@@ -113,7 +113,7 @@ describe('CLI history status formatting', () => {
   it('prints resumable details instead of inventing completed status', () => {
     const text = formatCliHistoryDetailsText({
       id: 'abc123' as ExecutionId,
-      status: CLI_HISTORY_RESUMABLE_STATUS,
+      status: HISTORY_RUN_STATUS.RESUMABLE,
       meta: {
         schemaVersion: EXECUTION_META_SCHEMA_VERSION,
         timestamp: '2026-06-03T05:03:06.717Z',
@@ -169,7 +169,7 @@ describe('CLI history status formatting', () => {
     const details = await readCliHistoryDetails(id);
 
     expect(details?.hasFlowRecord).toBe(true);
-    expect(details?.status).toBe(CLI_HISTORY_RESUMABLE_STATUS);
+    expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
     expect(formatCliHistoryDetailsText(details!)).toContain(
       'Flow record: present',
     );

@@ -22,26 +22,20 @@ export interface ParsedGlobalArgs {
   readonly color?: boolean;
   readonly 'no-input'?: boolean;
   readonly 'include-interop'?: boolean;
-  readonly source?: string | string[];
   // citty treats every `--no-*` token as a negated positive flag before it
   // applies aliases, so `--no-input` can arrive as `input: false`.
   readonly input?: unknown;
 }
 
 interface PickGlobalArgsOptions {
-  readonly skillSourcePaths?: readonly string[];
-}
-
-function stringValues(value: string | string[] | undefined): string[] {
-  if (Array.isArray(value)) {
-    return value.filter(isNonEmptyString).map((entry) => entry.trim());
-  }
-  return isNonEmptyString(value) ? [value.trim()] : [];
+  /** Collected from raw argv by the caller: citty's parsed `source` keeps only
+   *  the last value, so repeated `--source/-s` must not be read from `args`. */
+  readonly skillSourcePaths: readonly string[];
 }
 
 export function pickGlobalArgs(
   args: ParsedGlobalArgs,
-  options: PickGlobalArgsOptions = {},
+  options: PickGlobalArgsOptions,
 ): CliGlobalArgs {
   return {
     print: args.print === true,
@@ -56,6 +50,6 @@ export function pickGlobalArgs(
     noColor: args.color === false,
     noInput: args['no-input'] === true || args.input === false,
     includeInteropSkills: args['include-interop'] === true,
-    skillSourcePaths: options.skillSourcePaths ?? stringValues(args.source),
+    skillSourcePaths: options.skillSourcePaths,
   };
 }

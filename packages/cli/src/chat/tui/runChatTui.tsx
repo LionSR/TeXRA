@@ -31,7 +31,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
+import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
@@ -174,7 +174,7 @@ export async function runChat(
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   const initialResume = init.initialResume;
-  const transcriptLifecycle = await initializeInteractiveTranscriptSession(
+  const transcriptLifecycle = await initializeCliTranscriptSession(
     initialResume
       ? { onPersistentOpenFailure: 'fail' }
       : {
@@ -246,9 +246,11 @@ export async function runChat(
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
     runtimeSession.approvalPolicy;
-  const currentSessionContext = (helperModel: string): CliContext => ({
+  // A fresh context object per run: warnApprovalDenied dedupes the denied-gate
+  // operator warning on context identity, so each run start/resume must get
+  // its own.
+  const currentSessionContext = (): CliContext => ({
     ...context,
-    helperModel,
     quietLogs: true,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {

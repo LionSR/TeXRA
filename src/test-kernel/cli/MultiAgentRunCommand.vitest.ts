@@ -48,9 +48,6 @@ vi.mock('@cli/runtime/multiAgentPresets', () => ({
     mocks.formatCliMultiAgentPresetRunWarnings,
   formatCliMultiAgentTeamLaunchBlockMessage:
     mocks.formatCliMultiAgentTeamLaunchBlockMessage,
-  MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
-    'Root agent for the team run (defaults to the preset orchestrator)',
-  MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION: 'Model for the team root agent',
   readCliMultiAgentPresets: vi.fn(() => []),
 }));
 
@@ -202,14 +199,9 @@ function mockMaterializedStdin(inputFiles: string[]): void {
       run: (expanded: {
         readonly inputFiles: string[];
         readonly contextFiles: string[];
-        readonly hasMaterializedStdinInput: boolean;
+        readonly stdinInputPath?: string;
       }) => Promise<unknown>,
-    ) =>
-      run({
-        inputFiles,
-        contextFiles: [],
-        hasMaterializedStdinInput: true,
-      }),
+    ) => run({ inputFiles, contextFiles: [], stdinInputPath: inputFiles[0] }),
   );
 }
 

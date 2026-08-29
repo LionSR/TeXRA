@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { resumeEntryDescription } from '@cli/chat/tui/forms/ResumeListForm';
-import { CLI_HISTORY_RESUMABLE_STATUS } from '@cli/runtime/history';
+import { HISTORY_RUN_STATUS } from '@shared/schemas';
 
 describe('CLI ResumeListForm labels', () => {
   const TIMESTAMP = '2026-05-20T21:00:00.000Z';
@@ -40,7 +40,7 @@ describe('CLI ResumeListForm labels', () => {
         timestamp: TIMESTAMP,
         agent,
         model: 'deepseekT',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
         resumable: true,
         inputBasename,
         description,

@@ -1,5 +1,5 @@
 {
-  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip\u2019s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
+  "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
       "file": "packages/cli/src/chat/tui/chatSubmitDriver.ts",
@@ -605,12 +605,6 @@
       "file": "packages/cli/src/commands/init.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "defaultInitAgentOptions"
-    },
-    {
-      "file": "packages/cli/src/commands/init.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "defaultInitAnswers"
     },
     {
@@ -650,28 +644,10 @@
       "name": "initWizardModelSelectItems"
     },
     {
-      "file": "packages/cli/src/onboarding/onboardingState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "describeSavedKeyLocation"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationBlockRowCost"
-    },
-    {
       "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "orchestrationFooterHints"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationKeyHints"
     },
     {
       "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
@@ -684,12 +660,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "orchestrationPreviousStep"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationWrappedLineRows"
     },
     {
       "file": "packages/cli/src/runtime/apiStatus.ts",
@@ -734,12 +704,6 @@
       "name": "cliSecretsPath"
     },
     {
-      "file": "packages/cli/src/runtime/completion.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CLI_COMPLETION_SHELLS"
-    },
-    {
       "file": "packages/cli/src/runtime/doctor.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -752,28 +716,10 @@
       "name": "formatDoctorText"
     },
     {
-      "file": "packages/cli/src/runtime/initConfig.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "gitignoreWithTexra"
-    },
-    {
-      "file": "packages/cli/src/runtime/initConfig.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "serializeInitConfig"
-    },
-    {
       "file": "packages/cli/src/runtime/initPlatform.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "installCliShutdownSignalHandlers"
-    },
-    {
-      "file": "packages/cli/src/runtime/logSinks.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isCliPipeClosureError"
     },
     {
       "file": "packages/cli/src/runtime/logSinks.ts",
@@ -875,18 +821,6 @@
       "file": "packages/cli/src/runtime/updateChecker.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "formatUpdateCommand"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isPackageManagerInstall"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "resetCliUpdateNotifyLatchForTests"
     },
     {
@@ -924,12 +858,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "probeOutputPathForTests"
-    },
-    {
-      "file": "packages/cli/src/schemas/cliOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CliNdjsonRecordSchema"
     },
     {
       "file": "packages/cli/src/tui/ui/Select.tsx",

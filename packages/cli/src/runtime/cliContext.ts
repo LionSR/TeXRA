@@ -40,7 +40,6 @@ export interface CliContext {
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
-  readonly helperModel?: string;
   readonly quietLogs: boolean;
   readonly renderRunProgress?: boolean;
   readonly stdoutIsTty: boolean;
@@ -320,6 +319,31 @@ function pickEnvModel(
   return undefined;
 }
 
+function pickEnvApprovalPolicy(
+  env: Record<string, string | undefined>,
+  warnings: string[],
+): TexraApprovalPolicy | undefined {
+  const candidate = envValue(env, 'TEXRA_APPROVAL_POLICY');
+  if (!candidate) return undefined;
+  const parsed = parseTexraApprovalPolicy(candidate);
+  if (parsed) return parsed;
+  warnings.push(`Ignoring invalid TEXRA_APPROVAL_POLICY "${candidate}".`);
+  return undefined;
+}
+
+function pickEnvOutputFormat(
+  env: Record<string, string | undefined>,
+  warnings: string[],
+): CliOutputFormat | undefined {
+  const candidate = envValue(env, 'TEXRA_OUTPUT_FORMAT');
+  if (!candidate) return undefined;
+  if ((CLI_OUTPUT_FORMATS as readonly string[]).includes(candidate)) {
+    return candidate as CliOutputFormat;
+  }
+  warnings.push(`Ignoring invalid TEXRA_OUTPUT_FORMAT "${candidate}".`);
+  return undefined;
+}
+
 export async function resolveCliCwd(
   cwdFlag: string | undefined,
 ): Promise<string> {
@@ -373,42 +397,23 @@ export async function buildCliContext(
   const stdoutColorEnabled = !noColor && ambient.stdoutColorEnabled;
   const stderrColorEnabled = !noColor && ambient.stderrColorEnabled;
   const noInput = init.globalArgs.noInput === true;
-  const approvalPolicyFallback = noInput
-    ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-    : TEXRA_APPROVAL_POLICY_DEFAULT;
-  const approvalPolicyCandidates = noInput
-    ? [init.globalArgs.approvalPolicy]
-    : [
-        init.globalArgs.approvalPolicy,
-        envValue(env, 'TEXRA_APPROVAL_POLICY'),
-        loadedConfig.values.approvalPolicy,
-        userApprovalPolicy.value,
-      ];
-  let approvalPolicy = approvalPolicyFallback;
-  for (const candidate of approvalPolicyCandidates) {
-    if (!candidate) continue;
-    const parsed = parseTexraApprovalPolicy(candidate);
-    if (parsed) {
-      approvalPolicy = parsed;
-      break;
-    }
-    configWarnings.push(
-      `Ignoring invalid TEXRA_APPROVAL_POLICY "${candidate}".`,
-    );
-  }
-  let outputFormat: CliOutputFormat = 'text';
-  for (const candidate of [
-    init.globalArgs.outputFormat,
-    envValue(env, 'TEXRA_OUTPUT_FORMAT'),
-    loadedConfig.values.outputFormat,
-  ]) {
-    if (!candidate) continue;
-    if ((CLI_OUTPUT_FORMATS as readonly string[]).includes(candidate)) {
-      outputFormat = candidate as CliOutputFormat;
-      break;
-    }
-    configWarnings.push(`Ignoring invalid TEXRA_OUTPUT_FORMAT "${candidate}".`);
-  }
+  // The flag is validated by citty (`type: 'enum'`) and the two config tiers
+  // by Zod, each with its own path-labelled warning — the environment is the
+  // only tier that can still carry an unvalidated string. `--no-input` skips
+  // the env and config tiers entirely, so it also skips their warnings.
+  const approvalPolicy =
+    init.globalArgs.approvalPolicy ??
+    (noInput
+      ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
+      : (pickEnvApprovalPolicy(env, configWarnings) ??
+        loadedConfig.values.approvalPolicy ??
+        userApprovalPolicy.value ??
+        TEXRA_APPROVAL_POLICY_DEFAULT));
+  const outputFormat: CliOutputFormat =
+    init.globalArgs.outputFormat ??
+    pickEnvOutputFormat(env, configWarnings) ??
+    loadedConfig.values.outputFormat ??
+    'text';
   return {
     cwd,
     mode: cliMode(init.globalArgs, ambient),

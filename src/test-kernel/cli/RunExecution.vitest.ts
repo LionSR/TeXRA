@@ -409,25 +409,6 @@ describe('executeCliRequest', () => {
     );
   });
 
-  it('preserves caller-provided runtime tool exclusions', async () => {
-    const { executeCliRequest } = await loadRunExecution();
-    const request = baseRequest();
-
-    await executeCliRequest(request, cliContext(), {
-      runtimeUnavailableTools: ['custom_tool'],
-    });
-
-    expect(mocks.runAgent).toHaveBeenCalledWith(
-      request,
-      expect.objectContaining({
-        runtimeUnavailableTools: [
-          ...DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
-          'custom_tool',
-        ],
-      }),
-    );
-  });
-
   it('installs CLI host interactions with the runtime prompt hook', async () => {
     const { executeCliRequest } = await loadRunExecution();
     const request = baseRequest();

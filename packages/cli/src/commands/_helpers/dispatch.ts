@@ -215,26 +215,29 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   return [...rawArgs.slice(restIndex), ...leadingGlobals];
 }
 
-interface NestedGlobalFlagGroup {
-  readonly command: string;
-  readonly subCommands: readonly string[];
-}
-
 /**
  * Citty repeats the same routing behavior at nested command groups: parent
  * args before an explicit child help find the child but are not forwarded to
  * the child parser. Move known global flags from `texra auth --output-format
  * json status`-style positions to `texra auth status --output-format json`,
  * while leaving default subcommands untouched.
+ *
+ * The groups are read off the command tree rather than registered by hand: any
+ * group that declares a `default` subcommand accepts globals at the parent, so
+ * a new one needs no second registration here.
  */
-export function reorderNestedGlobalFlags(
+export async function reorderNestedGlobalFlags(
+  rootCommand: AnyCommand,
   rawArgs: readonly string[],
-  group: NestedGlobalFlagGroup,
-): string[] {
+): Promise<string[]> {
   const commandIndex = firstPositionalIndex(rawArgs);
-  if (commandIndex === undefined || rawArgs[commandIndex] !== group.command) {
+  const commandName =
+    commandIndex === undefined ? undefined : rawArgs[commandIndex];
+  if (commandIndex === undefined || commandName === undefined) {
     return [...rawArgs];
   }
+  const group = (await commandSubcommands(rootCommand))[commandName];
+  if (!group || !('default' in group)) return [...rawArgs];
 
   const afterCommand = rawArgs.slice(commandIndex + 1);
   const { leadingGlobals, restIndex, stoppedOnUnknownFlag } =
@@ -250,7 +253,7 @@ export function reorderNestedGlobalFlags(
   const explicitSubCommand = afterCommand[restIndex];
   if (
     explicitSubCommand === undefined ||
-    !group.subCommands.includes(explicitSubCommand)
+    !(explicitSubCommand in (await commandSubcommands(group)))
   ) {
     return [...rawArgs];
   }

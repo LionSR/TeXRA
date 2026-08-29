@@ -3,10 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
 import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
-import {
-  describeSavedKeyLocation,
-  formatSavedKeySummary,
-} from '@cli/onboarding/onboardingState';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   readOnboardingFlags,
@@ -34,21 +30,6 @@ describe('onboarding decline flag', () => {
     await state.update(ONBOARDING_DECLINED_KEY, 'yes');
 
     expect(readOnboardingFlags(state).declined).toBe(false);
-  });
-});
-
-describe('saved key summary', () => {
-  const SAVED_KEY_PREFIX =
-    'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment). ';
-
-  it('names the exact secret entry and env-var fallback', () => {
-    const message = describeSavedKeyLocation('anthropic');
-    expect(message).toContain('apiKey.anthropic');
-    expect(message).toContain('ANTHROPIC_API_KEY');
-  });
-
-  it('confirms where the saved key was stored', () => {
-    expect(formatSavedKeySummary('anthropic')).toBe(SAVED_KEY_PREFIX.trimEnd());
   });
 });
 

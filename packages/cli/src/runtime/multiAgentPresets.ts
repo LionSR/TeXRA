@@ -42,10 +42,6 @@ interface CliMultiAgentPresetListRecord extends TeamPreset {
 }
 
 const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
-export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
-  'Root agent for the team run (defaults to the preset orchestrator)';
-export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
-  'Model for the team root agent';
 const MULTI_AGENT_SHOW_HINT =
   'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
