@@ -43,7 +43,10 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import {
+  isInFlightPhase,
+  workflowRunSettled,
+} from '@shared/streams/streamStatus';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
@@ -340,7 +343,7 @@ export class TaskGroupList extends LitElement {
             taskGroups: this.groups,
             rows: this.rows,
             plan: this.workflowPlan,
-            runSettled: !isInFlightPhase(this.streamStatus ?? undefined),
+            runSettled: workflowRunSettled(this.streamStatus ?? undefined),
           })
         : null;
     this.model = model;

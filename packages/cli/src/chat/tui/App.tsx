@@ -20,7 +20,10 @@ import {
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
 import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import {
+  isActivePhase,
+  workflowRunSettled,
+} from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 // Local imports - TUI surfaces and state
@@ -321,8 +324,7 @@ export function App(props: AppProps): React.JSX.Element {
     workflowPopupStreamId === undefined
       ? undefined
       : streamPhaseFor(workflowPopupStreamId)?.phase;
-  const workflowRunSettled =
-    workflowRootPhase !== undefined && !isActivePhase(workflowRootPhase);
+  const workflowPopupRunSettled = workflowRunSettled(workflowRootPhase);
   const workflowPopupModel = useMemo(
     () =>
       workflowPopupRoot
@@ -330,10 +332,10 @@ export function App(props: AppProps): React.JSX.Element {
             taskGroups: workflowPopupRoot.taskGroups,
             rows: workflowPopupRoot.entries,
             plan: workflowPopupRoot.workflowPlan,
-            runSettled: workflowRunSettled,
+            runSettled: workflowPopupRunSettled,
           })
         : undefined,
-    [workflowPopupRoot, workflowRunSettled],
+    [workflowPopupRoot, workflowPopupRunSettled],
   );
   const workflowPopup = useSignal(workflowPopupViewSignal);
   // The popup controls its own grandchildren: their execution ids live on the
