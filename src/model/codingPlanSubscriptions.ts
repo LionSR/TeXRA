@@ -88,8 +88,10 @@ const RUNTIME_BY_ID = {
   CodingPlanSubscription['id'],
   Omit<CodingPlanSubscriptionRuntime, 'descriptor'> & {
     /**
-     * Whether this plan currently serves the model. Module-private: the one
-     * reader is {@link activeCodingPlanForModel}, which
+     * Whether this plan currently serves the model. Removed from the public
+     * {@link CodingPlanSubscriptionRuntime} interface (the spread into
+     * `codingPlanSubscriptionRuntimes` still carries it at runtime); the one
+     * intended reader is {@link activeCodingPlanForModel}, which
      * {@link activeSubscriptionUsageRoute} owns as the single public answer to
      * "which subscription serves this model next".
      */
