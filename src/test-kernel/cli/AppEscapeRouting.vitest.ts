@@ -319,7 +319,7 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write('\t');
-      await waitFor(() => stdout.output.includes('solo-workflow · 0/1 done'));
+      await waitFor(() => stdout.output.includes('solo-workflow · 0/1'));
       expect(stdout.output).toContain('Draft alone · Planned');
       stdin.write('\r');
       await sleep(30);
@@ -377,7 +377,7 @@ describe('App foreground Escape ownership', () => {
     try {
       stdin.write('\t');
       // The panel heading tallies the run; the phase row tallies its phase.
-      await waitFor(() => stdout.output.includes('workflow · 0/2 done'));
+      await waitFor(() => stdout.output.includes('workflow · 0/2 · 2 running'));
       await waitFor(() =>
         stdout.output.includes('Map (1/1) · 0/2 · 2 running'),
       );
@@ -468,7 +468,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('\t');
       await waitFor(() =>
-        currentFrame(stdout).includes('ambiguous-workflow · 0/2 done'),
+        currentFrame(stdout).includes('ambiguous-workflow · 0/2 · 2 running'),
       );
       stdin.write('\r');
       await waitFor(() =>
