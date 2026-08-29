@@ -161,7 +161,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
   });
 
   it('does not exceed the configured count when every round fails to compile', async () => {
-    const { shared, stages } = await runFlow({
+    const { shared, stages, outcome } = await runFlow({
       totalRounds: 3,
       failingRounds: [0, 1, 2],
     });
@@ -177,6 +177,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       { index: 1, total: 3 },
       { index: 2, total: 3 },
     ]);
+    expect(outcome).toBe(RUN_OUTCOME.FAILED);
   });
 
   it('fails without adding a repair round when final compile failure collides with cancellation', async () => {
