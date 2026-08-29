@@ -608,14 +608,16 @@ async function rollbackChangedSettings(
  * Rollback config for one coding-plan preference, shared by the pre-commit
  * restore (a switch that failed before or during client preparation) and the
  * commit task's rollback (a later access-settings write failed).
+ *
+ * Both callers sit past the point where the plan write was attempted, so
+ * `writeStarted` is always true here.
  */
 function codingPlanRollbackConfig(
   runtime: CodingPlanSubscriptionRuntime,
   previous: boolean,
-  writeStarted: boolean,
 ): RetrySettingRollbackConfig {
   return {
-    writeStarted,
+    writeStarted: true,
     needsRollback: () => runtime.getEnabled() !== previous,
     restore: async () => {
       await runtime.restoreEnabled(previous);
@@ -794,9 +796,7 @@ async function switchRetryToPersonalCredentials(
         options.commitQueue.add(async () => {
           signal.throwIfAborted();
           const previousCodingPlanEnabled = runtime.getEnabled();
-          let codingPlanWriteStarted = false;
           try {
-            codingPlanWriteStarted = true;
             await runRetryTask(
               () => setCliCodingPlanSubscription(codingPlanId, false),
               signal,
@@ -807,22 +807,14 @@ async function switchRetryToPersonalCredentials(
             throwWithRollbackFailures(
               error,
               await rollbackChangedSettings([
-                codingPlanRollbackConfig(
-                  runtime,
-                  previousCodingPlanEnabled,
-                  codingPlanWriteStarted,
-                ),
+                codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
               ]),
             );
           }
           await applyRetryCredentialCommit(
             decision,
             signal,
-            codingPlanRollbackConfig(
-              runtime,
-              previousCodingPlanEnabled,
-              codingPlanWriteStarted,
-            ),
+            codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
           );
         }),
       signal,
