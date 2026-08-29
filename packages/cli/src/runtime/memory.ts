@@ -47,7 +47,7 @@ export function formatCliMemoryList(items: readonly MemoryViewItem[]): string {
   return lines.join('\n');
 }
 
-export function cliMemoryStoragePathFromInput(inputPath: string): string {
+function cliMemoryStoragePathFromInput(inputPath: string): string {
   const trimmed = normalizeFilePath(inputPath.trim());
   if (!trimmed) {
     return displayToStoragePath(MEMORY_DISPLAY_ROOT);

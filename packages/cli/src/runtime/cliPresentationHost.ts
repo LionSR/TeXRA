@@ -15,6 +15,7 @@ import { formatInstructionActionHint } from '@shared/copy/instructionActionHint'
 import {
   createCliLogger,
   createCliLogSink,
+  flushNdjsonStdout,
   writeNdjsonStdout,
   type Logger,
   type LogSink,
@@ -141,6 +142,9 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       closed = true;
       runProgress?.clear();
       await sink?.flush?.();
+      // Approval-bypass records go through the module-level NDJSON queue via
+      // `writeNdjsonStdout`, which the lazily created `sink` may never cover.
+      if (ndjson) await flushNdjsonStdout();
     },
   };
 }

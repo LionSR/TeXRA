@@ -153,7 +153,6 @@ import {
   buildCliResumeItems,
   buildCliTeamItems,
 } from '../src/runtime/orchestration';
-import type { CliHistoryEntry } from '../src/runtime/history';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
@@ -162,6 +161,7 @@ import {
   type CliRuntimeHost,
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
+import type { CliHistoryEntry } from '../src/runtime/history';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
