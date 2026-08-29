@@ -36,7 +36,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   askApproval,
-  classifyCliRetryAction,
+  cliRetryQuotaRoute,
   cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
   type CliApprovalPromptHooks,
@@ -907,7 +907,7 @@ describe('formatRetryRequestMessage', () => {
       'Kimi Code subscription',
     );
     expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
-    expect(classifyCliRetryAction(retry)).toBe('disable-quota-route:kimiCode');
+    expect(cliRetryQuotaRoute(retry)?.id).toBe('kimiCode');
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
       disableQuotaRoute: 'kimiCode',
@@ -923,9 +923,7 @@ describe('formatRetryRequestMessage', () => {
       },
     };
 
-    expect(classifyCliRetryAction(retry)).toBe(
-      'disable-quota-route:glmCodingPlan',
-    );
+    expect(cliRetryQuotaRoute(retry)?.id).toBe('glmCodingPlan');
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
       disableQuotaRoute: 'glmCodingPlan',

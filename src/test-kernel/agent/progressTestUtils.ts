@@ -411,7 +411,7 @@ export function sessionWithInteractions(
     | SessionHostInteractions
     | Pick<SessionHostInteractions, 'emit'>
     | undefined,
-  status = new StreamStatusMachine(new SessionEventHub()),
+  eventHub?: SessionEventHub,
 ): SessionHandle {
   const owner =
     interactions instanceof SessionHostInteractions
@@ -424,11 +424,18 @@ export function sessionWithInteractions(
         : { ...interactions, cancel: () => {} },
     );
   }
+  // Like production SessionHandle, the stub carries a real event hub and
+  // co-constructs the status machine on that same hub — emit sites resolve
+  // `session.events` directly, and status facts publish on the hub the
+  // session's listeners read (SessionHandleInit documents why an injected
+  // machine is forbidden). Tests that record status facts pass the hub in.
+  const events = eventHub ?? new SessionEventHub();
   return {
     interactions: owner,
+    events,
     approvals: createSessionApprovals(owner),
     modelRetries: new ModelRetryGate(),
-    status,
+    status: new StreamStatusMachine(events),
     transcripts: { ensureLoaded: async () => {} },
     followUps: { terminalize: () => false },
   } as unknown as SessionHandle;

@@ -463,12 +463,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     return { role: 'assistant', content: [textPart(text)] };
   }
 
-  override extractAssistantText(
-    message: LanguageModelMessage,
-  ): string | undefined {
-    return message.role === 'assistant' ? messageText(message) : undefined;
-  }
-
   prependTextToUserMessage(
     messages: LanguageModelMessage[],
     text: string,

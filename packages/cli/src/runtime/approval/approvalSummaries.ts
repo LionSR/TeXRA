@@ -20,7 +20,7 @@ import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import {
   cliRetryActionHint,
-  classifyCliRetryAction,
+  cliRetryQuotaRoute,
   type CliApprovalContent,
 } from './approvalPrompts';
 
@@ -205,7 +205,7 @@ export function buildAgentProposalApprovalContent(
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const hint = cliRetryActionHint(classifyCliRetryAction(payload));
+  const hint = cliRetryActionHint(cliRetryQuotaRoute(payload));
   return hint ? [message, hint].join('\n') : message;
 }
 

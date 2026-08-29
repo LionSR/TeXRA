@@ -263,7 +263,7 @@ describe('NativeSubagentStrategy', () => {
       params.config,
       params.executionId,
       expect.objectContaining({
-        allowWaitingResult: true,
+        isSubagent: true,
         enforceCategory: true,
         parentStreamId: params.parentStreamId,
         stopAfterCycle: true,

@@ -40,9 +40,6 @@ interface RoutePolicy {
 interface RunOptions {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
-  readonly classifyFailure: (error: Error) => RouteFailure | undefined;
-  readonly isReachableFailure?: (error: Error) => boolean;
-  readonly additionalRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
 }
 
@@ -67,20 +64,17 @@ export class ModelRetryGate {
   private readonly routes = new Map<string, RouteState>();
   private disposed = false;
 
+  /**
+   * Run `operation` gated on every route in `routes`, narrowest first (see
+   * {@link acquireAll}). The tuple type is non-empty because an empty list
+   * would run the operation entirely ungated.
+   */
   async run<T>(
-    route: string,
+    routes: readonly [RoutePolicy, ...RoutePolicy[]],
     options: RunOptions,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const policies: RoutePolicy[] = [
-      ...(options.additionalRoutes ?? []),
-      {
-        key: route,
-        classifyFailure: options.classifyFailure,
-        isReachableFailure: options.isReachableFailure,
-      },
-    ];
-    const acquired = await this.acquireAll(policies, options);
+    const acquired = await this.acquireAll(routes, options);
     try {
       const result = await operation();
       for (const entry of acquired) {

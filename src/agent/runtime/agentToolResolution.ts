@@ -59,10 +59,6 @@ interface ResolveAgentToolsInput {
   toolInjections?: ToolInjectionRegistry;
 }
 
-export interface ResolvedAgentTools {
-  tools: ToolDefinition[];
-}
-
 /**
  * Probe the models currently available for delegation, but only when the
  * resolved tool list actually contains a delegation tool.
@@ -107,7 +103,7 @@ export async function resolveAgentTools({
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections = SharedToolInjectionRegistry,
-}: ResolveAgentToolsInput): Promise<ResolvedAgentTools> {
+}: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
@@ -161,9 +157,7 @@ export async function resolveAgentTools({
 
   const availableModelNames =
     await availableDelegationModelNamesForTools(resolved);
-  return {
-    tools: resolved.map((tool) =>
-      annotateDelegationAvailability(tool, availableModelNames),
-    ),
-  };
+  return resolved.map((tool) =>
+    annotateDelegationAvailability(tool, availableModelNames),
+  );
 }

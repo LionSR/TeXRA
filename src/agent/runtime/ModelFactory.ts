@@ -230,7 +230,6 @@ function applyShortModelNamePreference(
 export function resolveModelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
   useOpenRouter = getUseOpenRouter(),
-  preferShortModelNames = getPreferShortModelNames(),
   copilotRouteOverride?: CopilotRouteOverride,
 ): ModelHandlerCompatibilityKey | undefined {
   if (shouldUseInternalValidationModelHandler()) {
@@ -257,9 +256,11 @@ export function resolveModelHandlerCompatibilityKey(
     return 'ModelHandlerVscodeLm';
   }
 
+  // Re-application is identity on an already-shortened config, so the live
+  // `createModelHandler` path can hand this its own resolved config.
   const config = applyShortModelNamePreference(
     originalConfig,
-    preferShortModelNames,
+    getPreferShortModelNames(),
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
@@ -393,10 +394,6 @@ export async function createModelHandler(
   const compatibilityKey = resolveModelHandlerCompatibilityKey(
     config,
     useOpenRouter,
-    // Short-name preference was already applied by withShortModelName above;
-    // pass false so the key predicate routes on the same resolved config
-    // instead of re-resolving it.
-    false,
     copilotRouteOverride,
   );
   return createModelHandlerForResolvedCompatibilityKey(

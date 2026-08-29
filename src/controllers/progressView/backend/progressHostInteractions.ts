@@ -438,7 +438,6 @@ export function createProgressHostInteractions(
     async openExternalInquiry(request) {
       revealStream(request.streamId || undefined);
       handlers().externalInquiry.show(request);
-      return { threadId: request.threadId };
     },
 
     cancel,

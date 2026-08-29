@@ -54,7 +54,6 @@ import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
   createChatUserFollowUpMessages,
-  extractChatAssistantText,
   initializeChatMessages,
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
@@ -473,10 +472,6 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
 
   createAssistantMessage(text: string): ChatMessages {
     return { role: 'assistant', content: text };
-  }
-
-  extractAssistantText(message: ChatMessages): string | undefined {
-    return extractChatAssistantText(message);
   }
 
   // ---------------------------------------------------------------------------

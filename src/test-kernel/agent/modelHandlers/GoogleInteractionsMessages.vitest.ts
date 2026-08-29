@@ -120,7 +120,6 @@ describe('ModelHandlerGoogleInteractions message construction', () => {
     const step = handler.createAssistantMessage('hi');
     expect(step.type).toBe('model_output');
     expect(textOf(step)).toBe('hi');
-    expect(handler.extractAssistantText(step)).toBe('hi');
   });
 
   it('rejects empty text when constructing a content block', () => {

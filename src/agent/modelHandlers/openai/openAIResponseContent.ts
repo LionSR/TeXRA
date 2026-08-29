@@ -9,7 +9,6 @@ import type {
   ResponseInputContent,
   ResponseInputFile,
   ResponseInputItem,
-  ResponseOutputMessage,
 } from 'openai/resources/responses/responses';
 
 /** Build an `input_text` content part. */
@@ -33,17 +32,6 @@ export function isMessageItem(
   if (!('content' in item)) return false;
   const { content } = item;
   return typeof content === 'string' || Array.isArray(content);
-}
-
-/** Type guard for assistant text messages. */
-export function isAssistantTextMessage(
-  item?: ResponseInputItem,
-): item is EasyInputMessage | ResponseOutputMessage {
-  return (
-    item?.type === 'message' &&
-    item.role === 'assistant' &&
-    (typeof item.content === 'string' || Array.isArray(item.content))
-  );
 }
 
 /**

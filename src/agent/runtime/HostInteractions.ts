@@ -59,7 +59,7 @@ type AddCriticismSink = (input: ManualCriticismEntry) => {
   readonly resolvedPath: string;
 };
 
-export interface OpenPdfRequest {
+interface OpenPdfRequest {
   readonly location: FileLocation;
   readonly preserveFocus: boolean;
 }
@@ -71,7 +71,7 @@ type OpenPdfOpener = (request: OpenPdfRequest) => Promise<void> | void;
  * when no review session is collecting issues (or the report is rejected), so
  * the tool can surface that to the agent.
  */
-export type ReportReviewIssueSink = (report: ReviewIssueReport) => {
+type ReportReviewIssueSink = (report: ReviewIssueReport) => {
   readonly accepted: boolean;
   readonly reason?: string;
 };
@@ -210,10 +210,6 @@ interface HostInteractionResultByKind {
 }
 
 type HostExternalInquiryRequest = ExternalInquiryPermission;
-
-interface HostExternalInquiryHandle {
-  readonly threadId: string;
-}
 
 export type BashSettlement =
   | ({ readonly action: 'approve' } & NoRejectionProvenance)
@@ -378,7 +374,7 @@ export interface HostInteractions {
   ): Promise<UserQuestionSettlement> | undefined;
   openExternalInquiry?(
     request: HostExternalInquiryRequest,
-  ): Promise<HostExternalInquiryHandle> | undefined;
+  ): Promise<void> | undefined;
   setApprovalBypassState?(update: HostApprovalBypassStateUpdate): void;
   /** Settle pending requests matching the selector with their reject/cancel defaults. */
   cancel(selector?: HostInteractionCancelSelector): void;
@@ -473,7 +469,7 @@ export class SessionHostInteractions implements HostInteractions {
       // closure reports the eventual delivery result back through the
       // option callbacks once a live host actually renders (or declines) it.
       this.queuePresentationReplay((interactions) => {
-        if (!options.onReplayDelivered && !options.onReplayNotDelivered) {
+        if (!options.onReplayNotDelivered) {
           return interactions.emit?.(event, payload);
         }
         // A synchronous throw from the host's emit (a desktop renderer post
@@ -494,11 +490,7 @@ export class SessionHostInteractions implements HostInteractions {
         }
         return Promise.resolve(delivered).then(
           (value) => {
-            if (value === true) {
-              options.onReplayDelivered?.();
-            } else {
-              options.onReplayNotDelivered?.(interactions);
-            }
+            if (value !== true) options.onReplayNotDelivered?.(interactions);
           },
           (error: unknown) => {
             logger.warn('Replayed presentation notice failed', {
@@ -612,7 +604,7 @@ export class SessionHostInteractions implements HostInteractions {
 
   openExternalInquiry(
     request: HostExternalInquiryRequest,
-  ): Promise<HostExternalInquiryHandle> | undefined {
+  ): Promise<void> | undefined {
     // Opening an inquiry is a notification whose tool contract returns
     // immediately; it is not a response-bearing approval. Preserve the
     // existing loud unavailable path instead of parking the agent while no UI

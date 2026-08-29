@@ -82,8 +82,8 @@ export interface RunToolUseFlowInput extends BaseFlowContextInit {
   isSubagent?: boolean;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
-  onIdle?: (lastResponse: string | undefined) => void;
+  /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: () => void;
   /**
    * Fires after a running tool-use chat changes its model, once the shared
    * `ModelCell` already holds the new pair. The handler is deliberately not
@@ -177,7 +177,7 @@ export async function runToolUseFlow(
     runSession.followUps,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
-  const { tools: resolvedTools } = await resolveAgentTools({
+  const resolvedTools = await resolveAgentTools({
     tools: setting.tools,
     registry: baseRegistry,
     logger,

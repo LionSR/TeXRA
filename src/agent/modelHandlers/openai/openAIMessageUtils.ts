@@ -1,6 +1,5 @@
 // Local imports
 import type { FileLocation } from '@shared/schemas';
-import { joinNonEmpty } from '@utils/text/stringUtils';
 import type { MediaAttachmentContext } from '../support/mediaAttachmentPolicy';
 
 /** Options for normalizing OpenAI-style chat messages. */
@@ -359,24 +358,6 @@ export function createChatUserFollowUpMessages<T extends MessageLike>(
     content: [{ type: 'text', text: userMessage }],
   } as T);
   return messages;
-}
-
-/** Extracts the joined text content of a chat-shaped assistant message. */
-export function extractChatAssistantText<T extends MessageLike>(
-  message: T,
-): string | undefined {
-  if (message.role !== 'assistant') return undefined;
-  const { content } = message;
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return undefined;
-  return joinNonEmpty(
-    content
-      .filter(
-        (p): p is { type: 'text'; text: string } =>
-          p.type === 'text' && typeof p.text === 'string',
-      )
-      .map((p) => p.text),
-  );
 }
 
 /**

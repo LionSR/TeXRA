@@ -96,14 +96,13 @@ export interface ChildRecord extends ChildRecordData {
 
 /**
  * Logical identity of one child run turn (#9531, introduced 2026-08-03): a
- * stable turn token plus the delivery id its single parent delivery is
- * admitted under. Minted by the child-run loop per accepted turn — not by a
+ * stable turn token. Minted by the child-run loop per accepted turn — not by a
  * global registry — so the same logical delivery always carries the same id
- * and distinct turns never share one.
+ * and distinct turns never share one. The delivery id its single parent
+ * delivery is admitted under is derived from this token at the enqueue site.
  */
 const TurnRefSchema = z.object({
   token: z.string(),
-  deliveryId: z.string(),
 });
 export type ChildTurnRef = z.infer<typeof TurnRefSchema>;
 

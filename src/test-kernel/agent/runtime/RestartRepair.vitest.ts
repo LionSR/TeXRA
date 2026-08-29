@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import { type ResumabilityDecision } from '@agent/storage/resumability';
-import type { RunClassification } from '@agent/runtime/runClassification';
+import type {
+  RunClassification,
+  RunFactsClassification,
+} from '@agent/runtime/runClassification';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
@@ -43,26 +45,17 @@ function setupStream(name: string): StreamSetup {
 }
 
 /**
- * The durable facts that would have produced `classification`: what the
- * settlement re-reads under the lease. Ownership-only kinds have no facts;
- * settlement never reaches them.
+ * Narrow a pre-claim classification to what settlement re-reads under the
+ * lease. Ownership-only kinds never reach settlement.
  */
-function factsFor(classification: RunClassification): ResumabilityDecision {
-  switch (classification.kind) {
-    case 'resumable':
-      return {
-        kind: 'checkpoint',
-        flowRecord: {} as FlowRecord,
-        outcome: classification.outcome,
-      };
-    case 'finished':
-      return { kind: 'none', outcome: classification.outcome };
-    case 'unclassified':
-      return { kind: 'unreadable', cause: classification.cause };
-    case 'held_elsewhere':
-    case 'owned_here':
-      throw new Error(`no durable facts for ${classification.kind}`);
+function factsOf(classification: RunClassification): RunFactsClassification {
+  if (classification.kind === 'held_elsewhere') {
+    throw new Error('no durable facts for held_elsewhere');
   }
+  if (classification.kind === 'owned_here') {
+    throw new Error('no durable facts for owned_here');
+  }
+  return classification;
 }
 
 function runRepair(
@@ -77,8 +70,8 @@ function runRepair(
     executionIds: new Map([[setup.streamId, setup.executionId]]),
     // Settlement re-reads the facts under the lease; by default they agree
     // with the pre-claim classification.
-    deriveResumability: classifyRun
-      ? async (executionId) => factsFor(await classifyRun(executionId))
+    classifyRunFacts: classifyRun
+      ? async (executionId) => factsOf(await classifyRun(executionId))
       : undefined,
     ...overrides,
   });
@@ -169,21 +162,22 @@ describe('repairRestartedStreams', () => {
     // lock was taken. The fresh read wins: nothing is written over COMPLETED.
     // Ownership is the lock itself, so it is not asked again under it.
     const classifyRun = classifyAs({ kind: 'resumable' });
-    const deriveResumability = vi.fn(async () =>
-      factsFor({ kind: 'finished', outcome: RUN_OUTCOME.COMPLETED }),
+    const classifyRunFacts = vi.fn(
+      async (): Promise<RunFactsClassification> => ({
+        kind: 'finished',
+        outcome: RUN_OUTCOME.COMPLETED,
+      }),
     );
 
     await runRepair(setup, {
       closeRunningGroups,
       finalizeRun,
       classifyRun,
-      deriveResumability,
+      classifyRunFacts,
     });
 
     expect(classifyRun).toHaveBeenCalledOnce();
-    expect(deriveResumability).toHaveBeenCalledExactlyOnceWith(
-      setup.executionId,
-    );
+    expect(classifyRunFacts).toHaveBeenCalledExactlyOnceWith(setup.executionId);
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.COMPLETED);
     expect(closeRunningGroups).toHaveBeenCalledExactlyOnceWith(
       [setup.streamId],
@@ -238,8 +232,10 @@ describe('repairRestartedStreams', () => {
         }
         return { kind: 'finished' as const, outcome: RUN_OUTCOME.COMPLETED };
       }),
-      deriveResumability: async () =>
-        factsFor({ kind: 'finished', outcome: RUN_OUTCOME.COMPLETED }),
+      classifyRunFacts: async () => ({
+        kind: 'finished',
+        outcome: RUN_OUTCOME.COMPLETED,
+      }),
     });
 
     // Nothing known, nothing mutated, but shown: the cause is the display fact.

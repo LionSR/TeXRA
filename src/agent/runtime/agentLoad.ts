@@ -22,36 +22,19 @@ import { normalizeAgentSettingTools } from './agentSettingTools';
 
 const CHANNEL = 'agentLoad';
 
-interface AgentYamlValidationResult {
-  name: string;
-  settings: AgentSettingInput;
-  prompts: AgentPromptInput;
-}
-
 /**
- * Parses a YAML string or already-parsed object and validates that it
- * represents a full agent definition. Returns the validated name, settings,
- * and prompts so callers can reuse consistent schema checks across string and
- * file based workflows.
+ * Parses YAML text and validates that it represents a full agent definition,
+ * throwing when it does not. Inheriting definitions stay partial: only a root
+ * definition is held to the full settings/prompts schemas.
  */
-export function validateAgentYamlContent(
-  content: string | object,
-): AgentYamlValidationResult {
-  let data: ReturnType<(typeof AgentDefinitionSchema)['parse']>;
-  if (typeof content === 'string') {
-    const parsed = parseYamlWith(content, AgentDefinitionSchema);
-    if (parsed.isErr()) {
-      throw new Error(`Failed to parse agent YAML: ${parsed.error.message}`, {
-        cause: parsed.error,
-      });
-    }
-    data = parsed.value;
-  } else {
-    data = AgentDefinitionSchema.parse(content);
+export function validateAgentYamlContent(content: string): void {
+  const parsed = parseYamlWith(content, AgentDefinitionSchema);
+  if (parsed.isErr()) {
+    throw new Error(`Failed to parse agent YAML: ${parsed.error.message}`, {
+      cause: parsed.error,
+    });
   }
-  // `name` is validated by AgentNameSchema on both parse paths (trim + min 1),
-  // so the returned name is guaranteed non-empty and trimmed.
-  const rootName = data.name;
+  const data = parsed.value;
 
   if (!data.inherits) {
     AgentSettingSchema.parse(
@@ -59,12 +42,6 @@ export function validateAgentYamlContent(
     );
     AgentPromptSchema.parse(data.prompts);
   }
-
-  return {
-    name: rootName,
-    settings: data.settings,
-    prompts: data.prompts,
-  };
 }
 
 /** Loads and parses a YAML file from an absolute path. */

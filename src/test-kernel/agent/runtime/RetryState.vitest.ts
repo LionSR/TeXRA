@@ -298,15 +298,16 @@ async function captureModelRetry(
     await withRetryRunContext(streamId, session, () =>
       node.exec({ shouldStop: false, messages: [] }),
     );
-    const [wireRoute, modelOptions] = run.mock.calls[0]!;
-    const modelRoute = modelOptions.additionalRoutes?.[0];
-    if (!modelRoute) {
-      throw new Error('Expected model-specific retry route');
+    // The gate acquires narrowest-first: the model route, then the wire route.
+    const [routes] = run.mock.calls[0]!;
+    const [modelRoute, wire] = routes;
+    if (!modelRoute || !wire) {
+      throw new Error('Expected the model-specific and wire retry routes');
     }
     return {
-      wireRoute,
+      wireRoute: wire.key,
       modelRetryRoute: modelRoute.key,
-      classifyFailure: modelOptions.classifyFailure,
+      classifyFailure: wire.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
       gateCalls: run.mock.calls.length,
     };

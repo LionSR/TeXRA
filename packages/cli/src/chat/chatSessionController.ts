@@ -38,10 +38,7 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -316,9 +313,7 @@ export function createChatSessionController(
     // A launch failure already rendered through a targeted presentation
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
-    const alreadyPresented =
-      hasErrorPresentedMarker(error) || hasErrorPresentationPending(error);
-    if (!session.stopRequested && !alreadyPresented) {
+    if (!session.stopRequested && !hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
     if (session.stopRequested) {

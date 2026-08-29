@@ -1742,11 +1742,6 @@ export abstract class ModelHandler<
     return [];
   }
 
-  /** Default: returns undefined. Concrete handlers override with typed extraction. */
-  extractAssistantText(_message: M): string | undefined {
-    return undefined;
-  }
-
   // =========================================================================
   // Message modification methods (for post-build enrichment)
   // =========================================================================

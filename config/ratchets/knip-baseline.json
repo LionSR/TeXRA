@@ -1370,18 +1370,6 @@
       "name": "resolveOutputFiles"
     },
     {
-      "file": "src/agent/runtime/AgentLaunchContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getAgentPath"
-    },
-    {
-      "file": "src/agent/runtime/HostInteractions.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "OpenPdfRequest"
-    },
-    {
       "file": "src/agent/runtime/index.ts",
       "category": "production-dead",
       "kind": "types",
@@ -1394,22 +1382,10 @@
       "name": "shouldUseResponsesAPI"
     },
     {
-      "file": "src/agent/runtime/RunContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "useRunContext"
-    },
-    {
       "file": "src/agent/runtime/sessionDescription.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "cleanSessionDescription"
-    },
-    {
-      "file": "src/agent/runtime/terminalResultToast.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "terminalResultToast"
     },
     {
       "file": "src/agent/storage/conversationFormat.ts",

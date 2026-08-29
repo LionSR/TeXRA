@@ -30,7 +30,6 @@ describe('agentResponseTextConnector helper model routing', () => {
           extractResponse,
         },
         client: { provider: 'helper' },
-        modelName: 'deepseekT',
       },
     });
 

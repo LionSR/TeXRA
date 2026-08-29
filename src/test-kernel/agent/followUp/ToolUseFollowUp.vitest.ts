@@ -30,6 +30,7 @@ function activeTarget(): ToolUseFollowUpTarget {
   return {
     kind: 'active',
     context: {
+      ownerSession: {} as SessionHandle,
       modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,

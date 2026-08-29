@@ -307,19 +307,7 @@ export class StreamStatusMachine {
     this.holds.clear();
   }
 
-  entries(): IterableIterator<[StreamTabId, StreamPhase]> {
-    const phases = new Map<StreamTabId, StreamPhase>();
-    for (const [stream, state] of this.getAllStreamStates()) {
-      phases.set(stream, state.phase);
-    }
-    return phases.entries();
-  }
-
-  /**
-   * Combined per-stream phase + substate, including in-flight reservations.
-   * `entries()` is a thin phase-only projection of this, so the two views can
-   * never diverge on which streams they cover.
-   */
+  /** Combined per-stream phase + substate, including in-flight reservations. */
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
     const values = new Map<StreamTabId, StreamPhaseState>();
     for (const [stream, entry] of this.streams) {
