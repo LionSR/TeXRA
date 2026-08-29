@@ -339,6 +339,33 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
   return entry;
 }
 
+/**
+ * A Models-tab provider toggle: a globally-stored boolean that renders both as
+ * a profile row and as one per-provider control on the Models tab. These rows
+ * differ only in their default, copy, honoring reader, and Models-tab control,
+ * so the uniform `configTarget: 'global'` / `category: 'model'` /
+ * `settingsView: 'profile'` framing is written once here — the same tabulation
+ * the region toggles already use through `PROVIDER_ROUTING_SETTINGS`. Returns a
+ * `CORE_SETTING_ROWS` body (key and slot are added by the config-tree mapping).
+ */
+function modelProviderToggle(opts: {
+  readonly default: boolean;
+  readonly title: string;
+  readonly description: string;
+  readonly honoredBy: SettingHonoredBy;
+  readonly model: ModelsTabSurface;
+}): Omit<StateSettingEntry, 'key' | 'slots'> {
+  return {
+    schema: z.boolean().prefault(opts.default),
+    configTarget: 'global',
+    title: opts.title,
+    description: opts.description,
+    category: 'model',
+    honoredBy: opts.honoredBy,
+    surfaces: { settingsView: 'profile', models: [opts.model] },
+  };
+}
+
 // ============================================================================
 // Core (config-tree) rows
 // ============================================================================
@@ -401,141 +428,99 @@ const CORE_SETTING_ROWS: Record<
   // while Models-tab and runtime reads both keep merged-config semantics. A
   // workspace override therefore remains visible and honored; cleanup of values
   // stranded by the regression window is tracked separately in #11173.
-  'model.gpt5ReasoningSummary': {
-    schema: z.boolean().prefault(false),
-    configTarget: 'global',
+  'model.gpt5ReasoningSummary': modelProviderToggle({
+    default: false,
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'GPT-5 reasoning summary',
-          description:
-            'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
-          warning:
-            'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
-          warningUrl:
-            'https://platform.openai.com/settings/organization/billing/overview',
-          warningUrlLabel: 'Check your tier',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'GPT-5 reasoning summary',
+      description:
+        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
+      warning:
+        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
+      warningUrl:
+        'https://platform.openai.com/settings/organization/billing/overview',
+      warningUrlLabel: 'Check your tier',
     },
-  },
-  'model.useOpenAIResponsesAPI': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.useOpenAIResponsesAPI': modelProviderToggle({
+    default: true,
     title: 'Use the Responses API',
     description:
       "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-    category: 'model',
     honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'Use the Responses API',
-          description:
-            'Use the OpenAI Responses API instead of Chat Completions when available.',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'Use the Responses API',
+      description:
+        'Use the OpenAI Responses API instead of Chat Completions when available.',
     },
-  },
-  'model.useGoogleInteractionsServerState': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.useGoogleInteractionsServerState': modelProviderToggle({
+    default: true,
     title: 'Server-side conversation state',
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'google',
-          label: 'Server-side conversation state',
-          description:
-            "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
-        },
-      ],
+    model: {
+      provider: 'google',
+      label: 'Server-side conversation state',
+      description:
+        "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     },
-  },
-  'model.useGoogleBackgroundResponses': {
-    schema: z.boolean().prefault(false),
-    configTarget: 'global',
+  }),
+  'model.useGoogleBackgroundResponses': modelProviderToggle({
+    default: false,
     title: 'Google background responses',
     description:
       'Run long-running Google workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'google',
-          label: 'Background responses',
-          description:
-            'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
-        },
-      ],
+    model: {
+      provider: 'google',
+      label: 'Background responses',
+      description:
+        'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
     },
-  },
-  'model.useBackgroundResponses': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.useBackgroundResponses': modelProviderToggle({
+    default: true,
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'Background responses',
-          description:
-            'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'Background responses',
+      description:
+        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
     },
-  },
-  'model.openaiParallelToolCalls': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.openaiParallelToolCalls': modelProviderToggle({
+    default: true,
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'Parallel tool calls',
-          description:
-            'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'Parallel tool calls',
+      description:
+        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
     },
-  },
+  }),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `getValidatedConfig`, so the row must not narrow itself to the
   // global scope — a workspace override the runtime honors would then be
