@@ -27,7 +27,6 @@ import {
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
 } from '@shared/copy/accountAuth';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 
 export type AccountAccessFormValue =
@@ -83,7 +82,7 @@ function buildAccountAccessFormItems(
         },
         {
           value: { kind: 'login' as const, target: 'texra' },
-          label: RESEARCHER_ACCESS.label,
+          label: RESEARCHER_ACCESS_AUTH.signInLabel,
           description: RESEARCHER_ACCESS_AUTH.loginDescription,
         },
         {
@@ -125,7 +124,7 @@ function buildAccountAccessFormItems(
   if (status.texraSignedIn !== true) {
     accountItems.push({
       value: { kind: 'login', target: 'texra' },
-      label: RESEARCHER_ACCESS.label,
+      label: RESEARCHER_ACCESS_AUTH.signInLabel,
       description: RESEARCHER_ACCESS_AUTH.loginDescription,
     });
     accountItems.push({

@@ -15,6 +15,7 @@ import {
 } from '@common/teams/TeamPlan';
 import { platform } from '@platform/platform';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { filterNotNullish } from '@utils/core';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
@@ -44,13 +45,11 @@ interface CliMultiAgentPresetListRecord extends TeamPreset {
 const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
 const MULTI_AGENT_SHOW_HINT =
   'Hint: run `texra multi-agent show <team-id>` to see missing agents for degraded or unavailable presets.';
-const MULTI_AGENT_LOGIN_HINT =
-  'Hint: Researcher Access sign-in may load additional remote team agents.';
+const MULTI_AGENT_LOGIN_HINT = `Hint: ${RESEARCHER_ACCESS.label} sign-in may load additional remote team agents.`;
 const MULTI_AGENT_NO_TEAM_ROOT_REASON = 'no runnable team root';
 const MULTI_AGENT_LAUNCHER_SHOW_HINT =
   'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.';
-const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
-  'Researcher Access sign-in may unlock more remote team agents.';
+const MULTI_AGENT_LAUNCHER_LOGIN_HINT = `${RESEARCHER_ACCESS.label} sign-in may unlock more remote team agents.`;
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
 export function readCliMultiAgentPresets(): TeamPreset[] {

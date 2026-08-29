@@ -507,7 +507,8 @@ const SCENARIOS = [
       HARNESS_VISIBLE_TOOL_USE_AGENTS: '',
       HARNESS_VISIBLE_WORKFLOW_AGENTS: '',
     },
-    bootExpect: 'Account & access — TeXRA signed out · ChatGPT On · Grok Off',
+    bootExpect:
+      'Account & access — Researcher Access signed out · ChatGPT On · Grok Off',
     keys: ['3'],
     exitKeys: [ESC, ESC],
     expectExit: true,
@@ -523,7 +524,7 @@ const SCENARIOS = [
       'Prefer GLM Coding Plan',
       'Off · key configured',
       'Sign out of ChatGPT',
-      'Log in to TeXRA',
+      'Sign in with Researcher',
       'Esc back',
     ],
     unexpect: [

@@ -81,8 +81,13 @@ export const ACCOUNT_OUTCOME = {
  * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
  */
 export const RESEARCHER_ACCESS_AUTH = {
-  loginDescription: 'Remote agents and your TeXRA account',
-  deviceCodeLabel: 'Researcher device code',
+  signInLabel: `Sign in with ${RESEARCHER_ACCESS.label}`,
+  loginDescription: `Remote agents through ${RESEARCHER_ACCESS.label}`,
+  deviceCodeLabel: `${RESEARCHER_ACCESS.label} device code`,
+  signOutDescription: `Sign out of ${RESEARCHER_ACCESS.label}`,
+  statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,
+  statusExample: `show ${RESEARCHER_ACCESS.label} sign-in status`,
+  authDescription: `Sign in with ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, or ${RESEARCHER_ACCESS.label}; check status`,
   /** `/login` slash-command description. */
   slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, or ${RESEARCHER_ACCESS.label}`,
   startingDevice: `Starting ${RESEARCHER_ACCESS.label} device-code sign-in.`,

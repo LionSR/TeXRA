@@ -342,12 +342,12 @@ function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
   return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
 }
 
-/** Launcher-row summary: the TeXRA session ahead of the access summary. */
+/** Launcher-row summary: Researcher Access ahead of the access summary. */
 export function formatCliAccountAccessSummary(
   status: CliModelAccessStatus,
 ): string {
   const texra = status.texraSignedIn === true ? 'signed in' : 'signed out';
-  return `TeXRA ${texra} · ${formatCliModelAccessSummary(status)}`;
+  return `${RESEARCHER_ACCESS.label} ${texra} · ${formatCliModelAccessSummary(status)}`;
 }
 
 export interface CliAccountAccessRow {

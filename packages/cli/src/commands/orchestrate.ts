@@ -12,6 +12,8 @@ import { createLog } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { AgentCategory, byCategory } from '@shared/schemas';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -258,7 +260,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             );
             const answer = (
               await askCliQuestion(
-                'Choose: [s] Sign in to TeXRA, [c] Continue with available members, [q] Cancel: ',
+                `Choose: [s] Sign in to ${RESEARCHER_ACCESS.label}, [c] Continue with available members, [q] Cancel: `,
               )
             )
               .trim()
@@ -346,7 +348,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             }
           } else if (action.operation === 'sign-out') {
             await signOutCliSupabase();
-            writeTextStdout('Signed out of TeXRA.');
+            writeTextStdout(ACCOUNT_OUTCOME.signedOut(RESEARCHER_ACCESS.label));
           } else {
             await runLoginCommand(context, loginInitFromArgs({}));
           }

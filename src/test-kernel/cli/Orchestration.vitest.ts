@@ -342,7 +342,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Account & access',
       description:
-        'TeXRA signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+        'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
       value: { kind: 'browse-account-access' },
     });
     expect(
@@ -427,7 +427,7 @@ describe('CLI orchestration items', () => {
     ).toEqual({
       label: 'Account & access',
       description:
-        'TeXRA signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
+        'Researcher Access signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
       value: { kind: 'browse-account-access' },
     });
   });
@@ -482,7 +482,7 @@ describe('CLI orchestration items', () => {
     expect(
       items.find((item) => item.label === 'Account & access')?.description,
     ).toBe(
-      'TeXRA signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
@@ -504,12 +504,12 @@ describe('CLI orchestration items', () => {
     ]);
   });
 
-  it('prefixes the launcher access summary with the TeXRA sign-in state', () => {
+  it('prefixes the launcher access summary with the Researcher Access sign-in state', () => {
     expect(accountDescription(accountStatus({ texraSignedIn: true }))).toBe(
-      'TeXRA signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
     expect(accountDescription(accountStatus())).toBe(
-      'TeXRA signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      'Researcher Access signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
   });
 
@@ -519,7 +519,7 @@ describe('CLI orchestration items', () => {
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
       expect.objectContaining({
-        label: 'Log in to TeXRA',
+        label: 'Sign in with Researcher Access',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
@@ -546,7 +546,7 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
       }),
       expect.objectContaining({
-        label: 'Log in to TeXRA',
+        label: 'Sign in with Researcher Access',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
