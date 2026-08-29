@@ -39,7 +39,7 @@ import type {
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
+import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
 import { PersistedState } from '@shared/state/PersistedState';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
@@ -65,8 +65,7 @@ const LogListStateSchema = z.object({
 /** Cached per-stream data and DOM state */
 interface CachedStream {
   groups: TaskGroup[];
-  workflowPlan: WorkflowPlanMarker | undefined;
-  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
+  runModel: WorkflowRunModel | null;
   entries: StreamLogEntry[];
   rows: TranscriptRow[];
   updatedRowIndices: readonly number[];
@@ -74,7 +73,7 @@ interface CachedStream {
   rowGeneration: number;
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
-  status: StreamLifecycleStatus | null;
+  status: StreamLifecycleStatus | undefined;
   /** Whether this cached stream is tool-use. */
   isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */
@@ -133,8 +132,7 @@ export class LogList extends LitElement {
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
-      entry.workflowPlan = this.streamContext.workflowPlan;
-      entry.childProgress = this.streamContext.childProgress;
+      entry.runModel = this.streamContext.runModel;
       entry.entries = this.streamContext.entries;
       entry.rows = this.streamContext.rows;
       entry.updatedRowIndices = this.streamContext.updatedRowIndices;
@@ -170,8 +168,7 @@ export class LogList extends LitElement {
           ${ref(data.ref)}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
-          .workflowPlan=${data.workflowPlan}
-          .childProgress=${data.childProgress}
+          .model=${data.runModel}
           .entries=${data.entries}
           .rows=${data.rows}
           .updatedRowIndices=${data.updatedRowIndices}
@@ -241,8 +238,7 @@ export class LogList extends LitElement {
 
     const createdEntry: CachedStream = {
       groups: [],
-      workflowPlan: undefined,
-      childProgress: new Map(),
+      runModel: null,
       entries: [],
       rows: [],
       updatedRowIndices: [],
@@ -250,7 +246,7 @@ export class LogList extends LitElement {
       rowGeneration: 0,
       toggleStates,
       ref: createRef<TaskGroupList>(),
-      status: null,
+      status: undefined,
       isToolUse: false,
       terminalMode: false,
     };

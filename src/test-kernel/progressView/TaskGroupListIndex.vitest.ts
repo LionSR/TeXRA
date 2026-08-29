@@ -28,7 +28,11 @@ import {
   type WorkflowTaskRow,
 } from '@shared/transcript';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
+import {
+  workflowRunModel,
+  type ChildRunProgress,
+  type WorkflowRunModel,
+} from '@shared/streams/workflowRunModel';
 
 // Local file imports
 import {
@@ -49,8 +53,7 @@ type TaskGroupListInternals = HTMLElement & {
   isToolUse: boolean;
   terminal: boolean;
   toggleStates: ToggleStateStore | null;
-  workflowPlan: WorkflowPlanMarker | undefined;
-  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
+  model: WorkflowRunModel | null;
   updateComplete: Promise<boolean>;
   readonly index: TranscriptIndex;
   willUpdate: (changedProperties: Map<string, unknown>) => void;
@@ -147,11 +150,25 @@ function renderList(
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): Promise<TaskGroupListInternals> {
+  // The selector layer computes the model in production; the fixture does
+  // the same fold here.
+  const { workflowPlan, childProgress, ...rest } = options;
+  const model =
+    workflowPlan !== undefined || groups.some((group) => group.kind === 'phase')
+      ? workflowRunModel({
+          taskGroups: groups,
+          rows,
+          plan: workflowPlan,
+          runSettled: false,
+          childProgress: childProgress ?? new Map(),
+        })
+      : null;
   return mountComponent<TaskGroupListInternals>('task-group-list', {
     hasStreams: true,
     groups,
     rows,
-    ...options,
+    model,
+    ...rest,
   });
 }
 

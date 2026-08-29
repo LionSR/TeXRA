@@ -15,10 +15,8 @@ import {
   type GettingStartedAction,
   type StreamLifecycleStatus,
   type StreamLogEntry,
-  type StreamTabId,
   type TaskGroup,
   type WorkflowCallProgress,
-  type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
@@ -34,8 +32,6 @@ import {
   formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
   workflowPhaseRows,
-  workflowRunModel,
-  type ChildRunProgress,
   type WorkflowPhaseModel,
   type WorkflowRowGroup,
   type WorkflowRunModel,
@@ -46,16 +42,12 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import {
-  isInFlightPhase,
-  workflowRunSettled,
-} from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
@@ -91,26 +83,6 @@ const DEFAULT_TIMELINE_ITEM_WINDOW = 120;
 const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_GROUP_ROW_WINDOW = 400;
 const GROUP_ROW_WINDOW_STEP = 400;
-
-/**
- * Maps a group's `StreamPhase`/`RunOutcome` status to a steady wa-icon name.
- * Each terminal phase gets its own icon; an unrecognized status renders as
- * running.
- */
-function getStatusIcon(status: string): TeXRAIconName {
-  switch (status) {
-    case STREAM_PHASE.FAILED:
-      return terminalStatusIcon('failed');
-    case STREAM_PHASE.COMPLETED:
-      return terminalStatusIcon('completed');
-    case STREAM_PHASE.CANCELLED:
-      return terminalStatusIcon('cancelled');
-    // Running and every unrecognized status share the plain steady-state
-    // circle (running is the default look for a live group).
-    default:
-      return terminalStatusIcon('running');
-  }
-}
 
 const WORKFLOW_ROW_GROUPS = ['queued', 'declared'] as const;
 
@@ -153,13 +125,10 @@ export class TaskGroupList extends LitElement {
    */
   @property({ attribute: false }) entries: StreamLogEntry[] = [];
 
-  /**
-   * Existing row indices updated by the most recent backend delta.
-   * Null means the producer did not provide delta metadata, so fall back
-   * to reference scans.
-   */
-  @property({ attribute: false }) updatedRowIndices: readonly number[] | null =
-    null;
+  /** Existing row indices updated by the most recent backend delta,
+   *  consulted only while `updatedRowBaseGeneration` is the generation this
+   *  element has processed. */
+  @property({ attribute: false }) updatedRowIndices: readonly number[] = [];
 
   /** Generation immediately before updatedRowIndices was collected. */
   @property({ attribute: false }) updatedRowBaseGeneration = 0;
@@ -174,20 +143,12 @@ export class TaskGroupList extends LitElement {
   @property({ type: Boolean }) isToolUse = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) streamStatus: StreamLifecycleStatus | null =
-    null;
+  @property({ attribute: false }) streamStatus:
+    StreamLifecycleStatus | undefined = undefined;
 
-  /** The newest attempt's declared workflow plan; with the groups, rows, and
-   *  status it is the shared run model's whole input. */
-  @property({ attribute: false }) workflowPlan: WorkflowPlanMarker | undefined =
-    undefined;
-
-  /** Live progress of this stream's children, by child stream — the model
-   *  joins it to the cards that opened them. */
-  @property({ attribute: false }) childProgress: ReadonlyMap<
-    StreamTabId,
-    ChildRunProgress
-  > = new Map();
+  /** The shared workflow run model — the fold the CLI popup paints, computed
+   *  by the selector layer; null for a stream with no phases and no plan. */
+  @property({ attribute: false }) model: WorkflowRunModel | null = null;
 
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
@@ -202,14 +163,6 @@ export class TaskGroupList extends LitElement {
   private previousStatuses = new Map<string, string>();
 
   private readonly index = new TranscriptIndex();
-
-  /**
-   * The shared workflow run model — the fold the CLI popup paints, over the
-   * same task groups, rows, plan, and settled state — rebuilt in willUpdate
-   * whenever one of those inputs changes. Null for a stream with no phases
-   * and no plan.
-   */
-  private model: WorkflowRunModel | null = null;
 
   /** The model's opened phases by task-group id, for the group tree. */
   private phaseModels = new Map<string, WorkflowPhaseModel>();
@@ -283,15 +236,12 @@ export class TaskGroupList extends LitElement {
     if (groupsChanged) {
       this.checkForCompletedRuns();
     }
-    if (
-      groupsChanged ||
-      rowsChanged ||
-      changedProperties.has('rowGeneration') ||
-      changedProperties.has('workflowPlan') ||
-      changedProperties.has('childProgress') ||
-      changedProperties.has('streamStatus')
-    ) {
-      this.rebuildRunModel();
+    if (changedProperties.has('model')) {
+      this.phaseModels = new Map(
+        (this.model?.phases ?? [])
+          .filter((phase) => phase.opened)
+          .map((phase) => [phase.key, phase]),
+      );
     }
 
     const renderWindowsStale = this.index.apply({
@@ -305,9 +255,10 @@ export class TaskGroupList extends LitElement {
       previousRows: changedProperties.get('rows') as
         TranscriptRow[] | undefined,
       rowsChanged,
-      deltaIndices: this.canUseUpdatedRowIndices()
-        ? (this.updatedRowIndices ?? [])
-        : null,
+      deltaIndices:
+        this.updatedRowBaseGeneration === this.processedRowGeneration
+          ? this.updatedRowIndices
+          : null,
     });
     if (renderWindowsStale) {
       this.resetRenderWindows();
@@ -316,13 +267,6 @@ export class TaskGroupList extends LitElement {
 
   override updated(): void {
     this.processedRowGeneration = this.rowGeneration;
-  }
-
-  private canUseUpdatedRowIndices(): boolean {
-    return (
-      this.updatedRowIndices !== null &&
-      this.updatedRowBaseGeneration === this.processedRowGeneration
-    );
   }
 
   /**
@@ -347,26 +291,6 @@ export class TaskGroupList extends LitElement {
       nextStatuses.set(group.id, group.status);
     }
     this.previousStatuses = nextStatuses;
-  }
-
-  private rebuildRunModel(): void {
-    const model =
-      this.workflowPlan !== undefined ||
-      this.groups.some((group) => group.kind === 'phase')
-        ? workflowRunModel({
-            taskGroups: this.groups,
-            rows: this.rows,
-            plan: this.workflowPlan,
-            runSettled: workflowRunSettled(this.streamStatus ?? undefined),
-            childProgress: this.childProgress,
-          })
-        : null;
-    this.model = model;
-    this.phaseModels = new Map(
-      (model?.phases ?? [])
-        .filter((phase) => phase.opened)
-        .map((phase) => [phase.key, phase]),
-    );
   }
 
   private resetRenderWindows(): void {
@@ -432,6 +356,20 @@ export class TaskGroupList extends LitElement {
    * entry changes, so reference identity is the whole freshness test.
    */
   private renderLogEntry(row: TranscriptRow) {
+    if (row.kind === 'workflowTask') {
+      // The card, the model's live join for it, and the child it may open —
+      // the one-claimant rule the popup honours. The board has no clock, so
+      // elapsed is left to the popup.
+      const live = this.model?.liveOf.get(row.id);
+      const childStreamId = this.model?.childStreamOf.get(row.id);
+      return guard([row, live, childStreamId], () =>
+        formatWorkflowCallTemplate(
+          row,
+          formatWorkflowCallLiveParts(row.call, live),
+          childStreamId,
+        ),
+      );
+    }
     return guard([row], () => formatLogEntry(row));
   }
 
@@ -513,7 +451,7 @@ export class TaskGroupList extends LitElement {
   /** Whole-run tally above a multi-agent workflow's phases. */
   private renderRunBand(node: GroupTree): TemplateResult | typeof nothing {
     const model = this.model;
-    if (this.isToolUse || !model || model.tally.total === 0) return nothing;
+    if (!model || model.tally.total === 0) return nothing;
     if (!node.children.some((child) => child.group.kind === 'phase')) {
       return nothing;
     }
@@ -564,17 +502,8 @@ export class TaskGroupList extends LitElement {
       (row) => row.key,
       (row) => {
         switch (row.kind) {
-          case 'task': {
-            // The card plus the model's live join for it; the board has no
-            // clock, so elapsed is left to the popup.
-            const live = this.model?.liveOf.get(row.row.id);
-            return guard([row.row, live], () =>
-              formatWorkflowCallTemplate(
-                row.row,
-                formatWorkflowCallLiveParts(row.row.call, live),
-              ),
-            );
-          }
+          case 'task':
+            return this.renderLogEntry(row.row);
           case 'declared':
             return formatWorkflowDeclaredTaskTemplate(row.task);
           case 'group':
@@ -651,7 +580,7 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
-    const statusIcon = getStatusIcon(group.status);
+    const statusIcon = terminalStatusIcon(group.status);
     const phase = this.phaseModels.get(group.id);
     const title =
       group.kind === 'round' && group.index !== undefined
@@ -803,7 +732,7 @@ export class TaskGroupList extends LitElement {
       this.entries.length === 0 &&
       this.groups.length === 0
     ) {
-      const active = isInFlightPhase(this.streamStatus ?? undefined);
+      const active = isInFlightPhase(this.streamStatus);
       return html`
         <div class="log-placeholder">
           ${

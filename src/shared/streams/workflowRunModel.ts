@@ -43,7 +43,7 @@ import {
 // ---------------------------------------------------------------------------
 
 /** What an `INTERNAL` transcript entry says about the workflow run. */
-export type WorkflowMarker =
+type WorkflowMarker =
   | { readonly kind: 'plan'; readonly plan: WorkflowPlanMarker }
   | { readonly kind: 'malformedPlan'; readonly error: string };
 
@@ -127,7 +127,7 @@ export interface ChildRunProgress {
   readonly costUsd?: number;
 }
 
-export interface WorkflowRunModelInput {
+interface WorkflowRunModelInput {
   readonly taskGroups: readonly TaskGroup[];
   /** The stream's rows; the model picks the `workflowTask` ones. */
   readonly rows: readonly TranscriptRow[];

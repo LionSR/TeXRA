@@ -27,8 +27,15 @@ import {
   type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
+import {
+  isTerminalOutcomePhase,
+  workflowRunSettled,
+} from '@shared/streams/streamStatus';
+import {
+  workflowRunModel,
+  type ChildRunProgress,
+  type WorkflowRunModel,
+} from '@shared/streams/workflowRunModel';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { groupBy, toNewestFirstByTimestamp } from '@utils/core';
@@ -42,7 +49,6 @@ import {
 } from './store';
 import {
   EMPTY_LOG_CONTEXT,
-  EMPTY_PHASE_STAGE_MAP,
   EMPTY_STREAM_CONTEXT,
   type PhaseStageMap,
   type StreamContextValue,
@@ -152,22 +158,20 @@ export const childStreamsByParent$ = new Signal.Computed(() => {
 
 /**
  * Stream IDs with pending approval requests — drives tab pulse indicator.
- * Returns a stable Set reference when contents are unchanged so downstream
- * `Signal.Computed` consumers can skip propagation via Object.is().
+ * Compared by value, so an unchanged set keeps its identity and downstream
+ * `Signal.Computed` consumers skip propagation.
  */
-let _prevApprovalIds: Set<string> = new Set();
-export const pendingApprovalIds$ = new Signal.Computed(() => {
-  const ids = new Set<string>();
-  for (const p of permissions$.get()) {
-    const streamId = p.data.streamId;
-    if (streamId) ids.add(streamId);
-  }
-  if (setsEqual(ids, _prevApprovalIds)) {
-    return _prevApprovalIds;
-  }
-  _prevApprovalIds = ids;
-  return ids;
-});
+export const pendingApprovalIds$ = new Signal.Computed(
+  () => {
+    const ids = new Set<string>();
+    for (const p of permissions$.get()) {
+      const streamId = p.data.streamId;
+      if (streamId) ids.add(streamId);
+    }
+    return ids;
+  },
+  { equals: setsEqual },
+);
 
 // ---------------------------------------------------------------------------
 // Polite status announcements for the shell's role="status" region
@@ -260,21 +264,11 @@ export function diffStatusAnnouncement(
  * Reset every writable signal to its initial value. Called from
  * `ProgressApp`'s constructor on remount in the same JS context (tests,
  * hot reload). Progress state is singleton-scoped per the file header, so
- * the reset is a per-mount slate, not multi-instance coordination.
- *
- * Order matters: `_prevApprovalIds` must be cleared BEFORE
- * `resetTrackedSignals()` replays `permissions$`'s reset because that setter
- * triggers `pendingApprovalIds$` recomputation, which reads `_prevApprovalIds`
- * for the stable-Set memo — if we clear the cache after, the next read sees a
- * stale prior Set and returns it instead of the empty post-reset value.
- * `_prevPhaseStages` is the same memo over `appState`, so it is cleared
- * before that replay too. The announcement diff memos need no reset: they
- * live on the ProgressApp instance driving `diffStatusAnnouncement`, so a
- * remount starts fresh.
+ * the reset is a per-mount slate, not multi-instance coordination. The
+ * announcement diff memos need no reset: they live on the ProgressApp
+ * instance driving `diffStatusAnnouncement`, so a remount starts fresh.
  */
 export function resetProgressState(): void {
-  _prevApprovalIds = new Set();
-  _prevPhaseStages = EMPTY_PHASE_STAGE_MAP;
   clearFollowUpInputTransientStateStore();
   resetTrackedSignals();
 }
@@ -405,23 +399,21 @@ function samePhaseStages(left: PhaseStageMap, right: PhaseStageMap): boolean {
  * Tasks panel, whose rows are *other* streams — so unlike `activeStreamState$`
  * this deliberately spans every stream, and therefore recomputes on *any*
  * field of *any* stream (`streamStates$` changes identity on every progress
- * tick). Returns a stable Map reference when the phases themselves are
- * unchanged, mirroring `pendingApprovalIds$` above, so a run in flight does
- * not re-render its consumers on unrelated ticks. Values are compared by
- * content, not reference: an unchanged phase arrives as a fresh object each
- * time a metadata patch crosses postMessage.
+ * tick). Compared by content, not reference — an unchanged phase arrives as a
+ * fresh object each time a metadata patch crosses postMessage — so a run in
+ * flight does not re-render its consumers on unrelated ticks.
  */
-let _prevPhaseStages: PhaseStageMap = EMPTY_PHASE_STAGE_MAP;
-export const phaseStages$ = new Signal.Computed((): PhaseStageMap => {
-  const stages = new Map<StreamTabId, PhaseStage>();
-  for (const [streamId, state] of streamStates$.get()) {
-    const stage = state.stage;
-    if (stage?.kind === 'phase') stages.set(streamId, stage);
-  }
-  if (samePhaseStages(stages, _prevPhaseStages)) return _prevPhaseStages;
-  _prevPhaseStages = stages.size > 0 ? stages : EMPTY_PHASE_STAGE_MAP;
-  return _prevPhaseStages;
-});
+export const phaseStages$ = new Signal.Computed(
+  (): PhaseStageMap => {
+    const stages = new Map<StreamTabId, PhaseStage>();
+    for (const [streamId, state] of streamStates$.get()) {
+      const stage = state.stage;
+      if (stage?.kind === 'phase') stages.set(streamId, stage);
+    }
+    return stages;
+  },
+  { equals: samePhaseStages },
+);
 
 const activeIsToolUse$ = new Signal.Computed(() => {
   const state = activeStreamState$.get();
@@ -471,6 +463,37 @@ export const streamContext$ = new Signal.Computed((): StreamContextValue => {
   };
 });
 
+/** Whether the active run has ended — a boolean leaf, so a status tick that
+ *  does not cross that line leaves the run model alone. */
+const activeRunSettled$ = new Signal.Computed(() =>
+  workflowRunSettled(activeStreamState$.get()?.status),
+);
+
+/**
+ * The shared workflow run model for the active stream — the same fold the
+ * CLI popup makes — over its task groups, rows, plan, settled state, and
+ * children's live progress. Null for a tool-use stream or one with neither a
+ * phase nor a plan; the board only paints it.
+ */
+const activeRunModel$ = new Signal.Computed((): WorkflowRunModel | null => {
+  if (activeIsToolUse$.get()) return null;
+  const taskGroups = activeTaskGroups$.get();
+  const streamLogs = activeStreamLogs$.get();
+  if (
+    streamLogs.workflowPlan === undefined &&
+    !taskGroups.some((group) => group.kind === 'phase')
+  ) {
+    return null;
+  }
+  return workflowRunModel({
+    taskGroups,
+    rows: streamLogs.rows,
+    plan: streamLogs.workflowPlan,
+    runSettled: activeRunSettled$.get(),
+    childProgress: activeChildProgress$.get(),
+  });
+});
+
 /**
  * Log context derived from active stream + logs.
  * Depends on leaf selectors so status/badge/progress changes
@@ -489,12 +512,11 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     updatedRowBaseGeneration: streamLogs.updatedRowBaseGeneration,
     rowGeneration: streamLogs.generation,
     taskGroups: activeTaskGroups$.get(),
-    workflowPlan: streamLogs.workflowPlan,
-    childProgress: activeChildProgress$.get(),
+    runModel: activeRunModel$.get(),
     isToolUse: activeIsToolUse$.get(),
     hasStreams,
     streamName: activeStreamInfo.name,
-    streamStatus: activeStreamState$.get()?.status ?? null,
+    streamStatus: activeStreamState$.get()?.status,
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
     terminalMode: activeStreamInfo.identity?.kind === 'process',
