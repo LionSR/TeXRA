@@ -357,6 +357,22 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
 
+      // A request from one of the workflow's own agent calls takes the same
+      // foreground modal; it must not wait invisibly behind the popup.
+      void enqueueApproval({
+        kind: 'planApproval',
+        data: {
+          requestId: 'plan-workflow-child',
+          streamId: CHILD,
+          plan: { objective: 'Verify the child result.' },
+          goalEnabled: false,
+        },
+      });
+      await waitFor(() => stdout.output.includes('Verify the child result.'));
+      clearApprovals();
+      await waitFor(() => currentApproval.get() === undefined);
+      expect(foregroundReader.get()?.kind).toBe('workflow');
+
       // Enter on the task focuses that agent; Esc returns to main with the
       // popup back where it was.
       stdin.write('\r');

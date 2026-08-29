@@ -28,11 +28,13 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/streams/streamStatus';
 import { StreamLogDeltaBuffer, type StreamLogStore } from '@transcript';
+import type { TranscriptPresentationLease } from '@transcript/StreamLogStore';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   activeStreamId,
   focusStream,
+  foregroundReader,
   getCliStateGeneration,
   isCliStreamRetired,
   patchStream,
@@ -41,6 +43,7 @@ import {
   streamPhaseFor,
   streams,
 } from './cliState';
+import { isWorkflowScriptStream } from './childControls';
 import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
 import {
   advanceSettledPrefixIndex,
@@ -60,6 +63,18 @@ import {
 // can land before the first sync fires); one animation frame is enough
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
+
+/** A workflow popup and its Ctrl-T reader are two views of the same full
+ * transcript projection. Workflows never become the active viewport, so the
+ * foreground reader is their presentation-residency owner. */
+function foregroundWorkflowReaderStreamId(): StreamTabId | undefined {
+  const reader = foregroundReader.get();
+  if (!reader) return undefined;
+  if (reader.kind === 'workflow') return reader.streamId;
+  return reader.kind === 'transcript' && isWorkflowScriptStream(reader.streamId)
+    ? reader.streamId
+    : undefined;
+}
 
 interface StreamLogSession {
   readonly transcripts: StreamLogStore;
@@ -114,6 +129,9 @@ function trySyncStreamLog(
 export function subscribeStreamLog(session: StreamLogSession): () => void {
   const store = session.transcripts;
   let previousActiveStreamId = activeStreamId.get();
+  let workflowReaderStreamId: StreamTabId | undefined;
+  let workflowReaderLease: TranscriptPresentationLease | undefined;
+  let workflowReaderRevision = 0;
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
@@ -173,9 +191,59 @@ export function subscribeStreamLog(session: StreamLogSession): () => void {
       });
   });
 
+  const syncWorkflowReader = (): void => {
+    const nextStreamId = foregroundWorkflowReaderStreamId();
+    if (nextStreamId === workflowReaderStreamId) return;
+
+    const previousStreamId = workflowReaderStreamId;
+    workflowReaderStreamId = nextStreamId;
+    const revision = ++workflowReaderRevision;
+
+    if (previousStreamId !== undefined) {
+      // The signal already names the next surface, so this projects the old
+      // workflow back to its bounded background dashboard before releasing it.
+      trySyncStreamLog(session, previousStreamId);
+      workflowReaderLease?.close();
+      workflowReaderLease = undefined;
+      releaseInactiveStreamTranscript(store, previousStreamId);
+    }
+    if (nextStreamId === undefined) return;
+
+    void store
+      .ensureLoaded(nextStreamId, { retainForPresentation: true })
+      .then((lease) => {
+        if (
+          revision !== workflowReaderRevision ||
+          foregroundWorkflowReaderStreamId() !== nextStreamId
+        ) {
+          lease.close();
+          return;
+        }
+        workflowReaderLease = lease;
+        trySyncStreamLog(session, nextStreamId);
+      })
+      .catch((error: unknown) => {
+        if (foregroundWorkflowReaderStreamId() === nextStreamId) {
+          setTransientNotice(
+            `Could not load transcript: ${toErrorMessage(error)}`,
+            { ttlMs: Number.POSITIVE_INFINITY },
+          );
+        }
+      });
+  };
+  const disposeWorkflowReader = subscribeToSignalChanges(
+    [foregroundReader],
+    syncWorkflowReader,
+  );
+  syncWorkflowReader();
+
   return () => {
     dispose();
     disposeFocus();
+    disposeWorkflowReader();
+    workflowReaderRevision += 1;
+    workflowReaderLease?.close();
+    workflowReaderLease = undefined;
     // Cancel, not flush: the caller is tearing down (process exit or
     // unmount), so a final render of whatever was still pending isn't
     // needed and would race an already-torn-down UI.
@@ -234,7 +302,9 @@ export function syncStreamLog(
   }
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
-    currentActiveStreamId === undefined || currentActiveStreamId === streamId;
+    currentActiveStreamId === undefined ||
+    currentActiveStreamId === streamId ||
+    foregroundWorkflowReaderStreamId() === streamId;
 
   const metadata = streamMetadataFor(streamId);
   const streamSettled = isTranscriptSettlementPhase(
@@ -460,7 +530,8 @@ export function releaseInactiveStreamTranscript(
   const currentActiveStreamId = activeStreamId.get();
   if (
     currentActiveStreamId === undefined ||
-    currentActiveStreamId === streamId
+    currentActiveStreamId === streamId ||
+    foregroundWorkflowReaderStreamId() === streamId
   ) {
     return;
   }

@@ -457,17 +457,28 @@ export function WorkflowPopup({
       return;
     }
     if (input === 'f') {
-      const current =
-        selectedKey === undefined
-          ? -1
-          : rows.findIndex((row) => row.key === selectedKey);
-      const failed = rows
-        .map((row, index) => ({ row, index }))
+      const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
+        workflowPhaseRows(candidate, {
+          expanded: view.expanded,
+          filter: view.filter,
+        }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
+      );
+      const current = allRows.findIndex(
+        (item) =>
+          item.phaseIndex === phaseIndex && item.row.key === selectedKey,
+      );
+      const failed = allRows
+        .map((item, index) => ({ ...item, index }))
         .filter(
           ({ row }) => row.kind === 'task' && row.row.call.status === 'failed',
         );
       const next = failed.find(({ index }) => index > current) ?? failed[0];
-      if (next) onViewChange({ selectedKey: next.row.key });
+      if (next) {
+        onViewChange({
+          phaseIndex: next.phaseIndex,
+          selectedKey: next.row.key,
+        });
+      }
       return;
     }
     if (

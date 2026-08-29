@@ -56,6 +56,7 @@ import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
 import {
+  approvalPayloadStreamId,
   currentApproval,
   pendingApprovalSummaries,
   promoteApprovalsForStream,
@@ -212,8 +213,20 @@ export function App(props: AppProps): React.JSX.Element {
     isWorkflowScriptStream(foregroundReader.streamId)
       ? foregroundReader.streamId
       : undefined;
+  const pendingApprovalStreamId = pending
+    ? approvalPayloadStreamId(pending.payload)
+    : undefined;
+  const foregroundApprovalStreamId =
+    foregroundWorkflowStreamId !== undefined &&
+    pendingApprovalStreamId !== undefined &&
+    (parentStream.get(pendingApprovalStreamId) === foregroundWorkflowStreamId ||
+      childRosters
+        .get(foregroundWorkflowStreamId)
+        ?.some((child) => child.childStreamId === pendingApprovalStreamId))
+      ? pendingApprovalStreamId
+      : foregroundWorkflowStreamId;
   const activeApprovalVisible = approvalVisibleForActiveStream({
-    activeStreamId: foregroundWorkflowStreamId ?? activeStreamId,
+    activeStreamId: foregroundApprovalStreamId ?? activeStreamId,
     pending,
   });
   // Walks the child-stream tree, so keep it at data-change frequency rather

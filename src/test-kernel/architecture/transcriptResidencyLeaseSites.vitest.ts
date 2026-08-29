@@ -23,8 +23,9 @@ const HYDRATION_SITE_ALLOWLIST = new Set([
   'src/transcript/StreamLogStore.ts',
 ]);
 
-/** The progress coordinator is the sole production presentation lease owner. */
+/** Runtime sites allowed to retain transcripts for a visible reader. */
 const PRESENTATION_LEASE_SITE_ALLOWLIST = new Set([
+  'packages/cli/src/chat/tui/state/subscribeStreamLog.ts',
   'src/controllers/progressView/backend/ProgressBackend.ts',
   'src/transcript/StreamLogStore.ts',
 ]);
