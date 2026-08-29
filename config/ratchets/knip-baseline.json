@@ -1376,12 +1376,6 @@
       "name": "getAgentPath"
     },
     {
-      "file": "src/agent/runtime/HostInteractions.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "OpenPdfRequest"
-    },
-    {
       "file": "src/agent/runtime/index.ts",
       "category": "production-dead",
       "kind": "types",

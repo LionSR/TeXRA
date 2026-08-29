@@ -207,7 +207,6 @@ export function createTuiHostInteractions(
     },
     async openExternalInquiry(request) {
       handleExternalInquiry(request, context);
-      return { threadId: request.threadId };
     },
     setApprovalBypassState(update) {
       setTuiApprovalBypassState(update);
