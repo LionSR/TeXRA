@@ -21,8 +21,6 @@ import {
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
-  MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
-  MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import {
@@ -323,12 +321,13 @@ const multiAgentRunCommand = withUsageSections(
       },
       agent: {
         type: 'string',
-        description: MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
+        description:
+          'Root agent for the team run (defaults to the preset orchestrator)',
       },
       model: {
         type: 'string',
         alias: 'm',
-        description: MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
+        description: 'Model for the team root agent',
       },
       instruction: {
         type: 'string',

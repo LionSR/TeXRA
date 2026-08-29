@@ -20,8 +20,7 @@ import {
 } from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
 import {
-  resumableCliHistoryEntries,
-  RESUME_LIST_LIMIT,
+  listResumableCliHistoryEntries,
   type CliHistoryEntry,
 } from './history';
 import {
@@ -168,12 +167,9 @@ export function buildCliOrchestrationItems(
     });
   }
   // Count only — the rows themselves are built when the browser opens, and
-  // the count is capped at the same limit so it never reports more sessions
-  // than the browser can list.
-  const resumableCount = Math.min(
-    resumableCliHistoryEntries(input.history).length,
-    RESUME_LIST_LIMIT,
-  );
+  // the same capped reader answers both, so the count never reports more
+  // sessions than the browser can list.
+  const resumableCount = listResumableCliHistoryEntries(input.history).length;
   if (resumableCount > 0) {
     items.push({
       value: { kind: 'browse-resumes' },
@@ -328,13 +324,11 @@ function modelAccessItem(status: CliModelAccessStatus): CliOrchestrationItem {
 export function buildCliResumeItems(
   history: readonly CliHistoryEntry[],
 ): CliOrchestrationItem[] {
-  return resumableCliHistoryEntries(history)
-    .slice(0, RESUME_LIST_LIMIT)
-    .map((entry) => ({
-      value: { kind: 'resume', id: entry.id },
-      label: entry.id,
-      description: `${entry.timestamp}; ${formatCliHistoryResumeSummary(entry)}`,
-    }));
+  return listResumableCliHistoryEntries(history).map((entry) => ({
+    value: { kind: 'resume', id: entry.id },
+    label: entry.id,
+    description: `${entry.timestamp}; ${formatCliHistoryResumeSummary(entry)}`,
+  }));
 }
 
 // Lists every available team (built-in and custom) so the user can pick and

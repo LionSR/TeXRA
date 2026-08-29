@@ -212,7 +212,6 @@ function makeSessionContext(): CliContext {
     stdoutColorEnabled: true,
     stderrColorEnabled: true,
     quietLogs: true,
-    helperModel: 'test-model',
     commandName: 'chat',
   });
 }

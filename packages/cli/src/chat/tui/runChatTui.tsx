@@ -246,9 +246,11 @@ export async function runChat(
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
     runtimeSession.approvalPolicy;
-  const currentSessionContext = (helperModel: string): CliContext => ({
+  // A fresh context object per run: warnApprovalDenied dedupes the denied-gate
+  // operator warning on context identity, so each run start/resume must get
+  // its own.
+  const currentSessionContext = (): CliContext => ({
     ...context,
-    helperModel,
     quietLogs: true,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {

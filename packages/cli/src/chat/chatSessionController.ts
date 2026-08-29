@@ -162,8 +162,9 @@ export interface ChatSessionControllerInit {
   /** Runtime session that owns executions, storage, and interactions. */
   readonly runtimeSession: SessionHandle;
 
-  /** Build a {@link CliContext} keyed on the current model. */
-  readonly getSessionContext: (model: string) => CliContext;
+  /** Mint a fresh {@link CliContext} for one run (see the identity-keyed
+   *  approval-denial dedupe in `warnApprovalDenied`). */
+  readonly getSessionContext: () => CliContext;
 
   /** Disposable owner shared with the TUI session lifecycle. */
   readonly disposables: DisposableStore;
@@ -206,7 +207,7 @@ export function createChatSessionController(
     >,
     modelSource?: 'history',
   ): CliContext => {
-    const sessionContext = getSessionContext(config.model);
+    const sessionContext = getSessionContext();
     const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
     patchSessionMeta({
       agent: config.agent,

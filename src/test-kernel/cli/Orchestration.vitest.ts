@@ -22,15 +22,12 @@ import {
   type CliModelAccessStatus,
 } from '@cli/runtime/modelAccessRoute';
 
-import {
-  CLI_HISTORY_RESUMABLE_STATUS,
-  type CliHistoryEntry,
-} from '@cli/runtime/history';
+import type { CliHistoryEntry } from '@cli/runtime/history';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { type CliMultiAgentPresetRunPlan } from '@cli/runtime/multiAgentPresets';
 import { planTeamRun, type TeamPreset } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, HISTORY_RUN_STATUS } from '@shared/schemas';
 
 function codingPlans(
   kimiPreferred = false,
@@ -54,7 +51,7 @@ function historyEntry(
     agent: 'orchestrator',
     model: 'claude-opus-4-7',
     status: 'completed',
-    resumable: overrides.status === CLI_HISTORY_RESUMABLE_STATUS,
+    resumable: overrides.status === HISTORY_RUN_STATUS.RESUMABLE,
     inputBasename: '-',
     category: AgentCategory.ToolUse,
     ...overrides,
@@ -511,11 +508,11 @@ describe('CLI orchestration items', () => {
     const history = [
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
       }),
       historyEntry('bbbbbbbbbbbb', {
         agent: 'orchestrator',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
       }),
     ];
     const items = orchestrationItems({
@@ -568,7 +565,7 @@ describe('CLI orchestration items', () => {
     const items = buildCliResumeItems([
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
         inputBasename: 'paper.tex',
       }),
     ]);
@@ -582,7 +579,7 @@ describe('CLI orchestration items', () => {
     const items = buildCliResumeItems([
       historyEntry('aaaaaaaaaaaa', {
         agent: 'assistant',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
         inputBasename: '-',
         description: 'Sketching inductive Lean proof of Nat.add_comm.',
       }),
@@ -749,7 +746,7 @@ describe('CLI orchestration items', () => {
         history: [
           historyEntry('aaaaaaaaaaaa', {
             agent: 'review',
-            status: CLI_HISTORY_RESUMABLE_STATUS,
+            status: HISTORY_RUN_STATUS.RESUMABLE,
           }),
         ],
         toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
