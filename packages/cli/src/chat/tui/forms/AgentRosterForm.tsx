@@ -268,7 +268,9 @@ export function AgentRosterForm(
         const cwd = platform().workspace.getWorkspacePath();
         write(async () => {
           if (!cwd) {
-            throw new Error('Default chat-agent selection requires a workspace.');
+            throw new Error(
+              'Default chat-agent selection requires a workspace.',
+            );
           }
           await setWorkspaceCliChatAgent(cwd, value || undefined);
         }, 'overview');

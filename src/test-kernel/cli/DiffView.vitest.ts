@@ -58,9 +58,9 @@ describe('CLI diff display', () => {
   });
 
   it('clamps the bottom scroll offset so the last rows remain visible', () => {
-    expect(
-      maxScrollableRowOffset({ maxDisplayLines: 4, totalLines: 10 }),
-    ).toBe(7);
+    expect(maxScrollableRowOffset({ maxDisplayLines: 4, totalLines: 10 })).toBe(
+      7,
+    );
   });
 
   it.each([1, 2, 3])(

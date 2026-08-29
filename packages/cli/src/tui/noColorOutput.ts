@@ -60,9 +60,7 @@ function writeCallback(args: readonly unknown[]): (() => void) | undefined {
   return typeof callback === 'function' ? (callback as () => void) : undefined;
 }
 
-function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(
-  stream: T,
-): T {
+function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(stream: T): T {
   const state: SgrStripState = { pending: '' };
   const write = stream.write.bind(stream) as (
     chunk: string | Uint8Array,

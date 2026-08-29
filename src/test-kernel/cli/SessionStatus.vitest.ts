@@ -231,7 +231,7 @@ describe('CLI session status formatter', () => {
         agent: 'research',
         model: 'deepseekT',
         modelAccess: 'included',
-          status: STREAM_PHASE.WAITING,
+        status: STREAM_PHASE.WAITING,
       }),
     ).toContain('status: idle');
   });

@@ -228,19 +228,13 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   ) => void;
   readonly onClose: () => void;
 }): AsyncPickerForm<TData, TValue> {
-  const {
-    data,
-    loading,
-    error,
-    pendingInput,
-    clearPendingInput,
-    reload,
-  } = useAsyncListForm<TData>({
-    load: args.load,
-    onClose: args.onClose,
-    isEmpty: args.isEmpty,
-    closeEmptyOnEnter: args.closeEmptyOnEnter,
-  });
+  const { data, loading, error, pendingInput, clearPendingInput, reload } =
+    useAsyncListForm<TData>({
+      load: args.load,
+      onClose: args.onClose,
+      isEmpty: args.isEmpty,
+      closeEmptyOnEnter: args.closeEmptyOnEnter,
+    });
   const selectable = args.selectable !== false;
   const items = data === undefined ? [] : args.items(data);
   const select = (value: TValue): void => {

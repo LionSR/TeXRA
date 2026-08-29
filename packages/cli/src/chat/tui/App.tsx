@@ -271,13 +271,7 @@ export function App(props: AppProps): React.JSX.Element {
         rootStreamId: childListTarget,
         streams,
       }),
-    [
-      activeStreamId,
-      childListTarget,
-      childRosters,
-      parentStream,
-      streams,
-    ],
+    [activeStreamId, childListTarget, childRosters, parentStream, streams],
   );
   // Rows Tab navigates to that are still in flight — the count the status bar
   // advertises next to the Tab binding. `sessionViews` leads with the list
@@ -424,21 +418,14 @@ export function App(props: AppProps): React.JSX.Element {
   const focusChildList = useCallback(() => {
     const firstChildValue = childListValues.at(0);
     if (firstChildValue || workflowDashboardRootHasApproval) {
-      if (
-        workflowDashboardRootHasApproval &&
-        childListTarget !== undefined
-      ) {
+      if (workflowDashboardRootHasApproval && childListTarget !== undefined) {
         // The dashboard heading is not selectable, so focusing the list also
         // focuses its root and presents the approval advertised there.
         focusStreamAndPromoteApprovals(childListTarget);
       }
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
-  }, [
-    childListTarget,
-    childListValues,
-    workflowDashboardRootHasApproval,
-  ]);
+  }, [childListTarget, childListValues, workflowDashboardRootHasApproval]);
   const focusSession = useCallback(
     (streamId: StreamTabId) => {
       if (isWorkflowTaskListValue(selectedChildValue)) {

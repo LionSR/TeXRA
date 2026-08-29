@@ -118,10 +118,11 @@ export function ConversationRegion({
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
-  const { key: viewportKey, scoped: scopedTranscript } = activeTranscriptViewport({
-    activeStreamId: snapshot.activeStreamId,
-    parentStream: snapshot.parentStream,
-  });
+  const { key: viewportKey, scoped: scopedTranscript } =
+    activeTranscriptViewport({
+      activeStreamId: snapshot.activeStreamId,
+      parentStream: snapshot.parentStream,
+    });
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
     rootStreamId: snapshot.rootStreamId,
