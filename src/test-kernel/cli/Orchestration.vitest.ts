@@ -180,13 +180,20 @@ function accountDescription(account: CliAccountStatus): string | undefined {
 }
 
 /** The four preference toggles every account & access step opens with. */
-function accountAccessToggleRows(): readonly unknown[] {
+function accountAccessToggleRows(
+  oauthState: 'on' | 'off' = 'on',
+): readonly unknown[] {
   return (['chatgpt', 'grok', 'kimi-code', 'glm-code'] as const).map(
     (provider) =>
       expect.objectContaining({
         value: {
           kind: 'set-model-access',
-          access: { kind: 'subscription-preference', provider, state: 'on' },
+          access: {
+            kind: 'subscription-preference',
+            provider,
+            state:
+              provider === 'chatgpt' || provider === 'grok' ? oauthState : 'on',
+          },
         },
       }),
   );
@@ -511,6 +518,33 @@ describe('CLI orchestration items', () => {
 
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
+      expect.objectContaining({
+        label: 'Log in to TeXRA',
+        description: '',
+        value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
+      }),
+    ]);
+  });
+
+  it('offers browser sign-in when a preferred subscription is signed out', () => {
+    // Expired or revoked session with the preference still 'on': the toggle
+    // would only disable the preference, so the row must offer re-sign-in.
+    const account = accountStatus({
+      preferences: { chatGpt: 'on', grok: 'on' },
+    });
+
+    expect(buildCliAccountAccessItems(account)).toEqual([
+      ...accountAccessToggleRows('off'),
+      expect.objectContaining({
+        label: 'Sign in with ChatGPT',
+        description: 'Use a ChatGPT subscription',
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+      }),
+      expect.objectContaining({
+        label: 'Sign in with Grok',
+        description: 'Use a Grok / SuperGrok subscription',
+        value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
+      }),
       expect.objectContaining({
         label: 'Log in to TeXRA',
         description: '',

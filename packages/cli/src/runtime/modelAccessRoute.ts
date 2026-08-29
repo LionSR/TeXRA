@@ -9,9 +9,9 @@ import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
 // Kept to one rendered row: the /api form and the orchestration header both
-// budget a single line for this description.
+// budget a single line for this description (75 columns at most).
 export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
-  'Sign in or out, set subscription preferences, and choose how the rest is paid for.';
+  'Sign in or out, set subscription preferences, and how the rest is paid for.';
 
 export type CliModelAccessRoute =
   | 'chatgpt'
@@ -352,18 +352,20 @@ export function formatCliAccountAccessSummary(
 
 export interface CliAccountAccessRow {
   readonly provider: 'chatgpt' | 'grok' | 'texra';
-  readonly operation: 'sign-out';
+  readonly operation: 'sign-in' | 'sign-out';
   readonly label: string;
   readonly description: string;
 }
 
 /**
  * Account rows of the merged account & access surfaces, deduped per provider
- * by sign-in state: the preference toggle row is ChatGPT's and Grok's
- * sign-in path, so a signed-in subscription gets exactly one sign-out row
- * here and a signed-out one gets none (its surface's own sign-in rows cover
- * it). TeXRA has no toggle, so it gets a sign-out row whenever it is signed
- * in; its sign-in rows stay surface-specific.
+ * by sign-in state and stored preference. A signed-in subscription gets
+ * exactly one sign-out row. A signed-out one gets a browser sign-in row only
+ * when its preference is still 'on' (an expired or revoked session blocking
+ * the preference) — with the preference 'off' the toggle row is already the
+ * sign-in path, and a second row would be two controls for one action. TeXRA
+ * has no toggle, so it gets a sign-out row whenever it is signed in; its
+ * sign-in rows stay surface-specific.
  */
 export function buildCliAccountAccessRows(
   status: CliModelAccessStatus,
@@ -376,6 +378,13 @@ export function buildCliAccountAccessRows(
       label: CHATGPT_AUTH.signOutLabel,
       description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
     });
+  } else if (status.preferences.chatGpt === 'on') {
+    rows.push({
+      provider: 'chatgpt',
+      operation: 'sign-in',
+      label: CHATGPT_AUTH.signInLabel,
+      description: 'Use a ChatGPT subscription',
+    });
   }
   if (status.grokSignedIn) {
     rows.push({
@@ -383,6 +392,13 @@ export function buildCliAccountAccessRows(
       operation: 'sign-out',
       label: GROK_AUTH.signOutLabel,
       description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
+    });
+  } else if (status.preferences.grok === 'on') {
+    rows.push({
+      provider: 'grok',
+      operation: 'sign-in',
+      label: GROK_AUTH.signInLabel,
+      description: 'Use a Grok / SuperGrok subscription',
     });
   }
   if (status.texraSignedIn === true) {

@@ -54,12 +54,55 @@ function buildAccountAccessFormItems(
     description: item.description,
     ...(item.disabled === true ? { disabled: true } : {}),
   }));
-  if (input.kind !== 'loaded') return toggleItems;
+  if (input.kind !== 'loaded') {
+    if (input.state === 'failed') {
+      // Account state is unknown, so the form keeps every provider's sign-in
+      // transports — this same form backs /login and /logout, and recovery
+      // actions matter most exactly when account state failed to load.
+      return [
+        ...toggleItems,
+        {
+          value: { kind: 'login' as const, target: 'chatgpt' },
+          label: CHATGPT_AUTH.signInLabel,
+          description: 'Use a ChatGPT subscription',
+        },
+        {
+          value: { kind: 'login' as const, target: 'chatgpt --device' },
+          label: CHATGPT_AUTH.deviceCodeLabel,
+          description: DEVICE_CODE_DESCRIPTION,
+        },
+        {
+          value: { kind: 'login' as const, target: 'grok' },
+          label: GROK_AUTH.signInLabel,
+          description: 'Use a Grok / SuperGrok subscription',
+        },
+        {
+          value: { kind: 'login' as const, target: 'grok --device' },
+          label: GROK_AUTH.deviceCodeLabel,
+          description: DEVICE_CODE_DESCRIPTION,
+        },
+        {
+          value: { kind: 'login' as const, target: 'texra' },
+          label: RESEARCHER_ACCESS.label,
+          description: RESEARCHER_ACCESS_AUTH.loginDescription,
+        },
+        {
+          value: { kind: 'login' as const, target: 'texra --device' },
+          label: RESEARCHER_ACCESS_AUTH.deviceCodeLabel,
+          description: DEVICE_CODE_DESCRIPTION,
+        },
+      ];
+    }
+    return toggleItems;
+  }
 
   const status = input.access;
   const accountItems: Array<SelectItem<AccountAccessFormValue>> =
     buildCliAccountAccessRows(status).map((row) => ({
-      value: { kind: 'logout' as const, target: row.provider },
+      value:
+        row.operation === 'sign-out'
+          ? ({ kind: 'logout', target: row.provider } as const)
+          : ({ kind: 'login', target: row.provider } as const),
       label: row.label,
       description: row.description,
     }));

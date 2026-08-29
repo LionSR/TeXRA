@@ -566,7 +566,7 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Account & access',
-      'Sign in or out, set subscription preferences, and choose how the rest is paid for.',
+      'Sign in or out, set subscription preferences, and how the rest is paid for.',
       'Prefer ChatGPT subscrip',
       'On · harness@example.edu',
       'Prefer Grok subscriptio',

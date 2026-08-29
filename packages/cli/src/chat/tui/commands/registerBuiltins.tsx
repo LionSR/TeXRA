@@ -568,7 +568,10 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'login',
     description: RESEARCHER_ACCESS_AUTH.slashLoginDescription,
     category: 'account',
-    echo: 'ifPersists',
+    // The form can complete a sign-out or a preference toggle too, so the
+    // typed command is not an accurate transcript row; outcomes are written
+    // by loginFromChat itself.
+    echo: 'never',
     handler: (remainder, context) =>
       loginFromChat(remainder, context.cliContext),
     formComponent: AccountAccessFormAdapter,
@@ -577,7 +580,9 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'logout',
     description: 'Sign out of one account or all accounts',
     category: 'account',
-    echo: 'ifPersists',
+    // Same merged-form mismatch as /login: the typed command does not
+    // describe what the form actually did.
+    echo: 'never',
     handler: (remainder) => logoutFromChat(remainder),
     formComponent: AccountAccessFormAdapter,
   });
