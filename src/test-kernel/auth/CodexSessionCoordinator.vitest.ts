@@ -3,12 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   CodexAuthError,
-  CodexSessionCoordinator,
   type CodexOAuthClient,
-  type CodexSession,
   type CodexSessionStorage,
-  type CodexTokenResponse,
 } from '@auth/codex';
+import { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
+import type {
+  CodexSession,
+  CodexTokenResponse,
+} from '@auth/codex/codexSessionTypes';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { delay } from '@utils/core';
 

@@ -26,7 +26,8 @@ import {
   updateTranscriptEntry,
   withTranscriptWriter,
 } from '@test/support/storeTestDrivers';
-import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
+import { StreamLogStore } from '@transcript';
+import type { StreamLogAppendInput } from '@transcript/StreamLog';
 
 const ACTIVE = 'active' as StreamTabId;
 const INACTIVE = 'inactive' as StreamTabId;

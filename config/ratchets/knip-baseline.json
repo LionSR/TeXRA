@@ -1427,30 +1427,6 @@
       "file": "src/auth/codex/index.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "CODEX_CALLBACK_PATH"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_SESSION_SECRET_KEY"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CodexSessionCoordinator"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "extractCodexClaims"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "resetCodexCoordinator"
     },
     {
@@ -1463,25 +1439,7 @@
       "file": "src/auth/codex/index.ts",
       "category": "production-dead",
       "kind": "types",
-      "name": "CodexSession"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CodexSessionStatus"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
       "name": "CodexSessionStorage"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CodexTokenResponse"
     },
     {
       "file": "src/auth/oauth/pkce.ts",
@@ -1522,18 +1480,6 @@
     {
       "file": "src/auth/xai/index.ts",
       "category": "production-dead",
-      "kind": "exports",
-      "name": "decodeXaiJwtClaims"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "XaiSessionCoordinator"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
       "kind": "types",
       "name": "XaiOAuthClient"
     },
@@ -1541,19 +1487,7 @@
       "file": "src/auth/xai/index.ts",
       "category": "production-dead",
       "kind": "types",
-      "name": "XaiSession"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "types",
       "name": "XaiSessionStorage"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "XaiTokenResponse"
     },
     {
       "file": "src/auth/xai/XaiSessionCoordinator.ts",
@@ -2106,24 +2040,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "STREAM_LOGS_DIR"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamDataDir"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StreamLogAppendInput"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StreamLogDelta"
     },
     {
       "file": "src/transcript/spillArtifacts.ts",

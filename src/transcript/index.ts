@@ -15,12 +15,7 @@ export {
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
-export {
-  StreamLog,
-  StreamLogDeltaBuffer,
-  type StreamLogAppendInput,
-  type StreamLogDelta,
-} from './StreamLog';
+export { StreamLog, StreamLogDeltaBuffer } from './StreamLog';
 export { createRunTrace, type RunTrace } from './runTrace';
 export {
   findTranscriptSpillFile,
@@ -28,7 +23,6 @@ export {
   spillArtifactOpenFailedMessage,
   SPILL_ARTIFACT_DELETED_MESSAGE,
 } from './spillArtifacts';
-export { streamDataDir } from './streamDataPaths';
 export {
   StreamSnapshotPreloadError,
   StreamSnapshotStore,

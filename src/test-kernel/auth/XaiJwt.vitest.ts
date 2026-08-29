@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decodeXaiJwtClaims } from '@auth/xai';
+import { decodeXaiJwtClaims } from '@auth/xai/xaiJwt';
 
 function makeJwt(payload: object): string {
   const header = Buffer.from(

@@ -37,8 +37,8 @@ import { snapshotFacts } from '@test/support/storeTestDrivers';
 import {
   StreamSnapshotPreloadError,
   StreamSnapshotStore,
-  streamDataDir,
 } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import {
   stagedStreamDataDir,

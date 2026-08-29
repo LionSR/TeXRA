@@ -7,11 +7,9 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import {
-  CODEX_SESSION_SECRET_KEY,
-  resetCodexCoordinator,
-  type CodexSession,
-} from '@auth/codex';
+import { resetCodexCoordinator } from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
+import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import {
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
