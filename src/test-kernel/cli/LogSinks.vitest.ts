@@ -124,7 +124,7 @@ describe('CLI questions', () => {
     const input = Object.assign(new PassThrough(), { ref: vi.fn() });
     const output = new PassThrough();
 
-    const answer = askCliQuestion('Choose: ', input, output);
+    const answer = askCliQuestion('Choose: ', { input, output });
     input.end('continue\n');
 
     await expect(answer).resolves.toBe('continue');

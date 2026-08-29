@@ -1,9 +1,6 @@
 // Node imports
 import { mkdir, readdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { createInterface } from 'node:readline/promises';
-import { Writable } from 'node:stream';
-
 // Third-party imports
 import { execa } from 'execa';
 
@@ -27,7 +24,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeRawStderr, writeTextStderr } from '../runtime/logSinks';
+import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
 
 // Local imports - command helpers
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -36,26 +33,6 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
-
-async function promptSecret(question: string): Promise<string> {
-  const hiddenOutput = new Writable({
-    write(_chunk, _encoding, callback) {
-      callback();
-    },
-  });
-  const prompt = createInterface({
-    input: process.stdin,
-    output: hiddenOutput,
-    terminal: true,
-  });
-  writeRawStderr(question);
-  try {
-    return await prompt.question('');
-  } finally {
-    prompt.close();
-    writeRawStderr('\n');
-  }
-}
 
 function buildOverleafClonePorts(
   context: CliContext,
@@ -78,7 +55,9 @@ function buildOverleafClonePorts(
         );
       }
       if (tokenGuidance) writeTextStderr(tokenGuidance);
-      const token = (await promptSecret(`${spec.tokenTitle}: `)).trim();
+      const token = (
+        await askCliQuestion(`${spec.tokenTitle}: `, { hidden: true })
+      ).trim();
       return token || null;
     },
     showInvalidToken: async (_spec, message) => {

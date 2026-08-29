@@ -1,5 +1,6 @@
 // Node imports
 import { createInterface } from 'node:readline/promises';
+import { Writable } from 'node:stream';
 
 // Third-party imports
 import PQueue from 'p-queue';
@@ -150,23 +151,45 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(toErrorMessage(error));
 }
 
+/** Swallows readline's echo so a typed secret never reaches the terminal. */
+class SilentWritable extends Writable {
+  override _write(
+    _chunk: unknown,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    callback();
+  }
+}
+
 export async function askCliQuestion(
   question: string,
-  input: NodeJS.ReadableStream & { ref?: () => void } = process.stdin,
-  output: NodeJS.WritableStream = process.stderr,
+  options: {
+    readonly input?: NodeJS.ReadableStream & { ref?: () => void };
+    readonly output?: NodeJS.WritableStream;
+    /** Hide the typed answer: readline's echo goes to a swallowing sink and
+     *  the question is written straight to stderr instead. */
+    readonly hidden?: boolean;
+  } = {},
 ): Promise<string> {
+  const input = options.input ?? process.stdin;
   // Ink releases its ownership of stdin with `unref()` when a TUI exits.
   // A following readline prompt must acquire its own live handle or Node can
   // terminate while the top-level command is still awaiting the answer.
   input.ref?.();
+  if (options.hidden) writeRawStderr(question);
   const prompt = createInterface({
     input,
-    output,
+    output: options.hidden ? new SilentWritable() : (options.output ?? process.stderr),
+    // A swallowing non-TTY output would otherwise leave stdin in canonical
+    // mode, where the TTY driver echoes the secret itself.
+    ...(options.hidden ? { terminal: true } : {}),
   });
   try {
-    return await prompt.question(question);
+    return await prompt.question(options.hidden ? '' : question);
   } finally {
     prompt.close();
+    if (options.hidden) writeRawStderr('\n');
   }
 }
 
