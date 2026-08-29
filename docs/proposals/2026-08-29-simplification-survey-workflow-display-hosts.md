@@ -35,6 +35,17 @@ Prior rulings this survey is judged against, and honours:
 - AGENTS.md "Duplicate UI controls": one home per user action; secondary
   surfaces show read-only status.
 
+## Status (2026-08-29, end of day)
+
+Implemented: C1, C2, C3, C4, C5, C7 in #11602 (the shared
+`src/shared/streams/workflowRunModel.ts`, and the CLI popup on it) and the
+board on the same model in #11604. C5 landed as a full-roster scan rather than
+a parent-gated lookup: the roster row and the parent edge are separate facts,
+and the roster can land first (review of #11602). Open: C6, a relocation for
+one small PR. The "divergences" section below is superseded by the owner
+ruling: the board now paints the strip, the attention order, the counted
+groups, and the declared phases from the shared model.
+
 ## Owner ruling (2026-08-29)
 
 The maintainer ruled on this survey the same day: **the two hosts must share
