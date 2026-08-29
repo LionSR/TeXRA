@@ -172,39 +172,33 @@ export function workflowRunStatusSummary(
 ): readonly WorkflowStatusSegment[] | undefined {
   if (!slice || category !== AgentCategory.Workflow) return undefined;
   const phase = slice.taskGroups.findLast((group) => group.kind === 'phase');
-  const currentCalls = slice.entries.flatMap((row) =>
-    row.kind === 'workflowTask' ? [row.call] : [],
+  // Surface failures only once the band has a phase/progress anchor, so a
+  // stray phase-less failed call does not invent a band on its own (a
+  // phase-less run can never produce total>0, so the band would already
+  // always be undefined here). The tally is whole-run, so a failure persists
+  // after the run advances past its phase (unlike the current-phase
+  // done/total).
+  if (!phase) return undefined;
+  const callRows = slice.entries.flatMap((row) =>
+    row.kind === 'workflowTask' ? [row] : [],
   );
   const { done, total } = workflowPhaseCallProgress(
-    phase
-      ? slice.entries.flatMap((row) =>
-          row.kind === 'workflowTask' && row.groupId === phase.id
-            ? [row.call]
-            : [],
-        )
-      : [],
+    callRows.filter((row) => row.groupId === phase.id).map((row) => row.call),
   );
-  const segments: WorkflowStatusSegment[] = [];
-  if (phase) {
-    segments.push({
+  const segments: WorkflowStatusSegment[] = [
+    {
       text: formatWorkflowPhaseHeading(workflowPhaseHeadingOfGroup(phase)),
       tone: 'muted',
-    });
-  }
+    },
+  ];
   if (total > 0) {
     segments.push({ text: `${done}/${total} done`, tone: 'muted' });
   }
-  // Surface failures only once the band has a phase/progress anchor, so a
-  // stray phase-less failed call does not invent a band on its own. The tally
-  // is whole-run, so a failure persists after the run advances past its phase
-  // (unlike the current-phase done/total).
-  if (segments.length > 0) {
-    const { failed } = workflowCallFailureTally(currentCalls);
-    if (failed > 0) {
-      segments.push({ text: `${failed} failed`, tone: 'warning' });
-    }
+  const { failed } = workflowCallFailureTally(callRows.map((row) => row.call));
+  if (failed > 0) {
+    segments.push({ text: `${failed} failed`, tone: 'warning' });
   }
-  return segments.length > 0 ? segments : undefined;
+  return segments;
 }
 
 export function ConversationPane(
@@ -292,12 +286,14 @@ export function ConversationPane(
         <Box height={1} width={metadataWidth} overflowY="hidden">
           <Text wrap="truncate-end">
             {workflowMetadata.map((segment, index) => (
-              <Text
-                key={index}
-                dimColor={segment.tone === 'muted'}
-                color={segment.tone === 'warning' ? COLOR_WARNING : undefined}
-              >
-                {index > 0 ? ` · ${segment.text}` : segment.text}
+              <Text key={index}>
+                {index > 0 ? <Text dimColor>{' · '}</Text> : null}
+                <Text
+                  dimColor={segment.tone === 'muted'}
+                  color={segment.tone === 'warning' ? COLOR_WARNING : undefined}
+                >
+                  {segment.text}
+                </Text>
               </Text>
             ))}
           </Text>
