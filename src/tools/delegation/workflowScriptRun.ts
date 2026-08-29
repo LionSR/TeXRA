@@ -10,6 +10,7 @@ import {
 } from '@agent/workflowScript';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
 import {
+  isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,
   RUN_OUTCOME,
   stageTitleFor,
@@ -80,14 +81,12 @@ interface PhaseStage {
   failed: boolean;
 }
 
+/** One call as the projection last emitted it — exactly the card the
+ *  transcript holds under `logId`, so a later emission (the fold's diff,
+ *  the finally sweep) starts from what the reader already sees. */
 interface ProjectedWorkflowCall {
   readonly logId: string;
-  readonly definition: Pick<WorkflowCallProgress, 'id' | 'label' | 'phase'>;
-  status: WorkflowCallProgress['status'];
-  attemptNumber?: WorkflowCallProgress['attemptNumber'];
-  childStreamId?: WorkflowCallProgress['childStreamId'];
-  agent?: WorkflowCallProgress['agent'];
-  model?: WorkflowCallProgress['model'];
+  card: WorkflowCallProgress;
 }
 
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
@@ -238,70 +237,41 @@ export async function runPersistedWorkflowScriptWithProgress(
    * emitted from there belong to. Callers that only need the phase opened
    * ignore the return: `emitCall` resolves a card's group itself.
    */
-  const openPhaseStage = (
-    phase: string | undefined,
-    index?: number,
-    total?: number,
-  ): string | undefined =>
-    phase ? phaseFor(phase, index, total).handle.id : parentStageId;
+  const openPhaseStage = (phase: string | undefined): string | undefined =>
+    phase ? phaseFor(phase).handle.id : parentStageId;
 
   const recordTerminalActivity = (call: WorkflowCallTerminalProgress): void => {
     onActivity?.(formatWorkflowCallLine(call));
   };
   /**
-   * The phase recorded on a call's first emission is the single owner of
-   * "which phase is this call in", and it stamps both halves of that answer:
-   * the `stageId` its card is grouped under, and the `phase` on the emitted
-   * payload that hosts fold `done/total` by. A later update carrying the phase
-   * active at call time never overrides it, so the group and the fold cannot
-   * drift apart, and the same card cannot land in two groups — host progress
-   * trees classify a card once and cannot move it afterwards.
+   * A card's `phase` is the engine's own record: `stageId` is pinned when the
+   * call is issued and a declared task issued elsewhere is a contract fault,
+   * so the phase on the card and the group it is emitted under are one fact.
+   * Cards are emitted only once the fold (or the settle sweep) has opened
+   * their phase, so the group is the stage handle that already exists.
    */
   const emitCall = (call: WorkflowCallProgress): void => {
+    const card: WorkflowCallProgress = { ...call, attemptId: projectionId };
     let projected = projectedCalls.get(call.id);
-    if (!projected) {
-      projected = {
-        // Stable trace identity for this call within its run stream.
-        logId: `workflow-task-${projectionId}-${call.id}`,
-        definition: {
-          id: call.id,
-          label: call.label,
-          ...(call.phase !== undefined ? { phase: call.phase } : {}),
-        },
-        status: call.status,
-      };
+    if (projected) {
+      projected.card = card;
+    } else {
+      // Stable trace identity for this call within its run stream.
+      projected = { logId: `workflow-task-${projectionId}-${call.id}`, card };
       projectedCalls.set(call.id, projected);
-    } else {
-      projected.status = call.status;
     }
-    if (call.childStreamId !== undefined) {
-      projected.childStreamId = call.childStreamId;
-    }
-    projected.agent = call.agent;
-    projected.model = call.model;
-    if (call.attemptNumber === undefined) {
-      delete projected.attemptNumber;
-    } else {
-      projected.attemptNumber = call.attemptNumber;
-    }
-    const phase = projected.definition.phase;
-    // Cards are emitted only once the fold (or the settle sweep) has opened
-    // their phase, so the group is the stage handle that already exists.
     trace.emit({
       type: 'workflow.call',
       logId: projected.logId,
-      call: { ...call, phase, attemptId: projectionId },
-      stageId: phase === undefined ? parentStageId : phaseFor(phase).handle.id,
+      call: card,
+      stageId:
+        card.phase === undefined
+          ? parentStageId
+          : phaseFor(card.phase).handle.id,
     });
   };
-  const markPhaseFailed = (
-    title: string | undefined,
-    index?: number,
-    total?: number,
-  ): void => {
-    if (title) {
-      phaseFor(title, index, total).failed = true;
-    }
+  const markPhaseFailed = (title: string | undefined): void => {
+    if (title) phaseFor(title).failed = true;
   };
 
   const projectLog = (event: WorkflowScriptEvent): void => {
@@ -508,24 +478,20 @@ export async function runPersistedWorkflowScriptWithProgress(
         // stage loop above opens for them. A card whose group does not exist
         // yet is thereby unrepresentable.
         if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
+        const last = projected?.card;
         const streamChanged =
           call.childStreamId !== undefined &&
-          projected?.childStreamId !== call.childStreamId;
+          last?.childStreamId !== call.childStreamId;
         // The host resolves agent and model after the card first appears;
         // a live card re-emits so it names what actually runs.
         const factsChanged =
-          projected !== undefined &&
-          (projected.agent !== call.agent || projected.model !== call.model);
-        if (
-          projected &&
-          projected.status === status &&
-          !streamChanged &&
-          !factsChanged
-        ) {
+          last !== undefined &&
+          (last.agent !== call.agent || last.model !== call.model);
+        if (last && last.status === status && !streamChanged && !factsChanged) {
           continue;
         }
         const card = cardFor(call, status, snapshot);
-        const previousStatus = projected?.status;
+        const previousStatus = last?.status;
         emitCall(card);
         if (status === previousStatus) continue;
         if (status === 'running') onActivity?.(`Running: ${call.label}`);
@@ -538,15 +504,7 @@ export async function runPersistedWorkflowScriptWithProgress(
           status === 'cancelled' ||
           status === 'skipped'
         ) {
-          if (status === 'failed') {
-            // The phase recorded on the card's first emission owns which
-            // group the failure marks.
-            markPhaseFailed(
-              projected
-                ? projected.definition.phase
-                : stageTitleFor(snapshot, call),
-            );
-          }
+          if (status === 'failed') markPhaseFailed(card.phase);
           recordTerminalActivity(card as WorkflowCallTerminalProgress);
         }
       }
@@ -621,20 +579,15 @@ export async function runPersistedWorkflowScriptWithProgress(
       fold(lastSnapshot);
     }
     closed = true;
-    for (const projected of projectedCalls.values()) {
-      if (isTerminalWorkflowCallStatus(projected.status)) continue;
+    for (const { card } of projectedCalls.values()) {
+      if (isTerminalWorkflowCallProgress(card)) continue;
       // Open the declared phase the run never reached so the settled card
-      // still lands under a header; the loop below then closes it.
-      openPhaseStage(projected.definition.phase);
-      markPhaseFailed(projected.definition.phase);
+      // still lands under a header; the loop below then closes it. The card
+      // keeps every issued-call fact it already showed.
+      openPhaseStage(card.phase);
+      markPhaseFailed(card.phase);
       const call: WorkflowCallTerminalProgress = {
-        ...projected.definition,
-        ...(projected.attemptNumber !== undefined && {
-          attemptNumber: projected.attemptNumber,
-        }),
-        ...(projected.childStreamId !== undefined && {
-          childStreamId: projected.childStreamId,
-        }),
+        ...card,
         status: 'failed',
         error: WORKFLOW_CALL_UNFINISHED_NOTE,
       };

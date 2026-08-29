@@ -113,10 +113,11 @@ export function formatWorkflowPhaseHeading(
 }
 
 /**
- * What a run that ended first says about a call, written once here because two
- * channels report it: the execution snapshot the engine terminalizes and the
- * trace cards the run's progress projection settles. Two spellings of one
- * sentence is drift, not two facts.
+ * What a run that ended first says about a call. `NOT_REACHED` is the note
+ * on a declared call the run never issued (`workflowCallDetail` below);
+ * `UNFINISHED` has two writers — the engine's terminal sweep and the card
+ * projection's own backstop for a transition the writer never landed — so it
+ * is spelled once here. Two spellings of one sentence is drift, not two facts.
  */
 const WORKFLOW_CALL_NOT_REACHED_NOTE =
   'The workflow ended before this call was reached.';
