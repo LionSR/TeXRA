@@ -45,6 +45,7 @@ import {
   TranscriptReader,
   transcriptReaderTitle,
 } from './panes/TranscriptReader';
+import { WorkflowPopup } from './panes/WorkflowPopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
 import { StatusBar } from './panes/StatusBar';
@@ -72,6 +73,9 @@ import {
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
+  openWorkflowPopup,
+  updateWorkflowPopupView,
+  workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
   slashPaletteOpen as slashPaletteOpenSignal,
   streams as streamsSignal,
@@ -90,16 +94,11 @@ import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
 import {
   childListStreamId,
   childStreamListValue,
-  isWorkflowTaskListValue,
-  workflowTaskListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
   type ChildListValue,
 } from './state/childListSelection';
-import {
-  uniqueWorkflowChildStreamId,
-  workflowDashboardModel,
-} from './state/workflowDashboardModel';
+import { workflowDashboardModel } from './state/workflowDashboardModel';
 import { streamLabelForId, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
@@ -116,6 +115,17 @@ interface InputEventEmitterLike {
 // away instead of leaving it queued behind other streams' items. The visible
 // list-root row also owns session-wide (stream-less) approvals.
 function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
+  // A workflow-script run is never a viewport: every path that would focus
+  // one (a session-list row, Alt-N, Esc from one of its agents) lands on its
+  // parent with the popup open over it, and the popup's own stream owns the
+  // approvals that surface.
+  if (streamMetadataFor(streamId)?.identity?.kind === 'multiAgentWorkflow') {
+    const parentId = parentStreamSignal.get().get(streamId);
+    if (parentId !== undefined) focusStream(parentId);
+    openWorkflowPopup(streamId);
+    promoteApprovalsForStream(streamId, { includeSessionWide: false });
+    return;
+  }
   const visibleListRootStreamId = resolveChildListTarget({
     activeStreamId: streamId,
     childRosters: childRostersSignal.get(),
@@ -186,8 +196,13 @@ export function App(props: AppProps): React.JSX.Element {
   const selectedChildValue = childListSelection.selectedValue;
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
+  // While the workflow popup is open its stream is the one whose approvals
+  // show: the popup is where the user is looking, not the parent under it.
   const activeApprovalVisible = approvalVisibleForActiveStream({
-    activeStreamId,
+    activeStreamId:
+      foregroundReader?.kind === 'workflow'
+        ? foregroundReader.streamId
+        : activeStreamId,
     pending,
   });
   // Walks the child-stream tree, so keep it at data-change frequency rather
@@ -294,35 +309,34 @@ export function App(props: AppProps): React.JSX.Element {
     }
     return executionIds;
   }, [childRosters, sessionViews]);
-  const listRootSlice =
-    childListTarget !== undefined ? streams.get(childListTarget) : undefined;
-  const workflowDashboardRoot =
-    listRootSlice !== undefined &&
-    streamMetadataFor(listRootSlice.streamId)?.identity?.kind ===
-      'multiAgentWorkflow'
-      ? listRootSlice
+  // The popup's model: derived once here so its rows and the focus targets
+  // resolved from them can never disagree. A plan-only phase a finished run
+  // never reached is nothing to list; only a known, no-longer-active phase
+  // counts as settled (an unknown phase is a stream still being created).
+  const workflowPopupStreamId =
+    foregroundReader?.kind === 'workflow'
+      ? foregroundReader.streamId
       : undefined;
-  // The only derivation: `SubagentList` renders this instance and
-  // `ConversationRegion` budgets its rows from it, so rows cannot be grouped,
-  // ordered, or deduplicated twice and drift the keyboard off the screen.
-  // A plan-only phase a finished run never reached is nothing to list; only
-  // a known, no-longer-active phase counts as settled (an unknown phase is a
-  // stream still being created, not a finished run).
+  const workflowPopupRoot =
+    workflowPopupStreamId !== undefined
+      ? streams.get(workflowPopupStreamId)
+      : undefined;
   const workflowRootPhase =
-    workflowDashboardRoot === undefined
+    workflowPopupStreamId === undefined
       ? undefined
-      : streamPhaseFor(workflowDashboardRoot.streamId)?.phase;
+      : streamPhaseFor(workflowPopupStreamId)?.phase;
   const workflowRunSettled =
     workflowRootPhase !== undefined && !isActivePhase(workflowRootPhase);
-  const workflowDashboard = useMemo(
+  const workflowPopupModel = useMemo(
     () =>
-      workflowDashboardRoot
-        ? workflowDashboardModel(workflowDashboardRoot, columns, {
+      workflowPopupRoot
+        ? workflowDashboardModel(workflowPopupRoot, {
             runSettled: workflowRunSettled,
           })
         : undefined,
-    [columns, workflowDashboardRoot, workflowRunSettled],
+    [workflowPopupRoot, workflowRunSettled],
   );
+  const workflowPopup = useSignal(workflowPopupViewSignal);
   // Stream-less approvals fold onto the root of the visible surface: the
   // scoped child-list root while one replaces the session list, else the
   // session root.
@@ -335,30 +349,11 @@ export function App(props: AppProps): React.JSX.Element {
     [childListTarget, pendingSummaries, rootStreamId],
   );
   const childListValues = useMemo<readonly ChildListValue[]>(
-    () =>
-      workflowDashboard?.listValues ??
-      sessionViews.map((session) => childStreamListValue(session.id)),
-    [sessionViews, workflowDashboard],
+    () => sessionViews.map((session) => childStreamListValue(session.id)),
+    [sessionViews],
   );
-  const workflowDashboardRootHasApproval =
-    workflowDashboard !== undefined &&
-    !!pendingApprovalsForRows.get(workflowDashboard.root.streamId)?.length;
-  const childListAvailable =
-    childListValues.length > 0 || workflowDashboardRootHasApproval;
-  const selectedWorkflowTask =
-    selectedChildValue && workflowDashboard
-      ? workflowDashboard.taskByValue.get(selectedChildValue)
-      : undefined;
-  const selectedWorkflowChildStreamId =
-    selectedWorkflowTask && workflowDashboard
-      ? uniqueWorkflowChildStreamId(
-          selectedWorkflowTask,
-          workflowDashboard.childTaskIndex,
-          streams,
-        )
-      : undefined;
-  const selectedChildStreamId =
-    childListStreamId(selectedChildValue) ?? selectedWorkflowChildStreamId;
+  const childListAvailable = childListValues.length > 0;
+  const selectedChildStreamId = childListStreamId(selectedChildValue);
   const selectedChildKillable =
     selectedChildStreamId !== undefined &&
     activeSubagentExecutionIds.has(selectedChildStreamId);
@@ -381,10 +376,10 @@ export function App(props: AppProps): React.JSX.Element {
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
-      activeStreamId: workflowDashboard ? undefined : activeStreamId,
+      activeStreamId,
       values: childListValues,
     });
-  }, [activeStreamId, childListValues, workflowDashboard]);
+  }, [activeStreamId, childListValues]);
   // Stream focus can also move through lifecycle completion or a numeric
   // accelerator. Align the selected row before the changed frame is painted;
   // ordinary row reconciliation still preserves manual list selection.
@@ -392,30 +387,12 @@ export function App(props: AppProps): React.JSX.Element {
     if (childListActiveStreamRef.current === activeStreamId) return;
     childListActiveStreamRef.current = activeStreamId;
     if (!activeStreamId) return;
-    if (workflowDashboard) {
-      if (activeStreamId === workflowDashboard.root.streamId) return;
-      const matchingTask = workflowDashboard.childTaskIndex.get(activeStreamId);
-      if (matchingTask === null) return;
-      if (matchingTask) {
-        dispatchChildListSelection({
-          kind: 'highlight',
-          value: workflowTaskListValue(matchingTask.id),
-        });
-      } else {
-        dispatchChildListSelection({
-          kind: 'syncActiveStream',
-          streamId: activeStreamId,
-          values: childListValues,
-        });
-      }
-      return;
-    }
     dispatchChildListSelection({
       kind: 'syncActiveStream',
       streamId: activeStreamId,
       values: childListValues,
     });
-  }, [activeStreamId, childListValues, workflowDashboard]);
+  }, [activeStreamId, childListValues]);
   useEffect(() => {
     if (!childListAvailable && childListFocused) {
       dispatchChildListSelection({ kind: 'blur' });
@@ -426,26 +403,14 @@ export function App(props: AppProps): React.JSX.Element {
   }, []);
   const focusChildList = useCallback(() => {
     const firstChildValue = childListValues.at(0);
-    if (firstChildValue || workflowDashboardRootHasApproval) {
-      if (workflowDashboardRootHasApproval && childListTarget !== undefined) {
-        // The dashboard heading is not selectable, so focusing the list also
-        // focuses its root and presents the approval advertised there.
-        focusStreamAndPromoteApprovals(childListTarget);
-      }
+    if (firstChildValue) {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
-  }, [childListTarget, childListValues, workflowDashboardRootHasApproval]);
-  const focusSession = useCallback(
-    (streamId: StreamTabId) => {
-      if (isWorkflowTaskListValue(selectedChildValue)) {
-        dispatchChildListSelection({ kind: 'blur' });
-      } else {
-        dispatchChildListSelection({ kind: 'focusStream', streamId });
-      }
-      focusStreamAndPromoteApprovals(streamId);
-    },
-    [selectedChildValue],
-  );
+  }, [childListValues]);
+  const focusSession = useCallback((streamId: StreamTabId) => {
+    dispatchChildListSelection({ kind: 'focusStream', streamId });
+    focusStreamAndPromoteApprovals(streamId);
+  }, []);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     formBusy,
@@ -502,6 +467,34 @@ export function App(props: AppProps): React.JSX.Element {
             onClose={closeForegroundReader}
             streamId={foregroundReader.streamId}
             title={title}
+          />
+        );
+      }
+      case 'workflowPopup': {
+        if (
+          foregroundReader?.kind !== 'workflow' ||
+          workflowPopupModel === undefined
+        ) {
+          return null;
+        }
+        return (
+          <WorkflowPopup
+            activeSubagentExecutionIds={activeSubagentExecutionIds}
+            availableRows={availableRows}
+            model={workflowPopupModel}
+            onClose={closeForegroundReader}
+            onFocusStream={(streamId) => {
+              closeForegroundReader();
+              focusStreamAndPromoteApprovals(streamId);
+            }}
+            onKillExecution={props.onKillExecution}
+            onOpenTranscript={openTranscriptReader}
+            onViewChange={updateWorkflowPopupView}
+            onWorkflowControl={props.onWorkflowControl}
+            pendingApprovals={pendingApprovalsForRows}
+            streamId={foregroundReader.streamId}
+            streams={streams}
+            view={workflowPopup}
           />
         );
       }
@@ -594,12 +587,6 @@ export function App(props: AppProps): React.JSX.Element {
     const parentId = parentStreamSignal.get().get(streamId);
     if (parentId !== undefined) {
       focusStreamAndPromoteApprovals(parentId);
-      if (
-        selectedWorkflowChildStreamId === streamId &&
-        workflowDashboard?.root.streamId === parentId
-      ) {
-        dispatchChildListSelection({ kind: 'focus' });
-      }
       return true;
     }
     // `bareEscapeActive` already proved `canInterruptStream(streamId)` for a
@@ -820,8 +807,6 @@ export function App(props: AppProps): React.JSX.Element {
           selectedChildValue,
           selectedChildStreamId,
           selectedChildWorkflowControllable,
-          workflowDashboard,
-          workflowDashboardRootHasApproval,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,

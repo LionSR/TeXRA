@@ -7,12 +7,16 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
-import type { ChildListValue } from '@cli/chat/tui/state/childListSelection';
-import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
+import { WorkflowPopup } from '@cli/chat/tui/panes/WorkflowPopup';
+import {
+  emptySlice,
+  type StreamSlice,
+  type WorkflowPopupView,
+} from '@cli/chat/tui/state/cliState';
 import {
   uniqueWorkflowChildStreamId,
   workflowDashboardModel,
+  workflowPopupRows,
 } from '@cli/chat/tui/state/workflowDashboardModel';
 import {
   type StreamTabId,
@@ -21,21 +25,15 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow, TranscriptRowOf } from '@shared/transcript';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
-import {
-  pollForCondition,
-  waitForCondition as waitFor,
-} from '@test/support/asyncTestUtils';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 
 const ROOT = 'workflow-root' as StreamTabId;
-const WIDE_COLUMNS = 100;
-const NARROW_COLUMNS = 99;
-const ARROW_DOWN = '\u001b[B';
-const ARROW_RIGHT = '\u001b[C';
 
 interface TaskSpec {
   readonly id: string;
   readonly phase?: string;
   readonly childStreamId?: StreamTabId;
+  readonly status?: WorkflowCallProgress['status'];
 }
 
 /** A phase as the run's own lifecycle rows record it — the container both
@@ -56,7 +54,7 @@ function taskRow(task: TaskSpec): TranscriptRowOf<'workflowTask'> {
   const call: WorkflowCallProgress = {
     id: task.id,
     label: task.id,
-    status: 'running',
+    status: task.status ?? 'running',
     ...(task.phase === undefined ? {} : { phase: task.phase }),
     ...(task.childStreamId === undefined
       ? {}
@@ -108,82 +106,9 @@ const STREAMS: ReadonlyMap<StreamTabId, StreamSlice> = new Map([
   ['child-inspect' as StreamTabId, emptySlice('child-inspect' as StreamTabId)],
 ]);
 
-/** Drive the mounted list and collect the row values it highlights. */
-async function navigate(
-  keys: readonly string[],
-  props: Record<string, unknown>,
-  columns: number,
-): Promise<readonly ChildListValue[]> {
-  const { ink, React } = await loadInk();
-  const visited: ChildListValue[] = [];
-  let selected = props.selectedValue as ChildListValue;
-
-  function Harness() {
-    const [value, setValue] = React.useState(selected) as [
-      ChildListValue,
-      (next: ChildListValue) => void,
-    ];
-    return React.createElement(SubagentList, {
-      ...props,
-      onSelectionChange: (next: ChildListValue) => {
-        visited.push(next);
-        selected = next;
-        setValue(next);
-      },
-      selectedValue: value,
-    });
-  }
-
-  const { instance, stdin } = renderInteractive(
-    ink,
-    React.createElement(Harness),
-    { columns },
-  );
-  try {
-    await waitFor(() => stdin.listenerCount('readable') > 0);
-    for (const key of keys) {
-      const movesBefore = visited.length;
-      stdin.write(key);
-      // A press either moves (onSelectionChange fires synchronously once Ink
-      // dispatches the key) or deliberately clamps, in which case no move ever
-      // comes — so wait for the move event and treat a bounded quiet window as
-      // a clamp rather than sleeping a fixed wall-clock delay per key.
-      await pollForCondition(() => visited.length > movesBefore, {
-        timeoutMs: 250,
-        intervalMs: 5,
-      });
-    }
-    return visited;
-  } finally {
-    instance.unmount();
-  }
-}
-
-/** Drive the two-phase list with the shared props every test uses. */
-function navigateList(
-  keys: readonly string[],
-  selectedValue: ChildListValue,
-  columns: number,
-): Promise<readonly ChildListValue[]> {
-  return navigate(
-    keys,
-    {
-      keyboardActive: true,
-      listRootStreamId: ROOT,
-      dashboard: workflowDashboardModel(TWO_PHASE_ROOT, columns),
-      maxRows: 12,
-      onCancel: vi.fn(),
-      selectedValue,
-      sessions: [],
-      streams: STREAMS,
-    },
-    columns,
-  );
-}
-
 describe('workflow dashboard model', () => {
   it('orders phase rows by first appearance and task rows by transcript order', () => {
-    const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
+    const model = workflowDashboardModel(TWO_PHASE_ROOT);
 
     expect(model.groups.map((group) => group.heading.phaseLabel)).toStrictEqual(
       ['Map', 'Reduce'],
@@ -194,15 +119,82 @@ describe('workflow dashboard model', () => {
       'merge',
       'report',
     ]);
-    // Phase rows only exist in the two-column layout; the narrow list renders
-    // them as disabled separators, so they are not reconcilable row values.
-    expect(model.listValues).toStrictEqual([
-      ...model.groups.map((group) => group.value),
-      ...model.tasks.map((entry) => `workflowTask:${entry.id}`),
+    expect(model.groups.map((group) => group.key)).toStrictEqual([
+      'phase-Map',
+      'phase-Reduce',
     ]);
+  });
+
+  it('leads a phase with what needs attention and collapses the rest into counted groups', () => {
+    const root: StreamSlice = {
+      ...workflowRoot(
+        ['Derive'],
+        [
+          { id: 'q1', phase: 'Derive', status: 'queued' },
+          { id: 'ok1', phase: 'Derive', status: 'completed' },
+          { id: 'r1', phase: 'Derive', status: 'running' },
+          { id: 'bad', phase: 'Derive', status: 'failed' },
+          { id: 'q2', phase: 'Derive', status: 'planned' },
+          { id: 'wait', phase: 'Derive', status: 'awaitingApproval' },
+          { id: 'r2', phase: 'Derive', status: 'running' },
+          { id: 'ok2', phase: 'Derive', status: 'cached' },
+        ],
+      ),
+      workflowPlan: {
+        kind: 'workflowPlan',
+        attemptId: 'attempt-1',
+        phases: [{ title: 'Derive', index: 0 }],
+        tasks: [{ id: 'later', label: 'Later on', phase: 'Derive' }],
+      },
+    };
+    const group = workflowDashboardModel(root).groups[0]!;
+    const summarize = (rows: ReturnType<typeof workflowPopupRows>) =>
+      rows.map((row) =>
+        row.kind === 'group'
+          ? `${row.expanded ? '▾' : '▸'} ${row.count} ${row.group}`
+          : row.key,
+      );
+
+    // Awaiting approval, then failed, then running — transcript order within
+    // each — and one row per quiet group.
     expect(
-      workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS).listValues,
-    ).toStrictEqual(model.tasks.map((entry) => `workflowTask:${entry.id}`));
+      summarize(workflowPopupRows(group, { expanded: new Set(), filter: '' })),
+    ).toStrictEqual([
+      'task:task-wait',
+      'task:task-bad',
+      'task:task-r1',
+      'task:task-r2',
+      '▸ 2 queued',
+      '▸ 2 done',
+      '▸ 1 declared',
+    ]);
+    // An opened group lists its members under its header, in place.
+    expect(
+      summarize(
+        workflowPopupRows(group, { expanded: new Set(['queued']), filter: '' }),
+      ),
+    ).toStrictEqual([
+      'task:task-wait',
+      'task:task-bad',
+      'task:task-r1',
+      'task:task-r2',
+      '▾ 2 queued',
+      'task:task-q1',
+      'task:task-q2',
+      '▸ 2 done',
+      '▸ 1 declared',
+    ]);
+    // A filter is one flat list of matches, groups and all.
+    expect(
+      summarize(
+        workflowPopupRows(group, { expanded: new Set(), filter: 'ok' }),
+      ),
+    ).toStrictEqual(['task:task-ok1', 'task:task-ok2']);
+    expect(
+      summarize(
+        workflowPopupRows(group, { expanded: new Set(), filter: 'later' }),
+      ),
+    ).toStrictEqual(['declared:later']);
   });
 
   it('lists declared phases and tasks the run has not reached, never a card twice', () => {
@@ -223,7 +215,7 @@ describe('workflow dashboard model', () => {
         ],
       },
     };
-    const model = workflowDashboardModel(root, WIDE_COLUMNS);
+    const model = workflowDashboardModel(root);
     const summarize = (groups: typeof model.groups) =>
       groups.map((group) => [
         group.heading.phaseLabel,
@@ -245,19 +237,10 @@ describe('workflow dashboard model', () => {
     // Once the run has settled, a plan-only phase it never reached and that
     // holds no declared task is gone; one still holding declared tasks stays.
     expect(
-      summarize(
-        workflowDashboardModel(root, WIDE_COLUMNS, { runSettled: true }).groups,
-      ),
+      summarize(workflowDashboardModel(root, { runSettled: true }).groups),
     ).toEqual([
       ['Map', true, 1, ['extract']],
       ['Reduce', false, 0, ['merge']],
-    ]);
-    // The declared phase is a keyboard-reachable row; declared tasks are not.
-    expect(model.listValues).toEqual([
-      model.groups[0]?.value,
-      model.groups[1]?.value,
-      model.groups[2]?.value,
-      'workflowTask:task-inspect',
     ]);
   });
 
@@ -275,7 +258,7 @@ describe('workflow dashboard model', () => {
       [shared, emptySlice(shared)],
       ['own-child' as StreamTabId, emptySlice('own-child' as StreamTabId)],
     ]);
-    const model = workflowDashboardModel(root, WIDE_COLUMNS);
+    const model = workflowDashboardModel(root);
 
     expect(model.childTaskIndex.get(shared)).toBeNull();
     expect(
@@ -306,16 +289,18 @@ describe('workflow dashboard model', () => {
       endTime: 5,
     };
 
+    expect(workflowDashboardModel(root).groups[0]?.heading).toStrictEqual({
+      phaseLabel: 'Verify',
+      phaseIndex: 0,
+      phaseTotal: 1,
+    });
     expect(
-      workflowDashboardModel(root, WIDE_COLUMNS).groups[0]?.heading,
-    ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });
-    expect(
-      workflowDashboardModel({ ...root, taskGroups: [closed] }, WIDE_COLUMNS)
-        .groups[0]?.heading,
+      workflowDashboardModel({ ...root, taskGroups: [closed] }).groups[0]
+        ?.heading,
     ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });
   });
 
-  it('renders a current empty dynamic phase', async () => {
+  it('renders a current empty dynamic phase and the popup around it', async () => {
     const root = workflowRoot([], []);
     // A phase the script opened dynamically carries no declared position.
     const currentPhase: TaskGroup = {
@@ -326,97 +311,113 @@ describe('workflow dashboard model', () => {
       kind: 'phase',
     };
     const withPhase = { ...root, taskGroups: [currentPhase] };
-
-    const model = workflowDashboardModel(withPhase, WIDE_COLUMNS);
-
+    const model = workflowDashboardModel(withPhase);
     expect(model.groups).toHaveLength(1);
     expect(model.groups[0]).toMatchObject({
+      key: 'phase-current',
       heading: { phaseLabel: 'Explore' },
       tasks: [],
+      opened: true,
     });
-    const narrowModel = workflowDashboardModel(withPhase, NARROW_COLUMNS);
-    expect(narrowModel.listValues).toStrictEqual([
-      narrowModel.groups[0]?.value,
-    ]);
+
     const { ink, React } = await loadInk();
+    const view: WorkflowPopupView = {
+      phaseIndex: 0,
+      selectedKey: undefined,
+      expanded: new Set(),
+      filter: '',
+      filterEditing: false,
+    };
     const { instance, stdout } = renderInteractive(
       ink,
-      React.createElement(SubagentList, {
-        dashboard: model,
-        keyboardActive: false,
-        listRootStreamId: ROOT,
-        maxRows: 5,
-        selectedValue: model.groups[0]?.value,
-        sessions: [],
-        streams: new Map([[ROOT, root]]),
+      React.createElement(WorkflowPopup, {
+        activeSubagentExecutionIds: new Map(),
+        availableRows: 20,
+        model,
+        onClose: vi.fn(),
+        onFocusStream: vi.fn(),
+        onKillExecution: vi.fn(),
+        onOpenTranscript: vi.fn(),
+        onViewChange: vi.fn(),
+        onWorkflowControl: vi.fn(),
+        pendingApprovals: undefined,
+        streamId: ROOT,
+        streams: new Map([[ROOT, withPhase]]),
+        view,
       }),
-      { columns: WIDE_COLUMNS },
+      { columns: 100 },
     );
     try {
-      await waitFor(() => stdout.output.includes('Explore · 0/0'));
-      // The panel heading counts the run; the phase row counts the phase.
+      await waitFor(() => stdout.output.includes('◆ Explore · 0/0'));
+      // The panel title counts the run; the tab counts the phase.
       expect(stdout.output).toContain('Workflow · 0/0');
+      expect(stdout.output).toContain('No calls in this phase yet');
+      expect(stdout.output).toContain('Esc close');
     } finally {
       instance.unmount();
     }
+  });
 
-    const { instance: narrowInstance, stdout: narrowStdout } =
-      renderInteractive(
-        ink,
-        React.createElement(SubagentList, {
-          dashboard: narrowModel,
-          keyboardActive: true,
-          listRootStreamId: ROOT,
-          maxRows: 5,
-          selectedValue: narrowModel.groups[0]?.value,
-          sessions: [],
-          streams: new Map([[ROOT, root]]),
-        }),
-        { columns: NARROW_COLUMNS },
-      );
+  it('windows a big phase to the row budget with attention rows first', async () => {
+    const tasks: TaskSpec[] = [
+      { id: 'bad', phase: 'Derive', status: 'failed' },
+      ...Array.from({ length: 12 }, (_, index) => ({
+        id: `run-${index}`,
+        phase: 'Derive',
+        status: 'running' as const,
+      })),
+      ...Array.from({ length: 30 }, (_, index) => ({
+        id: `queued-${index}`,
+        phase: 'Derive',
+        status: 'queued' as const,
+      })),
+    ];
+    const root = workflowRoot(['Derive'], tasks);
+    const model = workflowDashboardModel(root);
+    const { ink, React } = await loadInk();
+    const view: WorkflowPopupView = {
+      phaseIndex: 0,
+      selectedKey: undefined,
+      expanded: new Set(),
+      filter: '',
+      filterEditing: false,
+    };
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(WorkflowPopup, {
+        activeSubagentExecutionIds: new Map(),
+        availableRows: 14,
+        model,
+        onClose: vi.fn(),
+        onFocusStream: vi.fn(),
+        onKillExecution: vi.fn(),
+        onOpenTranscript: vi.fn(),
+        onViewChange: vi.fn(),
+        onWorkflowControl: vi.fn(),
+        pendingApprovals: undefined,
+        streamId: ROOT,
+        streams: new Map([[ROOT, root]]),
+        view,
+      }),
+      { columns: 100 },
+    );
     try {
-      await waitFor(() => narrowStdout.output.includes('› ◆ Explore'));
+      await waitFor(() => stdout.output.includes('bad · Failed'));
+      const lines = stdout.output.split('\n');
+      const failedLine = lines.findIndex((line) =>
+        line.includes('bad · Failed'),
+      );
+      const firstRunning = lines.findIndex((line) =>
+        line.includes('run-0 · Running'),
+      );
+      expect(failedLine).toBeGreaterThan(-1);
+      expect(firstRunning).toBeGreaterThan(failedLine);
+      // 13 attention rows cannot all fit; the list says how many are below.
+      expect(stdout.output).toMatch(/… \d+ more/);
+      expect(stdout.output).toContain('12 running');
+      expect(stdout.output).toContain('1 failed');
     } finally {
-      narrowInstance.unmount();
+      instance.unmount();
     }
-  });
-
-  it('renders exactly the narrow row values the reducer reconciles against', async () => {
-    const model = workflowDashboardModel(TWO_PHASE_ROOT, NARROW_COLUMNS);
-    const visited = await navigateList(
-      [ARROW_DOWN, ARROW_DOWN, ARROW_DOWN],
-      model.listValues[0]!,
-      NARROW_COLUMNS,
-    );
-
-    // Arrow navigation skips the disabled phase separators, so the rows the
-    // keyboard can reach are exactly `listValues`, in order.
-    expect(visited).toStrictEqual(model.listValues.slice(1));
-  });
-
-  it('renders exactly the wide phase row values the reducer reconciles against', async () => {
-    const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
-    const phaseValues = model.groups.map((group) => group.value);
-    const visited = await navigateList(
-      [ARROW_DOWN, ARROW_DOWN],
-      phaseValues[0]!,
-      WIDE_COLUMNS,
-    );
-
-    expect(visited).toStrictEqual(phaseValues.slice(1));
-    for (const value of visited) expect(model.listValues).toContain(value);
-  });
-
-  it('enters a phase at a task row that exists in the same row list', async () => {
-    const model = workflowDashboardModel(TWO_PHASE_ROOT, WIDE_COLUMNS);
-    const secondGroup = model.groups[1]!;
-    const visited = await navigateList(
-      [ARROW_RIGHT],
-      secondGroup.value,
-      WIDE_COLUMNS,
-    );
-
-    expect(visited).toStrictEqual([`workflowTask:${secondGroup.tasks[0]!.id}`]);
-    expect(model.listValues).toContain(visited[0]);
   });
 });

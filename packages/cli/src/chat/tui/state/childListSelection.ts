@@ -1,25 +1,10 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-export type ChildListValue =
-  `stream:${string}` | `workflowPhase:${string}` | `workflowTask:${string}`;
+export type ChildListValue = `stream:${string}`;
 
 export function childStreamListValue(streamId: StreamTabId): ChildListValue {
   return `stream:${streamId}`;
-}
-
-export function workflowPhaseListValue(entryId: string): ChildListValue {
-  return `workflowPhase:${entryId}`;
-}
-
-export function workflowTaskListValue(entryId: string): ChildListValue {
-  return `workflowTask:${entryId}`;
-}
-
-export function isWorkflowTaskListValue(
-  value: ChildListValue | undefined,
-): value is `workflowTask:${string}` {
-  return value?.startsWith('workflowTask:') ?? false;
 }
 
 export function childListStreamId(

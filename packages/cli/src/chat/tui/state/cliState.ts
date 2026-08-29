@@ -412,6 +412,7 @@ interface WorkPlanReaderRequest {
 
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly streamId: StreamTabId }
+  | { readonly kind: 'workflow'; readonly streamId: StreamTabId }
   | {
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
@@ -433,6 +434,55 @@ export const foregroundReader: Signal.Computed<
 
 export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });
+}
+
+/** The counted groups a workflow phase's quiet rows collapse into. */
+export type WorkflowPopupGroupKind = 'queued' | 'done' | 'declared';
+
+/** View state of the workflow popup — which phase tab is open, which row is
+ *  highlighted, which counted groups are unfolded, and the live filter. Held
+ *  here rather than in the component so a repaint or a foreground surface
+ *  taking over (an approval) hands the popup back exactly as it was. */
+export interface WorkflowPopupView {
+  readonly phaseIndex: number;
+  readonly selectedKey: string | undefined;
+  readonly expanded: ReadonlySet<WorkflowPopupGroupKind>;
+  /** Live filter text; empty means none. */
+  readonly filter: string;
+  /** True while keystrokes edit the filter instead of moving the selection. */
+  readonly filterEditing: boolean;
+}
+
+const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
+  phaseIndex: 0,
+  selectedKey: undefined,
+  expanded: new Set(),
+  filter: '',
+  filterEditing: false,
+};
+
+const WORKFLOW_POPUP_VIEW = signal<WorkflowPopupView>(
+  INITIAL_WORKFLOW_POPUP_VIEW,
+);
+export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
+  () => WORKFLOW_POPUP_VIEW.get(),
+);
+
+/** Open the workflow popup on a workflow-script stream, starting from its
+ *  first phase. A workflow is never a viewport: this is the one way to look
+ *  inside one. */
+export function openWorkflowPopup(streamId: StreamTabId): void {
+  const current = FOREGROUND_READER.get();
+  if (current?.kind !== 'workflow' || current.streamId !== streamId) {
+    WORKFLOW_POPUP_VIEW.set(INITIAL_WORKFLOW_POPUP_VIEW);
+  }
+  FOREGROUND_READER.set({ kind: 'workflow', streamId });
+}
+
+export function updateWorkflowPopupView(
+  patch: Partial<WorkflowPopupView>,
+): void {
+  WORKFLOW_POPUP_VIEW.set({ ...WORKFLOW_POPUP_VIEW.get(), ...patch });
 }
 
 /** Capture one `/plan` invocation as the sole owner of async reader output. */

@@ -62,10 +62,6 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
  *  and rows keep their inline elapsed, so identity is not crowded out. */
 export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
 
-/** At this width the workflow dashboard has room for independently navigable
- * phase and task panes; below it, source-ordered tasks use the full row. */
-export const WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS = 100;
-
 /** Right-aligned metadata column for a child row: elapsed time, the number of
  *  tool calls the child has made, and its generated tokens so far (e.g.
  *  `2m 30s · 5 tool calls · ↓40k`). This is the per-agent stats summary a
@@ -147,23 +143,28 @@ export function workflowPhaseTallyText(
     .join(' · ');
 }
 
-/** Calls a phase's status strip shows before it collapses into a `+N` count. */
-const PHASE_STATUS_STRIP_LIMIT = 24;
-
 /**
  * One glyph per issued call, in issue order — the terminal's counterpart to the
  * board's per-call status dots. The glyphs are the very markers the task rows
  * paint (`WORKFLOW_TASK_STATUS_STYLE`), so the strip and the rows below it can
- * never tell different stories.
+ * never tell different stories. Past `maxCells` the strip ends in a `+N`
+ * count rather than wrapping, so it stays one row at any width.
  */
 export function workflowPhaseStatusStrip(
   calls: readonly WorkflowCallProgress[],
+  maxCells: number,
 ): string | undefined {
   if (calls.length === 0) return undefined;
+  const budget = Math.max(1, maxCells);
+  if (calls.length <= budget) {
+    return calls
+      .map((call) => WORKFLOW_TASK_STATUS_STYLE[call.status].marker)
+      .join('');
+  }
+  const shownCount = Math.max(1, budget - `+${calls.length - budget}`.length);
   const shown = calls
-    .slice(0, PHASE_STATUS_STRIP_LIMIT)
+    .slice(0, shownCount)
     .map((call) => WORKFLOW_TASK_STATUS_STYLE[call.status].marker)
     .join('');
-  const overflow = calls.length - PHASE_STATUS_STRIP_LIMIT;
-  return overflow > 0 ? `${shown}+${overflow}` : shown;
+  return `${shown}+${calls.length - shownCount}`;
 }

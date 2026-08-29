@@ -3,9 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   childListStreamId,
   childStreamListValue,
-  isWorkflowTaskListValue,
-  workflowPhaseListValue,
-  workflowTaskListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
   type ChildListSelectionState,
@@ -36,20 +33,6 @@ describe('CLI child list selection', () => {
   it('uses stable prefixed values for child rows', () => {
     expect(mainValue).toBe('stream:main');
     expect(childListStreamId(mainValue)).toBe(main);
-    expect(workflowPhaseListValue('entry:phase')).toBe(
-      'workflowPhase:entry:phase',
-    );
-    expect(workflowTaskListValue('entry:task')).toBe('workflowTask:entry:task');
-    expect(isWorkflowTaskListValue(workflowTaskListValue('entry:task'))).toBe(
-      true,
-    );
-    expect(isWorkflowTaskListValue(workflowPhaseListValue('entry:phase'))).toBe(
-      false,
-    );
-    expect(isWorkflowTaskListValue(undefined)).toBe(false);
-    expect(
-      childListStreamId(workflowTaskListValue('entry:task')),
-    ).toBeUndefined();
     expect(childListStreamId(undefined)).toBeUndefined();
   });
 
