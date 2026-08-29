@@ -166,7 +166,7 @@ describe('workflow run model', () => {
       );
 
     // Awaiting approval, then failed, then running — transcript order within
-    // each — and one row per quiet group.
+    // each — then the finished cards as rows, and one row per unstarted group.
     expect(
       summarize(workflowPhaseRows(phase, { expanded: new Set(), filter: '' })),
     ).toStrictEqual([
@@ -174,8 +174,9 @@ describe('workflow run model', () => {
       'task:task-bad',
       'task:task-r1',
       'task:task-r2',
+      'task:task-ok1',
+      'task:task-ok2',
       '▸ 2 queued',
-      '▸ 2 done',
       '▸ 1 declared',
     ]);
     // An opened group lists its members under its header, in place.
@@ -188,10 +189,11 @@ describe('workflow run model', () => {
       'task:task-bad',
       'task:task-r1',
       'task:task-r2',
+      'task:task-ok1',
+      'task:task-ok2',
       '▾ 2 queued',
       'task:task-q1',
       'task:task-q2',
-      '▸ 2 done',
       '▸ 1 declared',
     ]);
     // A filter is one flat list of matches, groups and all.

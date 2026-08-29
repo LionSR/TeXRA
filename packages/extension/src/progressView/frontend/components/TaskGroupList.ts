@@ -112,7 +112,7 @@ function getStatusIcon(status: string): TeXRAIconName {
   }
 }
 
-const WORKFLOW_ROW_GROUPS = ['queued', 'done', 'declared'] as const;
+const WORKFLOW_ROW_GROUPS = ['queued', 'declared'] as const;
 
 /** Toggle-store key of one phase's counted group of quiet cards. */
 function rowGroupToggleKey(phaseKey: string, group: WorkflowRowGroup): string {
