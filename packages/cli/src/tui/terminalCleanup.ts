@@ -30,9 +30,6 @@ const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // `<Static>` transcript lines persist in the primary-buffer scrollback.
 const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
 const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
-interface CleanupTerminalModesOptions {
-  readonly clearItermProgress?: boolean;
-}
 
 // The terminal may be gone (exit paths, a suspend, a closed window) and no
 // caller can surface a failed restore usefully, so every mode write is
@@ -51,11 +48,11 @@ export function supportsTerminalJobControl(
   return platform !== 'win32';
 }
 
-export function cleanupTerminalModes(
-  options: CleanupTerminalModesOptions = {},
-): void {
+export function cleanupTerminalModes(): void {
+  // TERM_PROGRAM is fixed for the process, so the writer owns the emulator
+  // check rather than having it threaded through the exit controller.
   writeTerminalSequence(
-    options.clearItermProgress
+    process.env.TERM_PROGRAM === 'iTerm.app'
       ? `${RESET_TERMINAL_MODES}${CLEAR_ITERM_PROGRESS}`
       : RESET_TERMINAL_MODES,
   );
@@ -70,27 +67,21 @@ export function cleanupTerminalModes(
  * `cleanupTerminalModes` is harmless — so install once while the TUI is
  * mounted and dispose with the other subscriptions.
  */
-export function installTerminalRestoreOnExit(
-  options: CleanupTerminalModesOptions = {},
-): () => void {
-  const onExit = (): void => cleanupTerminalModes(options);
+export function installTerminalRestoreOnExit(): () => void {
+  const onExit = (): void => cleanupTerminalModes();
   process.on('exit', onExit);
   return () => {
     process.off('exit', onExit);
   };
 }
 
-export function tuiInputModeRestoreSequence(options: {
-  readonly kittyKeyboard: boolean;
-}): string {
-  return `${options.kittyKeyboard ? KITTY_PUSH_DISAMBIGUATE : ''}${REARM_INPUT_MODES}`;
-}
-
 /** Re-enable the input modes the TUI relies on after a SIGCONT resume. */
 export function restoreTuiInputModes(options: {
   readonly kittyKeyboard: boolean;
 }): void {
-  writeTerminalSequence(tuiInputModeRestoreSequence(options));
+  writeTerminalSequence(
+    `${options.kittyKeyboard ? KITTY_PUSH_DISAMBIGUATE : ''}${REARM_INPUT_MODES}`,
+  );
 }
 
 export function clearTerminalScrollback(): void {

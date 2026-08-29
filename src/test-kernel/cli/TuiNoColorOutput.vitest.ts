@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  sgrStrippingWriteStream,
-  stripAnsiSgrChunk,
-} from '@cli/tui/noColorOutput';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 
 describe('TUI no-color output', () => {
   function fakeWriteStream(): { stream: NodeJS.WriteStream; writes: string[] } {
@@ -22,17 +19,19 @@ describe('TUI no-color output', () => {
   }
 
   it('strips SGR styling while preserving terminal control escapes', () => {
-    const input = '\x1b[2mDim\x1b[22m\x1b[36m cyan\x1b[39m\x1b[2K\x1b[1;1H';
+    const { stream, writes } = fakeWriteStream();
 
-    expect(stripAnsiSgrChunk(input, { pending: '' })).toBe(
-      'Dim cyan\x1b[2K\x1b[1;1H',
+    tuiOutputStreamForColor(stream, false).write(
+      '\x1b[2mDim\x1b[22m\x1b[36m cyan\x1b[39m\x1b[2K\x1b[1;1H',
     );
+
+    expect(writes).toEqual(['Dim cyan\x1b[2K\x1b[1;1H']);
   });
 
   it('strips SGR styling from byte chunks passed to write streams', () => {
     const { stream, writes } = fakeWriteStream();
 
-    sgrStrippingWriteStream(stream).write(
+    tuiOutputStreamForColor(stream, false).write(
       Buffer.from('\x1b[31mred\x1b[39m\x1b[2K'),
     );
 
@@ -41,7 +40,7 @@ describe('TUI no-color output', () => {
 
   it('keeps partial SGR sequences from leaking across writes', () => {
     const { stream, writes } = fakeWriteStream();
-    const stripped = sgrStrippingWriteStream(stream);
+    const stripped = tuiOutputStreamForColor(stream, false);
 
     stripped.write('\x1b[');
     stripped.write('31mred\x1b[3');
@@ -52,7 +51,7 @@ describe('TUI no-color output', () => {
 
   it('preserves split non-SGR terminal control sequences', () => {
     const { stream, writes } = fakeWriteStream();
-    const stripped = sgrStrippingWriteStream(stream);
+    const stripped = tuiOutputStreamForColor(stream, false);
 
     stripped.write('\x1b[');
     stripped.write('2Kclear');

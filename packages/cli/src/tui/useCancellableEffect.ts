@@ -12,21 +12,17 @@ type IsEffectCancelled = () => boolean;
  * Runs `effect` like a normal `useEffect`, but passes it an `isCancelled()`
  * check the effect can poll before applying async state updates after
  * unmount or a dependency change. `effect` may itself be async (its returned
- * promise is not awaited) and may optionally return its own cleanup
- * function, mirroring the real `useEffect` contract.
+ * promise is not awaited).
  */
 export function useCancellableEffect(
-  effect: (
-    isCancelled: IsEffectCancelled,
-  ) => void | Promise<void> | (() => void),
+  effect: (isCancelled: IsEffectCancelled) => void | Promise<void>,
   deps: React.DependencyList,
 ): void {
   useEffect(() => {
     let cancelled = false;
-    const cleanup = effect(() => cancelled);
+    effect(() => cancelled);
     return () => {
       cancelled = true;
-      if (typeof cleanup === 'function') cleanup();
     };
   }, deps);
 }

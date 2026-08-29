@@ -944,30 +944,6 @@
       "name": "CliNdjsonRecordSchema"
     },
     {
-      "file": "packages/cli/src/tui/noColorOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "sgrStrippingWriteStream"
-    },
-    {
-      "file": "packages/cli/src/tui/noColorOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "stripAnsiSgrChunk"
-    },
-    {
-      "file": "packages/cli/src/tui/selectWindow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "COMPACT_FORM_MAX_ROWS"
-    },
-    {
-      "file": "packages/cli/src/tui/terminalCleanup.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "tuiInputModeRestoreSequence"
-    },
-    {
       "file": "packages/cli/src/tui/ui/Select.tsx",
       "category": "production-dead",
       "kind": "exports",

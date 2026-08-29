@@ -2,7 +2,7 @@ import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
-import { subscribeToSharedTick } from '@cli/tui/useLiveNowMs';
+import { subscribeToPolling } from '@cli/tui/usePollingInterval';
 import {
   formatSessionTitle,
   TERMINAL_TAB_TITLE,
@@ -113,7 +113,7 @@ export function installTerminalTitleUpdates(
     if (stopSharedTick !== undefined) return;
     if (!terminalCapabilities.get().oscColorReports) return;
     updateTitle(runningTitle());
-    stopSharedTick = subscribeToSharedTick(() => {
+    stopSharedTick = subscribeToPolling(1000, () => {
       if (!terminalCapabilities.get().oscColorReports) {
         stopRunningAnimation();
         return;

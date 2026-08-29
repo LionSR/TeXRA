@@ -22,8 +22,8 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
+  restoreTuiInputModes,
   supportsTerminalJobControl,
-  tuiInputModeRestoreSequence,
 } from '@cli/tui/terminalCleanup';
 import {
   installTerminalTitleUpdates,
@@ -331,15 +331,18 @@ describe('installTerminalTitleUpdates', () => {
   });
 });
 
-describe('tuiInputModeRestoreSequence', () => {
+describe('restoreTuiInputModes', () => {
   it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
-    expect(tuiInputModeRestoreSequence({ kittyKeyboard: false })).toBe(
-      '\x1b[?2004h\x1b[?25l',
-    );
+    restoreTuiInputModes({ kittyKeyboard: false });
+
+    expect(writeSync).toHaveBeenLastCalledWith(1, '\x1b[?2004h\x1b[?25l');
   });
 
   it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
-    expect(tuiInputModeRestoreSequence({ kittyKeyboard: true })).toBe(
+    restoreTuiInputModes({ kittyKeyboard: true });
+
+    expect(writeSync).toHaveBeenLastCalledWith(
+      1,
       '\x1b[>1u\x1b[?2004h\x1b[?25l',
     );
   });

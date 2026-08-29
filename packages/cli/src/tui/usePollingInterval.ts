@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Shared poll registry, mirroring the `useLiveNowMs` ticker: one interval per
- * cadence, so N live surfaces never each own a timer. Subscribers at the same
- * cadence fire in one callback, so React batches their re-renders into one
- * pass. The timer is unref'd so a poll can never hold the process open on its
- * own, and is torn down once the last subscriber unsubscribes.
+ * Shared poll registry: one interval per cadence, so N live surfaces never
+ * each own a timer. Without it, per-component intervals would each fire at
+ * their own phase, producing up to one render burst per component per period.
+ * Subscribers at the same cadence fire in one callback, so React batches their
+ * re-renders into one pass. The timer is unref'd so a poll can never hold the
+ * process open on its own, and is torn down once the last subscriber
+ * unsubscribes. Non-React callers (e.g. the terminal-title updater) join the
+ * same registry instead of running a private setInterval.
  */
 type PollSubscriber = () => void;
 const pollSubscribers = new Map<number, Set<PollSubscriber>>();

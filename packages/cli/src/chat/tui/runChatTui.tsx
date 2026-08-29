@@ -152,7 +152,6 @@ export async function runChat(
   // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
   // mount and emit garbled output instead of a usable session).
   const terminalFailure = interactiveTerminalFailure(context);
-  const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
   if (terminalFailure) {
     // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
     // actionable advice is "use `texra run`", not "fix your TERM".
@@ -326,9 +325,7 @@ export async function runChat(
   // Crash safety stays armed until graceful teardown has restored the terminal;
   // it outlives session subscriptions so a later teardown failure cannot leave
   // the user's shell in raw/kitty/mouse mode with a hidden cursor.
-  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit({
-    clearItermProgress,
-  });
+  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit();
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
@@ -554,8 +551,6 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     canResume: transcriptLifecycle.canResume,
-    clearItermProgress,
-    kittyKeyboardEnabled: terminalCaps.kittyKeyboard,
     disposables,
     disposeTerminalRestoreOnExit,
     followUpQueue,
