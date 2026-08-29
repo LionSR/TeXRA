@@ -74,22 +74,3 @@ export function workflowScriptPlanSummary(plan: WorkflowScriptPlan): string {
   if (plan.phases.length === 0) return items;
   return `${plan.phases.length} ${plan.phases.length === 1 ? 'phase' : 'phases'} · ${items}`;
 }
-
-/**
- * Declared phases in order, each with the declared items assigned to it —
- * a phase with none still appears, since a runtime-driven script declares
- * phases and no items. Items with no phase come last under no heading.
- * Grouping is by declaration only — it says nothing about which calls run
- * together or depend on one another.
- */
-export function workflowScriptDeclaredItemsByPhase(plan: WorkflowScriptPlan): {
-  readonly phase?: string;
-  readonly items: readonly WorkflowCallIdentity[];
-}[] {
-  const groups = plan.phases.map((phase) => ({
-    phase: phase.title,
-    items: plan.tasks.filter((task) => task.phase === phase.title),
-  }));
-  const unphased = plan.tasks.filter((task) => task.phase === undefined);
-  return [...groups, ...(unphased.length > 0 ? [{ items: unphased }] : [])];
-}
