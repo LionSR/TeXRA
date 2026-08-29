@@ -43,7 +43,6 @@ import {
 
 /** What an `INTERNAL` transcript entry says about the workflow run. */
 export type WorkflowMarker =
-  | { readonly kind: 'attempt' }
   | { readonly kind: 'plan'; readonly plan: WorkflowPlanMarker }
   | { readonly kind: 'malformedPlan'; readonly error: string };
 
@@ -55,8 +54,9 @@ function internalMarkerKind(data: unknown): unknown {
 
 /**
  * Read the workflow marker one transcript entry carries, if any. Every host
- * folds these the same way: a new attempt starts with no plan until it records
- * one (an attempt that fails before then must not inherit its predecessor's),
+ * folds these the same way: the newest plan marker is the live plan (a
+ * relaunch under the same `meta.name` appends its own after the one it
+ * supersedes, and every attempt that reaches the engine records exactly one),
  * and a malformed plan is an unknown plan, not the previous attempt's.
  */
 export function workflowMarkerOf(
@@ -68,9 +68,7 @@ export function workflowMarkerOf(
   ) {
     return undefined;
   }
-  const kind = internalMarkerKind(entry.data);
-  if (kind === 'workflowAttempt') return { kind: 'attempt' };
-  if (kind !== 'workflowPlan') return undefined;
+  if (internalMarkerKind(entry.data) !== 'workflowPlan') return undefined;
   const parsed = WorkflowPlanMarkerSchema.safeParse(entry.data);
   return parsed.success
     ? { kind: 'plan', plan: parsed.data }

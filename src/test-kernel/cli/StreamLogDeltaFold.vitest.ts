@@ -514,11 +514,7 @@ describe('transcript fold vs from-scratch oracle', () => {
     // attempt marker itself is an `internal` entry, which the shared projector
     // gives no row on either host.
     withStreamSubscription(() => {
-      const attemptMarker = (
-        id: string,
-        attemptId: string,
-        timestamp: number,
-      ) =>
+      const planMarker = (id: string, attemptId: string, timestamp: number) =>
         appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
           id,
           type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -526,11 +522,11 @@ describe('transcript fold vs from-scratch oracle', () => {
           timestamp,
           messageType: MESSAGE_TYPES.INTERNAL,
           text: '',
-          data: { kind: 'workflowAttempt', attemptId },
+          data: { kind: 'workflowPlan', attemptId, phases: [], tasks: [] },
         });
 
       configureStreams(CONFIGS[2]);
-      attemptMarker('workflow-attempt-old', 'attempt-old', 1);
+      planMarker('workflow-attempt-old', 'attempt-old', 1);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'old-failed',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -562,7 +558,7 @@ describe('transcript fold vs from-scratch oracle', () => {
           ?.entries.map((entry) => entry.id),
       ).toEqual(['old-failed', 'survey-complete-old']);
 
-      attemptMarker('workflow-attempt-new', 'attempt-new', 4);
+      planMarker('workflow-attempt-new', 'attempt-new', 4);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'new-running',
         type: STREAM_LOG_ENTRY_TYPES.LOG,

@@ -340,9 +340,6 @@ describe('workflow run model', () => {
         data,
         verbose: false,
       }) as StreamLogEntry;
-    expect(
-      workflowMarkerOf(entry({ kind: 'workflowAttempt', attemptId: 'a' })),
-    ).toStrictEqual({ kind: 'attempt' });
     const plan = {
       kind: 'workflowPlan',
       attemptId: 'a',

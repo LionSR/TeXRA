@@ -146,12 +146,6 @@ interface WorkflowCallEvent extends StageStamp {
   readonly call: WorkflowCallProgress;
 }
 
-/** A physical workflow-script projection began, before any optional work. */
-interface WorkflowAttemptEvent extends StageStamp {
-  readonly type: 'workflow.attempt';
-  readonly attemptId: string;
-}
-
 /** The attempt's declared phases and tasks, emitted once before any of them
  *  opens — see `WorkflowPlanMarker`. */
 interface WorkflowPlanEvent extends StageStamp {
@@ -386,7 +380,6 @@ export type AgentEvent =
   | StageEndEvent
   | ToolStartEvent
   | ToolEndEvent
-  | WorkflowAttemptEvent
   | WorkflowPlanEvent
   | WorkflowCallEvent
   | ActiveSkillsEvent

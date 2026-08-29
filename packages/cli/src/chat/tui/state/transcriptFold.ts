@@ -228,10 +228,6 @@ function projectWorkflowPlanIncrementally(
     if (state.applied.get(entry.id) === entry) continue;
     state.applied.set(entry.id, entry);
     switch (marker.kind) {
-      case 'attempt':
-        // A new attempt starts with no plan of its own until it records one.
-        state.snapshot = undefined;
-        break;
       case 'malformedPlan':
         // An unreadable plan is an unknown plan, not the previous attempt's.
         logger.warn(
