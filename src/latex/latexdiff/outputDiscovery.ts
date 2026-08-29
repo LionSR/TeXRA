@@ -241,8 +241,7 @@ export async function discoverLatestExecutionOutputs(
       // Records without one go straight to the run-directory scan below.
       const streamId = await discovery.readStreamId(candidate.id);
       if (streamId !== undefined) {
-        const { outputFilesByRound: rounds } =
-          await snapshots.read(streamId);
+        const { outputFilesByRound: rounds } = await snapshots.read(streamId);
         if (Object.keys(rounds).length > 0) {
           return { executionId: candidate.id, rounds };
         }

@@ -215,5 +215,4 @@ describe('assembleTrace', () => {
     expect(trace.streamId).toBe(actualChildStreamId);
     expect(trace.entries).toHaveLength(1);
   });
-
 });

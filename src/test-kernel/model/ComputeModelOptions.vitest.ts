@@ -28,12 +28,14 @@ const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
  * Reinstall the fake platform mid-test with the access state the case needs,
  * then clear the two process-wide caches the picker reads through.
  */
-async function installAccessPlatform(options: {
-  secrets?: Record<string, string>;
-  config?: Record<string, unknown>;
-  enabledModels?: string[];
-  useOpenRouter?: boolean;
-} = {}): Promise<void> {
+async function installAccessPlatform(
+  options: {
+    secrets?: Record<string, string>;
+    config?: Record<string, unknown>;
+    enabledModels?: string[];
+    useOpenRouter?: boolean;
+  } = {},
+): Promise<void> {
   await installPlatform({
     config: options.config,
     globalState: {
