@@ -47,7 +47,7 @@ const MISSING_API_KEY_MESSAGE =
  * Map a terminal `result` event to the toast a host should present, or `null`
  * when none applies (subagent runs, success, user aborts, unclassified errors).
  */
-export function terminalResultToast(
+function terminalResultToast(
   event: ResultEvent,
 ): TerminalResultToast | null {
   if (event.isSubagent || !event.error) return null;

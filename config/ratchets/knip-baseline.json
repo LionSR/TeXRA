@@ -1388,12 +1388,6 @@
       "name": "cleanSessionDescription"
     },
     {
-      "file": "src/agent/runtime/terminalResultToast.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "terminalResultToast"
-    },
-    {
       "file": "src/agent/storage/conversationFormat.ts",
       "category": "production-dead",
       "kind": "exports",

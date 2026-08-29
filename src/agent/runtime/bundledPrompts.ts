@@ -3,20 +3,21 @@
  * `resources/` bundle.
  *
  * Each host calls `initializeBundledPrompts(resourcesPath)` exactly once at
- * startup with its own resolved resources root, and every row of
- * {@link BUNDLED_PROMPTS} is reachable. There is deliberately no per-prompt
- * initializer: two of them existed (polish and goal), each host had to
- * remember both, and desktop shipped a release that remembered goal and forgot
- * polish — so every desktop follow-up polish failed with "Polish model not
- * initialized" (#10365). A new prompt is a table row, not a fourth thing three
+ * startup with its own resolved resources root, and every prompt below is
+ * reachable. There is deliberately no per-prompt initializer: two of them
+ * existed (polish and goal), each host had to remember both, and desktop
+ * shipped a release that remembered goal and forgot polish — so every desktop
+ * follow-up polish failed with "Polish model not initialized" (#10365). A new
+ * prompt is another loader behind this one init, never a fourth thing three
  * composition roots must remember.
  *
- * Availability is per-row data, not a branch at the call site: `required` rows
- * reject when the bundle is missing or malformed; `fallback` rows return their
- * inline copy instead, warning whenever a bundle that *should* have loaded
- * could not be read or parsed. So the CLI — whose bundle ships `goal/` but not
+ * Each prompt owns what an absent or malformed bundle means for it: polish
+ * rejects (there is no inline copy to render), while goal substitutes its
+ * inline copy — silently when no host wired a bundle at all, and with a
+ * warning when a bundle that *should* have loaded could not be read or
+ * parsed. So the CLI — whose bundle ships `goal/` but not
  * `templates/instructionPolish.yaml` (`copy-resources.mjs`), and which renders
- * no polish prompt — registers both rows for free, since rows are read lazily
+ * no polish prompt — costs nothing for polish, since prompts are read lazily
  * and a CLI polish caller would fail loudly rather than silently.
  */
 
@@ -79,43 +80,15 @@ const INLINE_GOAL_PROMPTS: GoalPrompts = {
   },
 };
 
-/** What a row does when its bundled file is absent or unreadable. */
-type PromptAvailability<T> =
-  | { readonly kind: 'required' }
-  | { readonly kind: 'fallback'; readonly inline: T };
+const PolishPromptsSchema = z.object({
+  prompts: z.object({ userRequest: z.string() }),
+});
 
-interface BundledPrompt<T> {
-  /** Path segments under the host's packaged `resources/` root. */
-  readonly relPath: readonly string[];
-  readonly schema: z.ZodType<T>;
-  readonly whenUnavailable: PromptAvailability<T>;
-}
-
-/** Identity helper: infers each row's `T` from its schema inside the table. */
-function bundledPrompt<T>(row: BundledPrompt<T>): BundledPrompt<T> {
-  return row;
-}
-
-const BUNDLED_PROMPTS = {
-  polish: bundledPrompt({
-    relPath: ['templates', 'instructionPolish.yaml'],
-    schema: z.object({ prompts: z.object({ userRequest: z.string() }) }),
-    whenUnavailable: { kind: 'required' },
-  }),
-  goal: bundledPrompt({
-    relPath: ['goal', 'goal.yaml'],
-    schema: GoalPromptsSchema,
-    whenUnavailable: { kind: 'fallback', inline: INLINE_GOAL_PROMPTS },
-  }),
-};
-
-type PromptName = keyof typeof BUNDLED_PROMPTS;
-
-type PromptValue<N extends PromptName> =
-  (typeof BUNDLED_PROMPTS)[N] extends BundledPrompt<infer T> ? T : never;
+type PolishPrompts = z.infer<typeof PolishPromptsSchema>;
 
 let resourcesRoot: string | null = null;
-const loaded = new Map<PromptName, Promise<unknown>>();
+let polishPrompts: Promise<PolishPrompts> | undefined;
+let goalPrompts: Promise<GoalPrompts> | undefined;
 
 /**
  * Point every bundled prompt at the host's packaged `resources/` root.
@@ -126,57 +99,68 @@ const loaded = new Map<PromptName, Promise<unknown>>();
  */
 export function initializeBundledPrompts(resourcesPath: string): void {
   resourcesRoot = resourcesPath;
-  loaded.clear();
+  polishPrompts = undefined;
+  goalPrompts = undefined;
 }
 
-async function readBundledPrompt<T>(
-  name: PromptName,
-  row: BundledPrompt<T>,
+/**
+ * Read and parse one bundled prompt YAML. Throws when the file cannot be read
+ * or does not match `schema`; each caller owns what that means for its prompt.
+ */
+async function readPromptYaml<T>(
+  name: string,
+  filePath: string,
+  schema: z.ZodType<T>,
 ): Promise<T> {
-  const root = resourcesRoot;
-  if (root === null) {
-    if (row.whenUnavailable.kind === 'fallback')
-      return row.whenUnavailable.inline;
+  const content = await AbsoluteFS.read(filePath);
+  const parsed = parseYamlWith(content, schema);
+  if (parsed.isErr()) {
     throw new Error(
-      `Bundled prompt "${name}" is unavailable: no host called initializeBundledPrompts().`,
+      `Failed to parse ${name} prompt YAML at ${filePath}: ${parsed.error.message}`,
+      { cause: parsed.error },
     );
   }
+  return parsed.value;
+}
 
-  const filePath = join(root, ...row.relPath);
-  try {
-    const content = await AbsoluteFS.read(filePath);
-    const parsed = parseYamlWith(content, row.schema);
-    if (parsed.isErr()) {
+/** Required: no inline copy exists, so an unavailable bundle fails the call. */
+function loadPolishPrompts(): Promise<PolishPrompts> {
+  polishPrompts ??= (async () => {
+    const root = resourcesRoot;
+    if (root === null) {
       throw new Error(
-        `Failed to parse ${name} prompt YAML at ${filePath}: ${parsed.error.message}`,
-        { cause: parsed.error },
+        'Bundled prompt "polish" is unavailable: no host called initializeBundledPrompts().',
       );
     }
-    return parsed.value;
-  } catch (error) {
-    if (row.whenUnavailable.kind === 'required') throw error;
-    // Warn so a broken or missing bundled file is detectable rather than
-    // silently masked by the inline copy.
-    log.warn(
-      `Failed to load bundled ${name} prompts from ${filePath}; using inline templates: ${toErrorMessage(error)}`,
+    return readPromptYaml(
+      'polish',
+      join(root, 'templates', 'instructionPolish.yaml'),
+      PolishPromptsSchema,
     );
-    return row.whenUnavailable.inline;
-  }
+  })();
+  return polishPrompts;
 }
 
-function loadBundledPrompt<N extends PromptName>(
-  name: N,
-): Promise<PromptValue<N>> {
-  // The two casts in this module. The table is heterogeneous, so indexing it
-  // with a generic key yields the union of its rows and the cache cannot carry
-  // a per-key promise type. `PromptValue<N>` is derived from that same table,
-  // so the narrowing cannot drift from the row actually read.
-  const cached = loaded.get(name) as Promise<PromptValue<N>> | undefined;
-  if (cached) return cached;
-  const row = BUNDLED_PROMPTS[name] as BundledPrompt<PromptValue<N>>;
-  const pending = readBundledPrompt(name, row);
-  loaded.set(name, pending);
-  return pending;
+/** Falls back to the inline copy: the goal continuation must always render. */
+function loadGoalPrompts(): Promise<GoalPrompts> {
+  goalPrompts ??= (async () => {
+    const root = resourcesRoot;
+    // No host wired a bundle (tests, embedders): substitute the inline copy
+    // without a warning — nothing failed, there is simply nothing to read.
+    if (root === null) return INLINE_GOAL_PROMPTS;
+    const filePath = join(root, 'goal', 'goal.yaml');
+    try {
+      return await readPromptYaml('goal', filePath, GoalPromptsSchema);
+    } catch (error) {
+      // Warn so a broken or missing bundled file is detectable rather than
+      // silently masked by the inline copy.
+      log.warn(
+        `Failed to load bundled goal prompts from ${filePath}; using inline templates: ${toErrorMessage(error)}`,
+      );
+      return INLINE_GOAL_PROMPTS;
+    }
+  })();
+  return goalPrompts;
 }
 
 /**
@@ -188,7 +172,7 @@ export async function renderPolishPrompt(
   text: string,
 ): Promise<string> {
   const [{ prompts }, { default: nunjucks }] = await Promise.all([
-    loadBundledPrompt('polish'),
+    loadPolishPrompts(),
     import('nunjucks'),
   ]);
   const environment = createTexraNunjucksEnvironment(nunjucks);
@@ -200,5 +184,5 @@ export async function renderPolishPrompt(
 }
 
 export async function getContinuationTemplate(): Promise<string> {
-  return (await loadBundledPrompt('goal')).continuation.template;
+  return (await loadGoalPrompts()).continuation.template;
 }
