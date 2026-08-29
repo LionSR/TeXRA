@@ -150,6 +150,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import {
   chatTuiCanInterruptActiveRun,
+  chatTuiCanStartRootRun,
   chatTuiCanStopActiveRun,
   chatTuiIsResumableIdleOnExit,
   chatTuiSigintAction,
@@ -602,18 +603,6 @@ describe('createChatSessionController', () => {
     );
   });
 
-  it('canStartRootRun() delegates to chatTuiCanStartRootRun(session)', () => {
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-    expect(ctrl.canStartRootRun()).toBe(true);
-
-    session.markRunPending(new Promise(() => {}));
-    expect(ctrl.canStartRootRun()).toBe(false);
-
-    session.markRunCompleted();
-    expect(ctrl.canStartRootRun()).toBe(true);
-  });
-
   it('stop() sets stopRequested on the session', () => {
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -628,19 +617,6 @@ describe('createChatSessionController', () => {
     ctrl.stop();
     ctrl.stop();
     expect(session.stopRequested).toBe(true);
-  });
-
-  it('canStartRootRun returns false after stop() when a runPromise is set', () => {
-    const session = makeSession({
-      runPromise: new Promise(() => {}),
-      runCompleted: false,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-    // stop doesn't affect canStartRootRun on its own — it's the runPromise
-    // that gates it
-    expect(ctrl.canStartRootRun()).toBe(false);
-    ctrl.stop();
-    expect(ctrl.canStartRootRun()).toBe(false); // runPromise still pending
   });
 
   it('reads the shared detach-subagents setting key when stopping an active stream', () => {
@@ -1111,7 +1087,7 @@ describe('createChatSessionController', () => {
 
     expect(session.runPromise).toBeDefined();
     expect(session.runCompleted).toBe(false);
-    expect(ctrl.canStartRootRun()).toBe(false);
+    expect(chatTuiCanStartRootRun(session)).toBe(false);
 
     preload.resolve(undefined);
     await expect(resumed).resolves.toBe(false);
@@ -1134,7 +1110,7 @@ describe('createChatSessionController', () => {
     // tryResumeStream above.
     expect(session.runPromise).toBeDefined();
     expect(session.runCompleted).toBe(false);
-    expect(ctrl.canStartRootRun()).toBe(false);
+    expect(chatTuiCanStartRootRun(session)).toBe(false);
 
     configRead.resolve(null);
     await resumed;
@@ -1365,7 +1341,7 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
     expect(session.runCompleted).toBe(true);
     expect(session.interruptedStreamId).toBe('stream-interrupted');
-    expect(ctrl.canStartRootRun()).toBe(true);
+    expect(chatTuiCanStartRootRun(session)).toBe(true);
   });
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {

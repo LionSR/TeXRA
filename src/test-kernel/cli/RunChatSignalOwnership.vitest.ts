@@ -302,7 +302,6 @@ describe('runChat signal ownership wiring', () => {
     mocks.tuiOutputStreamForColor.mockImplementation((stream) => stream);
     mocks.createChatSessionController.mockReturnValue({
       admitInterruptedFollowUp: vi.fn(() => ({ kind: 'not_interrupted' })),
-      canStartRootRun: vi.fn(() => true),
       clearInterruptedRecovery: vi.fn(),
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,

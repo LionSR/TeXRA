@@ -63,7 +63,7 @@ export type StaticTranscriptItem =
       readonly entry: TranscriptRow;
     };
 
-export interface StaticTranscriptState {
+interface StaticTranscriptState {
   readonly ownerKey: string;
   readonly items: readonly StaticTranscriptItem[];
   /** Cumulative row/byte estimates for `items`, maintained incrementally. */

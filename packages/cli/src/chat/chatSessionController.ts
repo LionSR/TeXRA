@@ -64,10 +64,7 @@ import {
   patchSessionMeta,
   patchStream,
 } from './tui/state/cliState';
-import {
-  chatTuiCanStartRootRun,
-  type TuiSession,
-} from './tui/state/sessionRunState';
+import { type TuiSession } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import { attachSessionSignalsAdapter } from './tui/state/sessionSignalsAdapter';
 import { notify } from './tui/notifications/terminalNotifier';
@@ -159,9 +156,6 @@ export interface ChatSessionController {
     streamId: StreamTabId,
     recovery?: RecoveryContinuation,
   ): Promise<boolean>;
-
-  /** Whether a new root run can be started right now. */
-  canStartRootRun(): boolean;
 }
 
 export interface ChatSessionControllerInit {
@@ -912,6 +906,5 @@ export function createChatSessionController(
     },
     tryResumeStream: (streamId, recovery) =>
       tryResumeStream(streamId, recovery ? { recovery } : {}),
-    canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
 }
