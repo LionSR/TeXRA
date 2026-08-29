@@ -148,19 +148,16 @@ async function retrieveToolUseResume(
 }
 
 // Most flow-record fixtures below persist a fresh run/workspace snapshot
-// with only the current model and (occasionally) a transient override
-// varying between cases.
+// with only the current model and (occasionally) an override varying
+// between cases.
 function defaultStateSlices(
   model = 'gpt54',
-  transient: Record<string, string> = {},
+  overrides: Record<string, string> = {},
 ): StateSlicesSnapshot {
   return {
     runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
     workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    userChannels: {
-      input: Object.freeze({ MODEL: model }),
-      transient,
-    },
+    userChannels: { MODEL: model, ...overrides },
   };
 }
 
@@ -315,8 +312,7 @@ async function runPersistedFlow(
   const session = options.session ?? createTestSession();
   const config = options.config ?? resume?.agentConfig ?? CONFIG;
   const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
-    input: Object.freeze({ MODEL: config.model }),
-    transient: {},
+    MODEL: config.model,
   };
   const abortController = new AbortController();
   const runScope = createRunScope({
@@ -652,7 +648,7 @@ describe('retrieveSessionResumeData', () => {
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: { input: Object.freeze({}), transient: {} },
+        userChannels: {},
       },
     });
 
@@ -1829,7 +1825,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: { todos: [], plan: null },
-        userChannels: { input: Object.freeze({}), transient: {} },
+        userChannels: {},
       },
     });
 

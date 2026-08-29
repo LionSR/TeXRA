@@ -85,10 +85,7 @@ async function runPersistedReflectionFlow(
         prompt: PROMPT,
         logger,
         parentStage: logger.openStage('Reflection flow recovery test'),
-        userVarChannels: {
-          input: Object.freeze({ MODEL: CONFIG.model }),
-          transient: {},
-        },
+        userVarChannels: { MODEL: CONFIG.model },
         modelCell,
         toolPolicy: createToolPolicy(),
         onRoundFinalized: () => {},

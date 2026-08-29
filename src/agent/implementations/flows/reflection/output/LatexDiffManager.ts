@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { platform } from '@platform/platform';
@@ -48,9 +47,8 @@ export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
   constructor(
-    private readonly agentSetting: AgentWorkflowSetting,
+    private readonly isRewrite: boolean,
     private readonly getOutputFiles: () => RoundIndexed<OutputFileInfo>,
-    private readonly baseFiles: FileLocation[],
     private readonly logger: AgentTrace,
     private readonly streamId: string,
     private readonly fileService: TaskRunFileService,
@@ -145,9 +143,6 @@ export class LatexDiffManager {
         outputFiles.map((f) => [fileLocationDisplayPath(f.location), f]),
       );
 
-      this.logger.debug('Base files', {
-        data: this.baseFiles.map((f) => f.absolutePath),
-      });
       this.logger.debug(`r${currRound} output files`, {
         data: outputFiles.map((f) => f.location.absolutePath),
       });
@@ -170,7 +165,7 @@ export class LatexDiffManager {
         return pairs;
       };
 
-      if (this.agentSetting.isRewrite) {
+      if (this.isRewrite) {
         // A base file the mapping named but the workspace never held (an
         // agent whose declared output files are created by the run) has
         // nothing to diff against. Skip those pairs rather than gating the
@@ -284,9 +279,7 @@ export class LatexDiffManager {
     description: string,
   ): void {
     if (pairs.length === 0) {
-      if (this.baseFiles.length > 0) {
-        this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
-      }
+      this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
       return;
     }
 
@@ -353,7 +346,6 @@ export class LatexDiffManager {
       lineage: {
         original: originalLocation,
         diffBase: baseLocation,
-        diffFile: diffLocation,
       },
     };
 

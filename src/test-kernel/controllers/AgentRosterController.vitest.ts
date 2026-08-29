@@ -81,7 +81,7 @@ describe('AgentRosterController', () => {
       }),
     );
 
-    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
     expectMalformedWarning(warn);
   });
 
@@ -100,14 +100,14 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
     expectMalformedWarning(warn);
 
     await roster.setTeam('test-team');
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'test-team' });
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
@@ -132,7 +132,7 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write'],
@@ -159,8 +159,8 @@ describe('AgentRosterController', () => {
       }),
     });
 
-    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
-    expect(roster.getEffectiveSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
+    expect(roster.snapshot().effectiveSelection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
@@ -195,7 +195,7 @@ describe('AgentRosterController', () => {
       enabled: false,
     });
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: 'all',
@@ -217,7 +217,7 @@ describe('AgentRosterController', () => {
       name: 'write',
       enabled: true,
     });
-    expect(inherited.getSelection()).toEqual({ kind: 'inherit' });
+    expect(inherited.snapshot().selection).toEqual({ kind: 'inherit' });
     expect(
       inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();
@@ -230,7 +230,7 @@ describe('AgentRosterController', () => {
       name: 'lead',
       enabled: true,
     });
-    expect(team.getSelection()).toEqual({
+    expect(team.snapshot().selection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
@@ -243,7 +243,7 @@ describe('AgentRosterController', () => {
       name: 'search',
       enabled: true,
     });
-    expect(all.getSelection()).toEqual({ kind: 'all' });
+    expect(all.snapshot().selection).toEqual({ kind: 'all' });
   });
 
   it('preserves unresolved team members when another category changes', async () => {
@@ -270,7 +270,7 @@ describe('AgentRosterController', () => {
       enabled: true,
     });
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write', 'future-reviewer'],
@@ -288,7 +288,7 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getEffectiveSelection()).toEqual({ kind: 'all' });
+    expect(roster.snapshot().effectiveSelection).toEqual({ kind: 'all' });
     expect(roster.getVisibleAgents('toolUse')).toEqual(agents.toolUse);
     expect(roster.snapshot().missingTeamId).toBe('deleted-team');
   });
@@ -303,7 +303,7 @@ describe('AgentRosterController', () => {
       presets = [];
     });
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write'],
@@ -390,7 +390,7 @@ describe('AgentRosterController', () => {
       }),
     ]);
 
-    expect(first.getSelection()).toEqual({
+    expect(first.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write'],

@@ -31,7 +31,7 @@ export type AgentRunStateSnapshot = z.output<
 
 /**
  * Record cycle metrics into run state. Mutates run in place.
- * Used by both reflection flows (via recordRound) and tool-use flows (directly).
+ * Used by both the reflection and tool-use flows.
  */
 export function recordCycleMetrics(
   run: AgentRunStateSnapshot,
@@ -44,16 +44,4 @@ export function recordCycleMetrics(
     run.usageAccumulator.latestUsage = null;
   }
   run.totalResponseTimeMs += responseTimeMs;
-}
-
-/** Record round metrics from a ConversationRoundState snapshot. */
-export function recordRound(
-  run: AgentRunStateSnapshot,
-  roundState: ConversationRoundStateSnapshot,
-): void {
-  recordCycleMetrics(
-    run,
-    roundState.responseTimeMs,
-    roundState.normalizedUsage,
-  );
 }

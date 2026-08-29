@@ -55,23 +55,7 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
-import type {
-  ReflectionServices,
-  WorkflowOutputPolicy,
-} from './ReflectionServices';
-
-/**
- * Widen a round stage's `total` for a granted compile-repair round (#7077):
- * that round opens with `roundIndex === totalRounds` (one past the
- * configured last round), so without this the progress badge would render
- * an over-total "Round 3 of 2".
- */
-export function computeRoundStageTotal(
-  totalRounds: number,
-  roundIndex: number,
-): number {
-  return Math.max(totalRounds, roundIndex + 1);
-}
+import type { ReflectionServices } from './ReflectionServices';
 
 export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
@@ -170,19 +154,14 @@ export async function runReflectionFlow(
     streamId,
   );
   const diffManager = new LatexDiffManager(
-    setting,
+    setting.isRewrite,
     () => getOutputFilesByRound(outputState),
-    baseFiles,
     logger,
     streamId,
     fileService,
   );
 
-  const promptBuilder = new PromptBuilder(
-    prompt,
-    userVarChannels.transient,
-    logger,
-  );
+  const promptBuilder = new PromptBuilder(prompt, userVarChannels, logger);
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
@@ -198,15 +177,6 @@ export async function runReflectionFlow(
       workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
     ) as AgentFileLocation;
 
-  const workflowOutputPolicy: WorkflowOutputPolicy = {
-    shouldAutoOpenPdfOrLog: () =>
-      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-    shouldRejectOnCompileFailure: () =>
-      readPlatformSetting<boolean>(
-        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-      ),
-  };
-
   const services: ReflectionServices = {
     ...input,
     setting: resolvedSetting,
@@ -217,7 +187,6 @@ export async function runReflectionFlow(
     promptBuilder,
     fileService,
     getOutputFileLocation,
-    workflowOutputPolicy,
     baseFiles,
   };
 
@@ -311,7 +280,10 @@ export async function runReflectionFlow(
             parent: parent ?? undefined,
             kind: 'round',
             index: roundIndex,
-            total: computeRoundStageTotal(shared.totalRounds, roundIndex),
+            // A granted compile-repair round (#7077) opens with
+            // `roundIndex === totalRounds`, so widen the total rather than
+            // render an over-total "Round 3 of 2".
+            total: Math.max(shared.totalRounds, roundIndex + 1),
           }),
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
@@ -329,7 +301,9 @@ export async function runReflectionFlow(
           if (
             !s.compileFailureContext ||
             s.compileRepairRoundGranted ||
-            !workflowOutputPolicy.shouldRejectOnCompileFailure()
+            !readPlatformSetting<boolean>(
+              WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+            )
           ) {
             return false;
           }

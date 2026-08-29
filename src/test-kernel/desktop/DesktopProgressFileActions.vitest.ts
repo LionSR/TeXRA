@@ -55,7 +55,6 @@ function outputInfo(filePath: string): OutputFileInfo {
         absolutePath: absolutePath('workspace', 'main.tex'),
       },
       diffBase: null,
-      diffFile: null,
     },
     diff: null,
   };

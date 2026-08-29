@@ -34,10 +34,6 @@ const canonicalDiffResult = {
         absolutePath: '/repo/main.tex',
         relativePath: 'main.tex',
       },
-      diffFile: {
-        kind: 'external',
-        absolutePath: '/tmp/texra/abcdef/diff/main-diff.tex',
-      },
     },
     diff: null,
   },

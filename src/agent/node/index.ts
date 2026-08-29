@@ -11,11 +11,10 @@ export type Action = string;
 
 const log = createLog('PocketFlow');
 // Actions that deliberately end a flow when a node returns them with no
-// registered successor. `finalize` is the reflection flow's terminal action on
-// failure (ResponseCycleNode.post → FlowTransition.FINALIZE); without listing it
-// here, getNextNode logs a spurious "Flow ends: 'finalize' not found" warning on
-// every reflection-flow failure even though ending is the intended behavior.
-const TERMINAL_ACTIONS = new Set<Action>(['complete', 'finalize']);
+// registered successor, so getNextNode stays silent instead of logging a
+// spurious "Flow ends" warning. `waiting` is not terminal: a waiting flow is
+// resumed, not ended.
+const TERMINAL_ACTIONS = new Set<Action>(['complete']);
 
 /**
  * Base node class for PocketFlow.

@@ -37,7 +37,7 @@ const ToolUseTaskStateSchema = z.object({
   agentConfig: ToolUseAgentConfigSchema,
 });
 
-export const TaskStateSchema = z.union([
+const TaskStateSchema = z.union([
   WorkflowTaskStateSchema,
   ToolUseTaskStateSchema,
 ]);

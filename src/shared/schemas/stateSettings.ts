@@ -1312,7 +1312,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
     honoredBy: webviewHosts(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
     ),
     surfaces: { settingsView: 'latex' },
   }),
@@ -1326,6 +1326,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
+    // Also read by OutputNode.ts (compileFailureContext gate); the row names
+    // the extra-round grant in runReflectionFlow.ts as its reader evidence.
     honoredBy: everyHost(
       'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
       WORKFLOW_REJECT_RUNTIME_REACHABILITY,

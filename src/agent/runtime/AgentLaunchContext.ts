@@ -489,10 +489,7 @@ async function assembleAgentLaunchContext(
       : await parentStage.child('Init').run(buildVars);
   input.signal?.throwIfAborted();
 
-  const userVarChannels: UserVariableChannels = {
-    input: Object.freeze(baseVars),
-    transient: { ...baseVars },
-  };
+  const userVarChannels: UserVariableChannels = { ...baseVars };
   const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
 
   const usageMonitor = new UsageMonitor(

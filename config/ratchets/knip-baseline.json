@@ -1124,18 +1124,6 @@
       "name": "handleInvocationResult"
     },
     {
-      "file": "src/agent/core/state/TaskState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TaskStateSchema"
-    },
-    {
-      "file": "src/agent/implementations/flows/reflection/runReflectionFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "computeRoundStageTotal"
-    },
-    {
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",

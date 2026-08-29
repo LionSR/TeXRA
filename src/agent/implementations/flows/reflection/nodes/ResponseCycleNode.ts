@@ -1,11 +1,15 @@
 import { BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { recordRound } from '@agent/core/state/AgentState';
+import {
+  ConversationRoundStateSnapshotSchema,
+  recordCycleMetrics,
+} from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/state/AgentState';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { buildFailedRetryInfo } from '@common/errors/sdkError/providerErrorFormat';
 import type { AgentFileLocation, RetryErrorInfo } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -14,14 +18,11 @@ import {
   createResponseCycleFlow,
   type ResponseCycleShared,
 } from '../ResponseCycleFlow';
-import type {
-  ReflectionFlowShared,
-  RoundContext,
-} from '../ReflectionFlowState';
+import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
 interface CyclePrepInput {
-  context: RoundContext;
+  context: ProviderMessage[];
   outputLocation: AgentFileLocation;
   run: AgentRunStateSnapshot;
   workspace: AgentWorkspaceState;
@@ -50,7 +51,16 @@ export class ResponseCycleNode extends BaseNode<
       shared.workspaceSnapshot,
     );
     const run = shared.runStateSnapshot;
-    const round = context.stateRoundSnapshot;
+    // Minted fresh per attempt: this is a metrics accumulator the cycle sums
+    // into and `recordCycleMetrics` charges to the run, so a round retried after a
+    // cancel must not inherit the cancelled attempt's response time or usage.
+    // Continuations still accumulate within the attempt (they loop inside the
+    // inner flow), so `CONTINUE_LIMIT` bounds every unattended attempt; a
+    // user-driven cancel+resume deliberately starts a fresh continuation
+    // budget along with the fresh metrics rather than persisting the count.
+    const round = ConversationRoundStateSnapshotSchema.parse({
+      roundIndex: shared.currentRound,
+    });
 
     return {
       context,
@@ -70,7 +80,7 @@ export class ResponseCycleNode extends BaseNode<
       await this.services.modelCell.handler.initializeOutputAndPrefill(
         this.services.config,
         this.services.setting,
-        context.messages,
+        context,
         prepRes.workspace,
         prepRes.outputLocation,
       );
@@ -121,7 +131,11 @@ export class ResponseCycleNode extends BaseNode<
       }
       return { outcome: 'completed', endTurn: cycleShared.endTurn };
     } catch (error) {
-      recordRound(prepRes.run, prepRes.round);
+      recordCycleMetrics(
+        prepRes.run,
+        prepRes.round.responseTimeMs,
+        prepRes.round.normalizedUsage,
+      );
       await this.services.onRoundFinalized(prepRes.run);
       const err = ensureError(error);
       const { lastError } = buildFailedRetryInfo(err);
@@ -160,7 +174,7 @@ export class ResponseCycleNode extends BaseNode<
       shared.lastError = execRes.lastError;
       shared.continueRounds = false;
       shared.endTurn = false;
-      return FlowTransition.FINALIZE;
+      return FlowTransition.COMPLETE;
     }
 
     shared.endTurn = execRes.outcome === 'completed' ? execRes.endTurn : false;
@@ -176,7 +190,6 @@ export class ResponseCycleNode extends BaseNode<
     }
 
     shared.lastError = undefined;
-    shared.runStateSnapshot = prepRes.run;
     shared.workspaceSnapshot = prepRes.workspace.toSnapshot({
       excludeAssemblyStrings: true,
     });

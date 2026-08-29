@@ -32,7 +32,7 @@ function buildServices(
     setting: { agentCategory: 'toolUse', tools: [] } as never,
     resumeShared: null,
     toolRegistry: {} as never,
-    userVarChannels: { input: {}, transient: {} },
+    userVarChannels: {},
     ...overrides,
   } as ToolUseServices;
 }
@@ -109,7 +109,7 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     const resolvedToolNames = services.setting.tools.map((tool) => tool.name);
     const rebuiltPrompts = await buildInitialToolUsePrompts(
       services.prompt,
-      services.userVarChannels.transient,
+      services.userVarChannels,
       services.logger,
       {
         resolvedToolNames,

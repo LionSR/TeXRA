@@ -86,7 +86,6 @@ async function writeAndSplitDocuments(
   return createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
     createExternalLocation('/tmp/run/output.xml'),
     0,
-    'scratchpad',
     options.baseFiles?.map((name) =>
       createExternalLocation(`/tmp/run/${name}`),
     ),

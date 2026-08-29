@@ -41,11 +41,17 @@ export class ToolUseRoundPrepNode extends BaseNode<
 > {
   async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {
     const interrupted = this.services.runScope.signal.aborted;
-    const batch = this.services.session?.hasQueuedFollowUp()
-      ? await this.services.session.waitForFollowUp(
-          this.services.runScope.signal,
-        )
-      : null;
+    // Draining is destructive — `FollowUpQueue.waitForNext` shifts before it
+    // checks the abort signal — and `post()` drops the batch on an interrupted
+    // round. On a borrowed queue (the resume path deliberately preserves one
+    // for its owner) that would silently lose user input, so an already-aborted
+    // round leaves the queue alone.
+    const batch =
+      !interrupted && this.services.session?.hasQueuedFollowUp()
+        ? await this.services.session.waitForFollowUp(
+            this.services.runScope.signal,
+          )
+        : null;
 
     return {
       interrupted,

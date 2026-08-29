@@ -28,7 +28,6 @@ export interface PublishCompiledPdfOptions {
   source: FileLocation;
   compiledPdfPath: string;
   pdfStemSuffix?: string;
-  outputPdfName?: string;
 }
 
 function normalizePdfRelativePath(pdfPath: string): string {
@@ -51,10 +50,6 @@ function stripRoundPrefix(relativePath: string, round: number): string {
 }
 
 function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
-  if (options.outputPdfName) {
-    return normalizePdfRelativePath(options.outputPdfName);
-  }
-
   const comparablePath =
     options.source.kind === 'external'
       ? path.basename(options.displayName)

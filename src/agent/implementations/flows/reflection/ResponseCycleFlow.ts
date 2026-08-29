@@ -1,13 +1,11 @@
 import * as path from 'node:path';
 
-import { z } from 'zod';
-
 import { BaseNode, Flow } from '@agent/node';
 import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
-import { recordRound } from '@agent/core/state/AgentState';
+import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
-  BaseCycleFieldsSchema,
+  type BaseCycleFields,
   defaultPostCompactionContext,
   extractModelResponse,
   resetCycleState,
@@ -24,16 +22,17 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import {
-  AgentFileLocationSchema,
+  type AgentFileLocation,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
+  SCRATCHPAD_TAG,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 // ============================================================================
-// Cycle Fields Schema (Extends Base)
+// Cycle Fields
 // ============================================================================
 
 /**
@@ -41,17 +40,14 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
  * output tracking. Everything here is structuredClone compatible; the
  * non-serializable rest lives in {@link CycleTransientFields}.
  */
-const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
+interface CycleFields extends BaseCycleFields {
   /** Whether output file exists */
-  outputExists: z.boolean(),
+  outputExists: boolean;
   /** Agent output location selected before this cycle starts. */
-  outputLocation: AgentFileLocationSchema,
+  outputLocation: AgentFileLocation;
   /** Processed response text */
-  processedResponse: z.string().optional(),
-});
-
-/** Serializable cycle fields derived from schema */
-type CycleFields = z.infer<typeof CycleFieldsSchema>;
+  processedResponse?: string;
+}
 
 /**
  * Transient cycle fields that are NOT serialized. These hold non-serializable
@@ -98,10 +94,7 @@ class ResponsePrepNode extends BaseNode<
     const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(prompt.systemPrompt, {
-          ...userVarChannels.input,
-          ...userVarChannels.transient,
-        });
+      : await getSystemPromptWithRules(prompt.systemPrompt, userVarChannels);
 
     return { interrupted, exists, systemPrompt };
   }
@@ -253,7 +246,7 @@ class ResponseProcessNode extends BaseNode<
 
       const scratchpad = await extractScratchpad(
         processedResponse,
-        'scratchpad',
+        SCRATCHPAD_TAG,
       );
       if (scratchpad) {
         logger.info(scratchpad, {
@@ -402,12 +395,12 @@ class ResponseCycleFinalizeNode extends BaseNode<
   /** Finalize the round by recording stats and invoking callback. */
   async exec(): Promise<void> {
     const { round, run, onRoundFinalized, logger } = this.services;
-    recordRound(run, round);
+    recordCycleMetrics(run, round.responseTimeMs, round.normalizedUsage);
     // Best-effort finalization callback. `ResponseCycleNode` (the reflection
-    // wrapper) re-runs recordRound + onRoundFinalized from its catch block as a
-    // safety net for nodes that throw *before* reaching this single
+    // wrapper) re-runs recordCycleMetrics + onRoundFinalized from its catch
+    // block as a safety net for nodes that throw *before* reaching this single
     // finalization point. Guarding the callback here keeps this node from
-    // throwing *after* recordRound has already mutated run state — otherwise
+    // throwing *after* the metrics have already mutated run state — otherwise
     // that catch would re-record the round and double-count usage/response time.
     try {
       await onRoundFinalized(run);

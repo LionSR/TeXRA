@@ -750,10 +750,7 @@ describe('ToolUseWaitNode', () => {
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: {
-          input: Object.freeze({ INSTRUCTION: 'initial request' }),
-          transient: { INSTRUCTION: 'initial request' },
-        },
+        userChannels: { INSTRUCTION: 'initial request' },
       },
     });
     const createUserFollowUpMessages = appendUserFollowUpMessages();
@@ -841,7 +838,7 @@ describe('ToolUseWaitNode', () => {
     expect(info).toHaveBeenCalledWith('please revise the theorem', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
-    expect(shared.stateSlices?.userChannels.transient.INSTRUCTION).toBe(
+    expect(shared.stateSlices?.userChannels.INSTRUCTION).toBe(
       'please revise the theorem',
     );
   });
