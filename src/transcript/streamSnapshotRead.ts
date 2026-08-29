@@ -23,7 +23,6 @@ import {
   WorkPlanSnapshotShape,
   type CompileFailure,
   type OutputFileInfo,
-  type ParsedUsageData,
   type RoundIndexed,
   type StreamSnapshot,
   type StreamTabId,
@@ -225,23 +224,6 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     usageUnparsed,
     workPlan,
   };
-}
-
-/**
- * Read only the per-stream usage sidecar for usage-only hydration paths.
- *
- * Unlike the tolerant full-stream read, this path must never turn a
- * corrupt-present `usageStats.json` into an authoritative zero map: genuine
- * I/O errors and JSON `SyntaxError` propagate, and a present non-object value
- * is rejected instead of being silently treated as empty.
- */
-export async function readUsageData(kv: KVStore): Promise<ParsedUsageData> {
-  const raw = await kv.read(STREAM_DATA_KEYS.USAGE_STATS);
-  if (raw === undefined) return parseUsageData(undefined);
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('Invalid persisted usageStats.json');
-  }
-  return parseUsageData(raw);
 }
 
 /**
