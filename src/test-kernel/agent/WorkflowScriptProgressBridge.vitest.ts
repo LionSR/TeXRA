@@ -431,10 +431,12 @@ return await agent('Run loose', { id: 'loose' })`,
     );
 
     const researchId = stageId(events, 'Research');
-    expect(workflowCallEvent(events, 'Loose task', 'failed')).toMatchObject({
+    const failed = workflowCallEvent(events, 'Loose task', 'failed');
+    expect(failed).toMatchObject({
       stageId: undefined,
-      call: { phase: undefined, error: 'model unavailable' },
+      call: { error: 'model unavailable' },
     });
+    expect(failed?.call.phase).toBeUndefined();
     expect(events).toContainEqual({
       type: 'stage.end',
       id: researchId,
