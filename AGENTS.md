@@ -689,7 +689,8 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 ## Effect Best Practices
 
-**IMPORTANT:** Always consult effect-solutions before writing Effect code.
+When the optional local `effect-solutions` tool is installed, consult it before
+writing non-trivial Effect code:
 
 1. Run `effect-solutions list` to see available guides
 2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
@@ -697,13 +698,15 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
 
-Never guess at Effect patterns - check the guide first.
+If the tool is unavailable, consult the pinned package sources and types in
+`node_modules` instead of guessing at Effect patterns.
 
 ### Local Effect Source
 
-The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect`
-for reference. Use it to explore APIs, find usage examples, and understand
-implementation details when the documentation isn't enough. This repo pins
-`effect` 4.0.0-rc.x (v4) — match `effect-smol` (v4) sources, not Effect v3 docs.
+`effect-solutions` may clone the Effect repository to
+`~/.local/share/effect-solutions/effect` for reference. This optional checkout
+is not provisioned by the repository. When present, it should track
+`Effect-TS/effect` `main` (v4); Effect v3 lives on that repository's `v3`
+branch. Match the installed `effect` version when APIs differ.
 
 <!-- effect-solutions:end -->
