@@ -7,8 +7,8 @@ const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
  * parent execution owns one durable journal. A retry after a timeout or
  * interruption resumes that journal even when the model rewrites the script
  * (models rarely reproduce source byte-for-byte); safety lives in the journal
- * itself, whose entries replay only on a matching call index and prompt/
- * options hash — a changed call re-executes, an unchanged one is free.
+ * itself, whose entries replay only on a matching prompt/options hash key —
+ * a changed call re-executes, while an unchanged call is free to move.
  * A script that must re-execute everything from scratch needs a new
  * meta.name.
  */

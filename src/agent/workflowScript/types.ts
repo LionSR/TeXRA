@@ -403,7 +403,7 @@ export interface WorkflowScriptRunOptions {
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. Default 4. */
   concurrency?: number;
-  /** Journal from a prior run; per-index key matches return cached results. */
+  /** Journal from a prior run; matching keys replay regardless of call position. */
   journal?: WorkflowJournalEntry[];
   /** Recovery snapshot from the prior attempt, re-published after reconciliation. */
   initialSnapshot?: WorkflowExecutionSnapshot;
