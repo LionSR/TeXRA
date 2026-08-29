@@ -88,6 +88,7 @@ export const groupStyles = css`
     height: 7px;
     border-radius: 2px;
     background: var(--wa-color-surface-border);
+    box-sizing: border-box;
   }
 
   .group-dot--awaitingApproval {

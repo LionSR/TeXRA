@@ -103,7 +103,7 @@ export const toolUseStyles = css`
 
   .tool-output-terminal {
     display: block;
-    border-radius: var(--wa-border-radius-m, var(--border-radius-small));
+    border-radius: var(--border-radius-small);
     overflow: hidden;
     background: var(--wa-color-surface-default);
     border: var(--border-thin) solid var(--color-border);

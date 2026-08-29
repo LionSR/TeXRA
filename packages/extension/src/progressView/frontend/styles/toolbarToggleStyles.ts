@@ -7,16 +7,21 @@ export const toolbarToggleStyles = css`
     flex-shrink: 0;
   }
 
-  .bypass-toggle-button.is-active {
-    border-radius: var(--border-radius);
-    /* AUTO-EDIT / AUTO-BASH match the CLI warning badges. */
+  /* AUTO-EDIT / AUTO-BASH match the CLI warning badges. Targets ::part(base)
+     rather than the host: the pressed state's action-icon-button skin
+     (controlStyles.ts) also paints ::part(base), and this rule must win that
+     tie by winning the cascade at equal specificity — toolbarToggleStyles is
+     adopted after commonViewStyles in StreamHeader.ts — for one fill at one
+     radius instead of two mismatched stacked fills. */
+  .bypass-toggle-button.is-active::part(base) {
     --_toggle-color: var(--color-warning);
     color: var(--_toggle-color);
+    border-color: color-mix(in srgb, var(--_toggle-color) 40%, transparent);
     background-color: color-mix(in srgb, var(--_toggle-color) 15%, transparent);
   }
 
   /* AUTO-TASK is the complete grant — CLI uses the error badge. */
-  .bypass-toggle-button--task.is-active {
+  .bypass-toggle-button--task.is-active::part(base) {
     --_toggle-color: var(--color-error);
   }
 `;
