@@ -378,11 +378,10 @@ export function formatWorkflowCallLiveParts(
 // ---------------------------------------------------------------------------
 
 /** The counted groups a phase's quiet rows collapse into. */
-export type WorkflowRowGroup = 'queued' | 'done' | 'declared';
+export type WorkflowRowGroup = 'queued' | 'declared';
 
 const WORKFLOW_ROW_GROUP_LABEL = {
   queued: 'queued',
-  done: 'done',
   declared: 'declared',
 } as const satisfies Record<WorkflowRowGroup, string>;
 
@@ -451,9 +450,10 @@ function matchesFilter(
 /**
  * One phase's rows. With a filter every matching card is one flat row;
  * without one, cards needing attention (awaiting approval, failed, running —
- * in that order, transcript order within) lead, and the rest collapse into
- * `queued` / `done` / `declared` groups that open in place. Screen rows scale
- * with states, not with agents.
+ * in that order, transcript order within) lead, finished cards follow as
+ * rows of their own (a ticked box is the record of what ran), and the cards
+ * that have not started collapse into `queued` / `declared` groups that open
+ * in place.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
@@ -521,8 +521,8 @@ export function workflowPhaseRows(
   };
   return [
     ...attentionRows,
+    ...done.map(taskRowOf),
     ...groupRows('queued', queued.map(taskRowOf)),
-    ...groupRows('done', done.map(taskRowOf)),
     ...groupRows('declared', phase.declaredTasks.map(declaredRowOf)),
   ];
 }

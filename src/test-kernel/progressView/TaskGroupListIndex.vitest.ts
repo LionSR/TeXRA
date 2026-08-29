@@ -597,11 +597,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       }),
     ];
 
-    // The finished cards sit in the phase's "done" group; open it so the
-    // cards below are in the DOM (`false` = expanded, as for task groups).
-    const toggleStates = new ToggleStateStore();
-    toggleStates.set('phase-review#done', false);
-    const list = await renderList([run, phase], rows, { toggleStates });
+    const list = await renderList([run, phase], rows);
 
     // Header shows the phase label plus the one-based position, matching the
     // CLI's `(index+1/total)` diamond header.

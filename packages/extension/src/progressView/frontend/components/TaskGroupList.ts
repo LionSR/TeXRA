@@ -112,7 +112,7 @@ function getStatusIcon(status: string): TeXRAIconName {
   }
 }
 
-const WORKFLOW_ROW_GROUPS = ['queued', 'done', 'declared'] as const;
+const WORKFLOW_ROW_GROUPS = ['queued', 'declared'] as const;
 
 /** Toggle-store key of one phase's counted group of quiet cards. */
 function rowGroupToggleKey(phaseKey: string, group: WorkflowRowGroup): string {
@@ -550,8 +550,9 @@ export class TaskGroupList extends LitElement {
 
   /**
    * One phase's cards in the model's order — the CLI popup's order: cards
-   * needing attention first, the rest as counted groups that open in place,
-   * and the plan's tasks the run has not issued yet.
+   * needing attention first, finished cards as ticked rows, the unstarted
+   * ones as counted groups that open in place, and the plan's tasks the run
+   * has not issued yet.
    */
   private renderPhaseRows(phase: WorkflowPhaseModel): TemplateResult {
     const rows = workflowPhaseRows(phase, {
