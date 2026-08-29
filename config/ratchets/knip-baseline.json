@@ -1202,12 +1202,6 @@
       "name": "TraceDataSchema"
     },
     {
-      "file": "packages/trace-viewer/vite.standalone.config.ts",
-      "category": "unused",
-      "kind": "files",
-      "name": "packages/trace-viewer/vite.standalone.config.ts"
-    },
-    {
       "file": "src/agent/core/flows/ModelInvocationNode.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1944,12 +1938,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "USAGE_LOG_FLUSH_OUTCOME"
-    },
-    {
-      "file": "src/test-kernel/support/setupFakePlatform.ts",
-      "category": "unused",
-      "kind": "files",
-      "name": "src/test-kernel/support/setupFakePlatform.ts"
     },
     {
       "file": "src/tools/agentCliShared.ts",
