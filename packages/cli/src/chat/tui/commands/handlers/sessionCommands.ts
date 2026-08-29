@@ -29,11 +29,11 @@ import {
 import {
   hydrateStreamArtifacts,
   readStreamArtifacts,
+  type StreamArtifactReader,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MESSAGE_TYPES } from '@shared/schemas';

@@ -7,7 +7,7 @@ import {
   type CliLogoutTarget,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import type { ApiProvider } from '@model/apiProviders';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type ExecutionId } from '@shared/schemas';

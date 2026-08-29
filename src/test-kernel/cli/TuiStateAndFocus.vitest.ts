@@ -55,6 +55,7 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   bumpStreamArtifactRevision,
+  projectStreamArtifacts,
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
@@ -88,7 +89,6 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
-import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
