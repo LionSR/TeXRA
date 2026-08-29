@@ -40,6 +40,7 @@ import {
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 import { markdownStyles } from '@shared/styles/markdownStyles';
+import { getModelLabel } from '@shared/model/modelLabel';
 import {
   readSelectValue,
   renderAgentOptions,
@@ -205,7 +206,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                   </div>
                 `
               : html`<span class="workflow-proposal__model"
-                  >${data.model}</span
+                  >${getModelLabel(data.model)}</span
                 >`
           }
         </div>
@@ -257,7 +258,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       <div class="workflow-proposal__cost-warning">
         ${waIcon('triangle-exclamation')}
         ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(data.agent, data.model)}
+        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+          data.agent,
+          getModelLabel(data.model),
+        )}
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"
