@@ -27,30 +27,6 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // commit to interrupting.
 export const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
 
-export function appFocusShortcutsActive({
-  foregroundOpen,
-  reverseSearchOpen,
-  slashPaletteOpen,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return !foregroundOpen && !slashPaletteOpen && !reverseSearchOpen;
-}
-
-export function appEscapeInterruptActive({
-  inputDisabled,
-  reverseSearchOpen,
-  slashPaletteOpen,
-}: {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return !inputDisabled && !slashPaletteOpen && !reverseSearchOpen;
-}
-
 // Bare Esc must give a numbered stream-focus chord a chance to resolve while
 // that binding is on screen. `Alt`-chord platforms are unaffected: their
 // Esc+key sequences arrive as one burst, resolved synchronously by
@@ -66,19 +42,17 @@ export function shouldDeferEscapeInterruptForMetaChord({
 }
 
 export interface EscapeInterruptState {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
+  /** The committed render's focus-shortcut gate: no foreground surface, child
+   *  list, reverse search, or slash palette owns the keyboard. Bare Escape's
+   *  deferred chord timer reads it through a ref so it sees that render. */
+  readonly shortcutsActive: boolean;
   readonly canInterruptStream: (streamId: StreamTabId) => boolean;
   readonly onInterruptStream: (streamId: StreamTabId) => void;
 }
 
 export interface AppCtrlCState {
   readonly discardDraft: () => boolean;
-  readonly canStopActiveRun: () => boolean;
-  readonly onInterruptActive: () => void;
-  readonly onExit: () => void;
-  readonly onCtrlC?: () => void;
+  readonly onCtrlC: () => void;
 }
 
 export function appDraftDiscardActive({
@@ -93,18 +67,12 @@ export function appDraftDiscardActive({
   return !inputDisabled && !reverseSearchOpen && !childListFocused;
 }
 
-/** Apply the root TUI's complete Ctrl+C policy from the latest composer state. */
+/** Apply the root TUI's complete Ctrl+C policy from the latest composer state:
+ *  the first Ctrl+C discards a draft, and anything past that is the host's
+ *  SIGINT policy. */
 export function triggerAppCtrlC(state: AppCtrlCState): void {
   if (state.discardDraft()) return;
-  if (state.onCtrlC) {
-    state.onCtrlC();
-    return;
-  }
-  if (state.canStopActiveRun()) {
-    state.onInterruptActive();
-    return;
-  }
-  state.onExit();
+  state.onCtrlC();
 }
 
 export function digitFromMetaShortcut(value: string): number | undefined {

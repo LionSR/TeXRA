@@ -2461,10 +2461,8 @@ function renderHarnessApp(): React.JSX.Element {
       onKillExecution={markHarnessExecutionStopped}
       onWorkflowControl={() => undefined}
       canInterruptStream={canInterruptHarnessStream}
-      canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptActive={markHarnessInterrupted}
       onInterruptStream={markHarnessStreamInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}

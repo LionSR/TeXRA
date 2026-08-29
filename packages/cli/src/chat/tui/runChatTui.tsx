@@ -501,10 +501,8 @@ export async function runChat(
         (streamId === session.streamId && canInterruptActiveRun()) ||
         runtimeSession.status.isInFlight(streamId)
       }
-      canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
-      onInterruptActive={interruptActive}
       onInterruptStream={chatController.stopStream}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}

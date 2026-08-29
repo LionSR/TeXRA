@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports - TUI interaction policy
 import {
   appDraftDiscardActive,
-  appEscapeInterruptActive,
-  appFocusShortcutsActive,
   approvalVisibleForActiveStream,
   digitFromMetaShortcut,
   foregroundEscapeAction,
@@ -19,8 +17,6 @@ import {
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
 import type { StreamTabId } from '@shared/schemas';
 
-type EscapeActiveState = Parameters<typeof appEscapeInterruptActive>[0];
-type FocusState = Parameters<typeof appFocusShortcutsActive>[0];
 type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
 type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
 type ForegroundRowsInput = Parameters<typeof foregroundMaxRowsForKind>[0];
@@ -29,30 +25,12 @@ type MetaChordState = Parameters<
   typeof shouldDeferEscapeInterruptForMetaChord
 >[0];
 
-const focusEnabled = {
-  foregroundOpen: false,
-  reverseSearchOpen: false,
-  slashPaletteOpen: false,
-} satisfies FocusState;
-const escapeInterruptEnabled = {
-  inputDisabled: false,
-  reverseSearchOpen: false,
-  slashPaletteOpen: false,
-} satisfies EscapeActiveState;
 const escChordHidden = {
   shortcutModifierLabel: 'Esc',
   streamFocusAvailable: false,
 } satisfies MetaChordState;
 
-function ctrlCFixture({
-  active,
-  draft,
-  delegate,
-}: {
-  readonly active: boolean;
-  readonly draft: string;
-  readonly delegate?: boolean;
-}): {
+function ctrlCFixture({ draft }: { readonly draft: string }): {
   readonly events: string[];
   readonly readDraft: () => string;
   readonly state: AppCtrlCState;
@@ -69,10 +47,7 @@ function ctrlCFixture({
         events.push('clear');
         return true;
       },
-      canStopActiveRun: () => active,
-      onInterruptActive: () => events.push('interrupt'),
-      onExit: () => events.push('exit'),
-      onCtrlC: delegate ? () => events.push('delegate') : undefined,
+      onCtrlC: () => events.push('delegate'),
     },
   };
 }
@@ -108,32 +83,17 @@ function foregroundInput(
 describe('app interaction policy', () => {
   it.each([
     {
-      scenario:
-        'clears a non-empty draft without interrupting an active response',
-      active: true,
+      scenario: 'clears a non-empty draft instead of signalling the host',
       draft: 'unfinished',
       events: ['clear'],
     },
     {
-      scenario: 'clears a non-empty draft without exiting while idle',
-      active: false,
-      draft: 'unfinished',
-      events: ['clear'],
-    },
-    {
-      scenario: 'interrupts an active response when the draft is empty',
-      active: true,
+      scenario: 'hands an empty-draft Ctrl+C to the host signal policy',
       draft: '',
-      events: ['interrupt'],
+      events: ['delegate'],
     },
-    {
-      scenario: 'exits an idle chat when the draft is empty',
-      active: false,
-      draft: '',
-      events: ['exit'],
-    },
-  ])('$scenario', ({ active, draft, events }) => {
-    const fixture = ctrlCFixture({ active, draft });
+  ])('$scenario', ({ draft, events }) => {
+    const fixture = ctrlCFixture({ draft });
 
     triggerAppCtrlC(fixture.state);
     if (draft.length > 0) {
@@ -143,11 +103,7 @@ describe('app interaction policy', () => {
   });
 
   it('delegates the second Ctrl+C after clearing to existing signal policy', () => {
-    const fixture = ctrlCFixture({
-      active: true,
-      draft: 'unfinished',
-      delegate: true,
-    });
+    const fixture = ctrlCFixture({ draft: 'unfinished' });
 
     triggerAppCtrlC(fixture.state);
     triggerAppCtrlC(fixture.state);
@@ -212,32 +168,6 @@ describe('app interaction policy', () => {
           kind: 'approval',
         }),
       ).toBe(expectedByKind[approvalKind]);
-    }
-  });
-
-  it('lets input overlays own focus shortcuts', () => {
-    const cases = [
-      [focusEnabled, true],
-      [{ ...focusEnabled, reverseSearchOpen: true }, false],
-      [{ ...focusEnabled, slashPaletteOpen: true }, false],
-      [{ ...focusEnabled, foregroundOpen: true }, false],
-    ] satisfies readonly (readonly [FocusState, boolean])[];
-
-    for (const [state, expected] of cases) {
-      expect(appFocusShortcutsActive(state)).toBe(expected);
-    }
-  });
-
-  it('only lets Escape interrupt when no foreground input owns it', () => {
-    const cases = [
-      [escapeInterruptEnabled, true],
-      [{ ...escapeInterruptEnabled, inputDisabled: true }, false],
-      [{ ...escapeInterruptEnabled, reverseSearchOpen: true }, false],
-      [{ ...escapeInterruptEnabled, slashPaletteOpen: true }, false],
-    ] satisfies readonly (readonly [EscapeActiveState, boolean])[];
-
-    for (const [state, expected] of cases) {
-      expect(appEscapeInterruptActive(state)).toBe(expected);
     }
   });
 
