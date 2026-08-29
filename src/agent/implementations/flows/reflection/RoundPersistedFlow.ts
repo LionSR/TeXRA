@@ -51,6 +51,9 @@ export interface RoundAwareState {
 
   /** Set by nodes when execution fails. Skips round completion callbacks. */
   lastError?: RetryErrorInfo;
+
+  /** Output rejection carried into the next configured round, if one remains. */
+  compileFailureContext?: string;
 }
 
 // ============================================================================
@@ -206,7 +209,11 @@ export class RoundPersistedFlow<
   /** Derive the canonical RunOutcome from the current round state. */
   private resolveOutcome(shared: S): RunOutcome {
     return deriveRunOutcome({
-      failed: Boolean(shared.lastError),
+      failed: Boolean(
+        shared.lastError ||
+        (shared.compileFailureContext &&
+          shared.currentRound + 1 >= shared.totalRounds),
+      ),
       cancelled: this.callbacks.signal?.aborted || !shared.continueRounds,
     });
   }

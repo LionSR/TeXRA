@@ -37,6 +37,10 @@ interface FakeShared extends RoundAwareState {
   contextSeenByRound: Record<number, string | undefined>;
   /** Round indices that should simulate a compile failure. */
   failingRounds: number[];
+  /** Round indices after which execution should be cancelled. */
+  cancellingRounds: number[];
+  /** Mirrors the reject-on-compile-failure setting read by OutputNode. */
+  rejectOnCompileFailure: boolean;
   /** Mirrors OutputNode's compile-failure context (set on failure, consumed next round). */
   compileFailureContext?: string;
 }
@@ -47,14 +51,24 @@ interface FakeShared extends RoundAwareState {
  * then sets fresh feedback when the current round fails compilation.
  */
 class FakeRoundNode extends BaseNode<FakeShared> {
+  constructor(private readonly abortController?: AbortController) {
+    super();
+  }
+
   override async post(shared: FakeShared): Promise<undefined> {
     shared.roundsRun.push(shared.currentRound);
     shared.contextSeenByRound[shared.currentRound] =
       shared.compileFailureContext;
     delete shared.compileFailureContext;
 
-    if (shared.failingRounds.includes(shared.currentRound)) {
+    if (
+      shared.rejectOnCompileFailure &&
+      shared.failingRounds.includes(shared.currentRound)
+    ) {
       shared.compileFailureContext = `compile failed on round ${shared.currentRound}`;
+    }
+    if (shared.cancellingRounds.includes(shared.currentRound)) {
+      this.abortController?.abort();
     }
     return undefined;
   }
@@ -67,7 +81,8 @@ class UnexpectedRoundNode extends BaseNode<FakeShared> {
 }
 
 function makeFlow(kv = createFakeKv()) {
-  const node = new FakeRoundNode();
+  const abortController = new AbortController();
+  const node = new FakeRoundNode(abortController);
   const logger = new TraceEmitter();
   /** `{ index, total }` each round stage opened with, in call order. */
   const stages: Array<{ index: number; total: number }> = [];
@@ -82,6 +97,7 @@ function makeFlow(kv = createFakeKv()) {
           ...stage,
         });
       },
+      signal: abortController.signal,
     },
   });
   return { flow, stages };
@@ -95,6 +111,8 @@ function initialShared(overrides: Partial<FakeShared>): FakeShared {
     roundsRun: [],
     contextSeenByRound: {},
     failingRounds: [],
+    cancellingRounds: [],
+    rejectOnCompileFailure: true,
     ...overrides,
   };
 }
@@ -102,22 +120,48 @@ function initialShared(overrides: Partial<FakeShared>): FakeShared {
 async function runFlow(overrides: Partial<FakeShared>): Promise<{
   shared: FakeShared;
   stages: Array<{ index: number; total: number }>;
+  outcome: RunOutcome;
 }> {
   const { flow, stages } = makeFlow();
-  await flow.run(initialShared(overrides));
-  return { shared: (await flow.getShared())!, stages };
+  const outcome = await flow.run(initialShared(overrides));
+  return { shared: (await flow.getShared())!, stages, outcome };
+}
+
+async function expectFlowDidNotResume(
+  flow: RoundPersistedFlow<FakeShared>,
+  kv: ReturnType<typeof createFakeKv>,
+  stages: unknown[],
+): Promise<void> {
+  expect((await flow.getShared())?.roundsRun).toEqual([]);
+  expect(stages).toEqual([]);
+  await expect(
+    kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
+  ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
 }
 
 describe('RoundPersistedFlow compile-failure round limit', () => {
   it('passes compile-failure feedback into a remaining configured round', async () => {
-    const { shared } = await runFlow({ failingRounds: [0] });
+    const { shared, outcome } = await runFlow({ failingRounds: [0] });
 
     expect(shared.roundsRun).toEqual([0, 1]);
     expect(shared.contextSeenByRound[1]).toBe('compile failed on round 0');
+    expect(outcome).toBe(RUN_OUTCOME.COMPLETED);
+  });
+
+  it('cancels when non-final compile feedback cannot reach the next round', async () => {
+    const { shared, outcome } = await runFlow({
+      totalRounds: 3,
+      failingRounds: [0],
+      cancellingRounds: [0],
+    });
+
+    expect(shared.roundsRun).toEqual([0]);
+    expect(shared.compileFailureContext).toBe('compile failed on round 0');
+    expect(outcome).toBe(RUN_OUTCOME.CANCELLED);
   });
 
   it('does not exceed the configured count when every round fails to compile', async () => {
-    const { shared, stages } = await runFlow({
+    const { shared, stages, outcome } = await runFlow({
       totalRounds: 3,
       failingRounds: [0, 1, 2],
     });
@@ -133,13 +177,29 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       { index: 1, total: 3 },
       { index: 2, total: 3 },
     ]);
+    expect(outcome).toBe(RUN_OUTCOME.FAILED);
   });
 
-  it('does not add a repair round after the final configured round fails', async () => {
-    const { shared } = await runFlow({ failingRounds: [1] });
+  it('fails without adding a repair round when final compile failure collides with cancellation', async () => {
+    const { shared, outcome } = await runFlow({
+      failingRounds: [1],
+      cancellingRounds: [1],
+    });
 
     expect(shared.roundsRun).toEqual([0, 1]);
     expect(shared.compileFailureContext).toBe('compile failed on round 1');
+    expect(outcome).toBe(RUN_OUTCOME.FAILED);
+  });
+
+  it('retains completed behavior when compile-failure rejection is disabled', async () => {
+    const { shared, outcome } = await runFlow({
+      failingRounds: [1],
+      rejectOnCompileFailure: false,
+    });
+
+    expect(shared.roundsRun).toEqual([0, 1]);
+    expect(shared.compileFailureContext).toBeUndefined();
+    expect(outcome).toBe(RUN_OUTCOME.COMPLETED);
   });
 
   it('does not resume a persisted legacy repair round at the configured limit', async () => {
@@ -156,13 +216,9 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
       cursor: { nextNodeId: 'start' },
     } satisfies FlowRecord);
 
-    await expect(flow.run(persisted)).resolves.toBe(RUN_OUTCOME.COMPLETED);
+    await expect(flow.run(persisted)).resolves.toBe(RUN_OUTCOME.FAILED);
 
-    expect((await flow.getShared())?.roundsRun).toEqual([]);
-    expect(stages).toEqual([]);
-    await expect(
-      kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
-    ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
+    await expectFlowDidNotResume(flow, kv, stages);
   });
 
   it('does not resume a persisted round excluded by a lowered round count', async () => {
@@ -179,11 +235,7 @@ describe('RoundPersistedFlow compile-failure round limit', () => {
 
     await expect(flow.run(synced)).resolves.toBe(RUN_OUTCOME.COMPLETED);
 
-    expect((await flow.getShared())?.roundsRun).toEqual([]);
-    expect(stages).toEqual([]);
-    await expect(
-      kv.read<FlowRecord>(flowKey(kv.getExecutionId())),
-    ).resolves.toMatchObject({ cursor: { nextNodeId: 'start' } });
+    await expectFlowDidNotResume(flow, kv, stages);
   });
 
   it('still resumes a valid persisted cursor within the configured limit', async () => {
