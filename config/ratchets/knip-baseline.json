@@ -416,12 +416,6 @@
       "name": "queuedFollowUpPanelDisplay"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/QueuedFollowUpsPanel.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "QueuedFollowUpPanelDisplay"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -468,12 +462,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "StaticTranscriptRingBudgets"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StaticTranscriptState"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/TodosPlanPanel.tsx",

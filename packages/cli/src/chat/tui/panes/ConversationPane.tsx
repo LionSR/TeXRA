@@ -47,7 +47,6 @@ import {
 } from './WorkflowRunDetails';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
-const MIN_PENDING_ROWS = 1;
 
 interface ConversationPaneProps {
   /** Transcript measurement width, which callers may clamp to layout minimums. */
@@ -237,13 +236,10 @@ export function ConversationPane(
   const pendingRowReserve = newestPendingEntry
     ? Math.min(
         Math.max(0, maxRows - metadataRows),
-        Math.max(
-          MIN_PENDING_ROWS,
-          estimateLiveTranscriptEntryRows(
-            newestPendingEntry,
-            props.width,
-            props.subagentExecutionLabels,
-          ),
+        estimateLiveTranscriptEntryRows(
+          newestPendingEntry,
+          props.width,
+          props.subagentExecutionLabels,
         ),
       )
     : 0;
@@ -270,12 +266,7 @@ export function ConversationPane(
     props.width,
     props.subagentExecutionLabels,
   );
-  const visibleRows =
-    metadataRows +
-    detailRows +
-    (visibleEntries.entries.length > 0
-      ? Math.max(MIN_PENDING_ROWS, visibleEntries.usedRows)
-      : 0);
+  const visibleRows = metadataRows + detailRows + visibleEntries.usedRows;
 
   // Keep stream order intact so in-flight text stays interleaved with tool rows.
   // The explicit height keeps the input bar pinned and prevents bursts from

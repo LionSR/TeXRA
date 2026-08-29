@@ -58,6 +58,7 @@ import {
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   isFinalizedTranscriptRow,
@@ -88,7 +89,6 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
-import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
@@ -1665,7 +1665,6 @@ describe('CLI TUI row allocation', () => {
           agentCategory: fixture.category,
           creationTimestamp: 0,
         },
-        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
   });
@@ -1700,7 +1699,6 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: new Map([[child1, root]]),
         metadata: { creationTimestamp: 0, ...metadata },
-        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: 'reject', streamId: child1 });
   });

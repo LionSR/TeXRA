@@ -250,19 +250,14 @@ describe('InputBar draft discard', () => {
   it('clears a mounted foreground text input before exiting', async () => {
     const { ink, React } = await loadInk();
     const registry = createActiveDraftRegistry();
-    const onExit = vi.fn();
+    const onCtrlC = vi.fn();
     let currentValue = 'dialog answer';
 
     function Harness() {
       const [value, setValue] = React.useState(currentValue);
       ink.useInput((input: string, key: { readonly ctrl?: boolean }) => {
         if (key.ctrl && input === 'c') {
-          triggerAppCtrlC({
-            discardDraft: registry.discard,
-            canStopActiveRun: () => false,
-            onInterruptActive: vi.fn(),
-            onExit,
-          });
+          triggerAppCtrlC({ discardDraft: registry.discard, onCtrlC });
         }
       });
       return React.createElement(
@@ -289,7 +284,7 @@ describe('InputBar draft discard', () => {
       stdin.write('\u0003');
       await waitFor(() => currentValue === '');
 
-      expect(onExit).not.toHaveBeenCalled();
+      expect(onCtrlC).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }

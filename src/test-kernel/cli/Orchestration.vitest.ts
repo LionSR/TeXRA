@@ -30,11 +30,8 @@ import {
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
-import {
-  type CliMultiAgentPreset,
-  type CliMultiAgentPresetRunPlan,
-} from '@cli/runtime/multiAgentPresets';
-import { planTeamRun } from '@common/teams/TeamPlan';
+import { type CliMultiAgentPresetRunPlan } from '@cli/runtime/multiAgentPresets';
+import { planTeamRun, type TeamPreset } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 
@@ -104,7 +101,7 @@ function modelAccess(
   };
 }
 
-function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
+function preset(overrides: Partial<TeamPreset>): TeamPreset {
   return {
     id: 'physicist',
     name: 'Physicist',
@@ -121,7 +118,7 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
 }
 
 function presetPlan(
-  overrides: Partial<CliMultiAgentPreset>,
+  overrides: Partial<TeamPreset>,
   agents: {
     readonly workflow?: readonly AgentEntry[];
     readonly toolUse?: readonly AgentEntry[];
@@ -133,7 +130,7 @@ function presetPlan(
 }
 
 function readyPresetPlan(
-  overrides: Partial<CliMultiAgentPreset> = {},
+  overrides: Partial<TeamPreset> = {},
 ): CliMultiAgentPresetRunPlan {
   return presetPlan(
     { id: 'physicist', name: 'Physicist', ...overrides },

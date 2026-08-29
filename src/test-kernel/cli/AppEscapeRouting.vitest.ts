@@ -211,9 +211,8 @@ function appProps(
     onSubmit: vi.fn(),
     onKillExecution: vi.fn(),
     onWorkflowControl: vi.fn(),
-    canStopActiveRun: () => true,
     canInterruptStream: () => true,
-    onInterruptActive: vi.fn(),
+    onCtrlC: vi.fn(),
     onInterruptStream,
   };
 }

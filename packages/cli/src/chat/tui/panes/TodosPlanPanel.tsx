@@ -13,7 +13,6 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
@@ -48,27 +47,20 @@ export type CompactTodosPlanRow =
   | { kind: 'todo'; sourceIndex: number; todo: TodoItem }
   | { kind: 'planSummary'; sourceIndex: number; summary: string };
 
-// Sort priority by (row kind, status). Statuses absent for the todo kind use
-// DEFAULT_TODO_ROW_PRIORITY; planSummary has a single fixed priority.
-const COMPACT_TODO_ROW_PRIORITY: Partial<Record<TodoStatus, number>> = {
+// Sort priority by (row kind, status). The map is total, so a new status
+// compile-fails here instead of silently sorting at a default; planSummary has
+// a single fixed priority.
+const COMPACT_TODO_ROW_PRIORITY: Record<TodoStatus, number> = {
   [TODO_STATUS.IN_PROGRESS]: 0,
   [TODO_STATUS.PENDING]: 1,
   [TODO_STATUS.COMPLETED]: 4,
 };
-const DEFAULT_TODO_ROW_PRIORITY = 3;
 const PLAN_SUMMARY_PRIORITY = 5;
 
 function compactRowPriority(row: CompactTodosPlanRow): number {
-  switch (row.kind) {
-    case 'todo':
-      return (
-        COMPACT_TODO_ROW_PRIORITY[row.todo.status] ?? DEFAULT_TODO_ROW_PRIORITY
-      );
-    case 'planSummary':
-      return PLAN_SUMMARY_PRIORITY;
-    default:
-      return assertNever(row, 'Unknown compact todos/plan row kind');
-  }
+  return row.kind === 'todo'
+    ? COMPACT_TODO_ROW_PRIORITY[row.todo.status]
+    : PLAN_SUMMARY_PRIORITY;
 }
 
 export function compactTodosPlanRows({

@@ -161,13 +161,10 @@ export function advanceSettledPrefixIndex(
   total: number,
   start: number,
   streamFinal: boolean,
-  onAdvanced?: (index: number, row: TranscriptRow) => void,
 ): number {
   let index = Math.min(start, total);
   while (index < total) {
-    const row = rowAt(index);
-    if (blocksSettledPrefix(row, index, total, streamFinal)) break;
-    onAdvanced?.(index, row);
+    if (blocksSettledPrefix(rowAt(index), index, total, streamFinal)) break;
     index += 1;
   }
   return index;
@@ -251,8 +248,6 @@ interface FoldChangeFlags {
   /** A change touched a row the compact workflow output selects. */
   compactAffected: boolean;
   syntheticsChanged: boolean;
-  userRescan: boolean;
-  responseRescan: boolean;
 }
 
 export function newFoldChangeFlags(): FoldChangeFlags {
@@ -260,8 +255,6 @@ export function newFoldChangeFlags(): FoldChangeFlags {
     itemsChanged: false,
     compactAffected: false,
     syntheticsChanged: false,
-    userRescan: false,
-    responseRescan: false,
   };
 }
 
@@ -273,8 +266,6 @@ export function createTranscriptFoldState(): TranscriptFoldState {
     items: [],
     indexById: new Map(),
     finalizedFrontier: 0,
-    latestUserPos: -1,
-    latestResponsePos: -1,
     projectLifecycleToTaskGroups: false,
     synthetics: [],
   };
@@ -287,8 +278,6 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.items.length = 0;
   state.indexById.clear();
   state.finalizedFrontier = 0;
-  state.latestUserPos = -1;
-  state.latestResponsePos = -1;
   state.synthetics = [];
   state.lastOutputFull = undefined;
   state.lastEntriesOutput = undefined;
@@ -348,14 +337,22 @@ function touchesCompactOutput(row: TranscriptRow): boolean {
   return row.origin === 'local' || WORKFLOW_DASHBOARD_KINDS.has(row.kind);
 }
 
-function findLastFoldPos(
-  items: readonly TranscriptFoldItem[],
-  matches: (row: TranscriptRow, index: number) => boolean,
-): number {
+/** The stream's latest conversation line: the headline of the newest row that
+ *  is either a user instruction or a settled model reply. A row cannot be
+ *  both, so the highest-indexed match decides — one backwards scan, stopping
+ *  at the first hit. Both predicates already require a non-empty headline, so
+ *  `undefined` means "no such row", never "empty text". */
+export function latestConversationLine(
+  state: TranscriptFoldState,
+): string | undefined {
+  const items = state.items;
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    if (matches(items[index].rendered, index)) return index;
+    const row = items[index].rendered;
+    if (isUserLineRow(row) || isFinalizedResponseAt(state, row, index)) {
+      return transcriptRowHeadline(row);
+    }
   }
-  return -1;
+  return undefined;
 }
 
 function reindexFoldFrom(state: TranscriptFoldState, from: number): void {
@@ -382,17 +379,6 @@ function insertFoldItem(
     items.splice(pos, 0, item);
     reindexFoldFrom(state, pos);
     if (pos < state.finalizedFrontier) state.finalizedFrontier = pos;
-    if (state.latestUserPos >= pos) state.latestUserPos += 1;
-    if (state.latestResponsePos >= pos) state.latestResponsePos += 1;
-  }
-  if (isUserLineRow(item.rendered) && pos > state.latestUserPos) {
-    state.latestUserPos = pos;
-  }
-  if (
-    isFinalizedResponseAt(state, item.rendered, pos) &&
-    pos > state.latestResponsePos
-  ) {
-    state.latestResponsePos = pos;
   }
   flags.itemsChanged = true;
   if (touchesCompactOutput(item.rendered)) flags.compactAffected = true;
@@ -414,22 +400,6 @@ function replaceFoldRendered(
   // The frontier is never retracted here: a row below it has already been
   // printed into append-only `<Static>` scrollback and cannot be un-printed,
   // whatever its replacement says about itself.
-  if (pos === state.latestUserPos && !isUserLineRow(rendered)) {
-    flags.userRescan = true;
-  } else if (isUserLineRow(rendered) && pos > state.latestUserPos) {
-    state.latestUserPos = pos;
-  }
-  if (
-    pos === state.latestResponsePos &&
-    !isFinalizedResponseAt(state, rendered, pos)
-  ) {
-    flags.responseRescan = true;
-  } else if (
-    isFinalizedResponseAt(state, rendered, pos) &&
-    pos > state.latestResponsePos
-  ) {
-    state.latestResponsePos = pos;
-  }
 }
 
 function removeFoldItemAt(
@@ -441,10 +411,6 @@ function removeFoldItemAt(
   state.indexById.delete(removed.rendered.id);
   reindexFoldFrom(state, pos);
   if (pos < state.finalizedFrontier) state.finalizedFrontier -= 1;
-  if (pos === state.latestUserPos) flags.userRescan = true;
-  else if (pos < state.latestUserPos) state.latestUserPos -= 1;
-  if (pos === state.latestResponsePos) flags.responseRescan = true;
-  else if (pos < state.latestResponsePos) state.latestResponsePos -= 1;
   flags.itemsChanged = true;
   if (touchesCompactOutput(removed.rendered)) flags.compactAffected = true;
 }
@@ -468,20 +434,6 @@ function carriedPromotionFrontier(
     frontier += 1;
   }
   return frontier;
-}
-
-/** Recompute every position-derived cursor after a bulk items rebuild that
- *  only spliced local rows in or out. */
-function recomputeFoldCursors(
-  state: TranscriptFoldState,
-  promotedIds: ReadonlySet<string>,
-): void {
-  const items = state.items;
-  state.finalizedFrontier = carriedPromotionFrontier(items, promotedIds);
-  state.latestUserPos = findLastFoldPos(items, isUserLineRow);
-  state.latestResponsePos = findLastFoldPos(items, (row, index) =>
-    isFinalizedResponseAt(state, row, index),
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -655,9 +607,7 @@ function reconcileSynthetics(
     state.items.splice(pos, 0, item);
   }
   reindexFoldFrom(state, 0);
-  recomputeFoldCursors(state, promotedIds);
-  flags.userRescan = false;
-  flags.responseRescan = false;
+  state.finalizedFrontier = carriedPromotionFrontier(state.items, promotedIds);
   state.synthetics = current;
 }
 
@@ -672,12 +622,6 @@ function advanceSettledPrefix(
     items.length,
     state.finalizedFrontier,
     streamFinal,
-    // A newly printed model reply becomes the stream's latest line.
-    (index, row) => {
-      if (isResponseRow(row) && index > state.latestResponsePos) {
-        state.latestResponsePos = index;
-      }
-    },
   );
 }
 
@@ -712,21 +656,10 @@ export function applyStreamChanges(
       state.items,
       ctx.promotedIds,
     );
-    ctx.flags.responseRescan = true;
   }
   // Promote only after the merged order is final: "is there a later entry"
   // and `<Static>` append order are both defined on the final stream order.
   advanceSettledPrefix(state, ctx.streamFinal);
-  if (ctx.flags.userRescan) {
-    state.latestUserPos = findLastFoldPos(state.items, isUserLineRow);
-    ctx.flags.userRescan = false;
-  }
-  if (ctx.flags.responseRescan) {
-    state.latestResponsePos = findLastFoldPos(state.items, (row, index) =>
-      isFinalizedResponseAt(state, row, index),
-    );
-    ctx.flags.responseRescan = false;
-  }
   return { taskGroups, compaction };
 }
 

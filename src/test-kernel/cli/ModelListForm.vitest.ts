@@ -16,7 +16,6 @@ import {
   nextSelectHighlightIndex,
   selectInitialHighlightIndex,
   selectItemRenderKey,
-  visibleSelectRange,
 } from '@cli/tui/ui/Select';
 import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 
@@ -193,37 +192,6 @@ describe('Select render keys', () => {
     expect(first).toBe('0:New chat');
     expect(second).toBe('1:Help');
     expect(first).not.toBe(second);
-  });
-});
-
-describe('CLI Select visible range', () => {
-  it.each<{
-    name: string;
-    args: Parameters<typeof visibleSelectRange>[0];
-    expected: { start: number; end: number };
-  }>([
-    {
-      name: 'keeps a contiguous window around the highlighted row',
-      args: { itemCount: 8, highlight: 5, maxVisibleItems: 5 },
-      expected: { start: 3, end: 8 },
-    },
-    {
-      name: 'clamps the visible window at the list start',
-      args: { itemCount: 8, highlight: 0, maxVisibleItems: 5 },
-      expected: { start: 0, end: 5 },
-    },
-    {
-      name: 'clamps the visible window at the list end',
-      args: { itemCount: 8, highlight: 7, maxVisibleItems: 5 },
-      expected: { start: 3, end: 8 },
-    },
-    {
-      name: 'allows callers to reserve zero visible rows',
-      args: { itemCount: 8, highlight: 3, maxVisibleItems: 0 },
-      expected: { start: 0, end: 0 },
-    },
-  ])('$name', ({ args, expected }) => {
-    expect(visibleSelectRange(args)).toEqual(expected);
   });
 });
 

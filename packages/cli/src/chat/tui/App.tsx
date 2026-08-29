@@ -1,7 +1,7 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 // Third-party imports
-import { useApp, useInput, useStdin, useWindowSize } from 'ink';
+import { useInput, useStdin, useWindowSize } from 'ink';
 import {
   useCallback,
   useEffect,
@@ -26,8 +26,6 @@ import { SESSION_LIST } from '@shared/copy/nestedRuns';
 // Local imports - TUI surfaces and state
 import {
   appDraftDiscardActive,
-  appEscapeInterruptActive,
-  appFocusShortcutsActive,
   approvalVisibleForActiveStream,
   digitFromMetaShortcut,
   ESC_META_CHORD_INTERRUPT_DELAY_MS,
@@ -144,16 +142,14 @@ export interface AppProps {
   ) => void;
   /** Whether bare Escape may stop the identified focused stream. */
   readonly canInterruptStream: (streamId: StreamTabId) => boolean;
-  /** Whether Ctrl-C may stop the current root run. */
-  readonly canStopActiveRun: () => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
-  /** Apply the existing root-run interruption used by Ctrl-C. */
-  readonly onInterruptActive: () => void;
   /** Stop only the focused stream captured by bare Escape. */
   readonly onInterruptStream: (streamId: StreamTabId) => void;
   readonly onStaticTranscriptChange?: () => void;
-  readonly onCtrlC?: () => void;
+  /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
+   *  policy. Required: the App owns draft discard, never process lifecycle. */
+  readonly onCtrlC: () => void;
   /** Suspend the process (Ctrl-Z). Raw mode swallows the tty driver's own
    *  ^Z→SIGTSTP translation, so the parsed key must be routed explicitly. */
   readonly onSuspend?: () => void;
@@ -189,7 +185,6 @@ export function App(props: AppProps): React.JSX.Element {
   const childListFocused = childListSelection.focused;
   const selectedChildValue = childListSelection.selectedValue;
   const { columns, rows } = useWindowSize();
-  const { exit } = useApp();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeApprovalVisible = approvalVisibleForActiveStream({
     activeStreamId,
@@ -219,17 +214,18 @@ export function App(props: AppProps): React.JSX.Element {
       activeStreamId,
       parentStream,
       metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
-      phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
     }).kind === 'reject';
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
     ? SESSION_LIST.choosing
     : undefined;
   const inputDisabled = appInputDisabled || childInputHidden;
+  // One gate for "the App owns the keyboard": both focus shortcuts and bare
+  // Escape were separately derived from these same three facts.
+  const focusShortcutsActive =
+    !appInputDisabled && !slashPaletteOpen && !reverseSearchOpen;
   const escapeInterruptState: EscapeInterruptState = {
-    inputDisabled: appInputDisabled,
-    reverseSearchOpen,
-    slashPaletteOpen,
+    shortcutsActive: focusShortcutsActive,
     canInterruptStream: props.canInterruptStream,
     onInterruptStream: props.onInterruptStream,
   };
@@ -536,13 +532,6 @@ export function App(props: AppProps): React.JSX.Element {
     }
   }
 
-  const focusShortcutsActive =
-    !childListFocused &&
-    appFocusShortcutsActive({
-      foregroundOpen,
-      reverseSearchOpen,
-      slashPaletteOpen,
-    });
   const pendingEscapeInterrupt = useRef<
     | {
         readonly parentStreamId: StreamTabId | undefined;
@@ -581,14 +570,8 @@ export function App(props: AppProps): React.JSX.Element {
     return false;
   };
 
-  const appOwnsEscape = (): boolean => {
-    const state = escapeInterruptStateRef.current;
-    return appEscapeInterruptActive({
-      inputDisabled: state.inputDisabled,
-      reverseSearchOpen: state.reverseSearchOpen,
-      slashPaletteOpen: state.slashPaletteOpen,
-    });
-  };
+  const appOwnsEscape = (): boolean =>
+    escapeInterruptStateRef.current.shortcutsActive;
 
   const bareEscapeActive = (streamId: StreamTabId): boolean => {
     const state = escapeInterruptStateRef.current;
@@ -707,9 +690,8 @@ export function App(props: AppProps): React.JSX.Element {
 
     // Ctrl+C is owned here even over foreground surfaces. We render with
     // exitOnCtrlC: false (see runChatTui), so Ink neither auto-exits nor filters
-    // Ctrl+C out of useInput. The full CLI wires onCtrlC to the same SIGINT
-    // path used by terminals that deliver a signal; harnesses can fall back to
-    // interrupt-then-exit behavior without duplicating that process lifecycle.
+    // Ctrl+C out of useInput. Draft discard is the App's half; everything past
+    // it is the mount's SIGINT policy, wired through the required `onCtrlC`.
     if (key.ctrl && input === 'c') {
       if (formBusy) {
         formProgress?.cancel();
@@ -723,9 +705,6 @@ export function App(props: AppProps): React.JSX.Element {
               childListFocused,
             }) &&
               (inputBarRef.current?.discardDraft() ?? false)),
-          canStopActiveRun: props.canStopActiveRun,
-          onInterruptActive: props.onInterruptActive,
-          onExit: exit,
           onCtrlC: props.onCtrlC,
         });
       }
