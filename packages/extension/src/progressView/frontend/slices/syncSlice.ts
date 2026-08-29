@@ -44,7 +44,7 @@ export const syncHandlers = {
       // `controls.goal` already matches GoalStateSchema (the wire schema
       // imports it directly from `@shared/schemas/goal`) — no need to
       // round-trip it through deriveGoalState.
-      const goal = controls.goal;
+      const { goal, ...bypasses } = controls;
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
@@ -52,9 +52,7 @@ export const syncHandlers = {
         todos: workPlan.todos,
         plan: workPlan.plan,
         queuedFollowUps: workPlan.queuedFollowUps,
-        bashBypass: controls.bashBypass,
-        toolEditBypass: controls.toolEditBypass,
-        superYoloBypass: controls.superYoloBypass,
+        ...bypasses,
         ...goalToStateFields(goal),
       }));
     }

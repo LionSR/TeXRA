@@ -4,11 +4,13 @@ import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
+import { isFunctionCallOutputItem } from '@agent/modelHandlers/openai/responsesShapeGuards';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { classifyProviderMessageBlockType } from '@agent/types/ConversationBlockTypes';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -28,7 +30,11 @@ function hasToolResultContent(value: unknown): boolean {
     value.some((item) => {
       if (!isObject(item)) return false;
       return (
-        item.type === 'tool_result' ||
+        // Anthropic/Google Content `type: 'tool_result'` blocks share the
+        // canonical classifier with the export/storage formatters; VS Code
+        // LM's `kind` discriminant and Google's legacy `functionResponse`
+        // shape have no SSOT classifier to delegate to yet.
+        classifyProviderMessageBlockType(item.type) === 'tool-result' ||
         item.kind === 'toolResult' ||
         isObject(item.functionResponse)
       );
@@ -41,7 +47,7 @@ function isToolResultMessage(message: ProviderMessage | undefined): boolean {
   const record: Record<string, unknown> = message;
 
   return (
-    record['type'] === 'function_call_output' ||
+    isFunctionCallOutputItem(record) ||
     record['type'] === 'function_result' ||
     record['role'] === 'tool' ||
     (record['role'] === 'user' &&
