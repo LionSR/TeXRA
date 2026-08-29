@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -132,7 +133,7 @@ async function runLogin(
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
-    writeTextStdout(`Opening browser for TeXRA ${provider} sign-in...`);
+    writeTextStdout(RESEARCHER_ACCESS_AUTH.startingBrowser(provider));
   }
   const loginResult = await withCliAuthError(() =>
     signInCliSupabase({
@@ -232,7 +233,10 @@ export async function runLoginCommand(
 }
 
 export const logoutCommand = defineCliCommand({
-  meta: { name: 'logout', description: 'Sign out of TeXRA' },
+  meta: {
+    name: 'logout',
+    description: RESEARCHER_ACCESS_AUTH.signOutDescription,
+  },
   args: {
     ...GLOBAL_ARGS,
   },
@@ -268,7 +272,10 @@ function formatAuthStatusLine(profile: CliAuthProfile): string {
 }
 
 const authStatusCommand = defineCliCommand({
-  meta: { name: 'status', description: 'Show TeXRA sign-in status' },
+  meta: {
+    name: 'status',
+    description: RESEARCHER_ACCESS_AUTH.statusDescription,
+  },
   args: {
     ...GLOBAL_ARGS,
   },
@@ -303,8 +310,7 @@ const AUTH_SUBCOMMANDS = {
 export const authCommand = defineCommand({
   meta: {
     name: 'auth',
-    description:
-      'Sign in with ChatGPT, Grok, or your TeXRA account; check status',
+    description: RESEARCHER_ACCESS_AUTH.authDescription,
   },
   args: {
     ...GLOBAL_ARGS,

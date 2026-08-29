@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 import { hasCliRunCredential } from '../runtime/credentialStatus';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -81,7 +82,10 @@ export const setupCommand = withUsageSections(
         ['texra setup', 'agent-led setup: environment, roster, first task'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra login', 'sign in with Researcher Access (credentials only)'],
-        ['texra auth status', 'show TeXRA sign-in status'],
+        [
+          'texra auth status',
+          RESEARCHER_ACCESS_AUTH.statusDescription.toLowerCase(),
+        ],
       ],
     },
     {
