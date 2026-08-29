@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 // Local imports
 import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
+import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import type { Action } from '@agent/node';
 import {
   activeModelHandlerCompatibilityKey,
@@ -55,7 +56,6 @@ import {
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
-import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -254,11 +254,24 @@ export async function runToolUseFlow(
   const persistModelSwitch = async (model: string): Promise<void> => {
     const flow = activePersistedFlow;
     const liveShared = await flow?.getShared();
-    if (!flow || !liveShared || !setToolUseSharedModel(liveShared, model)) {
+    if (!flow || !liveShared?.stateSlices) {
       throw new Error(
         'Cannot save the model switch because the resumable session state is unavailable.',
       );
     }
+    // `modelId` is the resume SSOT; `MODEL` remains the prompt-facing user
+    // variable for the live run.
+    liveShared.modelId = model;
+    liveShared.stateSlices = {
+      ...liveShared.stateSlices,
+      userChannels: {
+        input: liveShared.stateSlices.userChannels.input,
+        transient: {
+          ...liveShared.stateSlices.userChannels.transient,
+          [USER_VAR_MODEL]: model,
+        },
+      },
+    };
     await flow.setShared(liveShared);
   };
 
@@ -378,7 +391,6 @@ export async function runToolUseFlow(
   let persistedFlowRecordExists = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
-  let earlyResult: RunToolUseFlowResult | undefined;
   const startupInterruption = new Error('Tool-use startup interrupted.');
   const teardownFailures: Array<{
     readonly operation: string;
@@ -430,7 +442,6 @@ export async function runToolUseFlow(
     // it before touching the persisted resume record.
     if (signal.aborted && input.resume) {
       resumeStartupPreservation = 'cancellation';
-      earlyResult = { outcome };
       throw startupInterruption;
     }
 
@@ -449,7 +460,6 @@ export async function runToolUseFlow(
       // not start a repair write after that handoff.
       if (signal.aborted) {
         persistenceRecoveryPending = false;
-        earlyResult = { outcome };
         throw startupInterruption;
       }
       if (flowRecord) {
@@ -694,7 +704,6 @@ export async function runToolUseFlow(
   if (!runAlreadyFailed && firstTeardownFailure) {
     throw firstTeardownFailure.error;
   }
-  if (earlyResult) return earlyResult;
 
   return {
     outcome,

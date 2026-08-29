@@ -1,13 +1,11 @@
 import * as path from 'node:path';
 
-import { z } from 'zod';
-
 import { BaseNode, Flow } from '@agent/node';
 import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
-  BaseCycleFieldsSchema,
+  type BaseCycleFields,
   defaultPostCompactionContext,
   extractModelResponse,
   resetCycleState,
@@ -24,7 +22,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import {
-  AgentFileLocationSchema,
+  type AgentFileLocation,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
   SCRATCHPAD_TAG,
@@ -34,7 +32,7 @@ import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 // ============================================================================
-// Cycle Fields Schema (Extends Base)
+// Cycle Fields
 // ============================================================================
 
 /**
@@ -42,17 +40,14 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
  * output tracking. Everything here is structuredClone compatible; the
  * non-serializable rest lives in {@link CycleTransientFields}.
  */
-const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
+interface CycleFields extends BaseCycleFields {
   /** Whether output file exists */
-  outputExists: z.boolean(),
+  outputExists: boolean;
   /** Agent output location selected before this cycle starts. */
-  outputLocation: AgentFileLocationSchema,
+  outputLocation: AgentFileLocation;
   /** Processed response text */
-  processedResponse: z.string().optional(),
-});
-
-/** Serializable cycle fields derived from schema */
-type CycleFields = z.infer<typeof CycleFieldsSchema>;
+  processedResponse?: string;
+}
 
 /**
  * Transient cycle fields that are NOT serialized. These hold non-serializable

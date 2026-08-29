@@ -266,13 +266,6 @@ export class ToolUseDispatchNode extends BaseNode<
     }
   }
 
-  clone(): this {
-    const cloned = super.clone();
-    cloned._duplicateToPrimary = new Map();
-    cloned._currentUserInstruction = undefined;
-    return cloned;
-  }
-
   /** Invoke a tool with error handling, returning an error result if the tool is missing. */
   private async invokeToolSafely(
     call: SdkToolCall,

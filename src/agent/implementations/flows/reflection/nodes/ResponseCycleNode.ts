@@ -171,7 +171,7 @@ export class ResponseCycleNode extends BaseNode<
       shared.lastError = execRes.lastError;
       shared.continueRounds = false;
       shared.endTurn = false;
-      return FlowTransition.FINALIZE;
+      return FlowTransition.COMPLETE;
     }
 
     shared.endTurn = execRes.outcome === 'completed' ? execRes.endTurn : false;

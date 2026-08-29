@@ -148,14 +148,6 @@ const UserVariableValueSchemas = {
   [K in keyof Required<UserVars>]-?: z.ZodType<Required<UserVars>[K]>;
 };
 
-function optionalizeUserVariableSchemas<T extends Record<string, z.ZodTypeAny>>(
-  schemas: T,
-): { [K in keyof T]: z.ZodOptional<T[K]> } {
-  return Object.fromEntries(
-    Object.entries(schemas).map(([key, schema]) => [key, schema.optional()]),
-  ) as { [K in keyof T]: z.ZodOptional<T[K]> };
-}
-
 /**
  * The fixed vocabulary as a frozen runtime list, derived from its single owner
  * so a new fixed variable only has to be declared once. The schema map itself
@@ -172,9 +164,9 @@ export const USER_VAR_RUNTIME_TOKENS: ReadonlyArray<keyof UserVars> =
  * — but each known fixed key is validated with its per-key type when present.
  * Custom `requiredFilesInternal` keys pass through untouched.
  */
-const UserVariableChannelRecordSchema = z.looseObject(
-  optionalizeUserVariableSchemas(UserVariableValueSchemas),
-);
+const UserVariableChannelRecordSchema = z
+  .looseObject(UserVariableValueSchemas)
+  .partial();
 
 /**
  * User variable channels for template rendering.

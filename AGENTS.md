@@ -499,8 +499,8 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
 - **Flow transitions** - use named constants instead of magic values:
   - `FlowTransition.DEFAULT` - follow next() successor
   - `FlowTransition.CONTINUE` - loop back to flow entry
-  - `FlowTransition.FINALIZE` - exit flow after finalization
-  - `FlowTransition.COMPLETE` - return control to caller
+  - `FlowTransition.COMPLETE` - end the flow and return control to caller
+  - `FlowTransition.WAITING` - pause with the cursor kept for resume
 - **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. A failing `exec()` goes to `execFallback(prepRes, error)`, which by default rethrows; override it to convert the failure into something `post()` can route on. Retries are **not** a `BaseNode` feature: the manual-retry loop and its `shouldAutoRetry(error)` / `retryPrompt(prepRes, error)` / `signal` hooks live on `ModelInvocationNode` (`src/agent/core/flows/ModelInvocationNode.ts`), the only node that invokes a model. Do not re-add retry machinery to the kernel for a node that does not call a provider.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (`runFlowWithLifecycle` / `executeAgent` catch).
 

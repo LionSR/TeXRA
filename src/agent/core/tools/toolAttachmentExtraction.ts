@@ -50,61 +50,33 @@ export interface ExtractedToolAttachments {
 export function extractToolAttachments(
   result: ToolResult,
 ): ExtractedToolAttachments {
-  const parsed = ToolResultSchema.parse(result);
-  const diagnostics = sanitizeDiagnostics(parsed.diagnostics);
+  // The parse IS the field whitelist: `ToolResultSchema` has no catchall, so
+  // every undeclared key is already stripped here. Re-listing the declared
+  // fields by hand would only add a place for a newly declared field to be
+  // silently dropped.
+  const { files, diagnostics: rawDiagnostics, ...rest } = ToolResultSchema.parse(
+    result,
+  );
+  const diagnostics = sanitizeDiagnostics(rawDiagnostics);
+  const attachments: ToolFileAttachment[] = files ?? [];
 
-  if (parsed.status === 'error') {
-    // Error variant: no binary-bearing fields exist on this branch of the
-    // schema (output/edits/files are all `z.undefined()` here), so there is
-    // nothing to strip beyond binary payloads that can't occur. `summary` is
-    // real on this variant — "Brief summary for human-facing logs" — and must
-    // survive sanitization; it feeds ToolUseDispatchNode's progress log.
-    const sanitizedResult: ToolResult = {
-      status: 'error',
-      error: parsed.error,
-      ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
-      ...(parsed.userInstruction !== undefined
-        ? { userInstruction: parsed.userInstruction }
-        : {}),
-      ...(parsed.userPatch !== undefined
-        ? { userPatch: parsed.userPatch }
-        : {}),
-      ...(parsed.attachmentSummary !== undefined
-        ? { attachmentSummary: parsed.attachmentSummary }
-        : {}),
-      ...(diagnostics !== undefined ? { diagnostics } : {}),
-    };
-    return { attachments: [], sanitizedResult };
-  }
-
-  // Executed variant: strip binary data (base64Data/bytes) from files, keep
-  // everything else the schema declares.
-  const attachments: ToolFileAttachment[] = parsed.files ?? [];
-  const sanitizedFiles: FileReference[] | undefined =
-    attachments.length > 0
-      ? attachments.map((file): FileReference => ({
-          path: file.path,
-          mimeType: file.mimeType,
-          ...(file.description ? { description: file.description } : {}),
-        }))
-      : undefined;
-
-  const sanitizedResult: ToolResult = {
-    status: 'executed',
-    ...(parsed.output !== undefined ? { output: parsed.output } : {}),
-    ...(parsed.summary !== undefined ? { summary: parsed.summary } : {}),
-    ...(parsed.endTurn !== undefined ? { endTurn: parsed.endTurn } : {}),
-    ...(parsed.edits !== undefined ? { edits: parsed.edits } : {}),
-    ...(sanitizedFiles !== undefined ? { files: sanitizedFiles } : {}),
-    ...(parsed.userInstruction !== undefined
-      ? { userInstruction: parsed.userInstruction }
-      : {}),
-    ...(parsed.userPatch !== undefined ? { userPatch: parsed.userPatch } : {}),
-    ...(parsed.attachmentSummary !== undefined
-      ? { attachmentSummary: parsed.attachmentSummary }
+  const sanitizedResult = {
+    ...rest,
+    // Binary payloads (base64Data/bytes) are the one thing the schema keeps
+    // and this projection must not: `FileReferenceSchema` is a loose object.
+    ...(attachments.length > 0
+      ? {
+          files: attachments.map(
+            (file): FileReference => ({
+              path: file.path,
+              mimeType: file.mimeType,
+              ...(file.description ? { description: file.description } : {}),
+            }),
+          ),
+        }
       : {}),
     ...(diagnostics !== undefined ? { diagnostics } : {}),
-  };
+  } as ToolResult;
 
   return { attachments, sanitizedResult };
 }
