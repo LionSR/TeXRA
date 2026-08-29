@@ -1370,12 +1370,6 @@
       "name": "resolveOutputFiles"
     },
     {
-      "file": "src/agent/runtime/AgentLaunchContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getAgentPath"
-    },
-    {
       "file": "src/agent/runtime/index.ts",
       "category": "production-dead",
       "kind": "types",
@@ -1386,12 +1380,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "shouldUseResponsesAPI"
-    },
-    {
-      "file": "src/agent/runtime/RunContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "useRunContext"
     },
     {
       "file": "src/agent/runtime/sessionDescription.ts",

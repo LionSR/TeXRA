@@ -9,7 +9,7 @@ import {
   getRunContextSession,
   getRunContextStreamId,
   getRunContextWorkingDirectory,
-  useRunContext,
+  tryUseRunContext,
   withRunContext,
 } from '@agent/runtime/RunContext';
 import { createRunScope } from '@agent/runtime/RunScope';
@@ -37,7 +37,7 @@ describe('RunContext', () => {
 
     modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
-    const resolved = withRunContext(context, () => useRunContext().model);
+    const resolved = withRunContext(context, () => tryUseRunContext()?.model);
 
     expect(resolved).toBe('sonnet46T');
   });
@@ -84,9 +84,5 @@ describe('RunContext', () => {
       runScope.workingDirectory,
     );
     expect(getRunContextSession(context)).toBe(runScope.session);
-  });
-
-  it('requires an active context for owned runtime state', () => {
-    expect(() => useRunContext()).toThrow(/outside withRunContext/);
   });
 });

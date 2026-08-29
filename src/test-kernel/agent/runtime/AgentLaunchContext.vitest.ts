@@ -27,14 +27,13 @@ vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 import { noopTrace } from '@agent/trace';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { useRunContext } from '@agent/runtime/RunContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext,
-  getAgentPath,
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
@@ -54,13 +53,14 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const EXECUTION_ID = 'launch-context-test' as ExecutionId;
 
-/** Launches with an empty agent/model, asserting the shared missing-agent failure. */
+/** Launches an unresolvable agent, asserting the shared missing-agent failure. */
 async function launchWithMissingAgent(
   session: ReturnType<typeof createTestSession>,
+  agent = '',
 ): Promise<void> {
   await expect(
     buildAgentLaunchContext({
-      config: AgentConfigSchema.parse({ agent: '', model: '' }),
+      config: AgentConfigSchema.parse({ agent, model: '' }),
       executionId: EXECUTION_ID,
       session,
     }),
@@ -68,21 +68,29 @@ async function launchWithMissingAgent(
 }
 
 /**
- * Triggers `getAgentPath`'s queued (no live host attached) missing-agent
- * failure and asserts the shared pending-presentation state, returning the
- * thrown error so the caller can attach a host and assert on replay.
+ * Triggers the launch's queued (no live host attached) missing-agent failure
+ * and asserts the shared pending-presentation state, returning the thrown
+ * error so the caller can attach a host and assert on replay.
  */
 async function triggerQueuedMissingAgentFailure(
   owner: SessionHostInteractions,
 ): Promise<unknown> {
+  const session = createTestSession({ interactions: owner });
   let thrown: unknown;
-  await getAgentPath(
-    '__queued_missing_agent_for_launch_context_test__',
-    owner,
-    AgentCategory.ToolUse,
-  ).catch((error: unknown) => {
-    thrown = error;
-  });
+  try {
+    await buildAgentLaunchContext({
+      config: AgentConfigSchema.parse({
+        agent: '__queued_missing_agent_for_launch_context_test__',
+        model: '',
+      }),
+      executionId: EXECUTION_ID,
+      session,
+    }).catch((error: unknown) => {
+      thrown = error;
+    });
+  } finally {
+    session.dispose();
+  }
   expect(String(thrown)).toContain('Could not find agent');
   expect(hasErrorPresentedMarker(thrown)).toBe(false);
   expect(hasErrorPresentationPending(thrown)).toBe(true);
@@ -104,14 +112,16 @@ describe('AgentLaunchContext', () => {
 
   it('publishes missing-agent banners through the supplied host interactions', async () => {
     const explicit = createRecordingHost();
+    const session = createTestSession({ interactions: explicit.host });
 
-    await expect(
-      getAgentPath(
+    try {
+      await launchWithMissingAgent(
+        session,
         '__missing_agent_for_launch_context_test__',
-        explicit.host,
-        AgentCategory.ToolUse,
-      ),
-    ).rejects.toThrow('Could not find agent');
+      );
+    } finally {
+      session.dispose();
+    }
 
     expect(explicit.events).toEqual([
       {
@@ -378,7 +388,7 @@ describe('AgentLaunchContext', () => {
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, { onApprovalPolicyDenial }, async () => {
-      const context = useRunContext();
+      const context = tryUseRunContext()!;
       expect(context.model).toBe('deepseekT');
       expect(context.kind).toBe('launch');
       if (context.kind !== 'launch') {
@@ -396,7 +406,7 @@ describe('AgentLaunchContext', () => {
       // context; the `AgentConfig.model` mirror does not drive it.
       modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
-      expect(useRunContext().model).toBe('sonnet46T');
+      expect(tryUseRunContext()?.model).toBe('sonnet46T');
     });
   });
 
@@ -419,7 +429,7 @@ describe('AgentLaunchContext', () => {
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, {}, async () => {
-      const context = useRunContext();
+      const context = tryUseRunContext()!;
       if (context.kind !== 'launch') {
         throw new Error('expected launch context');
       }
