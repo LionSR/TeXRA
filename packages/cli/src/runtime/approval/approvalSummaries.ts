@@ -2,7 +2,6 @@ import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
 } from '@agent/runtime';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -10,6 +9,7 @@ import {
   type AgentProposalPermission,
   type RetryPermission,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowCallCardLine,
@@ -148,7 +148,7 @@ function agentProposalApprovalSummary(
         `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
         WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
           proposal.agent,
-          getRuntimeModelLabel(proposal.model),
+          getModelLabel(proposal.model),
         ),
         WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
         `Script: ${workflow.scriptPath}`,
@@ -157,7 +157,7 @@ function agentProposalApprovalSummary(
         `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
           proposal.agentCategory,
         )})`,
-        `Model: ${getRuntimeModelLabel(proposal.model)}`,
+        `Model: ${getModelLabel(proposal.model)}`,
         ...(proposal.workflowCall
           ? [
               `Workflow call: ${proposal.workflowCall.label}`,

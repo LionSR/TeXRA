@@ -2,13 +2,13 @@ import {
   formatCliModelAccessRoute,
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { StreamPhase, StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { getModelLabel } from '@shared/model/modelLabel';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -94,7 +94,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
   return [
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
-    `model: ${getRuntimeModelLabel(input.model)}`,
+    `model: ${getModelLabel(input.model)}`,
     `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
     `approval: ${formatTexraApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0

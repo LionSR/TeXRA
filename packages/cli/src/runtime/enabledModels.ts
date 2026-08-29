@@ -8,10 +8,8 @@
  */
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
-import {
-  getRuntimeModelConfig,
-  getRuntimeModelLabel,
-} from '@model/runtimeModelRegistry';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { getModelLabel } from '@shared/model/modelLabel';
 
 import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
@@ -35,7 +33,7 @@ export function listCliEnabledModelCatalog(): readonly CliEnabledModelRow[] {
       const config = getRuntimeModelConfig(id);
       return {
         id,
-        label: getRuntimeModelLabel(id),
+        label: getModelLabel(id),
         provider: config?.provider ?? 'unknown',
         enabled: enabled.has(id),
         deprecated: isDeprecatedModel(id),

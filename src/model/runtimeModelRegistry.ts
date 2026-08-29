@@ -10,9 +10,6 @@ import type {
   LanguageModelReference,
 } from '@platform/languageModel';
 
-// Local exports - browser-safe model presentation
-export { getModelLabel as getRuntimeModelLabel } from '@shared/model/modelLabel';
-
 const MODEL_ACCESS_REQUEST_TIMEOUT_MS = 120_000;
 const MODEL_ACCESS_DISCOVERY_ATTEMPTS = 2;
 

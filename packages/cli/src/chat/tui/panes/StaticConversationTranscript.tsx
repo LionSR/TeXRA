@@ -10,9 +10,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamPhase, StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
+import { getModelLabel } from '@shared/model/modelLabel';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -140,8 +140,7 @@ export function sessionHeaderIdentityLine(
     });
     // The shared tab projection owns the model label; the session's own model
     // is the fallback for a stream whose config has not resolved.
-    const model =
-      view.info?.modelLabel ?? getRuntimeModelLabel(meta.model || '—');
+    const model = view.info?.modelLabel ?? getModelLabel(meta.model || '—');
     const streamKind =
       view.info?.identity?.kind === 'multiAgentWorkflow'
         ? 'workflow script'
@@ -161,7 +160,7 @@ export function sessionHeaderIdentityLine(
       ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${parentLabel} · model: ${model}`
       : `${streamKind}: ${view.label} · parent: ${parentLabel} · model: ${model}`;
   }
-  const model = getRuntimeModelLabel(meta.model || '—');
+  const model = getModelLabel(meta.model || '—');
   const agent = meta.agent || 'chat';
   if (meta.teamName) {
     return `team: ${meta.teamName} · root: ${agent} · model: ${model}`;

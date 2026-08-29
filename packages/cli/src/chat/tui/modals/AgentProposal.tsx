@@ -8,13 +8,13 @@ import {
 } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import {
   WORKFLOW_CALL_REVIEW_COPY,
@@ -124,7 +124,7 @@ function agentProposalMetadataLines({
           {
             text: WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
               payload.agent,
-              getRuntimeModelLabel(payload.model),
+              getModelLabel(payload.model),
             ),
           },
         ],
@@ -160,7 +160,7 @@ function agentProposalMetadataLines({
     {
       segments: [
         { text: 'Model: ', bold: true },
-        { text: getRuntimeModelLabel(payload.model) },
+        { text: getModelLabel(payload.model) },
         { text: ' · ' },
         { text: 'Category: ', bold: true },
         { text: agentProposalCategoryLabel(payload.agentCategory) },
