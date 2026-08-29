@@ -66,31 +66,28 @@ async function launchWithMissingAgent(
 
 /**
  * Triggers the launch's queued (no live host attached) missing-agent failure
- * and asserts the shared pending-presentation state, returning the thrown
- * error so the caller can attach a host and assert on replay.
+ * and asserts the shared claimed-presentation state, returning the owning
+ * session so the caller can attach a host, assert on replay, and dispose it
+ * (disposing earlier would drop the queued replay with the session).
  */
 async function triggerQueuedMissingAgentFailure(
   owner: SessionHostInteractions,
-): Promise<unknown> {
+): Promise<SessionHandle> {
   const session = createTestSession({ interactions: owner });
   let thrown: unknown;
-  try {
-    await buildAgentLaunchContext({
-      config: AgentConfigSchema.parse({
-        agent: '__queued_missing_agent_for_launch_context_test__',
-        model: '',
-      }),
-      executionId: EXECUTION_ID,
-      session,
-    }).catch((error: unknown) => {
-      thrown = error;
-    });
-  } finally {
-    session.dispose();
-  }
+  await buildAgentLaunchContext({
+    config: AgentConfigSchema.parse({
+      agent: '__queued_missing_agent_for_launch_context_test__',
+      model: '',
+    }),
+    executionId: EXECUTION_ID,
+    session,
+  }).catch((error: unknown) => {
+    thrown = error;
+  });
   expect(String(thrown)).toContain('Could not find agent');
   expect(hasErrorPresentationClaimed(thrown)).toBe(true);
-  return thrown;
+  return session;
 }
 
 describe('AgentLaunchContext', () => {
@@ -107,7 +104,9 @@ describe('AgentLaunchContext', () => {
   });
 
   it('publishes missing-agent banners through the supplied host interactions', async () => {
-    const explicit = createRecordingHost();
+    // Delivery is confirmed so the launch catch adds no generic toast; the
+    // undelivered variant is covered by the generic-error-toast test below.
+    const explicit = createRecordingHost({ emitDelivery: true });
     const session = createTestSession({ interactions: explicit.host });
 
     try {
@@ -178,7 +177,7 @@ describe('AgentLaunchContext', () => {
     // banner and emits no generic fallback.
     const recording = createRecordingHost({ emitDelivery: true });
     const owner = new SessionHostInteractions();
-    const thrown = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use(recording.interactions);
     await Promise.resolve();
@@ -192,13 +191,13 @@ describe('AgentLaunchContext', () => {
     expect(
       recording.events.filter((event) => event.event === 'requestShowError'),
     ).toHaveLength(0);
-    owner.dispose();
+    session.dispose();
   });
 
   it('emits the generic fallback when a queued missing-agent banner replay is not delivered', async () => {
     const recording = createRecordingHost({ emitDelivery: false });
     const owner = new SessionHostInteractions();
-    const thrown = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use(recording.interactions);
     await Promise.resolve();
@@ -212,7 +211,7 @@ describe('AgentLaunchContext', () => {
     expect(
       recording.events.filter((event) => event.event === 'requestShowError'),
     ).toHaveLength(1);
-    owner.dispose();
+    session.dispose();
   });
 
   it('emits the generic fallback when a queued banner replay throws synchronously', async () => {
@@ -222,7 +221,7 @@ describe('AgentLaunchContext', () => {
     // error stays presentation-pending and surfaces zero times (#10398).
     const events: Array<{ event: string; payload: unknown }> = [];
     const owner = new SessionHostInteractions();
-    const thrown = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use({
       emit: (event, payload) => {
@@ -240,7 +239,7 @@ describe('AgentLaunchContext', () => {
     expect(
       events.filter((entry) => entry.event === 'requestShowError'),
     ).toHaveLength(1);
-    owner.dispose();
+    session.dispose();
   });
 
   it('normalizes a live-host synchronous banner throw into the generic toast fallback', async () => {

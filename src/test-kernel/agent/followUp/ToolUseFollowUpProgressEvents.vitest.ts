@@ -149,25 +149,6 @@ describe('tool-use follow-up progress events', () => {
     }
   });
 
-  it('falls back to the default session when the active run has no event hub', () => {
-    const run = createRecordingHost();
-    const recorded = recordSessionEvents(defaultSession().events);
-
-    try {
-      withRunContext(
-        createRunContext({
-          session: {} as SessionHandle,
-        }),
-        () => notifyFollowUpSent(streamId),
-      );
-
-      expect(recorded.events).toEqual([followUpSentEvent(streamId)]);
-      expect(run.events).toEqual([]);
-    } finally {
-      recorded.detach();
-    }
-  });
-
   it('aborts a blocking wait when the owning session emits followUpSent', () => {
     const session = trackSession();
     const ac = new AbortController();

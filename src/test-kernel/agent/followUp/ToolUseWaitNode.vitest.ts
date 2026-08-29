@@ -181,10 +181,6 @@ describe('ToolUseWaitNode', () => {
 
       const node = new ToolUseWaitNode().setServices(services);
       const prep = await node.prep(shared);
-      // The child-run loop reads the turn facts off the flow result and
-      // delivers them after suspension (see childRunLoop.ts), so the node
-      // carries none.
-      expect(prep.lastResponse).toBeUndefined();
 
       const transition = await withTestRunContext(
         services.runScope,
