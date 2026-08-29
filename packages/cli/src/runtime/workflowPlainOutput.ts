@@ -1,6 +1,5 @@
 import type { AgentEvent } from '@agent/trace';
 import type { SessionEventHub } from '@agent/runtime';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   MESSAGE_TYPES,
   STREAM_PHASE,
@@ -9,6 +8,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 import {
   formatWorkflowCallLine,
   formatWorkflowPhaseHeading,
@@ -87,7 +87,7 @@ function createWorkflowStreamProjection(
     // runtime label, as the transcript projection does.
     const line = formatWorkflowCallLine(
       'model' in call && call.model !== undefined
-        ? { ...call, model: getRuntimeModelLabel(call.model) }
+        ? { ...call, model: getModelLabel(call.model) }
         : call,
     );
     if (lastCallLines.get(logId) === line) return;
