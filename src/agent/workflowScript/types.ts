@@ -401,7 +401,8 @@ export interface WorkflowScriptRunOptions {
   ) => Promise<WorkflowCallAdmission>;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;
-  /** Max concurrently running agent() calls. Default 4. */
+  /** Max concurrently running agent() calls. The host passes the session's
+   *  child-run budget; 4 is the library fallback. */
   concurrency?: number;
   /** Journal from a prior run; matching keys replay regardless of call position. */
   journal?: WorkflowJournalEntry[];

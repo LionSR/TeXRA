@@ -36,6 +36,7 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
@@ -446,6 +447,9 @@ describe('state settings catalog', () => {
     //    orchestrator asks to kill one of its own child executions.
     //  - compaction threshold and retry attempts are read by the shared model
     //    handler and invocation node used by headless CLI runs.
+    //  - the child-run concurrency budget is read by childRunBudget (via the
+    //    child-run loop every detached subagent and workflow script launches
+    //    through) and passed to the workflow engine's semaphore.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
@@ -483,6 +487,7 @@ describe('state settings catalog', () => {
         AGENT_SKILLS_CONFIG_KEY,
         MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
         MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ].sort(),
     );

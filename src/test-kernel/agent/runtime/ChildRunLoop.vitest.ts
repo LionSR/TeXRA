@@ -1,4 +1,6 @@
 // Test composition imports
+import * as os from 'node:os';
+
 import '@test/support/defaultSessionTestSetup';
 
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
@@ -65,6 +67,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { platform } from '@platform/platform';
 import {
@@ -977,6 +980,29 @@ describe('childRunLoop E2E fixtures', () => {
     expect(mocks.finalizeRun).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
+  });
+
+  it('sizes the child-run budget to the machine when the setting is auto', () => {
+    const config = platform().config as FakeConfigProvider;
+    try {
+      config.set(
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto,
+      );
+      expect(resolveChildRunConcurrencyBudget()).toBe(
+        Math.min(
+          CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+          Math.max(1, os.availableParallelism()),
+        ),
+      );
+      config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 7);
+      expect(resolveChildRunConcurrencyBudget()).toBe(7);
+    } finally {
+      config.set(
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+      );
+    }
   });
 
   it('gates budgeted child turns through the session child-run budget', async () => {
