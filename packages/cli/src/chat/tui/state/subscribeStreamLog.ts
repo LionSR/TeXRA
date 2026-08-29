@@ -30,7 +30,6 @@ import {
 import { StreamLogDeltaBuffer, type StreamLogStore } from '@transcript';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { transcriptRowHeadline } from '../panes/transcriptEntries';
 import {
   activeStreamId,
   focusStream,
@@ -49,6 +48,7 @@ import {
   compactWorkflowEntries,
   createTranscriptFoldState,
   isFullLogChildStream,
+  latestConversationLine,
   newFoldChangeFlags,
   resetTranscriptFoldState,
   workflowOperationalLatestLine,
@@ -366,18 +366,10 @@ export function syncStreamLog(
 
     // Transcript-derived live status only. The shared metadata `description`
     // is the runtime's own one-liner and is never written from here.
-    const latestUserPos = state.latestUserPos;
-    const latestInstruction =
-      latestUserPos >= 0
-        ? transcriptRowHeadline(state.items[latestUserPos].rendered)
-        : undefined;
-    const latestLine = workflowStatusFeed
-      ? (workflowOperationalLatestLine(state.items) ?? slice.latestLine)
-      : ((state.latestResponsePos > latestUserPos
-          ? transcriptRowHeadline(state.items[state.latestResponsePos].rendered)
-          : undefined) ??
-        latestInstruction ??
-        slice.latestLine);
+    const latestLine =
+      (workflowStatusFeed
+        ? workflowOperationalLatestLine(state.items)
+        : latestConversationLine(state)) ?? slice.latestLine;
 
     // A compact workflow keeps only its bounded canonical dashboard rows plus
     // synthetic operational rows; ordinary inactive streams keep synthetic

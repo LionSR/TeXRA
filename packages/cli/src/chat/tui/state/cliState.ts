@@ -99,10 +99,6 @@ export interface TranscriptFoldState {
   readonly indexById: Map<string, number>;
   /** First index the contiguous settled-prefix promotion has not covered. */
   finalizedFrontier: number;
-  /** Index of the last user row with text, or -1 (latest-line fallback). */
-  latestUserPos: number;
-  /** Index of the last finalized model-response row with text, or -1. */
-  latestResponsePos: number;
   /** Projection-mode bit `items` was built under; a flip forces a rebuild. */
   projectLifecycleToTaskGroups: boolean;
   /** Local rows reconciled into `items`, in slice order, by identity. */
