@@ -90,9 +90,8 @@ export function createAgentProposalTransport(options: {
       // per-call review cards settle to a bare approve/skip, so option data
       // there would offer a pick the backend discards.
       const acceptsOverrides =
-        proposal.workflowCall === undefined &&
-        (proposal.agentCategory !== AgentCategory.Workflow ||
-          proposal.workflowScript === undefined);
+        proposal.agentCategory !== AgentCategory.Workflow ||
+        proposal.workflowScript === undefined;
       renderer.showPermission({
         kind: PERMISSION_KIND.PROPOSAL,
         data: proposal,

@@ -12,7 +12,6 @@ import {
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
 import type { AgentProposalPermission } from '@shared/schemas';
-import { workflowCallCardLine } from '@shared/copy/workflowScriptProposal';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
@@ -95,28 +94,11 @@ describe('CLI agent proposal approval layout', () => {
       },
     } as AgentProposalPermission;
 
-    // margin · name/plan · defaults · cost warning · review-keys explanation ·
-    // plan-label note (wraps once) · script path.
+    // margin · name/plan · defaults · cost warning · plan-label note (wraps
+    // once) · script path.
     expect(
       agentProposalMetadataRows({ fileGroups: [], payload, width: 76 }),
-    ).toBe(8);
-  });
-
-  it('separates the issued-call note from what a phase approval admits', () => {
-    const workflowCall = {
-      workflowName: 'review-and-revise',
-      callId: 'call-1',
-      label: 'Investigate sources',
-      phase: 'Investigate',
-      admitsPhase: true,
-    } as const;
-
-    expect(workflowCallCardLine(workflowCall)).toBe(
-      'Issued by workflow review-and-revise · phase Investigate — Approving admits every later call this phase issues.',
-    );
-    expect(
-      workflowCallCardLine({ ...workflowCall, admitsPhase: undefined }),
-    ).toBe('Issued by workflow review-and-revise · phase Investigate');
+    ).toBe(7);
   });
 
   it('includes the pulse prefix when a dynamic proposal title reaches the width boundary', () => {

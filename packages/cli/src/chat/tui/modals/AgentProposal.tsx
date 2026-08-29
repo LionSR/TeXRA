@@ -17,9 +17,7 @@ import {
 import { getModelLabel } from '@shared/model/modelLabel';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import {
-  WORKFLOW_CALL_REVIEW_COPY,
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowCallCardLine,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 
@@ -134,10 +132,6 @@ function agentProposalMetadataLines({
         tone: 'warning',
       },
       {
-        segments: [{ text: WORKFLOW_CALL_REVIEW_COPY.cliReviewExplanation }],
-        tone: 'dim',
-      },
-      {
         segments: [
           {
             text:
@@ -167,12 +161,6 @@ function agentProposalMetadataLines({
       ],
     },
   ];
-  if (payload.workflowCall) {
-    lines.push({
-      segments: [{ text: workflowCallCardLine(payload.workflowCall) }],
-      tone: 'dim',
-    });
-  }
   if (payload.workingDirectory) {
     lines.push({
       segments: [
@@ -257,13 +245,9 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
     props.payload.agentCategory === AgentCategory.Workflow
       ? props.payload.workflowScript
       : undefined;
-  const workflowCall = props.payload.workflowCall;
-  let title = `Spawn ${props.payload.agent}?`;
-  if (workflowScript) {
-    title = `Approve multi-agent workflow ${workflowScript.name}?`;
-  } else if (workflowCall) {
-    title = `Run workflow call ${workflowCall.label}?`;
-  }
+  const title = workflowScript
+    ? `Approve multi-agent workflow ${workflowScript.name}?`
+    : `Spawn ${props.payload.agent}?`;
   const instructionWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
@@ -289,22 +273,6 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
         kind: 'superYolo',
         label: DELEGATION_APPROVAL_COPY.cliAction,
       }}
-      extraActions={
-        workflowScript
-          ? [
-              {
-                key: 'p',
-                label: WORKFLOW_CALL_REVIEW_COPY.phase,
-                decision: { accepted: true, callReview: 'phase' },
-              },
-              {
-                key: 'c',
-                label: WORKFLOW_CALL_REVIEW_COPY.call,
-                decision: { accepted: true, callReview: 'call' },
-              },
-            ]
-          : []
-      }
       onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >

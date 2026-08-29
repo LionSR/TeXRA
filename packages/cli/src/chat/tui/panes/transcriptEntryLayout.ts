@@ -166,10 +166,6 @@ export const WORKFLOW_TASK_STATUS_STYLE = {
     color: COLOR_BORDER,
   },
   planned: { marker: WORKFLOW_CALL_STATUS_GLYPH.planned, color: undefined },
-  awaitingApproval: {
-    marker: WORKFLOW_CALL_STATUS_GLYPH.awaitingApproval,
-    color: COLOR_HINT,
-  },
   queued: { marker: WORKFLOW_CALL_STATUS_GLYPH.queued, color: undefined },
   running: { marker: WORKFLOW_CALL_STATUS_GLYPH.running, color: COLOR_HINT },
   completed: {

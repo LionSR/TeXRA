@@ -297,23 +297,6 @@ export interface WorkflowAttemptFacts {
 }
 
 /**
- * One issued call presented for the user's admission before it queues:
- * everything the script declared for it. The host resolves agent, model, and
- * files from these options exactly as its runner will at launch.
- */
-interface WorkflowCallAdmissionRequest {
-  readonly index: number;
-  readonly progressId: WorkflowScriptProgressId;
-  readonly label: string;
-  readonly phase?: string;
-  readonly prompt: string;
-  readonly options: WorkflowAgentCallOptions;
-}
-
-/** `'skip'` resolves the call to the skipped sentinel; it is never journaled. */
-export type WorkflowCallAdmission = 'run' | 'skip';
-
-/**
  * Host-provided executor for one `agent()` call. Tests use a fake; a
  * production host wires this to the in-band subagent execution path so the
  * engine receives the typed AgentFinalResult envelope, never the XML
@@ -388,17 +371,6 @@ export interface WorkflowScriptRunOptions {
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
   ) => Promise<string>;
-  /**
-   * Per-call admission gate, awaited after journal replay is ruled out and
-   * before the call takes a concurrency slot — so a pending review never holds
-   * a slot, charges the live-call cap, or reserves a child attempt. The run's
-   * abort signal ends the wait. A decision is control-plane only: never
-   * journaled, so a resumed run asks again. Absent means every call runs.
-   */
-  admitCall?: (
-    request: WorkflowCallAdmissionRequest,
-    signal: AbortSignal,
-  ) => Promise<WorkflowCallAdmission>;
   /** Parent cancellation signal; aborts guest execution and active agents. */
   signal?: AbortSignal;
   /** Max concurrently running agent() calls. The host passes the session's

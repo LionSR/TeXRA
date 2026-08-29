@@ -130,8 +130,6 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  /** Per-call review gate chosen at proposal time; absent runs every call. */
-  readonly admitCall?: WorkflowScriptRunOptions['admitCall'];
   /** Snapshot read from the detached run metadata that receives subsequent writes. */
   readonly initialSnapshot?: WorkflowExecutionSnapshot;
   /** Persist the canonical snapshot on the detached run metadata. */
@@ -280,7 +278,6 @@ export function createWorkflowScriptStrategy(
           // once": the engine's own default is a library fallback only.
           concurrency: resolveChildRunConcurrencyBudget(),
           runAgent,
-          ...(params.admitCall && { admitCall: params.admitCall }),
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           onActivity: runLog.add,

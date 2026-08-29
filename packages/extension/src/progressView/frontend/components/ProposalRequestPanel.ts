@@ -30,13 +30,11 @@ import type {
   PermissionPayload,
   WorkflowAgentProposalPermission,
   WorkflowCallIdentity,
-  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowCallCardLine,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 import { markdownStyles } from '@shared/styles/markdownStyles';
@@ -121,15 +119,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     }
   }
 
-  // Setup restores the proposal into the main view for a manual run. A
-  // per-call review card decides only whether the script's call runs now
-  // (admission is run|skip), so it offers no Setup.
-  private get canSetup(): boolean {
-    return this.permission.data.workflowCall === undefined;
-  }
-
   protected override handleExtraKey(key: string): boolean {
-    if (key === 's' && this.canSetup) {
+    if (key === 's') {
       this.emitAction({ action: 'setup' });
       return true;
     }
@@ -148,20 +139,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     this.emitAction(this.approveAllDelegatedWorkDecision);
   }
 
-  protected override get canReviewWorkflowCalls(): boolean {
-    const data = this.permission.data;
-    return (
-      data.agentCategory === AgentCategory.Workflow &&
-      data.workflowScript !== undefined
-    );
-  }
-
-  protected override reviewWorkflowCallsHandler(
-    scope: Exclude<WorkflowCallReviewScope, 'none'>,
-  ): void {
-    this.emitAction({ action: 'approve', callReview: scope });
-  }
-
   override render(): TemplateResult {
     const data = this.permission.data;
     const modelOptions = this.permission.modelOptionsData ?? [];
@@ -171,8 +148,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     let categoryLabel = 'Tool-Use';
     if (workflowScript) {
       categoryLabel = 'Multi-agent workflow';
-    } else if (data.workflowCall) {
-      categoryLabel = 'Workflow call';
     } else if (isWorkflow) {
       categoryLabel = 'Workflow';
     }
@@ -230,7 +205,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                 >`
           }
         </div>
-        ${this.renderWorkflowCallContext(data)}
         ${
           workflowScript
             ? this.renderWorkflowScriptSummary(data, workflowScript)
@@ -241,16 +215,14 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       `,
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
-      trailingActions: this.canSetup
-        ? renderLabeledActionButton({
-            id: 'proposal-setup-button',
-            icon: 'reply',
-            text: 'Setup',
-            tooltip: 'Setup (s)',
-            action: 'setup',
-            onClick: () => this.emitAction({ action: 'setup' }),
-          })
-        : nothing,
+      trailingActions: renderLabeledActionButton({
+        id: 'proposal-setup-button',
+        icon: 'reply',
+        text: 'Setup',
+        tooltip: 'Setup (s)',
+        action: 'setup',
+        onClick: () => this.emitAction({ action: 'setup' }),
+      }),
     });
   }
 
@@ -327,17 +299,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
         ${this.renderProposalFileList('Script', [workflow.scriptPath], true)}
       </wa-details>
     `;
-  }
-
-  /** One issued call of a multi-agent workflow under per-call/phase review. */
-  private renderWorkflowCallContext(
-    data: AgentProposalPermission,
-  ): TemplateResult | typeof nothing {
-    const call = data.workflowCall;
-    if (!call) return nothing;
-    return html`<div class="workflow-proposal__plan-note">
-      <strong>${call.label}</strong> — ${workflowCallCardLine(call)}
-    </div>`;
   }
 
   private renderInstruction(instruction: string): TemplateResult {

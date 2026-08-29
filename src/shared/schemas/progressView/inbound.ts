@@ -23,11 +23,7 @@ import {
   InquiryDropActionSchema,
   InquirySubmitActionSchema,
 } from '../inquiry';
-import {
-  AgentProposalSchema,
-  UserQuestionAnswersSchema,
-  WorkflowCallReviewScopeSchema,
-} from '../prompts';
+import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
 import {
   StreamScopedBaseSchema,
   StreamSelectionSchema,
@@ -169,7 +165,6 @@ const AgentProposalActionMessageSchema = z.discriminatedUnion('action', [
     action: z.literal('approve'),
     model: z.string().optional(),
     agent: z.string().optional(),
-    callReview: WorkflowCallReviewScopeSchema.optional(),
   }),
   actionWithFeedback(ProposalActionMessageBase, 'reject'),
   z.strictObject({

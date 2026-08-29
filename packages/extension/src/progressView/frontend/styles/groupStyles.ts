@@ -94,10 +94,6 @@ export const groupStyles = css`
     color: var(--color-text-muted);
   }
 
-  .group-cell--awaitingApproval {
-    color: var(--color-warning);
-  }
-
   .group-cell--running {
     color: var(--wa-color-focus);
   }

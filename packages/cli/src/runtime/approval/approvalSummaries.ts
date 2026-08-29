@@ -12,7 +12,6 @@ import {
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowCallCardLine,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -158,12 +157,6 @@ function agentProposalApprovalSummary(
           proposal.agentCategory,
         )})`,
         `Model: ${getModelLabel(proposal.model)}`,
-        ...(proposal.workflowCall
-          ? [
-              `Workflow call: ${proposal.workflowCall.label}`,
-              workflowCallCardLine(proposal.workflowCall),
-            ]
-          : []),
       ];
   return [
     ...header,

@@ -11,7 +11,6 @@ import type {
   UserQuestionAnswers,
   ExternalInquiryPermission,
   UserQuestionPermission,
-  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -142,8 +141,6 @@ export type ProposalResult =
       action: 'approve';
       model?: string;
       agent?: string;
-      /** Multi-agent workflow proposals only: how issued calls are admitted. */
-      callReview?: WorkflowCallReviewScope;
     } & NoRejectionProvenance)
   | ({ action: 'reject'; model?: never; agent?: never } & RejectionProvenance)
   | ({

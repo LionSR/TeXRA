@@ -113,10 +113,6 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('planned'),
   }),
-  /** Issued and held for the user's review before it may queue. */
-  WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('awaitingApproval'),
-  }),
   /** Issued and waiting for one of the run's concurrency slots. */
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('queued'),
@@ -147,8 +143,7 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
 ]);
 
 export type WorkflowCallProgress = z.infer<typeof WorkflowCallProgressSchema>;
-type WorkflowCallLiveStatus =
-  'declared' | 'planned' | 'awaitingApproval' | 'queued' | 'running';
+type WorkflowCallLiveStatus = 'declared' | 'planned' | 'queued' | 'running';
 export type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
   { readonly status: WorkflowCallLiveStatus }
@@ -161,7 +156,6 @@ export function isTerminalWorkflowCallStatus(
   switch (status) {
     case 'declared':
     case 'planned':
-    case 'awaitingApproval':
     case 'queued':
     case 'running':
       return false;
@@ -183,7 +177,6 @@ export function isTerminalWorkflowCallProgress(
 export const WORKFLOW_TASK_STATUS_LABEL = {
   declared: 'Declared',
   planned: 'Planned',
-  awaitingApproval: 'Waiting for approval',
   queued: 'Queued',
   running: 'Running',
   completed: 'Finished',
