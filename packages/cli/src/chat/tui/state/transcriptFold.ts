@@ -207,12 +207,10 @@ function projectTaskGroupsIncrementally(
   return state.snapshot;
 }
 
-function isWorkflowPlanMarkerCandidate(data: unknown): boolean {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    (data as { readonly kind?: unknown }).kind === 'workflowPlan'
-  );
+function internalMarkerKind(data: unknown): unknown {
+  return typeof data === 'object' && data !== null
+    ? (data as { readonly kind?: unknown }).kind
+    : undefined;
 }
 
 /**
@@ -233,13 +231,23 @@ function projectWorkflowPlanIncrementally(
   for (const entry of entries) {
     if (
       entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-      entry.messageType !== MESSAGE_TYPES.INTERNAL ||
-      !isWorkflowPlanMarkerCandidate(entry.data)
+      entry.messageType !== MESSAGE_TYPES.INTERNAL
     ) {
+      continue;
+    }
+    const markerKind = internalMarkerKind(entry.data);
+    if (markerKind !== 'workflowPlan' && markerKind !== 'workflowAttempt') {
       continue;
     }
     if (state.applied.get(entry.id) === entry) continue;
     state.applied.set(entry.id, entry);
+    if (markerKind === 'workflowAttempt') {
+      // A new attempt starts with no plan of its own until it records one;
+      // an attempt that fails before then must not inherit its
+      // predecessor's.
+      state.snapshot = undefined;
+      continue;
+    }
     const parsed = WorkflowPlanMarkerSchema.safeParse(entry.data);
     if (!parsed.success) {
       // The newest marker is the live attempt's plan; when it is unreadable

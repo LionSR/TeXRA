@@ -104,8 +104,13 @@ function unionWithDeclaredPlan(
 ): readonly MutableWorkflowPhaseGroup[] {
   const cardIds = new Set(cards.map((entry) => entry.call.id));
   const declaredByPhase = new Map<string, WorkflowCallIdentity[]>();
+  const unphasedDeclared: WorkflowCallIdentity[] = [];
   for (const task of plan.tasks) {
-    if (task.phase === undefined || cardIds.has(task.id)) continue;
+    if (cardIds.has(task.id)) continue;
+    if (task.phase === undefined) {
+      unphasedDeclared.push(task);
+      continue;
+    }
     const list = declaredByPhase.get(task.phase) ?? [];
     list.push(task);
     declaredByPhase.set(task.phase, list);
@@ -142,6 +147,17 @@ function unionWithDeclaredPlan(
   }
   for (const group of opened) {
     if (!placed.has(group)) ordered.push(group);
+  }
+  // Plan tasks declared outside any phase sit under the same trailing
+  // "Unphased" heading their cards will use once issued.
+  if (unphasedDeclared.length > 0) {
+    ordered.push({
+      value: workflowPhaseListValue('declared-unphased'),
+      heading: { phaseLabel: 'Unphased' },
+      tasks: [],
+      opened: false,
+      declaredTasks: unphasedDeclared,
+    });
   }
   return ordered;
 }
