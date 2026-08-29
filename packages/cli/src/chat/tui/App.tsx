@@ -271,10 +271,12 @@ export function App(props: AppProps): React.JSX.Element {
   );
   // Rows Tab navigates to that are still in flight — the count the status bar
   // advertises next to the Tab binding. `sessionViews` leads with the list
-  // root, so require a parent: the root session is not a background session.
+  // root, which is never one of its own children: excluding it by identity
+  // (not by "has a parent") keeps a focused workflow stream, itself a child
+  // of main, from counting as its own active agent.
   const childRunningCount = sessionViews.filter(
     (view) =>
-      view.parentId !== undefined &&
+      view.id !== childListTarget &&
       view.slice !== undefined &&
       isActivePhase(streamPhaseFor(view.id)?.phase),
   ).length;

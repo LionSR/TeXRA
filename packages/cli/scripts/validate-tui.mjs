@@ -231,7 +231,7 @@ const SCENARIOS = [
     keys: ['\t'],
     expect: [
       "Workflow script 'live-workflow-validation'",
-      'Proofread (1/1) · 0/2 done',
+      'Proofread (1/1) · 0/2 · 2 running',
       'Running: Proofread paper A',
       'Running: Proofread paper B',
       'Proofread paper A · Running · bash',
@@ -255,7 +255,7 @@ const SCENARIOS = [
     keys: ['must not reach workflow', '\r'],
     expect: [
       "Workflow script 'live-workflow-validation'",
-      'Proofread (1/1) · 0/2 done',
+      'Proofread (1/1) · 0/2 · 2 running',
       'Esc back',
     ],
     unexpect: [
