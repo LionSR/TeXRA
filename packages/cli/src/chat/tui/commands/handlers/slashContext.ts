@@ -10,8 +10,6 @@ import { type ExecutionId } from '@shared/schemas';
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
-  readonly commandName?: string;
-  readonly cwd: CliContext['cwd'];
   readonly processCwd?: CliContext['cwd'];
   readonly initialAgent: string;
   readonly initialModel: string;

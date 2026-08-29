@@ -158,7 +158,6 @@ function createContext(
   return {
     cliContext: createCliContext(),
     session,
-    cwd: '/tmp/workspace',
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',

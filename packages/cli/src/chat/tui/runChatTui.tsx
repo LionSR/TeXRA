@@ -262,8 +262,6 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
-    commandName: context.commandName,
-    cwd: context.cwd,
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,

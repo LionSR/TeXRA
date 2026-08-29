@@ -182,8 +182,8 @@ export async function showCliSessionStatus(
         slice && meta.transcriptMode === 'persistent'
           ? context.session.executionId
           : undefined,
-      commandName: context.commandName,
-      cwd: context.cwd,
+      commandName: context.cliContext.commandName,
+      cwd: context.cliContext.cwd,
       processCwd: context.processCwd,
       approvalPolicy: context.getApprovalPolicy(),
       queuedFollowUpMessages:
