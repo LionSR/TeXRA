@@ -44,7 +44,7 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import type { TranscriptRowOf } from '@shared/transcript';
+import type { WorkflowTaskRow } from '@shared/transcript';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
@@ -117,10 +117,7 @@ function markToolUseAgent(...streamIds: StreamTabId[]): void {
 
 /** A workflow-task row as the projector builds one, for the suites that seed
  *  a dashboard directly instead of replaying a stream log. */
-function taskRow(
-  id: string,
-  call: WorkflowCallProgress,
-): TranscriptRowOf<'workflowTask'> {
+function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
   const statusLabel = call.status === 'running' ? 'Running' : 'Planned';
   return {
     kind: 'workflowTask',
@@ -340,7 +337,6 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       expect(activeStreamId.get()).toBe(ROOT);
-      expect(stdout.output).toContain('workflow · 0/1 · 1 running');
       // View state the user set inside the popup survives the round trips
       // below; only opening a different workflow would start fresh.
       updateWorkflowPopupView({ expanded: new Set(['done']) });

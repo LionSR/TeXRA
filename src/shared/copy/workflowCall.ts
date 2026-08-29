@@ -206,3 +206,60 @@ export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
   const explanation = detail ? ` — ${detail.text}` : '';
   return `${WORKFLOW_TASK_STATUS_LABEL[call.status]}: ${call.label}${suffix}${explanation}`;
 }
+
+/**
+ * One glyph per call status — the vocabulary every host paints, so a strip
+ * of cells reads the same on the terminal and on the board, and reads
+ * without colour: pending and running, done and failed, skipped and cached
+ * are all distinct shapes.
+ */
+export const WORKFLOW_CALL_STATUS_GLYPH = {
+  declared: '□',
+  planned: '□',
+  awaitingApproval: '□',
+  queued: '□',
+  running: '☐',
+  completed: '☑',
+  cached: '✓',
+  skipped: '⊘',
+  cancelled: '⊘',
+  failed: '✗',
+} as const satisfies Record<WorkflowCallProgress['status'], string>;
+
+/** A phase the run has opened, and its hollow twin for one it has only
+ *  declared. */
+export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;
+
+interface WorkflowTallyCounts {
+  readonly done: number;
+  readonly total: number;
+  readonly running: number;
+  readonly failed: number;
+  readonly declared?: number;
+}
+
+/** `done/total · N running · N failed` — the one spelling of a tally. */
+export function formatWorkflowTally(tally: WorkflowTallyCounts): string {
+  return [
+    `${tally.done}/${tally.total}`,
+    tally.running > 0 ? `${tally.running} running` : undefined,
+    tally.failed > 0 ? `${tally.failed} failed` : undefined,
+  ]
+    .filter(filterNotNullish)
+    .join(' · ');
+}
+
+/** A phase's tally: an opened phase counts its calls and, while the plan
+ *  still holds tasks it has not issued, how many; a phase known only from the
+ *  plan has no calls to count, so its declared count is the whole story. */
+export function formatWorkflowPhaseTally(phase: {
+  readonly opened: boolean;
+  readonly tally: WorkflowTallyCounts;
+}): string {
+  const declared = phase.tally.declared ?? 0;
+  const declaredText = declared > 0 ? `${declared} declared` : undefined;
+  if (!phase.opened) return declaredText ?? 'declared';
+  return [formatWorkflowTally(phase.tally), declaredText]
+    .filter(filterNotNullish)
+    .join(' · ');
+}

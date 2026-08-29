@@ -30,7 +30,6 @@ export {
   type TranscriptRow,
   type TranscriptRowBase,
   type TranscriptRowKind,
-  type TranscriptRowOf,
   type UserRow,
   type WebFetchRow,
   type WebSearchRow,

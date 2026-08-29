@@ -19,9 +19,6 @@ export const STATUS_DOT = '●';
 
 /** Decorative brand marker at the head of the status bar (aria-hidden). */
 export const STATUS_DIAMOND = '◆';
-/** A phase the run has declared but not opened — the hollow twin of
- *  STATUS_DIAMOND, so the two read apart without colour. */
-export const STATUS_DIAMOND_OUTLINE = '◇';
 
 /** Warning marker for inline failure notices (e.g. render-error fallback). */
 export const WARNING = '⚠';

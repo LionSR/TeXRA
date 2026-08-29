@@ -24,6 +24,7 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 // Local imports - TUI surfaces and state
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import {
   appDraftDiscardActive,
   approvalVisibleForActiveStream,
@@ -33,7 +34,6 @@ import {
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
   groupPendingApprovalsByRow,
-  selectedChildRowWorkflowControllable,
   shouldDeferEscapeInterruptForMetaChord,
   triggerAppCtrlC,
   type EscapeInterruptState,
@@ -93,13 +93,10 @@ import {
 } from './state/childExecutions';
 import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
 import {
-  childListStreamId,
-  childStreamListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
   type ChildListValue,
 } from './state/childListSelection';
-import { workflowDashboardModel } from './state/workflowDashboardModel';
 import { streamLabelForId, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
@@ -329,7 +326,10 @@ export function App(props: AppProps): React.JSX.Element {
   const workflowPopupModel = useMemo(
     () =>
       workflowPopupRoot
-        ? workflowDashboardModel(workflowPopupRoot, {
+        ? workflowRunModel({
+            taskGroups: workflowPopupRoot.taskGroups,
+            rows: workflowPopupRoot.entries,
+            plan: workflowPopupRoot.workflowPlan,
             runSettled: workflowRunSettled,
           })
         : undefined,
@@ -361,30 +361,14 @@ export function App(props: AppProps): React.JSX.Element {
     [childListTarget, pendingSummaries, rootStreamId],
   );
   const childListValues = useMemo<readonly ChildListValue[]>(
-    () => sessionViews.map((session) => childStreamListValue(session.id)),
+    () => sessionViews.map((session) => session.id),
     [sessionViews],
   );
   const childListAvailable = childListValues.length > 0;
-  const selectedChildStreamId = childListStreamId(selectedChildValue);
+  const selectedChildStreamId = selectedChildValue;
   const selectedChildKillable =
     selectedChildStreamId !== undefined &&
     activeSubagentExecutionIds.has(selectedChildStreamId);
-  const selectedChildParentId =
-    selectedChildStreamId !== undefined
-      ? parentStream.get(selectedChildStreamId)
-      : undefined;
-  const selectedChildWorkflowControllable =
-    selectedChildRowWorkflowControllable({
-      parentIdentity:
-        selectedChildParentId !== undefined
-          ? streamMetadataFor(selectedChildParentId)?.identity
-          : undefined,
-      selectedChildIdentity:
-        selectedChildStreamId !== undefined
-          ? streamMetadataFor(selectedChildStreamId)?.identity
-          : undefined,
-      selectedChildKillable,
-    });
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
@@ -802,9 +786,6 @@ export function App(props: AppProps): React.JSX.Element {
               }
               childListFocused={childListFocused}
               childListSelectionKillable={selectedChildKillable}
-              childListSelectionWorkflowControllable={
-                selectedChildWorkflowControllable
-              }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
               streamFocusAvailable={sessionViews.length > 0}
@@ -826,7 +807,6 @@ export function App(props: AppProps): React.JSX.Element {
           sessionViews,
           selectedChildValue,
           selectedChildStreamId,
-          selectedChildWorkflowControllable,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,
@@ -836,7 +816,6 @@ export function App(props: AppProps): React.JSX.Element {
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillExecution={props.onKillExecution}
-        onWorkflowControl={props.onWorkflowControl}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

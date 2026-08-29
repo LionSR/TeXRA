@@ -7,14 +7,11 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
-import { fillRows } from '@cli/runtime/terminalText';
-import { STREAM_PHASE, type WorkflowCallProgress } from '@shared/schemas';
-import { workflowCallTally } from '@shared/copy/workflowCall';
-import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
+import { STREAM_PHASE } from '@shared/schemas';
+import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-// Local imports - TUI state and presentation
-import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
+// Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Row-dot color for a child stream's phase.
@@ -104,69 +101,4 @@ export function pendingApprovalRowDisplay(
     label: PENDING_APPROVAL_ROW_LABELS[first],
     overflow: kinds.length > 1 ? `+${kinds.length - 1}` : undefined,
   };
-}
-
-/** Display columns the workflow dashboard reserves for a row's status marker,
- *  counting the space that separates it from the focus pointer. */
-const DASHBOARD_MARKER_COLUMNS = 3;
-
-/**
- * The marker cell every workflow-dashboard row shares. The cell is filled to a
- * fixed column count by measured display width, so a marker the width helper
- * counts as two columns takes its own cell instead of shoving the label right
- * and leaving that row one column out of line with its neighbours.
- *
- * (A terminal whose East-Asian-Ambiguous table disagrees with the width helper
- * — `□`, `●` and `·` are Ambiguous — still draws such a glyph double-wide; no
- * padding computed on this side can see that, so glyph choice, not padding, is
- * the lever there.)
- */
-export function dashboardMarkerCell(marker: string): string {
-  return fillRows(` ${marker}`, DASHBOARD_MARKER_COLUMNS);
-}
-
-/**
- * `done/total · N running · N failed` for one phase's calls — the same fold the
- * progress view's phase headers render (`TaskGroupList.renderWorkflowCallTally`),
- * so the terminal and the board can never disagree on what a phase has done.
- */
-export function workflowPhaseTallyText(
-  calls: readonly WorkflowCallProgress[],
-): string {
-  const { done, total, running, failed } = workflowCallTally(calls);
-  return [
-    `${done}/${total}`,
-    running > 0 ? `${running} running` : undefined,
-    failed > 0 ? `${failed} failed` : undefined,
-  ]
-    .filter(filterNotNullish)
-    .join(' · ');
-}
-
-/**
- * One glyph per issued call, in issue order — the terminal's counterpart to the
- * board's per-call status dots. The glyphs are the very markers the task rows
- * paint (`WORKFLOW_TASK_STATUS_STYLE`), so the strip and the rows below it can
- * never tell different stories. Past `maxCells` the strip ends in a `+N`
- * count rather than wrapping, so it stays one row at any width.
- */
-export function workflowPhaseStatusStrip(
-  calls: readonly WorkflowCallProgress[],
-  maxCells: number,
-): string | undefined {
-  if (calls.length === 0) return undefined;
-  const budget = Math.max(1, maxCells);
-  if (calls.length <= budget) {
-    return calls
-      .map((call) => WORKFLOW_TASK_STATUS_STYLE[call.status].marker)
-      .join('');
-  }
-  // Reserve the widest `+N` the hidden count can need, so the strip never
-  // exceeds `maxCells` at a digit rollover.
-  const shownCount = Math.max(1, budget - (1 + String(calls.length).length));
-  const shown = calls
-    .slice(0, shownCount)
-    .map((call) => WORKFLOW_TASK_STATUS_STYLE[call.status].marker)
-    .join('');
-  return `${shown}+${calls.length - shownCount}`;
 }

@@ -15,7 +15,6 @@ import {
   type SubagentListProps,
 } from '@cli/chat/tui/panes/SubagentList';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
-import { childStreamListValue } from '@cli/chat/tui/state/childListSelection';
 import {
   activeStreamId,
   emptySlice,
@@ -47,7 +46,7 @@ import {
   type TokenUsageStats,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import type { TranscriptRowOf } from '@shared/transcript';
+import type { PhaseRow, WorkflowTaskRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import {
@@ -163,7 +162,7 @@ function phaseEntry(
     readonly phaseTotal?: number;
     readonly attemptId?: string;
   } = {},
-): TranscriptRowOf<'phase'> {
+): PhaseRow {
   return {
     id,
     kind: 'phase',
@@ -182,7 +181,7 @@ function workflowTaskEntry(
   line: string,
   call: WorkflowCallProgress,
   settlementSeqNo?: number,
-): TranscriptRowOf<'workflowTask'> {
+): WorkflowTaskRow {
   return {
     id,
     kind: 'workflowTask',

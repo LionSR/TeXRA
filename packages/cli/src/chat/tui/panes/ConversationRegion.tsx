@@ -8,7 +8,7 @@ import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { StreamTabId, WorkflowControlAction } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -61,9 +61,6 @@ interface ConversationRegionSnapshot {
   readonly selectedChildValue: ChildListValue | undefined;
   /** Stream `selectedChildValue` points at, resolved once by `App`. */
   readonly selectedChildStreamId: StreamTabId | undefined;
-  /** Whether that stream is a skip/retry-able workflow-script grandchild —
-   *  the fact the status bar's `s`/`r` hint reads. */
-  readonly selectedChildWorkflowControllable: boolean;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -89,10 +86,6 @@ interface ConversationRegionProps {
   readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
-  readonly onWorkflowControl: (
-    executionId: string,
-    action: WorkflowControlAction,
-  ) => void;
 }
 
 export function ConversationRegion({
@@ -103,7 +96,6 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillExecution,
-  onWorkflowControl,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -270,14 +262,10 @@ export function ConversationRegion({
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
-              onWorkflowControl={onWorkflowControl}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.listRootStreamId}
               selectedChildStreamId={snapshot.selectedChildStreamId}
-              selectedChildWorkflowControllable={
-                snapshot.selectedChildWorkflowControllable
-              }
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}

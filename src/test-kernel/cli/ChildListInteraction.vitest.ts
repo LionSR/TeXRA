@@ -3,16 +3,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
-import {
-  childListStreamId,
-  childStreamListValue,
-  type ChildListValue,
-} from '@cli/chat/tui/state/childListSelection';
+import type { ChildListValue } from '@cli/chat/tui/state/childListSelection';
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
-import type { TranscriptRowOf } from '@shared/transcript';
+import type { PhaseRow, WorkflowTaskRow } from '@shared/transcript';
 import {
   loadInk,
   renderInteractive,
@@ -71,8 +67,7 @@ function controlledList(
       // `App` resolves the highlighted row to a stream once and hands the
       // result down; a plain session row resolves to its own stream.
       selectedChildStreamId:
-        childListStreamId(value) ??
-        (props.selectedChildStreamId as StreamTabId | undefined),
+        value ?? (props.selectedChildStreamId as StreamTabId | undefined),
     });
   }
   return { Harness, current: () => selected };
@@ -92,7 +87,7 @@ function phaseRow(
   phaseLabel: string,
   phaseIndex: number,
   phaseTotal: number,
-): TranscriptRowOf<'phase'> {
+): PhaseRow {
   return {
     kind: 'phase',
     id,
@@ -105,10 +100,7 @@ function phaseRow(
   };
 }
 
-function taskRow(
-  id: string,
-  call: WorkflowCallProgress,
-): TranscriptRowOf<'workflowTask'> {
+function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
   const statusLabel = call.status === 'running' ? 'Running' : 'Planned';
   return {
     kind: 'workflowTask',
@@ -145,19 +137,15 @@ describe('CLI child list interaction', () => {
     const onFocusStream = vi.fn();
     const onKillExecution = vi.fn();
     const onCancel = vi.fn();
-    const { Harness, current } = controlledList(
-      React,
-      childStreamListValue(root),
-      {
-        activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
-        keyboardActive: true,
-        maxRows: 5,
-        onCancel,
-        onFocusStream,
-        onKillExecution,
-        sessions: [session(root, true), session(child)],
-      },
-    );
+    const { Harness, current } = controlledList(React, root, {
+      activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
+      keyboardActive: true,
+      maxRows: 5,
+      onCancel,
+      onFocusStream,
+      onKillExecution,
+      sessions: [session(root, true), session(child)],
+    });
 
     const { instance, stdin } = renderChildList(
       ink,
@@ -167,7 +155,7 @@ describe('CLI child list interaction', () => {
     try {
       await waitForInput(stdin);
       stdin.write('\u001B[B');
-      await waitFor(() => current() === childStreamListValue(child));
+      await waitFor(() => current() === child);
       stdin.write('k');
       await waitFor(() => onKillExecution.mock.calls.length === 1);
       stdin.write('\r');
@@ -183,60 +171,20 @@ describe('CLI child list interaction', () => {
     }
   });
 
-  it('skips and retries the focused subagent grandchild by execution id', async () => {
-    const { ink, React } = await loadInk();
-    const onWorkflowControl = vi.fn();
-
-    const { instance, stdin } = renderChildList(
-      ink,
-      React.createElement(SubagentList, {
-        activeSubagentExecutionIds: new Map([[child, 'child-exec']]),
-        keyboardActive: true,
-        maxRows: 5,
-        onCancel: vi.fn(),
-        onWorkflowControl,
-        onSelectionChange: vi.fn(),
-        selectedValue: childStreamListValue(child),
-        selectedChildStreamId: child,
-        selectedChildWorkflowControllable: true,
-        sessions: [session(root, true), session(child)],
-      }),
-    );
-
-    try {
-      await waitForInput(stdin);
-      stdin.write('s');
-      await waitFor(() => onWorkflowControl.mock.calls.length === 1);
-      stdin.write('r');
-      await waitFor(() => onWorkflowControl.mock.calls.length === 2);
-
-      expect(onWorkflowControl.mock.calls).toEqual([
-        ['child-exec', 'skip'],
-        ['child-exec', 'retry'],
-      ]);
-    } finally {
-      instance.unmount();
-    }
-  });
-
   it('walks to the child row and clamps at the selectable boundaries', async () => {
     const { ink, React } = await loadInk();
     const onCancel = vi.fn();
     const onFocusStream = vi.fn();
     const onSelectionChange = vi.fn();
-    const { Harness, current } = controlledList(
-      React,
-      childStreamListValue(root),
-      {
-        keyboardActive: true,
-        listRootStreamId: root,
-        maxRows: 5,
-        onCancel,
-        onFocusStream,
-        onSelectionChange,
-        sessions: [session(root, true), { ...session(child), parentId: root }],
-      },
-    );
+    const { Harness, current } = controlledList(React, root, {
+      keyboardActive: true,
+      listRootStreamId: root,
+      maxRows: 5,
+      onCancel,
+      onFocusStream,
+      onSelectionChange,
+      sessions: [session(root, true), { ...session(child), parentId: root }],
+    });
 
     const { instance, stdin, stdout } = renderChildList(
       ink,
@@ -251,16 +199,16 @@ describe('CLI child list interaction', () => {
       stdin.write('\u001B[A');
       stdin.write('\u001B[A');
       await sleep(30);
-      expect(current()).toBe(childStreamListValue(root));
+      expect(current()).toBe(root);
       expect(onSelectionChange).not.toHaveBeenCalled();
 
       stdin.write('\u001B[B');
-      await waitFor(() => current() === childStreamListValue(child));
+      await waitFor(() => current() === child);
       expect(onSelectionChange).toHaveBeenCalledOnce();
       stdin.write('\u001B[B');
       stdin.write('\u001B[B');
       await sleep(30);
-      expect(current()).toBe(childStreamListValue(child));
+      expect(current()).toBe(child);
       expect(onSelectionChange).toHaveBeenCalledOnce();
       expect(onCancel).not.toHaveBeenCalled();
 
@@ -289,7 +237,7 @@ describe('CLI child list interaction', () => {
           maxRows: 5,
           onCancel,
           onSelectionChange,
-          selectedValue: childStreamListValue(boundary),
+          selectedValue: boundary,
           sessions: [session(root, true), session(child)],
         }),
       );
