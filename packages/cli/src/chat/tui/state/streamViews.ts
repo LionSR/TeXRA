@@ -102,31 +102,30 @@ export function nearestActiveStreamAncestor<T>(init: {
 }
 
 /**
- * The shared tab projection for one stream. Its own metadata is the identity
- * authority; the parent's roster row is the fallback for a child whose
- * `run.start` has not landed yet (`child.activity` can arrive first — the
- * `roster-first` child-event order).
+ * A stream's identity: its own metadata, else the roster row a parent
+ * rendered it from. The roster row (`child.activity`) and the parent edge
+ * (`setParentStream`) are separate facts, and the roster can land before
+ * both the edge and the child's `run.start` — the `roster-first`
+ * child-event order — so every roster is scanned rather than the edge's
+ * parent alone.
  */
-/** A stream's identity: its own metadata, else the roster row its parent
- *  rendered it from (`child.activity` can arrive before `run.start`). */
 export function streamIdentityFor(init: {
   readonly childRosters: ChildRosters;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
 }): RunIdentity | undefined {
   const own = streamMetadataFor(init.streamId)?.identity;
   if (own) return own;
-  const parentStreamId = init.parentStream.get(init.streamId);
-  return parentStreamId
-    ? visibleSubagentRows(parentStreamId, init.childRosters).find(
-        (child) => child.childStreamId === init.streamId,
-      )?.identity
-    : undefined;
+  for (const rows of init.childRosters.values()) {
+    const row = rows.find((child) => child.childStreamId === init.streamId);
+    if (row) return row.identity;
+  }
+  return undefined;
 }
 
+/** The shared tab projection for one stream, under `streamIdentityFor`'s
+ *  identity. */
 function streamTabInfoFor(init: {
   readonly childRosters: ChildRosters;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
 }): StreamTabInfo | undefined {
   const metadata = streamMetadataFor(init.streamId);

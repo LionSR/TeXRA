@@ -24,6 +24,7 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 // Local imports - TUI surfaces and state
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import {
   appDraftDiscardActive,
   approvalVisibleForActiveStream,
@@ -96,7 +97,6 @@ import {
   reduceChildListSelection,
   type ChildListValue,
 } from './state/childListSelection';
-import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { streamLabelForId, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
@@ -816,7 +816,6 @@ export function App(props: AppProps): React.JSX.Element {
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
         onKillExecution={props.onKillExecution}
-        onWorkflowControl={props.onWorkflowControl}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

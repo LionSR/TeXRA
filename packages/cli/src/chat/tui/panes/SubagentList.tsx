@@ -28,7 +28,6 @@ import {
   readStreamArtifacts,
   streamArtifactRevision,
 } from '../state/subscribeStreamArtifacts';
-import type { ChildListValue } from '../state/childListSelection';
 
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
@@ -39,6 +38,7 @@ import {
 } from './SubagentListDisplay';
 import { useSignal } from '../state/useSignal';
 import { streamPhaseFor } from '../state/cliState';
+import type { ChildListValue } from '../state/childListSelection';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { StreamView } from '../state/streamViews';
 

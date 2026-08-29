@@ -211,7 +211,7 @@ function projectTaskGroupsIncrementally(
  * The newest `workflowPlan` marker in transcript order. A relaunch under the
  * same meta.name appends its own marker after the attempt it supersedes, so
  * the last one applied is the live attempt's plan — the same "newest attempt"
- * rule `workflowDashboardModel` applies to the cards.
+ * rule `workflowRunModel` applies to the cards.
  */
 function projectWorkflowPlanIncrementally(
   fold: TranscriptFoldState,

@@ -14,13 +14,13 @@ import {
   type WorkflowCallProgress,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
+import type { WorkflowTaskRow } from '@shared/transcript';
 import {
   workflowMarkerOf,
   workflowPhaseRows,
   workflowRunModel,
   type WorkflowRunModel,
 } from '@shared/streams/workflowRunModel';
-import type { WorkflowTaskRow } from '@shared/transcript';
 
 interface TaskSpec {
   readonly id: string;

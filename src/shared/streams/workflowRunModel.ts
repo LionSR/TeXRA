@@ -22,13 +22,13 @@ import {
   type WorkflowCallProgress,
   type WorkflowPlanMarker,
 } from '@shared/schemas';
+import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import {
   latestWorkflowAttemptEntries,
   workflowCallTally,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
-import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 
 // ---------------------------------------------------------------------------
 // Markers on the transcript

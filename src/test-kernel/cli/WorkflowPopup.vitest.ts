@@ -14,8 +14,8 @@ import type {
   TaskGroup,
   WorkflowCallProgress,
 } from '@shared/schemas';
-import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import type { WorkflowTaskRow } from '@shared/transcript';
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 

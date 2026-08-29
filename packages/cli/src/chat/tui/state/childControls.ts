@@ -102,11 +102,8 @@ function rosterParentOf(streamId: StreamTabId): StreamTabId | undefined {
 /** Whether a stream is a workflow-script run. */
 export function isWorkflowScriptStream(streamId: StreamTabId): boolean {
   return (
-    streamIdentityFor({
-      childRosters: childRosters.get(),
-      parentStream: parentStream.get(),
-      streamId,
-    })?.kind === 'multiAgentWorkflow'
+    streamIdentityFor({ childRosters: childRosters.get(), streamId })?.kind ===
+    'multiAgentWorkflow'
   );
 }
 

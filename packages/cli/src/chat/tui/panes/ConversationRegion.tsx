@@ -8,7 +8,7 @@ import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { StreamTabId, WorkflowControlAction } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -86,10 +86,6 @@ interface ConversationRegionProps {
   readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
-  readonly onWorkflowControl: (
-    executionId: string,
-    action: WorkflowControlAction,
-  ) => void;
 }
 
 export function ConversationRegion({
@@ -100,7 +96,6 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillExecution,
-  onWorkflowControl,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,

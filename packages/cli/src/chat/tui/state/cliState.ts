@@ -22,8 +22,8 @@ import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
-import type { StreamArtifactAuthority } from '@transcript';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
+import type { StreamArtifactAuthority } from '@transcript';
 import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
