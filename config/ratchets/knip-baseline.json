@@ -176,12 +176,6 @@
       "name": "validateSettingInput"
     },
     {
-      "file": "packages/cli/src/chat/tui/forms/LoginForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "LOGIN_FORM_ITEMS"
-    },
-    {
       "file": "packages/cli/src/chat/tui/forms/ModelListForm.tsx",
       "category": "production-dead",
       "kind": "exports",

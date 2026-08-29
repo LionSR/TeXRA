@@ -42,7 +42,7 @@ import {
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
 import {
-  buildCliAccountItems,
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
@@ -162,11 +162,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
     return result.exitCode;
   }
 
-  // The TUI intercepts every navigation action (`browse-*`,
-  // `configure-model-access`) internally, so `runOrchestrationTui` only ever
-  // resolves with an action this switch handles. An unhandled kind falls out
-  // of the switch and re-runs the launcher, which is the same outcome the
-  // navigation kinds used to spell out.
+  // The TUI intercepts every navigation action (`browse-*`) internally, so
+  // `runOrchestrationTui` only ever resolves with an action this switch
+  // handles. An unhandled kind falls out of the switch and re-runs the
+  // launcher, which is the same outcome the navigation kinds used to spell
+  // out.
   launcher: while (true) {
     const history = await listCliHistoryEntries();
     const presets = readCliMultiAgentPresets();
@@ -178,8 +178,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
       getCliAuthProfile(),
     ]);
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
-    // One shape for one fact: the launcher's model-access view and its account
-    // view are the same record, so they cannot disagree about who is signed in.
+    // One shape for one fact: the launcher's "Account & access" row and its
+    // step are built from the same record, so they cannot disagree about who
+    // is signed in.
     const launcherModelAccess = {
       ...modelAccess,
       texraSignedIn: authProfile.authenticated,
@@ -189,8 +190,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       presetPlans: presetPlanSet.plans,
       history,
       toolUseAgents,
-      modelAccess: launcherModelAccess,
-      account: launcherModelAccess,
+      accountAccess: launcherModelAccess,
       presetLaunchBlockReason,
     });
     // Load the model registry up front so the launcher can offer a model pick
@@ -215,8 +215,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         remoteAgentCatalogAvailable: await SupabaseClient.isAuthenticated(),
         launchBlockReason: presetLaunchBlockReason,
       }),
-      accountItems: buildCliAccountItems(launcherModelAccess),
-      modelAccess: launcherModelAccess,
+      accountAccessItems: buildCliAccountAccessItems(launcherModelAccess),
       version: context.version,
       statusLines,
       allowDefaultModelLaunch,

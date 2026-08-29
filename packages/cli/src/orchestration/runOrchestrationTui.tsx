@@ -15,11 +15,7 @@ import {
   type CliOrchestrationItem,
   type CliOrchestrationModelPickAction,
 } from '../runtime/orchestration';
-import {
-  buildCliModelAccessItems,
-  CLI_MODEL_ACCESS_DESCRIPTION,
-  type CliModelAccessStatus,
-} from '../runtime/modelAccessRoute';
+import { CLI_ACCOUNT_ACCESS_DESCRIPTION } from '../runtime/modelAccessRoute';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 interface OrchestrationAppProps {
@@ -27,12 +23,13 @@ interface OrchestrationAppProps {
   readonly resumeItems?: readonly CliOrchestrationItem[];
   readonly agentItems?: readonly CliOrchestrationItem[];
   readonly teamItems?: readonly CliOrchestrationItem[];
-  readonly accountItems?: readonly CliOrchestrationItem[];
+  /** Rows of the "Account & access" step — preference toggles plus account
+   *  sign-in/out actions, already resolvable launcher actions. */
+  readonly accountAccessItems?: readonly CliOrchestrationItem[];
   /** Model access list for the second step. An empty list means unknown
    *  registry state, so the launcher still starts chats with runtime defaults;
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
-  readonly modelAccess?: CliModelAccessStatus;
   /** CLI version, shown in the launcher header (matches the chat session
    *  header) so a directly-launched `texra` reports which build is running. */
   readonly version: string;
@@ -48,11 +45,10 @@ type OrchestrationLauncherStep =
       readonly action: CliOrchestrationModelPickAction;
       readonly backTo: 'launcher' | 'agent' | 'team';
     }
-  | { readonly kind: 'model-access' }
+  | { readonly kind: 'account-access' }
   | { readonly kind: 'resume' }
   | { readonly kind: 'agent' }
-  | { readonly kind: 'team' }
-  | { readonly kind: 'account' };
+  | { readonly kind: 'team' };
 
 /** Return the parent picker for Escape, or null when Escape exits the launcher. */
 export function orchestrationPreviousStep(
@@ -236,12 +232,6 @@ export function OrchestrationApp(
     kind: 'launcher',
   });
   const pending = step.kind === 'model' ? step.action : undefined;
-  const modelAccessItems = props.modelAccess
-    ? buildCliModelAccessItems({
-        kind: 'loaded',
-        access: props.modelAccess,
-      })
-    : [];
   const isPendingTeam = pending?.kind === 'preset';
   // One header per step, shared between the wrapped-row measurement below and
   // the styled render further down so the measured and displayed text can't
@@ -250,10 +240,10 @@ export function OrchestrationApp(
   let subtitle: string;
   let itemCount: number;
   switch (step.kind) {
-    case 'model-access':
-      title = 'Model access';
-      subtitle = CLI_MODEL_ACCESS_DESCRIPTION;
-      itemCount = modelAccessItems.length;
+    case 'account-access':
+      title = 'Account & access';
+      subtitle = CLI_ACCOUNT_ACCESS_DESCRIPTION;
+      itemCount = props.accountAccessItems?.length ?? 0;
       break;
     case 'resume':
       title = 'Resume';
@@ -269,11 +259,6 @@ export function OrchestrationApp(
       title = 'Team';
       subtitle = 'Choose a team for this session.';
       itemCount = teamItems.length;
-      break;
-    case 'account':
-      title = 'Account';
-      subtitle = 'Sign in, change account, or sign out.';
-      itemCount = props.accountItems?.length ?? 0;
       break;
     case 'model':
       title = isPendingTeam ? 'Lead model' : 'Model';
@@ -324,8 +309,8 @@ export function OrchestrationApp(
   };
 
   const onItemSelect = (action: CliOrchestrationAction): void => {
-    if (action.kind === 'configure-model-access') {
-      setStep({ kind: 'model-access' });
+    if (action.kind === 'browse-account-access') {
+      setStep({ kind: 'account-access' });
       return;
     }
     if (action.kind === 'browse-resumes') {
@@ -338,10 +323,6 @@ export function OrchestrationApp(
     }
     if (action.kind === 'browse-teams') {
       setStep({ kind: 'team' });
-      return;
-    }
-    if (action.kind === 'browse-accounts') {
-      setStep({ kind: 'account' });
       return;
     }
     if (isCliOrchestrationModelPickAction(action) && modelItems.length > 0) {
@@ -375,12 +356,12 @@ export function OrchestrationApp(
   let stepSelect: React.JSX.Element;
   let stepKeyHints: readonly KeyHint[];
   switch (step.kind) {
-    case 'model-access':
+    case 'account-access':
       stepSelect = (
         <Select
-          key="orchestration-model-access-picker"
-          items={modelAccessItems}
-          onSelect={(access) => finish({ kind: 'set-model-access', access })}
+          key="orchestration-account-access-picker"
+          items={props.accountAccessItems ?? []}
+          onSelect={finish}
           {...selectProps}
         />
       );
@@ -398,16 +379,8 @@ export function OrchestrationApp(
       stepKeyHints = orchestrationStepKeyHints('resume', 'back');
       break;
     case 'agent':
-    case 'team':
-    case 'account': {
-      let pickerItems: readonly CliOrchestrationItem[];
-      if (step.kind === 'agent') {
-        pickerItems = agentItems;
-      } else if (step.kind === 'team') {
-        pickerItems = teamItems;
-      } else {
-        pickerItems = props.accountItems ?? [];
-      }
+    case 'team': {
+      const pickerItems = step.kind === 'agent' ? agentItems : teamItems;
       stepSelect = (
         <Select
           key={`orchestration-${step.kind}-picker`}

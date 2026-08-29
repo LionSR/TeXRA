@@ -7,7 +7,7 @@ import {
   orchestrationPreviousStep,
 } from '@cli/orchestration/runOrchestrationTui';
 import {
-  buildCliAccountItems,
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
@@ -174,9 +174,22 @@ function accountStatus(
 }
 
 function accountDescription(account: CliAccountStatus): string | undefined {
-  return orchestrationItems({ account }).find(
-    (item) => item.label === 'Account',
+  return orchestrationItems({ accountAccess: account }).find(
+    (item) => item.label === 'Account & access',
   )?.description;
+}
+
+/** The four preference toggles every account & access step opens with. */
+function accountAccessToggleRows(): readonly unknown[] {
+  return (['chatgpt', 'grok', 'kimi-code', 'glm-code'] as const).map(
+    (provider) =>
+      expect.objectContaining({
+        value: {
+          kind: 'set-model-access',
+          access: { kind: 'subscription-preference', provider, state: 'on' },
+        },
+      }),
+  );
 }
 
 function kimiCodePreferenceItem(
@@ -311,24 +324,19 @@ describe('CLI orchestration items', () => {
     });
   });
 
-  it('keeps model access directly below new chat and presents every access route', () => {
-    const status = {
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      } as const,
-      codingPlans: codingPlans(),
+  it('keeps account & access directly below new chat and presents every access route', () => {
+    const status = accountStatus({
       chatGptSignedIn: true,
-      grokSignedIn: false,
       chatGptAccountLabel: 'researcher@example.com',
-    };
-    const items = orchestrationItems({ modelAccess: status });
+      texraSignedIn: true,
+    });
+    const items = orchestrationItems({ accountAccess: status });
 
     expect(items[1]).toEqual({
-      label: 'Model access',
+      label: 'Account & access',
       description:
-        'ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
-      value: { kind: 'configure-model-access' },
+        'TeXRA signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      value: { kind: 'browse-account-access' },
     });
     expect(
       buildCliModelAccessItems({ kind: 'loaded', access: status }),
@@ -405,11 +413,15 @@ describe('CLI orchestration items', () => {
       'On · key configured',
     );
 
-    expect(orchestrationItems({ modelAccess: kimiOnAccess })[1]).toEqual({
-      label: 'Model access',
+    expect(
+      orchestrationItems({
+        accountAccess: { ...kimiOnAccess, texraSignedIn: false },
+      })[1],
+    ).toEqual({
+      label: 'Account & access',
       description:
-        'ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
-      value: { kind: 'configure-model-access' },
+        'TeXRA signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
+      value: { kind: 'browse-account-access' },
     });
   });
 
@@ -443,66 +455,62 @@ describe('CLI orchestration items', () => {
     });
   });
 
-  it('offers account management as one startup row with provider actions', () => {
+  it('offers account & access as one startup row with toggles first', () => {
     const account = accountStatus({
       texraSignedIn: true,
       texraAccountLabel: 'researcher@example.com',
+      chatGptSignedIn: true,
+      chatGptAccountLabel: 'chatgpt@example.com',
+      grokSignedIn: true,
+      grokAccountLabel: 'grok@example.com',
     });
-    const items = orchestrationItems({ account });
+    const items = orchestrationItems({ accountAccess: account });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
-      'Account',
+      'Account & access',
       'Settings',
       'Help',
     ]);
-    expect(items.find((item) => item.label === 'Account')?.description).toBe(
-      'TeXRA · researcher@example.com',
+    expect(
+      items.find((item) => item.label === 'Account & access')?.description,
+    ).toBe(
+      'TeXRA signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
-    expect(buildCliAccountItems(account)).toEqual([
+    expect(buildCliAccountAccessItems(account)).toEqual([
+      ...accountAccessToggleRows(),
       expect.objectContaining({
-        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+        label: 'Sign out of ChatGPT',
+        description: 'chatgpt@example.com',
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-out' },
       }),
       expect.objectContaining({
-        value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
+        label: 'Sign out of Grok',
+        description: 'grok@example.com',
+        value: { kind: 'account', provider: 'grok', operation: 'sign-out' },
       }),
       expect.objectContaining({
         label: 'Log out of TeXRA',
-        description: '',
+        description: 'researcher@example.com',
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
     ]);
   });
 
-  it('summarizes multiple signed-in accounts with natural list grammar', () => {
-    // #9719: "A and B and C" is awkward once Grok is a third account.
-    expect(
-      accountDescription(
-        accountStatus({ texraSignedIn: true, chatGptSignedIn: true }),
-      ),
-    ).toBe('TeXRA and ChatGPT signed in');
-
-    expect(
-      accountDescription(
-        accountStatus({
-          texraSignedIn: true,
-          chatGptSignedIn: true,
-          grokSignedIn: true,
-        }),
-      ),
-    ).toBe('TeXRA, ChatGPT, and Grok signed in');
+  it('prefixes the launcher access summary with the TeXRA sign-in state', () => {
+    expect(accountDescription(accountStatus({ texraSignedIn: true }))).toBe(
+      'TeXRA signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+    );
+    expect(accountDescription(accountStatus())).toBe(
+      'TeXRA signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+    );
   });
 
-  it('offers both sign-in paths when no account is present', () => {
+  it('keeps signed-out subscriptions on their toggle rows and always lists TeXRA', () => {
     const account = accountStatus();
 
-    expect(buildCliAccountItems(account)).toEqual([
-      expect.objectContaining({
-        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
-      }),
-      expect.objectContaining({
-        value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
-      }),
+    expect(buildCliAccountAccessItems(account)).toEqual([
+      ...accountAccessToggleRows(),
       expect.objectContaining({
         label: 'Log in to TeXRA',
         description: '',

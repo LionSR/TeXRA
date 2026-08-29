@@ -5,6 +5,7 @@ import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import {
   type CliLogoutTarget,
+  type LoginFormValue,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
@@ -18,12 +19,13 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
-import { ModelAccessForm } from '../forms/ModelAccessForm';
+import {
+  AccountAccessForm,
+  type AccountAccessFormValue,
+} from '../forms/AccountAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
-import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
-import { LogoutForm } from '../forms/LogoutForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
@@ -109,7 +111,7 @@ function formSelectionHandler<T>({
   readonly echoOnPersist?: boolean;
   readonly completion?: SelectionCompletion;
   readonly busyTitle?: (value: T) => string;
-  readonly abandonNotice?: string;
+  readonly abandonNotice?: string | ((value: T) => string);
 }): (value: T) => void {
   return (value) => {
     if (completion === 'busy') {
@@ -137,7 +139,13 @@ function formSelectionHandler<T>({
         }
         formProgress.set(undefined);
         onDone(value);
-        if (!canAbort) setTransientNotice(abandonNotice);
+        if (!canAbort) {
+          setTransientNotice(
+            typeof abandonNotice === 'function'
+              ? abandonNotice(value)
+              : abandonNotice,
+          );
+        }
       };
       const title = busyTitle?.(value) ?? 'Working';
       const archiveCopyable = (): void => {
@@ -322,20 +330,48 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
-  function ModelAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
+  function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
-      <ModelAccessForm
+      <AccountAccessForm
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<CliModelAccessSelection>({
-          action: onModelAccessSelect,
+        onSelect={formSelectionHandler<AccountAccessFormValue>({
+          action: (value, output) => {
+            switch (value.kind) {
+              case 'access':
+                return onModelAccessSelect(value.selection, output);
+              case 'login':
+                return onLoginSelect(value.target, output);
+              case 'logout':
+                return onLogoutSelect(value.target, output);
+            }
+          },
           onDone: props.onDone,
           onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
           completion: 'busy',
-          busyTitle: () => 'Updating model access',
-          abandonNotice:
-            'Model access update abandoned; it may still complete.',
+          busyTitle: (value) => {
+            switch (value.kind) {
+              case 'access':
+                return 'Updating model access';
+              case 'login': {
+                const args = parseChatLoginSlashArgs(value.target);
+                return args ? loginStartMessage(args) : 'Signing in';
+              }
+              case 'logout':
+                return 'Signing out';
+            }
+          },
+          abandonNotice: (value) => {
+            switch (value.kind) {
+              case 'access':
+                return 'Model access update abandoned; it may still complete.';
+              case 'login':
+                return 'Sign-in abandoned; the browser flow may still complete.';
+              case 'logout':
+                return 'Sign-out abandoned; it may still complete.';
+            }
+          },
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -376,48 +412,6 @@ export function registerBuiltinSlashCommands(options?: {
           );
           props.onDone(provider);
         }}
-        onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function LoginFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <LoginForm
-        availableRows={props.availableRows}
-        onSelect={formSelectionHandler<LoginFormValue>({
-          action: onLoginSelect,
-          onDone: props.onDone,
-          onError: options?.onError,
-          completion: 'busy',
-          busyTitle: (value) => {
-            const args = parseChatLoginSlashArgs(value);
-            return args ? loginStartMessage(args) : 'Signing in';
-          },
-          abandonNotice:
-            'Sign-in abandoned; the browser flow may still complete.',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
-        onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function LogoutFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <LogoutForm
-        availableRows={props.availableRows}
-        onSelect={formSelectionHandler<CliLogoutTarget>({
-          action: onLogoutSelect,
-          onDone: props.onDone,
-          onError: options?.onError,
-          completion: 'busy',
-          busyTitle: () => 'Signing out',
-          abandonNotice: 'Sign-out abandoned; it may still complete.',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -541,11 +535,11 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description: `Choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
-    category: 'configuration',
+    description: `Sign in, choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
+    category: 'account',
     echo: 'ifPersists',
     handler: applyCliModelAccessInput,
-    formComponent: ModelAccessFormAdapter,
+    formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'key',
@@ -581,7 +575,7 @@ export function registerBuiltinSlashCommands(options?: {
     echo: 'ifPersists',
     handler: (remainder, context) =>
       loginFromChat(remainder, context.cliContext),
-    formComponent: LoginFormAdapter,
+    formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'logout',
@@ -589,7 +583,7 @@ export function registerBuiltinSlashCommands(options?: {
     category: 'account',
     echo: 'ifPersists',
     handler: (remainder) => logoutFromChat(remainder),
-    formComponent: LogoutFormAdapter,
+    formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'approval',

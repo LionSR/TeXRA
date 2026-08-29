@@ -9,8 +9,8 @@ import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 
 // Kept to one rendered row: the /api form and the orchestration header both
 // budget a single line for this description.
-export const CLI_MODEL_ACCESS_DESCRIPTION =
-  'Set subscription preferences and how the rest is paid for.';
+export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
+  'Sign in or out, set subscription preferences, and choose how the rest is paid for.';
 
 export type CliModelAccessRoute =
   | 'chatgpt'
@@ -65,7 +65,7 @@ interface CliModelAccessItem {
   readonly disabled?: boolean;
 }
 
-type CliModelAccessItemsInput =
+export type CliModelAccessItemsInput =
   | {
       readonly kind: 'loaded';
       readonly access: CliModelAccessStatus;
@@ -331,9 +331,7 @@ export function buildCliModelAccessItems(
 }
 
 /** Compact configuration summary; observed per-request routes use UsageRoute. */
-export function formatCliModelAccessSummary(
-  status: CliModelAccessStatus,
-): string {
+function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
   const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
   const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
   const codingPlans = CODING_PLAN_SUBSCRIPTIONS.map((plan) => {
@@ -341,4 +339,12 @@ export function formatCliModelAccessSummary(
     return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
   });
   return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
+}
+
+/** Launcher-row summary: the TeXRA session ahead of the access summary. */
+export function formatCliAccountAccessSummary(
+  status: CliModelAccessStatus,
+): string {
+  const texra = status.texraSignedIn === true ? 'signed in' : 'signed out';
+  return `TeXRA ${texra} · ${formatCliModelAccessSummary(status)}`;
 }

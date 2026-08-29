@@ -148,6 +148,7 @@ import {
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
 import {
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
@@ -532,14 +533,20 @@ const HARNESS_MODEL_ACCESS =
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
         grokSignedIn: false,
+        texraSignedIn: HARNESS_AUTHENTICATED === '1',
+        texraAccountLabel:
+          HARNESS_AUTHENTICATED === '1' ? 'harness@example.edu' : undefined,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
   toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-  modelAccess: HARNESS_MODEL_ACCESS,
+  accountAccess: HARNESS_MODEL_ACCESS,
 });
+const HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS = HARNESS_MODEL_ACCESS
+  ? buildCliAccountAccessItems(HARNESS_MODEL_ACCESS)
+  : undefined;
 const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
   HARNESS_ORCHESTRATION_HISTORY,
 );
@@ -639,7 +646,7 @@ if (SHOW_ORCHESTRATION) {
       agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
       teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
       models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
-      modelAccess={HARNESS_MODEL_ACCESS}
+      accountAccessItems={HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS}
       version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
