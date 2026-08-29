@@ -83,13 +83,11 @@ export function extractToolAttachments(
       // and this projection must not: `FileReferenceSchema` is a loose object.
       ...(attachments.length > 0
         ? {
-            files: attachments.map(
-              (file): FileReference => ({
-                path: file.path,
-                mimeType: file.mimeType,
-                ...(file.description ? { description: file.description } : {}),
-              }),
-            ),
+            files: attachments.map((file): FileReference => ({
+              path: file.path,
+              mimeType: file.mimeType,
+              ...(file.description ? { description: file.description } : {}),
+            })),
           }
         : {}),
       ...(diagnostics !== undefined ? { diagnostics } : {}),

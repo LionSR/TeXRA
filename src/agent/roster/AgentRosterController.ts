@@ -180,7 +180,8 @@ export class AgentRosterController<
   }
 
   private getEffectiveSelection(): AgentRosterSnapshot['effectiveSelection'] {
-    return this.resolveEffectiveSelection(this.getSelection()).effectiveSelection;
+    return this.resolveEffectiveSelection(this.getSelection())
+      .effectiveSelection;
   }
 
   /** The team this workspace effectively runs, or null when it runs no team. */

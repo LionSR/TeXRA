@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 // Local imports
 import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
-import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import type { Action } from '@agent/node';
+import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,

@@ -19,9 +19,8 @@ describe('repair-round progress badge (PR #7290 follow-up)', () => {
   useLitComponentTestDom();
 
   it('renders a sensible, non-over-total badge for the widened repair-round stage', async () => {
-    const { renderProgressBadgeContent, getProgressBadgeTitle } = await import(
-      '@progressView/frontend/formatters/progressBadgeFormatter'
-    );
+    const { renderProgressBadgeContent, getProgressBadgeTitle } =
+      await import('@progressView/frontend/formatters/progressBadgeFormatter');
     const { render } = await import('lit');
 
     // The repair round as opened by createRoundStage: index 2 (0-based, the

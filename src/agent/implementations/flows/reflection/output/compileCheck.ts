@@ -182,9 +182,7 @@ export async function runCompileCheck(
       // compile log" action around `log.absolutePath` — a placeholder string
       // here would silently break both. Fall back to the output file's own
       // comparable path (still useful context, even though it isn't a log).
-      const fallbackRelativePath = fileLocationDisplayPath(
-        outputFile.location,
-      );
+      const fallbackRelativePath = fileLocationDisplayPath(outputFile.location);
       failures.push({
         round: currentRound,
         displayName,

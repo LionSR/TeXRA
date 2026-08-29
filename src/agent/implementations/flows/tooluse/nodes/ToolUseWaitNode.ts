@@ -172,8 +172,7 @@ export class ToolUseWaitNode extends BaseNode<
     if (!execRes.synthetic) {
       const instruction = userFollowUpInstruction(execRes.followUps);
       if (instruction && shared.stateSlices) {
-        shared.stateSlices.userChannels[USER_VAR_INSTRUCTION] =
-          instruction;
+        shared.stateSlices.userChannels[USER_VAR_INSTRUCTION] = instruction;
       }
     }
 
