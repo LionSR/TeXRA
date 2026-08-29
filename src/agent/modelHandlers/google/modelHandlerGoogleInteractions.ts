@@ -487,9 +487,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * impossible in stateless mode, so `stateful` is load-bearing (unlike OpenAI,
    * which always sends store:true). Workflow-only mirrors OpenAI's exclusion of
    * tool-use loops (which rely on per-step streaming). There is no Gemini
-   * analogue of isGptFamilyModelName, and not every Interactions-capable model
-   * supports background (gemini-2.5-flash 400s), so the per-model gate is the
-   * runtime `backgroundUnsupported` fallback rather than a model-name check.
+   * analogue of OpenAI's GPT-family name check, and not every
+   * Interactions-capable model supports background (gemini-2.5-flash 400s), so
+   * the per-model gate is the runtime `backgroundUnsupported` fallback rather
+   * than a model-name check.
    */
   private useBackgroundMode(stateful: boolean): boolean {
     return (

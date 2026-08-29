@@ -51,7 +51,6 @@ function trace(
     meta: null,
     entries: [],
     snapshot: { streamId: 'stream-1' },
-    terminalStatus: null,
     ...overrides,
   };
 }
@@ -94,7 +93,7 @@ describe('trace-viewer TraceDataSchema', () => {
     if (!parsed.success) return;
     expect(parsed.data.executionId).toBe(executionId);
     expect(parsed.data.streamId).toBe(streamId);
-    expect(parsed.data.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
+    expect(parsed.data.meta?.outcome).toBe('completed');
     expect(parsed.data.entries).toHaveLength(1);
 
     // parseTraceData must accept the same real document without throwing.
@@ -102,7 +101,7 @@ describe('trace-viewer TraceDataSchema', () => {
   });
 
   it('rejects a trace missing required top-level fields', () => {
-    // config, meta, entries, snapshot, terminalStatus all missing.
+    // config, meta, entries and snapshot all missing.
     expectTraceRejected({ executionId: 'abcdef', streamId: 'stream-1' });
   });
 

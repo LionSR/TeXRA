@@ -1616,18 +1616,6 @@
       "name": "PROVIDER_KEY_REDACTION_RULES"
     },
     {
-      "file": "src/model/codex/codexPreference.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_PREFER_SUBSCRIPTION_KEY"
-    },
-    {
-      "file": "src/model/codingPlanSubscriptions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "activeCodingPlanForModel"
-    },
-    {
       "file": "src/model/modelOptionsBasic.ts",
       "category": "production-dead",
       "kind": "exports",

@@ -391,7 +391,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
     // Completed execution: full KV fetch
     const store = getExecutionStore(executionId);
-    const [meta, record, children, todosResult, report] = await Promise.all([
+    const [meta, record, children, todos, report] = await Promise.all([
       store.readMeta(),
       store.readRunRecord(),
       store.readChildren(),
@@ -434,7 +434,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       executionId,
       category,
       children,
-      todosResult.todos,
+      todos,
       report,
       { workflow: meta?.workflow },
     );
@@ -551,7 +551,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const handle = session.executions.getHandle(executionId);
     const todos = handle
       ? getRunningTodos(session, handle)
-      : (await readCompletedRunTodos(executionId)).todos;
+      : await readCompletedRunTodos(executionId);
 
     if (todos.length === 0) {
       return executed(`No task list found for execution ${executionId}.`);

@@ -430,10 +430,8 @@ export class StreamLogStore {
    * racing it, so two batches can never persist the same stream out of order.
    */
   private readonly writeQueue = new PQueue({ concurrency: 1 });
-  private writeGeneration = 0;
   private readonly writeTombstones = new Set<StreamTabId>();
   private clearing = false;
-  private stateRevision = 0;
   private summaryCacheMaintenanceEnabled = true;
   /**
    * Streams whose durable write has already been reported as failing. The
@@ -479,15 +477,6 @@ export class StreamLogStore {
   /** Snapshot of streams with unsaved changes (list form of `dirtyIds`). */
   private dirtyStreamIds(): StreamTabId[] {
     return [...this.dirtyIds];
-  }
-
-  /** In-flight `ensureLoaded` promises across every resident stream. */
-  private pendingLoads(): Promise<void>[] {
-    const loads: Promise<void>[] = [];
-    for (const state of this.streams.values()) {
-      if (state.pendingLoad) loads.push(state.pendingLoad);
-    }
-    return loads;
   }
 
   /**
@@ -642,7 +631,6 @@ export class StreamLogStore {
     const summary = this.summaries.get(streamId);
     if (summary === undefined || isDeepStrictEqual(summary.meta, meta)) return;
     summary.meta = meta;
-    this.stateRevision += 1;
     // Share the transcript queue so flush() drains this write. Re-read at
     // execution time, and let a dirty transcript's own write carry the
     // metadata: persisting its newer log-derived summary fields before the
@@ -668,7 +656,6 @@ export class StreamLogStore {
       return;
     this.ensureStreamState(streamId).log = new StreamLog();
     this.summaries.set(streamId, {});
-    this.stateRevision += 1;
     if (this.mode.kind === 'persistent') {
       this.markDirty(streamId);
       this.scheduleSave();
@@ -900,7 +887,6 @@ export class StreamLogStore {
             diskEntries.preservedRawEntries,
           );
           this.ensureStreamState(streamId).log = merged;
-          this.stateRevision += 1;
           this.refreshSummary(streamId, merged);
           this.markDirty(streamId);
           this.scheduleSave();
@@ -914,7 +900,6 @@ export class StreamLogStore {
           );
           const state = this.ensureStreamState(streamId);
           state.log = logInstance;
-          this.stateRevision += 1;
           this.refreshSummary(streamId, logInstance);
           // An eviction request that arrived while the load was in flight gets
           // queued; honor it now (unless a reactivation cleared the intent).
@@ -1071,7 +1056,6 @@ export class StreamLogStore {
       // only after durable deletion succeeds so callers can retain and retry a
       // stream whose transcript cleanup failed.
       this.forgetStreamState(streamId);
-      this.stateRevision += 1;
     } catch (error) {
       // executeWrite() drains dirty ids while the tombstone suppresses writes.
       // Restore the retry marker if deletion fails and a resident log remains.
@@ -1090,10 +1074,8 @@ export class StreamLogStore {
     this.assertWritableStore('clear transcript streams');
     const count = this.summaries.size;
     this.clearing = true;
-    this.writeGeneration += 1;
     this.saveThrottle.cancel();
     this.forgetAllStreamState();
-    this.stateRevision += 1;
 
     try {
       await this.writeQueue.onIdle();
@@ -1229,8 +1211,8 @@ export class StreamLogStore {
     if (this.mode.kind === 'ephemeral') return;
 
     // Drain iteratively: executeWrite may re-queue streams that are still
-    // rehydrating (`pendingLoads`) or whose prior load failed. Wait for
-    // those to resolve and then re-run the save, so shutdown doesn't lose
+    // rehydrating (a resident `pendingLoad`) or whose prior load failed. Wait
+    // for those to resolve and then re-run the save, so shutdown doesn't lose
     // appends that landed on a resumed stream. Bound the loop by the set
     // of streams that could still make progress — if the only dirty
     // entries are persistently `loadFailed`, we can't persist them.
@@ -1240,7 +1222,11 @@ export class StreamLogStore {
     const MAX_WRITE_RETRIES = 3;
     let writeAttempts = 0;
     while (true) {
-      const loads = this.pendingLoads();
+      // In-flight `ensureLoaded` promises across every resident stream.
+      const loads: Promise<void>[] = [];
+      for (const state of this.streams.values()) {
+        if (state.pendingLoad) loads.push(state.pendingLoad);
+      }
       if (this.saveThrottle.pending) {
         this.saveThrottle.cancel();
         await this.executeWrite();
@@ -1288,7 +1274,6 @@ export class StreamLogStore {
   private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
     this.assertWritableStore('commit transcript changes');
     this.refreshSummary(streamId, logInstance);
-    this.stateRevision += 1;
     if (this.mode.kind === 'persistent') this.markDirty(streamId);
     this.notify(streamId);
   }
@@ -1352,7 +1337,6 @@ export class StreamLogStore {
     }
     this.writeTombstones.clear();
     this.clearing = false;
-    this.stateRevision += 1;
 
     log.info(`Loaded ${this.summaries.size} stream summaries (file-backed)`);
   }
@@ -1440,11 +1424,10 @@ export class StreamLogStore {
   private async writeStream(
     streamId: StreamTabId,
     logInstance: StreamLog,
-    expectedGeneration: number = this.writeGeneration,
   ): Promise<void> {
-    if (this.shouldSkipWrite(streamId, expectedGeneration)) return;
+    if (this.shouldSkipWrite(streamId)) return;
     await this.logsKv.write(streamId, logInstance.toPersistedEntries());
-    if (this.shouldSkipWrite(streamId, expectedGeneration)) {
+    if (this.shouldSkipWrite(streamId)) {
       await this.logsKv.delete(streamId);
       await this.deleteSummaryCache(streamId);
       return;
@@ -1458,19 +1441,22 @@ export class StreamLogStore {
       ...toSummary(logInstance),
       ...(meta !== undefined && { meta }),
     });
-    if (this.shouldSkipWrite(streamId, expectedGeneration)) {
+    if (this.shouldSkipWrite(streamId)) {
       await this.logsKv.delete(streamId);
       await this.deleteSummaryCache(streamId);
     }
   }
 
-  private shouldSkipWrite(
-    streamId: StreamTabId,
-    expectedGeneration: number,
-  ): boolean {
+  /**
+   * Whether an in-flight write batch must drop this stream. `clearing` is the
+   * single owner of "a clear is in progress": it is set synchronously before
+   * `clear()` awaits `writeQueue.onIdle()`, and the queue has concurrency 1,
+   * so every batch that could still be carrying pre-clear data runs while it
+   * is true.
+   */
+  private shouldSkipWrite(streamId: StreamTabId): boolean {
     return (
       this.clearing ||
-      expectedGeneration !== this.writeGeneration ||
       this.writeTombstones.has(streamId) ||
       !this.summaries.has(streamId)
     );
@@ -1605,7 +1591,6 @@ export class StreamLogStore {
     if (state.log) {
       this.refreshSummary(streamId, state.log);
       state.log = undefined;
-      this.stateRevision += 1;
     }
     this.pruneStreamState(streamId);
   }
@@ -1713,7 +1698,6 @@ export class StreamLogStore {
     if (toWrite.length === 0) return;
 
     log.debug(`Writing ${toWrite.length} dirty stream(s)`);
-    const writeGeneration = this.writeGeneration;
 
     // Write streams one at a time. Each KV write serializes the stream's full
     // transcript to JSON before the filesystem await; starting every dirty
@@ -1725,7 +1709,7 @@ export class StreamLogStore {
         const logInstance = this.streams.get(streamId)?.log;
         if (!logInstance) continue;
         try {
-          await this.writeStream(streamId, logInstance, writeGeneration);
+          await this.writeStream(streamId, logInstance);
           this.writeFailureWarned.delete(streamId);
         } catch (error) {
           // Failed writes re-mark their stream dirty so the next save retries.

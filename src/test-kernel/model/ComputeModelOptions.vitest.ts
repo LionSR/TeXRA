@@ -8,7 +8,6 @@ import {
   computeModelOptionsData,
   getModelUnavailableReason,
   invalidateModelOptionsCache,
-  type ModelOptionsAccess,
 } from '@model/computeModelOptions';
 import {
   resolveDirectModelApiKeyProvider,
@@ -22,19 +21,34 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
-function createModelOptionsAccess(
-  secrets: Record<string, string> = {
-    [apiKeySecretName('openai')]: 'sk-openai',
-  },
-): ModelOptionsAccess {
-  return {
-    visibleModels: ['gpt55'],
-    secrets: new FakeSecrets(secrets),
-    useOpenRouter: false,
-  };
+const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
+
+/**
+ * Reinstall the fake platform mid-test with the access state the case needs,
+ * then clear the two process-wide caches the picker reads through.
+ */
+async function installAccessPlatform(
+  options: {
+    secrets?: Record<string, string>;
+    config?: Record<string, unknown>;
+    enabledModels?: string[];
+    useOpenRouter?: boolean;
+  } = {},
+): Promise<void> {
+  await installPlatform({
+    config: options.config,
+    globalState: {
+      [GlobalStateKey.ENABLED_MODELS]: options.enabledModels ?? ['gpt55'],
+      ...(options.useOpenRouter === undefined
+        ? {}
+        : { [GlobalStateKey.USE_OPENROUTER]: options.useOpenRouter }),
+    },
+    secrets: options.secrets ?? OPENAI_KEY_SECRETS,
+  });
+  invalidateApiKeyCache();
+  invalidateModelOptionsCache();
 }
 
 function codexSessionSecrets(): Record<string, string> {
@@ -48,18 +62,9 @@ function codexSessionSecrets(): Record<string, string> {
   };
 }
 
-function initSubscriptionPlatform(
-  secrets: Record<string, string> = {},
-  enabledModels: string[] = ['gpt55'],
-): Promise<void> {
-  return installPlatform({
-    config: {
-      'texra.chatgptCodex.preferSubscription': true,
-    },
-    globalState: { [GlobalStateKey.ENABLED_MODELS]: enabledModels },
-    secrets,
-  });
-}
+const PREFER_CODEX_CONFIG = {
+  'texra.chatgptCodex.preferSubscription': true,
+};
 
 describe('model catalogue direct-route key ownership', () => {
   it('assigns every servable direct route to an API-key provider', () => {
@@ -78,10 +83,7 @@ describe('model catalogue direct-route key ownership', () => {
 describe('computeModelOptionsData availability', () => {
   setupPlatform({
     globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
-    secrets: {
-      [apiKeySecretName('openai')]: 'sk-openai',
-      [apiKeySecretName('deepseek')]: 'sk-deepseek',
-    },
+    secrets: OPENAI_KEY_SECRETS,
   });
 
   beforeEach(() => {
@@ -94,11 +96,11 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('uses a Kimi Code key for the plan-exclusive model', async () => {
-    const access = createModelOptionsAccess({
-      [apiKeySecretName('kimiCode')]: 'sk-kimi-code',
+    await installAccessPlatform({
+      secrets: { [apiKeySecretName('kimiCode')]: 'sk-kimi-code' },
     });
 
-    const [model] = await computeModelOptionsData(['kimiCoding'], access);
+    const [model] = await computeModelOptionsData(['kimiCoding']);
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -108,12 +110,12 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('does not treat a Moonshot key as a Kimi Code credential', async () => {
-    const access = createModelOptionsAccess({
-      [apiKeySecretName('moonshot')]: 'sk-moonshot',
+    await installAccessPlatform({
+      secrets: { [apiKeySecretName('moonshot')]: 'sk-moonshot' },
     });
 
-    const [model] = await computeModelOptionsData(['kimiCoding'], access);
-    const reason = await getModelUnavailableReason('kimiCoding', access);
+    const [model] = await computeModelOptionsData(['kimiCoding']);
+    const reason = await getModelUnavailableReason('kimiCoding');
 
     expect(model).toMatchObject({
       provider: 'kimiCode',
@@ -126,17 +128,17 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('reports a model with no stored key as missing a key', async () => {
-    const access = createModelOptionsAccess({});
+    await installAccessPlatform({ secrets: {} });
 
-    const [model] = await computeModelOptionsData(['gpt55'], access);
+    const [model] = await computeModelOptionsData(['gpt55']);
 
     expect(model.availability).toBe('missing-key');
   });
 
   it('labels models the registry no longer describes instead of shipping a bare row', async () => {
-    const access = createModelOptionsAccess();
+    await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(['no-such-model'], access);
+    const [model] = await computeModelOptionsData(['no-such-model']);
 
     expect(model).toMatchObject({
       value: 'no-such-model',
@@ -149,19 +151,19 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('reports a stored personal key as provider-key access', async () => {
-    const access = createModelOptionsAccess();
+    await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(undefined, access);
+    const [model] = await computeModelOptionsData(undefined);
 
     expect(model.availability).toBe('provider-key');
     expect(model.disabled).toBe(false);
   });
 
   it('marks retired models unavailable', async () => {
-    const access = createModelOptionsAccess();
+    await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(['haiku3'], access);
-    const reason = await getModelUnavailableReason('haiku3', access);
+    const [model] = await computeModelOptionsData(['haiku3']);
+    const reason = await getModelUnavailableReason('haiku3');
 
     expect(model).toMatchObject({
       availability: 'retired',
@@ -175,10 +177,10 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('honors the catalogue retirement of the legacy Copilot model', async () => {
-    const access = createModelOptionsAccess();
+    await installAccessPlatform();
 
-    const [model] = await computeModelOptionsData(['copilot4o'], access);
-    const reason = await getModelUnavailableReason('copilot4o', access);
+    const [model] = await computeModelOptionsData(['copilot4o']);
+    const reason = await getModelUnavailableReason('copilot4o');
 
     expect(model).toMatchObject({
       availability: 'retired',
@@ -192,25 +194,21 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('does not disable API-key access when ChatGPT subscription is preferred but signed out', async () => {
-    await initSubscriptionPlatform();
-    const access = createModelOptionsAccess();
+    await installAccessPlatform({ config: PREFER_CODEX_CONFIG });
 
-    const [model] = await computeModelOptionsData(['gpt55'], access);
+    const [model] = await computeModelOptionsData(['gpt55']);
 
     expect(model.availability).toBe('provider-key');
     expect(model.disabled).toBe(false);
   });
 
   it('does not advertise GPT-5.6 Pro through ChatGPT subscription', async () => {
-    await installPlatform({
-      config: {
-        'texra.chatgptCodex.preferSubscription': true,
-      },
+    await installAccessPlatform({
+      config: PREFER_CODEX_CONFIG,
       secrets: codexSessionSecrets(),
     });
-    const access = createModelOptionsAccess({});
 
-    const [model] = await computeModelOptionsData(['gpt56pro'], access);
+    const [model] = await computeModelOptionsData(['gpt56pro']);
 
     expect(MODEL_CONFIGS.gpt56pro.codexSubscription).not.toBe(true);
     expect(model).toMatchObject({
@@ -221,13 +219,10 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('marks GPT-5.6 Pro unavailable through OpenRouter', async () => {
-    const access = {
-      ...createModelOptionsAccess(),
-      useOpenRouter: true,
-    };
+    await installAccessPlatform({ useOpenRouter: true });
 
-    const [model] = await computeModelOptionsData(['gpt56pro'], access);
-    const reason = await getModelUnavailableReason('gpt56pro', access);
+    const [model] = await computeModelOptionsData(['gpt56pro']);
+    const reason = await getModelUnavailableReason('gpt56pro');
 
     expect(model).toMatchObject({
       availability: 'provider-unavailable',
@@ -241,13 +236,10 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('asks for an OpenRouter key, not the provider key, on the OpenRouter route', async () => {
-    const access = {
-      ...createModelOptionsAccess({}),
-      useOpenRouter: true,
-    };
+    await installAccessPlatform({ secrets: {}, useOpenRouter: true });
 
-    const [model] = await computeModelOptionsData(['gpt55'], access);
-    const reason = await getModelUnavailableReason('gpt55', access);
+    const [model] = await computeModelOptionsData(['gpt55']);
+    const reason = await getModelUnavailableReason('gpt55');
 
     expect(model).toMatchObject({
       availability: 'missing-key',
@@ -258,10 +250,12 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('enables eligible OpenAI models from ChatGPT sign-in without an API key', async () => {
-    await initSubscriptionPlatform(codexSessionSecrets());
-    const access = createModelOptionsAccess({});
+    await installAccessPlatform({
+      config: PREFER_CODEX_CONFIG,
+      secrets: codexSessionSecrets(),
+    });
 
-    const [model] = await computeModelOptionsData(['gpt55'], access);
+    const [model] = await computeModelOptionsData(['gpt55']);
 
     expect(model.availability).toBe('subscription-access');
     expect(model.context).toBe(
@@ -277,13 +271,13 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('automatically lists every active model served by ChatGPT', async () => {
-    await initSubscriptionPlatform(codexSessionSecrets(), ['gemini31p']);
-    const access = {
-      ...createModelOptionsAccess({}),
-      visibleModels: ['gemini31p'],
-    };
+    await installAccessPlatform({
+      config: PREFER_CODEX_CONFIG,
+      secrets: codexSessionSecrets(),
+      enabledModels: ['gemini31p'],
+    });
 
-    const models = await computeModelOptionsData(undefined, access);
+    const models = await computeModelOptionsData(undefined);
     const expected = Object.entries(MODEL_CONFIGS)
       .filter(
         ([, config]) =>
@@ -308,23 +302,14 @@ describe('computeModelOptionsData availability', () => {
   });
 
   it('shows subscription access for a signed-in preferred subscription', async () => {
-    await initSubscriptionPlatform(codexSessionSecrets());
-    const access = createModelOptionsAccess();
+    await installAccessPlatform({
+      config: PREFER_CODEX_CONFIG,
+      secrets: { ...codexSessionSecrets(), ...OPENAI_KEY_SECRETS },
+    });
 
-    const [model] = await computeModelOptionsData(['gpt55'], access);
+    const [model] = await computeModelOptionsData(['gpt55']);
 
     expect(model.availability).toBe('subscription-access');
-  });
-
-  it('does not reuse cached provider keys for injected access', async () => {
-    await computeModelOptionsData(['deepseekproT']);
-
-    const access = createModelOptionsAccess({});
-
-    const [model] = await computeModelOptionsData(['deepseekproT'], access);
-
-    expect(model.availability).toBe('missing-key');
-    expect(model.disabled).toBe(true);
   });
 
   it('caches explicit model-list availability', async () => {
@@ -401,13 +386,10 @@ describe('computeModelOptionsData Kimi Code routing (dual-backend kimi3)', () =>
   });
 
   it('reports OpenRouter without changing the Kimi K3 registry identity', async () => {
-    const access = {
-      ...createModelOptionsAccess({
-        [apiKeySecretName('openRouter')]: 'sk-openrouter',
-      }),
-      useOpenRouter: true,
-    };
-    const [model] = await computeModelOptionsData(['kimi3'], access);
+    const model = await kimi3Option(
+      { [GlobalStateKey.USE_OPENROUTER]: true },
+      { [apiKeySecretName('openRouter')]: 'sk-openrouter' },
+    );
 
     expect(model).toMatchObject({
       provider: 'moonshot',

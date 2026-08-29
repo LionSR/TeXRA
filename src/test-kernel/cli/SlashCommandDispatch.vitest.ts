@@ -500,14 +500,7 @@ describe('handleTuiSlashCommand', () => {
         plan: { objective: 'Use the accepted live plan.' },
         todos: [],
       },
-      authority: {
-        outputFiles: false,
-        missingOutputs: false,
-        compileFailures: false,
-        usage: false,
-        todos: false,
-        plan: true,
-      },
+      authority: { complete: false, todos: false, plan: true },
     },
     {
       label: 'todos',
@@ -521,14 +514,7 @@ describe('handleTuiSlashCommand', () => {
           },
         ],
       },
-      authority: {
-        outputFiles: false,
-        missingOutputs: false,
-        compileFailures: false,
-        usage: false,
-        todos: true,
-        plan: false,
-      },
+      authority: { complete: false, todos: true, plan: false },
     },
   ] satisfies readonly {
     label: string;

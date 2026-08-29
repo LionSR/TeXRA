@@ -3,14 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
-  type ModelOptionsAccess,
 } from '@model/computeModelOptions';
 import {
   copilotRouteUnavailableReason,
   preferredCopilotRouteModels,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
-import { apiKeySecretName } from '@model/apiProviders';
+import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   copilotRouteForModel,
   discoveredCopilotRoutes,
@@ -27,7 +26,6 @@ import type {
 } from '@platform/languageModel';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
 // The discovered-editor-model fixture must track an llm-zoo base model that
@@ -92,21 +90,11 @@ function failingDiscoveryPort(): LanguageModelPort {
 function resetModelCaches(): void {
   invalidateRuntimeModelRegistry();
   invalidateModelOptionsCache();
+  invalidateApiKeyCache();
 }
 
-function googleKeySecrets(): FakeSecrets {
-  return new FakeSecrets({ [apiKeySecretName('google')]: 'sk-google' });
-}
-
-function modelOptionsAccess(
-  overrides: Partial<ModelOptionsAccess> = {},
-): ModelOptionsAccess {
-  return {
-    visibleModels: [],
-    secrets: new FakeSecrets(),
-    useOpenRouter: false,
-    ...overrides,
-  };
+function googleKeySecrets(): Record<string, string> {
+  return { [apiKeySecretName('google')]: 'sk-google' };
 }
 
 describe('runtime model registry', () => {
@@ -472,14 +460,12 @@ describe('Copilot route in model pickers', () => {
         globalState: {
           [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
         },
+        secrets: googleKeySecrets(),
       },
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(
-      ['gemini31p'],
-      modelOptionsAccess({ secrets: googleKeySecrets() }),
-    );
+    const options = await computeModelOptionsData(['gemini31p']);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -498,12 +484,12 @@ describe('Copilot route in model pickers', () => {
 
   it('never appends route rows to the visible model list', async () => {
     const port = languageModelPort([GEMINI_PRO, GPT_56]);
-    await installPlatform({}, { languageModel: port });
-
-    const options = await computeModelOptionsData(
-      undefined,
-      modelOptionsAccess({ visibleModels: ['gpt55'] }),
+    await installPlatform(
+      { globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] } },
+      { languageModel: port },
     );
+
+    const options = await computeModelOptionsData(undefined);
 
     expect(options.map((option) => option.value)).toEqual(['gpt55']);
   });
@@ -516,15 +502,13 @@ describe('Copilot route in model pickers', () => {
       {
         globalState: {
           [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
+          [GlobalStateKey.ENABLED_MODELS]: ['gemini31p'],
         },
       },
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(
-      undefined,
-      modelOptionsAccess({ visibleModels: ['gemini31p'] }),
-    );
+    const options = await computeModelOptionsData(undefined);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -544,14 +528,12 @@ describe('Copilot route in model pickers', () => {
         globalState: {
           [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p'],
         },
+        secrets: googleKeySecrets(),
       },
       { languageModel: port },
     );
 
-    const options = await computeModelOptionsData(
-      ['gemini31p'],
-      modelOptionsAccess({ secrets: googleKeySecrets() }),
-    );
+    const options = await computeModelOptionsData(['gemini31p']);
 
     expect(options).toHaveLength(1);
     expect(options[0]).toEqual(
@@ -566,12 +548,12 @@ describe('Copilot route in model pickers', () => {
 
   it('leaves non-preferred models on their ordinary routes', async () => {
     const port = languageModelPort([GEMINI_PRO]);
-    await installPlatform({}, { languageModel: port });
-
-    const options = await computeModelOptionsData(
-      ['gemini31p'],
-      modelOptionsAccess({ secrets: googleKeySecrets() }),
+    await installPlatform(
+      { secrets: googleKeySecrets() },
+      { languageModel: port },
     );
+
+    const options = await computeModelOptionsData(['gemini31p']);
 
     expect(options[0]).toEqual(
       expect.objectContaining({

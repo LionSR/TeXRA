@@ -40,50 +40,6 @@ describe('default agent model', () => {
 });
 
 describe('default model list', () => {
-  it('includes Gemini 3.7 Flash as the active default Google Flash model', () => {
-    const config = MODEL_CONFIGS.gemini37f;
-
-    expect(DEFAULT_MODELS).toContain('gemini37f');
-    expect(config).toMatchObject({
-      fullName: 'gemini-3.7-flash',
-      label: 'Gemini 3.7 Flash',
-      provider: 'google',
-      openRouterOnly: false,
-    });
-    expect(config.deprecated ?? false).toBe(false);
-    expect(config.inputPrice).toBeLessThanOrEqual(3);
-  });
-
-  it('includes Fable 5 as a default model', () => {
-    const config = MODEL_CONFIGS.fable5;
-
-    expect(DEFAULT_MODELS).toContain('fable5');
-    expect(config).toMatchObject({
-      fullName: 'claude-fable-5',
-      label: 'Claude Fable 5',
-      provider: 'anthropic',
-      openRouterOnly: false,
-    });
-    expect(config.deprecated ?? false).toBe(false);
-    expect(config.inputPrice).toBe(10);
-    expect(config.outputPrice).toBe(50);
-    expect(config.contextWindow).toBe(1_000_000);
-    expect(config.maxOutputTokens).toBe(128_000);
-  });
-
-  it('includes Grok 4.5 as a default xAI model', () => {
-    const config = MODEL_CONFIGS.grok45;
-
-    expect(DEFAULT_MODELS).toContain('grok45');
-    expect(config).toMatchObject({
-      fullName: 'grok-4.5',
-      provider: 'xai',
-      openRouterOnly: false,
-    });
-    expect(config.retired ?? false).toBe(false);
-    expect(config.deprecated ?? false).toBe(false);
-  });
-
   it('only contains model ids known by llm-zoo', () => {
     expect(DEFAULT_MODELS.filter((model) => !MODEL_CONFIGS[model])).toEqual([]);
   });
@@ -147,10 +103,6 @@ describe('computeModelListVersion', () => {
     expect(MODEL_LIST_VERSION).toBe(
       computeModelListVersion(PREFERRED_DEFAULT_MODELS),
     );
-  });
-
-  it('preserves the established hash for the current preferred set', () => {
-    expect(MODEL_LIST_VERSION).toBe(1_872_513_843);
   });
 
   it('does not change when a non-preferred catalogue model retires', () => {

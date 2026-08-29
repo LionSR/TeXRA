@@ -4,7 +4,6 @@ import { RunRecordSchema } from '@agent/core/definition/RunRecord';
 import {
   ExecutionIdSchema,
   ExecutionMetaSchema,
-  ExecutionStatusSchema,
   StreamLogEntrySchema,
   StreamSnapshotSchema,
   StreamTabIdSchema,
@@ -25,8 +24,6 @@ export const TraceDocumentSchema = z.object({
    */
   entries: z.array(StreamLogEntrySchema),
   snapshot: StreamSnapshotSchema,
-  /** `null` for executions that predate outcome tracking or never terminated. */
-  terminalStatus: ExecutionStatusSchema.nullable(),
 });
 
 export type TraceDocument = Readonly<z.infer<typeof TraceDocumentSchema>>;

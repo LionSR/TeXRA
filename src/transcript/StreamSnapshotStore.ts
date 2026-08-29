@@ -83,7 +83,6 @@ import {
   emptyStreamData,
   readMeta,
   readStreamData,
-  readUsageData,
   type StreamData,
 } from './streamSnapshotRead';
 import type PQueue from 'p-queue';
@@ -102,24 +101,17 @@ const MAX_DIRTY_WRITE_RETRIES = 3;
 
 class DirtySidecarWritesError extends Error {}
 
-/** Artifact fields whose in-memory values remain authoritative after preload fails. */
+/** Artifact state whose in-memory values remain authoritative after preload fails. */
 export interface StreamArtifactAuthority {
-  readonly outputFiles: boolean;
-  readonly missingOutputs: boolean;
-  readonly compileFailures: boolean;
-  readonly usage: boolean;
+  /**
+   * The whole in-memory record is authoritative: a prior seed or an existence
+   * probe already established this stream's disk baseline, so every
+   * accumulator holds the complete field value and not just a delta.
+   */
+  readonly complete: boolean;
   readonly todos: boolean;
   readonly plan: boolean;
 }
-
-const ALL_STREAM_ARTIFACTS_AUTHORITATIVE = Object.freeze({
-  outputFiles: true,
-  missingOutputs: true,
-  compileFailures: true,
-  usage: true,
-  todos: true,
-  plan: true,
-}) satisfies StreamArtifactAuthority;
 
 /** A failed preload together with the in-memory fields that remain usable. */
 export class StreamSnapshotPreloadError extends Error {
@@ -361,16 +353,15 @@ function artifactAuthorityAfterPreloadFailure(
   baseline: DiskState,
   overlays: Partial<OverlayPatches>,
 ): StreamArtifactAuthority {
-  if (baseline !== 'unknown') return ALL_STREAM_ARTIFACTS_AUTHORITATIVE;
+  // Without an established baseline the output-file / missing-output /
+  // compile-failure / usage overlays are deltas over an unread disk state, so
+  // they establish nothing. Plan and todos are replacements, so a live overlay
+  // for either is authoritative on its own.
+  const complete = baseline !== 'unknown';
   return {
-    // These four overlays are deltas over an unread disk baseline, so they do
-    // not establish the complete field value. Plan and todos are replacements.
-    outputFiles: false,
-    missingOutputs: false,
-    compileFailures: false,
-    usage: false,
-    todos: overlays.workPlan?.todos !== undefined,
-    plan: overlays.workPlan?.plan !== undefined,
+    complete,
+    todos: complete || overlays.workPlan?.todos !== undefined,
+    plan: complete || overlays.workPlan?.plan !== undefined,
   };
 }
 
@@ -401,8 +392,6 @@ interface StreamRecord {
    * lossy read permanently deleting them on the next save (#7464).
    */
   usageUnparsed: Map<string, unknown>;
-  /** Usage was hydrated by a usage-only seed; `getRunUsage` needs no warning. */
-  usageProvenance: boolean;
   workPlan: WorkPlanSnapshot;
   meta: StreamTabMeta | undefined;
   /**
@@ -469,7 +458,6 @@ export class StreamSnapshotStore {
     compileFailures: {},
     usage: new Map(),
     usageUnparsed: new Map(),
-    usageProvenance: false,
     workPlan: EMPTY_WORK_PLAN,
     meta: undefined,
     runExecutionId: undefined,
@@ -509,7 +497,7 @@ export class StreamSnapshotStore {
    * mutations queued behind them — the same `PQueue({ concurrency: 1 })`-
    * per-key precedent as `streamApprovalQueue.ts`. Each queued unit of work
    * still publishes its promise onto `record.seedChain` for the readers that
-   * await it (`awaitSeeded`, `seedUsageOnly`, `flush`, staged deletion).
+   * await it (`awaitSeeded`, `flush`, staged deletion).
    */
   private readonly seedQueues = new Map<StreamTabId, PQueue>();
 
@@ -1082,11 +1070,8 @@ export class StreamSnapshotStore {
   }
 
   getRunUsage(stream: StreamTabId): ReadonlyMap<string, TokenUsageStats> {
-    const record = this.records.get(stream);
-    if (!record?.usageProvenance) {
-      this.warnIfUnseeded('getRunUsage', stream);
-    }
-    return record?.usage ?? EMPTY_RUN_USAGE;
+    this.warnIfUnseeded('getRunUsage', stream);
+    return this.records.get(stream)?.usage ?? EMPTY_RUN_USAGE;
   }
 
   /** Flattened set of known output-file paths for a stream. */
@@ -1209,23 +1194,6 @@ export class StreamSnapshotStore {
   async deleteStream(stream: StreamTabId): Promise<void> {
     const deletion = await this.stageDeleteStream(stream);
     await deletion.commit();
-  }
-
-  /** Delete the entire `streamData/` tree + all in-memory state. */
-  async deleteAll(): Promise<void> {
-    const pending = [...this.writeMutexes.values()].map((mutex) =>
-      mutex.waitForUnlock(),
-    );
-    this.evictAll();
-    await Promise.all(pending);
-    await Promise.all([
-      new KVStore(STREAM_DATA_DIR).deleteDir(),
-      StorageFS.delete(STREAM_DATA_DELETION_DIR, { recursive: true }).catch(
-        (error: unknown) => {
-          if (!isFileNotFoundError(error)) throw error;
-        },
-      ),
-    ]);
   }
 
   private setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -1470,14 +1438,6 @@ export class StreamSnapshotStore {
   /** Streams left in reversible staging by an interrupted deletion. */
   async listStagedDeletions(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DELETION_DIR);
-  }
-
-  /**
-   * Whether a stream has a persisted `workPlan.json` sidecar — an existence
-   * check only (a single stat via `KVStore.exists`), not a read.
-   */
-  async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
-    return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
@@ -1741,8 +1701,8 @@ export class StreamSnapshotStore {
    * seeded (via {@link load} or a progress event) its in-memory accumulators
    * are the single source of truth — they already hold the disk state plus any
    * newer deltas — so we assemble from memory and skip a redundant disk re-read.
-   * The CLI resume path calls `load` then `read` back-to-back. Only an unseeded
-   * stream, such as a display-only read that was never resumed, hits disk.
+   * Only an unseeded stream — a display-only read from a call-scoped store that
+   * was never `load`ed or `preload`ed — hits disk.
    */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
     if (await this.awaitSeeded(streamId)) {
@@ -1785,21 +1745,6 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * A stream's output files (round → files). Served from the seeded in-memory
-   * accumulators when available — the single source of truth — so a caller that
-   * already `load()`ed the stream doesn't re-read all sidecars from disk; only
-   * an unseeded stream falls back to a disk read.
-   */
-  async readOutputFiles(
-    streamId: StreamTabId,
-  ): Promise<ReadonlyRoundIndexed<OutputFileInfo>> {
-    if (await this.awaitSeeded(streamId)) {
-      return this.getOutputFiles(streamId);
-    }
-    return (await readStreamData(this.kv(streamId))).outputFiles;
-  }
-
-  /**
    * Authoritatively hydrate the in-memory accumulators from the stream-log set.
    * Streams not present in `streamIds` are evicted; streams that are present are
    * refreshed from disk even if this store had seeded them before, so a reused
@@ -1818,11 +1763,6 @@ export class StreamSnapshotStore {
    * startup; later mutations for other streams must still seed from disk before
    * writing.
    *
-   * `usageOnly` hydrates only the per-stream usage sidecar. Restart repair uses
-   * it for parked WAITING streams so the status-bar usage total is correct
-   * immediately without making the full 6-file record resident for the whole
-   * session (#9947, #10520).
-   *
    * `reportArtifactAuthority` wraps a failed full preload with the fields whose
    * prior seed or live overlay remains authoritative, so a reader may retain
    * accepted in-memory state without treating unread disk defaults as facts.
@@ -1830,44 +1770,10 @@ export class StreamSnapshotStore {
   async preload(
     streamIds: readonly StreamTabId[],
     options?: {
-      readonly usageOnly?: boolean;
       readonly reportArtifactAuthority?: boolean;
     },
   ): Promise<void> {
-    if (options?.usageOnly) {
-      await pMap(streamIds, (streamId) => this.seedUsageOnly(streamId), {
-        concurrency: SEED_IO_CONCURRENCY,
-      });
-      return;
-    }
     await this.seedStreams(streamIds, options?.reportArtifactAuthority);
-  }
-
-  private async seedUsageOnly(streamId: StreamTabId): Promise<void> {
-    if (this.hasDiskProvenance(streamId)) return;
-    const version = this.streamVersion(streamId);
-    const record = this.getOrCreateRecord(streamId);
-    if (record.seedChain) {
-      await record.seedChain.catch(() => undefined);
-    }
-    if (this.streamVersion(streamId) !== version) return;
-    if (this.hasDiskProvenance(streamId)) return;
-    const usage = await readUsageData(this.kv(streamId));
-    if (this.streamVersion(streamId) !== version) return;
-    const current = this.records.get(streamId);
-    if (!current || current.diskState !== 'unknown') return;
-    current.usage = new Map(usage.usage);
-    current.usageUnparsed = new Map(usage.unparsedRuns);
-    // Replay any eager live usage delta that landed while the disk read was
-    // pending. The overlay stays in place so a later full seed replays it once
-    // on top of freshly-read disk usage; this seed performs no writes itself.
-    const usageOverlay = current.overlays.usage;
-    if (usageOverlay) {
-      for (const [storageKey, delta] of usageOverlay) {
-        this.applyUsageDeltaMemory(current, storageKey, delta);
-      }
-    }
-    current.usageProvenance = true;
   }
 
   private async seedStreams(

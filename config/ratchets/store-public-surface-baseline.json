@@ -28,7 +28,6 @@
     ],
     "StreamSnapshotStore": [
       "attachSessionEvents",
-      "deleteAll",
       "deleteStream",
       "evictAll",
       "flush",
@@ -41,14 +40,12 @@
       "getRunMetadata",
       "getRunUsage",
       "getWorkPlan",
-      "hasPersistedWorkPlan",
       "hasProvenance",
       "listPersistedStreams",
       "listStagedDeletions",
       "load",
       "preload",
       "read",
-      "readOutputFiles",
       "reconcileStagedDeletions",
       "stageDeleteStream"
     ]
