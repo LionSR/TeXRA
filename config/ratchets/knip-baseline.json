@@ -362,12 +362,6 @@
       "name": "userQuestionPromptRowsBudget"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/ConversationPane.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workflowRunStatusSummary"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/InfoPane.tsx",
       "category": "production-dead",
       "kind": "exports",

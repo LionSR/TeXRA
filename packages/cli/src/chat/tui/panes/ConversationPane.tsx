@@ -3,14 +3,8 @@
 
 import { Box, Text } from 'ink';
 
-import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import {
-  formatWorkflowPhaseHeading,
-  workflowCallTally,
-  workflowPhaseHeadingOfGroup,
-} from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import {
@@ -134,76 +128,6 @@ function renderConversationPaneEntry({
   );
 }
 
-/**
- * One colored fragment of the workflow status band. Neutral progress is
- * `muted` (the band's prior dim styling); a failure tally is `warning` so a
- * degraded run does not read as a clean one. Separators are added by the
- * renderer, never stored here, so the data stays a clean logical list.
- */
-interface WorkflowStatusSegment {
-  readonly text: string;
-  readonly tone: 'muted' | 'warning';
-}
-
-/**
- * One-line workflow status band. Phase progress leads so it survives
- * `truncate-end` on a narrow terminal. The running `done/total` lives here
- * rather than on the `◆` divider because that divider prints once into
- * scrollback and can never be rewritten.
- *
- * The phase and its calls both come from the run's own phase task groups — the
- * band names the last phase the run opened and counts the calls whose
- * `groupId` names it, which is the classification the progress view's group
- * tree makes and the dashboard's phase rows reuse. Matching on the call's
- * `phase` *label* instead would fuse two same-named phases into one tally.
- * Naming the phase is also what keeps this number distinct from the
- * dashboard heading's, which counts the whole run.
- *
- * A whole-run failure tally is appended in a warning tone the moment any call
- * fails. The engine deliberately keeps the run going after a failed subagent
- * (it resolves to `null`), so the lifecycle stays `completed` — but the status
- * band must not let that read as a clean run.
- */
-export function workflowRunStatusSummary(
-  slice: StreamSlice | undefined,
-  category: AgentCategory | undefined,
-): readonly WorkflowStatusSegment[] | undefined {
-  if (!slice || category !== AgentCategory.Workflow) return undefined;
-  const phase = slice.taskGroups.findLast((group) => group.kind === 'phase');
-  // Surface failures only once the band has a phase/progress anchor, so a
-  // stray phase-less failed call does not invent a band on its own (a
-  // phase-less run can never produce total>0, so the band would already
-  // always be undefined here). The tally is whole-run, so a failure persists
-  // after the run advances past its phase (unlike the current-phase
-  // done/total).
-  if (!phase) return undefined;
-  const callRows = slice.entries.flatMap((row) =>
-    row.kind === 'workflowTask' ? [row] : [],
-  );
-  const { done, total, running } = workflowCallTally(
-    callRows.filter((row) => row.groupId === phase.id).map((row) => row.call),
-  );
-  const segments: WorkflowStatusSegment[] = [
-    {
-      text: formatWorkflowPhaseHeading(workflowPhaseHeadingOfGroup(phase)),
-      tone: 'muted',
-    },
-  ];
-  // Same tally vocabulary as the dashboard heading and phase rows
-  // (`done/total · N running`): the band sits directly above them.
-  if (total > 0) {
-    segments.push({ text: `${done}/${total}`, tone: 'muted' });
-  }
-  if (running > 0) {
-    segments.push({ text: `${running} running`, tone: 'muted' });
-  }
-  const { failed } = workflowCallTally(callRows.map((row) => row.call));
-  if (failed > 0) {
-    segments.push({ text: `${failed} failed`, tone: 'warning' });
-  }
-  return segments;
-}
-
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
@@ -229,17 +153,10 @@ export function ConversationPane(
     props.availableWidth !== undefined && props.width !== undefined
       ? Math.min(props.availableWidth, props.width)
       : (props.availableWidth ?? props.width);
-  const workflowMetadata = workflowRunStatusSummary(slice, category);
-  const metadataRows =
-    workflowMetadata &&
-    maxRows > 0 &&
-    (displayEntries.length === 0 || maxRows > 1)
-      ? 1
-      : 0;
   const newestPendingEntry = displayEntries.at(-1);
   const pendingRowReserve = newestPendingEntry
     ? Math.min(
-        Math.max(0, maxRows - metadataRows),
+        Math.max(0, maxRows),
         estimateLiveTranscriptEntryRows(
           newestPendingEntry,
           props.width,
@@ -247,10 +164,7 @@ export function ConversationPane(
         ),
       )
     : 0;
-  const detailCapacity = Math.max(
-    0,
-    maxRows - metadataRows - pendingRowReserve,
-  );
+  const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
   const workflowFacts = slice
     ? {
         taskGroups: slice.taskGroups,
@@ -266,34 +180,17 @@ export function ConversationPane(
   const detailRows = visibleWorkflowDetails.length;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
-    Math.max(0, maxRows - metadataRows - detailRows),
+    Math.max(0, maxRows - detailRows),
     props.width,
     props.subagentExecutionLabels,
   );
-  const visibleRows = metadataRows + detailRows + visibleEntries.usedRows;
+  const visibleRows = detailRows + visibleEntries.usedRows;
 
   // Keep stream order intact so in-flight text stays interleaved with tool rows.
   // The explicit height keeps the input bar pinned and prevents bursts from
   // stealing rows reserved for the footer chrome.
   return (
     <Box flexDirection="column" height={visibleRows} overflowY="hidden">
-      {workflowMetadata !== undefined && metadataRows > 0 ? (
-        <Box height={1} width={metadataWidth} overflowY="hidden">
-          <Text wrap="truncate-end">
-            {workflowMetadata.map((segment, index) => (
-              <Text key={index}>
-                {index > 0 ? <Text dimColor>{' · '}</Text> : null}
-                <Text
-                  dimColor={segment.tone === 'muted'}
-                  color={segment.tone === 'warning' ? COLOR_WARNING : undefined}
-                >
-                  {segment.text}
-                </Text>
-              </Text>
-            ))}
-          </Text>
-        </Box>
-      ) : null}
       <WorkflowRunDetails
         lines={visibleWorkflowDetails}
         width={metadataWidth}

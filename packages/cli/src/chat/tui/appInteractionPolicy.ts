@@ -80,7 +80,12 @@ export function digitFromMetaShortcut(value: string): number | undefined {
 }
 
 export type ForegroundSurfaceKind =
-  'form' | 'infoPane' | 'approval' | 'transcriptReader' | 'workPlanReader';
+  | 'form'
+  | 'infoPane'
+  | 'approval'
+  | 'transcriptReader'
+  | 'workPlanReader'
+  | 'workflowPopup';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
@@ -93,7 +98,7 @@ export function foregroundSurfaceKind({
   readonly formBusy: boolean;
   readonly infoPaneOpen: boolean;
   readonly pendingApproval: boolean;
-  readonly readerKind: 'transcript' | 'workPlan' | undefined;
+  readonly readerKind: 'transcript' | 'workPlan' | 'workflow' | undefined;
 }): ForegroundSurfaceKind | undefined {
   if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
@@ -103,6 +108,7 @@ export function foregroundSurfaceKind({
   // answer from the user takes the foreground away from it.
   if (readerKind === 'workPlan') return 'workPlanReader';
   if (readerKind === 'transcript') return 'transcriptReader';
+  if (readerKind === 'workflow') return 'workflowPopup';
   return undefined;
 }
 
@@ -135,6 +141,7 @@ export function foregroundEscapeAction({
     case 'infoPane':
     case 'transcriptReader':
     case 'workPlanReader':
+    case 'workflowPopup':
       return 'close';
     case 'approval':
       // Esc rejects (confirmCardKeyAction); label the consequence, not "cancel".
@@ -183,6 +190,7 @@ export function foregroundMaxRowsForKind({
     case 'infoPane':
     case 'transcriptReader':
     case 'workPlanReader':
+    case 'workflowPopup':
       return undefined;
     case 'approval':
       return approvalForegroundMaxRows(approvalKind);

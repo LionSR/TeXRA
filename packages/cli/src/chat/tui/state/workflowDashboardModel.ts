@@ -1,18 +1,17 @@
-// Single derivation of the workflow-dashboard rows.
+// Single derivation of a workflow run's phases and rows.
 //
-// Two consumers read the same dashboard and must agree on row identity and
-// order: `App` drives the child-list selection reducer, the Alt/Esc-1..9 focus
-// path, and the bare-Escape walk from it, while `SubagentList` renders it.
-// Deriving the rows twice is exactly how keyboard numbering silently desyncs
-// from what is on screen, so both read this module and neither regroups,
-// re-sorts, or re-dedupes on its own.
+// The popup renders it and `App` resolves focus targets from it, so the two
+// must agree on row identity and order: both read this module and neither
+// regroups, re-sorts, or re-dedupes on its own.
 
 // Local imports - shared stream identity
 import type {
   StreamTabId,
   WorkflowCallIdentity,
+  WorkflowCallProgress,
   WorkflowPlanMarker,
 } from '@shared/schemas';
+import { WORKFLOW_TASK_STATUS_LABEL } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
 import {
   latestWorkflowAttemptEntries,
@@ -20,21 +19,15 @@ import {
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
 
-// Local imports - TUI presentation constants
-import { WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS } from '../panes/SubagentListDisplay';
-
 // Local imports - TUI state
-import {
-  workflowPhaseListValue,
-  workflowTaskListValue,
-  type ChildListValue,
-} from './childListSelection';
-import type { StreamSlice } from './cliState';
+import type { StreamSlice, WorkflowPopupGroupKind } from './cliState';
 
 export type WorkflowTaskEntry = TranscriptRowOf<'workflowTask'>;
 
 export interface WorkflowPhaseGroup {
-  readonly value: ChildListValue;
+  /** Stable row identity: the task group id, or `declared-<title>` for a
+   *  phase known only from the plan. */
+  readonly key: string;
   /** The phase's own heading facts, as its `TaskGroup` states them — or as
    *  the declared plan states them for a phase the run has not opened. */
   readonly heading: WorkflowPhaseHeading;
@@ -58,31 +51,16 @@ type WorkflowChildTaskIndex = ReadonlyMap<
 export interface WorkflowDashboardModel {
   /** The workflow stream the dashboard is rooted on. */
   readonly root: StreamSlice;
-  /** Phase groups in the order the run opened them; tasks stay in transcript
-   *  order. */
+  /** Phase groups in plan order, then the order the run opened them; tasks
+   *  stay in transcript order. */
   readonly groups: readonly WorkflowPhaseGroup[];
   /** Every task, in transcript-entry order. */
   readonly tasks: readonly WorkflowTaskEntry[];
   readonly childTaskIndex: WorkflowChildTaskIndex;
-  readonly taskByValue: ReadonlyMap<ChildListValue, WorkflowTaskEntry>;
-  readonly groupByValue: ReadonlyMap<ChildListValue, WorkflowPhaseGroup>;
-  /** Row values the child-list selection reducer reconciles against. Phase
-   *  rows only participate while the two-column layout shows them.
-   *
-   *  Task values keep transcript order, which equals the narrow list's grouped
-   *  render order for every workflow whose same-phase tasks are contiguous —
-   *  the shape every current workflow emits. A workflow that interleaved two
-   *  phases would seed the reducer's default row from the transcript-first
-   *  task while the narrow list highlights the first group's first task; that
-   *  divergence predates this module and is deliberately preserved here rather
-   *  than changed inside a refactor. */
-  readonly listValues: readonly ChildListValue[];
-  /** True while the two-column (phases | tasks) layout is in effect. */
-  readonly wide: boolean;
 }
 
 interface MutableWorkflowPhaseGroup {
-  readonly value: ChildListValue;
+  readonly key: string;
   readonly heading: WorkflowPhaseHeading;
   readonly tasks: WorkflowTaskEntry[];
   readonly opened: boolean;
@@ -130,7 +108,7 @@ function unionWithDeclaredPlan(
       // skipped-empty-phase suppression, and stays gone.
       if (runSettled && declaredTasks.length === 0) continue;
       group = {
-        value: workflowPhaseListValue(`declared-${phase.title}`),
+        key: `declared-${phase.title}`,
         heading: {
           phaseLabel: phase.title,
           phaseIndex: phase.index,
@@ -152,7 +130,7 @@ function unionWithDeclaredPlan(
   // "Unphased" heading their cards will use once issued.
   if (unphasedDeclared.length > 0) {
     ordered.push({
-      value: workflowPhaseListValue('declared-unphased'),
+      key: 'declared-unphased',
       heading: { phaseLabel: 'Unphased' },
       tasks: [],
       opened: false,
@@ -162,7 +140,7 @@ function unionWithDeclaredPlan(
   return ordered;
 }
 
-/** Derive the dashboard rows for one workflow root at one terminal width.
+/** Derive the phases and rows for one workflow root.
  *
  *  Phases are the run's own `phase` task groups, and a call joins the group
  *  its `groupId` names — the same classification the progress view's group
@@ -171,7 +149,6 @@ function unionWithDeclaredPlan(
  *  script opened but never filled. */
 export function workflowDashboardModel(
   root: StreamSlice,
-  columns: number,
   options: {
     /** True once the workflow run has ended: plan-only phases it never
      *  reached are then nothing to show. */
@@ -183,7 +160,7 @@ export function workflowDashboardModel(
   for (const group of root.taskGroups) {
     if (group.kind !== 'phase') continue;
     const phaseGroup: MutableWorkflowPhaseGroup = {
-      value: workflowPhaseListValue(group.id),
+      key: group.id,
       heading: workflowPhaseHeadingOfGroup(group),
       tasks: [],
       opened: true,
@@ -208,8 +185,8 @@ export function workflowDashboardModel(
 
   const tasks: WorkflowTaskEntry[] = [];
   // A call the run issued outside any open phase has no group to sit under.
-  // The board leaves such a row ungrouped in the root timeline; the dashboard
-  // is a phase list, so it collects them into one trailing group rather than
+  // The board leaves such a row ungrouped in the root timeline; the popup is
+  // a phase list, so it collects them into one trailing group rather than
   // dropping rows the keyboard could otherwise never reach.
   let ungrouped: MutableWorkflowPhaseGroup | undefined;
   // A phase whose every task belonged to a superseded attempt is the
@@ -229,7 +206,7 @@ export function workflowDashboardModel(
       continue;
     }
     ungrouped ??= {
-      value: workflowPhaseListValue(entry.id),
+      key: `unphased-${entry.id}`,
       heading: { phaseLabel: 'Unphased' },
       tasks: [],
       opened: true,
@@ -262,87 +239,7 @@ export function workflowDashboardModel(
     );
   }
 
-  const taskValues = tasks.map((entry) => workflowTaskListValue(entry.id));
-  const narrowValues = survivingGroups.flatMap((group) =>
-    group.tasks.length === 0
-      ? [group.value]
-      : group.tasks.map((entry) => workflowTaskListValue(entry.id)),
-  );
-  const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
-  return {
-    root,
-    groups: survivingGroups,
-    tasks,
-    childTaskIndex,
-    taskByValue: new Map(
-      tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
-    ),
-    groupByValue: new Map(survivingGroups.map((group) => [group.value, group])),
-    // Narrow phase headers with tasks are disabled separators. An empty phase
-    // is itself selectable so a phase-only dashboard remains keyboard-reachable.
-    listValues: wide
-      ? [...survivingGroups.map((group) => group.value), ...taskValues]
-      : narrowValues,
-    wide,
-  };
-}
-
-/** Number of content rows the dashboard can display at the current width.
- *  `undefined` (no workflow root) reserves no rows at all. */
-export function workflowDashboardPanelItemCount(
-  model: WorkflowDashboardModel | undefined,
-  selectedValue: ChildListValue | undefined,
-  rootHasApproval: boolean,
-): number {
-  if (!model) return 0;
-  if (model.groups.length === 0 && model.tasks.length === 0) {
-    return rootHasApproval ? 1 : 0;
-  }
-  if (!model.wide) {
-    // Declared rows sit under their phase in the narrow list too.
-    return (
-      1 +
-      model.groups.length +
-      model.tasks.length +
-      model.groups.reduce((sum, group) => sum + group.declaredTasks.length, 0)
-    );
-  }
-  const { activeGroup } = workflowDashboardSelection(model, selectedValue);
-  const taskColumnRows =
-    (activeGroup?.tasks.length ?? 0) + (activeGroup?.declaredTasks.length ?? 0);
-  return 1 + Math.max(model.groups.length, taskColumnRows);
-}
-
-interface WorkflowDashboardSelection {
-  readonly selectedGroup: WorkflowPhaseGroup | undefined;
-  readonly selectedTask: WorkflowTaskEntry | undefined;
-  readonly selectedTaskGroup: WorkflowPhaseGroup | undefined;
-  /** Group whose tasks the task column shows. */
-  readonly activeGroup: WorkflowPhaseGroup | undefined;
-}
-
-/** Resolve what one selected row means for the dashboard. Shared so the row
- *  budget reserved for the panel and the rows the panel actually renders are
- *  computed from the same active group. */
-export function workflowDashboardSelection(
-  model: WorkflowDashboardModel,
-  selectedValue: ChildListValue | undefined,
-): WorkflowDashboardSelection {
-  const selectedGroup = selectedValue
-    ? model.groupByValue.get(selectedValue)
-    : undefined;
-  const selectedTask = selectedValue
-    ? model.taskByValue.get(selectedValue)
-    : undefined;
-  const selectedTaskGroup = selectedTask
-    ? model.groups.find((group) => group.tasks.includes(selectedTask))
-    : undefined;
-  return {
-    selectedGroup,
-    selectedTask,
-    selectedTaskGroup,
-    activeGroup: selectedGroup ?? selectedTaskGroup ?? model.groups[0],
-  };
+  return { root, groups: survivingGroups, tasks, childTaskIndex };
 }
 
 /** The task's child stream when this task is its only claimant and the stream
@@ -358,4 +255,169 @@ export function uniqueWorkflowChildStreamId(
     streams.has(childStreamId)
     ? childStreamId
     : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Popup rows: attention first, volume collapsed
+// ---------------------------------------------------------------------------
+
+export type WorkflowPopupRow =
+  | {
+      readonly kind: 'task';
+      readonly key: string;
+      readonly entry: WorkflowTaskEntry;
+    }
+  | {
+      readonly kind: 'declared';
+      readonly key: string;
+      readonly task: WorkflowCallIdentity;
+    }
+  | {
+      readonly kind: 'group';
+      readonly key: string;
+      readonly group: WorkflowPopupGroupKind;
+      readonly count: number;
+      readonly expanded: boolean;
+    };
+
+/** Rows that need a decision lead, rows worth watching follow; everything
+ *  else is a counted group. Lower sorts first. */
+const ATTENTION_RANK: Partial<Record<WorkflowCallProgress['status'], number>> =
+  {
+    awaitingApproval: 0,
+    failed: 1,
+    running: 2,
+  };
+
+const QUEUED_STATUSES: ReadonlySet<WorkflowCallProgress['status']> = new Set([
+  'planned',
+  'queued',
+]);
+
+function popupGroupOf(
+  status: WorkflowCallProgress['status'],
+): 'queued' | 'done' | undefined {
+  if (status in ATTENTION_RANK) return undefined;
+  return QUEUED_STATUSES.has(status) ? 'queued' : 'done';
+}
+
+function workflowPopupTaskKey(entry: WorkflowTaskEntry): string {
+  return `task:${entry.id}`;
+}
+
+function declaredKey(task: WorkflowCallIdentity): string {
+  return `declared:${task.id}`;
+}
+
+function matchesFilter(
+  filter: string,
+  ...texts: readonly (string | undefined)[]
+): boolean {
+  return texts.some((text) => text?.toLowerCase().includes(filter));
+}
+
+/**
+ * One phase's rows for the popup. With a filter every matching task is one
+ * flat row; without one, rows needing attention (awaiting approval, failed,
+ * running — in that order, transcript order within) lead, and the rest
+ * collapse into `queued` / `done` / `declared` groups that open in place.
+ * Screen rows scale with states, not with agents.
+ */
+export function workflowPopupRows(
+  group: WorkflowPhaseGroup,
+  view: {
+    readonly expanded: ReadonlySet<WorkflowPopupGroupKind>;
+    readonly filter: string;
+  },
+): readonly WorkflowPopupRow[] {
+  const filter = view.filter.trim().toLowerCase();
+  if (filter.length > 0) {
+    return [
+      ...group.tasks
+        .filter((entry) =>
+          matchesFilter(
+            filter,
+            entry.call.label,
+            entry.call.agent,
+            WORKFLOW_TASK_STATUS_LABEL[entry.call.status],
+          ),
+        )
+        .map((entry): WorkflowPopupRow => ({
+          kind: 'task',
+          key: workflowPopupTaskKey(entry),
+          entry,
+        })),
+      ...group.declaredTasks
+        .filter((task) =>
+          matchesFilter(
+            filter,
+            task.label,
+            WORKFLOW_TASK_STATUS_LABEL.declared,
+          ),
+        )
+        .map((task): WorkflowPopupRow => ({
+          kind: 'declared',
+          key: declaredKey(task),
+          task,
+        })),
+    ];
+  }
+
+  const attention: WorkflowTaskEntry[] = [];
+  const grouped: Record<'queued' | 'done', WorkflowTaskEntry[]> = {
+    queued: [],
+    done: [],
+  };
+  for (const entry of group.tasks) {
+    const bucket = popupGroupOf(entry.call.status);
+    if (bucket === undefined) attention.push(entry);
+    else grouped[bucket].push(entry);
+  }
+  // Stable within a rank: `toSorted` keeps transcript order for equal keys.
+  const attentionRows = attention
+    .toSorted(
+      (a, b) =>
+        (ATTENTION_RANK[a.call.status] ?? 0) -
+        (ATTENTION_RANK[b.call.status] ?? 0),
+    )
+    .map((entry): WorkflowPopupRow => ({
+      kind: 'task',
+      key: workflowPopupTaskKey(entry),
+      entry,
+    }));
+
+  const groupRows = (
+    kind: WorkflowPopupGroupKind,
+    members: readonly WorkflowPopupRow[],
+  ): readonly WorkflowPopupRow[] => {
+    if (members.length === 0) return [];
+    const expanded = view.expanded.has(kind);
+    const header: WorkflowPopupRow = {
+      kind: 'group',
+      key: `group:${kind}`,
+      group: kind,
+      count: members.length,
+      expanded,
+    };
+    return expanded ? [header, ...members] : [header];
+  };
+  const taskRows = (entries: readonly WorkflowTaskEntry[]) =>
+    entries.map((entry): WorkflowPopupRow => ({
+      kind: 'task',
+      key: workflowPopupTaskKey(entry),
+      entry,
+    }));
+  return [
+    ...attentionRows,
+    ...groupRows('queued', taskRows(grouped.queued)),
+    ...groupRows('done', taskRows(grouped.done)),
+    ...groupRows(
+      'declared',
+      group.declaredTasks.map((task): WorkflowPopupRow => ({
+        kind: 'declared',
+        key: declaredKey(task),
+        task,
+      })),
+    ),
+  ];
 }

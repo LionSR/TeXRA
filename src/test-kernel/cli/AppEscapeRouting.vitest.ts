@@ -26,6 +26,8 @@ import {
   rootRunPending,
   rootStreamId,
   streams,
+  updateWorkflowPopupView,
+  workflowPopupView,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -295,213 +297,81 @@ describe('App foreground Escape ownership', () => {
     }
   });
 
-  it('renders and operates a canonical workflow dashboard with zero descendants', async () => {
+  it('opens a workflow as a popup over its parent, never as a viewport', async () => {
+    const WORKFLOW = 'escape-workflow' as StreamTabId;
     seedRootStream();
-    seedStreamMeta(ROOT, {
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'solo-workflow',
+    setRunning(WORKFLOW, CHILD);
+    seedChildRoster(ROOT, [
+      {
+        ...runningChild('workflow-execution', 'workflow', WORKFLOW),
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
       },
+    ]);
+    seedParentEdge(WORKFLOW, ROOT);
+    seedStreamMeta(WORKFLOW, {
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'workflow' },
       agentCategory: AgentCategory.Workflow,
     });
-    patchStream(ROOT, (slice) => ({
+    patchStream(WORKFLOW, (slice) => ({
       ...slice,
       entries: [
-        taskRow('task-planned-only', {
-          id: 'draft-alone',
-          label: 'Draft alone',
-          status: 'planned',
-        }),
-      ],
-    }));
-    const { instance, stdin, stdout, onInterruptStream } =
-      await renderWithInterrupt();
-
-    try {
-      stdin.write('\t');
-      await waitFor(() => stdout.output.includes('solo-workflow · 0/1'));
-      expect(stdout.output).toContain('Draft alone · Planned');
-      stdin.write('\r');
-      await sleep(30);
-      expect(activeStreamId.get()).toBe(ROOT);
-      expect(onInterruptStream).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('retains projected workflow rows while child detail is focused and returns to the same task', async () => {
-    seedRootStream();
-    setRunning(CHILD, GRANDCHILD);
-    seedStreamMeta(ROOT, {
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'workflow',
-      },
-      agentCategory: AgentCategory.Workflow,
-    });
-    const runTrace = createRunTrace(ROOT, defaultSession().transcripts);
-    const phase = runTrace.trace.openStage('Map', {
-      id: 'phase-map',
-      kind: 'phase',
-      index: 0,
-      total: 1,
-    });
-    for (const [logId, id, label, childStreamId] of [
-      ['task-child', 'inspect', 'Inspect', CHILD],
-      ['task-review', 'review', 'Review', GRANDCHILD],
-    ] as const) {
-      runTrace.trace.emit({
-        type: 'workflow.call',
-        logId,
-        stageId: phase.id,
-        call: {
-          id,
-          label,
-          phase: 'Map',
-          status: 'running',
-          childStreamId,
-        },
-      });
-    }
-    syncStreamLog(defaultSession(), ROOT);
-    seedChildRoster(ROOT, [
-      runningChild('workflow-child-execution', 'duplicate', CHILD),
-      runningChild('workflow-review-execution', 'duplicate', GRANDCHILD),
-    ]);
-    seedParentEdge(CHILD, ROOT);
-    seedParentEdge(GRANDCHILD, ROOT);
-    const { instance, stdin, stdout, onInterruptStream } =
-      await renderWithInterrupt();
-
-    try {
-      stdin.write('\t');
-      // The panel heading tallies the run; the phase row tallies its phase.
-      await waitFor(() => stdout.output.includes('workflow · 0/2 · 2 running'));
-      await waitFor(() =>
-        stdout.output.includes('Map (1/1) · 0/2 · 2 running'),
-      );
-      stdin.write('\r');
-      await waitFor(() => stdout.output.includes('Inspect · Running'));
-      stdin.write('\r');
-      await waitFor(() => activeStreamId.get() === CHILD);
-      syncStreamLog(defaultSession(), ROOT);
-      expect(
-        streams
-          .get()
-          .get(ROOT)
-          ?.entries.map((entry) => [entry.id, entry.kind]),
-      ).toEqual([
-        ['phase-map', 'phase'],
-        ['task-child', 'workflowTask'],
-        ['task-review', 'workflowTask'],
-      ]);
-
-      stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === ROOT, {
-        timeoutMs: 1_000,
-      });
-      const taskLine = stdout.output
-        .split('\n')
-        .find((line) => line.includes('Inspect · Running'));
-      expect(taskLine).toContain(POINTER);
-      expect(stdout.output).toContain('Esc input');
-
-      stdin.write(ESC);
-      await waitFor(() => stdout.output.includes('Tab sessions'));
-      expect(activeStreamId.get()).toBe(ROOT);
-
-      focusStream(GRANDCHILD);
-      await waitFor(() => activeStreamId.get() === GRANDCHILD);
-      await sleep(30);
-      stdin.write(ESC);
-      await waitFor(() => activeStreamId.get() === ROOT, {
-        timeoutMs: 1_000,
-      });
-      await waitFor(() =>
-        stdout.output
-          .split('\n')
-          .some(
-            (line) =>
-              line.includes('Review · Running') && line.includes(POINTER),
-          ),
-      );
-      expect(onInterruptStream).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-      runTrace.dispose();
-    }
-  });
-
-  it('preserves workflow selection when tasks share a child stream', async () => {
-    seedRootStream();
-    setRunning(CHILD);
-    seedChildRoster(ROOT, [
-      runningChild('shared-child-execution', 'shared-child', CHILD),
-    ]);
-    seedParentEdge(CHILD, ROOT);
-    seedStreamMeta(ROOT, {
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'ambiguous-workflow',
-      },
-      agentCategory: AgentCategory.Workflow,
-    });
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      entries: ['first', 'second'].map((id) =>
-        taskRow(`task-${id}`, {
-          id,
-          label: id,
+        taskRow('task-child', {
+          id: 'inspect',
+          label: 'Inspect',
           status: 'running',
           childStreamId: CHILD,
         }),
-      ),
+      ],
     }));
-    const onInterruptStream = vi.fn();
-    const { instance, stdin, stdout } = await renderDebugApp(
-      appProps(onInterruptStream),
-      { columns: 100, rows: 30 },
-    );
+    seedChildRoster(WORKFLOW, [
+      runningChild('child-execution', 'inspect', CHILD),
+    ]);
+    seedParentEdge(CHILD, WORKFLOW);
+    markToolUseAgent(CHILD);
+    const { instance, stdin, stdout, onInterruptStream } =
+      await renderWithInterrupt();
 
     try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('\t');
-      await waitFor(() =>
-        currentFrame(stdout).includes('ambiguous-workflow · 0/2 · 2 running'),
-      );
-      stdin.write('\r');
-      await waitFor(() =>
-        currentFrame(stdout)
-          .split('\n')
-          .some(
-            (line) =>
-              line.includes('first · Running') && line.includes(POINTER),
-          ),
-      );
+      await waitFor(() => stdout.output.includes('workflow running'));
       stdin.write(ARROW_KEYS.Down);
-      await waitFor(() =>
-        currentFrame(stdout)
-          .split('\n')
-          .some(
-            (line) =>
-              line.includes('second · Running') && line.includes(POINTER),
-          ),
-      );
+      stdin.write('\r');
+      // The workflow row opens the popup over main; main stays the viewport.
+      await waitFor(() => foregroundReader.get()?.kind === 'workflow');
+      await waitFor(() => stdout.output.includes('Inspect · Running'));
+      expect(activeStreamId.get()).toBe(ROOT);
+      expect(stdout.output).toContain('workflow · 0/1 · 1 running');
+      // View state the user set inside the popup survives the round trips
+      // below; only opening a different workflow would start fresh.
+      updateWorkflowPopupView({ expanded: new Set(['done']) });
 
-      focusStream(CHILD);
+      // An approval bound to the workflow stream surfaces over the popup,
+      // and the popup comes back once it is answered.
+      void enqueueApproval({
+        kind: 'planApproval',
+        data: {
+          requestId: 'plan-workflow-popup',
+          streamId: WORKFLOW,
+          plan: { objective: 'Verify the workflow.' },
+          goalEnabled: false,
+        },
+      });
+      await waitFor(() => stdout.output.includes('Approve plan?'));
+      clearApprovals();
+      await waitFor(() => currentApproval.get() === undefined);
+      expect(foregroundReader.get()?.kind).toBe('workflow');
+
+      // Enter on the task focuses that agent; Esc returns to main with the
+      // popup back where it was.
+      stdin.write('\r');
       await waitFor(() => activeStreamId.get() === CHILD);
-      focusStream(ROOT);
-      await waitFor(() => activeStreamId.get() === ROOT);
-      await waitFor(() =>
-        currentFrame(stdout)
-          .split('\n')
-          .some(
-            (line) =>
-              line.includes('second · Running') && line.includes(POINTER),
-          ),
-      );
-
+      expect(foregroundReader.get()).toBeUndefined();
+      stdin.write(ESC);
+      await waitFor(() => activeStreamId.get() === ROOT, {
+        timeoutMs: 1_000,
+      });
+      await waitFor(() => foregroundReader.get()?.kind === 'workflow');
+      expect(workflowPopupView.get().expanded.has('done')).toBe(true);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
@@ -1291,65 +1161,6 @@ describe('App approval surface ownership', () => {
     }
   });
 
-  it('focuses a dashboard root before presenting its bound approval', async () => {
-    seedRootStream();
-    setRunning(CHILD);
-    seedChildRoster(ROOT, [
-      runningChild('approval-task-execution', 'approval-task', CHILD),
-    ]);
-    seedParentEdge(CHILD, ROOT);
-    seedStreamMeta(ROOT, {
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'approval-workflow',
-      },
-      agentCategory: AgentCategory.Workflow,
-    });
-    patchStream(ROOT, (slice) => ({
-      ...slice,
-      entries: [
-        taskRow('approval-task', {
-          id: 'approval-task',
-          label: 'Approval task',
-          status: 'running',
-          childStreamId: CHILD,
-        }),
-      ],
-    }));
-    focusStream(CHILD);
-    enqueueOtherStreamInquiry(
-      'external-other-dashboard',
-      'Wait outside the dashboard root.',
-      'ei_000000000009',
-    );
-    void enqueueApproval({
-      kind: 'planApproval',
-      data: {
-        requestId: 'plan-dashboard-root',
-        streamId: ROOT,
-        plan: { objective: 'Verify the dashboard root.' },
-        goalEnabled: false,
-      },
-    });
-    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
-
-    try {
-      stdin.write('\t');
-      await waitFor(() => activeStreamId.get() === ROOT);
-      await waitFor(() => {
-        const pending = currentApproval.get()?.payload;
-        return (
-          pending?.kind === 'planApproval' &&
-          pending.data.requestId === 'plan-dashboard-root'
-        );
-      });
-      await waitFor(() => stdout.output.includes('Approve plan?'));
-      expect(stdout.output).not.toContain('Wait outside the dashboard root.');
-    } finally {
-      instance.unmount();
-    }
-  });
-
   it('promotes a session-wide approval against the post-Escape root', async () => {
     seedChildHierarchy();
     focusStream(CHILD);
@@ -1415,46 +1226,6 @@ describe('App approval surface ownership', () => {
         stdout.output.includes('Verify the scoped child session.'),
       );
       expect(stdout.output).not.toContain('Wait outside the scoped list.');
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('promotes an approval-only dashboard before workflow rows exist', async () => {
-    seedRootStream();
-    seedStreamMeta(ROOT, {
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'starting-workflow',
-      },
-      agentCategory: AgentCategory.Workflow,
-    });
-    patchStream(ROOT, (slice) => ({ ...slice, entries: [] }));
-    enqueueOtherStreamInquiry(
-      'external-other',
-      'Wait outside the active stream.',
-      'ei_000000000001',
-    );
-    enqueueSessionInquiry(
-      'external-session',
-      'Verify the workflow before it emits rows.',
-      'ei_000000000002',
-    );
-    const { instance, stdin, stdout } = await renderApp(appProps(vi.fn()));
-
-    try {
-      stdin.write('\t');
-      await waitFor(() => {
-        const pending = currentApproval.get()?.payload;
-        return (
-          pending?.kind === 'externalInquiry' &&
-          pending.data.requestId === 'external-session'
-        );
-      });
-      await waitFor(() =>
-        stdout.output.includes('Verify the workflow before it emits rows.'),
-      );
-      expect(stdout.output).not.toContain('Wait outside the active stream.');
     } finally {
       instance.unmount();
     }

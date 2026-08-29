@@ -11,8 +11,14 @@ import { formatCompactDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { nearestActiveStreamAncestor, streamTreeEntries } from './streamViews';
-import { visibleSubagentRows, type ChildRosters } from './childExecutions';
-import type { StreamSlice } from './cliState';
+import {
+  childRosters,
+  parentStream,
+  streamMetadataFor,
+  visibleSubagentRows,
+  type ChildRosters,
+} from './childExecutions';
+import { focusStream, openWorkflowPopup, type StreamSlice } from './cliState';
 
 /** Compact elapsed reading for one child row, shown only while it is running:
  *  a settled row's duration is reported by the task card that owns its
@@ -79,4 +85,49 @@ export function numericFocusTargetForActiveStream(init: {
     rootStreamId: resolveChildListTarget(init),
     streams: init.streams,
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
+}
+
+/** The roster row that rendered a child stream, for the interval before its
+ *  run metadata and parent edge arrive (roster-first event ordering). */
+function rosterRowFor(
+  streamId: StreamTabId,
+):
+  | { readonly parentId: StreamTabId; readonly row: ActiveChildInfo }
+  | undefined {
+  for (const [parentId, rows] of childRosters.get()) {
+    const row = rows.find((candidate) => candidate.childStreamId === streamId);
+    if (row) return { parentId, row };
+  }
+  return undefined;
+}
+
+/**
+ * Show a stream the way the user expects to see it. A workflow-script run is
+ * never a viewport: presenting one lands on its parent with the popup open
+ * over it. Every writer of `activeStreamId` that means "show me this stream"
+ * — the session list, Alt-N, Esc out of a child, an approval announcing its
+ * stream, the return to a finished child's owner — goes through here, so the
+ * rule has one owner.
+ */
+/** Whether a stream is a workflow-script run, read from its run metadata or,
+ *  before that arrives, from the roster row that rendered it. */
+export function isWorkflowScriptStream(streamId: StreamTabId): boolean {
+  const identity =
+    streamMetadataFor(streamId)?.identity ??
+    rosterRowFor(streamId)?.row.identity;
+  return identity?.kind === 'multiAgentWorkflow';
+}
+
+export function presentStream(
+  streamId: StreamTabId,
+): 'stream' | 'workflowPopup' {
+  const roster = rosterRowFor(streamId);
+  if (isWorkflowScriptStream(streamId)) {
+    const parentId = parentStream.get().get(streamId) ?? roster?.parentId;
+    if (parentId !== undefined) focusStream(parentId);
+    openWorkflowPopup(streamId);
+    return 'workflowPopup';
+  }
+  focusStream(streamId);
+  return 'stream';
 }

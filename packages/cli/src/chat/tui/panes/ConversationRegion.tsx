@@ -41,10 +41,6 @@ import {
   streamArtifactRevision,
 } from '../state/subscribeStreamArtifacts';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
-import {
-  workflowDashboardPanelItemCount,
-  type WorkflowDashboardModel,
-} from '../state/workflowDashboardModel';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
@@ -68,9 +64,6 @@ interface ConversationRegionSnapshot {
   /** Whether that stream is a skip/retry-able workflow-script grandchild —
    *  the fact the status bar's `s`/`r` hint reads. */
   readonly selectedChildWorkflowControllable: boolean;
-  /** Dashboard rows for a workflow-script list root, derived once by `App`. */
-  readonly workflowDashboard: WorkflowDashboardModel | undefined;
-  readonly workflowDashboardRootHasApproval: boolean;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -194,16 +187,8 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
-  const workflowDashboardItemCount = workflowDashboardPanelItemCount(
-    snapshot.workflowDashboard,
-    snapshot.selectedChildValue,
-    snapshot.workflowDashboardRootHasApproval,
-  );
-  const sessionPanelItemCount =
-    workflowDashboardItemCount > 0
-      ? workflowDashboardItemCount
-      : snapshot.sessionViews.length;
-  const minimumSessionPanelRows = workflowDashboardItemCount > 1 ? 3 : 2;
+  const sessionPanelItemCount = snapshot.sessionViews.length;
+  const minimumSessionPanelRows = 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,
@@ -289,14 +274,12 @@ export function ConversationRegion({
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.listRootStreamId}
-              dashboard={snapshot.workflowDashboard}
               selectedChildStreamId={snapshot.selectedChildStreamId}
               selectedChildWorkflowControllable={
                 snapshot.selectedChildWorkflowControllable
               }
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
-              streams={snapshot.streams}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
             <TodosPlanPanel
