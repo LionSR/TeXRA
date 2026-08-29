@@ -51,7 +51,7 @@ import {
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { advanceSettledPrefixIndex } from '@cli/chat/tui/state/transcriptFold';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   bumpStreamArtifactRevision,
@@ -779,17 +779,17 @@ describe('cliState stream, focus, and child-edge fields', () => {
       expect(parentStream.get().get(child1)).toBe(root);
       expect(orderedSessionDescendants(root)[0]).toBe(child1);
       expect(
-        transcriptViewportKey({
+        activeTranscriptViewport({
           activeStreamId: child1,
           parentStream: parentStream.get(),
         }),
-      ).toBe(`scoped:${child1}`);
+      ).toEqual({ key: `scoped:${child1}`, scoped: true });
       expect(
-        transcriptViewportKey({
+        activeTranscriptViewport({
           activeStreamId: root,
           parentStream: parentStream.get(),
         }),
-      ).toBe('root-scrollback');
+      ).toEqual({ key: 'root-scrollback', scoped: false });
     });
   });
 });

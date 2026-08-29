@@ -3,7 +3,10 @@ import {
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  formatTexraApprovalPolicy,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import type { StreamPhase, StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
@@ -26,7 +29,6 @@ export interface CliSessionStatusInput {
   readonly model: string;
   readonly teamName?: string;
   readonly modelAccess: CliModelAccessRoute;
-  readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
@@ -41,7 +43,7 @@ export interface CliSessionStatusInput {
   readonly commandName?: string;
   readonly cwd?: string;
   readonly processCwd?: string;
-  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approvalPolicy: TexraApprovalPolicy;
 }
 
 export function formatCliStatusLabel(
@@ -94,7 +96,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     `agent: ${input.agent}`,
     `model: ${getRuntimeModelLabel(input.model)}`,
     `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
-    `approval: ${input.approval}`,
+    `approval: ${formatTexraApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),

@@ -123,7 +123,7 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
     childRosters: childRostersSignal.get(),
     parentStream: parentStreamSignal.get(),
     streams: streamsSignal.get(),
-  }).streamId;
+  });
   focusStream(streamId);
   promoteApprovalsForStream(streamId, {
     includeSessionWide: streamId === visibleListRootStreamId,
@@ -268,12 +268,12 @@ export function App(props: AppProps): React.JSX.Element {
         activeStreamId,
         childRosters,
         parentStream,
-        rootStreamId: childListTarget.streamId,
+        rootStreamId: childListTarget,
         streams,
       }),
     [
       activeStreamId,
-      childListTarget.streamId,
+      childListTarget,
       childRosters,
       parentStream,
       streams,
@@ -302,11 +302,13 @@ export function App(props: AppProps): React.JSX.Element {
     }
     return executionIds;
   }, [childRosters, sessionViews]);
+  const listRootSlice =
+    childListTarget !== undefined ? streams.get(childListTarget) : undefined;
   const workflowDashboardRoot =
-    childListTarget.slice !== undefined &&
-    streamMetadataFor(childListTarget.slice.streamId)?.identity?.kind ===
+    listRootSlice !== undefined &&
+    streamMetadataFor(listRootSlice.streamId)?.identity?.kind ===
       'multiAgentWorkflow'
-      ? childListTarget.slice
+      ? listRootSlice
       : undefined;
   // The only derivation: `SubagentList` renders this instance and
   // `ConversationRegion` budgets its rows from it, so rows cannot be grouped,
@@ -325,9 +327,9 @@ export function App(props: AppProps): React.JSX.Element {
     () =>
       groupPendingApprovalsByRow(
         pendingSummaries,
-        childListTarget.streamId ?? rootStreamId,
+        childListTarget ?? rootStreamId,
       ),
-    [childListTarget.streamId, pendingSummaries, rootStreamId],
+    [childListTarget, pendingSummaries, rootStreamId],
   );
   const childListValues = useMemo<readonly ChildListValue[]>(
     () =>
@@ -424,16 +426,16 @@ export function App(props: AppProps): React.JSX.Element {
     if (firstChildValue || workflowDashboardRootHasApproval) {
       if (
         workflowDashboardRootHasApproval &&
-        childListTarget.streamId !== undefined
+        childListTarget !== undefined
       ) {
         // The dashboard heading is not selectable, so focusing the list also
         // focuses its root and presents the approval advertised there.
-        focusStreamAndPromoteApprovals(childListTarget.streamId);
+        focusStreamAndPromoteApprovals(childListTarget);
       }
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [
-    childListTarget.streamId,
+    childListTarget,
     childListValues,
     workflowDashboardRootHasApproval,
   ]);
@@ -844,7 +846,7 @@ export function App(props: AppProps): React.JSX.Element {
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,
-          childListTarget,
+          listRootStreamId: childListTarget,
           pendingApprovals: pendingApprovalsForRows,
         }}
         onCancelChildList={cancelChildList}

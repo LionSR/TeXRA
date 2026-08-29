@@ -14,11 +14,6 @@ import { nearestActiveStreamAncestor, streamTreeEntries } from './streamViews';
 import { visibleSubagentRows, type ChildRosters } from './childExecutions';
 import type { StreamSlice } from './cliState';
 
-export interface ChildListTarget {
-  readonly slice: StreamSlice | undefined;
-  readonly streamId: StreamTabId | undefined;
-}
-
 /** Compact elapsed reading for one child row, shown only while it is running:
  *  a settled row's duration is reported by the task card that owns its
  *  outcome, so repeating a frozen figure in the live list is noise. */
@@ -53,8 +48,7 @@ export function resolveChildListTarget({
   readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): ChildListTarget {
-  const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+}): StreamTabId | undefined {
   if (activeStreamId && !hasChildListItems(activeStreamId, childRosters)) {
     const ancestor = nearestActiveStreamAncestor({
       activeStreamId,
@@ -63,18 +57,10 @@ export function resolveChildListTarget({
       canUseValue: (_slice, streamId) =>
         hasChildListItems(streamId, childRosters),
     });
-    if (ancestor) {
-      return {
-        streamId: ancestor.streamId,
-        slice: ancestor.value,
-      };
-    }
+    if (ancestor) return ancestor.streamId;
   }
 
-  return {
-    streamId: activeStreamId,
-    slice: activeSlice,
-  };
+  return activeStreamId;
 }
 
 export function numericFocusTargetForActiveStream(init: {
@@ -86,12 +72,11 @@ export function numericFocusTargetForActiveStream(init: {
 }): StreamTabId | undefined {
   if (!init.activeStreamId || init.zeroBasedIndex < 0) return undefined;
   const shortcutIndex = init.zeroBasedIndex + 1;
-  const target = resolveChildListTarget(init);
   return streamTreeEntries({
     activeStreamId: init.activeStreamId,
     childRosters: init.childRosters,
     parentStream: init.parentStream,
-    rootStreamId: target.streamId,
+    rootStreamId: resolveChildListTarget(init),
     streams: init.streams,
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
 }

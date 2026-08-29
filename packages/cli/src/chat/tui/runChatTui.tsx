@@ -272,9 +272,8 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeExecution: chatController.resume,
   });
-  const initialPresetId = initialResume
-    ? (initialResume.config.cli?.multiAgentPresetId ?? undefined)
-    : init.cliMultiAgentPresetId;
+  const initialPresetId =
+    initialResume?.config.cli?.multiAgentPresetId ?? init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
     category: AgentCategory.ToolUse,
@@ -284,13 +283,10 @@ export async function runChat(
     approvalPolicy: runtimeSession.approvalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
-    teamName: initialResume
-      ? readCliMultiAgentPresetName(initialPresetId)
-      : (init.teamName ?? readCliMultiAgentPresetName(initialPresetId)),
+    teamName: init.teamName ?? readCliMultiAgentPresetName(initialPresetId),
     cliMultiAgentPresetId: initialPresetId,
-    delegationAgentScope: initialResume
-      ? (initialResume.config.delegationAgentScope ?? undefined)
-      : init.delegationAgentScope,
+    delegationAgentScope:
+      initialResume?.config.delegationAgentScope ?? init.delegationAgentScope,
     version,
   });
   if (transcriptLifecycle.warning) {
