@@ -296,32 +296,15 @@ function staticTranscriptItemBaseMetrics(
 
 function staticTranscriptItemMetricsForPrevious(
   base: StaticTranscriptItemMetrics,
-  previousBase: StaticTranscriptItemMetrics | undefined,
+  previousMarginBottomRows = 0,
 ): StaticTranscriptItemMetrics {
-  const marginTopRows =
-    previousBase === undefined
-      ? base.declaredTopRows
-      : Math.max(0, base.declaredTopRows - previousBase.marginBottomRows);
+  const marginTopRows = Math.max(
+    0,
+    base.declaredTopRows - previousMarginBottomRows,
+  );
   return {
     ...base,
     rows: base.contentRows + marginTopRows + base.marginBottomRows,
-  };
-}
-
-function staticTranscriptPreviousBase(
-  previousItem: StaticTranscriptItem | undefined,
-): StaticTranscriptItemMetrics | undefined {
-  const previousEntry =
-    previousItem === undefined ? undefined : entryAbove(previousItem);
-  if (previousEntry === undefined) return undefined;
-  // Only the previous entry's bottom margin participates in collapse; laying
-  // out the whole previous item here would duplicate its layout cost.
-  return {
-    rows: 0,
-    bytes: 0,
-    contentRows: 0,
-    declaredTopRows: 0,
-    marginBottomRows: transcriptEntryMarginBottomRows(previousEntry),
   };
 }
 
@@ -333,9 +316,12 @@ function staticTranscriptItemMetrics(
 ): StaticTranscriptItemMetrics {
   const base = staticTranscriptItemBaseMetrics(item, width, executionLabels);
   if (item.kind === 'header') return base;
+  const previousEntry = entryAbove(previousItem);
   return staticTranscriptItemMetricsForPrevious(
     base,
-    staticTranscriptPreviousBase(previousItem),
+    previousEntry === undefined
+      ? 0
+      : transcriptEntryMarginBottomRows(previousEntry),
   );
 }
 
@@ -499,10 +485,7 @@ function retainedStaticTranscriptTail(
   if (firstBase === undefined) {
     return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
   }
-  const firstMetrics = staticTranscriptItemMetricsForPrevious(
-    firstBase,
-    headerBase,
-  );
+  const firstMetrics = staticTranscriptItemMetricsForPrevious(firstBase);
   let totals = {
     rows: (headerBase?.rows ?? 0) + firstMetrics.rows,
     bytes: (headerBase?.bytes ?? 0) + firstMetrics.bytes,
@@ -517,17 +500,12 @@ function retainedStaticTranscriptTail(
     const oldFirst = items[start];
     if (oldFirst === undefined) break;
     const oldFirstBase = firstBase;
-    const oldFirstBefore = staticTranscriptItemMetricsForPrevious(
-      oldFirstBase,
-      headerBase,
-    );
-    const candidateMetrics = staticTranscriptItemMetricsForPrevious(
-      candidateBase,
-      headerBase,
-    );
+    const oldFirstBefore = staticTranscriptItemMetricsForPrevious(oldFirstBase);
+    const candidateMetrics =
+      staticTranscriptItemMetricsForPrevious(candidateBase);
     const oldFirstAfter = staticTranscriptItemMetricsForPrevious(
       oldFirstBase,
-      candidateBase,
+      candidateBase.marginBottomRows,
     );
     totals = {
       rows:
@@ -615,16 +593,13 @@ function staticTranscriptItemsEquivalent(
 }
 
 function shouldWaitForChildIdentity({
-  hasHeader,
   parentStream,
   scrollbackStreamId,
 }: {
-  readonly hasHeader: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly scrollbackStreamId: StreamTabId | undefined;
 }): boolean {
   return (
-    !hasHeader &&
     scrollbackStreamId !== undefined &&
     parentStream.has(scrollbackStreamId) &&
     !streamMetadataFor(scrollbackStreamId)?.config?.model
@@ -661,12 +636,11 @@ function ensureStaticSessionHeader({
   readonly byteCount: number;
   readonly inserted: boolean;
 } {
-  if (items.some((item) => item.id === SESSION_HEADER_ID)) {
+  if (items[0]?.id === SESSION_HEADER_ID) {
     return { items, rowCount, byteCount, inserted: false };
   }
   if (
     shouldWaitForChildIdentity({
-      hasHeader: false,
       parentStream,
       scrollbackStreamId,
     })
@@ -692,7 +666,7 @@ function ensureStaticSessionHeader({
     width,
     executionLabels,
   );
-  const firstItem = items.find((item) => item.kind !== 'header');
+  const firstItem = items[0];
   let nextRowCount: number;
   let nextByteCount: number;
   if (firstItem === undefined) {
@@ -726,13 +700,7 @@ function ensureStaticSessionHeader({
     return { items, rowCount, byteCount, inserted: false };
   }
 
-  const firstEntryIndex = items.findIndex((item) => item.kind !== 'header');
-  const nextItems = [...items];
-  nextItems.splice(
-    firstEntryIndex < 0 ? nextItems.length : firstEntryIndex,
-    0,
-    header,
-  );
+  const nextItems = [header, ...items];
   return {
     items: nextItems,
     rowCount: nextRowCount,
@@ -789,7 +757,6 @@ export function buildStaticTranscriptItems(
   // still pending when the model arrives.
   if (
     shouldWaitForChildIdentity({
-      hasHeader: false,
       parentStream,
       scrollbackStreamId,
     })
@@ -955,7 +922,6 @@ export function buildStaticTranscriptState({
   // pending when the model arrives; scanning them now would mark them
   // consumed and drop them later.
   const waitingForChildIdentity = shouldWaitForChildIdentity({
-    hasHeader: false,
     parentStream,
     scrollbackStreamId,
   });
@@ -1080,8 +1046,8 @@ export function advanceStaticTranscriptState(
   }
 
   if (
+    !current.items.some((item) => item.id === SESSION_HEADER_ID) &&
     shouldWaitForChildIdentity({
-      hasHeader: current.items.some((item) => item.id === SESSION_HEADER_ID),
       parentStream,
       scrollbackStreamId,
     })

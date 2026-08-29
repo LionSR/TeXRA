@@ -261,7 +261,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         isChildStream: true,
-        location: 'Survey (1/1) › Agent runtime',
+        location: { context: 'Survey (1/1)', label: 'Agent runtime' },
         width: 80,
       }),
     );

@@ -76,7 +76,7 @@ function PlainEntryRows({
   // Workflow-call rows carry the same status color as their layout marker, so
   // the six statuses stay distinguishable at a glance.
   let rowColor: string | undefined;
-  if (entry.kind === 'error') {
+  if (entry.kind === 'error' && colorEnabled !== false) {
     rowColor = COLOR_ERROR;
   } else if (entry.kind === 'compactionActivity' && colorEnabled !== false) {
     rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;

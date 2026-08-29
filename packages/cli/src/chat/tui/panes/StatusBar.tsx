@@ -322,9 +322,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
-    location: focusedPhaseHeading
-      ? `${focusedPhaseHeading} › ${focusedLabel}`
-      : focusedLabel,
+    location:
+      focusedLabel === undefined
+        ? undefined
+        : { context: focusedPhaseHeading, label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,

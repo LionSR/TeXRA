@@ -245,26 +245,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   }, []);
   const onImagePaste = useCallback(
     async (attempt: ImagePasteAttempt): Promise<string | null> => {
-      try {
-        const result = await attachClipboardImage();
-        if (!attempt.isCurrent()) return null;
-        if (!result.ok) {
-          setTransientNotice(result.reason);
-          return null;
-        }
-        return attachmentsRef.current.addPastedImage({
-          path: result.path,
-          mediaType: result.mediaType,
-          displayName: result.displayName,
-        });
-      } catch (error) {
-        if (attempt.isCurrent()) {
-          setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`, {
-            ttlMs: Number.POSITIVE_INFINITY,
-          });
-        }
+      const result = await attachClipboardImage();
+      if (!attempt.isCurrent()) return null;
+      if (!result.ok) {
+        setTransientNotice(result.reason);
         return null;
       }
+      return attachmentsRef.current.addPastedImage({
+        path: result.path,
+        mediaType: result.mediaType,
+        displayName: result.displayName,
+      });
     },
     [],
   );
