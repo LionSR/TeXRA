@@ -43,10 +43,8 @@ import {
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
-import {
-  markWorkPlanArtifactHydrated,
-  type StreamArtifactReader,
-} from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import { markWorkPlanArtifactHydrated } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';

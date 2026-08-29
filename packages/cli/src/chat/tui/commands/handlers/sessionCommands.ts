@@ -29,8 +29,8 @@ import {
 import {
   hydrateStreamArtifacts,
   readStreamArtifacts,
-  type StreamArtifactReader,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';

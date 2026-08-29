@@ -55,10 +55,10 @@ import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMod
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   bumpStreamArtifactRevision,
-  projectStreamArtifacts,
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   isFinalizedTranscriptRow,
