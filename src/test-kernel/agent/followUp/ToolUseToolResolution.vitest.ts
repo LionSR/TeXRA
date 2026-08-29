@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import {
-  resolveAgentTools,
-  type ResolvedAgentTools,
-} from '@agent/runtime/agentToolResolution';
+import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -32,7 +29,7 @@ describe('tool-use tool resolution', () => {
       runtimeUnavailableTools?: readonly string[];
     },
   ): Promise<string[]> {
-    const { tools } = await resolveAgentTools({
+    const tools = await resolveAgentTools({
       tools: toolDefs(names),
       registry: getDefaultToolRegistry(),
       logger,
@@ -44,7 +41,7 @@ describe('tool-use tool resolution', () => {
 
   async function resolveDiagnostics(
     runtimeUnavailableTools: readonly string[],
-  ): Promise<ResolvedAgentTools> {
+  ): Promise<ToolDefinition[]> {
     const diagnostics = new DiagnosticsTool();
     const registry = new MapToolRegistry({ diagnostics });
     return resolveAgentTools({
@@ -105,7 +102,7 @@ describe('tool-use tool resolution', () => {
   });
 
   it('omits diagnostics when read support is host-unavailable', async () => {
-    const { tools } = await resolveDiagnostics(['diagnostics']);
+    const tools = await resolveDiagnostics(['diagnostics']);
 
     expect(tools).toEqual([]);
   });

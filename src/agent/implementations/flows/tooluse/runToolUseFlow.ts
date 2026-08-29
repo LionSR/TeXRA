@@ -177,7 +177,7 @@ export async function runToolUseFlow(
     runSession.followUps,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
-  const { tools: resolvedTools } = await resolveAgentTools({
+  const resolvedTools = await resolveAgentTools({
     tools: setting.tools,
     registry: baseRegistry,
     logger,

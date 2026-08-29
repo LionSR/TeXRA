@@ -171,6 +171,12 @@ async function resumeRunWithRecoveryProvenance(
   const suppliedRecovery = options.recovery
     ? session.followUps.useRecovery(options.recovery)
     : undefined;
+  /** Give the caller-supplied recovery back on every path that never starts. */
+  const abandonSupplied = (provisional = recoveryIsProvisional): void => {
+    if (suppliedRecovery) {
+      releaseUnstartedRecovery(session, suppliedRecovery, provisional);
+    }
+  };
 
   const store = getExecutionStore(executionId);
   let config: Awaited<ReturnType<typeof store.readConfig>>;
@@ -178,30 +184,20 @@ async function resumeRunWithRecoveryProvenance(
   try {
     [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
   } catch (error) {
-    if (suppliedRecovery) {
-      releaseUnstartedRecovery(
-        session,
-        suppliedRecovery,
-        recoveryIsProvisional,
-      );
-    }
+    abandonSupplied();
     throw error;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
   const streamId = meta?.streamId;
   if (!config || !streamId) {
-    if (suppliedRecovery) {
-      releaseUnstartedRecovery(
-        session,
-        suppliedRecovery,
-        recoveryIsProvisional,
-      );
-    }
+    abandonSupplied();
     return REFUSED;
   }
   if (suppliedRecovery && suppliedRecovery.streamId !== streamId) {
-    releaseUnstartedRecovery(session, suppliedRecovery, false);
+    // A stream mismatch is never provisional: the entry belongs to another
+    // stream, so it stays recoverable there.
+    abandonSupplied(false);
     return REFUSED;
   }
   // A stream that is already running or resuming in this process is refused,
@@ -211,13 +207,7 @@ async function resumeRunWithRecoveryProvenance(
     isCancellationRequested() ||
     session.executions.isActiveOrResuming(streamId)
   ) {
-    if (suppliedRecovery) {
-      releaseUnstartedRecovery(
-        session,
-        suppliedRecovery,
-        recoveryIsProvisional,
-      );
-    }
+    abandonSupplied();
     return REFUSED;
   }
 
@@ -229,11 +219,11 @@ async function resumeRunWithRecoveryProvenance(
       ? session.followUps.useRecovery(options.recovery)
       : session.followUps.claimRecovery(streamId, true);
     if (!queueLease) return REFUSED;
-  } else if (suppliedRecovery) {
+  } else {
     // Workflow runs have no follow-up consumer. An empty entry created only
     // for lookup can be terminalized; caller-supplied or raced input remains
     // recoverable so no user message or release observer is lost.
-    releaseUnstartedRecovery(session, suppliedRecovery, recoveryIsProvisional);
+    abandonSupplied();
   }
 
   let resume: Awaited<ReturnType<typeof retrieveSessionResumeData>>;

@@ -90,7 +90,7 @@ async function resolveWorkflowSettingTools(
   logger: { warn: (msg: string) => void },
   supportsFunctionCalling: boolean,
 ): Promise<AgentWorkflowSetting> {
-  const { tools } = await resolveAgentTools({
+  const tools = await resolveAgentTools({
     tools: setting.tools,
     logger,
     approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
