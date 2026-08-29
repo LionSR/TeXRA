@@ -27,14 +27,12 @@ const WORKFLOW_PLAIN_EVENT_TYPES = [
  * Headless `texra run` is a log, not a board. A call's pre-start states are
  * already on the TUI card and the workflow board, so the plain projection
  * prints only what a log reader needs: that a call started, and how it ended.
- * `awaitingApproval` stays — a run blocked on a decision is visible nowhere
- * else in a piped log — and a new status has to be classified here to compile.
+ * A new status has to be classified here to compile.
  */
 const WORKFLOW_PLAIN_CALL_LINE = {
   declared: false,
   planned: false,
   queued: false,
-  awaitingApproval: true,
   running: true,
   completed: true,
   cached: true,

@@ -144,7 +144,6 @@ describe('workflow run model', () => {
         { id: 'r1', phase: 'Derive', status: 'running' },
         { id: 'bad', phase: 'Derive', status: 'failed' },
         { id: 'q2', phase: 'Derive', status: 'planned' },
-        { id: 'wait', phase: 'Derive', status: 'awaitingApproval' },
         { id: 'r2', phase: 'Derive', status: 'running' },
         { id: 'ok2', phase: 'Derive', status: 'cached' },
       ],
@@ -165,12 +164,11 @@ describe('workflow run model', () => {
           : row.key,
       );
 
-    // Awaiting approval, then failed, then running — transcript order within
-    // each — then the finished cards as rows, and one row per unstarted group.
+    // Failed, then running — transcript order within each — then the finished
+    // cards as rows, and one row per unstarted group.
     expect(
       summarize(workflowPhaseRows(phase, { expanded: new Set(), filter: '' })),
     ).toStrictEqual([
-      'task:task-wait',
       'task:task-bad',
       'task:task-r1',
       'task:task-r2',
@@ -185,7 +183,6 @@ describe('workflow run model', () => {
         workflowPhaseRows(phase, { expanded: new Set(['queued']), filter: '' }),
       ),
     ).toStrictEqual([
-      'task:task-wait',
       'task:task-bad',
       'task:task-r1',
       'task:task-r2',
@@ -209,7 +206,7 @@ describe('workflow run model', () => {
     ).toStrictEqual(['declared:later']);
     expect(phase.tally).toStrictEqual({
       done: 3,
-      total: 8,
+      total: 7,
       running: 2,
       failed: 1,
       declared: 1,

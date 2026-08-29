@@ -89,22 +89,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     ).toBe('Setup (s)');
   });
 
-  it('offers no Setup on a per-call workflow review card', async () => {
-    const permission = createPermission();
-    permission.data.workflowCall = {
-      workflowName: 'revise',
-      callId: 'call-1',
-      label: 'Revise the introduction',
-    };
-
-    const element = await mountPanel(permission);
-
-    expect(
-      element.shadowRoot?.querySelector('#proposal-setup-button'),
-    ).toBeNull();
-    expect(element.handleKeyboardShortcut('s')).toBe(false);
-  });
-
   it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);

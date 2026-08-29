@@ -336,11 +336,6 @@ async function requestProposalInteraction(
     currentSession().approvals.setDelegatedWorkBypasses(request.streamId, true);
     approveQueuedDelegatedWorkForStream(request.streamId);
   }
-  // A workflow-script proposal approved with call review is a TUI-only
-  // refinement of approve; every other outcome is the shared settlement.
-  if (decision.accepted && decision.callReview) {
-    return { action: 'approve', callReview: decision.callReview };
-  }
   return toApprovalSettlement(decision);
 }
 

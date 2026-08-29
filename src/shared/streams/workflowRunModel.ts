@@ -412,13 +412,12 @@ export type WorkflowPhaseRow =
       readonly expanded: boolean;
     };
 
-/** Rows that need a decision lead, rows worth watching follow. */
-const ATTENTION_STATUSES = ['awaitingApproval', 'failed', 'running'] as const;
+/** Rows that failed lead, rows worth watching follow. */
+const ATTENTION_STATUSES = ['failed', 'running'] as const;
 type AttentionStatus = (typeof ATTENTION_STATUSES)[number];
 const ATTENTION_RANK: Record<AttentionStatus, number> = {
-  awaitingApproval: 0,
-  failed: 1,
-  running: 2,
+  failed: 0,
+  running: 1,
 };
 
 function isAttentionStatus(
@@ -449,11 +448,10 @@ function matchesFilter(
 
 /**
  * One phase's rows. With a filter every matching card is one flat row;
- * without one, cards needing attention (awaiting approval, failed, running —
- * in that order, transcript order within) lead, finished cards follow as
- * rows of their own (a ticked box is the record of what ran), and the cards
- * that have not started collapse into `queued` / `declared` groups that open
- * in place.
+ * without one, cards needing attention (failed, then running — transcript
+ * order within) lead, finished cards follow as rows of their own (a ticked
+ * box is the record of what ran), and the cards that have not started
+ * collapse into `queued` / `declared` groups that open in place.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
