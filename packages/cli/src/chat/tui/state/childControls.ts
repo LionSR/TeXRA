@@ -90,15 +90,6 @@ export function numericFocusTargetForActiveStream(init: {
   }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
 }
 
-/** The parent that lists a child on its roster, for the interval before the
- *  parent edge is recorded (roster-first event ordering). */
-function rosterParentOf(streamId: StreamTabId): StreamTabId | undefined {
-  for (const [parentId, rows] of childRosters.get()) {
-    if (rows.some((row) => row.childStreamId === streamId)) return parentId;
-  }
-  return undefined;
-}
-
 /** Whether a stream is a workflow-script run. */
 export function isWorkflowScriptStream(streamId: StreamTabId): boolean {
   return (
@@ -119,8 +110,10 @@ export function presentStream(
   streamId: StreamTabId,
 ): 'stream' | 'workflowPopup' {
   if (isWorkflowScriptStream(streamId)) {
-    const parentId =
-      parentStream.get().get(streamId) ?? rosterParentOf(streamId);
+    // The parent edge is here whenever the roster row is: the status applier
+    // creates the child's stream before the roster and the edge are emitted
+    // back to back, and the edge clears only with the parent, roster included.
+    const parentId = parentStream.get().get(streamId);
     if (parentId !== undefined) focusStream(parentId);
     openWorkflowPopup(streamId);
     return 'workflowPopup';
