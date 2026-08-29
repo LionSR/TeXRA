@@ -229,11 +229,20 @@ function utf8Prefix(text: string, byteBudget: number): string {
 /**
  * The longest suffix of `text` that encodes within `byteBudget` UTF-8 bytes,
  * found by walking the encoded bytes back past any `10xxxxxx` continuation
- * bytes to the nearest code-point boundary.
+ * bytes to the nearest code-point boundary. Only a bounded tail window is
+ * encoded: every UTF-16 code unit contributes at least one UTF-8 byte, so a
+ * `byteBudget + 1`-unit window always covers the kept bytes without an
+ * input-sized allocation on a huge single-line input, and the extra unit
+ * guarantees that a surrogate pair split by the window edge has its
+ * replacement bytes dropped before the kept region. Not exact for ill-formed
+ * input: a lone surrogate inside the kept suffix decodes to U+FFFD instead of
+ * surviving as a raw code unit (the persisted JSON bytes are identical either
+ * way, and the byte accounting matches — both encode to three bytes).
  */
 function utf8Suffix(text: string, byteBudget: number): string {
-  const bytes = UTF8_ENCODER.encode(text);
-  if (bytes.length <= byteBudget) return text;
+  const window = text.slice(Math.max(0, text.length - (byteBudget + 1)));
+  const bytes = UTF8_ENCODER.encode(window);
+  if (window.length === text.length && bytes.length <= byteBudget) return text;
   let start = Math.max(0, bytes.length - byteBudget);
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
   return UTF8_DECODER.decode(bytes.subarray(start));
