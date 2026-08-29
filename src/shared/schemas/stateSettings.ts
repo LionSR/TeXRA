@@ -743,9 +743,9 @@ const CORE_SETTING_ROWS: Record<
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
-    title: 'Make skills available to tool-use agents',
+    title: 'Enable skills for tool-use agents',
     description:
-      'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
+      'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
     honoredBy: everyHost('src/agent/prompt/userVars.ts', {
       command:
@@ -976,7 +976,7 @@ const SKILL_AVAILABILITY_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "answer a short question"',
   through:
-    'packages/cli/src/commands/agentsRun.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
 } satisfies CliRuntimeReachability;
 
 const GIT_AUTHOR_HONORED_BY: SettingHonoredBy = {

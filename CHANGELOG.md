@@ -8,7 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - **Choose skills per workspace** — the extension, desktop app, and CLI now let
   you enable or disable individual skills and skill source groups from one
-  consolidated skills display.
+  consolidated skills display. Skills are off by default until you enable the
+  master skills switch.
 
 ## [0.40.6] - 2026-08-28
 

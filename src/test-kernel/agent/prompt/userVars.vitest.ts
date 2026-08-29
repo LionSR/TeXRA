@@ -112,6 +112,29 @@ describe('buildUserVars runtime skill diagnostics', () => {
     await fakeConfig.update('texra.skills.enabled', undefined);
   });
 
+  it('keeps skills off until the master switch is enabled', async () => {
+    await fakeConfig.update('texra.skills.enabled', undefined);
+    const warn = vi.fn();
+    const emit = vi.fn();
+
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      spiedTrace({ warn, emit }),
+      { workspacePath: '/workspace' },
+    );
+
+    expect(vars.AVAILABLE_SKILLS).toBe('');
+    expect(warn).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      type: 'skills.snapshot',
+      skills: [],
+    });
+  });
+
   it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {
     const warn = vi.fn();
     const emit = vi.fn();

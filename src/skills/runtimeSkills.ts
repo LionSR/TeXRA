@@ -99,6 +99,8 @@ export function filterDiscoveredSkills(
       ({ skill, source }) =>
         !isSkillDisabled(skill.name, source.scope, disabled),
     ),
+    // Keep discovery issues visible even for disabled sources so users can
+    // repair a source before enabling it again.
     errors: result.errors,
   };
 }
