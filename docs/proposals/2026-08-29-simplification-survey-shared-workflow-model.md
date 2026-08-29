@@ -102,7 +102,7 @@ alternative does not give a full reset either (cards still scope by their
 own `attemptId`), so it is not offered. Net ≈ −40. Risk: low; `events.ts` is
 the unpublished `@texra-ai/agent` contract with no external consumer.
 
-### Bundle 3 — one declared-plan shape (≈ −15; supersedes #11605)
+### Bundle 3 — one declared-plan shape (≈ −20; deletes the fold #11608 relocated)
 
 **S6. `WorkflowDeclaredPlan` once; the proposal panel folds through the
 model.** The approval proposal carries
@@ -118,7 +118,8 @@ reader is `workflowRunModel.ts:211`; the popup's tab order uses model array
 order, not `index`. `tasks` is the same _shape_ but a different fact
 (pre-approval declaration vs. this attempt's remaining plan), which is why
 this is one schema, not one event. `workflowScriptDeclaredItemsByPhase`
-(`workflowScriptProposal.ts:85-94`, one consumer: `ProposalRequestPanel.ts:246`)
+(after #11608 a file-local helper in `ProposalRequestPanel.ts:67`, one
+caller at `:238`; the survey was scouted before that relocation landed)
 is the same grouping `unionWithDeclaredPlan` performs; calling
 `workflowRunModel({ taskGroups: [], rows: [], plan, runSettled: false,
 childProgress: new Map() })` yields the panel's groups exactly (zero-task
@@ -135,9 +136,10 @@ they fail `strictObject` loudly as `malformedPlan` (warn, no plan) — the
 intermediate-data ruling; no tolerance arm. Fixtures with `index:`
 (`WorkflowScriptProgressBridge.vitest.ts:152-160`,
 `WorkflowRunModel.vitest.ts:155,222-224`) are edits. Net ≈ −15 (the new
-shared schema counted). **This supersedes #11605** — the helper is deleted,
-not relocated; close it when this lands. Land after Bundle 2 so the marker
-vocabulary changes once.
+shared schema counted, the panel-local helper deleted). #11605 chose
+relocation and closed with #11608; this is the next step — the extension no
+longer regroups the plan at all, which is the divergence the owner ruling
+names. Land after Bundle 2 so the marker vocabulary changes once.
 
 ### Bundle 4 — the projection keeps the card it last wrote (≈ −20)
 
@@ -340,7 +342,8 @@ and #11613 (textual overlap in `WorkflowPopup.tsx` and
 
 No issues filed from this survey (the classifier gates issue creation
 without an explicit request); each bundle above is written to be an issue
-or a PR body. #11605 is superseded by S6 and should close when it lands.
+or a PR body. #11605 closed with #11608 (relocation); S6 goes one step
+further and deletes the relocated fold.
 
 ## Checks
 
