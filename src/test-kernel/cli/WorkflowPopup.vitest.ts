@@ -76,7 +76,7 @@ async function renderPopup(
       onOpenTranscript: vi.fn(),
       onViewChange: vi.fn(),
       onWorkflowControl: vi.fn(),
-      pendingApprovals: undefined,
+      pendingApprovals: new Map(),
       streamId: ROOT,
       streams: new Map([[ROOT, slice]]),
       view: VIEW,

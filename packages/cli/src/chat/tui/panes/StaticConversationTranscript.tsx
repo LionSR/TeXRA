@@ -146,7 +146,6 @@ export function sessionHeaderIdentityLine(
         ? 'workflow script'
         : 'subagent';
     const phaseText = ancestorWorkflowPhaseLabel({
-      categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
       stageOf: (id) => streamStateFor(id)?.stage,
       parentStream,
       streamId: context.streamId,
