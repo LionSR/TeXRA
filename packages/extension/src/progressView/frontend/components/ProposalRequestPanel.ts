@@ -61,6 +61,11 @@ import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
 
+/**
+ * Declared phases in order, each with its declared items. Empty phases still
+ * appear, and unphased items come last. This grouping describes declarations,
+ * not which calls run together or depend on one another.
+ */
 function workflowScriptDeclaredItemsByPhase(plan: {
   readonly phases: readonly { readonly title: string }[];
   readonly tasks: readonly WorkflowCallIdentity[];
