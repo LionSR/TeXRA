@@ -27,8 +27,7 @@ import {
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowPhaseHeading,
-  workflowCallFailureTally,
-  workflowPhaseCallProgress,
+  workflowCallTally,
 } from '@shared/copy/workflowCall';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
@@ -442,7 +441,7 @@ function WorkflowDashboard({
     })),
   ]);
   const calls = tasks.map((entry) => entry.call);
-  const { done, total } = workflowPhaseCallProgress(calls);
+  const { done, total, running, failed } = workflowCallTally(calls);
   const contentRows =
     maxRows === undefined ? undefined : Math.max(0, maxRows - 2);
 
@@ -491,8 +490,7 @@ function WorkflowDashboard({
   const rootAgent = rootIdentity
     ? runIdentityDisplayName(rootIdentity)
     : undefined;
-  const heading = `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
-  const { failed } = workflowCallFailureTally(calls);
+  const heading = `${rootAgent ?? 'Workflow'} · ${done}/${total}`;
   const renderTask = (
     item: SelectItem<ChildListValue>,
     state: { readonly focused: boolean },
@@ -546,6 +544,11 @@ function WorkflowDashboard({
         <RowSegment bold flexShrink={1}>
           {heading}
         </RowSegment>
+        {running > 0 ? (
+          <RowSegment dimColor flexShrink={2}>
+            {` · ${running} running`}
+          </RowSegment>
+        ) : null}
         {failed > 0 ? (
           // A pending approval needs action, so this tally yields before the
           // fixed approval suffix when the two cannot both fit.
@@ -761,7 +764,7 @@ export function SubagentList(
               focused={state.focused}
               hiddenRowSummary={
                 state.hiddenItemCount > 0
-                  ? `+${formatResultCount(state.hiddenItemCount, 'session')}`
+                  ? `+${formatResultCount(state.hiddenItemCount, 'agent')}`
                   : undefined
               }
               metadataColumn={metadataColumn}

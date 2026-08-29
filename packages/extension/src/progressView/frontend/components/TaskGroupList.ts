@@ -22,9 +22,9 @@ import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import {
   formatWorkflowPhaseHeading,
-  workflowPhaseCallProgress,
+  latestWorkflowAttemptEntries,
+  workflowCallTally,
   workflowPhaseHeadingOfGroup,
-  workflowCallFailureTally,
 } from '@shared/copy/workflowCall';
 
 // Side-effect imports - register Web Awesome components
@@ -102,13 +102,28 @@ function collectWorkflowCalls(node: GroupTree): WorkflowCallProgress[] {
   ];
 }
 
+/**
+ * `collectWorkflowCalls`, scoped to the newest resume attempt. A relaunch
+ * under the same `meta.name` appends a second projection attempt to the same
+ * transcript with fresh card ids; without this, a subtree's live tally folds
+ * every attempt together — doubling totals and keeping stale failures the
+ * resume is actively re-running. Older attempts' cards remain readable as
+ * history in the rows themselves — only the live count and dots are scoped.
+ */
+function collectLatestAttemptWorkflowCalls(
+  node: GroupTree,
+): readonly WorkflowCallProgress[] {
+  return latestWorkflowAttemptEntries(
+    collectWorkflowCalls(node),
+    (call) => call.attemptId,
+  );
+}
+
 /** `done/total`, then `· N running` while live and `· N failed` in warning tone. */
 function renderWorkflowCallTally(
   calls: readonly WorkflowCallProgress[],
 ): TemplateResult {
-  const { done, total } = workflowPhaseCallProgress(calls);
-  const running = calls.filter((call) => call.status === 'running').length;
-  const { failed } = workflowCallFailureTally(calls);
+  const { done, total, running, failed } = workflowCallTally(calls);
   return html`<span class="group-progress">${done}/${total}</span>${
       running > 0
         ? html`<span class="group-progress">· ${running} running</span>`
@@ -431,16 +446,16 @@ export class TaskGroupList extends LitElement {
   /**
    * `done/total · N running · N failed` plus one status dot per call for a
    * phase header, folded from the workflow-call cards the group already holds
-   * — the same fold the CLI band uses, so no second owner of counts. Nothing
-   * renders for a group with no call cards, so round and run headers are
-   * unaffected.
+   * via the same shared `workflowCallTally` the CLI's phase and run tallies
+   * use, so no second owner of counts. Nothing renders for a group with no
+   * call cards, so round and run headers are unaffected.
    */
   private renderGroupProgress(
     node: GroupTree,
   ): TemplateResult | typeof nothing {
     if (node.group.kind !== 'phase') return nothing;
     // The header counts the whole subtree, exactly as renderRunBand does.
-    const calls = collectWorkflowCalls(node);
+    const calls = collectLatestAttemptWorkflowCalls(node);
     if (calls.length === 0) return nothing;
     return html`${renderWorkflowCallTally(calls)}
       <span class="group-dots" aria-hidden="true"
@@ -469,7 +484,7 @@ export class TaskGroupList extends LitElement {
       return nothing;
     }
     return html`${guard([node, this.rowGeneration], () => {
-      const calls = collectWorkflowCalls(node);
+      const calls = collectLatestAttemptWorkflowCalls(node);
       if (calls.length === 0) return nothing;
       return html`<div class="log-run-band">
         ${renderWorkflowCallTally(calls)}
@@ -635,7 +650,7 @@ export class TaskGroupList extends LitElement {
           ${
             active
               ? 'Run is starting. Progress updates will appear here.'
-              : 'No log output for this stream yet.'
+              : 'No log output for this run yet.'
           }
         </div>
       `;

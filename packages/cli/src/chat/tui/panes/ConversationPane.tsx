@@ -8,8 +8,7 @@ import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
   formatWorkflowPhaseHeading,
-  workflowCallFailureTally,
-  workflowPhaseCallProgress,
+  workflowCallTally,
   workflowPhaseHeadingOfGroup,
 } from '@shared/copy/workflowCall';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
@@ -181,7 +180,7 @@ export function workflowRunStatusSummary(
   const callRows = slice.entries.flatMap((row) =>
     row.kind === 'workflowTask' ? [row] : [],
   );
-  const { done, total } = workflowPhaseCallProgress(
+  const { done, total } = workflowCallTally(
     callRows.filter((row) => row.groupId === phase.id).map((row) => row.call),
   );
   const segments: WorkflowStatusSegment[] = [
@@ -193,7 +192,7 @@ export function workflowRunStatusSummary(
   if (total > 0) {
     segments.push({ text: `${done}/${total} done`, tone: 'muted' });
   }
-  const { failed } = workflowCallFailureTally(callRows.map((row) => row.call));
+  const { failed } = workflowCallTally(callRows.map((row) => row.call));
   if (failed > 0) {
     segments.push({ text: `${failed} failed`, tone: 'warning' });
   }

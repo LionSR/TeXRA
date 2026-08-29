@@ -70,33 +70,60 @@ export function formatWorkflowCallMetadataParts(
 }
 
 /**
- * Completion fold for one phase's calls, shared by every host so the terminal
- * and the progress view can never disagree on what "done" counts. The caller
- * selects the phase's calls — each host already holds them in its own
- * container, and matching them here would duplicate that ownership.
+ * Completion fold for a caller-selected list of calls — `done/total · N
+ * running · N failed` — shared by every host so the terminal and the
+ * progress view can never disagree on what a phase, or a whole run, has
+ * done. The caller selects the calls (each host already holds them in its
+ * own container, and matching them here would duplicate that ownership), so
+ * the same helper serves both a phase-scoped fold and a whole-run fold from
+ * two different call lists.
+ *
+ * Cancelled calls remain distinct from failures and do not contribute to
+ * `failed`. Snapshot consumers (`/executions`) derive their own per-status
+ * tallies with `deriveWorkflowCounts` and do not need this helper.
  */
-export function workflowPhaseCallProgress(
-  calls: readonly WorkflowCallProgress[],
-): { readonly done: number; readonly total: number } {
+export function workflowCallTally(calls: readonly WorkflowCallProgress[]): {
+  readonly done: number;
+  readonly total: number;
+  readonly running: number;
+  readonly failed: number;
+} {
   return {
     done: calls.filter((call) => isTerminalWorkflowCallProgress(call)).length,
     total: calls.length,
+    running: calls.filter((call) => call.status === 'running').length,
+    failed: calls.filter((call) => call.status === 'failed').length,
   };
 }
 
 /**
- * Whole-run failure tally shared by every host, so the terminal and the
- * progress view can never disagree on whether a workflow had failed calls.
- * Mirrors `workflowPhaseCallProgress` in taking a caller-selected call list.
+ * Scope a caller-selected list of workflow-task rows to the newest resume
+ * attempt, shared by every host's live tally and row selection. A relaunch
+ * under the same `meta.name` appends a second projection attempt to the same
+ * deterministic transcript with fresh card ids, so without this, dashboards
+ * and boards fold every attempt together — doubling totals and keeping stale
+ * failures the resume is actively re-running.
  *
- * Cancelled calls remain distinct from failures and do not contribute to this
- * tally. Snapshot consumers (`/executions`) derive their own per-status tallies
- * with `deriveWorkflowCounts` and do not need this helper.
+ * "Newest" is the last attempt id observed while scanning `entries` in the
+ * caller's own (transcript) order, since a resume's cards are appended after
+ * the attempt they supersede. Entries with no attempt id (older, pre-attempt
+ * transcripts) are never filtered out — only a defined id that disagrees
+ * with the newest one drops a row.
  */
-export function workflowCallFailureTally(
-  calls: readonly WorkflowCallProgress[],
-): { readonly failed: number } {
-  return { failed: calls.filter((call) => call.status === 'failed').length };
+export function latestWorkflowAttemptEntries<T>(
+  entries: readonly T[],
+  attemptIdOf: (entry: T) => string | undefined,
+): readonly T[] {
+  let latestAttemptId: string | undefined;
+  for (const entry of entries) {
+    const attemptId = attemptIdOf(entry);
+    if (attemptId !== undefined) latestAttemptId = attemptId;
+  }
+  if (latestAttemptId === undefined) return entries;
+  return entries.filter((entry) => {
+    const attemptId = attemptIdOf(entry);
+    return attemptId === undefined || attemptId === latestAttemptId;
+  });
 }
 
 /** One workflow phase as its emitter names and orders it. */

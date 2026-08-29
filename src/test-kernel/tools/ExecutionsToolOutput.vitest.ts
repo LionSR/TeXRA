@@ -502,7 +502,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     });
     const output = result.output ?? '';
     assert.equal(result.status, 'executed');
-    assert.ok(output.includes('"currentStage"'));
+    assert.ok(output.includes('"currentPhase"'));
     assert.ok(output.includes('"calls"'));
     assert.ok(output.includes('"stageBlocked": 0'));
     assert.ok(output.includes('"childExecutionId": "abcdef123456"'));

@@ -488,7 +488,7 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     typeof viewRange[1] === 'number'
   ) {
     sections.push(
-      textSection('Range:', `lines ${viewRange[0]}–${viewRange[1]}`),
+      textSection('Range:', `lines ${viewRange[0]}-${viewRange[1]}`),
     );
   }
   if (typeof input.offset === 'number') {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
-import { COLOR_ACCENT } from '@cli/tui/ui/colors';
+import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
@@ -47,6 +47,170 @@ function fileGroupText(label: string, files: readonly string[]): string {
   return formatAgentProposalFileGroup(label, files, FILE_LIMIT);
 }
 
+interface MetadataSegment {
+  readonly text: string;
+  readonly bold?: boolean;
+}
+
+/**
+ * One line of the proposal card's metadata block. Segments (rather than a
+ * single bold prefix) let a line carry more than one bold span — e.g. the
+ * `Model: X · Category: Y` line's two mid-line labels. `tone` maps to the
+ * shared color/dim vocabulary; `marginTop` reproduces a blank spacer row
+ * (not text) above the line, matching the plain-approval branch's file-group
+ * Box marginTop.
+ *
+ * This is the single enumeration of the proposal card's content: both the
+ * rendered JSX and the row-budget count (agentProposalMetadataRows) derive
+ * from it, so a content change can no longer update one and silently
+ * mis-budget the other.
+ */
+interface MetadataLine {
+  readonly segments: readonly MetadataSegment[];
+  readonly tone?: 'warning' | 'dim';
+  readonly marginTop?: boolean;
+}
+
+function fileGroupLine(group: {
+  readonly label: string;
+  readonly files: readonly string[];
+}): MetadataLine {
+  const text = fileGroupText(group.label, group.files);
+  const prefix = `${group.label}: `;
+  return {
+    segments: [
+      { text: prefix, bold: true },
+      { text: text.slice(prefix.length) },
+    ],
+  };
+}
+
+function fileGroupLines(
+  fileGroups: ReturnType<typeof getProposalFileGroups>,
+  heading?: string,
+): MetadataLine[] {
+  if (fileGroups.length === 0) {
+    return [];
+  }
+  const lines = fileGroups.map((group) => fileGroupLine(group));
+  if (heading !== undefined) {
+    return [{ segments: [{ text: `${heading}:` }], tone: 'dim' }, ...lines];
+  }
+  const [first, ...rest] = lines;
+  return [{ ...first, marginTop: true }, ...rest];
+}
+
+function agentProposalMetadataLines({
+  fileGroups,
+  payload,
+}: {
+  readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
+  readonly payload: AgentProposalPermission;
+}): MetadataLine[] {
+  if (
+    payload.agentCategory === AgentCategory.Workflow &&
+    payload.workflowScript
+  ) {
+    const workflow = payload.workflowScript;
+    return [
+      {
+        segments: [
+          { text: workflow.name, bold: true },
+          { text: ` · ${workflowScriptPlanSummary(workflow)}` },
+        ],
+      },
+      {
+        segments: [
+          {
+            text: WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+              payload.agent,
+              getRuntimeModelLabel(payload.model),
+            ),
+          },
+        ],
+      },
+      {
+        segments: [{ text: WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning }],
+        tone: 'warning',
+      },
+      {
+        segments: [{ text: WORKFLOW_CALL_REVIEW_COPY.cliReviewExplanation }],
+        tone: 'dim',
+      },
+      {
+        segments: [
+          {
+            text:
+              workflow.tasks.length > 0
+                ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
+                : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote,
+          },
+        ],
+        tone: 'dim',
+      },
+      ...fileGroupLines(fileGroups, WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading),
+      {
+        segments: [{ text: `Script: ${workflow.scriptPath}` }],
+        tone: 'dim',
+      },
+    ];
+  }
+
+  const lines: MetadataLine[] = [
+    {
+      segments: [
+        { text: 'Model: ', bold: true },
+        { text: getRuntimeModelLabel(payload.model) },
+        { text: ' · ' },
+        { text: 'Category: ', bold: true },
+        { text: agentProposalCategoryLabel(payload.agentCategory) },
+      ],
+    },
+  ];
+  if (payload.workflowCall) {
+    lines.push({
+      segments: [{ text: workflowCallCardLine(payload.workflowCall) }],
+      tone: 'dim',
+    });
+  }
+  if (payload.workingDirectory) {
+    lines.push({
+      segments: [
+        { text: 'Directory: ', bold: true },
+        { text: payload.workingDirectory },
+      ],
+    });
+  }
+  lines.push(...fileGroupLines(fileGroups));
+  lines.push({
+    segments: [{ text: DELEGATION_APPROVAL_COPY.cliExplanation }],
+    tone: 'dim',
+  });
+  return lines;
+}
+
+function metadataLinesRows(
+  lines: readonly MetadataLine[],
+  width: number,
+): number {
+  return (
+    1 +
+    lines.reduce(
+      (rows, line) =>
+        rows +
+        (line.marginTop ? 1 : 0) +
+        wrappedRows(
+          line.segments.map((segment) => segment.text).join(''),
+          width,
+        ),
+      0,
+    )
+  );
+}
+
+/** Row-count view of {@link agentProposalMetadataLines} for the scrollable
+ * prompt-area budget — same descriptor list, counted rather than painted, so
+ * the two can never drift. */
 export function agentProposalMetadataRows({
   fileGroups,
   payload,
@@ -56,80 +220,33 @@ export function agentProposalMetadataRows({
   readonly payload: AgentProposalPermission;
   readonly width: number;
 }): number {
-  if (
-    payload.agentCategory === AgentCategory.Workflow &&
-    payload.workflowScript
-  ) {
-    const workflow = payload.workflowScript;
-    return (
-      1 +
-      wrappedRows(
-        `${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
-        width,
-      ) +
-      wrappedRows(
-        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-          payload.agent,
-          getRuntimeModelLabel(payload.model),
-        ),
-        width,
-      ) +
-      wrappedRows(WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning, width) +
-      wrappedRows(WORKFLOW_CALL_REVIEW_COPY.cliReviewExplanation, width) +
-      wrappedRows(
-        workflow.tasks.length > 0
-          ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
-          : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote,
-        width,
-      ) +
-      (fileGroups.length > 0
-        ? 1 +
-          fileGroups.reduce(
-            (rows, group) =>
-              rows +
-              wrappedRows(fileGroupText(group.label, group.files), width),
-            0,
-          )
-        : 0) +
-      wrappedRows(`Script: ${workflow.scriptPath}`, width)
-    );
-  }
-  return (
-    1 +
-    wrappedRows(
-      `Model: ${getRuntimeModelLabel(payload.model)} · Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
-      width,
-    ) +
-    (payload.workflowCall
-      ? wrappedRows(workflowCallCardLine(payload.workflowCall), width)
-      : 0) +
-    (payload.workingDirectory
-      ? wrappedRows(`Directory: ${payload.workingDirectory}`, width)
-      : 0) +
-    (fileGroups.length > 0
-      ? 1 +
-        fileGroups.reduce(
-          (rows, group) =>
-            rows + wrappedRows(fileGroupText(group.label, group.files), width),
-          0,
-        )
-      : 0) +
-    wrappedRows(DELEGATION_APPROVAL_COPY.cliExplanation, width)
+  return metadataLinesRows(
+    agentProposalMetadataLines({ fileGroups, payload }),
+    width,
   );
 }
 
-function FileGroup(props: {
-  readonly label: string;
-  readonly files: readonly string[];
+function MetadataLineRow(props: {
+  readonly line: MetadataLine;
 }): React.JSX.Element {
-  const text = fileGroupText(props.label, props.files);
-  const prefix = `${props.label}: `;
-  return (
-    <Text>
-      <Text bold>{prefix}</Text>
-      {text.slice(prefix.length)}
+  const { line } = props;
+  const text = (
+    <Text
+      color={line.tone === 'warning' ? COLOR_WARNING : undefined}
+      dimColor={line.tone === 'dim'}
+    >
+      {line.segments.map((segment, index) =>
+        segment.bold ? (
+          <Text key={index} bold>
+            {segment.text}
+          </Text>
+        ) : (
+          segment.text
+        ),
+      )}
     </Text>
   );
+  return line.marginTop ? <Box marginTop={1}>{text}</Box> : text;
 }
 
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
@@ -150,11 +267,11 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const instructionWidth = clampModalWidth(
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
-  const metadataRows = agentProposalMetadataRows({
+  const metadataLines = agentProposalMetadataLines({
     fileGroups,
     payload: props.payload,
-    width: instructionWidth,
   });
+  const metadataRows = metadataLinesRows(metadataLines, instructionWidth);
   const maxInstructionRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
@@ -192,78 +309,9 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">
-        {workflowScript ? (
-          <>
-            <Text>
-              <Text bold>{workflowScript.name}</Text>
-              {' · '}
-              {workflowScriptPlanSummary(workflowScript)}
-            </Text>
-            <Text>
-              {WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
-                props.payload.agent,
-                getRuntimeModelLabel(props.payload.model),
-              )}
-            </Text>
-            <Text color="yellow">
-              {WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-            </Text>
-            <Text dimColor>
-              {WORKFLOW_CALL_REVIEW_COPY.cliReviewExplanation}
-            </Text>
-            <Text dimColor>
-              {workflowScript.tasks.length > 0
-                ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
-                : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote}
-            </Text>
-            {fileGroups.length > 0 ? (
-              <Box flexDirection="column">
-                <Text dimColor>
-                  {WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:
-                </Text>
-                {fileGroups.map((group) => (
-                  <FileGroup
-                    key={group.label}
-                    label={group.label}
-                    files={group.files}
-                  />
-                ))}
-              </Box>
-            ) : null}
-            <Text dimColor>Script: {workflowScript.scriptPath}</Text>
-          </>
-        ) : (
-          <>
-            <Text>
-              <Text bold>Model: </Text>
-              {getRuntimeModelLabel(props.payload.model)}
-              {' · '}
-              <Text bold>Category: </Text>
-              {agentProposalCategoryLabel(props.payload.agentCategory)}
-            </Text>
-            {workflowCall ? (
-              <Text dimColor>{workflowCallCardLine(workflowCall)}</Text>
-            ) : null}
-            {props.payload.workingDirectory ? (
-              <Text>
-                <Text bold>Directory: </Text>
-                {props.payload.workingDirectory}
-              </Text>
-            ) : null}
-            {fileGroups.length > 0 ? (
-              <Box marginTop={1} flexDirection="column">
-                {fileGroups.map((group) => (
-                  <FileGroup
-                    key={group.label}
-                    label={group.label}
-                    files={group.files}
-                  />
-                ))}
-              </Box>
-            ) : null}
-            <Text dimColor>{DELEGATION_APPROVAL_COPY.cliExplanation}</Text>
-          </>
-        )}
+        {metadataLines.map((line, index) => (
+          <MetadataLineRow key={index} line={line} />
+        ))}
       </Box>
       <ScrollableModalText
         hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}

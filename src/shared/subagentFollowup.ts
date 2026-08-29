@@ -214,7 +214,7 @@ export function formatWorkflowScriptDeliverySummary(
   const status = summary.outcome === 'completed' ? 'completed' : 'failed';
   const facts = [
     `${formatResultCount(summary.phaseCount, 'phase')}`,
-    `${summary.taskDone}/${summary.taskTotal} tasks succeeded`,
+    `${summary.taskDone}/${summary.taskTotal} calls succeeded`,
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];
