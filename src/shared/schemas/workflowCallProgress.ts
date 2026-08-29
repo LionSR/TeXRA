@@ -32,6 +32,24 @@ export type WorkflowAttemptMarker = {
   readonly attemptId: string;
 };
 
+/**
+ * The declared plan of one workflow-script attempt — every `meta.phases`
+ * entry and every `meta.tasks` entry, in script order — recorded once on the
+ * transcript when the attempt's execution state is constructed. Phases and
+ * calls the run has reached are projected as stages and cards; this marker is
+ * what lets a host list the ones it has not reached yet without opening their
+ * stage (a `stage.start` prints the phase divider into scrollback).
+ */
+export const WorkflowPlanMarkerSchema = z.strictObject({
+  kind: z.literal('workflowPlan'),
+  attemptId: z.string().min(1),
+  phases: z.array(
+    z.strictObject({ title: z.string().min(1), index: z.int().min(0) }),
+  ),
+  tasks: z.array(WorkflowCallIdentitySchema),
+});
+export type WorkflowPlanMarker = z.infer<typeof WorkflowPlanMarkerSchema>;
+
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
   durationMs: z.number().nonnegative().optional(),
   totalCostUsd: z.number().nonnegative().optional(),

@@ -205,6 +205,49 @@ describe('workflow dashboard model', () => {
     ).toStrictEqual(model.tasks.map((entry) => `workflowTask:${entry.id}`));
   });
 
+  it('lists declared phases and tasks the run has not reached, never a card twice', () => {
+    const root: StreamSlice = {
+      ...workflowRoot(['Map'], [{ id: 'inspect', phase: 'Map' }]),
+      workflowPlan: {
+        kind: 'workflowPlan',
+        attemptId: 'attempt-1',
+        phases: [
+          { title: 'Map', index: 0 },
+          { title: 'Reduce', index: 1 },
+        ],
+        tasks: [
+          { id: 'inspect', label: 'inspect', phase: 'Map' },
+          { id: 'extract', label: 'Extract facts', phase: 'Map' },
+          { id: 'merge', label: 'Merge results', phase: 'Reduce' },
+        ],
+      },
+    };
+    const model = workflowDashboardModel(root, WIDE_COLUMNS);
+
+    expect(
+      model.groups.map((group) => [
+        group.heading.phaseLabel,
+        group.opened,
+        group.tasks.length,
+        group.declaredTasks.map((task) => task.id),
+      ]),
+    ).toEqual([
+      ['Map', true, 1, ['extract']],
+      ['Reduce', false, 0, ['merge']],
+    ]);
+    expect(model.groups[1]?.heading).toEqual({
+      phaseLabel: 'Reduce',
+      phaseIndex: 1,
+      phaseTotal: 2,
+    });
+    // The declared phase is a keyboard-reachable row; declared tasks are not.
+    expect(model.listValues).toEqual([
+      model.groups[0]?.value,
+      model.groups[1]?.value,
+      'workflowTask:task-inspect',
+    ]);
+  });
+
   it('gives an ambiguous child stream to no task at all', () => {
     const shared = 'shared-child' as StreamTabId;
     const root = workflowRoot(

@@ -10,6 +10,7 @@ import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   POINTER,
   STATUS_DIAMOND,
+  STATUS_DIAMOND_OUTLINE,
   TICK,
   TOKENS_GENERATED,
 } from '@cli/tui/ui/glyphs';
@@ -17,6 +18,7 @@ import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import {
   WORKFLOW_TASK_STATUS_LABEL,
+  type WorkflowCallIdentity,
   isTerminalWorkflowCallProgress,
   runIdentityDisplayName,
   type StreamTabId,
@@ -163,6 +165,16 @@ function PhaseHeader({
 }): React.JSX.Element {
   const calls = group.tasks.map((entry) => entry.call);
   const strip = showStatusStrip ? workflowPhaseStatusStrip(calls) : undefined;
+  const declared = group.declaredTasks.length;
+  // An opened phase tallies its calls and, while the plan still holds tasks
+  // it has not issued, how many; a phase known only from the plan has no
+  // calls to tally, so its declared count is the whole story.
+  const declaredText = declared > 0 ? `${declared} declared` : undefined;
+  const tally = group.opened
+    ? [workflowPhaseTallyText(calls), declaredText]
+        .filter(filterNotNullish)
+        .join(' · ')
+    : (declaredText ?? 'declared');
   return (
     <Box
       flexDirection="row"
@@ -179,7 +191,9 @@ function PhaseHeader({
           {focused ? POINTER : ' '}
         </Text>
         <Text aria-hidden dimColor>
-          {dashboardMarkerCell(STATUS_DIAMOND)}
+          {dashboardMarkerCell(
+            group.opened ? STATUS_DIAMOND : STATUS_DIAMOND_OUTLINE,
+          )}
         </Text>
       </Box>
       <Box minWidth={0} flexShrink={1}>
@@ -189,7 +203,7 @@ function PhaseHeader({
       </Box>
       <Box minWidth={0} flexShrink={2}>
         <Text dimColor wrap="truncate-end">
-          {` · ${workflowPhaseTallyText(calls)}`}
+          {` · ${tally}`}
         </Text>
       </Box>
       {strip ? (
@@ -386,6 +400,32 @@ function WorkflowTaskRow({
   );
 }
 
+/** A plan task the run has not issued yet: label and status, nothing to
+ *  focus, kill, or retry. */
+function DeclaredTaskRow({
+  task,
+}: {
+  readonly task: WorkflowCallIdentity;
+}): React.JSX.Element {
+  const style = WORKFLOW_TASK_STATUS_STYLE.declared;
+  return (
+    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
+      <Box flexShrink={0}>
+        <Text aria-hidden> </Text>
+        <Text aria-hidden color={style.color}>
+          {dashboardMarkerCell(style.marker)}
+        </Text>
+      </Box>
+      <RowSegment dimColor flexShrink={1}>
+        {task.label}
+      </RowSegment>
+      <RowSegment dimColor flexShrink={1}>
+        {` · ${WORKFLOW_TASK_STATUS_LABEL.declared}`}
+      </RowSegment>
+    </Box>
+  );
+}
+
 function WorkflowDashboard({
   columns,
   keyboardActive,
@@ -423,12 +463,26 @@ function WorkflowDashboard({
     label: group.heading.phaseLabel,
     value: group.value,
   }));
-  const taskItems: SelectItem<ChildListValue>[] = (
-    activeGroup?.tasks ?? []
-  ).map((entry) => ({
-    label: entry.call.label,
-    value: workflowTaskListValue(entry.id),
-  }));
+  // Declared rows sit under the phase's cards, disabled: they own no stream
+  // to focus and no call to control, and they leave the list the moment the
+  // run issues them (their card then takes the row).
+  const declaredTaskByValue = new Map<ChildListValue, WorkflowCallIdentity>(
+    (activeGroup?.declaredTasks ?? []).map((task) => [
+      workflowTaskListValue(`declared-${task.id}`),
+      task,
+    ]),
+  );
+  const taskItems: SelectItem<ChildListValue>[] = [
+    ...(activeGroup?.tasks ?? []).map((entry) => ({
+      label: entry.call.label,
+      value: workflowTaskListValue(entry.id),
+    })),
+    ...[...declaredTaskByValue].map(([value, task]) => ({
+      label: task.label,
+      value,
+      disabled: true,
+    })),
+  ];
   const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
     {
       label: group.heading.phaseLabel,
@@ -496,7 +550,10 @@ function WorkflowDashboard({
     state: { readonly focused: boolean },
   ): React.JSX.Element | null => {
     const entry = taskByValue.get(item.value);
-    if (!entry) return null;
+    if (!entry) {
+      const declared = declaredTaskByValue.get(item.value);
+      return declared ? <DeclaredTaskRow task={declared} /> : null;
+    }
     const childStreamId = uniqueChildId(entry);
     return (
       <WorkflowTaskRow

@@ -32,6 +32,7 @@ import type {
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
   WorkflowCallProgress,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 
@@ -150,6 +151,15 @@ interface WorkflowCallEvent extends StageStamp {
 interface WorkflowAttemptEvent extends StageStamp {
   readonly type: 'workflow.attempt';
   readonly attemptId: string;
+}
+
+/** The attempt's declared phases and tasks, emitted once before any of them
+ *  opens — see `WorkflowPlanMarker`. */
+interface WorkflowPlanEvent extends StageStamp {
+  readonly type: 'workflow.plan';
+  readonly attemptId: string;
+  readonly phases: WorkflowPlanMarker['phases'];
+  readonly tasks: WorkflowPlanMarker['tasks'];
 }
 
 /** Exact raw skill catalog accepted for this run's initial prompt. */
@@ -378,6 +388,7 @@ export type AgentEvent =
   | ToolStartEvent
   | ToolEndEvent
   | WorkflowAttemptEvent
+  | WorkflowPlanEvent
   | WorkflowCallEvent
   | ActiveSkillsEvent
   | UsageEvent

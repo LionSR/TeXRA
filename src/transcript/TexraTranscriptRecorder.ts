@@ -49,6 +49,7 @@ import {
   type MessageType,
   type ToolUseLog,
   type WorkflowAttemptMarker,
+  type WorkflowPlanMarker,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
@@ -550,6 +551,26 @@ export function attachTranscriptRecorder(
           } satisfies WorkflowAttemptMarker;
           writer.appendSettled({
             id: `workflow-attempt-${event.attemptId}`,
+            type: STREAM_LOG_ENTRY_TYPES.LOG,
+            level: 'info',
+            timestamp: Date.now(),
+            groupId: event.stageId,
+            messageType: MESSAGE_TYPES.INTERNAL,
+            data: marker,
+            verbose: false,
+          });
+          return;
+        }
+
+        case 'workflow.plan': {
+          const marker = {
+            kind: 'workflowPlan',
+            attemptId: event.attemptId,
+            phases: event.phases,
+            tasks: event.tasks,
+          } satisfies WorkflowPlanMarker;
+          writer.appendSettled({
+            id: `workflow-plan-${event.attemptId}`,
             type: STREAM_LOG_ENTRY_TYPES.LOG,
             level: 'info',
             timestamp: Date.now(),
