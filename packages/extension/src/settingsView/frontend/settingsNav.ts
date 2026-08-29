@@ -67,6 +67,11 @@ const SETTINGS_TAB_METADATA: Record<
     description:
       'Review tool availability, permissions, and desktop diagnostics.',
   },
+  SKILLS: {
+    icon: 'wand-magic-sparkles',
+    label: 'Skills',
+    description: 'Choose which reusable instructions agents can load.',
+  },
   AI_AGENTS: {
     icon: 'link',
     label: 'Integrations',

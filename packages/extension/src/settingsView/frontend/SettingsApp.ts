@@ -46,6 +46,7 @@ import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
+import './tabs/SkillsTab';
 import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
@@ -78,6 +79,8 @@ import {
   customAgentScanIssues,
   customPresets,
   detachSubagentsOnStop,
+  disabledSkills,
+  disabledSkillSources,
   multiAgentSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
@@ -105,6 +108,8 @@ import {
   resetSettingsState,
   selectedPanel,
   sessionProblem,
+  skillLoadIssues,
+  skillsList,
   subscriptionUsage,
   telemetryEnabled,
   toolDashboardItems,
@@ -420,8 +425,17 @@ export class SettingsApp extends SettingsAppBase {
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
-            .agentSkillsEnabled=${agentSkillsEnabled.get()}
           ></tools-tab>
+        `;
+      case 'skills':
+        return html`
+          <skills-tab
+            .masterEnabled=${agentSkillsEnabled.get()}
+            .disabledSkills=${disabledSkills.get()}
+            .disabledSources=${disabledSkillSources.get()}
+            .skills=${skillsList.get()}
+            .issues=${skillLoadIssues.get()}
+          ></skills-tab>
         `;
       case 'ai-agents':
         return html`

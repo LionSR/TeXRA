@@ -146,6 +146,7 @@ export async function initializeElectronPlatform(
   // desktop cannot wire one prompt and forget another the way it once did.
   initializeBundledPrompts(resourcesPath);
   initializeNodeRuntimeSkills({
+    host: 'desktop',
     cwd: workspacePath ?? app.getPath('home'),
     resourcesPath,
   });

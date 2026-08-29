@@ -802,7 +802,7 @@ describe('desktop settings IPC', () => {
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
   });
 
-  it('writes the agent-skills toggle and returns the shared setting message', async () => {
+  it('writes the agent-skills toggle and returns the skills settings', async () => {
     const config = new FakeScopedConfigProvider();
 
     const { settings, posted } = createCapturedSettingsFixture({
@@ -822,10 +822,14 @@ describe('desktop settings IPC', () => {
     expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
     expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
     expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS),
     ).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
-      values: { [AGENT_SKILLS_CONFIG_KEY]: false },
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS,
+      values: {
+        [AGENT_SKILLS_CONFIG_KEY]: false,
+        [WorkspaceStateKey.DISABLED_SKILLS]: [],
+        [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
+      },
     });
   });
 

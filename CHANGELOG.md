@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Features
+
+- **Choose skills per workspace** — the extension, desktop app, and CLI now let
+  you enable or disable individual skills and skill source groups from one
+  consolidated skills display.
+
 ## [0.40.6] - 2026-08-28
 
 ### Shared (all surfaces)
