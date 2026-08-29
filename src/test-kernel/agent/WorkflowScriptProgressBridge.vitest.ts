@@ -107,25 +107,6 @@ function latestWorkflowCallEvents(
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
-  it('announces an attempt before script parsing can fail', async () => {
-    const { trace, events } = recordingTrace();
-
-    await expect(
-      runScript(trace, 'invalid-script', 'not valid js'),
-    ).rejects.toThrow();
-
-    expect(events[0]).toMatchObject({
-      type: 'workflow.attempt',
-      attemptId: expect.any(String),
-    });
-    expect(
-      events.some(
-        (event) =>
-          event.type === 'workflow.call' || event.type === 'stage.start',
-      ),
-    ).toBe(false);
-  });
-
   it('records the declared plan once, before any phase opens', async () => {
     const { trace, events } = recordingTrace();
     await runScript(
@@ -147,8 +128,7 @@ return await agent('Inspect', { id: 'inspect' })`,
     const plans = events.filter((event) => event.type === 'workflow.plan');
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({
-      attemptId:
-        events[0]?.type === 'workflow.attempt' ? events[0].attemptId : '',
+      attemptId: expect.any(String),
       phases: [
         { title: 'Research', index: 0 },
         { title: 'Write', index: 1 },

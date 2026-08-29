@@ -129,10 +129,10 @@ function applyEntry(
     streamLogs,
     applyCompactionActivityEntries(streamLogs.compactionProjection, [entry]),
   );
-  // The workflow attempt and plan markers are the one internal record this
-  // host reads: they are an input of the shared workflow run model the board
-  // paints. A new attempt starts with no plan of its own until it records one,
-  // and an unreadable plan is an unknown plan, not the previous attempt's.
+  // The workflow plan marker is the one internal record this host reads: it
+  // is an input of the shared workflow run model the board paints. The newest
+  // marker is the live plan; an unreadable one is an unknown plan, not the
+  // previous attempt's.
   const marker = workflowMarkerOf(entry);
   if (marker) {
     if (marker.kind === 'malformedPlan') {

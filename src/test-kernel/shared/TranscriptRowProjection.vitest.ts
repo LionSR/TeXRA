@@ -143,7 +143,7 @@ describe('projectTranscriptRow', () => {
         ...base,
         messageType: MESSAGE_TYPES.INTERNAL,
         text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'x' },
+        data: { kind: 'workflowPlan', attemptId: 'x', phases: [], tasks: [] },
       }),
     ).toBeUndefined();
   });

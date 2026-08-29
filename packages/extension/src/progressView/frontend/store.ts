@@ -48,8 +48,8 @@ export interface StreamLogs {
   compactionProjection: CompactionActivityProjection;
   /**
    * The newest attempt's declared workflow plan, folded from the
-   * `workflowAttempt` / `workflowPlan` markers the same way the CLI folds
-   * them; one input of the shared workflow run model the board paints.
+   * `workflowPlan` markers (newest wins) the same way the CLI folds them;
+   * one input of the shared workflow run model the board paints.
    */
   workflowPlan: WorkflowPlanMarker | undefined;
   /**

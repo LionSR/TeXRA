@@ -26,12 +26,6 @@ export const WorkflowCallIdentitySchema = z.strictObject({
 });
 export type WorkflowCallIdentity = z.infer<typeof WorkflowCallIdentitySchema>;
 
-/** Durable boundary emitted by the controlled workflow transcript writer. */
-export type WorkflowAttemptMarker = {
-  readonly kind: 'workflowAttempt';
-  readonly attemptId: string;
-};
-
 /**
  * The declared plan of one workflow-script attempt — every `meta.phases`
  * entry and every `meta.tasks` entry, in script order — recorded once on the
