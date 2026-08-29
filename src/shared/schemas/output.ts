@@ -337,3 +337,10 @@ export const OUTPUT_DOCUMENT_TAG = 'document';
 
 /** Closing tag that marks a complete response. */
 export const OUTPUT_END_TAG = `</${OUTPUT_DOCUMENTS_TAG}>`;
+
+/**
+ * The tag a model wraps its thinking in, before the documents container. Like
+ * the tags above this is a fixed protocol constant: the agent prompts hardcode
+ * `<scratchpad>`, so nothing else could ever match.
+ */
+export const SCRATCHPAD_TAG = 'scratchpad';

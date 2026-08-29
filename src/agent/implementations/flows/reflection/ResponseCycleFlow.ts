@@ -27,6 +27,7 @@ import {
   AgentFileLocationSchema,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
+  SCRATCHPAD_TAG,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -253,7 +254,7 @@ class ResponseProcessNode extends BaseNode<
 
       const scratchpad = await extractScratchpad(
         processedResponse,
-        'scratchpad',
+        SCRATCHPAD_TAG,
       );
       if (scratchpad) {
         logger.info(scratchpad, {
