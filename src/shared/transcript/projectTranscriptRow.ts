@@ -288,19 +288,18 @@ const WEB_FETCH_ERROR_LABEL: Readonly<Record<string, string>> = {
  */
 function phaseGroupData(
   entry: StreamLogEntry,
-): { index?: number; total?: number; attemptId?: string } | undefined {
+): { index?: number; total?: number } | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
   ) {
     return undefined;
   }
-  const { kind, index, total, attemptId } = entry.data;
+  const { kind, index, total } = entry.data;
   if (kind !== 'phase') return undefined;
   return {
     ...(index !== undefined ? { index } : {}),
     ...(total !== undefined ? { total } : {}),
-    ...(attemptId !== undefined ? { attemptId } : {}),
   };
 }
 
@@ -333,7 +332,6 @@ export function projectTranscriptRow(
       phaseLabel,
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-      ...(phase.attemptId !== undefined ? { attemptId: phase.attemptId } : {}),
     };
   }
 

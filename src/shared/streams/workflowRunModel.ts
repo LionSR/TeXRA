@@ -26,10 +26,9 @@ import {
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import {
   TOKENS_GENERATED,
-  latestWorkflowAttemptEntries,
-  workflowCallTally,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
+  type WorkflowTally,
 } from '@shared/copy/workflowCall';
 import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
 import {
@@ -81,15 +80,6 @@ export function workflowMarkerOf(
 // ---------------------------------------------------------------------------
 // The run model
 // ---------------------------------------------------------------------------
-
-/** `done/total`, the live counts, and how many plan tasks are still unissued. */
-interface WorkflowTally {
-  readonly done: number;
-  readonly total: number;
-  readonly running: number;
-  readonly failed: number;
-  readonly declared: number;
-}
 
 export interface WorkflowPhaseModel {
   /** Stable identity: the task group id, or `declared-<title>` for a phase
@@ -165,7 +155,14 @@ function tallyOf(
   tasks: readonly WorkflowTaskRow[],
   declared: number,
 ): WorkflowTally {
-  return { ...workflowCallTally(tasks.map((row) => row.call)), declared };
+  return {
+    done: tasks.filter((row) => isTerminalWorkflowCallProgress(row.call))
+      .length,
+    total: tasks.length,
+    running: tasks.filter((row) => row.call.status === 'running').length,
+    failed: tasks.filter((row) => row.call.status === 'failed').length,
+    declared,
+  };
 }
 
 /**
@@ -267,11 +264,13 @@ export function workflowRunModel(
   const cards = input.rows.filter(
     (row): row is WorkflowTaskRow => row.kind === 'workflowTask',
   );
-  const liveIds = new Set(
-    latestWorkflowAttemptEntries(cards, (row) => row.call.attemptId).map(
-      (row) => row.id,
-    ),
-  );
+  // "Newest" is the last attempt id in transcript order — a resume's cards
+  // are appended after the attempt they supersede. A card with no attempt id
+  // (an older transcript) is never dropped; only a defined id that disagrees
+  // with the newest one is.
+  let latestAttemptId: string | undefined;
+  for (const row of cards)
+    latestAttemptId = row.call.attemptId ?? latestAttemptId;
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -282,7 +281,8 @@ export function workflowRunModel(
   const staleOnly = new Set<MutablePhase>();
   for (const row of cards) {
     const phase = row.groupId ? byGroupId.get(row.groupId) : undefined;
-    if (!liveIds.has(row.id)) {
+    const attemptId = row.call.attemptId;
+    if (attemptId !== undefined && attemptId !== latestAttemptId) {
       if (phase) staleOnly.add(phase);
       continue;
     }
