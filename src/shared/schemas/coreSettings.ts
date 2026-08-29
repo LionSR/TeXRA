@@ -80,7 +80,7 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
   min: 0,
   max: 100,
   description:
-    "Maximum number of live native child model conversations one session may run at once; a workflow script runs this many agent() calls concurrently. 0 (the default) sizes it to this machine's CPU count. Detached subagents beyond the budget wait for a slot to free.",
+    "Maximum number of detached child runs one session may run at once; a workflow script also runs this many agent() calls concurrently (in-band, not counted against the session budget). 0 (the default) sizes it to this machine's CPU count. Detached subagents beyond the budget wait for a slot to free.",
 } as const);
 
 export const ModelRetryMaxAttemptsSchema = z
