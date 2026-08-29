@@ -27,8 +27,9 @@ The files have distinct roles:
 - **Output processing** — `texraResponseTextProcessing.ts` is the LaTeX-owned
   policy for cleaning up and joining a model's continued LaTeX output; the
   agent runtime only supplies the connector strategy. `texcount.ts` shells out
-  to `texcount` for word/character counts. `latexdiff.ts` runs `latexdiff`
-  between two revisions.
+  to `texcount` for word/character counts. `latexdiff.ts` is the thin
+  host-facing entry point for a diff; the actual `latexdiff` orchestration
+  lives in the `latexdiff/` subdirectory below.
 - **Media and file management** — `LatexMediaManager.ts` owns per-workspace
   media state and dependency mirroring; `TikzPictureManager.ts` extracts and
   renders standalone TikZ pictures; `acceptedFileTarget.ts` resolves where an
@@ -42,6 +43,24 @@ The files have distinct roles:
   the workflow built on top of it (precondition checks, clone execution,
   auth-failure retry) — new Overleaf logic that doesn't need I/O belongs in
   `overleafProject.ts`, not `overleafClone.ts`.
+
+## Subdirectories
+
+- **`formatter/`** — the local-formatter backends `latexindentpt.ts` (runs
+  `latexindent`) and `texfmt.ts` (runs `tex-fmt`) wrap, `texFormatter.ts`
+  resolves which one a workspace setting selects and runs it, and
+  `indentDirectory.ts` applies it across a whole directory.
+- **`latexdiff/`** — the real implementation behind `latexdiff.ts`.
+  `runLatexdiff.ts` is the host-neutral entry point every host (VS Code, CLI,
+  desktop) calls; it resolves which round outputs to diff via
+  `outputDiscovery.ts`/`executionDiscovery.ts` (the latter's narrow port lets
+  `latex` stay out of `@agent/storage`), builds the diff operations in
+  `diffOperations.ts`/`diffCommandExecutor.ts`, names output files with
+  `diffFileNameManager.ts`, and processes the raw diff in
+  `diffFileProcessor.ts` (math markup options come from `mathMarkup.ts`).
+  `service.ts` holds the shared `latexdiffService` singleton, `types.ts` the
+  types those pieces share, and `latexdiffCopy.ts` the user-facing outcome
+  strings both host commands print so they can't disagree on wording.
 
 New parsing helpers that more than one extractor needs belong in
 `latexParsingUtils.ts`; new host-facing workflows should take their side
