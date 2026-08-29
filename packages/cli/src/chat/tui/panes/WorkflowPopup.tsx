@@ -31,6 +31,7 @@ import {
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 
 // Local imports - shared schemas and copy
 import {
@@ -404,10 +405,10 @@ export function WorkflowPopup({
   // they measure at this width.
   const hintRows = Math.max(
     1,
-    Math.ceil(
-      textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR)) /
-        Math.max(1, width),
-    ),
+    wrapAnsiToWidth(
+      hints.map(keyHintText).join(KEY_HINT_SEPARATOR),
+      Math.max(1, width),
+    ).split('\n').length,
   );
   const filterShown = view.filterEditing || view.filter.length > 0;
   const listRows = Math.max(

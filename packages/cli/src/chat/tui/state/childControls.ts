@@ -109,13 +109,20 @@ function rosterRowFor(
  * stream, the return to a finished child's owner — goes through here, so the
  * rule has one owner.
  */
+/** Whether a stream is a workflow-script run, read from its run metadata or,
+ *  before that arrives, from the roster row that rendered it. */
+export function isWorkflowScriptStream(streamId: StreamTabId): boolean {
+  const identity =
+    streamMetadataFor(streamId)?.identity ??
+    rosterRowFor(streamId)?.row.identity;
+  return identity?.kind === 'multiAgentWorkflow';
+}
+
 export function presentStream(
   streamId: StreamTabId,
 ): 'stream' | 'workflowPopup' {
   const roster = rosterRowFor(streamId);
-  const identity =
-    streamMetadataFor(streamId)?.identity ?? roster?.row.identity;
-  if (identity?.kind === 'multiAgentWorkflow') {
+  if (isWorkflowScriptStream(streamId)) {
     const parentId = parentStream.get().get(streamId) ?? roster?.parentId;
     if (parentId !== undefined) focusStream(parentId);
     openWorkflowPopup(streamId);

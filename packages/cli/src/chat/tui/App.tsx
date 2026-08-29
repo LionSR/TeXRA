@@ -59,6 +59,7 @@ import {
   createActiveDraftRegistry,
 } from './input/activeDraft';
 import {
+  isWorkflowScriptStream,
   numericFocusTargetForActiveStream,
   presentStream,
   resolveChildListTarget,
@@ -73,6 +74,7 @@ import {
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
+  openWorkflowPopup,
   updateWorkflowPopupView,
   workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
@@ -195,8 +197,7 @@ export function App(props: AppProps): React.JSX.Element {
   // parent under it.
   const foregroundWorkflowStreamId =
     foregroundReader !== undefined &&
-    streamMetadataFor(foregroundReader.streamId)?.identity?.kind ===
-      'multiAgentWorkflow'
+    isWorkflowScriptStream(foregroundReader.streamId)
       ? foregroundReader.streamId
       : undefined;
   const activeApprovalVisible = approvalVisibleForActiveStream({
@@ -475,7 +476,15 @@ export function App(props: AppProps): React.JSX.Element {
           <TranscriptReader
             availableRows={availableRows}
             executionLabels={subagentExecutionLabels}
-            onClose={closeForegroundReader}
+            onClose={() => {
+              // A workflow's log is only ever opened from its popup (a
+              // workflow is never a viewport), so closing it goes back there.
+              if (isWorkflowScriptStream(foregroundReader.streamId)) {
+                openWorkflowPopup(foregroundReader.streamId);
+              } else {
+                closeForegroundReader();
+              }
+            }}
             streamId={foregroundReader.streamId}
             title={title}
           />
