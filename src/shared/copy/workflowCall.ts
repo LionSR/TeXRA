@@ -226,6 +226,10 @@ export const WORKFLOW_CALL_STATUS_GLYPH = {
   failed: '✗',
 } as const satisfies Record<WorkflowCallProgress['status'], string>;
 
+/** Generated-token marker, prefixed to a compact token count (`↓1.2k`)
+ *  wherever a host shows what a run has produced so far. */
+export const TOKENS_GENERATED = '↓';
+
 /** A phase the run has opened, and its hollow twin for one it has only
  *  declared. */
 export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;

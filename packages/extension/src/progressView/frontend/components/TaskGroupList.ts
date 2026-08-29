@@ -15,6 +15,7 @@ import {
   type GettingStartedAction,
   type StreamLifecycleStatus,
   type StreamLogEntry,
+  type StreamTabId,
   type TaskGroup,
   type WorkflowCallProgress,
   type WorkflowPlanMarker,
@@ -30,9 +31,11 @@ import {
   workflowPhaseHeadingOfGroup,
 } from '@shared/copy/workflowCall';
 import {
+  formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
   workflowPhaseRows,
   workflowRunModel,
+  type ChildRunProgress,
   type WorkflowPhaseModel,
   type WorkflowRowGroup,
   type WorkflowRunModel,
@@ -70,7 +73,10 @@ import { playCompletionSound } from '../audioNotification';
 
 // Local imports - formatters
 import { formatLogEntry } from '../formatters';
-import { formatWorkflowDeclaredTaskTemplate } from '../formatters/logFormatters/workflowCallFormatter';
+import {
+  formatWorkflowCallTemplate,
+  formatWorkflowDeclaredTaskTemplate,
+} from '../formatters/logFormatters/workflowCallFormatter';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 
 // Local imports - sibling helpers
@@ -176,6 +182,13 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) workflowPlan: WorkflowPlanMarker | undefined =
     undefined;
 
+  /** Live progress of this stream's children, by child stream — the model
+   *  joins it to the cards that opened them. */
+  @property({ attribute: false }) childProgress: ReadonlyMap<
+    StreamTabId,
+    ChildRunProgress
+  > = new Map();
+
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
 
@@ -275,6 +288,7 @@ export class TaskGroupList extends LitElement {
       rowsChanged ||
       changedProperties.has('rowGeneration') ||
       changedProperties.has('workflowPlan') ||
+      changedProperties.has('childProgress') ||
       changedProperties.has('streamStatus')
     ) {
       this.rebuildRunModel();
@@ -344,6 +358,7 @@ export class TaskGroupList extends LitElement {
             rows: this.rows,
             plan: this.workflowPlan,
             runSettled: workflowRunSettled(this.streamStatus ?? undefined),
+            childProgress: this.childProgress,
           })
         : null;
     this.model = model;
@@ -548,8 +563,17 @@ export class TaskGroupList extends LitElement {
       (row) => row.key,
       (row) => {
         switch (row.kind) {
-          case 'task':
-            return this.renderLogEntry(row.row);
+          case 'task': {
+            // The card plus the model's live join for it; the board has no
+            // clock, so elapsed is left to the popup.
+            const live = this.model?.liveOf.get(row.row.id);
+            return guard([row.row, live], () =>
+              formatWorkflowCallTemplate(
+                row.row,
+                formatWorkflowCallLiveParts(row.row.call, live),
+              ),
+            );
+          }
           case 'declared':
             return formatWorkflowDeclaredTaskTemplate(row.task);
           case 'group':

@@ -23,7 +23,7 @@ import {
 } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { POINTER, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { fillRows, textDisplayWidth } from '@cli/runtime/terminalText';
@@ -48,8 +48,10 @@ import {
   formatWorkflowTally,
 } from '@shared/copy/workflowCall';
 import {
+  formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
   workflowPhaseRows,
+  type ChildRunProgress,
   type WorkflowPhaseModel,
   type WorkflowPhaseRow,
   type WorkflowRowGroup,
@@ -138,50 +140,27 @@ function statusStrip(
   return `${cells.slice(0, shownCount).map(glyph).join('')}+${cells.length - shownCount}`;
 }
 
-function liveTaskMetadata(
-  row: WorkflowTaskRowModel,
-  streamId: StreamTabId | undefined,
-  nowMs: number,
-): string | undefined {
-  // The row's own parts name the call (kind · agent · model · attempt · files)
-  // and, once it settles, what it cost; the live segments below cover the
-  // in-flight window the card itself cannot: elapsed, generated tokens, and
-  // the running spend read off the child stream.
-  const live = !isTerminalWorkflowCallProgress(row.call);
-  const usage = streamId
-    ? readStreamArtifacts(streamId)?.cumulativeUsage
-    : undefined;
-  const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
-  const parts = [
-    ...row.metadataParts,
-    live && runStartedAt !== undefined
-      ? formatCompactDuration(nowMs - runStartedAt)
-      : undefined,
-    usage && usage.outputTokens > 0
-      ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`
-      : undefined,
-    live && usage?.cost !== undefined && usage.cost > 0
-      ? formatCostUsd(usage.cost)
-      : undefined,
-  ].filter(filterNotNullish);
-  return parts.length > 0 ? parts.join(' · ') : undefined;
-}
-
 function TaskRow({
   focused,
+  live,
   nowMs,
   pendingKinds,
   row,
-  streamId,
 }: {
   readonly focused: boolean;
+  readonly live: ChildRunProgress | undefined;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly row: WorkflowTaskRowModel;
-  readonly streamId: StreamTabId | undefined;
 }): React.JSX.Element {
   const style = WORKFLOW_TASK_STATUS_STYLE[row.call.status];
-  const metadata = liveTaskMetadata(row, streamId, nowMs);
+  // The row's own parts name the call and, once settled, what it cost; the
+  // model's live join adds the in-flight window the card cannot carry.
+  const parts = [
+    ...row.metadataParts,
+    ...formatWorkflowCallLiveParts(row.call, live, nowMs),
+  ];
+  const metadata = parts.length > 0 ? parts.join(' · ') : undefined;
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -348,9 +327,7 @@ export function WorkflowPopup({
   const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
   const nowMs = useLiveNowMsSince([
     runStartedAt,
-    ...model.tasks.map(
-      (row) => streamPhaseFor(childStreamOf(row))?.runStartedAt,
-    ),
+    ...model.tasks.map((row) => model.liveOf.get(row.id)?.runStartedAt),
   ]);
 
   const identity = streamMetadataFor(streamId)?.identity;
@@ -520,9 +497,9 @@ export function WorkflowPopup({
         return (
           <TaskRow
             focused={state.focused}
+            live={model.liveOf.get(row.row.id)}
             nowMs={nowMs}
             row={row.row}
-            streamId={childStreamId}
             pendingKinds={
               childStreamId === undefined
                 ? undefined

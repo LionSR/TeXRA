@@ -28,6 +28,7 @@ import {
   type WorkflowTaskRow,
 } from '@shared/transcript';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
+import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
 
 // Local file imports
 import {
@@ -49,6 +50,7 @@ type TaskGroupListInternals = HTMLElement & {
   terminal: boolean;
   toggleStates: ToggleStateStore | null;
   workflowPlan: WorkflowPlanMarker | undefined;
+  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   updateComplete: Promise<boolean>;
   readonly index: TranscriptIndex;
   willUpdate: (changedProperties: Map<string, unknown>) => void;
@@ -142,6 +144,7 @@ function renderList(
   options: {
     toggleStates?: ToggleStateStore;
     workflowPlan?: WorkflowPlanMarker;
+    childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): Promise<TaskGroupListInternals> {
   return mountComponent<TaskGroupListInternals>('task-group-list', {
@@ -757,6 +760,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         label: 'Running now',
         phase: 'Map',
         status: 'running',
+        childStreamId: 'researcher@gpt#live',
       }),
     ];
     const workflowPlan: WorkflowPlanMarker = {
@@ -772,11 +776,19 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     const list = await renderList([run, phase], rows, {
       toggleStates,
       workflowPlan,
+      childProgress: new Map([
+        ['researcher@gpt#live' as StreamTabId, { toolCallCount: 3 }],
+      ]),
     });
 
-    // The running card leads; the queued cards are one counted row until
-    // the reader opens it in place.
+    // The running card leads, carrying its child's live progress; the
+    // queued cards are one counted row until the reader opens it in place.
     const content = groupContent(list, 'phase-map');
+    expect(
+      content
+        ?.querySelector('[data-log-id="live"] .workflow-task-meta')
+        ?.textContent?.trim(),
+    ).toBe('3 tools');
     const cardsBefore = [
       ...(content?.querySelectorAll('.workflow-task') ?? []),
     ].map((card) => card.getAttribute('data-log-id'));

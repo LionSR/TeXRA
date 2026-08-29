@@ -16,9 +16,11 @@ import {
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
 import {
+  formatWorkflowCallLiveParts,
   workflowMarkerOf,
   workflowPhaseRows,
   workflowRunModel,
+  type ChildRunProgress,
   type WorkflowRunModel,
 } from '@shared/streams/workflowRunModel';
 
@@ -73,7 +75,11 @@ function taskRow(task: TaskSpec): WorkflowTaskRow {
 function modelOf(
   phases: readonly string[],
   tasks: readonly TaskSpec[],
-  options: { plan?: WorkflowPlanMarker; runSettled?: boolean } = {},
+  options: {
+    plan?: WorkflowPlanMarker;
+    runSettled?: boolean;
+    childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
+  } = {},
 ): WorkflowRunModel {
   return workflowRunModel({
     taskGroups: phases.map((name, index) =>
@@ -82,6 +88,7 @@ function modelOf(
     rows: tasks.map(taskRow),
     plan: options.plan,
     runSettled: options.runSettled ?? false,
+    childProgress: options.childProgress ?? new Map(),
   });
 }
 
@@ -254,17 +261,46 @@ describe('workflow run model', () => {
 
   it('gives an ambiguous child stream to no card at all', () => {
     const shared = 'shared-child' as StreamTabId;
+    const own = 'own-child' as StreamTabId;
+    const live: ChildRunProgress = {
+      runStartedAt: 1_000,
+      toolCallCount: 7,
+      outputTokens: 12_000,
+      costUsd: 0.03,
+    };
     const model = modelOf(
       [],
       [
         { id: 'first', childStreamId: shared },
         { id: 'second', childStreamId: shared },
-        { id: 'third', childStreamId: 'own-child' as StreamTabId },
+        { id: 'third', childStreamId: own },
       ],
+      {
+        childProgress: new Map([
+          [shared, live],
+          [own, live],
+        ]),
+      },
     );
     expect(
       model.tasks.map((row) => model.childStreamOf.get(row.id)),
     ).toStrictEqual([undefined, undefined, 'own-child']);
+    // The live join follows the same claimant rule, and its copy is one
+    // string per fact — elapsed only with a clock, tokens and tools always.
+    expect(model.tasks.map((row) => model.liveOf.get(row.id))).toStrictEqual([
+      undefined,
+      undefined,
+      live,
+    ]);
+    const third = model.tasks[2]!;
+    expect(formatWorkflowCallLiveParts(third.call, live, 13_000)).toStrictEqual(
+      ['12s', '↓12k', '$0.030', '7 tools'],
+    );
+    expect(formatWorkflowCallLiveParts(third.call, live)).toStrictEqual([
+      '↓12k',
+      '$0.030',
+      '7 tools',
+    ]);
     // Cards outside any phase share one trailing heading.
     expect(model.phases.map((phase) => phase.heading.phaseLabel)).toStrictEqual(
       ['Unphased'],
@@ -289,6 +325,7 @@ describe('workflow run model', () => {
         rows: [taskRow({ id: 'v', phase: 'Verify' })],
         plan: undefined,
         runSettled: true,
+        childProgress: new Map(),
       }).phases[0]?.heading,
     ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });
   });

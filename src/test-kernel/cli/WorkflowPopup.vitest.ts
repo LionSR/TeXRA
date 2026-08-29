@@ -61,6 +61,7 @@ async function renderPopup(
     rows,
     plan: undefined,
     runSettled: false,
+    childProgress: new Map(),
   });
   const { ink, React } = await loadInk();
   return renderInteractive(
