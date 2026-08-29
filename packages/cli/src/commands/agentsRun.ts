@@ -62,7 +62,7 @@ export async function runToolUseAgent(
       requireWorkspaceFiles: true,
       readStdinText: readCliStdinText,
     },
-    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
+    async ({ inputFiles, contextFiles, stdinInputPath }) => {
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
@@ -81,7 +81,7 @@ export async function runToolUseAgent(
       const execution = await executeCliToolUseConfig(config, runContext, {
         enforceCategory: true,
         stopAfterCycle: true,
-        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
+        recoveryInputIsDurable: stdinInputPath === undefined,
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non tool-use run.`,
       });
       if (!execution.ok) return execution.exitCode;

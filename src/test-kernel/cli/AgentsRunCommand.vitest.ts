@@ -167,13 +167,13 @@ describe('CLI agents run command', () => {
         run: (inputs: {
           readonly inputFiles: string[];
           readonly contextFiles: string[];
-          readonly hasMaterializedStdinInput: boolean;
+          readonly stdinInputPath?: string;
         }) => Promise<unknown>,
       ) =>
         run({
           inputFiles: ['.texra-tmp/stdin.tex'],
           contextFiles: [],
-          hasMaterializedStdinInput: true,
+          stdinInputPath: '.texra-tmp/stdin.tex',
         }),
     );
     await runToolUseAgent(createRunCommandCliContext(), {

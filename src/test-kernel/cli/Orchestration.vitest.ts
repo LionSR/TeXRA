@@ -160,6 +160,19 @@ function orchestrationItems(
   });
 }
 
+function accountStatus(
+  overrides: Partial<CliAccountStatus> = {},
+): CliAccountStatus {
+  return {
+    preferences: { chatGpt: 'off', grok: 'off' },
+    codingPlans: codingPlans(),
+    texraSignedIn: false,
+    chatGptSignedIn: false,
+    grokSignedIn: false,
+    ...overrides,
+  };
+}
+
 function accountDescription(account: CliAccountStatus): string | undefined {
   return orchestrationItems({ account }).find(
     (item) => item.label === 'Account',
@@ -431,12 +444,10 @@ describe('CLI orchestration items', () => {
   });
 
   it('offers account management as one startup row with provider actions', () => {
-    const account = {
+    const account = accountStatus({
       texraSignedIn: true,
       texraAccountLabel: 'researcher@example.com',
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    };
+    });
     const items = orchestrationItems({ account });
 
     expect(items.map((item) => item.label)).toEqual([
@@ -466,28 +477,24 @@ describe('CLI orchestration items', () => {
   it('summarizes multiple signed-in accounts with natural list grammar', () => {
     // #9719: "A and B and C" is awkward once Grok is a third account.
     expect(
-      accountDescription({
-        texraSignedIn: true,
-        chatGptSignedIn: true,
-        grokSignedIn: false,
-      }),
+      accountDescription(
+        accountStatus({ texraSignedIn: true, chatGptSignedIn: true }),
+      ),
     ).toBe('TeXRA and ChatGPT signed in');
 
     expect(
-      accountDescription({
-        texraSignedIn: true,
-        chatGptSignedIn: true,
-        grokSignedIn: true,
-      }),
+      accountDescription(
+        accountStatus({
+          texraSignedIn: true,
+          chatGptSignedIn: true,
+          grokSignedIn: true,
+        }),
+      ),
     ).toBe('TeXRA, ChatGPT, and Grok signed in');
   });
 
   it('offers both sign-in paths when no account is present', () => {
-    const account = {
-      texraSignedIn: false,
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    };
+    const account = accountStatus();
 
     expect(buildCliAccountItems(account)).toEqual([
       expect.objectContaining({

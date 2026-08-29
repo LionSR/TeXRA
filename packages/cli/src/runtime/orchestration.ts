@@ -96,14 +96,15 @@ export interface BuildCliOrchestrationItemsInput {
 type CliAccountProvider = 'chatgpt' | 'grok' | 'texra';
 type CliAccountOperation = 'sign-in' | 'sign-out';
 
-export interface CliAccountStatus {
+/**
+ * The launcher's account view is the model-access status with the TeXRA
+ * session merged in — `readCliModelAccessStatus` never sets `texraSignedIn`,
+ * so requiring it here keeps the compile-time proof that the auth profile was
+ * merged before the account rows are built.
+ */
+export type CliAccountStatus = CliModelAccessStatus & {
   readonly texraSignedIn: boolean;
-  readonly texraAccountLabel?: string;
-  readonly chatGptSignedIn: boolean;
-  readonly chatGptAccountLabel?: string;
-  readonly grokSignedIn: boolean;
-  readonly grokAccountLabel?: string;
-}
+};
 
 export function isCliOrchestrationModelPickAction(
   action: CliOrchestrationAction,

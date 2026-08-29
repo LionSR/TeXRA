@@ -178,24 +178,19 @@ async function runOrchestration(context: CliContext): Promise<number> {
       getCliAuthProfile(),
     ]);
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
-    const accountStatus = {
-      texraSignedIn: authProfile.authenticated,
-      texraAccountLabel: authProfile.accountLabel,
-      chatGptSignedIn: modelAccess.chatGptSignedIn,
-      chatGptAccountLabel: modelAccess.chatGptAccountLabel,
-      grokSignedIn: modelAccess.grokSignedIn,
-      grokAccountLabel: modelAccess.grokAccountLabel,
-    };
+    // One shape for one fact: the launcher's model-access view and its account
+    // view are the same record, so they cannot disagree about who is signed in.
     const launcherModelAccess = {
       ...modelAccess,
       texraSignedIn: authProfile.authenticated,
+      texraAccountLabel: authProfile.accountLabel,
     };
     const items = buildCliOrchestrationItems({
       presetPlans: presetPlanSet.plans,
       history,
       toolUseAgents,
       modelAccess: launcherModelAccess,
-      account: accountStatus,
+      account: launcherModelAccess,
       presetLaunchBlockReason,
     });
     // Load the model registry up front so the launcher can offer a model pick
@@ -220,7 +215,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         remoteAgentCatalogAvailable: await SupabaseClient.isAuthenticated(),
         launchBlockReason: presetLaunchBlockReason,
       }),
-      accountItems: buildCliAccountItems(accountStatus),
+      accountItems: buildCliAccountItems(launcherModelAccess),
       modelAccess: launcherModelAccess,
       version: context.version,
       statusLines,

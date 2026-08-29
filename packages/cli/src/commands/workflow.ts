@@ -112,7 +112,7 @@ export async function runWorkflowAgent(
     init.contextFiles,
     context.cwd,
     { readStdinText: readCliStdinText },
-    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
+    async ({ inputFiles, contextFiles, stdinInputPath }) => {
       if (init.output && inputFiles.length > 1) {
         throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
       }
@@ -120,7 +120,7 @@ export async function runWorkflowAgent(
       const model = await selectCliRunModel(context, init.model, 'run');
       const runContext = buildHeadlessRunContext(context);
       const expectedOutputFiles = init.outputDir
-        ? expectedOutputFilesForOutputDir(agent, inputFiles)
+        ? expectedOutputFilesForOutputDir(agent, inputFiles, stdinInputPath)
         : undefined;
       // Persist CLI destinations absolutely so resumption has one path
       // representation and never reconstructs output locations.
@@ -156,7 +156,7 @@ export async function runWorkflowAgent(
 
       return executeCliWorkflowConfig(config, runContext, {
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
-        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
+        recoveryInputIsDurable: stdinInputPath === undefined,
       });
     },
   );
