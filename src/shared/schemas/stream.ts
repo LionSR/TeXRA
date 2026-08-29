@@ -40,8 +40,8 @@ export const EXECUTION_STATUS = {
   ERROR: 'error',
 } as const;
 
-export const ExecutionStatusSchema = z.enum(EXECUTION_STATUS);
-export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
+export type ExecutionStatus =
+  (typeof EXECUTION_STATUS)[keyof typeof EXECUTION_STATUS];
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
