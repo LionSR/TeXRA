@@ -11,6 +11,7 @@ export const groupStyles = css`
     border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     cursor: pointer;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     background-color: color-mix(
       in srgb,
@@ -35,6 +36,13 @@ export const groupStyles = css`
        matching the shared status dot and the CLI row marker. */
     &.is-cancelled {
       border-inline-start-color: var(--border-control);
+    }
+
+    /* A phase the plan declares and the run has not opened: hollow glyph,
+       dashed rail, quiet. */
+    &.is-declared {
+      border-inline-start-style: dashed;
+      color: var(--color-text-muted);
     }
   }
 
@@ -62,8 +70,7 @@ export const groupStyles = css`
     flex-grow: 1;
   }
 
-  /* Completed/declared task count for a phase header, right-aligned beside
-     the timestamps. */
+  /* A phase header's tally, right-aligned beside the timestamps. */
   .group-progress {
     font-size: var(--font-size-sm);
     font-variant-numeric: tabular-nums;
@@ -71,52 +78,67 @@ export const groupStyles = css`
     margin-inline-start: var(--wa-space-2xs);
   }
 
-  .group-progress--failed {
+  /* One glyph per card, inline after the tally; a strip too wide for the
+     header wraps its cells rather than squeezing the title. Failed reads
+     red, running blue, done green; the shapes carry the same distinctions
+     without colour. */
+  .group-strip {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 1px 2px;
+    margin-inline-start: var(--wa-space-xs);
+    font-size: var(--font-size-sm);
+    line-height: 1.1;
+    color: var(--color-text-muted);
+  }
+
+  .group-cell--awaitingApproval {
+    color: var(--color-warning);
+  }
+
+  .group-cell--running {
+    color: var(--wa-color-focus);
+  }
+
+  .group-cell--completed,
+  .group-cell--cached {
+    color: var(--color-success);
+  }
+
+  .group-cell--failed {
     color: var(--color-error);
   }
 
-  /* One dot per call: what a phase holds, at a glance. */
-  .group-dots {
+  .group-cell--skipped,
+  .group-cell--cancelled {
+    opacity: var(--opacity-subtle);
+  }
+
+  /* A counted group of quiet cards; a click unfolds it in place. */
+  .workflow-row-group {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    margin-inline-start: var(--wa-space-xs);
-  }
-
-  .group-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 2px;
-    background: var(--wa-color-surface-border);
-    box-sizing: border-box;
-  }
-
-  .group-dot--awaitingApproval {
-    background: var(--wa-color-warning-border-loud);
-  }
-
-  .group-dot--running {
-    background: var(--wa-color-focus);
-  }
-
-  .group-dot--completed,
-  .group-dot--cached {
-    background: var(--color-success);
-  }
-
-  .group-dot--failed {
-    background: var(--color-error);
-  }
-
-  .group-dot--skipped,
-  .group-dot--cancelled {
+    gap: var(--wa-space-2xs);
+    margin: var(--wa-space-2xs) 0;
+    padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
+    border: none;
+    border-radius: var(--wa-border-radius-m, var(--border-radius));
     background: transparent;
-    border: 1px solid var(--wa-color-surface-border);
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
   }
 
-  .group-dots-more {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+  .workflow-row-group:hover {
+    background: var(--wa-color-neutral-fill-quiet);
+  }
+
+  .workflow-row-group:focus-visible {
+    outline: 2px solid var(--wa-color-focus);
+    outline-offset: 1px;
   }
 
   .log-run-band {

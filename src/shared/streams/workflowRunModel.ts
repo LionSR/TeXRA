@@ -317,6 +317,20 @@ export function workflowRunModel(
 /** The counted groups a phase's quiet rows collapse into. */
 export type WorkflowRowGroup = 'queued' | 'done' | 'declared';
 
+const WORKFLOW_ROW_GROUP_LABEL = {
+  queued: 'queued',
+  done: 'done',
+  declared: 'declared',
+} as const satisfies Record<WorkflowRowGroup, string>;
+
+/** `12 queued` — the one spelling of a counted group's row. */
+export function formatWorkflowRowGroup(row: {
+  readonly count: number;
+  readonly group: WorkflowRowGroup;
+}): string {
+  return `${row.count} ${WORKFLOW_ROW_GROUP_LABEL[row.group]}`;
+}
+
 export type WorkflowPhaseRow =
   | {
       readonly kind: 'task';
