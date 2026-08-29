@@ -60,6 +60,9 @@ function journalKey(
   return truncatedHexId(stableStringify(source), 16);
 }
 
+// Library fallback only: the TeXRA host passes the session's child-run budget
+// (`resolveChildRunConcurrencyBudget`) as `concurrency`, so this value
+// governs no product run.
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;

@@ -26,6 +26,7 @@ import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
 import type {
   ExecutionId,
@@ -275,6 +276,9 @@ export function createWorkflowScriptStrategy(
             files: params.files,
           }),
           signal: abortController.signal,
+          // The session's child-run budget is the one owner of "how many at
+          // once": the engine's own default is a library fallback only.
+          concurrency: resolveChildRunConcurrencyBudget(),
           runAgent,
           ...(params.admitCall && { admitCall: params.admitCall }),
           fingerprintAgentDependencies: (options) =>

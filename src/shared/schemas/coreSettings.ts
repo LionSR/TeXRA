@@ -72,11 +72,15 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
  * about the range.
  */
 export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
-  defaultValue: 16,
-  min: 1,
+  /** `0` sizes the budget to this machine's core count at runtime — the
+   *  same "special value inside the range" shape as the compaction
+   *  threshold's `0 = disable`, so the number widget needs no second mode. */
+  auto: 0,
+  defaultValue: 0,
+  min: 0,
   max: 100,
   description:
-    'Maximum number of live native child model conversations one session may run at once. Detached subagents beyond this wait for a slot to free.',
+    "Maximum number of detached child runs one session may run at once; a workflow script also runs this many agent() calls concurrently (in-band, not counted against the session budget). 0 (the default) sizes it to this machine's CPU count. Detached subagents beyond the budget wait for a slot to free.",
 } as const);
 
 export const ModelRetryMaxAttemptsSchema = z

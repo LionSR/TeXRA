@@ -10,6 +10,8 @@
  * budget starts as soon as a slot frees, and a queued turn cancelled before
  * its slot never starts fresh model work.
  */
+import * as os from 'node:os';
+
 import PQueue from 'p-queue';
 
 import {
@@ -23,11 +25,28 @@ import type { SessionHandle } from './SessionHandle';
 
 const budgets = new WeakMap<SessionHandle, PQueue>();
 
-function readConfiguredChildRunBudget(): number {
-  return getValidatedConfig(
+/**
+ * The configured budget with the `auto` sentinel resolved to this machine's
+ * core count, clamped to the schema range. Model conversations are network
+ * bound, so the core count is a floor for useful parallelism rather than a
+ * ceiling — which is why the setting stays overridable up to `max`. This is
+ * the one host-side owner of the number: the session queue below and the
+ * workflow engine's per-run semaphore (`workflowScriptStrategy`) both read
+ * it here. Resolved host-side because `src/shared` is loaded by the settings
+ * webview and must stay free of `node:os`.
+ */
+export function resolveChildRunConcurrencyBudget(): number {
+  const configured = getValidatedConfig(
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
     ChildRunConcurrencyBudgetSchema,
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+  );
+  if (configured !== CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto) {
+    return configured;
+  }
+  return Math.min(
+    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+    Math.max(1, os.availableParallelism()),
   );
 }
 
@@ -40,7 +59,7 @@ function readConfiguredChildRunBudget(): number {
  * queued work.
  */
 export function childRunBudgetFor(session: SessionHandle): PQueue {
-  const configured = readConfiguredChildRunBudget();
+  const configured = resolveChildRunConcurrencyBudget();
   const existing = budgets.get(session);
   if (existing) {
     existing.concurrency = configured;

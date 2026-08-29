@@ -185,7 +185,7 @@ return await parallel(
   starts a new journal.
   Otherwise-identical calls must provide distinct `id` options; ambiguous
   duplicates fail before launch.
-- **Budgets**: one concurrency semaphore (default 4) across all `agent()`
+- **Budgets**: one concurrency semaphore (the host's child-run budget; library default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()` call, and a wall-clock timeout. The cap and
   timeout raise `WorkflowRunAbortError`, which `parallel()` does

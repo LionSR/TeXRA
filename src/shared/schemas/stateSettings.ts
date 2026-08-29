@@ -411,8 +411,13 @@ const CORE_SETTING_ROWS: Record<
     title: 'Child-run concurrency budget',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'multi-agent',
-    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
-    surfaces: { settingsView: 'multi-agent' },
+    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts', {
+      command:
+        'texra agents run <tool-use-agent> --instruction "dispatch two subagents"',
+      through:
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
+    }),
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'goal.enabled': {
     schema: z.boolean().prefault(true),
