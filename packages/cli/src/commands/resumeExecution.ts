@@ -23,7 +23,7 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
-import { initializeHeadlessTranscriptSession } from '../runtime/transcriptSession';
+import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -129,27 +129,24 @@ export async function runResumeExecution(
       );
       return CliExitCode.Usage;
     }
-  } else {
-    try {
-      await resolveCliLaunchAgent(config.agent, 'run');
-    } catch (error) {
-      if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(loadFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
-  }
-
-  if (config.agentCategory === AgentCategory.ToolUse) {
     const { runChat } = await import('../chat/tui/runChatTui');
     return (await runChat(context, { initialResume: { id, config } })).exitCode;
   }
 
+  try {
+    await resolveCliLaunchAgent(config.agent, 'run');
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      writeTextStderr(error.message);
+      return CliExitCode.Usage;
+    }
+    writeTextStderr(loadFailureMessage(id, error));
+    return CliExitCode.AgentError;
+  }
+
   // `resumeRun`'s guards need the live session planes; the headless skeleton
   // adopts this session rather than re-initializing.
-  const { session } = await initializeHeadlessTranscriptSession();
+  const { session } = await initializeCliTranscriptSession();
   let exitCode: number = CliExitCode.Usage;
   try {
     const result = await resumeRun(id, {
@@ -159,21 +156,22 @@ export async function runResumeExecution(
         executionId,
         modelHandlerCompatibilityKey,
       ) => {
-        const output = resumeWorkflowOutputFile(workflowConfig);
-        const outputDir = resumeWorkflowOutputDirectory(workflowConfig);
-        await assertOutputFileAvailable(output, context.cwd);
-        await assertOutputDirAvailable(outputDir, context.cwd);
+        // Fast-fail on an unusable destination before the run restarts;
+        // `executeCliWorkflowConfig` reads the same persisted `cli` block.
+        await assertOutputFileAvailable(
+          resumeWorkflowOutputFile(workflowConfig),
+          context.cwd,
+        );
+        await assertOutputDirAvailable(
+          resumeWorkflowOutputDirectory(workflowConfig),
+          context.cwd,
+        );
         exitCode = await executeCliWorkflowConfig(
           workflowConfig,
           buildHeadlessRunContext(context),
           {
             executionId,
             modelHandlerCompatibilityKey,
-            // Honor the original run's persisted output destination.
-            output,
-            outputDir,
-            expectedOutputFiles:
-              workflowConfig.cli?.expectedOutputFiles ?? undefined,
             recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
               workflowConfig,
               context.cwd,

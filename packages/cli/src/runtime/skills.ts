@@ -15,8 +15,6 @@ import { listRuntimeSkillSources } from '@skills/runtimeSkills';
 // Local imports - CLI runtime
 import type { CliContext } from './cliContext';
 
-type CliSkillDiscoveryOptions = SkillSourceOptions;
-
 interface CliSkillRecord {
   readonly name: string;
   readonly description: string;
@@ -39,7 +37,7 @@ export function skillListRecord(entry: SourcedSkill): CliSkillRecord {
 
 export async function readCliSkills(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
-  options: CliSkillDiscoveryOptions = {},
+  options: SkillSourceOptions = {},
 ): Promise<DiscoverSkillSourcesResult> {
   return discoverSkillSources(defaultSkillSources(context, options));
 }

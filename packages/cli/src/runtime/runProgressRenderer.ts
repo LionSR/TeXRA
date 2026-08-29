@@ -66,8 +66,6 @@ export interface RunProgressRendererInit {
   readonly nowMs?: () => number;
   readonly minIntervalMs?: number;
   readonly heartbeatIntervalMs?: number;
-  /** Width of the stderr terminal used for the repainting live line. */
-  readonly columns?: number;
   /** Supplies the current stderr width, allowing live terminal resizes. */
   readonly getColumns?: () => number | undefined;
   readonly setInterval?: typeof setInterval;
@@ -87,17 +85,15 @@ export function createRunProgressRenderer(
   if (context.renderRunProgress !== true) return undefined;
   return new DefaultRunProgressRenderer({
     colorEnabled: context.stderrColorEnabled,
+    ...init,
     getColumns:
       init?.getColumns ??
-      (init?.columns === undefined
-        ? () => {
-            const columns = getStderrColumns();
-            return context.stderrIsTty && columns != null && columns > 0
-              ? columns
-              : undefined;
-          }
-        : () => init.columns),
-    ...init,
+      (() => {
+        const columns = getStderrColumns();
+        return context.stderrIsTty && columns != null && columns > 0
+          ? columns
+          : undefined;
+      }),
   });
 }
 
@@ -164,7 +160,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       : undefined;
   }
 
-  constructor(init: RunProgressRendererInit) {
+  constructor(
+    init: RunProgressRendererInit & {
+      readonly getColumns: () => number | undefined;
+    },
+  ) {
     this.write = init.write ?? writeRawStderr;
     this.nowMs = init.nowMs ?? Date.now;
     this.minIntervalMs = init.minIntervalMs ?? 100;
@@ -172,7 +172,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.setInterval = init.setInterval ?? setInterval;
     this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
-    this.getColumns = init.getColumns ?? (() => init.columns);
+    this.getColumns = init.getColumns;
     this.attachedAt = this.nowMs();
   }
 

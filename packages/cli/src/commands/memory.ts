@@ -1,18 +1,13 @@
 import { defineCommand } from 'citty';
 
-import {
-  loadMemoryItems,
-  loadMemoryPreview,
-} from '@tools/memory/memoryFileSystem';
-import { toDisplayPath } from '@tools/memory/memoryUtils';
+import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeTextStdout } from '../runtime/logSinks';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
-  cliMemoryStoragePathFromInput,
+  loadCliMemoryDetail,
 } from '../runtime/memory';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -41,22 +36,11 @@ async function runMemoryShow(
 ): Promise<number> {
   await initLocalCliPlatform(context);
 
-  if (context.outputFormat === 'text') {
-    writeTextStdout(await formatCliMemoryPreview(inputPath));
-    return CliExitCode.Success;
-  }
-
-  const storagePath = cliMemoryStoragePathFromInput(inputPath);
-  const preview = await loadMemoryPreview(storagePath);
-  const record = {
-    path: toDisplayPath(storagePath),
-    lineCount: preview.lineCount,
-    preview: preview.preview,
-  };
+  const record = await loadCliMemoryDetail(inputPath);
   emitCliResult(context, {
     json: record,
     ndjson: { kind: 'memory-detail', ...record },
-    text: '',
+    text: formatCliMemoryPreview(record),
   });
   return CliExitCode.Success;
 }

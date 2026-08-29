@@ -141,7 +141,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       closed = true;
       runProgress?.clear();
       await sink?.flush?.();
-      await sink?.close?.();
     },
   };
 }

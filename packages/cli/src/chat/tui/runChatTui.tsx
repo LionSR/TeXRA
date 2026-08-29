@@ -31,7 +31,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
+import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
@@ -174,7 +174,7 @@ export async function runChat(
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   const initialResume = init.initialResume;
-  const transcriptLifecycle = await initializeInteractiveTranscriptSession(
+  const transcriptLifecycle = await initializeCliTranscriptSession(
     initialResume
       ? { onPersistentOpenFailure: 'fail' }
       : {

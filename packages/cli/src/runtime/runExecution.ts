@@ -34,7 +34,7 @@ import {
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
-import { initializeHeadlessTranscriptSession } from './transcriptSession';
+import { initializeCliTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -59,8 +59,6 @@ interface CliExecuteOptions {
   readonly enforceCategory?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
-  /** Additional tools unavailable in this CLI runtime. */
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Workflow output handler extended with the CLI publication gate; attempt
    *  the commit synchronously once before destination validation or I/O. */
   readonly openWorkflowOutput?: CliWorkflowOutputHandler;
@@ -247,7 +245,7 @@ export async function executeCliRequest(
 > {
   // Transcript persistence is a launch prerequisite for every headless run.
   // This executes before runtime-host construction and before runAgent.
-  const { session } = await initializeHeadlessTranscriptSession();
+  const { session } = await initializeCliTranscriptSession();
   session.setApprovalPolicy(runContext.approvalPolicy);
   const presentationHost = createCliRuntimeHost(runContext);
   let failurePresented = false;
@@ -486,10 +484,7 @@ export async function executeCliRequest(
         ),
         onApprovalPolicyDenial: () =>
           warnApprovalDenied(runContext, 'Tool or edit approval'),
-        runtimeUnavailableTools: [
-          ...getDefaultUnavailableToolNames('cli'),
-          ...(options.runtimeUnavailableTools ?? []),
-        ],
+        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
       });
     } finally {
       // Unblock an in-flight shutdown when acquisition failed before a scope

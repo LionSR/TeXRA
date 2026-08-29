@@ -29,13 +29,11 @@ interface LogRecord {
 export interface LogSink {
   write(record: LogRecord): void;
   flush?(): Promise<void>;
-  close?(): Promise<void>;
 }
 
 export interface Logger {
   debug(message: string, fields?: LogFields): void;
   info(message: string, fields?: LogFields): void;
-  warn(message: string, fields?: LogFields): void;
   error(message: string, fields?: LogFields): void;
 }
 
@@ -50,7 +48,6 @@ export function createCliLogger(sink: LogSink): Logger {
   return {
     debug: (m, f) => write('debug', m, f),
     info: (m, f) => write('info', m, f),
-    warn: (m, f) => write('warn', m, f),
     error: (m, f) => write('error', m, f),
   };
 }
@@ -219,10 +216,6 @@ export class NdjsonStdoutSink implements LogSink {
 
   flush(): Promise<void> {
     return this.queue.onIdle();
-  }
-
-  async close(): Promise<void> {
-    await this.flush();
   }
 
   /**

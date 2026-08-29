@@ -29,16 +29,12 @@ export function cliMemoryItemDescription(item: MemoryViewItem): string {
   return truncateSummary(parts.join('; '), MEMORY_DESCRIPTION_MAX);
 }
 
-export function formatCliMemoryList(
-  items: readonly MemoryViewItem[],
-  options?: { limit?: number },
-): string {
+export function formatCliMemoryList(items: readonly MemoryViewItem[]): string {
   if (items.length === 0) {
     return 'No memory files found.';
   }
 
-  const limit = options?.limit ?? CLI_MEMORY_LIST_LIMIT;
-  const shown = items.slice(0, limit);
+  const shown = items.slice(0, CLI_MEMORY_LIST_LIMIT);
   const lines = [
     `Memories (${items.length}):`,
     ...shown.map(
@@ -78,16 +74,30 @@ export function cliMemoryStoragePathFromInput(inputPath: string): string {
   return displayToStoragePath(`${MEMORY_DISPLAY_ROOT}/${trimmed}`);
 }
 
-export async function formatCliMemoryPreview(
+export interface CliMemoryDetail {
+  readonly path: string;
+  readonly lineCount?: number;
+  readonly preview?: string;
+}
+
+/** Resolve a CLI memory path argument and load its preview exactly once. */
+export async function loadCliMemoryDetail(
   inputPath: string,
-): Promise<string> {
+): Promise<CliMemoryDetail> {
   const storagePath = cliMemoryStoragePathFromInput(inputPath);
   const preview = await loadMemoryPreview(storagePath);
-  const displayPath = toDisplayPath(storagePath);
-  const lines = [`Memory: ${displayPath}`];
-  if (preview.lineCount != null) {
-    lines.push(`${preview.lineCount} lines`);
+  return {
+    path: toDisplayPath(storagePath),
+    lineCount: preview.lineCount,
+    preview: preview.preview,
+  };
+}
+
+export function formatCliMemoryPreview(detail: CliMemoryDetail): string {
+  const lines = [`Memory: ${detail.path}`];
+  if (detail.lineCount != null) {
+    lines.push(`${detail.lineCount} lines`);
   }
-  lines.push('', preview.preview?.trimEnd() || '(empty)');
+  lines.push('', detail.preview?.trimEnd() || '(empty)');
   return lines.join('\n');
 }

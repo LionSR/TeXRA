@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
   cliMemoryStoragePathFromInput,
   formatCliMemoryList,
@@ -41,14 +42,15 @@ describe('CLI memory formatting', () => {
 
   it('limits long memory listings and reports hidden rows', () => {
     const list = formatCliMemoryList(
-      [item, { ...item, displayPath: '/memories/other.md' }],
-      {
-        limit: 1,
-      },
+      Array.from({ length: CLI_MEMORY_LIST_LIMIT + 1 }, (_unused, index) => ({
+        ...item,
+        displayPath: `/memories/project-${index}.md`,
+      })),
     );
 
-    expect(list).toContain('Memories (2):');
-    expect(list).toContain('/memories/project.md');
+    expect(list).toContain(`Memories (${CLI_MEMORY_LIST_LIMIT + 1}):`);
+    expect(list).toContain('/memories/project-0.md');
+    expect(list).not.toContain(`/memories/project-${CLI_MEMORY_LIST_LIMIT}.md`);
     expect(list).toContain('... 1 more');
   });
 
