@@ -127,6 +127,7 @@ describe('workflow run model', () => {
     const model = modelOf(
       ['Map'],
       [
+        { id: 'legacy', phase: 'Map', status: 'failed' },
         { id: 'old', phase: 'Map', status: 'failed', attemptId: 'a1' },
         { id: 'new', phase: 'Map', attemptId: 'a2' },
       ],

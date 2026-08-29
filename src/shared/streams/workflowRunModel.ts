@@ -263,9 +263,9 @@ export function workflowRunModel(
     (row): row is WorkflowTaskRow => row.kind === 'workflowTask',
   );
   // "Newest" is the last attempt id in transcript order — a resume's cards
-  // are appended after the attempt they supersede. A card with no attempt id
-  // (an older transcript) is never dropped; only a defined id that disagrees
-  // with the newest one is.
+  // are appended after the attempt they supersede. Once one exists, cards
+  // from an older transcript without an attempt id are superseded too; keep
+  // every card only when the transcript has no attempt ids at all.
   let latestAttemptId: string | undefined;
   for (const row of cards)
     latestAttemptId = row.call.attemptId ?? latestAttemptId;
@@ -280,7 +280,7 @@ export function workflowRunModel(
   for (const row of cards) {
     const phase = row.groupId ? byGroupId.get(row.groupId) : undefined;
     const attemptId = row.call.attemptId;
-    if (attemptId !== undefined && attemptId !== latestAttemptId) {
+    if (latestAttemptId !== undefined && attemptId !== latestAttemptId) {
       if (phase) staleOnly.add(phase);
       continue;
     }
