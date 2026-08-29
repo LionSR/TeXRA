@@ -24,7 +24,7 @@ plan-vs-issued-calls record
 child-run concurrency proposal ([2026-08-15](./2026-08-15-child-run-concurrency-budget.md)).
 Nothing below collapses a settled surface.
 
-**Totals if everything lands:** ≈ −290 production LoC across seven small
+**Totals if everything lands:** ≈ −285 production LoC across seven small
 PRs; −8 exports, −4 declarations, −1 trace event, −1 transcript marker kind,
 +1 shared schema (the single plan shape). Zero new tests; three fixture
 edits.
@@ -102,7 +102,7 @@ alternative does not give a full reset either (cards still scope by their
 own `attemptId`), so it is not offered. Net ≈ −40. Risk: low; `events.ts` is
 the unpublished `@texra-ai/agent` contract with no external consumer.
 
-### Bundle 3 — one declared-plan shape (≈ −20; deletes the fold #11608 relocated)
+### Bundle 3 — one declared-plan shape (≈ −15; deletes the fold #11608 relocated)
 
 **S6. `WorkflowDeclaredPlan` once; the proposal panel folds through the
 model.** The approval proposal carries
@@ -118,8 +118,9 @@ reader is `workflowRunModel.ts:211`; the popup's tab order uses model array
 order, not `index`. `tasks` is the same _shape_ but a different fact
 (pre-approval declaration vs. this attempt's remaining plan), which is why
 this is one schema, not one event. `workflowScriptDeclaredItemsByPhase`
-(after #11608 a file-local helper in `ProposalRequestPanel.ts:67`, one
-caller at `:238`; the survey was scouted before that relocation landed)
+(scouted as the shared export at `workflowScriptProposal.ts:85-94`; since
+#11608 a file-local helper of `ProposalRequestPanel.ts` with one caller in
+its plan rendering — line numbers omitted, that file moved twice today)
 is the same grouping `unionWithDeclaredPlan` performs; calling
 `workflowRunModel({ taskGroups: [], rows: [], plan, runSettled: false,
 childProgress: new Map() })` yields the panel's groups exactly (zero-task
@@ -303,8 +304,10 @@ rejected.
 - **Two concurrency owners.** `resolveChildRunConcurrencyBudget()` has two
   readers by design (session queue, workflow semaphore); workflow
   grandchildren run `budgeted: false` and never double-queue. The library
-  default `DEFAULT_CONCURRENCY = 4` has zero product callers and ~110 test
-  call sites; not worth −2 lines.
+  default `DEFAULT_CONCURRENCY = 4` has zero product callers; making the
+  option required to delete it would touch the 83 `runWorkflowScript(...)`
+  test calls that rely on the default (only 15 pass `concurrency:`); not
+  worth −2 lines.
 - **Root elapsed/cost through the model.** The run's own window and its
   children's are different facts; the board shows neither for the root.
   Adding a root field is a pass-through the model does not fold; net ≥ +3.
