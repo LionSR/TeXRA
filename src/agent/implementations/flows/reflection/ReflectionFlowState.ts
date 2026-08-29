@@ -22,6 +22,9 @@ import {
  * time and usage. The snapshot is now minted fresh per attempt in
  * `ResponseCycleNode`, and the legacy wrapper unwraps to its messages here so
  * nothing downstream branches on the format.
+ *
+ * Legacy arm introduced 2026-08-29 with the retirement (#11568); remove it
+ * after 2026-11-29 once persisted wrapped-context rounds have aged out.
  */
 const RoundConversationSchema = z.union([
   z

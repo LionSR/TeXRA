@@ -187,14 +187,26 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * already merged it at read time. Shape-detected rather than tried as a union
  * member: the canonical record is loose, so a legacy record with one malformed
  * variable would otherwise fall through and parse as a flat record carrying
- * two junk keys instead of failing.
+ * two junk keys instead of failing. An envelope carrying either legacy key
+ * without both channels being records is corrupt durable state and fails
+ * here, rather than resuming with every fixed variable silently absent.
+ *
+ * Legacy reader introduced 2026-08-29 with the collapse (#11568); remove
+ * after 2026-11-29 once pre-collapse checkpoints have aged out.
  */
-export const UserVariableChannelsSchema = z.preprocess((value) => {
+export const UserVariableChannelsSchema = z.preprocess((value, ctx) => {
   if (!isPlainRecord(value)) return value;
   const { input, transient } = value;
-  return isPlainRecord(input) && isPlainRecord(transient)
-    ? { ...input, ...transient }
-    : value;
+  if (!('input' in value) && !('transient' in value)) return value;
+  if (isPlainRecord(input) && isPlainRecord(transient)) {
+    return { ...input, ...transient };
+  }
+  ctx.addIssue({
+    code: 'custom',
+    message:
+      'Malformed legacy user-variable envelope: `input`/`transient` present but not both records',
+  });
+  return z.NEVER;
 }, UserVariableChannelRecordSchema);
 
 /** Derived from UserVariableChannelsSchema - single source of truth. */

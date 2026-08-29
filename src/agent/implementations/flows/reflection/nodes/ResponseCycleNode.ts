@@ -54,7 +54,10 @@ export class ResponseCycleNode extends BaseNode<
     // Minted fresh per attempt: this is a metrics accumulator the cycle sums
     // into and `recordCycleMetrics` charges to the run, so a round retried after a
     // cancel must not inherit the cancelled attempt's response time or usage.
-    // Continuations still accumulate, because they loop inside the inner flow.
+    // Continuations still accumulate within the attempt (they loop inside the
+    // inner flow), so `CONTINUE_LIMIT` bounds every unattended attempt; a
+    // user-driven cancel+resume deliberately starts a fresh continuation
+    // budget along with the fresh metrics rather than persisting the count.
     const round = ConversationRoundStateSnapshotSchema.parse({
       roundIndex: shared.currentRound,
     });

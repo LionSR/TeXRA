@@ -69,8 +69,26 @@ class FakeRoundNode extends BaseNode<FakeShared> {
 
 function makeFlow() {
   const node = new FakeRoundNode();
-  return new RoundPersistedFlow<FakeShared>(node, createFakeKv(), {
+  const logger = new TraceEmitter();
+  /** `{ index, total }` each round stage opened with, in call order. */
+  const stages: Array<{ index: number; total: number }> = [];
+  const flow = new RoundPersistedFlow<FakeShared>(node, createFakeKv(), {
     callbacks: {
+      // Mirrors runReflectionFlow's `createRoundStage`: a granted repair
+      // round opens with `roundIndex === totalRounds`, so the stage total
+      // widens rather than rendering an over-total "Round 3 of 2".
+      createRoundStage: (roundIndex, parent, shared) => {
+        const stage = {
+          index: roundIndex,
+          total: Math.max(shared.totalRounds, roundIndex + 1),
+        };
+        stages.push(stage);
+        return logger.openStage(`r${roundIndex}`, {
+          parent: parent ?? undefined,
+          kind: 'round',
+          ...stage,
+        });
+      },
       grantExtraRound: (s) => {
         if (
           !s.compileFailureContext ||
@@ -84,6 +102,7 @@ function makeFlow() {
       },
     },
   });
+  return { flow, stages };
 }
 
 function initialShared(overrides: Partial<FakeShared>): FakeShared {
@@ -99,33 +118,43 @@ function initialShared(overrides: Partial<FakeShared>): FakeShared {
   };
 }
 
-async function runFlow(overrides: Partial<FakeShared>): Promise<FakeShared> {
-  const flow = makeFlow();
+async function runFlow(overrides: Partial<FakeShared>): Promise<{
+  shared: FakeShared;
+  stages: Array<{ index: number; total: number }>;
+}> {
+  const { flow, stages } = makeFlow();
   await flow.run(initialShared(overrides));
-  return (await flow.getShared())!;
+  return { shared: (await flow.getShared())!, stages };
 }
 
 describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
   it('grants exactly one extra round when the final configured round fails to compile', async () => {
     // totalRounds: 2 (rounds 0 and 1 configured); round 1 (the last one) fails.
-    const shared = await runFlow({ failingRounds: [1] });
+    const { shared, stages } = await runFlow({ failingRounds: [1] });
 
     // Round 0, round 1 (configured, fails), and a granted repair round 2.
     expect(shared.roundsRun).toEqual([0, 1, 2]);
     // The repair round (2) received the failure context from round 1.
     expect(shared.contextSeenByRound[2]).toBe('compile failed on round 1');
     expect(shared.compileRepairRoundGranted).toBe(true);
+    // The repair round's stage opens with the widened total (3, not the
+    // configured 2), so the badge renders "Round 3 of 3" rather than "3 of 2".
+    expect(stages).toEqual([
+      { index: 0, total: 2 },
+      { index: 1, total: 2 },
+      { index: 2, total: 3 },
+    ]);
   });
 
   it('does not grant an extra round when a clean final round has no failure context', async () => {
-    const shared = await runFlow({ failingRounds: [] });
+    const { shared } = await runFlow({ failingRounds: [] });
 
     expect(shared.roundsRun).toEqual([0, 1]);
     expect(shared.compileRepairRoundGranted).toBeUndefined();
   });
 
   it('does not grant an extra round when rejectOnCompileFailure is off', async () => {
-    const shared = await runFlow({
+    const { shared } = await runFlow({
       failingRounds: [1],
       rejectOnCompileFailureEnabled: false,
     });
@@ -136,7 +165,7 @@ describe('RoundPersistedFlow bounded compile-repair round (#7077)', () => {
 
   it('does not chain a second repair round when the repair round itself fails again', async () => {
     // Both the configured final round (1) and the granted repair round (2) fail.
-    const shared = await runFlow({ failingRounds: [1, 2] });
+    const { shared } = await runFlow({ failingRounds: [1, 2] });
 
     // Exactly one repair round (2) — no round 3, even though round 2 also failed.
     expect(shared.roundsRun).toEqual([0, 1, 2]);
