@@ -15,10 +15,14 @@ The files have distinct roles:
   service instead takes a caller-supplied channel (agent runs use their
   stream id; desktop and the tool-approval preview use their own) — only the
   extension's own latexdiff command group reuses this shared channel.
-- **Content extraction** — `extractFigure.ts` and `extractBibliography.ts`
-  pull figure paths and bibliography entries out of LaTeX source;
-  `extractFileDependencies.ts` resolves `\input`/`\include`/`\bibliography`
-  targets so `LatexMediaManager` can mirror them into run storage.
+- **Content extraction** — `extractFigure.ts` pulls figure paths out of LaTeX
+  source; `extractBibliography.ts` extracts bibliography-file references and
+  citation keys from the source (`extractBibliographyContext`) and separately
+  loads the actual entries from those referenced `.bib` files
+  (`loadBibliographyEntries`) — the two stages have different inputs, don't
+  conflate them. `extractFileDependencies.ts` resolves
+  `\input`/`\include`/`\bibliography` targets so `LatexMediaManager` can
+  mirror them into run storage.
   `latexParsingUtils.ts` holds the comment-stripping and bibliography-directive
   matching those two extractors share — add new shared parsing there rather
   than duplicating it in either extractor. `labelSearch.ts` scans files for a
@@ -32,9 +36,12 @@ The files have distinct roles:
   to `texcount` for word/character counts. `latexdiff.ts` is the thin
   host-facing entry point for a diff; the actual `latexdiff` orchestration
   lives in the `latexdiff/` subdirectory below.
-- **Media and file management** — `LatexMediaManager.ts` owns per-workspace
-  media state and dependency mirroring; `TikzPictureManager.ts` extracts and
-  renders standalone TikZ pictures; `acceptedFileTarget.ts` resolves where an
+- **Media and file management** — `LatexMediaManager.ts` compiles PDFs and
+  mirrors figure dependencies into run storage, writing results into a
+  `MediaWorkspaceState` the caller owns (the manager itself holds only a
+  logger and an optional file service, no state);
+  `TikzPictureManager.ts` extracts and renders standalone TikZ pictures;
+  `acceptedFileTarget.ts` resolves where an
   accepted/edited file should land and commits the replacement;
   `mergeFileUtils.ts` parses the `_rN_`-suffixed filenames TeXRA's merge
   workflow generates.
@@ -43,8 +50,9 @@ The files have distinct roles:
   archives. `overleafProject.ts` is the pure, host-neutral parsing and
   credential/URL derivation for an Overleaf git remote; `overleafClone.ts` is
   the workflow built on top of it (precondition checks, clone execution,
-  auth-failure retry) — new Overleaf logic that doesn't need I/O belongs in
-  `overleafProject.ts`, not `overleafClone.ts`.
+  auth-failure handling — it clears the bad token and reports the failure,
+  it does not retry the clone itself) — new Overleaf logic that doesn't need
+  I/O belongs in `overleafProject.ts`, not `overleafClone.ts`.
 
 ## Subdirectories
 
