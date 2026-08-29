@@ -474,6 +474,6 @@ export function releaseInactiveStreamTranscript(
     resetTranscriptFoldState(fold);
     fold.taskGroupProjection = undefined;
     fold.compactionProjection = undefined;
-    fold.workflowPlanProjection = undefined;
+    fold.workflowPlan = undefined;
   }
 }

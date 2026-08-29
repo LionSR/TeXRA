@@ -211,36 +211,28 @@ function projectTaskGroupsIncrementally(
  * The newest `workflowPlan` marker in transcript order. A relaunch under the
  * same meta.name appends its own marker after the attempt it supersedes, so
  * the last one applied is the live attempt's plan — the same "newest attempt"
- * rule `workflowRunModel` applies to the cards.
+ * rule `workflowRunModel` applies to the cards. Markers are appended settled
+ * and never patched, and the fold is last-wins, so feeding it the appended
+ * tail or replaying any prefix lands on the same plan.
  */
 function projectWorkflowPlanIncrementally(
   fold: TranscriptFoldState,
   entries: readonly StreamLogEntry[],
 ): WorkflowPlanMarker | undefined {
-  let state = fold.workflowPlanProjection;
-  if (!state) {
-    state = { applied: new Map(), snapshot: undefined };
-    fold.workflowPlanProjection = state;
-  }
   for (const entry of entries) {
     const marker = workflowMarkerOf(entry);
     if (!marker) continue;
-    if (state.applied.get(entry.id) === entry) continue;
-    state.applied.set(entry.id, entry);
-    switch (marker.kind) {
-      case 'malformedPlan':
-        // An unreadable plan is an unknown plan, not the previous attempt's.
-        logger.warn(
-          `Ignoring malformed workflow plan marker ${entry.id}: ${marker.error}`,
-        );
-        state.snapshot = undefined;
-        break;
-      case 'plan':
-        state.snapshot = marker.plan;
-        break;
+    if (marker.kind === 'malformedPlan') {
+      // An unreadable plan is an unknown plan, not the previous attempt's.
+      logger.warn(
+        `Ignoring malformed workflow plan marker ${entry.id}: ${marker.error}`,
+      );
+      fold.workflowPlan = undefined;
+    } else {
+      fold.workflowPlan = marker.plan;
     }
   }
-  return state.snapshot;
+  return fold.workflowPlan;
 }
 
 function projectCompactionIncrementally(

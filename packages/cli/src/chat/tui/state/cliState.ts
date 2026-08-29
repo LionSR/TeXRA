@@ -73,13 +73,6 @@ interface TaskGroupProjectionState {
   snapshot: readonly TaskGroup[];
 }
 
-/** Incremental declared-plan memo: the newest `workflowPlan` marker in
- *  transcript order, kept the same way as the task-group memo. */
-interface WorkflowPlanProjectionState {
-  readonly applied: Map<string, StreamLogEntry>;
-  snapshot: WorkflowPlanMarker | undefined;
-}
-
 /** Incremental compaction-activity projection state, cursored on the source
  *  log (`appliedHead`), so it too survives fold rebuilds. */
 interface CompactionProjectionState {
@@ -118,7 +111,8 @@ export interface TranscriptFoldState {
    *  residency is released, and die with the slice like everything here. */
   taskGroupProjection?: TaskGroupProjectionState;
   compactionProjection?: CompactionProjectionState;
-  workflowPlanProjection?: WorkflowPlanProjectionState;
+  /** The newest `workflowPlan` marker folded so far (last wins). */
+  workflowPlan?: WorkflowPlanMarker;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
