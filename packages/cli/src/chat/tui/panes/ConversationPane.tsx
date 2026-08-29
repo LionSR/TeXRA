@@ -180,7 +180,7 @@ export function workflowRunStatusSummary(
   const callRows = slice.entries.flatMap((row) =>
     row.kind === 'workflowTask' ? [row] : [],
   );
-  const { done, total } = workflowCallTally(
+  const { done, total, running } = workflowCallTally(
     callRows.filter((row) => row.groupId === phase.id).map((row) => row.call),
   );
   const segments: WorkflowStatusSegment[] = [
@@ -189,8 +189,13 @@ export function workflowRunStatusSummary(
       tone: 'muted',
     },
   ];
+  // Same tally vocabulary as the dashboard heading and phase rows
+  // (`done/total · N running`): the band sits directly above them.
   if (total > 0) {
-    segments.push({ text: `${done}/${total} done`, tone: 'muted' });
+    segments.push({ text: `${done}/${total}`, tone: 'muted' });
+  }
+  if (running > 0) {
+    segments.push({ text: `${running} running`, tone: 'muted' });
   }
   const { failed } = workflowCallTally(callRows.map((row) => row.call));
   if (failed > 0) {

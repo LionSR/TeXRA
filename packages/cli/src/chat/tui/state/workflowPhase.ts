@@ -27,14 +27,21 @@ function currentWorkflowPhaseLabel(
   return formatPhaseStageLabel(stage);
 }
 
-/** Nearest workflow-script ancestor's current phase, walking parent links. */
+/**
+ * Nearest workflow-script ancestor's current phase, walking parent links
+ * starting from the stream's parent. A stream's own stage is never its
+ * location context: the header prints once into scrollback and would go
+ * stale as the workflow advanced, and the status bar already has a stage
+ * slot for the displayed stream's own phase — naming it here too printed
+ * `Derive (1/2) › name … Derive (1/2)` on one row.
+ */
 export function ancestorWorkflowPhaseLabel(init: {
   readonly categoryOf: (streamId: StreamTabId) => AgentCategory | undefined;
   readonly stageOf: (streamId: StreamTabId) => StreamStage | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
 }): string | undefined {
-  let id: StreamTabId | undefined = init.streamId;
+  let id: StreamTabId | undefined = init.parentStream.get(init.streamId);
   const seen = new Set<StreamTabId>();
   while (id && !seen.has(id)) {
     seen.add(id);

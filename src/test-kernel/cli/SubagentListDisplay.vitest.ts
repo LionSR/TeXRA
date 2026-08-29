@@ -355,12 +355,12 @@ describe('CLI child list display model', () => {
       workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
         (segment) => segment.text,
       ),
-    ).toEqual(['Map (1/3)', '1/2 done']);
+    ).toEqual(['Map (1/3)', '1/2', '1 running']);
     expect(
       workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
         (segment) => segment.tone,
       ),
-    ).toEqual(['muted', 'muted']);
+    ).toEqual(['muted', 'muted', 'muted']);
   });
 
   it('appends a warning failure tally when any call has failed', () => {
@@ -396,7 +396,7 @@ describe('CLI child list display model', () => {
       workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
         (segment) => segment.text,
       ),
-    ).toEqual(['Map (1/1)', '2/2 done', '1 failed']);
+    ).toEqual(['Map (1/1)', '2/2', '1 failed']);
     expect(
       workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
         (segment) => segment.tone,
@@ -437,7 +437,7 @@ describe('CLI child list display model', () => {
       workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
         (segment) => segment.text,
       ),
-    ).toEqual(['Write (2/2)', '0/2 done', '1 failed']);
+    ).toEqual(['Write (2/2)', '0/2', '2 running', '1 failed']);
   });
 
   it('does not invent a phase fold for phase-less tasks', () => {
@@ -495,7 +495,7 @@ describe('CLI child list display model', () => {
       workflowRunStatusSummary(slice, AgentCategory.Workflow)?.map(
         (segment) => segment.text,
       ),
-    ).toEqual(['Map (1/2)', '0/1 done']);
+    ).toEqual(['Map (1/2)', '0/1', '1 running']);
   });
 
   it('prioritizes live workflow activity over metadata in a one-row viewport', async () => {
