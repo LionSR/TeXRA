@@ -453,6 +453,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     updatedRowBaseGeneration: streamLogs.updatedRowBaseGeneration,
     rowGeneration: streamLogs.generation,
     taskGroups: activeTaskGroups$.get(),
+    workflowPlan: streamLogs.workflowPlan,
     isToolUse: activeIsToolUse$.get(),
     hasStreams,
     streamName: activeStreamInfo.name,

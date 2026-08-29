@@ -18,6 +18,7 @@ import {
   type StreamTabId,
   type TaskGroup,
   type WorkflowCallProgress,
+  type WorkflowPlanMarker,
 } from '@shared/schemas';
 import {
   projectTranscriptRow,
@@ -26,6 +27,7 @@ import {
   type TranscriptRow,
   type WorkflowTaskRow,
 } from '@shared/transcript';
+import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 
 // Local file imports
 import {
@@ -45,6 +47,8 @@ type TaskGroupListInternals = HTMLElement & {
   hasStreams: boolean;
   isToolUse: boolean;
   terminal: boolean;
+  toggleStates: ToggleStateStore | null;
+  workflowPlan: WorkflowPlanMarker | undefined;
   updateComplete: Promise<boolean>;
   readonly index: TranscriptIndex;
   willUpdate: (changedProperties: Map<string, unknown>) => void;
@@ -135,11 +139,16 @@ function createList(rows: TranscriptRow[]): TaskGroupListInternals {
 function renderList(
   groups: TaskGroup[],
   rows: TranscriptRow[],
+  options: {
+    toggleStates?: ToggleStateStore;
+    workflowPlan?: WorkflowPlanMarker;
+  } = {},
 ): Promise<TaskGroupListInternals> {
   return mountComponent<TaskGroupListInternals>('task-group-list', {
     hasStreams: true,
     groups,
     rows,
+    ...options,
   });
 }
 
@@ -585,7 +594,11 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       }),
     ];
 
-    const list = await renderList([run, phase], rows);
+    // The finished cards sit in the phase's "done" group; open it so the
+    // cards below are in the DOM (`false` = expanded, as for task groups).
+    const toggleStates = new ToggleStateStore();
+    toggleStates.set('phase-review#done', false);
+    const list = await renderList([run, phase], rows, { toggleStates });
 
     // Header shows the phase label plus the one-based position, matching the
     // CLI's `(index+1/total)` diamond header.
@@ -594,11 +607,14 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       'Review (2/3)',
     );
 
-    // The header also folds its own cards into a completion count. All four
-    // are terminal here (completed / failed / skipped x2).
+    // The header's tally and strip are the shared model's: all four cards
+    // are terminal (completed / failed / skipped x2), one failed.
     expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
-      '4/4',
+      '4/4 · 1 failed',
     );
+    expect(
+      header?.querySelector('.group-strip')?.textContent?.replaceAll(/\s/g, ''),
+    ).toBe('☑✗⊘⊘');
 
     // Each task is one structured card with its status and terminal metadata.
     const content = groupContent(list, 'phase-review');
@@ -694,7 +710,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
 
     const header = groupHeader(list, 'phase-map');
     expect(header?.querySelector('.group-progress')?.textContent?.trim()).toBe(
-      '1/2',
+      '1/2 · 1 running',
     );
     expect(header?.querySelector('wa-spinner')).toBeNull();
     expect(header?.querySelector('wa-icon')?.getAttribute('name')).toBe(
@@ -715,5 +731,84 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         ?.querySelector('[data-log-id="task-b"] .workflow-task-status')
         ?.textContent?.trim(),
     ).toBe('Running');
+  });
+
+  it('leads with attention, folds the rest into counted groups, and lists declared phases', async () => {
+    const run = runGroup('Run: workflow');
+    const phase = createGroup('phase-map', STREAM_PHASE.RUNNING, {
+      name: 'Map',
+      startTime: 2,
+      parentGroupId: 'run',
+      kind: 'phase',
+      index: 0,
+      total: 2,
+    });
+    const rows: TranscriptRow[] = [
+      ...['q1', 'q2', 'q3'].map((id, index) =>
+        workflowTaskRow('phase-map', id, 3 + index, {
+          id,
+          label: `Queued ${id}`,
+          phase: 'Map',
+          status: 'queued',
+        }),
+      ),
+      workflowTaskRow('phase-map', 'live', 6, {
+        id: 'live',
+        label: 'Running now',
+        phase: 'Map',
+        status: 'running',
+      }),
+    ];
+    const workflowPlan: WorkflowPlanMarker = {
+      kind: 'workflowPlan',
+      attemptId: 'attempt-1',
+      phases: [
+        { title: 'Map', index: 0 },
+        { title: 'Publish', index: 1 },
+      ],
+      tasks: [{ id: 'report', label: 'Write the report', phase: 'Publish' }],
+    };
+    const toggleStates = new ToggleStateStore();
+    const list = await renderList([run, phase], rows, {
+      toggleStates,
+      workflowPlan,
+    });
+
+    // The running card leads; the queued cards are one counted row until
+    // the reader opens it in place.
+    const content = groupContent(list, 'phase-map');
+    const cardsBefore = [
+      ...(content?.querySelectorAll('.workflow-task') ?? []),
+    ].map((card) => card.getAttribute('data-log-id'));
+    expect(cardsBefore).toEqual(['live']);
+    const group = content?.querySelector<HTMLButtonElement>(
+      '.workflow-row-group',
+    );
+    expect(group?.textContent?.trim()).toBe('3 queued');
+    expect(group?.getAttribute('aria-expanded')).toBe('false');
+    group?.click();
+    await list.updateComplete;
+    const cardsAfter = [
+      ...(groupContent(list, 'phase-map')?.querySelectorAll('.workflow-task') ??
+        []),
+    ].map((card) => card.getAttribute('data-log-id'));
+    expect(cardsAfter).toEqual(['live', 'q1', 'q2', 'q3']);
+    expect(toggleStates.get('phase-map#queued')).toBe(false);
+
+    // A phase the plan declares and the run has not opened follows with its
+    // hollow glyph and the plan's tasks for it.
+    const declaredHeader = groupHeader(list, 'declared-Publish');
+    expect(declaredHeader?.classList.contains('is-declared')).toBe(true);
+    expect(
+      declaredHeader?.querySelector('.group-title')?.textContent?.trim(),
+    ).toBe('Publish (2/2)');
+    expect(
+      declaredHeader?.querySelector('.group-progress')?.textContent?.trim(),
+    ).toBe('1 declared');
+    expect(
+      groupContent(list, 'declared-Publish')
+        ?.querySelector('.workflow-row-group')
+        ?.textContent?.trim(),
+    ).toBe('1 declared');
   });
 });

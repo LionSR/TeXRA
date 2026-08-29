@@ -18,6 +18,7 @@ import type {
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 
@@ -68,6 +69,8 @@ export interface StreamLogContextValue {
   /** Current log generation. */
   rowGeneration: number;
   taskGroups: TaskGroup[];
+  /** The newest attempt's declared workflow plan, for the run model. */
+  workflowPlan: WorkflowPlanMarker | undefined;
   isToolUse: boolean;
   hasStreams: boolean;
   /** Stream name for switch detection in LogList */
@@ -85,6 +88,7 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   updatedRowBaseGeneration: 0,
   rowGeneration: 0,
   taskGroups: [],
+  workflowPlan: undefined,
   isToolUse: false,
   hasStreams: false,
   streamName: null,

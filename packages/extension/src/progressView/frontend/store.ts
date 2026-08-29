@@ -10,6 +10,7 @@ import {
   type StreamTabId,
   type InquiryThreadUpdatedEvent,
   type InquiryThreadId,
+  type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import {
@@ -46,6 +47,12 @@ export interface StreamLogs {
   /** Correlated context-compaction lifecycle projected into stable rows. */
   compactionProjection: CompactionActivityProjection;
   /**
+   * The newest attempt's declared workflow plan, folded from the
+   * `workflowAttempt` / `workflowPlan` markers the same way the CLI folds
+   * them; one input of the shared workflow run model the board paints.
+   */
+  workflowPlan: WorkflowPlanMarker | undefined;
+  /**
    * Existing row indices updated by the most recent backend delta.
    * Pure append batches leave this empty so renderers can skip whole-log scans.
    */
@@ -64,6 +71,7 @@ function createEmptyStreamLogs(): StreamLogs {
     rowIndex: new Map(),
     taskGroupIndex: new Map(),
     compactionProjection: createCompactionActivityProjection(),
+    workflowPlan: undefined,
     updatedRowIndices: [],
     updatedRowBaseGeneration: 0,
     generation: 0,

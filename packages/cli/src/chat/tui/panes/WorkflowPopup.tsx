@@ -48,6 +48,7 @@ import {
   formatWorkflowTally,
 } from '@shared/copy/workflowCall';
 import {
+  formatWorkflowRowGroup,
   workflowPhaseRows,
   type WorkflowPhaseModel,
   type WorkflowPhaseRow,
@@ -81,12 +82,6 @@ import { ApprovalSegments, RowSegment } from './SubagentList';
 import { pendingApprovalRowDisplay } from './SubagentListDisplay';
 import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-
-const GROUP_LABEL = {
-  queued: 'queued',
-  done: 'done',
-  declared: 'declared',
-} as const satisfies Record<WorkflowRowGroup, string>;
 
 /** Rows of chrome inside the panel beyond what the shared budget already
  *  counts: the tab strip and the per-call status strip. The filter line adds
@@ -260,7 +255,7 @@ function GroupRow({
         </Text>
       </Box>
       <RowSegment dimColor={!focused} flexShrink={1}>
-        {`${count} ${GROUP_LABEL[group]}`}
+        {formatWorkflowRowGroup({ count, group })}
       </RowSegment>
     </Box>
   );
