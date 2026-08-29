@@ -1229,11 +1229,14 @@ describe('CLI run progress renderer', () => {
 
   it('maps the global quiet flag into CLI context args', () => {
     expect(
-      pickGlobalArgs({
-        quiet: true,
-        'output-format': 'text',
-        'approval-policy': 'never',
-      }).quiet,
+      pickGlobalArgs(
+        {
+          quiet: true,
+          'output-format': 'text',
+          'approval-policy': 'never',
+        },
+        { skillSourcePaths: [] },
+      ).quiet,
     ).toBe(true);
   });
 });

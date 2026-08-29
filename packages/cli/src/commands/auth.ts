@@ -38,13 +38,11 @@ import { CliUsageError, type CliContext } from '../runtime/cliContext';
 type LoginCommandArgs = {
   readonly providerArg?: string;
   readonly 'no-browser'?: boolean;
-  readonly noBrowser?: boolean;
+  // citty rewrites `--no-browser` into `browser: false` before parsing.
   readonly browser?: boolean;
   readonly device?: boolean;
   readonly 'select-account'?: boolean;
-  readonly selectAccount?: boolean;
   readonly 'login-hint'?: string;
-  readonly loginHint?: string;
 };
 
 export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
@@ -56,7 +54,7 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
     noBrowser: booleanArg(args, 'no-browser'),
     device: args.device === true,
     selectAccount: booleanArg(args, 'select-account'),
-    loginHint: optString(args['login-hint']) ?? optString(args.loginHint),
+    loginHint: optString(args['login-hint']),
   };
 }
 
