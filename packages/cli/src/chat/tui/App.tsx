@@ -60,11 +60,11 @@ import {
 } from './input/activeDraft';
 import {
   numericFocusTargetForActiveStream,
+  presentStream,
   resolveChildListTarget,
 } from './state/childControls';
 import {
   activeStreamId as activeStreamIdSignal,
-  focusStream,
   rootStreamId as rootStreamIdSignal,
   activeForm as activeFormSignal,
   closeInfoPane,
@@ -73,7 +73,6 @@ import {
   formProgress as formProgressSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
-  openWorkflowPopup,
   updateWorkflowPopupView,
   workflowPopupView as workflowPopupViewSignal,
   reverseSearchOpen as reverseSearchOpenSignal,
@@ -115,14 +114,10 @@ interface InputEventEmitterLike {
 // away instead of leaving it queued behind other streams' items. The visible
 // list-root row also owns session-wide (stream-less) approvals.
 function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
-  // A workflow-script run is never a viewport: every path that would focus
-  // one (a session-list row, Alt-N, Esc from one of its agents) lands on its
-  // parent with the popup open over it, and the popup's own stream owns the
-  // approvals that surface.
-  if (streamMetadataFor(streamId)?.identity?.kind === 'multiAgentWorkflow') {
-    const parentId = parentStreamSignal.get().get(streamId);
-    if (parentId !== undefined) focusStream(parentId);
-    openWorkflowPopup(streamId);
+  // A workflow-script run presents as a popup over its parent (the rule
+  // lives in `presentStream`); the popup's own stream owns the approvals
+  // that surface.
+  if (presentStream(streamId) === 'workflowPopup') {
     promoteApprovalsForStream(streamId, { includeSessionWide: false });
     return;
   }
@@ -132,7 +127,6 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
     parentStream: parentStreamSignal.get(),
     streams: streamsSignal.get(),
   });
-  focusStream(streamId);
   promoteApprovalsForStream(streamId, {
     includeSessionWide: streamId === visibleListRootStreamId,
   });
@@ -196,13 +190,17 @@ export function App(props: AppProps): React.JSX.Element {
   const selectedChildValue = childListSelection.selectedValue;
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
-  // While the workflow popup is open its stream is the one whose approvals
-  // show: the popup is where the user is looking, not the parent under it.
+  // While a workflow's popup or its log is in the foreground, that stream is
+  // the one whose approvals show: it is where the user is looking, not the
+  // parent under it.
+  const foregroundWorkflowStreamId =
+    foregroundReader !== undefined &&
+    streamMetadataFor(foregroundReader.streamId)?.identity?.kind ===
+      'multiAgentWorkflow'
+      ? foregroundReader.streamId
+      : undefined;
   const activeApprovalVisible = approvalVisibleForActiveStream({
-    activeStreamId:
-      foregroundReader?.kind === 'workflow'
-        ? foregroundReader.streamId
-        : activeStreamId,
+    activeStreamId: foregroundWorkflowStreamId ?? activeStreamId,
     pending,
   });
   // Walks the child-stream tree, so keep it at data-change frequency rather
@@ -337,6 +335,19 @@ export function App(props: AppProps): React.JSX.Element {
     [workflowPopupRoot, workflowRunSettled],
   );
   const workflowPopup = useSignal(workflowPopupViewSignal);
+  // The popup controls its own grandchildren: their execution ids live on the
+  // workflow's roster, not on the parent conversation's.
+  const workflowPopupExecutionIds = useMemo(
+    () =>
+      new Map(
+        workflowPopupStreamId === undefined
+          ? []
+          : activeSubagentsFor(workflowPopupStreamId, childRosters).map(
+              (child) => [child.childStreamId, child.executionId] as const,
+            ),
+      ),
+    [childRosters, workflowPopupStreamId],
+  );
   // Stream-less approvals fold onto the root of the visible surface: the
   // scoped child-list root while one replaces the session list, else the
   // session root.
@@ -479,7 +490,7 @@ export function App(props: AppProps): React.JSX.Element {
         }
         return (
           <WorkflowPopup
-            activeSubagentExecutionIds={activeSubagentExecutionIds}
+            activeSubagentExecutionIds={workflowPopupExecutionIds}
             availableRows={availableRows}
             model={workflowPopupModel}
             onClose={closeForegroundReader}

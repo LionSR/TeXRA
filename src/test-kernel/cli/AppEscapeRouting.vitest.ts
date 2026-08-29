@@ -26,6 +26,8 @@ import {
   rootRunPending,
   rootStreamId,
   streams,
+  updateWorkflowPopupView,
+  workflowPopupView,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -339,6 +341,9 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       expect(activeStreamId.get()).toBe(ROOT);
       expect(stdout.output).toContain('workflow · 0/1 · 1 running');
+      // View state the user set inside the popup survives the round trips
+      // below; only opening a different workflow would start fresh.
+      updateWorkflowPopupView({ expanded: new Set(['done']) });
 
       // An approval bound to the workflow stream surfaces over the popup,
       // and the popup comes back once it is answered.
@@ -366,6 +371,7 @@ describe('App foreground Escape ownership', () => {
         timeoutMs: 1_000,
       });
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
+      expect(workflowPopupView.get().expanded.has('done')).toBe(true);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
       instance.unmount();

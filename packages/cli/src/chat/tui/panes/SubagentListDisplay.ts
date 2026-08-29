@@ -161,7 +161,9 @@ export function workflowPhaseStatusStrip(
       .map((call) => WORKFLOW_TASK_STATUS_STYLE[call.status].marker)
       .join('');
   }
-  const shownCount = Math.max(1, budget - `+${calls.length - budget}`.length);
+  // Reserve the widest `+N` the hidden count can need, so the strip never
+  // exceeds `maxCells` at a digit rollover.
+  const shownCount = Math.max(1, budget - (1 + String(calls.length).length));
   const shown = calls
     .slice(0, shownCount)
     .map((call) => WORKFLOW_TASK_STATUS_STYLE[call.status].marker)

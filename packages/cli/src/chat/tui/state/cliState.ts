@@ -461,20 +461,23 @@ const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
   filterEditing: false,
 };
 
-const WORKFLOW_POPUP_VIEW = signal<WorkflowPopupView>(
-  INITIAL_WORKFLOW_POPUP_VIEW,
-);
+/** The view belongs to the workflow stream, not to the mounted reader:
+ *  closing the popup to look at one of its agents and coming back lands
+ *  where the user left it; only a different workflow starts fresh. */
+const WORKFLOW_POPUP_VIEW = signal<{
+  readonly streamId: StreamTabId | undefined;
+  readonly view: WorkflowPopupView;
+}>({ streamId: undefined, view: INITIAL_WORKFLOW_POPUP_VIEW });
 export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
-  () => WORKFLOW_POPUP_VIEW.get(),
+  () => WORKFLOW_POPUP_VIEW.get().view,
 );
 
-/** Open the workflow popup on a workflow-script stream, starting from its
- *  first phase. A workflow is never a viewport: this is the one way to look
- *  inside one. */
+/** Open the workflow popup on a workflow-script stream. A workflow is never
+ *  a viewport: this is the one way to look inside one (see
+ *  `presentStream`). */
 export function openWorkflowPopup(streamId: StreamTabId): void {
-  const current = FOREGROUND_READER.get();
-  if (current?.kind !== 'workflow' || current.streamId !== streamId) {
-    WORKFLOW_POPUP_VIEW.set(INITIAL_WORKFLOW_POPUP_VIEW);
+  if (WORKFLOW_POPUP_VIEW.get().streamId !== streamId) {
+    WORKFLOW_POPUP_VIEW.set({ streamId, view: INITIAL_WORKFLOW_POPUP_VIEW });
   }
   FOREGROUND_READER.set({ kind: 'workflow', streamId });
 }
@@ -482,7 +485,8 @@ export function openWorkflowPopup(streamId: StreamTabId): void {
 export function updateWorkflowPopupView(
   patch: Partial<WorkflowPopupView>,
 ): void {
-  WORKFLOW_POPUP_VIEW.set({ ...WORKFLOW_POPUP_VIEW.get(), ...patch });
+  const current = WORKFLOW_POPUP_VIEW.get();
+  WORKFLOW_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
 }
 
 /** Capture one `/plan` invocation as the sole owner of async reader output. */
@@ -781,6 +785,10 @@ export function resetCliState(
   activeForm.set(undefined);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
+  WORKFLOW_POPUP_VIEW.set({
+    streamId: undefined,
+    view: INITIAL_WORKFLOW_POPUP_VIEW,
+  });
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   draftRestoreRequest.set([]);

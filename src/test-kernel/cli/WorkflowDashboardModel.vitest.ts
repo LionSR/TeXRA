@@ -51,15 +51,19 @@ function phaseGroup(name: string, index: number, total: number): TaskGroup {
 }
 
 function taskRow(task: TaskSpec): TranscriptRowOf<'workflowTask'> {
-  const call: WorkflowCallProgress = {
+  const identity = {
     id: task.id,
     label: task.id,
-    status: task.status ?? 'running',
     ...(task.phase === undefined ? {} : { phase: task.phase }),
     ...(task.childStreamId === undefined
       ? {}
       : { childStreamId: task.childStreamId }),
   };
+  const status = task.status ?? 'running';
+  let call: WorkflowCallProgress;
+  if (status === 'failed') call = { ...identity, status, error: 'boom' };
+  else if (status === 'skipped') call = { ...identity, status, reason: 'user' };
+  else call = { ...identity, status } as WorkflowCallProgress;
   return {
     kind: 'workflowTask',
     id: `task-${task.id}`,

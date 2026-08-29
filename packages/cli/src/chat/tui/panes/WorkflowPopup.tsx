@@ -14,7 +14,12 @@ import { useMemo } from 'react';
 // Local imports - TUI primitives
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import {
+  KEY_HINT_SEPARATOR,
+  KeyHints,
+  keyHintText,
+  type KeyHint,
+} from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
@@ -25,6 +30,7 @@ import {
 } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas and copy
 import {
@@ -90,9 +96,36 @@ const GROUP_LABEL = {
 } as const satisfies Record<WorkflowPopupGroupKind, string>;
 
 /** Rows of chrome inside the panel beyond what the shared budget already
- *  counts: the tab strip, the per-call status strip, and the second row the
- *  wrapped key hints can take. The filter line adds one while it shows. */
-const POPUP_CHROME_ROWS = 3;
+ *  counts: the tab strip and the per-call status strip. The filter line adds
+ *  one while it shows, and the wrapped key hints add their measured rows. */
+const POPUP_CHROME_ROWS = 2;
+const TAB_SEPARATOR = '    ';
+const TAB_SCROLL_MARK = '‹ ';
+
+function phaseTabText(group: WorkflowPhaseGroup): string {
+  return `${group.opened ? STATUS_DIAMOND : STATUS_DIAMOND_OUTLINE} ${formatWorkflowPhaseHeading(group.heading)} · ${phaseTallyText(group)}`;
+}
+
+/** First tab to draw so the active one is on screen: walk the window start
+ *  forward until the tabs from it through the active one fit the width. */
+function tabWindowStart(
+  tabs: readonly string[],
+  activeIndex: number,
+  width: number,
+): number {
+  const fits = (from: number): boolean => {
+    let used = from > 0 ? textDisplayWidth(TAB_SCROLL_MARK) : 0;
+    for (let index = from; index <= activeIndex; index++) {
+      used +=
+        (index > from ? textDisplayWidth(TAB_SEPARATOR) : 0) +
+        textDisplayWidth(tabs[index] ?? '');
+    }
+    return used <= width;
+  };
+  let start = 0;
+  while (start < activeIndex && !fits(start)) start++;
+  return start;
+}
 
 function phaseTallyText(group: WorkflowPhaseGroup): string {
   const declared = group.declaredTasks.length;
@@ -349,13 +382,43 @@ export function WorkflowPopup({
       selectedChildKillable: selectedExecutionId !== undefined,
     });
 
+  const hints: KeyHint[] = [
+    { key: '←/→', action: 'phase' },
+    { key: '↑/↓', action: 'select' },
+    { key: 'Enter', action: 'open / toggle' },
+    { key: '/', action: 'filter' },
+    { key: 'f', action: 'next failed' },
+    ...(controllable
+      ? [
+          { key: 's', action: 'skip' },
+          { key: 'r', action: 'retry' },
+        ]
+      : []),
+    ...(selectedExecutionId !== undefined
+      ? [{ key: 'x', action: 'kill' }]
+      : []),
+    { key: 'Ctrl-T', action: 'log' },
+    { key: 'Esc', action: view.filter.length > 0 ? 'clear filter' : 'close' },
+  ];
+  // The shared budget assumes a one-row footer; the wrapped hints take what
+  // they measure at this width.
+  const hintRows = Math.max(
+    1,
+    Math.ceil(
+      textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR)) /
+        Math.max(1, width),
+    ),
+  );
   const filterShown = view.filterEditing || view.filter.length > 0;
   const listRows = Math.max(
     1,
     scrollableModalTextRowsBudget({ availableRows, columns, title }) -
       POPUP_CHROME_ROWS -
+      (hintRows - 1) -
       (filterShown ? 1 : 0),
   );
+  const tabTexts = groups.map(phaseTabText);
+  const tabStart = tabWindowStart(tabTexts, phaseIndex, width);
 
   const clearFilterOrClose = (): void => {
     if (view.filter.length > 0) onViewChange({ filter: '' });
@@ -493,25 +556,6 @@ export function WorkflowPopup({
     }
   };
 
-  const hints: KeyHint[] = [
-    { key: '←/→', action: 'phase' },
-    { key: '↑/↓', action: 'select' },
-    { key: 'Enter', action: 'open / toggle' },
-    { key: '/', action: 'filter' },
-    { key: 'f', action: 'next failed' },
-    ...(controllable
-      ? [
-          { key: 's', action: 'skip' },
-          { key: 'r', action: 'retry' },
-        ]
-      : []),
-    ...(selectedExecutionId !== undefined
-      ? [{ key: 'x', action: 'kill' }]
-      : []),
-    { key: 'Ctrl-T', action: 'log' },
-    { key: 'Esc', action: view.filter.length > 0 ? 'clear filter' : 'close' },
-  ];
-
   const emptyText = (() => {
     if (view.filter.length > 0) return `No agents match "${view.filter}"`;
     if (!group) return 'No phases yet';
@@ -528,17 +572,19 @@ export function WorkflowPopup({
       <Box flexDirection="column" width={width}>
         <Box height={1} overflowY="hidden">
           <Text wrap="truncate-end">
-            {groups.map((phase, index) => {
+            {tabStart > 0 ? <Text dimColor>{TAB_SCROLL_MARK}</Text> : null}
+            {groups.slice(tabStart).map((phase, offset) => {
+              const index = tabStart + offset;
               const active = index === phaseIndex;
               return (
                 <Text key={phase.key}>
-                  {index > 0 ? '    ' : ''}
+                  {offset > 0 ? TAB_SEPARATOR : ''}
                   <Text
                     bold={active}
                     color={active ? COLOR_HINT : undefined}
                     dimColor={!active}
                   >
-                    {`${phase.opened ? STATUS_DIAMOND : STATUS_DIAMOND_OUTLINE} ${formatWorkflowPhaseHeading(phase.heading)} · ${phaseTallyText(phase)}`}
+                    {tabTexts[index]}
                   </Text>
                 </Text>
               );
