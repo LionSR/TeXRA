@@ -86,10 +86,7 @@ export const setupCommand = withUsageSections(
           'texra login',
           `sign in with ${RESEARCHER_ACCESS.label} (credentials only)`,
         ],
-        [
-          'texra auth status',
-          RESEARCHER_ACCESS_AUTH.statusDescription.toLowerCase(),
-        ],
+        ['texra auth status', RESEARCHER_ACCESS_AUTH.statusExample],
       ],
     },
     {

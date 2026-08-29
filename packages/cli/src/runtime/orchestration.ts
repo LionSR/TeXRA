@@ -5,7 +5,7 @@ import {
 } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf, agentName } from '@shared/schemas';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -232,7 +232,7 @@ export function buildCliAccountAccessItems(
   if (!status.texraSignedIn) {
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
-      label: RESEARCHER_ACCESS.label,
+      label: RESEARCHER_ACCESS_AUTH.signInLabel,
       description: '',
     });
   }

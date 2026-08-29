@@ -524,7 +524,7 @@ const SCENARIOS = [
       'Prefer GLM Coding Plan',
       'Off · key configured',
       'Sign out of ChatGPT',
-      'Researcher Access',
+      'Sign in with Researcher',
       'Esc back',
     ],
     unexpect: [

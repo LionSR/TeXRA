@@ -519,7 +519,7 @@ describe('CLI orchestration items', () => {
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
       expect.objectContaining({
-        label: 'Researcher Access',
+        label: 'Sign in with Researcher Access',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
@@ -546,7 +546,7 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
       }),
       expect.objectContaining({
-        label: 'Researcher Access',
+        label: 'Sign in with Researcher Access',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
