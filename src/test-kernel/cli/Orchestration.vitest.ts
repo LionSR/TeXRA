@@ -490,7 +490,7 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-out' },
       }),
       expect.objectContaining({
-        label: 'Log out of TeXRA',
+        label: 'Sign out of Researcher Access',
         description: 'researcher@example.com',
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),

@@ -28,7 +28,6 @@ import {
   defaultSession,
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -230,7 +229,6 @@ const SHOW_ORCHESTRATION_HISTORY =
   process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
-const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
@@ -533,9 +531,7 @@ const HARNESS_MODEL_ACCESS =
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
         grokSignedIn: false,
-        texraSignedIn: HARNESS_AUTHENTICATED === '1',
-        texraAccountLabel:
-          HARNESS_AUTHENTICATED === '1' ? 'harness@example.edu' : undefined,
+        texraSignedIn: false,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
@@ -627,14 +623,9 @@ function harnessOrchestrationModels(): readonly CliModelAccess[] {
 }
 
 function harnessOrchestrationStatusLines(): readonly string[] {
-  const authenticated = HARNESS_AUTHENTICATED === '1';
-  const profile = {
-    authenticated,
-    accountLabel: authenticated ? 'harness@example.edu' : undefined,
-  };
   return [
     `api: ${formatCliModelAccessRouteInline('personal')}`,
-    formatCliAuthStatusLine(profile),
+    formatCliAuthStatusLine({ authenticated: false }),
   ];
 }
 
@@ -664,18 +655,6 @@ if (SHOW_ORCHESTRATION) {
   );
   await instance.waitUntilExit();
   process.exit(0);
-}
-
-if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
-  const accessToken = HARNESS_AUTHENTICATED === '1' ? 'harness-token' : null;
-  SupabaseClient.setAuthProvider({
-    whenReady: async () => {},
-    ensureFreshToken: async () => accessToken,
-    getStoredSessionState: async () =>
-      accessToken === null ? 'none' : 'authenticated',
-    getStoredAccountLabel: async () => null,
-    getLastRefreshFailure: () => null,
-  });
 }
 
 /** A settled text row the way the fold hands one to the painter. `seqNo` and

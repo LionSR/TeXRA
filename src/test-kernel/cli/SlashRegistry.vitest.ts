@@ -205,7 +205,7 @@ describe('slashRegistry', () => {
       [
         'login',
         {
-          description: 'Sign in to ChatGPT or Researcher Access',
+          description: 'Sign in to ChatGPT, Grok, or Researcher Access',
           ...withForm,
         },
       ],

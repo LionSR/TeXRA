@@ -6,7 +6,6 @@ import {
 import type { ExecutionId } from '@shared/schemas';
 import { agentKeyOf, agentName } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import {
@@ -30,6 +29,7 @@ import {
   type CliModelPickerItem,
 } from './modelAccess';
 import {
+  buildCliAccountAccessRows,
   buildCliModelAccessItems,
   formatCliAccountAccessSummary,
   type CliModelAccessSelection,
@@ -204,12 +204,6 @@ export function buildCliOrchestrationItems(
   return items;
 }
 
-/**
- * Rows of the launcher's "Account & access" step: the four preference
- * toggles first, then account rows deduped against them — the toggle row is
- * ChatGPT's and Grok's sign-in path, so only signed-in subscriptions get a
- * sign-out row, while TeXRA (which has no toggle) always gets its own row.
- */
 export function buildCliAccountAccessItems(
   status: CliAccountStatus,
 ): CliOrchestrationItem[] {
@@ -222,36 +216,19 @@ export function buildCliAccountAccessItems(
     description: item.description,
     ...(item.disabled === true ? { disabled: true } : {}),
   }));
-  const items: CliOrchestrationItem[] = [...toggleItems];
-  if (status.chatGptSignedIn) {
-    items.push({
+  const items: CliOrchestrationItem[] = [
+    ...toggleItems,
+    ...buildCliAccountAccessRows(status).map((row) => ({
       value: {
-        kind: 'account',
-        provider: 'chatgpt',
-        operation: 'sign-out',
+        kind: 'account' as const,
+        provider: row.provider,
+        operation: row.operation,
       },
-      label: CHATGPT_AUTH.signOutLabel,
-      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
-    });
-  }
-  if (status.grokSignedIn) {
-    items.push({
-      value: {
-        kind: 'account',
-        provider: 'grok',
-        operation: 'sign-out',
-      },
-      label: GROK_AUTH.signOutLabel,
-      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
-    });
-  }
-  if (status.texraSignedIn) {
-    items.push({
-      value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
-      label: 'Log out of TeXRA',
-      description: status.texraAccountLabel ?? '',
-    });
-  } else {
+      label: row.label,
+      description: row.description,
+    })),
+  ];
+  if (!status.texraSignedIn) {
     items.push({
       value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       label: 'Log in to TeXRA',

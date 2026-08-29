@@ -6,6 +6,7 @@ import {
 } from '@shared/codingPlanSubscriptions';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
 // Kept to one rendered row: the /api form and the orchestration header both
 // budget a single line for this description.
@@ -347,4 +348,50 @@ export function formatCliAccountAccessSummary(
 ): string {
   const texra = status.texraSignedIn === true ? 'signed in' : 'signed out';
   return `TeXRA ${texra} · ${formatCliModelAccessSummary(status)}`;
+}
+
+export interface CliAccountAccessRow {
+  readonly provider: 'chatgpt' | 'grok' | 'texra';
+  readonly operation: 'sign-out';
+  readonly label: string;
+  readonly description: string;
+}
+
+/**
+ * Account rows of the merged account & access surfaces, deduped per provider
+ * by sign-in state: the preference toggle row is ChatGPT's and Grok's
+ * sign-in path, so a signed-in subscription gets exactly one sign-out row
+ * here and a signed-out one gets none (its surface's own sign-in rows cover
+ * it). TeXRA has no toggle, so it gets a sign-out row whenever it is signed
+ * in; its sign-in rows stay surface-specific.
+ */
+export function buildCliAccountAccessRows(
+  status: CliModelAccessStatus,
+): readonly CliAccountAccessRow[] {
+  const rows: CliAccountAccessRow[] = [];
+  if (status.chatGptSignedIn) {
+    rows.push({
+      provider: 'chatgpt',
+      operation: 'sign-out',
+      label: CHATGPT_AUTH.signOutLabel,
+      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
+    });
+  }
+  if (status.grokSignedIn) {
+    rows.push({
+      provider: 'grok',
+      operation: 'sign-out',
+      label: GROK_AUTH.signOutLabel,
+      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
+    });
+  }
+  if (status.texraSignedIn === true) {
+    rows.push({
+      provider: 'texra',
+      operation: 'sign-out',
+      label: `Sign out of ${RESEARCHER_ACCESS.label}`,
+      description: status.texraAccountLabel ?? RESEARCHER_ACCESS.label,
+    });
+  }
+  return rows;
 }

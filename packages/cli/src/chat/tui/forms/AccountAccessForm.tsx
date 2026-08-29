@@ -10,8 +10,10 @@ import type {
   LoginFormValue,
 } from '@cli/runtime/loginOptions';
 import {
+  buildCliAccountAccessRows,
   buildCliModelAccessItems,
   CLI_ACCOUNT_ACCESS_DESCRIPTION,
+  formatCliModelAccessRoute,
   type CliModelAccessItemsInput,
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
@@ -43,13 +45,6 @@ type AccountAccessFormStatus =
   | { readonly state: 'loaded'; readonly overview: CliModelAccessOverview }
   | { readonly state: 'failed'; readonly message: string };
 
-/**
- * Rows of the merged account & access form, deduped per provider by state:
- * the preference toggle is ChatGPT's and Grok's browser sign-in path, so a
- * signed-out subscription only gets the device-code row the toggle lacks and
- * a signed-in one only gets sign-out. TeXRA has no toggle, so it keeps its
- * own sign-in rows.
- */
 function buildAccountAccessFormItems(
   input: CliModelAccessItemsInput,
 ): ReadonlyArray<SelectItem<AccountAccessFormValue>> {
@@ -62,40 +57,29 @@ function buildAccountAccessFormItems(
   if (input.kind !== 'loaded') return toggleItems;
 
   const status = input.access;
-  const accountItems: Array<SelectItem<AccountAccessFormValue>> = [];
-  if (status.chatGptSignedIn) {
-    accountItems.push({
-      value: { kind: 'logout', target: 'chatgpt' },
-      label: CHATGPT_AUTH.signOutLabel,
-      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
-    });
-  } else {
+  const accountItems: Array<SelectItem<AccountAccessFormValue>> =
+    buildCliAccountAccessRows(status).map((row) => ({
+      value: { kind: 'logout' as const, target: row.provider },
+      label: row.label,
+      description: row.description,
+    }));
+  // Signed-out subscriptions get the one sign-in transport their toggle row
+  // lacks (device code); the toggle itself is the browser sign-in path.
+  if (!status.chatGptSignedIn) {
     accountItems.push({
       value: { kind: 'login', target: 'chatgpt --device' },
       label: CHATGPT_AUTH.deviceCodeLabel,
       description: DEVICE_CODE_DESCRIPTION,
     });
   }
-  if (status.grokSignedIn) {
-    accountItems.push({
-      value: { kind: 'logout', target: 'grok' },
-      label: GROK_AUTH.signOutLabel,
-      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
-    });
-  } else {
+  if (!status.grokSignedIn) {
     accountItems.push({
       value: { kind: 'login', target: 'grok --device' },
       label: GROK_AUTH.deviceCodeLabel,
       description: DEVICE_CODE_DESCRIPTION,
     });
   }
-  if (status.texraSignedIn === true) {
-    accountItems.push({
-      value: { kind: 'logout', target: 'texra' },
-      label: `Sign out of ${RESEARCHER_ACCESS.label}`,
-      description: status.texraAccountLabel ?? RESEARCHER_ACCESS.label,
-    });
-  } else {
+  if (status.texraSignedIn !== true) {
     accountItems.push({
       value: { kind: 'login', target: 'texra' },
       label: RESEARCHER_ACCESS.label,
@@ -150,7 +134,12 @@ export function AccountAccessForm(
   );
   let detailLines: readonly string[] | undefined;
   if (status?.state === 'loaded') {
-    detailLines = status.overview.lines;
+    // The rows already describe each preference and account; the detail block
+    // only carries what no row says.
+    detailLines = [
+      `Otherwise: ${formatCliModelAccessRoute('personal')}`,
+      ...(status.overview.note ? [status.overview.note] : []),
+    ];
   } else if (status?.state === 'failed') {
     detailLines = [status.message];
   }

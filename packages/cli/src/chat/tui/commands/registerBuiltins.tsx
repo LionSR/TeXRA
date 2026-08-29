@@ -102,7 +102,7 @@ function formSelectionHandler<T>({
   echoOnPersist = false,
   completion = 'afterAction',
   busyTitle,
-  abandonNotice = 'Operation abandoned; it may still complete.',
+  abandonNotice,
 }: {
   readonly action: (value: T, output: SlashCommandOutput) => FormActionResult;
   readonly onDone: (value: T) => void;
@@ -111,7 +111,7 @@ function formSelectionHandler<T>({
   readonly echoOnPersist?: boolean;
   readonly completion?: SelectionCompletion;
   readonly busyTitle?: (value: T) => string;
-  readonly abandonNotice?: string | ((value: T) => string);
+  readonly abandonNotice?: (value: T) => string;
 }): (value: T) => void {
   return (value) => {
     if (completion === 'busy') {
@@ -139,12 +139,8 @@ function formSelectionHandler<T>({
         }
         formProgress.set(undefined);
         onDone(value);
-        if (!canAbort) {
-          setTransientNotice(
-            typeof abandonNotice === 'function'
-              ? abandonNotice(value)
-              : abandonNotice,
-          );
+        if (!canAbort && abandonNotice !== undefined) {
+          setTransientNotice(abandonNotice(value));
         }
       };
       const title = busyTitle?.(value) ?? 'Working';
