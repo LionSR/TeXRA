@@ -192,7 +192,6 @@ export function pendingListFormChoice<T>(args: {
 
 interface AsyncListFormControls<TData> {
   readonly data: TData;
-  readonly setData: (next: TData) => void;
   /** Re-run the loader, keeping the current data on screen until it returns. */
   readonly reload: () => void;
 }
@@ -235,7 +234,6 @@ export function useAsyncPickerForm<TData, TValue>(args: {
     error,
     pendingInput,
     clearPendingInput,
-    setData,
     reload,
   } = useAsyncListForm<TData>({
     load: args.load,
@@ -250,7 +248,7 @@ export function useAsyncPickerForm<TData, TValue>(args: {
       args.onClose();
       return;
     }
-    if (data !== undefined) args.onSelect?.(value, { data, setData, reload });
+    if (data !== undefined) args.onSelect?.(value, { data, reload });
   };
   usePendingListFormSelection({
     loading,
@@ -285,7 +283,6 @@ export interface AsyncListFormProps<TData, TValue> extends Omit<
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
   readonly isEmpty?: (data: TData) => boolean;
   readonly showTransientCloseHint?: boolean;
-  readonly descriptionFor?: (data: TData) => ReactNode;
   readonly detailFor?: (data: TData) => ReactNode;
   readonly detailRowsFor?: (data: TData) => number;
   readonly compactDetailFor?: (data: TData) => ReactNode;
@@ -305,7 +302,6 @@ export function AsyncListForm<TData, TValue>(
     items: itemsFor,
     isEmpty,
     showTransientCloseHint,
-    descriptionFor,
     detailFor,
     detailRowsFor,
     compactDetailFor,
@@ -333,7 +329,6 @@ export function AsyncListForm<TData, TValue>(
     <ListForm
       {...listProps}
       items={picker.items}
-      description={descriptionFor?.(data) ?? listProps.description}
       detail={detailFor?.(data) ?? listProps.detail}
       detailRows={detailRowsFor?.(data) ?? listProps.detailRows}
       compactDetail={compactDetailFor?.(data) ?? listProps.compactDetail}

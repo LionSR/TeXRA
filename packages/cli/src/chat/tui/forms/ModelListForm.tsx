@@ -16,7 +16,6 @@ import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
-  type SelectWindowSize,
 } from '@cli/tui/selectWindow';
 import {
   CompactPickerKeyHints,
@@ -35,13 +34,8 @@ export interface ModelListFormProps {
   readonly onClose: () => void;
 }
 
-export function modelSelectWindow(args: {
-  readonly availableRows: number | undefined;
-  readonly itemCount: number;
-}): SelectWindowSize {
-  // Border, title, description, footer spacer, and key hints are the chrome.
-  return computeSelectWindowSize({ ...args, chromeRows: 6 });
-}
+// Border, title, description, footer spacer, and key hints are the chrome.
+const MODEL_SELECT_CHROME_ROWS = 6;
 
 export function modelListDescription({
   itemCount,
@@ -70,9 +64,10 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     onClose: props.onClose,
   });
   const items = picker.items;
-  const selectWindow = modelSelectWindow({
+  const selectWindow = computeSelectWindowSize({
     availableRows: props.availableRows,
     itemCount: items.length,
+    chromeRows: MODEL_SELECT_CHROME_ROWS,
   });
   const description = modelListDescription({
     itemCount: items.length,

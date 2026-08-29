@@ -107,25 +107,7 @@
       "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "agentRosterSelectWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "buildChatDefaultAgentItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectedAgentKeys"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "setChatDefaultAgent"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/CliConfigForm.tsx",
@@ -204,12 +186,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "modelListDescription"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ModelListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "modelSelectWindow"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ProviderApiKeyForm.tsx",
