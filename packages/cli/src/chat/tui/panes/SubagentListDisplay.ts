@@ -9,10 +9,7 @@ import {
 import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
 import { fillRows } from '@cli/runtime/terminalText';
 import { STREAM_PHASE, type WorkflowCallProgress } from '@shared/schemas';
-import {
-  workflowCallFailureTally,
-  workflowPhaseCallProgress,
-} from '@shared/copy/workflowCall';
+import { workflowCallTally } from '@shared/copy/workflowCall';
 import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -140,9 +137,7 @@ export function dashboardMarkerCell(marker: string): string {
 export function workflowPhaseTallyText(
   calls: readonly WorkflowCallProgress[],
 ): string {
-  const { done, total } = workflowPhaseCallProgress(calls);
-  const running = calls.filter((call) => call.status === 'running').length;
-  const { failed } = workflowCallFailureTally(calls);
+  const { done, total, running, failed } = workflowCallTally(calls);
   return [
     `${done}/${total}`,
     running > 0 ? `${running} running` : undefined,

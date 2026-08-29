@@ -278,7 +278,7 @@ describe('summarizeSubagentFollowup', () => {
 
     expect(summarizeSubagentFollowup(xml)).toBe(
       [
-        '✓ proofread-pipeline completed · 2 phases · 4/4 tasks succeeded · $0.190 · 12m 4s',
+        '✓ proofread-pipeline completed · 2 phases · 4/4 calls succeeded · $0.190 · 12m 4s',
         '  paper_A.tex (+120 -80)',
         '  notes.txt',
         '  script: .texra/workflow-scripts/proofread-pipeline.mjs',

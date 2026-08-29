@@ -299,7 +299,7 @@ describe('workflow dashboard model', () => {
     try {
       await waitFor(() => stdout.output.includes('Explore · 0/0'));
       // The panel heading counts the run; the phase row counts the phase.
-      expect(stdout.output).toContain('Workflow · 0/0 done');
+      expect(stdout.output).toContain('Workflow · 0/0');
     } finally {
       instance.unmount();
     }

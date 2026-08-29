@@ -167,7 +167,7 @@ export function createWorkflowScriptStrategy(
    *
    * `taskDone` counts the tasks that produced a result (completed or cached),
    * which is deliberately narrower than the phase header's `done/total`
-   * (workflowPhaseCallProgress), where every settled call counts, failures and
+   * (workflowCallTally), where every settled call counts, failures and
    * skips included. The two answer different questions, so the delivery line
    * labels its count "succeeded".
    *

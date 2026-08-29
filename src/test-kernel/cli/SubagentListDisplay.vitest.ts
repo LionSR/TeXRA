@@ -1102,7 +1102,7 @@ describe('CLI child list display model', () => {
     // The panel heading tallies the run; each phase row tallies its own calls
     // with the same `done/total · N running · N failed` fold the board's phase
     // headers use, so the two numbers on screen are never the same number.
-    expect(wideOutput).toContain('research-workflow · 2/4 done');
+    expect(wideOutput).toContain('research-workflow · 2/4 · 1 running');
     expect(wideOutput).toContain('Map (1/2) · 0/2 · 1 running');
     expect(wideOutput).toContain('Write (2/2) · 2/2');
     // Focused and unfocused phase rows start their text in the same column,
@@ -1501,7 +1501,7 @@ describe('CLI child list display model', () => {
       40,
     );
 
-    expect(output).toContain('Starting workflow · 0/0 done · inquiry');
+    expect(output).toContain('Starting workflow · 0/0 · inquiry');
   });
 
   // The right-aligned metadata column is the one row element `SubagentList`

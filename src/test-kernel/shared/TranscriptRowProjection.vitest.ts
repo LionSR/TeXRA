@@ -85,7 +85,7 @@ describe('projectTranscriptRow', () => {
       },
     });
     if (row?.kind !== 'tool') throw new Error('bad');
-    expect(row.model.headerLabel).toBe('delegate_agent');
+    expect(row.model.headerLabel).toBe('Delegate agent');
     expect(row.model.headerPreview).toBe('proof');
     expect(row.model.sections.map((s) => s.kind)).toEqual([
       'identifier',

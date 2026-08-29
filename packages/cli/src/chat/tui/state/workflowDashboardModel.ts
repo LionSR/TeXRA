@@ -11,6 +11,7 @@
 import type { StreamTabId } from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
 import {
+  latestWorkflowAttemptEntries,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
@@ -98,16 +99,38 @@ export function workflowDashboardModel(
     groups.push(phaseGroup);
     byGroupId.set(group.id, phaseGroup);
   }
+  // A relaunch under the same meta.name appends a second projection attempt
+  // to the same transcript with fresh card ids; scope to the newest attempt
+  // so a resume's live totals and rows don't fold a superseded attempt's
+  // cards in with the one actually running (see latestWorkflowAttemptEntries).
+  const allWorkflowTaskEntries = root.entries.filter(
+    (entry): entry is WorkflowTaskEntry => entry.kind === 'workflowTask',
+  );
+  const scopedIds = new Set(
+    latestWorkflowAttemptEntries(
+      allWorkflowTaskEntries,
+      (entry) => entry.call.attemptId,
+    ).map((entry) => entry.id),
+  );
+
   const tasks: WorkflowTaskEntry[] = [];
   // A call the run issued outside any open phase has no group to sit under.
   // The board leaves such a row ungrouped in the root timeline; the dashboard
   // is a phase list, so it collects them into one trailing group rather than
   // dropping rows the keyboard could otherwise never reach.
   let ungrouped: MutableWorkflowPhaseGroup | undefined;
-  for (const entry of root.entries) {
-    if (entry.kind !== 'workflowTask') continue;
-    tasks.push(entry);
+  // A phase whose every task belonged to a superseded attempt is the
+  // resume's duplicate phase row (fresh stage ids per phase per attempt), not
+  // a genuinely empty phase — tracked so it can be dropped below rather than
+  // showing a same-titled phase with nothing in it.
+  const groupsWithStaleTasks = new Set<MutableWorkflowPhaseGroup>();
+  for (const entry of allWorkflowTaskEntries) {
     const group = entry.groupId ? byGroupId.get(entry.groupId) : undefined;
+    if (!scopedIds.has(entry.id)) {
+      if (group) groupsWithStaleTasks.add(group);
+      continue;
+    }
+    tasks.push(entry);
     if (group) {
       group.tasks.push(entry);
       continue;
@@ -119,7 +142,10 @@ export function workflowDashboardModel(
     };
     ungrouped.tasks.push(entry);
   }
-  if (ungrouped) groups.push(ungrouped);
+  const survivingGroups = groups.filter(
+    (group) => group.tasks.length > 0 || !groupsWithStaleTasks.has(group),
+  );
+  if (ungrouped) survivingGroups.push(ungrouped);
 
   const childTaskIndex = new Map<StreamTabId, WorkflowTaskEntry | null>();
   for (const entry of tasks) {
@@ -132,7 +158,7 @@ export function workflowDashboardModel(
   }
 
   const taskValues = tasks.map((entry) => workflowTaskListValue(entry.id));
-  const narrowValues = groups.flatMap((group) =>
+  const narrowValues = survivingGroups.flatMap((group) =>
     group.tasks.length === 0
       ? [group.value]
       : group.tasks.map((entry) => workflowTaskListValue(entry.id)),
@@ -140,17 +166,17 @@ export function workflowDashboardModel(
   const wide = columns >= WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS;
   return {
     root,
-    groups,
+    groups: survivingGroups,
     tasks,
     childTaskIndex,
     taskByValue: new Map(
       tasks.map((entry) => [workflowTaskListValue(entry.id), entry]),
     ),
-    groupByValue: new Map(groups.map((group) => [group.value, group])),
+    groupByValue: new Map(survivingGroups.map((group) => [group.value, group])),
     // Narrow phase headers with tasks are disabled separators. An empty phase
     // is itself selectable so a phase-only dashboard remains keyboard-reachable.
     listValues: wide
-      ? [...groups.map((group) => group.value), ...taskValues]
+      ? [...survivingGroups.map((group) => group.value), ...taskValues]
       : narrowValues,
     wide,
   };
