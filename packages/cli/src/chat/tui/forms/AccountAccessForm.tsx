@@ -121,7 +121,7 @@ function buildAccountAccessFormItems(
       description: DEVICE_CODE_DESCRIPTION,
     });
   }
-  if (status.texraSignedIn !== true) {
+  if (!status.texraSignedIn) {
     accountItems.push({
       value: { kind: 'login', target: 'texra' },
       label: RESEARCHER_ACCESS_AUTH.signInLabel,
@@ -136,7 +136,7 @@ function buildAccountAccessFormItems(
   const signedInCount = [
     status.chatGptSignedIn,
     status.grokSignedIn,
-    status.texraSignedIn === true,
+    status.texraSignedIn,
   ].filter(Boolean).length;
   if (signedInCount >= 2) {
     accountItems.push({

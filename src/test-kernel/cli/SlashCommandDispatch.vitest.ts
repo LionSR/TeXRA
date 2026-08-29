@@ -134,6 +134,7 @@ function mockModelAccessOverview(): void {
       },
       chatGptSignedIn: false,
       grokSignedIn: false,
+      texraSignedIn: false,
     },
     lines: ['model access: Your own API keys'],
   });
