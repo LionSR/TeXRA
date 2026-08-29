@@ -33,6 +33,7 @@ import type {
   StreamLifecycleStatus,
   StreamLogEntry,
   TaskGroup,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
@@ -62,6 +63,7 @@ const LogListStateSchema = z.object({
 /** Cached per-stream data and DOM state */
 interface CachedStream {
   groups: TaskGroup[];
+  workflowPlan: WorkflowPlanMarker | undefined;
   entries: StreamLogEntry[];
   rows: TranscriptRow[];
   updatedRowIndices: readonly number[];
@@ -128,6 +130,7 @@ export class LogList extends LitElement {
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
+      entry.workflowPlan = this.streamContext.workflowPlan;
       entry.entries = this.streamContext.entries;
       entry.rows = this.streamContext.rows;
       entry.updatedRowIndices = this.streamContext.updatedRowIndices;
@@ -163,6 +166,7 @@ export class LogList extends LitElement {
           ${ref(data.ref)}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
+          .workflowPlan=${data.workflowPlan}
           .entries=${data.entries}
           .rows=${data.rows}
           .updatedRowIndices=${data.updatedRowIndices}
@@ -232,6 +236,7 @@ export class LogList extends LitElement {
 
     const createdEntry: CachedStream = {
       groups: [],
+      workflowPlan: undefined,
       entries: [],
       rows: [],
       updatedRowIndices: [],
