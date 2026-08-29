@@ -1,9 +1,4 @@
-import type { WorkflowCallIdentity } from '@shared/schemas';
-
-interface WorkflowScriptPlan {
-  readonly phases: readonly { readonly title: string }[];
-  readonly tasks: readonly WorkflowCallIdentity[];
-}
+import type { WorkflowDeclaredPlan } from '@shared/schemas';
 
 /**
  * Copy for the multi-agent workflow proposal, shared by every host so the
@@ -25,7 +20,7 @@ export const WORKFLOW_SCRIPT_PROPOSAL_COPY = {
  * `2 phases · 3 declared items`, `2 phases · calls issued at runtime`, or the
  * bare tail when the script declares no phases. Never a fake `0 tasks`.
  */
-export function workflowScriptPlanSummary(plan: WorkflowScriptPlan): string {
+export function workflowScriptPlanSummary(plan: WorkflowDeclaredPlan): string {
   const items =
     plan.tasks.length > 0
       ? `${plan.tasks.length} declared ${plan.tasks.length === 1 ? 'item' : 'items'}`

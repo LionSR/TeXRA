@@ -15,7 +15,7 @@ import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from './proposalFields';
-import { WorkflowCallIdentitySchema } from './workflowCallProgress';
+import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
 
 /** Optional stream ID - allows empty string when stream context is unavailable */
 const OptionalStreamIdSchema = z.union([StreamTabIdSchema, z.literal('')]);
@@ -56,12 +56,10 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
-const WorkflowScriptProposalDetailsSchema = z.strictObject({
+const WorkflowScriptProposalDetailsSchema = WorkflowDeclaredPlanSchema.extend({
   name: z.string().min(1),
   description: z.string().min(1),
   scriptPath: z.string().min(1),
-  phases: z.array(z.strictObject({ title: z.string().min(1) })),
-  tasks: z.array(WorkflowCallIdentitySchema),
 });
 
 /** Workflow agent proposal - includes file fields for document processing */

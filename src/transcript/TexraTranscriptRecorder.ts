@@ -548,7 +548,6 @@ export function attachTranscriptRecorder(
             attemptId: event.attemptId,
             phases: event.phases.map((phase) => ({
               title: redactSecrets(phase.title),
-              index: phase.index,
             })),
             tasks: event.tasks.map((task) => ({
               ...task,

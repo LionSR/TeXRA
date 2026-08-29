@@ -129,10 +129,7 @@ return await agent('Inspect', { id: 'inspect' })`,
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({
       attemptId: expect.any(String),
-      phases: [
-        { title: 'Research', index: 0 },
-        { title: 'Write', index: 1 },
-      ],
+      phases: [{ title: 'Research' }, { title: 'Write' }],
       tasks: [
         { id: 'inspect', label: 'Inspect source', phase: 'Research' },
         { id: 'draft', label: 'Draft the section', phase: 'Write' },

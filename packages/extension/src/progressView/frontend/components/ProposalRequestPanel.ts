@@ -29,10 +29,10 @@ import type {
   AgentProposalPermission,
   PermissionPayload,
   WorkflowAgentProposalPermission,
-  WorkflowCallIdentity,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
@@ -58,26 +58,6 @@ import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '../events';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { getComposedPathElement } from '../utils';
-
-/**
- * Declared phases in order, each with its declared items. Empty phases still
- * appear, and unphased items come last. This grouping describes declarations,
- * not which calls run together or depend on one another.
- */
-function workflowScriptDeclaredItemsByPhase(plan: {
-  readonly phases: readonly { readonly title: string }[];
-  readonly tasks: readonly WorkflowCallIdentity[];
-}): {
-  readonly phase?: string;
-  readonly items: readonly WorkflowCallIdentity[];
-}[] {
-  const groups = plan.phases.map((phase) => ({
-    phase: phase.title,
-    items: plan.tasks.filter((task) => task.phase === phase.title),
-  }));
-  const unphased = plan.tasks.filter((task) => task.phase === undefined);
-  return [...groups, ...(unphased.length > 0 ? [{ items: unphased }] : [])];
-}
 
 function proposalRequestIdOf(
   p: PermissionPayload | null | undefined,
@@ -235,7 +215,17 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     workflow: NonNullable<WorkflowAgentProposalPermission['workflowScript']>,
   ): TemplateResult {
     const fullName = `${workflow.name}: ${workflow.description}`;
-    const declaredGroups = workflowScriptDeclaredItemsByPhase(workflow);
+    // The plan's phases as the run model folds them for a run that has not
+    // started: every declared phase in order, its declared items under it,
+    // unphased items under the trailing `Unphased` phase — the same shape the
+    // popup and the board show once the run is live.
+    const { phases } = workflowRunModel({
+      taskGroups: [],
+      rows: [],
+      plan: workflow,
+      runSettled: false,
+      childProgress: new Map(),
+    });
 
     return html`
       <div class="workflow-proposal__workflow-summary">
@@ -261,17 +251,17 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       >
         ${this.renderInstruction(workflow.description)}
         ${
-          declaredGroups.length > 0
+          phases.length > 0
             ? html`<ul class="workflow-proposal__task-list">
                 ${repeat(
-                  declaredGroups,
-                  (group) => group.phase ?? '',
-                  (group) =>
+                  phases,
+                  (phase) => phase.key,
+                  (phase) =>
                     html`<li>
-                      ${group.phase ?? 'No phase'}
+                      ${phase.heading.phaseLabel}
                       <ul>
                         ${repeat(
-                          group.items,
+                          phase.declaredTasks,
                           (task) => task.id,
                           (task) => html`<li>${task.label}</li>`,
                         )}

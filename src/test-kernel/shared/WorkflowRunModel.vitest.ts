@@ -151,7 +151,7 @@ describe('workflow run model', () => {
         plan: {
           kind: 'workflowPlan',
           attemptId: 'attempt-1',
-          phases: [{ title: 'Derive', index: 0 }],
+          phases: [{ title: 'Derive' }],
           tasks: [{ id: 'later', label: 'Later on', phase: 'Derive' }],
         },
       },
@@ -217,11 +217,7 @@ describe('workflow run model', () => {
     const plan: WorkflowPlanMarker = {
       kind: 'workflowPlan',
       attemptId: 'attempt-1',
-      phases: [
-        { title: 'Map', index: 0 },
-        { title: 'Reduce', index: 1 },
-        { title: 'Publish', index: 2 },
-      ],
+      phases: [{ title: 'Map' }, { title: 'Reduce' }, { title: 'Publish' }],
       tasks: [
         { id: 'inspect', label: 'inspect', phase: 'Map' },
         { id: 'extract', label: 'Extract facts', phase: 'Map' },
@@ -343,7 +339,7 @@ describe('workflow run model', () => {
     const plan = {
       kind: 'workflowPlan',
       attemptId: 'a',
-      phases: [{ title: 'Map', index: 0 }],
+      phases: [{ title: 'Map' }],
       tasks: [],
     };
     expect(workflowMarkerOf(entry(plan))).toStrictEqual({ kind: 'plan', plan });

@@ -762,10 +762,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     const workflowPlan: WorkflowPlanMarker = {
       kind: 'workflowPlan',
       attemptId: 'attempt-1',
-      phases: [
-        { title: 'Map', index: 0 },
-        { title: 'Publish', index: 1 },
-      ],
+      phases: [{ title: 'Map' }, { title: 'Publish' }],
       tasks: [{ id: 'report', label: 'Write the report', phase: 'Publish' }],
     };
     const toggleStates = new ToggleStateStore();
