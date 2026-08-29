@@ -1188,7 +1188,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
-  createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
+  override createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
     if (mediaMessage.length === 0) {
       return [];
     }
@@ -1380,7 +1380,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  protected createAssistantMessageForAccumulatedOutput(
+  protected override createAssistantMessageForAccumulatedOutput(
     workspaceState: AgentWorkspaceState,
   ): MessageParam {
     this.logger.debug('Creating new assistant message for fresh request');
@@ -1405,7 +1405,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
-  shouldContinue(
+  override shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
     _agentSetting: AgentSetting,

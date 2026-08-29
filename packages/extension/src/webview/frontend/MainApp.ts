@@ -309,7 +309,7 @@ export class MainApp extends MainAppBase {
     });
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const onboardingState = onboardingFunnelState$.get();
     const desktopHost = this.isDesktopHost;
     if (onboardingState === 'pending') {

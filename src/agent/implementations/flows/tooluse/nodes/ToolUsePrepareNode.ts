@@ -23,7 +23,7 @@ export class ToolUsePrepareNode extends BaseNode<
   ToolUseRunShared,
   ToolUseServices
 > {
-  async exec(_prepRes: void): Promise<CyclePrepResult> {
+  override async exec(_prepRes: void): Promise<CyclePrepResult> {
     const {
       userVarChannels,
       logger,
@@ -142,7 +142,7 @@ export class ToolUsePrepareNode extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRunShared,
     _prepRes: void,
     execRes: CyclePrepResult,

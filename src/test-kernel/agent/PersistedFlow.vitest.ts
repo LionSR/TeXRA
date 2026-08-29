@@ -19,21 +19,24 @@ import { StorageFS } from '@utils/files/storageFS';
 setupPlatform({ workspacePath: '/workspace' });
 
 class CompleteNode extends BaseNode<{ count: number }> {
-  async post(shared: { count: number }): Promise<string> {
+  override async post(shared: { count: number }): Promise<string> {
     shared.count += 1;
     return 'complete';
   }
 }
 
 class ContinueOnceNode extends BaseNode<{ count: number; continue: boolean }> {
-  async post(shared: { count: number; continue: boolean }): Promise<string> {
+  override async post(shared: {
+    count: number;
+    continue: boolean;
+  }): Promise<string> {
     shared.count += 1;
     return shared.continue ? 'again' : 'complete';
   }
 }
 
 class SuspendNode extends BaseNode<{ count: number }> {
-  async post(shared: { count: number }): Promise<string> {
+  override async post(shared: { count: number }): Promise<string> {
     shared.count += 1;
     return FlowTransition.WAITING;
   }

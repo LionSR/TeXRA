@@ -93,7 +93,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private _mainViewProvider?: MainViewProvider;
   private readonly detachHostInteractions: () => void;
 
-  constructor(protected readonly context: vscode.ExtensionContext) {
+  constructor(protected override readonly context: vscode.ExtensionContext) {
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 

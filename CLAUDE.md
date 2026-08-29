@@ -234,3 +234,26 @@ Load these when the work lands in their territory:
 - **releasing** — cutting a release: changelog, tags, GitHub Releases, desktop
   installers.
 - **tech-debt-tournament** — one cycle of the recurring scoped tech-debt sweep.
+
+<!-- effect-solutions:start -->
+
+## Effect Best Practices
+
+**IMPORTANT:** Always consult effect-solutions before writing Effect code.
+
+1. Run `effect-solutions list` to see available guides
+2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
+3. Search `~/.local/share/effect-solutions/effect` for real implementations
+
+Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
+
+Never guess at Effect patterns - check the guide first.
+
+### Local Effect Source
+
+The Effect v4 repository is cloned to `~/.local/share/effect-solutions/effect`
+for reference. Use it to explore APIs, find usage examples, and understand
+implementation details when the documentation isn't enough. This repo pins
+`effect` 4.0.0-rc.x (v4) — match `effect-smol` (v4) sources, not Effect v3 docs.
+
+<!-- effect-solutions:end -->

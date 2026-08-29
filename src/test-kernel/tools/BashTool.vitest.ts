@@ -85,7 +85,7 @@ const testModelConfig: ModelConfig = {
 class BashMockHandler extends ModelHandlerOpenAIResponse {
   private callCount = 0;
 
-  async getClient(): Promise<OpenAI> {
+  override async getClient(): Promise<OpenAI> {
     return {} as OpenAI;
   }
 

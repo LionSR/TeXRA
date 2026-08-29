@@ -29,7 +29,7 @@ vi.mock('@tools/approval/bashApproval', async (importActual) => {
 });
 
 class TestOpenAIResponseHandler extends ModelHandlerOpenAIResponse {
-  async getClient(): Promise<never> {
+  override async getClient(): Promise<never> {
     throw new Error('not used');
   }
 

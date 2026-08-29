@@ -16,7 +16,7 @@ export class PrepareContextNode extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     return {
       currentRound: shared.currentRound,
       conversation: shared.context ?? [],
@@ -24,7 +24,7 @@ export class PrepareContextNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: PrepInput): Promise<ProviderMessage[]> {
+  override async exec(prepRes: PrepInput): Promise<ProviderMessage[]> {
     const { promptBuilder, logger } = this.services;
     const modelHandler = this.services.modelCell.handler;
     const { currentRound, conversation, compileFailureContext } = prepRes;
@@ -64,7 +64,7 @@ export class PrepareContextNode extends BaseNode<
     return messages;
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     _prepRes: PrepInput,
     context: ProviderMessage[],

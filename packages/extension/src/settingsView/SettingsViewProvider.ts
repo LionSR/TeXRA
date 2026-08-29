@@ -24,7 +24,7 @@ export class SettingsViewProvider extends BaseWebviewProvider {
   protected contentProvider: BundledViewContentProvider;
   protected messageHandler: SettingsViewMessageHandler;
 
-  constructor(protected readonly context: vscode.ExtensionContext) {
+  constructor(protected override readonly context: vscode.ExtensionContext) {
     super(context);
     this.contentProvider = new BundledViewContentProvider(
       context,

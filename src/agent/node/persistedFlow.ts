@@ -330,7 +330,7 @@ export class PersistedFlow<
     return structuredClone(shared) as Record<string, unknown>;
   }
 
-  async run(shared: S): Promise<Action | undefined> {
+  override async run(shared: S): Promise<Action | undefined> {
     await this.ensureRecord(shared);
     let step = await this.stepWithResult();
     while (step.hasMore) {

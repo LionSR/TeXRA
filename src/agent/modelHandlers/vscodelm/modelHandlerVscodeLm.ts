@@ -332,7 +332,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     ];
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): VscodeLmMediaPart[] {
+  override createMediaContent(mediaMessage: MediaEntry[]): VscodeLmMediaPart[] {
     return mediaMessage.flatMap((media): VscodeLmMediaPart[] => {
       if (
         media.media_category !== 'image' ||

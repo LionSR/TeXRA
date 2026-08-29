@@ -32,7 +32,7 @@ export class ToolUseCycleNode extends BaseNode<
   ToolUseRunShared,
   ToolUseServices
 > {
-  async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
+  override async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
     if (shared.stateSlices === null) {
       throw new Error('PrepareNode must run before CycleNode');
     }
@@ -53,7 +53,7 @@ export class ToolUseCycleNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
+  override async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
     const { runScope } = this.services;
     const modelHandler = this.services.modelCell.handler;
     const { streamId } = runScope;
@@ -176,7 +176,7 @@ export class ToolUseCycleNode extends BaseNode<
     }
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: CyclePrepResult,
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
@@ -187,7 +187,7 @@ export class ToolUseCycleNode extends BaseNode<
     return { outcome: 'failed', lastError };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRunShared,
     prepRes: CyclePrepResult,
     execRes: ToolUseCycleOutcome,

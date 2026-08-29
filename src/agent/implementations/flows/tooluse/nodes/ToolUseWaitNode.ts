@@ -27,13 +27,13 @@ export class ToolUseWaitNode extends BaseNode<
     super();
   }
 
-  async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
+  override async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     return {
       afterError: !!(shared.lastError || shared.userCancelledRetry),
     };
   }
 
-  async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
+  override async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
     const { session, isSubagent, runScope, toolPolicy } = this.services;
     const { streamId, session: ownerSession, signal } = runScope;
     const { stopAfterCycle } = toolPolicy;
@@ -139,7 +139,7 @@ export class ToolUseWaitNode extends BaseNode<
     };
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: WaitPrepResult,
     error: Error,
   ): Promise<WaitExecResult> {
@@ -147,7 +147,7 @@ export class ToolUseWaitNode extends BaseNode<
     return { kind: 'stop' };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRunShared,
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,

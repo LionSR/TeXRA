@@ -115,7 +115,7 @@ export interface StreamArtifactAuthority {
 
 /** A failed preload together with the in-memory fields that remain usable. */
 export class StreamSnapshotPreloadError extends Error {
-  readonly name = 'StreamSnapshotPreloadError';
+  override readonly name = 'StreamSnapshotPreloadError';
 
   constructor(
     cause: unknown,
