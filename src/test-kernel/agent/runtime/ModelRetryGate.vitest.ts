@@ -151,18 +151,16 @@ describe('ModelRetryGate', () => {
     await expectAdmittedAfter(next, nextOperation, 2000);
 
     // Third failure keeps growing: 4x the base.
-    await expect(gate.run(wireRoutes(), options(), throwTransient)).rejects.toBe(
-      TRANSIENT,
-    );
+    await expect(
+      gate.run(wireRoutes(), options(), throwTransient),
+    ).rejects.toBe(TRANSIENT);
     const finalOperation = vi.fn(async () => undefined);
     const final = gate.run(wireRoutes(), options(), finalOperation);
     await expectAdmittedAfter(final, finalOperation, 4000);
   });
 
   it('keeps model rate limits off the shared wire route', async () => {
-    const modelRoutes = (
-      modelRoute: string,
-    ): [TestRoute, TestRoute] => [
+    const modelRoutes = (modelRoute: string): [TestRoute, TestRoute] => [
       {
         key: modelRoute,
         classifyFailure: (error: Error) =>
@@ -262,9 +260,9 @@ describe('ModelRetryGate', () => {
     // ...then a success admitted while the route is already healthy resets it.
     await gate.run(wireRoutes(), options(), async () => undefined);
 
-    await expect(gate.run(wireRoutes(), options(), throwTransient)).rejects.toBe(
-      TRANSIENT,
-    );
+    await expect(
+      gate.run(wireRoutes(), options(), throwTransient),
+    ).rejects.toBe(TRANSIENT);
 
     // Cooling restarts at the base backoff, not the previous streak's tier.
     const nextOperation = vi.fn(async () => undefined);
@@ -372,9 +370,9 @@ describe('ModelRetryGate', () => {
 
     stale.complete();
     await stalePending;
-    await expect(gate.run(wireRoutes(), options(), throwTransient)).rejects.toBe(
-      TRANSIENT,
-    );
+    await expect(
+      gate.run(wireRoutes(), options(), throwTransient),
+    ).rejects.toBe(TRANSIENT);
 
     const nextOperation = vi.fn(async () => undefined);
     const next = gate.run(wireRoutes(), options(), nextOperation);

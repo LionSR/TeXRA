@@ -177,9 +177,7 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(classifyRun).toHaveBeenCalledOnce();
-    expect(classifyRunFacts).toHaveBeenCalledExactlyOnceWith(
-      setup.executionId,
-    );
+    expect(classifyRunFacts).toHaveBeenCalledExactlyOnceWith(setup.executionId);
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.COMPLETED);
     expect(closeRunningGroups).toHaveBeenCalledExactlyOnceWith(
       [setup.streamId],

@@ -111,9 +111,9 @@ describe('Copilot model handler routing', () => {
   });
 
   it('takes precedence over the global OpenRouter route', () => {
-    expect(
-      resolveModelHandlerCompatibilityKey(copilotConfig, true),
-    ).toBe('ModelHandlerVscodeLm');
+    expect(resolveModelHandlerCompatibilityKey(copilotConfig, true)).toBe(
+      'ModelHandlerVscodeLm',
+    );
   });
 
   it('fails clearly when the host language-model port is unavailable', async () => {
@@ -207,9 +207,9 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini31p;
-    expect(
-      resolveModelHandlerCompatibilityKey(config, false, 'direct'),
-    ).toBe('ModelHandlerGoogleInteractions');
+    expect(resolveModelHandlerCompatibilityKey(config, false, 'direct')).toBe(
+      'ModelHandlerGoogleInteractions',
+    );
     expect(resolveModelHandlerCompatibilityKey(config, false)).toBe(
       'ModelHandlerVscodeLm',
     );

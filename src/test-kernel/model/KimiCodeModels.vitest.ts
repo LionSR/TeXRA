@@ -109,9 +109,9 @@ describe('Kimi Code routing', () => {
     expect(
       resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false),
     ).toBe('ModelHandlerKimi');
-    expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true),
-    ).toBe('ModelHandlerOpenRouterNative');
+    expect(resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
   });
 
   it('does not divert other moonshot models off their normal routes', () => {

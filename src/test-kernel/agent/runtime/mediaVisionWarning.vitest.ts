@@ -49,8 +49,8 @@ describe('media vision warnings', () => {
       expected: undefined,
     },
   ])('$name', ({ files, capabilities, kind, modelName, expected }) => {
-    expect(
-      mediaNeedsVisionWarning(files, capabilities, kind, modelName),
-    ).toBe(expected);
+    expect(mediaNeedsVisionWarning(files, capabilities, kind, modelName)).toBe(
+      expected,
+    );
   });
 });

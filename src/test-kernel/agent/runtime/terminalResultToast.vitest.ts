@@ -63,7 +63,9 @@ describe('terminal result presentation', () => {
 
   it('maps disk-full and unexpected to error toasts carrying the message', () => {
     expect(
-      toastsFor(result({ error: { kind: 'disk-full', message: 'No space left' } })),
+      toastsFor(
+        result({ error: { kind: 'disk-full', message: 'No space left' } }),
+      ),
     ).toEqual([
       { event: 'requestShowError', payload: { message: 'No space left' } },
     ]);

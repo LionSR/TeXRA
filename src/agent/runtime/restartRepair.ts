@@ -160,8 +160,7 @@ export async function repairRestartedStreams(
 ): Promise<void> {
   const now = options.now ?? Date.now();
   const classifyRun = options.classifyRun ?? defaultClassifyRun;
-  const classifyRunFacts =
-    options.classifyRunFacts ?? defaultClassifyRunFacts;
+  const classifyRunFacts = options.classifyRunFacts ?? defaultClassifyRunFacts;
   const finalizeRun = options.finalizeRun ?? defaultFinalizeRun;
   const isCurrent = (streamId: StreamTabId, executionId?: ExecutionId) =>
     options.isRepairCandidateCurrent?.(streamId, executionId) ?? true;

@@ -37,9 +37,7 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
-import {
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,

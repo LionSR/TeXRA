@@ -17,9 +17,7 @@ import {
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import {
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -529,10 +527,7 @@ export async function executeCliRequest(
       shutdownLaunchAborted = true;
     } else if (!(err instanceof AgentError)) {
       primaryRunFailure = { error: err };
-    } else if (
-      !failurePresented &&
-      !hasErrorPresentationClaimed(err)
-    ) {
+    } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
       // A failure before lifecycle startup has no `result` event. Preserve the
       // ordinary toast path when it ran, and provide the missing direct fallback
       // while the presentation host is still attached. A launch failure that

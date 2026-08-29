@@ -898,4 +898,3 @@ export function defaultSession(): SessionHandle {
 export function currentSession(): SessionHandle {
   return getRunContextSession(tryUseRunContext()) ?? defaultSession();
 }
-
