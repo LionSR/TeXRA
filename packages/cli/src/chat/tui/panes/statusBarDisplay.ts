@@ -506,6 +506,20 @@ function fitTransientNoticeStatusBarLeftSegments(
     fitNotice();
   }
 
+  const sacrificeBypassBadgesUntilFit = (): void => {
+    while (statusBarSegmentsWidth(fitted) > innerWidth) {
+      const badgeIndex = fitted.findLastIndex(isBypassBadge);
+      if (badgeIndex < 0) break;
+      fitted.splice(badgeIndex, 1);
+      fitNotice();
+    }
+  };
+
+  // Preserve the destructive-action warning before retaining auto-approval
+  // badges. Otherwise warning truncation can reduce it to empty text, making
+  // the row fit while hiding that queued input will be discarded.
+  if (discardWarning) sacrificeBypassBadgesUntilFit();
+
   // Extremely narrow terminals may not fit even the full discard warning.
   // Drop the lower-priority confirmation text and truncate the warning so the
   // status row never exceeds its layout budget.
@@ -525,12 +539,7 @@ function fitTransientNoticeStatusBarLeftSegments(
   // would soft-wrap the row, breaking the 2-row chrome budget. Sacrifice
   // badges from the tail — mirroring how liveness is sacrificed above — only
   // while the row still overflows.
-  while (statusBarSegmentsWidth(fitted) > innerWidth) {
-    const badgeIndex = fitted.findLastIndex(isBypassBadge);
-    if (badgeIndex < 0) break;
-    fitted.splice(badgeIndex, 1);
-    fitNotice();
-  }
+  sacrificeBypassBadgesUntilFit();
 
   return fitted;
 }
