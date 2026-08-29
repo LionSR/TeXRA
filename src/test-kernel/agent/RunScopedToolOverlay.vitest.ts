@@ -67,7 +67,6 @@ function stopAfterToolObservationHandler<T extends { name: string }>(
     setOutputStreaming: () => {},
     getWireRouteKey: () => 'test',
     getModelRetryRouteKey: () => 'test:model',
-    extractAssistantText: () => undefined,
     createResponse: async (options: { tools?: T[] }) => {
       observedTools.push(options.tools ?? []);
       throw stopAfterObservation;

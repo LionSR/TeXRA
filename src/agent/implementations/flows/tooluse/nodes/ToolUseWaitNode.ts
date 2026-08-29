@@ -15,8 +15,6 @@ import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 interface WaitPrepResult {
-  /** Latest assistant text, read only by the root-mode `onIdle` notification. */
-  lastResponse: string | undefined;
   /** True when entering after a failed/cancelled cycle. */
   afterError: boolean;
 }
@@ -30,25 +28,8 @@ export class ToolUseWaitNode extends BaseNode<
   }
 
   async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
-    const { onIdle } = this.services;
-    const modelHandler = this.services.modelCell.handler;
-
-    // Only a wired `onIdle` reads the response text (a host projecting the
-    // transcript before the flow blocks). A suspended subagent turn's facts
-    // are read off the flow result by the child-run loop, not from here.
-    let lastResponse: string | undefined;
-    if (onIdle) {
-      for (const message of shared.messages.toReversed()) {
-        const text = modelHandler.extractAssistantText(message);
-        if (text !== undefined) {
-          lastResponse = text;
-          break;
-        }
-      }
-    }
     return {
       afterError: !!(shared.lastError || shared.userCancelledRetry),
-      lastResponse,
     };
   }
 
@@ -90,7 +71,7 @@ export class ToolUseWaitNode extends BaseNode<
       // block) so a host can project each round's response as it happens —
       // e.g. the CLI syncing its terminal transcript live. Distinct from
       // subagent delivery below, which suspends the flow; this never does.
-      this.services.onIdle?.(prepRes.lastResponse);
+      this.services.onIdle?.();
     }
 
     if (stopAfterCycle) {

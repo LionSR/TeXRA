@@ -167,9 +167,7 @@ function defaultStateSlices(
 function createTaggedModelCell(
   compatibilityKey: ModelHandlerCompatibilityKey,
   modelId: string,
-  handler: Record<string, unknown> = {
-    extractAssistantText: () => undefined,
-  },
+  handler: Record<string, unknown> = {},
 ): RunToolUseFlowInput['modelCell'] {
   // ModelFactory installs this non-enumerable tag on every active handler.
   Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {

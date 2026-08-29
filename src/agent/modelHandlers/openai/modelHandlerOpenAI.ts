@@ -59,7 +59,6 @@ import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
   createChatUserFollowUpMessages,
-  extractChatAssistantText,
   initializeChatMessages,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
@@ -741,12 +740,6 @@ export class ModelHandlerOpenAI<
     }
 
     return message;
-  }
-
-  override extractAssistantText(
-    message: ChatCompletionMessageParam,
-  ): string | undefined {
-    return extractChatAssistantText(message);
   }
 
   /** Builds the default content parts for inline vision requests. */

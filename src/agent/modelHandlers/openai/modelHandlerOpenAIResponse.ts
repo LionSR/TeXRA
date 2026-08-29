@@ -105,7 +105,6 @@ import {
   contentToText,
   createInputText,
   hasResponseOutputText,
-  isAssistantTextMessage,
   isMessageItem,
 } from './openAIResponseContent';
 import {
@@ -2799,20 +2798,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       role: 'assistant',
       content: text,
     } satisfies EasyInputMessage;
-  }
-
-  override extractAssistantText(
-    message: ResponseInputItem,
-  ): string | undefined {
-    if (!isAssistantTextMessage(message)) {
-      return undefined;
-    }
-
-    // String content (from createAssistantMessage) or array content
-    // (input_text history or output_text response parts); empty flattens to
-    // undefined.
-    const text = contentToText(message.content, '');
-    return text.length > 0 ? text : undefined;
   }
 
   private appendAssistantText(

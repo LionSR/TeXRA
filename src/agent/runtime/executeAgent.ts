@@ -97,7 +97,7 @@ type ToolUseLaunchVariant =
   | {
       readonly kind: 'fresh';
       /** Root-run-only; resume has no caller-supplied equivalent. */
-      readonly onIdle?: (lastResponse: string | undefined) => void;
+      readonly onIdle?: () => void;
     }
   | {
       readonly kind: 'resume';
@@ -359,8 +359,8 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   enforceCategory?: boolean;
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
-  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
-  onIdle?: (lastResponse: string | undefined) => void;
+  /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: () => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */

@@ -1018,13 +1018,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     } satisfies ModelOutputStep;
   }
 
-  override extractAssistantText(message: Step): string | undefined {
-    if (message.type !== 'model_output') return undefined;
-    return joinNonEmpty(
-      (message.content ?? []).filter(isTextContent).map((c) => c.text),
-    );
-  }
-
   protected textMedia(text: string): TextContent {
     if (!text) {
       throw new Error('Google text content must not be empty.');

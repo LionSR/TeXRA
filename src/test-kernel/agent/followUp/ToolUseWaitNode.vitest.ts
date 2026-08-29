@@ -96,7 +96,6 @@ function createWaitNodeServices(
         ...capabilities,
       },
       createUserFollowUpMessages: vi.fn(async () => []),
-      extractAssistantText: () => undefined,
       ...modelHandlerOverrides,
     }),
     session: {
@@ -303,7 +302,6 @@ describe('ToolUseWaitNode', () => {
 
     const services = createWaitNodeServices({
       isSubagent: false,
-      modelHandler: { extractAssistantText: () => 'partial response' },
       onIdle,
       session: { waitForFollowUp },
     });
@@ -313,7 +311,6 @@ describe('ToolUseWaitNode', () => {
     await withTestRunContext(services.runScope, () => node.exec(prep));
 
     expect(onIdle).toHaveBeenCalledOnce();
-    expect(onIdle).toHaveBeenCalledWith('partial response');
     expect(waitForFollowUp).toHaveBeenCalledOnce();
   });
 

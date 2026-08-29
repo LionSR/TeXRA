@@ -53,7 +53,6 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { joinNonEmpty } from '@utils/text/stringUtils';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
@@ -1185,15 +1184,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       newResponse,
       workspaceState,
       responseObject,
-    );
-  }
-
-  override extractAssistantText(message: MessageParam): string | undefined {
-    if (message.role !== 'assistant') return undefined;
-    if (typeof message.content === 'string') return message.content;
-    if (!Array.isArray(message.content)) return undefined;
-    return joinNonEmpty(
-      message.content.filter(isTextBlockParam).map((b) => b.text),
     );
   }
 

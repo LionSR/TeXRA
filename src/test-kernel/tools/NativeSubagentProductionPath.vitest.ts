@@ -132,8 +132,6 @@ function taggedScriptedHandler(
       stopReason: 'stop',
     }),
     extractToolUse: () => [],
-    extractAssistantText: (message: { content?: unknown }) =>
-      typeof message.content === 'string' ? message.content : undefined,
     setAgentCategory: vi.fn(),
     setLogger: vi.fn(),
     dispose: vi.fn(),
