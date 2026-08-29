@@ -169,9 +169,9 @@ return await parallel(
   so editing a referenced path invalidates both its cached result and stable
   child identity. Display labels and phases do not participate in identity.
   Failed and cancelled calls are not journaled, so resume retries them; so
-  are a user's skip and a per-call admission denial — the journal records
-  outcomes of the script's calls, a human verdict belongs to the attempt
-  that asked for it, and a resume is a new attempt. The checkpoint identity
+  is a user's skip — the journal records outcomes of the script's calls, a
+  human verdict belongs to the attempt that asked for it, and a resume is a
+  new attempt. The checkpoint identity
   is `meta.name` plus the default agent: resuming under a different agent
   starts a new journal.
   Otherwise-identical calls must provide distinct `id` options; ambiguous

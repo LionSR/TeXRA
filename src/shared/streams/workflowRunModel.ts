@@ -448,11 +448,10 @@ function matchesFilter(
 
 /**
  * One phase's rows. With a filter every matching card is one flat row;
- * without one, cards needing attention (awaiting approval, failed, running —
- * in that order, transcript order within) lead, finished cards follow as
- * rows of their own (a ticked box is the record of what ran), and the cards
- * that have not started collapse into `queued` / `declared` groups that open
- * in place.
+ * without one, cards needing attention (failed, then running — transcript
+ * order within) lead, finished cards follow as rows of their own (a ticked
+ * box is the record of what ran), and the cards that have not started
+ * collapse into `queued` / `declared` groups that open in place.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
