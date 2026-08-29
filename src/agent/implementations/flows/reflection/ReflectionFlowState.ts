@@ -57,15 +57,8 @@ export const ReflectionFlowStateSchema = z.object({
   /** Provider-message format used by the persisted `context` messages. */
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
 
-  /** One-shot repair context injected into the next round's user request. */
+  /** Compile-failure context injected into the next configured round. */
   compileFailureContext: z.string().optional(),
-
-  /**
-   * Set once a compile-repair round has been granted, so a compile failure
-   * on that repair round (or a resumed run) can't grant a second one.
-   * Bounds the repair round to exactly one per run.
-   */
-  compileRepairRoundGranted: z.boolean().optional(),
 });
 
 /** Shared state type for reflection flow nodes. */
