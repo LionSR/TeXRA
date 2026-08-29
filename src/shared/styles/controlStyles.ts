@@ -247,6 +247,25 @@ export const buttonStyles: CSSResult = css`
     transform: translateY(0) scale(0.97);
   }
 
+  /* Native WA split-action groups (the approve caret menu, the diff-actions
+     dropdown) render nativeChrome segments that carry none of the
+     INTERACTIVE_CONTROLS aliases above, so the fused group needs its own
+     lift/press feedback — applied to the wa-button-group host so the whole
+     control moves as one unit instead of the segments moving independently. */
+  wa-button-group.split-group {
+    transition:
+      filter var(--transition-normal),
+      transform var(--transition-normal);
+  }
+
+  wa-button-group.split-group:hover {
+    transform: translateY(-1px);
+  }
+
+  wa-button-group.split-group:active {
+    transform: translateY(0) scale(0.97);
+  }
+
   .icon-button wa-icon,
   .action-icon-button wa-icon {
     font-size: var(--font-size-icon-sm);
@@ -370,6 +389,10 @@ export const buttonStyles: CSSResult = css`
 
   @media (prefers-reduced-motion: reduce) {
     :is(${INTERACTIVE_CONTROLS}):not([disabled]):is(:hover, :active) {
+      transform: none;
+    }
+
+    wa-button-group.split-group:is(:hover, :active) {
       transform: none;
     }
   }

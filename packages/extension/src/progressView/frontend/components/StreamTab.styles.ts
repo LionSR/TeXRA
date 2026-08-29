@@ -167,6 +167,7 @@ export const streamTabStyles = css`
     margin-inline: var(--wa-space-2xs) 0;
     color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
     opacity: 0;
+    transition: opacity var(--transition-fast);
     position: relative;
     z-index: 10;
   }
@@ -312,6 +313,7 @@ export const streamTabStyles = css`
 
   .tab-expand wa-icon {
     font-size: var(--font-size-xs);
+    transition: transform var(--transition-fast);
   }
 
   .tab-expand[aria-expanded='true'] wa-icon {

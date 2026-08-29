@@ -16,7 +16,10 @@ import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 import { WORKFLOW_CALL_REVIEW_COPY } from '@shared/copy/workflowScriptProposal';
 import { createEvent } from '@shared/utils/events';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
-import { renderSplitButtonMenuParts } from '@shared/wa/splitButton';
+import {
+  renderSplitButtonMenuParts,
+  splitButtonTriggerStyles,
+} from '@shared/wa/splitButton';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 /** Each menu item's dropdown-item value is the event it emits when selected. */
@@ -57,6 +60,7 @@ export class ApproveSplitButton extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    splitButtonTriggerStyles,
     css`
       /* Mirror the .action-button cap (requestPanelSharedStyles, #6658): hug
          content so Approve stays button-sized instead of filling the row. */
@@ -65,30 +69,6 @@ export class ApproveSplitButton extends LitElement {
         flex: 0 1 auto;
         min-width: auto;
         max-width: min(14rem, 100%);
-      }
-
-      .approve-split-trigger {
-        width: 1.5rem;
-        min-width: 1.5rem;
-      }
-
-      .approve-split-trigger::part(base) {
-        padding-inline: 0;
-      }
-
-      .approve-split-trigger wa-icon {
-        font-size: var(--font-size-sm);
-        transition: transform var(--transition-fast);
-      }
-
-      .approve-split-menu[open] .approve-split-trigger wa-icon {
-        transform: rotate(180deg);
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .approve-split-trigger wa-icon {
-          transition: none;
-        }
       }
     `,
   ];
@@ -177,7 +157,7 @@ export class ApproveSplitButton extends LitElement {
     });
 
     return html`
-      <wa-button-group class="approve-split" label="Approve">
+      <wa-button-group class="approve-split split-group" label="Approve">
         ${approveButton} ${menu}
       </wa-button-group>
       ${tooltip}

@@ -50,28 +50,4 @@ export const toolEditRequestPanelStyles: CSSResult = css`
     min-width: 0;
     max-width: none;
   }
-
-  .diff-dropdown-trigger {
-    width: 1.5rem;
-    min-width: 1.5rem;
-  }
-
-  .diff-dropdown-trigger::part(base) {
-    padding-inline: 0;
-  }
-
-  .diff-dropdown-trigger wa-icon {
-    font-size: var(--font-size-sm);
-    transition: transform var(--transition-fast);
-  }
-
-  .diff-dropdown-menu[open] .diff-dropdown-trigger wa-icon {
-    transform: rotate(180deg);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .diff-dropdown-trigger wa-icon {
-      transition: none;
-    }
-  }
 `;

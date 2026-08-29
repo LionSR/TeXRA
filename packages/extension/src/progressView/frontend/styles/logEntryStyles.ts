@@ -158,8 +158,6 @@ export const logEntryStyles = css`
   .workflow-task-status {
     align-self: center;
     padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
-    border-radius: 999px;
-    background: transparent;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     white-space: nowrap;
