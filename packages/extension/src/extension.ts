@@ -196,12 +196,9 @@ async function refreshApiKeyStatus() {
 
 /**
  * Workspace-bound commands the getting-started walkthrough exposes as buttons.
- * The walkthrough opens right after install even when no folder is open — the
- * state where activation stops at the welcome view and never reaches
- * `registerCommands` — so without fallbacks every one of these buttons is a
- * dead click. The credential commands are registered for real in that state
- * (sign-in needs no folder); these need the workspace-backed platform, so each
- * fallback says why nothing can run yet and offers the two ways forward.
+ * Their links invoke one bridge command so a no-workspace click can explain
+ * the prerequisite without firing the real command's `onCommand` completion
+ * event.
  */
 const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
   EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
@@ -213,6 +210,9 @@ const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
   'texra.cleanOutput',
   'texra.cleanBuild',
 ] as const satisfies readonly CommandId[];
+
+/** Internal command URI used by workspace-bound walkthrough links. */
+const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 
 async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
   const openFolder = 'Open Folder';
@@ -227,6 +227,26 @@ async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
   } else if (choice === createSample) {
     await createSampleProjectWithoutWorkspace(extensionPath);
   }
+}
+
+function registerWalkthroughWorkspaceAction(
+  context: vscode.ExtensionContext,
+  hasSingleWorkspace: boolean,
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      WALKTHROUGH_WORKSPACE_ACTION_COMMAND,
+      async (
+        command: (typeof WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE)[number],
+      ) => {
+        if (hasSingleWorkspace) {
+          await vscode.commands.executeCommand(command);
+          return;
+        }
+        await explainWorkspaceRequired(context.extensionPath);
+      },
+    ),
+  );
 }
 
 /**
@@ -303,8 +323,9 @@ export async function activate(context: vscode.ExtensionContext) {
 async function activateExtension(context: vscode.ExtensionContext) {
   installUnhandledRejectionSurface(context.subscriptions);
   const workspaceFolders = vscode.workspace.workspaceFolders;
+  const hasSingleWorkspace = workspaceFolders?.length === 1;
 
-  if (!workspaceFolders || workspaceFolders.length !== 1) {
+  if (!hasSingleWorkspace) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into SecretStorage
     // (`platform().secrets`) and the global `~/.texra` config — none of it
@@ -360,12 +381,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
         apiSetApiKey(async () => {}),
       ),
-      ...WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE.map((command) =>
-        vscode.commands.registerCommand(command, () =>
-          explainWorkspaceRequired(context.extensionPath),
-        ),
-      ),
     );
+    registerWalkthroughWorkspaceAction(context, false);
     return;
   }
   const rawWorkspacePath = () =>
@@ -618,6 +635,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
   const mainViewProvider = registerCommands(context);
+  registerWalkthroughWorkspaceAction(context, true);
   // Wire the two sidebar surfaces to each other before anything can invoke a
   // placement command: `texra.showProgressView` is registered above and is
   // also the status bar item's command, and a progress view without its main

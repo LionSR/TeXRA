@@ -513,7 +513,7 @@
           {
             "id": "texra.gettingStarted.setupAssistant",
             "title": "The setup assistant takes it from here",
-            "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant](command:texra.runSetupAssistant)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
+            "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
             "media": {
               "markdown": "resources/walkthroughs/getting-started.md"
             },
@@ -524,7 +524,7 @@
           {
             "id": "texra.gettingStarted.agentModel",
             "title": "Meet the orchestrator",
-            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. The orchestrator itself comes from the hosted research-agent catalog, so sign in to TeXRA to use it; without sign-in, start with **assistant** instead.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.showMultiAgent)",
+            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. The orchestrator itself comes from the hosted research-agent catalog, so sign in to TeXRA to use it; without sign-in, start with **assistant** instead.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMultiAgent%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of the agent and model selection UI"
@@ -547,7 +547,7 @@
           {
             "id": "texra.gettingStarted.stageFiles",
             "title": "Manual path: pick your files",
-            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.showMainView)",
+            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/file-selection.png",
               "altText": "Screenshot of the file selection interface"
@@ -559,7 +559,7 @@
           {
             "id": "texra.gettingStarted.autoExtract",
             "title": "Manual path: auto-extract figures (optional)",
-            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run TikZ extraction manually:\n\n[Extract TikZ figures](command:texra.extractTikzFigures)",
+            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run TikZ extraction manually:\n\n[Extract TikZ figures](command:texra.walkthroughWorkspaceAction?%5B%22texra.extractTikzFigures%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/auto-extract-options.png",
               "altText": "Screenshot showing auto-extraction options"
@@ -571,7 +571,7 @@
           {
             "id": "texra.gettingStarted.progress",
             "title": "Manual path: run the agent",
-            "description": "You're all set. Click Run agent and the orchestrator will start working through your paper.\n\n[Run agent](command:texra.execute)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.showProgressView) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
+            "description": "You're all set. Click Run agent and the orchestrator will start working through your paper.\n\n[Run agent](command:texra.walkthroughWorkspaceAction?%5B%22texra.execute%22%5D)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.walkthroughWorkspaceAction?%5B%22texra.showProgressView%22%5D) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot of the Progress view"
@@ -592,7 +592,7 @@
           {
             "id": "texra.gettingStarted.housekeeping",
             "title": "Manual path: clean up when you're done",
-            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean all outputs](command:texra.cleanOutput) | [Clean build files](command:texra.cleanBuild)",
+            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean all outputs](command:texra.walkthroughWorkspaceAction?%5B%22texra.cleanOutput%22%5D) | [Clean build files](command:texra.walkthroughWorkspaceAction?%5B%22texra.cleanBuild%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
               "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
