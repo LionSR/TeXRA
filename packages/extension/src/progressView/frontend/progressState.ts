@@ -331,9 +331,7 @@ const activeChildProgress$ = new Signal.Computed(
       const childState = states.get(child.childStreamId);
       if (!childState) continue;
       progress.set(child.childStreamId, {
-        ...(childState.runStartedAt !== undefined
-          ? { runStartedAt: childState.runStartedAt }
-          : {}),
+        runStartedAt: childState.runStartedAt,
         toolCallCount: childState.conversationProgress.toolCallCount,
       });
     }

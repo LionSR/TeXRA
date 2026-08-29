@@ -60,7 +60,6 @@ import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
-import { selectedChildRowWorkflowControllable } from '../appInteractionPolicy';
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
 import {
@@ -245,8 +244,10 @@ interface WorkflowPopupProps {
   readonly view: WorkflowPopupView;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
-  readonly pendingApprovals:
-    ReadonlyMap<string, readonly PendingApprovalKind[]> | undefined;
+  readonly pendingApprovals: ReadonlyMap<
+    string,
+    readonly PendingApprovalKind[]
+  >;
   readonly onClose: () => void;
   readonly onFocusStream: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -322,10 +323,9 @@ export function WorkflowPopup({
       : undefined;
   };
   const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
-  const nowMs = useLiveNowMsSince([
-    runStartedAt,
-    ...model.tasks.map((row) => model.liveOf.get(row.id)?.runStartedAt),
-  ]);
+  // A card is live only while its workflow is, and the run's own origin is
+  // set for every active phase, so it alone keys the clock.
+  const nowMs = useLiveNowMsSince([runStartedAt]);
 
   const identity = streamMetadataFor(streamId)?.identity;
   const name = identity ? runIdentityDisplayName(identity) : 'Workflow';
@@ -350,13 +350,19 @@ export function WorkflowPopup({
     selectedChildStreamId !== undefined
       ? activeSubagentExecutionIds.get(selectedChildStreamId)
       : undefined;
+  // A workflow-script grandchild `agent()` call is the only skip/retry-able
+  // row: a native agent run (an external CLI tool's child is driven by that
+  // tool and would no-op) whose parent is the workflow run — one identity
+  // hop, which excludes the run stream itself.
+  const selectedChildIdentity =
+    selectedChildStreamId !== undefined
+      ? streamMetadataFor(selectedChildStreamId)?.identity
+      : undefined;
   const controllable =
-    selectedChildStreamId !== undefined &&
-    selectedChildRowWorkflowControllable({
-      parentIdentity: identity,
-      selectedChildIdentity: streamMetadataFor(selectedChildStreamId)?.identity,
-      selectedChildKillable: selectedExecutionId !== undefined,
-    });
+    selectedExecutionId !== undefined &&
+    selectedChildIdentity?.kind === 'agent' &&
+    selectedChildIdentity.tool === undefined &&
+    identity?.kind === 'multiAgentWorkflow';
 
   const hints: KeyHint[] = [
     { key: '←/→', action: 'phase' },
@@ -500,7 +506,7 @@ export function WorkflowPopup({
             pendingKinds={
               childStreamId === undefined
                 ? undefined
-                : pendingApprovals?.get(childStreamId)
+                : pendingApprovals.get(childStreamId)
             }
           />
         );

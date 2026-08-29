@@ -352,12 +352,12 @@ export function App(props: AppProps): React.JSX.Element {
       const runStartedAt = streamPhaseFor(child.childStreamId)?.runStartedAt;
       const usage = readStreamArtifacts(child.childStreamId)?.cumulativeUsage;
       childProgress.set(child.childStreamId, {
-        ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+        runStartedAt,
         toolCallCount:
           streamStateFor(child.childStreamId)?.conversationProgress
             .toolCallCount ?? 0,
-        ...(usage ? { outputTokens: usage.outputTokens } : {}),
-        ...(usage?.cost !== undefined ? { costUsd: usage.cost } : {}),
+        outputTokens: usage?.outputTokens,
+        costUsd: usage?.cost,
       });
     }
     return workflowRunModel({

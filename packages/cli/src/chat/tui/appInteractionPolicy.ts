@@ -1,7 +1,7 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 // Local imports - shared schemas and utilities
-import { type RunIdentity, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
@@ -220,30 +220,5 @@ export function groupPendingApprovalsByRow(
     keyed,
     (entry) => entry.key,
     (entry) => entry.summary.kind,
-  );
-}
-
-// A workflow-script grandchild `agent()` call is the only interactively
-// skip/retry-able row: a NATIVE agent run (no external CLI tool — those
-// children are driven by their own tool and would no-op here) whose parent
-// stream IS the workflow-script run — one identity hop, which excludes the
-// run stream itself so its row never shows a control that would silently
-// no-op. Callers read both identities from the shared metadata
-// (`streamMetadataFor`), resolving the parent edge themselves, so this
-// selector stays pure.
-export function selectedChildRowWorkflowControllable({
-  parentIdentity,
-  selectedChildIdentity,
-  selectedChildKillable,
-}: {
-  readonly parentIdentity: RunIdentity | undefined;
-  readonly selectedChildIdentity: RunIdentity | undefined;
-  readonly selectedChildKillable: boolean;
-}): boolean {
-  return (
-    selectedChildKillable &&
-    selectedChildIdentity?.kind === 'agent' &&
-    selectedChildIdentity.tool === undefined &&
-    parentIdentity?.kind === 'multiAgentWorkflow'
   );
 }

@@ -288,7 +288,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     focusedStreamId === undefined
       ? undefined
       : ancestorWorkflowPhaseLabel({
-          categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
           stageOf: (id) => streamStateFor(id)?.stage,
           parentStream,
           streamId: focusedStreamId,
