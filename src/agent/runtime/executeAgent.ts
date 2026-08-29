@@ -363,34 +363,27 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   onIdle?: (lastResponse: string | undefined) => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
-  /**
-   * Allow the promise to resolve with the non-terminal WAITING result.
-   * `nativeSubagentStrategy` is the only caller that opts in: interactive
-   * launches consume WAITING as a loop turn, while single-cycle launches admit
-   * it so their durability wrapper can persist a meaningful invariant failure
-   * rather than losing the returned turn and cost. The flag is inert for a
-   * workflow-category flow (`isWaitingFlowResult` requires `category ===
-   * 'toolUse'`). Resume paths have no equivalent flag: whether
-   * a resumed run is a subagent comes from persisted lineage, so
-   * `resumeToolUseFromResumeData` always admits WAITING and callers narrow
-   * with `isWaitingFlowResult`.
-   */
-  allowWaitingResult?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelHandlerCompatibilityKey?: ModelHandlerCompatibilityKey | null;
   /** Deliberate one-run bypass used only by a Copilot direct-key fallback. */
   copilotRouteOverride?: CopilotRouteOverride;
 }
 
+// A WAITING result is reachable only for a subagent: `{ kind: 'waiting' }` is
+// minted solely behind `ToolUseWaitNode`'s `isSubagent` check, so `isSubagent`
+// already carries the fact a separate `allowWaitingResult` flag used to.
+// Resume paths need no flag at all — whether a resumed run is a subagent comes
+// from persisted lineage, so `resumeToolUseFromResumeData` always admits
+// WAITING and callers narrow with `isWaitingFlowResult`.
 export function executeAgent(
   config: AgentConfig,
   executionId: ExecutionId,
-  options: ExecuteAgentOptions & { allowWaitingResult: true },
+  options: ExecuteAgentOptions & { isSubagent: true },
 ): Promise<AgentFlowResult | WaitingToolUseFlowResult>;
 export function executeAgent(
   config: AgentConfig,
   executionId: ExecutionId,
-  options: ExecuteAgentOptions & { allowWaitingResult?: false | undefined },
+  options: ExecuteAgentOptions & { isSubagent?: false | undefined },
 ): Promise<AgentFlowResult>;
 
 /**
@@ -493,9 +486,9 @@ export async function executeAgent(
           },
           buildLifecycleOptions(options, isSubagent),
         );
-        if (isWaitingFlowResult(result) && !options.allowWaitingResult) {
+        if (isWaitingFlowResult(result) && !options.isSubagent) {
           throw new Error(
-            'executeAgent received a non-terminal WAITING result without allowWaitingResult.',
+            'executeAgent received a non-terminal WAITING result for a non-subagent run.',
           );
         }
         return result;

@@ -114,7 +114,7 @@ export interface ChildRunPorts {
  */
 export type ChildRunOutcome =
   | { kind: 'completed' }
-  | { kind: 'failed'; error?: unknown; errorMessage?: string }
+  | { kind: 'failed'; error?: unknown }
   | { kind: 'cancelled' };
 
 /**
@@ -503,8 +503,17 @@ function mintChildTurnRef(
 ): ChildTurnRef {
   // The `:generation:` segment is the persisted spelling of this token and is
   // frozen: delivery ids minted by an earlier build must keep comparing equal.
-  const token = `${executionId}:generation:${attemptId}:turn:${turnIndex}`;
-  return { token, deliveryId: `${token}:delivery` };
+  return { token: `${executionId}:generation:${attemptId}:turn:${turnIndex}` };
+}
+
+/**
+ * The delivery id one accepted turn's single parent delivery is admitted
+ * under. Derived from the turn token rather than persisted beside it, so the
+ * two can never disagree; the `:delivery` suffix is frozen for the same reason
+ * the token's `:generation:` segment is.
+ */
+function turnDeliveryId(turnRef: ChildTurnRef): string {
+  return `${turnRef.token}:delivery`;
 }
 
 /**
@@ -550,9 +559,7 @@ function emitTurnDiagnostic(
   logger.debug(`childRunLoop ${event}`, {
     data: {
       executionId,
-      ...(turnRef
-        ? { turnToken: turnRef.token, deliveryId: turnRef.deliveryId }
-        : {}),
+      ...(turnRef ? { turnToken: turnRef.token } : {}),
       ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
     },
@@ -709,7 +716,7 @@ async function deliverTurn<TTurn>(params: {
     followUp: {
       text: msg,
       origin: 'subagent_result',
-      deliveryId: turnRef.deliveryId,
+      deliveryId: turnDeliveryId(turnRef),
     },
   };
 }

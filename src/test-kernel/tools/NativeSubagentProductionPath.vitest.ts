@@ -298,7 +298,6 @@ async function launchWaitingChild(options: {
   await expect(
     executeAgent(parentConfig, PARENT_EXECUTION_ID, {
       session,
-      allowWaitingResult: true,
       isSubagent: true,
       parentStreamId: OUTER_STREAM_ID,
     }),
@@ -596,7 +595,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         followUp: {
           text: report!,
           origin: 'subagent_result',
-          deliveryId: completed!.deliveryId,
+          // Derived from the persisted turn token exactly as production does.
+          deliveryId: `${completed!.token}:delivery`,
         },
         session,
       });
@@ -615,7 +615,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       followUp: {
         text: report!,
         origin: 'subagent_result',
-        deliveryId: `${completed!.deliveryId}:other`,
+        deliveryId: `${completed!.token}:delivery:other`,
       },
       session,
     });
