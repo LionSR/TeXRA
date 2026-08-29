@@ -28,6 +28,7 @@ vi.mock('@tools/inquiry/externalInquiryStorage', () => ({
 }));
 
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { InquiryThreadId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -40,8 +41,15 @@ import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInqui
 const THREAD = 'ei_aabbccdd0011' as InquiryThreadId;
 const STREAM = 'stream:desktop-parent' as StreamTabId;
 
+/**
+ * A host-supplied session: only identity plus the event hub the continuation
+ * emits on. A real hub, because a session handle always carries one.
+ */
 function sessionStub(tag?: string): SessionHandle {
-  return { ...(tag ? { tag } : {}) } as unknown as SessionHandle;
+  return {
+    ...(tag ? { tag } : {}),
+    events: new SessionEventHub(),
+  } as unknown as SessionHandle;
 }
 
 /** Collects the session facts emitted on a hub until detached. */
@@ -191,44 +199,6 @@ describe('external inquiry continuation session routing', () => {
       run.detach();
       fallback.detach();
       session.dispose();
-    }
-  });
-
-  it('falls back to the default session when the selected session has no event hub', async () => {
-    const runSession = createTestSession();
-    const run = captureFacts(runSession);
-    const fallback = captureFacts(defaultSession());
-
-    try {
-      await withRunContext(
-        createRunContext({
-          session: runSession,
-        }),
-        () =>
-          injectContinuationForAnsweredThread(
-            THREAD,
-            answeredManifest(),
-            sessionStub(),
-          ),
-      );
-
-      expect(run.facts).toEqual([]);
-      expect(fallback.facts).toEqual([
-        {
-          scope: 'session',
-          event: {
-            type: 'inquiryThreadUpdated',
-            payload: expect.objectContaining({
-              threadId: THREAD,
-              resumeOutcome: 'sent',
-            }),
-          },
-        },
-      ]);
-    } finally {
-      run.detach();
-      fallback.detach();
-      runSession.dispose();
     }
   });
 

@@ -3,8 +3,6 @@ import { classifyRun } from '@agent/runtime/runClassification';
 import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import {
   currentSession,
-  defaultSession,
-  resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
@@ -97,7 +95,7 @@ export function notifyFollowUpSent(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  (resolveEmitSession(session) ?? defaultSession()).events.emit({
+  (session ?? currentSession()).events.emit({
     scope: 'session',
     event: { type: 'followUpSent', payload: { streamId } },
   });
