@@ -35,6 +35,20 @@ Prior rulings this survey is judged against, and honours:
 - AGENTS.md "Duplicate UI controls": one home per user action; secondary
   surfaces show read-only status.
 
+## Owner ruling (2026-08-29)
+
+The maintainer ruled on this survey the same day: **the two hosts must share
+one workflow-display state structure and differ only in how they paint it.**
+That supersedes the #11545 measurement that left the phase grouping
+host-local, and it settles the "divergences" below as defects, not product
+choices: the board gets the per-call glyph strip, the declared phases and
+tasks from the `workflow.plan` marker, and the attention-first grouping,
+from the same model the popup reads. No projector or adapter layer on either
+side — each host calls the shared model directly. The dead-code findings
+(C1–C7) are cleaned up in the same pass. Implementation: one PR moves the model
+into `src/shared/streams/` with the CLI on it and the cleanups; a second puts
+the board on it.
+
 ## Candidates (issue-ready, ordered by leverage)
 
 Estimated total across C1–C6: about −150 production LoC, −9 exports, −50 test
