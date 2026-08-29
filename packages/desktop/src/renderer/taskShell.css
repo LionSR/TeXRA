@@ -499,6 +499,28 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   -webkit-app-region: no-drag;
 }
 
+.task-header-button-slot {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* Same warning hue the rail's per-stream pending-approval indicator uses
+   (StreamTab.styles.ts `.has-pending-approval`) — the only cue left when a
+   call held at the approval gate is on a stream the collapsed sidebar
+   currently hides. */
+.task-header-pending-approval-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-warning);
+  border: 1.5px solid var(--wa-color-surface-default);
+  pointer-events: none;
+}
+
 .task-header-title {
   min-width: 0;
   overflow: hidden;

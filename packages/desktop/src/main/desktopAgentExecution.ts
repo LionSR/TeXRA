@@ -89,7 +89,6 @@ import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
-import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 import {
   ALL_STREAMS_DELETED_CAUSE,
   RETRY_REQUEST_CLEARED_CAUSE,
@@ -252,20 +251,19 @@ export class DesktopProgressBridge {
           this.options.host.showErrorMessage(message),
           'Failed to present the error dialog',
         ),
-      requestShowInstruction: (instruction) => {
+      requestShowInstruction: (instruction) =>
         // An instruction is actionable guidance, not a failure, so it uses
-        // the info dialog. The desktop dialog carries no buttons, so the
-        // action tokens the extension renders as buttons become trailing
-        // hint text and `showSuppress` has no affordance to attach to.
-        const hint = formatInstructionActionHint(
-          instruction.actions,
-          'desktop',
-        );
-        return this.settleHostDialog(
-          this.options.host.showInfoMessage(`${instruction.message}${hint}`),
+        // the info-style dialog. `showInstructionDialog` renders each action
+        // token as a real button; `showSuppress` still has no affordance to
+        // attach to (a native dialog has no persistent "never remind again"
+        // control).
+        this.settleHostDialog(
+          this.options.host.showInstructionDialog(
+            instruction.message,
+            instruction.actions,
+          ),
           'Failed to present the instruction dialog',
-        );
-      },
+        ),
       showAgentConfigBanner: ({ agentName }) =>
         this.postToRenderer({
           command: MAIN_VIEW_COMMANDS.SET_BANNER,
