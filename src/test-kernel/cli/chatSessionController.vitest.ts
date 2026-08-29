@@ -134,6 +134,7 @@ import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -357,6 +358,8 @@ function installOwnerSession(): {
   const executions = new ExecutionRegistry({
     events,
     streamStatus: status,
+    approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+    publishResult: () => {},
     releaseRootExecutionLease: async () => {},
   });
   const interactions = new SessionHostInteractions();

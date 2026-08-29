@@ -6,6 +6,7 @@ import {
 } from '@agent/runtime/ExecutionHandle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { AgentCategory } from '@shared/schemas';
 import type { ExecutionId, RunIdentity, StreamTabId } from '@shared/schemas';
@@ -43,6 +44,8 @@ export function testExecutionRegistry(): ExecutionRegistry {
   return new ExecutionRegistry({
     events,
     streamStatus: new StreamStatusMachine(events),
+    approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+    publishResult: () => {},
     releaseRootExecutionLease: async () => {},
   });
 }

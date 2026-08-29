@@ -25,6 +25,7 @@ import {
 } from '@agent/storage/executionLease';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
@@ -505,6 +506,8 @@ describe('cross-process execution leases', () => {
     const registry = new ExecutionRegistry({
       streamStatus: new StreamStatusMachine(events),
       events,
+      approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+      publishResult: () => {},
       releaseRootExecutionLease: async () => undefined,
     });
     const readToken = async (): Promise<string> => {

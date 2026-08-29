@@ -2,11 +2,7 @@ import { logUserMessage, type AgentTrace } from '@agent/trace';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import {
-  countMediaFilesNeedingVision,
-  formatMediaNeedsVisionWarning,
-  shouldWarnMediaNeedsVision,
-} from '@agent/runtime/mediaVisionWarning';
+import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   deliveryTagOf,
@@ -95,17 +91,12 @@ export async function appendFollowUpAsUserMessage(
     return { messages: nextMessages, attachmentKinds: [] };
   }
 
-  if (
-    shouldWarnMediaNeedsVision(
-      followUp.mediaFiles,
-      services.modelCell.handler.capabilities,
-    )
-  ) {
-    const visionMediaCount = countMediaFilesNeedingVision(followUp.mediaFiles);
-    services.logger.warn(
-      formatMediaNeedsVisionWarning(visionMediaCount, 'pasted'),
-    );
-  }
+  const visionWarning = mediaNeedsVisionWarning(
+    followUp.mediaFiles,
+    services.modelCell.handler.capabilities,
+    'pasted',
+  );
+  if (visionWarning) services.logger.warn(visionWarning);
 
   const attachmentKinds =
     await services.modelCell.handler.addMediaToUserMessage(

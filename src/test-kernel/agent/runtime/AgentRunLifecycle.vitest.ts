@@ -727,6 +727,7 @@ describe('runFlowWithLifecycle', () => {
           STREAM_PHASE.CANCELLED,
         );
         const flowContext: LiveToolUseFlowContext = {
+          ownerSession: defaultSession(),
           modelHandler: { supportsManualCompaction: false },
           requestImmediateCompaction: vi.fn(),
           modelSwitchDisabledReason: vi.fn(),

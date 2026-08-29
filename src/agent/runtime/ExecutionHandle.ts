@@ -9,7 +9,6 @@
 import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type {
   AgentCategory,
@@ -95,13 +94,13 @@ type TerminalState = 'open' | 'claimed' | 'settled';
  * turn and knows how to cancel the in-progress model/tool round.
  */
 export type LiveToolUseFlowContext = {
-  readonly ownerSession?: SessionHandle;
   readonly modelHandler: Pick<
     ToolUseFlowContext['modelHandler'],
     'supportsManualCompaction'
   >;
 } & Pick<
   ToolUseFlowContext,
+  | 'ownerSession'
   | 'requestImmediateCompaction'
   | 'modelSwitchDisabledReason'
   | 'switchModel'

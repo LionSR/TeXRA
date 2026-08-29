@@ -74,15 +74,15 @@ describe('tool-use follow-up progress events', () => {
       parentStreamId: stream,
       agent: 'search',
     });
+    const owner = session ?? defaultSession();
     handle.attachToolUseFlow({
-      ...(session ? { ownerSession: session } : {}),
+      ownerSession: owner,
       modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
       interrupt: () => {},
     });
-    const owner = session ?? defaultSession();
     owner.executions.track(handle);
     trackedExecutions.push({ session: owner, executionId });
   }

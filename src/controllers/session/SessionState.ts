@@ -656,7 +656,7 @@ export class SessionState {
     // to close.
     const preExistingEphemeral = new Set<StreamTabId>([
       ...this._ephemeralState.keys(),
-      ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
+      ...this.streamStatus.getAllStreamStates().keys(),
     ]);
     const identitiesAtStart = new Set<StreamTabId>([
       ...preExistingEphemeral,

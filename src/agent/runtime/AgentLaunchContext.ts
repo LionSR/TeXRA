@@ -58,11 +58,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
-import {
-  countMediaFilesNeedingVision,
-  formatMediaNeedsVisionWarning,
-  shouldWarnMediaNeedsVision,
-} from './mediaVisionWarning';
+import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
@@ -453,17 +449,13 @@ async function assembleAgentLaunchContext(
   // Tell the user when attached images will be dropped because the chosen model
   // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
   // drop them silently otherwise.
-  if (
-    shouldWarnMediaNeedsVision(config.mediaFiles, modelHandler.capabilities)
-  ) {
-    agentLogger.warn(
-      formatMediaNeedsVisionWarning(
-        countMediaFilesNeedingVision(config.mediaFiles),
-        'attached',
-        fullConfig.model,
-      ),
-    );
-  }
+  const visionWarning = mediaNeedsVisionWarning(
+    config.mediaFiles,
+    modelHandler.capabilities,
+    'attached',
+    fullConfig.model,
+  );
+  if (visionWarning) agentLogger.warn(visionWarning);
 
   const agentPath = path.dirname(resolution.entry.path);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
