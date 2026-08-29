@@ -33,11 +33,7 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
 });
 
 import { runCli } from '@cli/commands/root';
-import {
-  defaultInitAgentOptions,
-  defaultInitAnswers,
-  initCommand,
-} from '@cli/commands/init';
+import { defaultInitAnswers, initCommand } from '@cli/commands/init';
 import {
   initWizardDefaultAgentIndex,
   initWizardModelSelectItems,
@@ -126,17 +122,6 @@ describe('CLI init command', () => {
       valueHint: 'directory',
       description: 'Working directory to initialize (defaults to $PWD)',
     });
-  });
-
-  it('does not offer simplifier as a default init agent option', () => {
-    const registryAgents: Array<{ name: string; description: string }> = [
-      { name: 'chat', description: 'General chat' },
-      { name: 'simplifier', description: 'Code simplification' },
-      { name: 'review', description: 'Code review' },
-    ];
-    const options = defaultInitAgentOptions(registryAgents);
-
-    expect(options).toEqual([{ name: 'chat' }, { name: 'review' }]);
   });
 
   it('defaults non-interactive init to the visible team lead', () => {

@@ -32,14 +32,6 @@ interface SubscriptionUsageReader {
 
 const SubscriptionUsage = new SubscriptionUsageService();
 
-/** Prefix of the signed-in auth status line — the TUI's launcher compacts the
- *  auth line by truncating the trailing segments behind this prefix. */
-export const AUTH_SIGNED_IN_LINE_PREFIX = 'auth: signed in';
-
-/** Separator between the segments that make up an auth status line (account,
- *  usage). The launcher truncates at this to keep the status line short. */
-export const AUTH_STATUS_SEGMENT_SEPARATOR = ' · ';
-
 export function formatCliAuthStatusLine(
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
 ): string {

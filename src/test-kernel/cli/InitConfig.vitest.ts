@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildInitConfig,
   ensureTexraGitignored,
-  gitignoreWithTexra,
-  serializeInitConfig,
   writeInitConfig,
   type InitAnswers,
 } from '@cli/runtime/initConfig';
@@ -49,9 +47,14 @@ describe('buildInitConfig', () => {
   });
 });
 
-describe('serializeInitConfig', () => {
-  it('produces pretty JSON with a trailing newline', () => {
-    const text = serializeInitConfig(buildInitConfig(ANSWERS));
+describe('writeInitConfig', () => {
+  it('writes pretty JSON with a trailing newline', async () => {
+    const workspace = await makeTempDir('texra-init-config-', tempDirs);
+    const configPath = workspaceTexraConfigPath(workspace);
+
+    await writeInitConfig(configPath, buildInitConfig(ANSWERS));
+
+    const text = await nodeReadFile(configPath, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
     expect(JSON.parse(text)).toEqual(buildInitConfig(ANSWERS));
     expect(text).toContain('  "texra.chat": {');
@@ -94,29 +97,26 @@ describe('setWorkspaceCliChatAgent', () => {
   });
 });
 
-describe('gitignoreWithTexra', () => {
-  it.each([
-    [
-      'appends to content',
-      'node_modules\ndist\n',
-      'node_modules\ndist\n.texra/\n',
-    ],
-    ['creates content', '', '.texra/\n'],
-    ['recognizes .texra/', 'node_modules\n.texra/\n', null],
-    ['recognizes bare .texra', '.texra\n', null],
-  ])('%s', (_case, existing, expected) => {
-    expect(gitignoreWithTexra(existing)).toBe(expected);
-  });
-});
-
 describe('ensureTexraGitignored', () => {
   it.each([
     ['creates an absent file', undefined, 'created', '.texra/\n'],
     [
       'appends to existing content',
-      'node_modules\n',
+      'node_modules\ndist\n',
       'added',
+      'node_modules\ndist\n.texra/\n',
+    ],
+    [
+      'leaves a file that already ignores .texra/ untouched',
       'node_modules\n.texra/\n',
+      'present',
+      'node_modules\n.texra/\n',
+    ],
+    [
+      'recognizes a bare .texra entry',
+      '.texra\n',
+      'present',
+      '.texra\n',
     ],
   ] as const)('%s', async (_case, existing, outcome, expected) => {
     const workspace = await makeTempDir('texra-gitignore-', tempDirs);

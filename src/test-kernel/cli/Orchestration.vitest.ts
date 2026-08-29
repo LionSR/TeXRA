@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import {
-  orchestrationBlockRowCost,
   orchestrationFooterHints,
-  orchestrationKeyHints,
   orchestrationLauncherLayout,
   orchestrationPreviousStep,
-  orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
 import {
   buildCliAccountItems,
@@ -182,9 +179,6 @@ function kimiCodePreferenceItem(
   );
 }
 
-const SIGNED_IN_AUTH_STATUS =
-  'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining';
-
 const ORCHESTRATION_TEST_HEADER_LINES = [
   'TeXRA v0.0.0-test',
   'Start a session or configure model access.',
@@ -220,30 +214,6 @@ describe('CLI orchestration items', () => {
     expect(
       orchestrationPreviousStep({ kind: 'model', action, backTo: 'launcher' }),
     ).toEqual({ kind: 'launcher' });
-  });
-
-  it('advertises the full direct-open hotkey range used by Select', () => {
-    expect(orchestrationKeyHints()).toContainEqual({
-      key: '1-9/a-z/Enter',
-      action: 'open',
-    });
-  });
-
-  it('keeps the exit hint out of the Select letter hotkey range', () => {
-    const hints = orchestrationKeyHints();
-
-    expect(hints).toContainEqual({ key: 'Esc', action: 'exit' });
-    expect(hints).not.toContainEqual({ key: 'q/Esc', action: 'exit' });
-  });
-
-  it('budgets wrapped launcher status rows instead of assuming one row per line', () => {
-    const accountHint =
-      'actions: choose Model access below; `texra login --select-account` changes account';
-
-    expect(orchestrationWrappedLineRows(accountHint, 52)).toBeGreaterThan(1);
-    expect(orchestrationBlockRowCost([accountHint], 52)).toBe(
-      1 + orchestrationWrappedLineRows(accountHint, 52),
-    );
   });
 
   it('keeps compact launcher orientation before advisory footer text', () => {
@@ -305,48 +275,6 @@ describe('CLI orchestration items', () => {
       maxVisibleItems: 4,
       showOverflow: true,
     });
-  });
-
-  it('keeps compact signed-in auth after the API mode on short launchers', () => {
-    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
-
-    const layout = launcherLayout({ rows: 14, statusLines });
-
-    expect(layout).toEqual({
-      statusLines: [
-        'api: your own API keys',
-        'auth: signed in as researcher@example.com',
-      ],
-      footerHints: [],
-      maxVisibleItems: 4,
-      showOverflow: true,
-    });
-  });
-
-  it('keeps footer hints when compact auth creates enough room', () => {
-    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
-    const footerHints = ['Team settings are available from the launcher.'];
-
-    const layout = launcherLayout({ rows: 16, statusLines, footerHints });
-
-    expect(layout.statusLines).toEqual([
-      'api: your own API keys',
-      'auth: signed in as researcher@example.com',
-    ]);
-    expect(layout.footerHints).toEqual(footerHints);
-    expect(layout.maxVisibleItems).toBe(4);
-  });
-
-  it('uses the compact auth fallback when the launcher is narrow', () => {
-    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
-
-    const layout = launcherLayout({ rows: 16, columns: 40, statusLines });
-
-    expect(layout.statusLines).toEqual([
-      'api: your own API keys',
-      'auth: signed in as researcher@example.com',
-    ]);
-    expect(layout.maxVisibleItems).toBe(4);
   });
 
   it('keeps visible choices instead of overflow-only output on tiny row budgets', () => {

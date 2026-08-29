@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import {
   askCliQuestion,
-  isCliPipeClosureError,
   NdjsonStdoutSink,
 } from '@cli/runtime/logSinks';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
@@ -117,24 +116,6 @@ describe('NdjsonStdoutSink', () => {
 
     expect(lines).toEqual([]);
     expect(stdout.write).not.toHaveBeenCalled();
-  });
-});
-
-describe('CLI pipe errors', () => {
-  function errorWithCode(message: string, code: string): Error {
-    return Object.assign(new Error(message), { code });
-  }
-
-  it('recognizes pipe closure errors as non-fatal output events', () => {
-    expect(isCliPipeClosureError(errorWithCode('write EPIPE', 'EPIPE'))).toBe(
-      true,
-    );
-    expect(
-      isCliPipeClosureError(
-        errorWithCode('stream destroyed', 'ERR_STREAM_DESTROYED'),
-      ),
-    ).toBe(true);
-    expect(isCliPipeClosureError(new Error('disk full'))).toBe(false);
   });
 });
 

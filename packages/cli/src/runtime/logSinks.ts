@@ -56,7 +56,7 @@ const closed = { stdout: false, stderr: false };
 
 type StreamKey = 'stdout' | 'stderr';
 
-export function isCliPipeClosureError(error: unknown): boolean {
+function isCliPipeClosureError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const code = (error as { code?: unknown }).code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';

@@ -11,9 +11,6 @@
  *   `ndjson` argument of every `emitCliResult` call is checked against the
  *   registered `kind` set at compile time (the previous `object` type checked
  *   nothing — a typo'd or unregistered `kind` slipped through silently).
- * - `CliNdjsonRecordContract.vitest.mts` parses representative records against
- *   {@link CliNdjsonRecordSchema}, locking the contract so downstream consumers
- *   that key on `kind` don't break under a silent rename.
  *
  * Members are intentionally *loose*: the discriminator and the primary nested
  * field are pinned, but extra keys pass through. Several commands spread a
@@ -29,7 +26,7 @@ import { z } from 'zod';
 /** A payload field carried verbatim from the command (already shaped upstream). */
 const payload = z.unknown();
 
-export const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
+const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('agent'), agent: payload }),
   z.looseObject({ kind: z.literal('agent-roster'), roster: payload }),
   z.looseObject({ kind: z.literal('config'), config: payload }),
