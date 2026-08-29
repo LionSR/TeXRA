@@ -127,6 +127,50 @@ describe('workflow-script progress bridge', () => {
     ).toBe(false);
   });
 
+  it('records the declared plan once, before any phase opens', async () => {
+    const { trace, events } = recordingTrace();
+    await runScript(
+      trace,
+      'plan-marker',
+      `export const meta = {
+  name: 'plan-marker-test',
+  description: 'records the declared plan',
+  phases: [{ title: 'Research' }, { title: 'Write' }],
+  tasks: [
+    { id: 'inspect', label: 'Inspect source', phase: 'Research' },
+    { id: 'draft', label: 'Draft the section', phase: 'Write' },
+  ],
+}
+phase('Research')
+return await agent('Inspect', { id: 'inspect' })`,
+    );
+
+    const plans = events.filter((event) => event.type === 'workflow.plan');
+    expect(plans).toHaveLength(1);
+    expect(plans[0]).toMatchObject({
+      attemptId:
+        events[0]?.type === 'workflow.attempt' ? events[0].attemptId : '',
+      phases: [
+        { title: 'Research', index: 0 },
+        { title: 'Write', index: 1 },
+      ],
+      tasks: [
+        { id: 'inspect', label: 'Inspect source', phase: 'Research' },
+        { id: 'draft', label: 'Draft the section', phase: 'Write' },
+      ],
+    });
+    // The plan precedes the first phase stage and every card.
+    const planIndex = events.indexOf(plans[0]!);
+    const firstStage = events.findIndex(
+      (event) => event.type === 'stage.start',
+    );
+    const firstCard = events.findIndex(
+      (event) => event.type === 'workflow.call',
+    );
+    expect(planIndex).toBeLessThan(firstStage);
+    expect(planIndex).toBeLessThan(firstCard);
+  });
+
   it('keeps planned call cards in their phase stage across incremental updates', async () => {
     const { trace, events } = recordingTrace();
     const parent = trace.openStage('Parent');

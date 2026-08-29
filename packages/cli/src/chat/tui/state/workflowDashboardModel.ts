@@ -8,7 +8,11 @@
 // re-sorts, or re-dedupes on its own.
 
 // Local imports - shared stream identity
-import type { StreamTabId } from '@shared/schemas';
+import type {
+  StreamTabId,
+  WorkflowCallIdentity,
+  WorkflowPlanMarker,
+} from '@shared/schemas';
 import type { TranscriptRowOf } from '@shared/transcript';
 import {
   latestWorkflowAttemptEntries,
@@ -31,9 +35,16 @@ export type WorkflowTaskEntry = TranscriptRowOf<'workflowTask'>;
 
 export interface WorkflowPhaseGroup {
   readonly value: ChildListValue;
-  /** The phase's own heading facts, as its `TaskGroup` states them. */
+  /** The phase's own heading facts, as its `TaskGroup` states them — or as
+   *  the declared plan states them for a phase the run has not opened. */
   readonly heading: WorkflowPhaseHeading;
   readonly tasks: readonly WorkflowTaskEntry[];
+  /** True once the run has opened this phase (it has a `TaskGroup`); false
+   *  for a phase known only from the declared plan. */
+  readonly opened: boolean;
+  /** Declared plan tasks in this phase the run has not issued as calls yet —
+   *  every plan task without a card. Empty for a dynamic script. */
+  readonly declaredTasks: readonly WorkflowCallIdentity[];
 }
 
 /** A task's child stream, or `null` when several tasks claim the same stream.
@@ -74,6 +85,81 @@ interface MutableWorkflowPhaseGroup {
   readonly value: ChildListValue;
   readonly heading: WorkflowPhaseHeading;
   readonly tasks: WorkflowTaskEntry[];
+  readonly opened: boolean;
+  declaredTasks: readonly WorkflowCallIdentity[];
+}
+
+/**
+ * Fill the run's opened phases in with its declared plan: a plan phase with no
+ * task group yet becomes a declared group in plan order, a plan task with no
+ * card lands under its phase as a declared task, and opened phases the plan
+ * never named (dynamic `phase()` calls) keep their run order after it. A card
+ * always wins over its plan entry, so nothing is listed twice.
+ */
+function unionWithDeclaredPlan(
+  opened: readonly MutableWorkflowPhaseGroup[],
+  plan: WorkflowPlanMarker,
+  cards: readonly WorkflowTaskEntry[],
+  runSettled: boolean,
+): readonly MutableWorkflowPhaseGroup[] {
+  const cardIds = new Set(cards.map((entry) => entry.call.id));
+  const declaredByPhase = new Map<string, WorkflowCallIdentity[]>();
+  const unphasedDeclared: WorkflowCallIdentity[] = [];
+  for (const task of plan.tasks) {
+    if (cardIds.has(task.id)) continue;
+    if (task.phase === undefined) {
+      unphasedDeclared.push(task);
+      continue;
+    }
+    const list = declaredByPhase.get(task.phase) ?? [];
+    list.push(task);
+    declaredByPhase.set(task.phase, list);
+  }
+  const byTitle = new Map(
+    opened.map((group) => [group.heading.phaseLabel, group] as const),
+  );
+  const ordered: MutableWorkflowPhaseGroup[] = [];
+  const placed = new Set<MutableWorkflowPhaseGroup>();
+  for (const phase of plan.phases) {
+    const declaredTasks = declaredByPhase.get(phase.title) ?? [];
+    let group = byTitle.get(phase.title);
+    if (!group) {
+      // A settled run never opens a phase it did not reach, and its settle
+      // sweep has already housed every declared card under a stage — so an
+      // empty plan-only phase after settlement is the bridge's own
+      // skipped-empty-phase suppression, and stays gone.
+      if (runSettled && declaredTasks.length === 0) continue;
+      group = {
+        value: workflowPhaseListValue(`declared-${phase.title}`),
+        heading: {
+          phaseLabel: phase.title,
+          phaseIndex: phase.index,
+          phaseTotal: plan.phases.length,
+        },
+        tasks: [],
+        opened: false,
+        declaredTasks: [],
+      };
+    }
+    group.declaredTasks = declaredTasks;
+    ordered.push(group);
+    placed.add(group);
+  }
+  for (const group of opened) {
+    if (!placed.has(group)) ordered.push(group);
+  }
+  // Plan tasks declared outside any phase sit under the same trailing
+  // "Unphased" heading their cards will use once issued.
+  if (unphasedDeclared.length > 0) {
+    ordered.push({
+      value: workflowPhaseListValue('declared-unphased'),
+      heading: { phaseLabel: 'Unphased' },
+      tasks: [],
+      opened: false,
+      declaredTasks: unphasedDeclared,
+    });
+  }
+  return ordered;
 }
 
 /** Derive the dashboard rows for one workflow root at one terminal width.
@@ -86,6 +172,11 @@ interface MutableWorkflowPhaseGroup {
 export function workflowDashboardModel(
   root: StreamSlice,
   columns: number,
+  options: {
+    /** True once the workflow run has ended: plan-only phases it never
+     *  reached are then nothing to show. */
+    readonly runSettled?: boolean;
+  } = {},
 ): WorkflowDashboardModel {
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byGroupId = new Map<string, MutableWorkflowPhaseGroup>();
@@ -95,6 +186,8 @@ export function workflowDashboardModel(
       value: workflowPhaseListValue(group.id),
       heading: workflowPhaseHeadingOfGroup(group),
       tasks: [],
+      opened: true,
+      declaredTasks: [],
     };
     groups.push(phaseGroup);
     byGroupId.set(group.id, phaseGroup);
@@ -139,12 +232,24 @@ export function workflowDashboardModel(
       value: workflowPhaseListValue(entry.id),
       heading: { phaseLabel: 'Unphased' },
       tasks: [],
+      opened: true,
+      declaredTasks: [],
     };
     ungrouped.tasks.push(entry);
   }
-  const survivingGroups = groups.filter(
+  const openedGroups = groups.filter(
     (group) => group.tasks.length > 0 || !groupsWithStaleTasks.has(group),
   );
+  const survivingGroups = [
+    ...(root.workflowPlan
+      ? unionWithDeclaredPlan(
+          openedGroups,
+          root.workflowPlan,
+          tasks,
+          options.runSettled === true,
+        )
+      : openedGroups),
+  ];
   if (ungrouped) survivingGroups.push(ungrouped);
 
   const childTaskIndex = new Map<StreamTabId, WorkflowTaskEntry | null>();
@@ -194,10 +299,18 @@ export function workflowDashboardPanelItemCount(
     return rootHasApproval ? 1 : 0;
   }
   if (!model.wide) {
-    return 1 + model.groups.length + model.tasks.length;
+    // Declared rows sit under their phase in the narrow list too.
+    return (
+      1 +
+      model.groups.length +
+      model.tasks.length +
+      model.groups.reduce((sum, group) => sum + group.declaredTasks.length, 0)
+    );
   }
   const { activeGroup } = workflowDashboardSelection(model, selectedValue);
-  return 1 + Math.max(model.groups.length, activeGroup?.tasks.length ?? 0);
+  const taskColumnRows =
+    (activeGroup?.tasks.length ?? 0) + (activeGroup?.declaredTasks.length ?? 0);
+  return 1 + Math.max(model.groups.length, taskColumnRows);
 }
 
 interface WorkflowDashboardSelection {

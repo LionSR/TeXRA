@@ -14,6 +14,7 @@ import type {
   StreamLogEntry,
   StreamTabId,
   TaskGroup,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -71,6 +72,13 @@ interface TaskGroupProjectionState {
   snapshot: readonly TaskGroup[];
 }
 
+/** Incremental declared-plan memo: the newest `workflowPlan` marker in
+ *  transcript order, kept the same way as the task-group memo. */
+interface WorkflowPlanProjectionState {
+  readonly applied: Map<string, StreamLogEntry>;
+  snapshot: WorkflowPlanMarker | undefined;
+}
+
 /** Incremental compaction-activity projection state, cursored on the source
  *  log (`appliedHead`), so it too survives fold rebuilds. */
 interface CompactionProjectionState {
@@ -109,6 +117,7 @@ export interface TranscriptFoldState {
    *  residency is released, and die with the slice like everything here. */
   taskGroupProjection?: TaskGroupProjectionState;
   compactionProjection?: CompactionProjectionState;
+  workflowPlanProjection?: WorkflowPlanProjectionState;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
@@ -153,6 +162,10 @@ export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
+  /** The newest attempt's declared phases and tasks, from the transcript's
+   *  `workflowPlan` marker; undefined until a workflow-script run records
+   *  one. What the dashboard lists that the run has not reached yet. */
+  readonly workflowPlan: WorkflowPlanMarker | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
    *  until the runtime supplies a `description`. */
@@ -193,6 +206,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     streamId,
     latestLine: undefined,
     taskGroups: [],
+    workflowPlan: undefined,
     thinkingActive: false,
     compactingActive: false,
     entries: [],

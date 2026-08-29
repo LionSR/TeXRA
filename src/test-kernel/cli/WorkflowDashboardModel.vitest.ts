@@ -205,6 +205,62 @@ describe('workflow dashboard model', () => {
     ).toStrictEqual(model.tasks.map((entry) => `workflowTask:${entry.id}`));
   });
 
+  it('lists declared phases and tasks the run has not reached, never a card twice', () => {
+    const root: StreamSlice = {
+      ...workflowRoot(['Map'], [{ id: 'inspect', phase: 'Map' }]),
+      workflowPlan: {
+        kind: 'workflowPlan',
+        attemptId: 'attempt-1',
+        phases: [
+          { title: 'Map', index: 0 },
+          { title: 'Reduce', index: 1 },
+          { title: 'Publish', index: 2 },
+        ],
+        tasks: [
+          { id: 'inspect', label: 'inspect', phase: 'Map' },
+          { id: 'extract', label: 'Extract facts', phase: 'Map' },
+          { id: 'merge', label: 'Merge results', phase: 'Reduce' },
+        ],
+      },
+    };
+    const model = workflowDashboardModel(root, WIDE_COLUMNS);
+    const summarize = (groups: typeof model.groups) =>
+      groups.map((group) => [
+        group.heading.phaseLabel,
+        group.opened,
+        group.tasks.length,
+        group.declaredTasks.map((task) => task.id),
+      ]);
+
+    expect(summarize(model.groups)).toEqual([
+      ['Map', true, 1, ['extract']],
+      ['Reduce', false, 0, ['merge']],
+      ['Publish', false, 0, []],
+    ]);
+    expect(model.groups[1]?.heading).toEqual({
+      phaseLabel: 'Reduce',
+      phaseIndex: 1,
+      phaseTotal: 3,
+    });
+    // Once the run has settled, a plan-only phase it never reached and that
+    // holds no declared task is gone; one still holding declared tasks stays.
+    expect(
+      summarize(
+        workflowDashboardModel(root, WIDE_COLUMNS, { runSettled: true }).groups,
+      ),
+    ).toEqual([
+      ['Map', true, 1, ['extract']],
+      ['Reduce', false, 0, ['merge']],
+    ]);
+    // The declared phase is a keyboard-reachable row; declared tasks are not.
+    expect(model.listValues).toEqual([
+      model.groups[0]?.value,
+      model.groups[1]?.value,
+      model.groups[2]?.value,
+      'workflowTask:task-inspect',
+    ]);
+  });
+
   it('gives an ambiguous child stream to no task at all', () => {
     const shared = 'shared-child' as StreamTabId;
     const root = workflowRoot(

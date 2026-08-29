@@ -212,6 +212,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
   >();
   let constructionEmissionSeen = false;
+  let planEmitted = false;
   let runOutcome: RunOutcome = RUN_OUTCOME.FAILED;
 
   const phaseFor = (
@@ -428,6 +429,39 @@ export async function runPersistedWorkflowScriptWithProgress(
     }
     try {
       declaredStageTotal ??= snapshot.stages.length;
+      if (!planEmitted) {
+        planEmitted = true;
+        // The plan is the snapshot's own stage and call lists, hydrated
+        // history included. Hosts union it with the stages and cards that
+        // follow, and a card always wins over its plan entry, so a resumed
+        // run's plan never doubles what its cards already say.
+        trace.emit({
+          type: 'workflow.plan',
+          attemptId: projectionId,
+          stageId: parentStageId,
+          phases: snapshot.stages.map((stage) => ({
+            title: stage.title,
+            index: stage.order,
+          })),
+          // A resumed run's reusable results (completed or cached) are
+          // history, not plan: they are never re-emitted as cards, so listing
+          // them here would show finished work as declared.
+          tasks: snapshot.calls
+            .filter(
+              (call) =>
+                call.status !== WORKFLOW_CALL_STATUS.COMPLETED &&
+                call.status !== WORKFLOW_CALL_STATUS.CACHED,
+            )
+            .map((call) => {
+              const phase = stageTitleFor(snapshot, call);
+              return {
+                id: call.id,
+                label: call.label,
+                ...(phase !== undefined ? { phase } : {}),
+              };
+            }),
+        });
+      }
       for (const stage of snapshot.stages) {
         if (stage.lifecycle === 'waiting') continue;
         // A declared phase the run bypassed (`phase()` jumped past it, or the
