@@ -14,10 +14,10 @@ type AgentRosterSnapshot = ReturnType<
 >;
 
 /** The roster snapshot plus the two facts only the CLI resolves. */
-export interface CliAgentRosterRecord extends AgentRosterSnapshot {
+export type CliAgentRosterRecord = AgentRosterSnapshot & {
   readonly defaultChatAgent?: string;
   readonly agentKeys: ByCategory<AgentRosterCategorySelection>;
-}
+};
 
 export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
   await loadAgents({ includeRemote: false });
