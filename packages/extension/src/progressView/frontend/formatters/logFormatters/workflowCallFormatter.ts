@@ -69,9 +69,11 @@ export function formatWorkflowDeclaredTaskTemplate(
   `;
 }
 
-/** Render one workflow call as a status card updated in place by log id. */
+/** Render one workflow call as a status card updated in place by log id;
+ *  `liveParts` are the in-flight segments the run model joins to it. */
 export function formatWorkflowCallTemplate(
   row: WorkflowTaskRow,
+  liveParts: readonly string[] = [],
 ): TemplateResult {
   const { call, detail } = row;
   const hasChildStream = call.childStreamId !== undefined;
@@ -102,7 +104,7 @@ export function formatWorkflowCallTemplate(
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
         <span class="workflow-task-title">${call.label}</span>
-        ${callMetadata(row.metadataParts)}
+        ${callMetadata([...row.metadataParts, ...liveParts])}
         ${
           detail
             ? html`<span

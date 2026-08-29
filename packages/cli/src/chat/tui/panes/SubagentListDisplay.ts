@@ -6,8 +6,9 @@ import {
   COLOR_SUCCESS,
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
-import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { STATUS_DOT } from '@cli/tui/ui/glyphs';
 import { STREAM_PHASE } from '@shared/schemas';
+import { TOKENS_GENERATED } from '@shared/copy/workflowCall';
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 

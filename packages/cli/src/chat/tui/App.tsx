@@ -27,7 +27,10 @@ import {
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 // Local imports - TUI surfaces and state
-import { workflowRunModel } from '@shared/streams/workflowRunModel';
+import {
+  workflowRunModel,
+  type ChildRunProgress,
+} from '@shared/streams/workflowRunModel';
 import {
   appDraftDiscardActive,
   approvalVisibleForActiveStream,
@@ -92,8 +95,14 @@ import {
   parentStream as parentStreamSignal,
   sessionStateRevision,
   streamMetadataFor,
+  streamStateFor,
   subagentExecutionLabels as subagentExecutionLabelsSignal,
+  visibleSubagentRows,
 } from './state/childExecutions';
+import {
+  readStreamArtifacts,
+  streamArtifactRevision,
+} from './state/subscribeStreamArtifacts';
 import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
 import {
   INITIAL_CHILD_LIST_SELECTION,
@@ -180,7 +189,8 @@ export function App(props: AppProps): React.JSX.Element {
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
   // Render reads shared stream metadata through `streamMetadataFor`; the
   // revision signal re-renders on metadata changes the roster signal misses.
-  useSignal(sessionStateRevision);
+  const sessionRevision = useSignal(sessionStateRevision);
+  const artifactRevision = useSignal(streamArtifactRevision);
   const formBusy = formProgress?.status === 'running';
   const pendingSummaries = useSignal(pendingApprovalSummaries);
   const [childListSelection, dispatchChildListSelection] = useReducer(
@@ -325,18 +335,46 @@ export function App(props: AppProps): React.JSX.Element {
       ? undefined
       : streamPhaseFor(workflowPopupStreamId)?.phase;
   const workflowPopupRunSettled = workflowRunSettled(workflowRootPhase);
-  const workflowPopupModel = useMemo(
-    () =>
-      workflowPopupRoot
-        ? workflowRunModel({
-            taskGroups: workflowPopupRoot.taskGroups,
-            rows: workflowPopupRoot.entries,
-            plan: workflowPopupRoot.workflowPlan,
-            runSettled: workflowPopupRunSettled,
-          })
-        : undefined,
-    [workflowPopupRoot, workflowPopupRunSettled],
-  );
+  // Each child's live progress is read once here off the session's own
+  // record of that child (status machine, execution state, usage) and joined
+  // to its card by the model; the popup paints the join and reads no stream.
+  const workflowPopupModel = useMemo(() => {
+    if (!workflowPopupRoot || workflowPopupStreamId === undefined) {
+      return undefined;
+    }
+    const childProgress = new Map<StreamTabId, ChildRunProgress>();
+    for (const child of visibleSubagentRows(
+      workflowPopupStreamId,
+      childRosters,
+    )) {
+      const runStartedAt = streamPhaseFor(child.childStreamId)?.runStartedAt;
+      const usage = readStreamArtifacts(child.childStreamId)?.cumulativeUsage;
+      childProgress.set(child.childStreamId, {
+        ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+        toolCallCount:
+          streamStateFor(child.childStreamId)?.conversationProgress
+            .toolCallCount ?? 0,
+        ...(usage ? { outputTokens: usage.outputTokens } : {}),
+        ...(usage?.cost !== undefined ? { costUsd: usage.cost } : {}),
+      });
+    }
+    return workflowRunModel({
+      taskGroups: workflowPopupRoot.taskGroups,
+      rows: workflowPopupRoot.entries,
+      plan: workflowPopupRoot.workflowPlan,
+      runSettled: workflowPopupRunSettled,
+      childProgress,
+    });
+    // The two revisions are the signals that a child's progress or usage
+    // moved; they carry no value of their own.
+  }, [
+    workflowPopupRoot,
+    workflowPopupRunSettled,
+    workflowPopupStreamId,
+    childRosters,
+    sessionRevision,
+    artifactRevision,
+  ]);
   const workflowPopup = useSignal(workflowPopupViewSignal);
   // The popup controls its own grandchildren: their execution ids live on the
   // workflow's roster, not on the parent conversation's.

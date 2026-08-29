@@ -15,6 +15,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   WORKFLOW_TASK_STATUS_LABEL,
   WorkflowPlanMarkerSchema,
+  isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -24,11 +25,18 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import {
+  TOKENS_GENERATED,
   latestWorkflowAttemptEntries,
   workflowCallTally,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
 } from '@shared/copy/workflowCall';
+import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
+import {
+  formatCompactDuration,
+  formatCostUsd,
+  pluralize,
+} from '@utils/text/stringUtils';
 
 // ---------------------------------------------------------------------------
 // Markers on the transcript
@@ -111,6 +119,23 @@ export interface WorkflowRunModel {
    *  that card is the stream's only claimant. A stream two cards claim is
    *  nobody's — opening it would jump somewhere the user did not point at. */
   readonly childStreamOf: ReadonlyMap<string, StreamTabId>;
+  /** A card's child run progress, by row id, where the card has a child
+   *  stream of its own (`childStreamOf`) and the host holds that stream. */
+  readonly liveOf: ReadonlyMap<string, ChildRunProgress>;
+}
+
+/**
+ * What a child run reports about itself while it runs, read off the child's
+ * own stream by whichever host holds it — the one owner of these facts — and
+ * joined to the card that opened the child by the model (`liveOf`). Elapsed
+ * origin and tool calls come from stream state on every host; tokens and
+ * spend only where a host projects usage per stream.
+ */
+export interface ChildRunProgress {
+  readonly runStartedAt?: number;
+  readonly toolCallCount: number;
+  readonly outputTokens?: number;
+  readonly costUsd?: number;
 }
 
 export interface WorkflowRunModelInput {
@@ -124,6 +149,8 @@ export interface WorkflowRunModelInput {
    *  card under a stage, so an empty plan-only phase is its own
    *  skipped-empty-phase suppression). */
   readonly runSettled: boolean;
+  /** Live progress by child stream, for the cards that opened those streams. */
+  readonly childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
 }
 
 interface MutablePhase {
@@ -290,8 +317,12 @@ export function workflowRunModel(
     claimants.set(childStreamId, claimants.has(childStreamId) ? null : row);
   }
   const childStreamOf = new Map<string, StreamTabId>();
+  const liveOf = new Map<string, ChildRunProgress>();
   for (const [childStreamId, row] of claimants) {
-    if (row) childStreamOf.set(row.id, childStreamId);
+    if (!row) continue;
+    childStreamOf.set(row.id, childStreamId);
+    const progress = input.childProgress.get(childStreamId);
+    if (progress) liveOf.set(row.id, progress);
   }
 
   const declaredTotal = ordered.reduce(
@@ -307,7 +338,39 @@ export function workflowRunModel(
     tasks,
     tally: tallyOf(tasks, declaredTotal),
     childStreamOf,
+    liveOf,
   };
+}
+
+/**
+ * The in-flight segments a card cannot carry itself — elapsed, generated
+ * tokens, running spend, tool calls — from the child run's own progress.
+ * Elapsed and spend show only while the call is live (a settled card carries
+ * its own duration and cost); tokens and tool calls stay, since nothing else
+ * records them. Elapsed needs a clock: a host without one passes no `nowMs`
+ * and shows the rest.
+ */
+export function formatWorkflowCallLiveParts(
+  call: WorkflowCallProgress,
+  live: ChildRunProgress | undefined,
+  nowMs?: number,
+): string[] {
+  if (!live) return [];
+  const settled = isTerminalWorkflowCallProgress(call);
+  return [
+    !settled && live.runStartedAt !== undefined && nowMs !== undefined
+      ? formatCompactDuration(nowMs - live.runStartedAt)
+      : undefined,
+    live.outputTokens !== undefined && live.outputTokens > 0
+      ? `${TOKENS_GENERATED}${formatCompactTokenCount(live.outputTokens)}`
+      : undefined,
+    !settled && live.costUsd !== undefined && live.costUsd > 0
+      ? formatCostUsd(live.costUsd)
+      : undefined,
+    live.toolCallCount > 0
+      ? `${live.toolCallCount} ${pluralize(live.toolCallCount, 'tool')}`
+      : undefined,
+  ].filter(filterNotNullish);
 }
 
 // ---------------------------------------------------------------------------
