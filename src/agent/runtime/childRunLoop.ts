@@ -490,11 +490,12 @@ async function attemptTurn<TTurn>(
 
 /**
  * Mint the logical identity of one accepted child turn (#9531): a stable turn
- * token plus the delivery id the turn's single parent delivery is admitted
- * under. Stable within one child-run attempt and distinct across attempts,
- * even when a workflow deliberately reuses its execution ID. A producer
- * replaying the same accepted turn therefore presents the same id, while a
- * later workflow run cannot collide with its prior delivery.
+ * token, from which `turnDeliveryId` derives the delivery id the turn's
+ * single parent delivery is admitted under. Stable within one child-run
+ * attempt and distinct across attempts, even when a workflow deliberately
+ * reuses its execution ID. A producer replaying the same accepted turn
+ * therefore presents the same id, while a later workflow run cannot collide
+ * with its prior delivery.
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
@@ -945,9 +946,10 @@ export function startChildRunLoop<TTurn>(
     let releaseFailure: unknown;
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
-    // Turn identity (#9531): each accepted turn mints a stable token/delivery
-    // id and records itself active before running; the latest completed turn
-    // is carried forward so an interrupted turn never overwrites it.
+    // Turn identity (#9531): each accepted turn mints a stable token (its
+    // delivery id is derived at the enqueue site) and records itself active
+    // before running; the latest completed turn is carried forward so an
+    // interrupted turn never overwrites it.
     let turnIndex = 0;
     let lastCompletedTurn: ChildTurnRef | undefined;
     // KVStore does not serialize per-key writes: queue turn-state writes so
