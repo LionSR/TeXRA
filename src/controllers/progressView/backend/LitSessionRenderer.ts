@@ -357,19 +357,7 @@ export class LitSessionRenderer implements SessionRendererPort {
         };
       },
       get controls() {
-        const controls = getStreamControls(stream);
-        return {
-          bashBypass: controls.bashBypass,
-          toolEditBypass: controls.toolEditBypass,
-          superYoloBypass: controls.superYoloBypass,
-          goal: controls.goalActive
-            ? {
-                active: true as const,
-                status: controls.goalStatus,
-                objective: controls.goalObjective,
-              }
-            : { active: false as const },
-        };
+        return getStreamControls(stream);
       },
     });
   }

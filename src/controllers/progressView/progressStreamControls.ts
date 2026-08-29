@@ -1,5 +1,5 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { GoalStatus, StreamTabId } from '@shared/schemas';
+import type { GoalState, StreamTabId } from '@shared/schemas';
 import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
@@ -10,19 +10,18 @@ import { GoalStore } from '@tools/goal';
 /**
  * Per-stream control flags pushed to the progress view: approval bypass state
  * plus the goal chip state. A progress-view domain concept, owned here next to
- * the producer rather than inside the Lit renderer.
+ * the producer rather than inside the Lit renderer. `goal` is the same
+ * canonical {@link GoalState} the wire projection (`ControlsSectionSchema`)
+ * and `deriveGoalState` use, so the one production consumer
+ * (`LitSessionRenderer`) can forward this return value as-is instead of
+ * re-flattening and re-deriving it.
  */
-interface ProgressStreamBypassControls {
+interface ProgressStreamControls {
   bashBypass: boolean;
   toolEditBypass: boolean;
   superYoloBypass: boolean;
+  goal: GoalState;
 }
-
-type ProgressStreamControls = ProgressStreamBypassControls &
-  (
-    | { goalActive: false }
-    | { goalActive: true; goalStatus: GoalStatus; goalObjective: string }
-  );
 
 export type GetProgressStreamControls = (
   stream: StreamTabId,
@@ -33,18 +32,12 @@ export function getProgressStreamControls(
   session?: SessionHandle,
 ): ProgressStreamControls {
   const goal = GoalStore.getForStream(streamId);
-  const bypasses = {
+  return {
     bashBypass: isBashApprovalBypassedForStream(streamId, session),
     toolEditBypass: isApprovalBypassedForStream(streamId, session),
     superYoloBypass: proposalApprovals(session).isBypassed(streamId),
-  };
-  if (!goal) {
-    return { ...bypasses, goalActive: false };
-  }
-  return {
-    ...bypasses,
-    goalActive: true,
-    goalStatus: goal.status,
-    goalObjective: goal.objective,
+    goal: goal
+      ? { active: true, status: goal.status, objective: goal.objective }
+      : { active: false },
   };
 }
