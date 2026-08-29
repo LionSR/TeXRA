@@ -18,8 +18,7 @@ import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
+  hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -532,8 +531,7 @@ export async function executeCliRequest(
       primaryRunFailure = { error: err };
     } else if (
       !failurePresented &&
-      !hasErrorPresentedMarker(err) &&
-      !hasErrorPresentationPending(err)
+      !hasErrorPresentationClaimed(err)
     ) {
       // A failure before lifecycle startup has no `result` event. Preserve the
       // ordinary toast path when it ran, and provide the missing direct fallback

@@ -456,7 +456,6 @@ describe('session.interactions immediate capabilities', () => {
     // (#10398).
     const session = createTestSession();
     const onReplayScheduled = vi.fn();
-    const onReplayDelivered = vi.fn();
     const onReplayNotDelivered = vi.fn();
 
     session.interactions.emit(
@@ -465,7 +464,6 @@ describe('session.interactions immediate capabilities', () => {
       {
         replayWhenAttached: true,
         onReplayScheduled,
-        onReplayDelivered,
         onReplayNotDelivered,
       },
     );
@@ -481,7 +479,6 @@ describe('session.interactions immediate capabilities', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(onReplayDelivered).not.toHaveBeenCalled();
     expect(onReplayNotDelivered).toHaveBeenCalledOnce();
     expect(onReplayNotDelivered).toHaveBeenCalledWith(throwingHost);
     session.dispose();

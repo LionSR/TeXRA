@@ -38,8 +38,7 @@ import {
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
 import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
+  hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import {
   RUN_OUTCOME,
@@ -92,8 +91,7 @@ async function triggerQueuedMissingAgentFailure(
     session.dispose();
   }
   expect(String(thrown)).toContain('Could not find agent');
-  expect(hasErrorPresentedMarker(thrown)).toBe(false);
-  expect(hasErrorPresentationPending(thrown)).toBe(true);
+  expect(hasErrorPresentationClaimed(thrown)).toBe(true);
   return thrown;
 }
 
@@ -177,10 +175,9 @@ describe('AgentLaunchContext', () => {
     ).toHaveLength(1);
   });
 
-  it('marks a queued missing-agent banner only after a live host replays and delivers it', async () => {
-    // `emit` without an attached host must not report confirmed delivery:
-    // the throw site only marks `errorPresented` once the retained replay
-    // actually renders on a live host.
+  it('renders a queued missing-agent banner once a live host replays it', async () => {
+    // The retained replay owns the delivery decision: it renders the targeted
+    // banner and emits no generic fallback.
     const recording = createRecordingHost({ emitDelivery: true });
     const owner = new SessionHostInteractions();
     const thrown = await triggerQueuedMissingAgentFailure(owner);
@@ -189,7 +186,6 @@ describe('AgentLaunchContext', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(hasErrorPresentedMarker(thrown)).toBe(true);
     expect(
       recording.events.filter(
         (event) => event.event === 'showAgentConfigBanner',
@@ -210,7 +206,6 @@ describe('AgentLaunchContext', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
     expect(
       recording.events.filter(
         (event) => event.event === 'showAgentConfigBanner',
@@ -244,7 +239,6 @@ describe('AgentLaunchContext', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
     expect(
       events.filter((entry) => entry.event === 'requestShowError'),
     ).toHaveLength(1);
@@ -284,8 +278,7 @@ describe('AgentLaunchContext', () => {
     }
 
     expect(String(thrown)).toContain('Could not find agent');
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
-    expect(hasErrorPresentationPending(thrown)).toBe(false);
+    expect(hasErrorPresentationClaimed(thrown)).toBe(false);
     expect(
       events.filter((entry) => entry.event === 'requestShowError'),
     ).toHaveLength(1);

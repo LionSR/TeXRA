@@ -469,7 +469,7 @@ export class SessionHostInteractions implements HostInteractions {
       // closure reports the eventual delivery result back through the
       // option callbacks once a live host actually renders (or declines) it.
       this.queuePresentationReplay((interactions) => {
-        if (!options.onReplayDelivered && !options.onReplayNotDelivered) {
+        if (!options.onReplayNotDelivered) {
           return interactions.emit?.(event, payload);
         }
         // A synchronous throw from the host's emit (a desktop renderer post
@@ -490,11 +490,7 @@ export class SessionHostInteractions implements HostInteractions {
         }
         return Promise.resolve(delivered).then(
           (value) => {
-            if (value === true) {
-              options.onReplayDelivered?.();
-            } else {
-              options.onReplayNotDelivered?.(interactions);
-            }
+            if (value !== true) options.onReplayNotDelivered?.(interactions);
           },
           (error: unknown) => {
             logger.warn('Replayed presentation notice failed', {

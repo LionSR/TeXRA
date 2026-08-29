@@ -34,10 +34,8 @@ import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError } from '@common/errors';
 import {
-  attachErrorPresentationPending,
-  attachErrorPresented,
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
@@ -158,19 +156,17 @@ async function presentLaunchError<K extends RuntimePresentationEvent>(
 ): Promise<never> {
   const delivered = await interactions.emit(event, payload, {
     replayWhenAttached: true,
-    onReplayScheduled: () => attachErrorPresentationPending(err),
-    onReplayDelivered: () => attachErrorPresented(err),
+    onReplayScheduled: () => attachErrorPresentationClaimed(err),
     onReplayNotDelivered: (host) => {
       host.emit?.('requestShowError', { message: toErrorMessage(err) });
     },
   });
-  // Mark "presented" only when a live host confirmed it rendered the
-  // targeted notice. A queued replay marks it as presentation-pending; the
-  // replay either attaches the presented marker on confirmed delivery or
-  // emits the generic fallback on non-delivery. A live-host emit that throws
-  // synchronously is normalized to `false` by `SessionHostInteractions.emit`,
-  // leaving the marker unset so the launch catch emits the generic fallback.
-  if (delivered) attachErrorPresented(err);
+  // Claim presentation only when a live host confirmed it rendered the
+  // targeted notice, or when the notice was retained for replay (the replay
+  // owns the eventual fallback). A live-host emit that throws synchronously
+  // is normalized to `false` by `SessionHostInteractions.emit`, leaving the
+  // marker unset so the launch catch emits the generic fallback.
+  if (delivered) attachErrorPresentationClaimed(err);
   throw err;
 }
 
@@ -664,8 +660,7 @@ export async function buildAgentLaunchContext(
     if (
       !input.suppressErrorNotification &&
       !(err instanceof ZodError) &&
-      !hasErrorPresentedMarker(err) &&
-      !hasErrorPresentationPending(err)
+      !hasErrorPresentationClaimed(err)
     ) {
       interactions.emit(
         'requestShowError',
