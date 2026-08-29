@@ -19,7 +19,6 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { filterNotNullish } from '@utils/core';
 import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 
-export type CliMultiAgentPreset = TeamPreset;
 export type CliMultiAgentPresetRunPlan = TeamRunPlan<AgentEntry>;
 
 interface CliMultiAgentPresetFormatOptions {
@@ -31,10 +30,6 @@ interface CliMultiAgentTeamLaunchBlockMessageOptions {
   readonly followUpAdvice?: string;
 }
 
-type CliMultiAgentPresetAgentAvailability = TeamAgentAvailability;
-
-type CliMultiAgentPresetAvailability = TeamAvailability;
-
 /**
  * Machine-readable `multi-agent list` record. It preserves the raw preset
  * fields so existing consumers still see a preset-shaped object, while adding
@@ -42,8 +37,8 @@ type CliMultiAgentPresetAvailability = TeamAvailability;
  * loads the agent registry and emits the resolved run plan as
  * `multi-agent-preset-inspection`.)
  */
-interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
-  readonly availability: CliMultiAgentPresetAvailability;
+interface CliMultiAgentPresetListRecord extends TeamPreset {
+  readonly availability: TeamAvailability;
 }
 
 const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
@@ -62,7 +57,7 @@ const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
   'Researcher Access sign-in may unlock more remote team agents.';
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
-export function readCliMultiAgentPresets(): CliMultiAgentPreset[] {
+export function readCliMultiAgentPresets(): TeamPreset[] {
   const customRaw = platform().workspaceState.get<unknown>(
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
   );
@@ -97,7 +92,7 @@ function cliMultiAgentPresetAvailabilityParts(
 
 function formatCliMultiAgentPresetAvailabilityPart(
   kind: 'workflow' | 'tool-use',
-  availability: CliMultiAgentPresetAgentAvailability,
+  availability: TeamAgentAvailability,
 ): string | undefined {
   if (availability.total === 0) return undefined;
   return `${kind}:${availability.label}`;
@@ -257,7 +252,7 @@ export function cliMultiAgentPresetListRecords(
 }
 
 function formatPresetAvailabilityForLauncher(
-  availability: CliMultiAgentPresetAvailability,
+  availability: TeamAvailability,
   blockReason: string | undefined,
 ): string | undefined {
   const details = blockReason ? [formatLauncherBlockReason(blockReason)] : [];
@@ -287,7 +282,7 @@ function formatLauncherBlockReason(blockReason: string): string {
 
 function formatPresetAgentCountForLauncher(
   kind: 'workflow' | 'tool-use',
-  availability: CliMultiAgentPresetAgentAvailability,
+  availability: TeamAgentAvailability,
   options: { readonly countStyle: 'total' | 'ratio' },
 ): string | undefined {
   if (availability.total === 0) return undefined;
