@@ -26,7 +26,6 @@ export interface StreamView {
   readonly info?: StreamTabInfo;
   readonly label: string;
   readonly parentId?: StreamTabId;
-  readonly parentLabel?: string;
   readonly slice: StreamSlice | undefined;
   readonly active: boolean;
 }
@@ -161,13 +160,6 @@ export function streamViewForId(init: {
     info: streamTabInfoFor(init),
     label: streamLabelForId(init),
     parentId,
-    parentLabel: parentId
-      ? streamLabelForId({
-          childRosters: init.childRosters,
-          parentStream: init.parentStream,
-          streamId: parentId,
-        })
-      : undefined,
     slice: init.streams.get(init.streamId),
     active: init.streamId === init.activeStreamId,
   };

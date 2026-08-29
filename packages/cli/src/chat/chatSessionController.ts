@@ -252,6 +252,23 @@ export function createChatSessionController(
   };
 
   // A cancelled root can publish completion just before its run promise
+  /** One owner of the "claimed but never handed off" invariant: a recovery
+   *  lease this controller took and never passed to a run must go back as
+   *  `'recoverable'`, or the follow-ups typed during the interruption are
+   *  lost. Every resume path calls this on its way out. */
+  const handBackUnusedRecovery = (
+    recovery: FollowUpRecoveryLease | undefined,
+    handedOff: boolean,
+  ): void => {
+    if (
+      recovery &&
+      !handedOff &&
+      runtimeSession.followUps.useRecovery(recovery)
+    ) {
+      runtimeSession.followUps.release(recovery, 'recoverable');
+    }
+  };
+
   // settles. During that narrow interval its teardown can still overwrite a
   // successor's root-slot state. Retain every unsettled interrupted generation
   // so a later interruption cannot discard an earlier blocker.
@@ -621,13 +638,7 @@ export function createChatSessionController(
         })
         .catch(reportRunFailure)
         .finally(() => {
-          if (
-            recovery &&
-            !recoveryHandedOff &&
-            runtimeSession.followUps.useRecovery(recovery)
-          ) {
-            runtimeSession.followUps.release(recovery, 'recoverable');
-          }
+          handBackUnusedRecovery(recovery, recoveryHandedOff);
           if (!followUpQueueReady) {
             restoreInterruptedRecovery(supersededRecovery);
           }
@@ -642,13 +653,7 @@ export function createChatSessionController(
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
     } catch (error: unknown) {
-      if (
-        recovery &&
-        !recoveryHandedOff &&
-        runtimeSession.followUps.useRecovery(recovery)
-      ) {
-        runtimeSession.followUps.release(recovery, 'recoverable');
-      }
+      handBackUnusedRecovery(recovery, recoveryHandedOff);
       restoreInterruptedRecovery(supersededRecovery);
       reportRunFailure(error);
       session.markRunCompleted();
@@ -791,13 +796,7 @@ export function createChatSessionController(
         reportRunFailure(error);
         return false;
       } finally {
-        if (
-          recovery &&
-          !recoveryHandedOff &&
-          runtimeSession.followUps.useRecovery(recovery)
-        ) {
-          runtimeSession.followUps.release(recovery, 'recoverable');
-        }
+        handBackUnusedRecovery(recovery, recoveryHandedOff);
         finalize();
         if (activeAutoResumeCancellation === attemptCancellation) {
           activeAutoResumeCancellation = undefined;

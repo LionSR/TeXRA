@@ -32,7 +32,7 @@ import {
   type ChildRosters,
 } from '../state/childExecutions';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
-import { streamViewForId } from '../state/streamViews';
+import { streamLabelForId, streamViewForId } from '../state/streamViews';
 import { ancestorWorkflowPhaseLabel } from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
@@ -152,9 +152,14 @@ export function sessionHeaderIdentityLine(
       parentStream,
       streamId: context.streamId,
     });
+    const parentLabel = streamLabelForId({
+      childRosters: context.childRosters ?? new Map(),
+      parentStream,
+      streamId: parentStreamId,
+    });
     return phaseText
-      ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${view.parentLabel} · model: ${model}`
-      : `${streamKind}: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
+      ? `${streamKind}: ${view.label} · ${phaseText} · parent: ${parentLabel} · model: ${model}`
+      : `${streamKind}: ${view.label} · parent: ${parentLabel} · model: ${model}`;
   }
   const model = getRuntimeModelLabel(meta.model || '—');
   const agent = meta.agent || 'chat';
@@ -294,6 +299,9 @@ function staticTranscriptItemBaseMetrics(
   };
 }
 
+/** Only the previous entry's bottom margin participates in collapse, so
+ *  callers pass that one number rather than laying the previous item out
+ *  again. `undefined` means there is no entry above. */
 function staticTranscriptItemMetricsForPrevious(
   base: StaticTranscriptItemMetrics,
   previousMarginBottomRows = 0,

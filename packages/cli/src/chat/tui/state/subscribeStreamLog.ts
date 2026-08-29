@@ -72,12 +72,7 @@ interface StreamLogSession {
  * out-of-band sync (status transition, focus switch, tests) folds the same
  * buffered changes instead of rescanning the log.
  */
-interface PendingStreamDeltas {
-  readonly buffer: StreamLogDeltaBuffer;
-  generation: number;
-}
-
-const PENDING_DELTAS = new Map<StreamTabId, PendingStreamDeltas>();
+const PENDING_DELTAS = new Map<StreamTabId, StreamLogDeltaBuffer>();
 
 registerCliStateResetHook(() => {
   PENDING_DELTAS.clear();
@@ -126,11 +121,7 @@ export function subscribeStreamLog(session: StreamLogSession): () => void {
   // batch window coalesces them into a single pass; each stream's buffered
   // delta is folded when it fires, so batching loses nothing.
   const syncDebounce = createFlushableDebounce(() => {
-    for (const [streamId, pending] of [...PENDING_DELTAS]) {
-      if (pending.generation !== getCliStateGeneration()) {
-        PENDING_DELTAS.delete(streamId);
-        continue;
-      }
+    for (const streamId of [...PENDING_DELTAS.keys()]) {
       trySyncStreamLog(session, streamId);
     }
   }, STREAM_SYNC_THROTTLE_MS);
@@ -139,15 +130,11 @@ export function subscribeStreamLog(session: StreamLogSession): () => void {
     if (isCliStreamRetired(streamId)) return;
     const pending = PENDING_DELTAS.get(streamId);
     if (pending) {
-      pending.buffer.push(delta);
-      pending.generation = getCliStateGeneration();
+      pending.push(delta);
     } else {
       const buffer = new StreamLogDeltaBuffer(delta.emissionSeq - 1);
       buffer.push(delta);
-      PENDING_DELTAS.set(streamId, {
-        buffer,
-        generation: getCliStateGeneration(),
-      });
+      PENDING_DELTAS.set(streamId, buffer);
     }
     // Only start the window on its first tick — later ticks in the same
     // window join the batch without resetting the countdown (`pending`
@@ -221,7 +208,7 @@ export function syncStreamLog(
   session.flushPendingTraces();
   const store = session.transcripts;
   const log = store.get(streamId);
-  const pending = PENDING_DELTAS.get(streamId);
+  const buffer = PENDING_DELTAS.get(streamId);
   PENDING_DELTAS.delete(streamId);
   if (!log) {
     // No resident log (never created, or evicted): nothing to fold, but a
@@ -245,8 +232,6 @@ export function syncStreamLog(
     }
     return;
   }
-  const buffer = pending?.buffer;
-
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
     currentActiveStreamId === undefined || currentActiveStreamId === streamId;
