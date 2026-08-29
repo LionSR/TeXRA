@@ -894,7 +894,7 @@ const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts -> src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
 } satisfies CliRuntimeReachability;
 const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   command:
@@ -1346,10 +1346,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    // Also read by OutputNode.ts (compileFailureContext gate); the row names
-    // the extra-round grant in runReflectionFlow.ts as its reader evidence.
     honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
       WORKFLOW_REJECT_RUNTIME_REACHABILITY,
     ),
     surfaces: { settingsView: 'latex', cliConfig: true },

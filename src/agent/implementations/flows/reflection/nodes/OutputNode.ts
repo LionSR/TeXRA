@@ -286,6 +286,13 @@ export class OutputNode extends BaseNode<
         : undefined;
     if (compileFailureContext) {
       shared.compileFailureContext = compileFailureContext;
+      if (currentRound + 1 >= shared.totalRounds) {
+        shared.lastError = {
+          message:
+            'Automatic LaTeX compilation failed after the final workflow round.',
+          userRetryable: false,
+        };
+      }
     } else {
       delete shared.compileFailureContext;
     }

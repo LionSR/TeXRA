@@ -297,6 +297,45 @@ describe('output progress events', () => {
     expect(shared.compileFailureContext).toBeUndefined();
   });
 
+  it('fails the run when the final configured round fails compilation', async () => {
+    await installPlatform({
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+      },
+    });
+    const { outputNode, fixture } = compileContextCase(
+      'stream:final-compile-failure',
+    );
+    const shared = {
+      roundOutputs: [],
+      currentRound: 1,
+      totalRounds: 2,
+      continueRounds: true,
+    } as unknown as ReflectionFlowShared;
+
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastError).toEqual({
+      message:
+        'Automatic LaTeX compilation failed after the final workflow round.',
+      userRetryable: false,
+    });
+  });
+
   it.each([
     {
       name: 'publishes missing-output processing events on the run trace',
