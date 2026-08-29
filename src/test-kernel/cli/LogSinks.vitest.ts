@@ -5,10 +5,7 @@ import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  askCliQuestion,
-  NdjsonStdoutSink,
-} from '@cli/runtime/logSinks';
+import { askCliQuestion, NdjsonStdoutSink } from '@cli/runtime/logSinks';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 function createStdoutStub(writeResults: boolean[] = [true]) {

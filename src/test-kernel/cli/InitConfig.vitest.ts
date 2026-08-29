@@ -112,12 +112,7 @@ describe('ensureTexraGitignored', () => {
       'present',
       'node_modules\n.texra/\n',
     ],
-    [
-      'recognizes a bare .texra entry',
-      '.texra\n',
-      'present',
-      '.texra\n',
-    ],
+    ['recognizes a bare .texra entry', '.texra\n', 'present', '.texra\n'],
   ] as const)('%s', async (_case, existing, outcome, expected) => {
     const workspace = await makeTempDir('texra-gitignore-', tempDirs);
     const gitignorePath = join(workspace, '.gitignore');

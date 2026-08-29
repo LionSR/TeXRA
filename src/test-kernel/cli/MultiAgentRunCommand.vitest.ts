@@ -201,8 +201,7 @@ function mockMaterializedStdin(inputFiles: string[]): void {
         readonly contextFiles: string[];
         readonly stdinInputPath?: string;
       }) => Promise<unknown>,
-    ) =>
-      run({ inputFiles, contextFiles: [], stdinInputPath: inputFiles[0] }),
+    ) => run({ inputFiles, contextFiles: [], stdinInputPath: inputFiles[0] }),
   );
 }
 

@@ -180,7 +180,9 @@ export async function askCliQuestion(
   if (options.hidden) writeRawStderr(question);
   const prompt = createInterface({
     input,
-    output: options.hidden ? new SilentWritable() : (options.output ?? process.stderr),
+    output: options.hidden
+      ? new SilentWritable()
+      : (options.output ?? process.stderr),
     // A swallowing non-TTY output would otherwise leave stdin in canonical
     // mode, where the TTY driver echoes the secret itself.
     ...(options.hidden ? { terminal: true } : {}),

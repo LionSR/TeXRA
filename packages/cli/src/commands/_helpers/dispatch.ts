@@ -231,7 +231,8 @@ export async function reorderNestedGlobalFlags(
   rawArgs: readonly string[],
 ): Promise<string[]> {
   const commandIndex = firstPositionalIndex(rawArgs);
-  const commandName = commandIndex === undefined ? undefined : rawArgs[commandIndex];
+  const commandName =
+    commandIndex === undefined ? undefined : rawArgs[commandIndex];
   if (commandIndex === undefined || commandName === undefined) {
     return [...rawArgs];
   }

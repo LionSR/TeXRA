@@ -95,10 +95,7 @@ export function orchestrationFooterHints(
   return hints;
 }
 
-function orchestrationWrappedLineRows(
-  line: string,
-  columns: number,
-): number {
+function orchestrationWrappedLineRows(line: string, columns: number): number {
   return Math.max(
     1,
     wrapAnsiToWidth(line, Math.max(1, columns)).split('\n').length,
