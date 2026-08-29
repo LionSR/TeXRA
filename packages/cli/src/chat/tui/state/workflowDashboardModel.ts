@@ -100,6 +100,7 @@ function unionWithDeclaredPlan(
   opened: readonly MutableWorkflowPhaseGroup[],
   plan: WorkflowPlanMarker,
   cards: readonly WorkflowTaskEntry[],
+  runSettled: boolean,
 ): readonly MutableWorkflowPhaseGroup[] {
   const cardIds = new Set(cards.map((entry) => entry.call.id));
   const declaredByPhase = new Map<string, WorkflowCallIdentity[]>();
@@ -115,18 +116,27 @@ function unionWithDeclaredPlan(
   const ordered: MutableWorkflowPhaseGroup[] = [];
   const placed = new Set<MutableWorkflowPhaseGroup>();
   for (const phase of plan.phases) {
-    const group: MutableWorkflowPhaseGroup = byTitle.get(phase.title) ?? {
-      value: workflowPhaseListValue(`declared-${phase.title}`),
-      heading: {
-        phaseLabel: phase.title,
-        phaseIndex: phase.index,
-        phaseTotal: plan.phases.length,
-      },
-      tasks: [],
-      opened: false,
-      declaredTasks: [],
-    };
-    group.declaredTasks = declaredByPhase.get(phase.title) ?? [];
+    const declaredTasks = declaredByPhase.get(phase.title) ?? [];
+    let group = byTitle.get(phase.title);
+    if (!group) {
+      // A settled run never opens a phase it did not reach, and its settle
+      // sweep has already housed every declared card under a stage — so an
+      // empty plan-only phase after settlement is the bridge's own
+      // skipped-empty-phase suppression, and stays gone.
+      if (runSettled && declaredTasks.length === 0) continue;
+      group = {
+        value: workflowPhaseListValue(`declared-${phase.title}`),
+        heading: {
+          phaseLabel: phase.title,
+          phaseIndex: phase.index,
+          phaseTotal: plan.phases.length,
+        },
+        tasks: [],
+        opened: false,
+        declaredTasks: [],
+      };
+    }
+    group.declaredTasks = declaredTasks;
     ordered.push(group);
     placed.add(group);
   }
@@ -146,6 +156,11 @@ function unionWithDeclaredPlan(
 export function workflowDashboardModel(
   root: StreamSlice,
   columns: number,
+  options: {
+    /** True once the workflow run has ended: plan-only phases it never
+     *  reached are then nothing to show. */
+    readonly runSettled?: boolean;
+  } = {},
 ): WorkflowDashboardModel {
   const groups: MutableWorkflowPhaseGroup[] = [];
   const byGroupId = new Map<string, MutableWorkflowPhaseGroup>();
@@ -211,7 +226,12 @@ export function workflowDashboardModel(
   );
   const survivingGroups = [
     ...(root.workflowPlan
-      ? unionWithDeclaredPlan(openedGroups, root.workflowPlan, tasks)
+      ? unionWithDeclaredPlan(
+          openedGroups,
+          root.workflowPlan,
+          tasks,
+          options.runSettled === true,
+        )
       : openedGroups),
   ];
   if (ungrouped) survivingGroups.push(ungrouped);
@@ -263,7 +283,13 @@ export function workflowDashboardPanelItemCount(
     return rootHasApproval ? 1 : 0;
   }
   if (!model.wide) {
-    return 1 + model.groups.length + model.tasks.length;
+    // Declared rows sit under their phase in the narrow list too.
+    return (
+      1 +
+      model.groups.length +
+      model.tasks.length +
+      model.groups.reduce((sum, group) => sum + group.declaredTasks.length, 0)
+    );
   }
   const { activeGroup } = workflowDashboardSelection(model, selectedValue);
   const taskColumnRows =

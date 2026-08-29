@@ -463,25 +463,32 @@ function WorkflowDashboard({
     label: group.heading.phaseLabel,
     value: group.value,
   }));
-  // Declared rows sit under the phase's cards, disabled: they own no stream
+  // Declared rows sit under their phase's cards, disabled: they own no stream
   // to focus and no call to control, and they leave the list the moment the
   // run issues them (their card then takes the row).
+  const declaredTaskValue = (task: WorkflowCallIdentity): ChildListValue =>
+    workflowTaskListValue(`declared-${task.id}`);
   const declaredTaskByValue = new Map<ChildListValue, WorkflowCallIdentity>(
-    (activeGroup?.declaredTasks ?? []).map((task) => [
-      workflowTaskListValue(`declared-${task.id}`),
-      task,
-    ]),
+    groups.flatMap((group) =>
+      group.declaredTasks.map(
+        (task) => [declaredTaskValue(task), task] as const,
+      ),
+    ),
   );
+  const declaredItems = (
+    group: WorkflowPhaseGroup | undefined,
+  ): SelectItem<ChildListValue>[] =>
+    (group?.declaredTasks ?? []).map((task) => ({
+      label: task.label,
+      value: declaredTaskValue(task),
+      disabled: true,
+    }));
   const taskItems: SelectItem<ChildListValue>[] = [
     ...(activeGroup?.tasks ?? []).map((entry) => ({
       label: entry.call.label,
       value: workflowTaskListValue(entry.id),
     })),
-    ...[...declaredTaskByValue].map(([value, task]) => ({
-      label: task.label,
-      value,
-      disabled: true,
-    })),
+    ...declaredItems(activeGroup),
   ];
   const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
     {
@@ -493,6 +500,7 @@ function WorkflowDashboard({
       label: entry.call.label,
       value: workflowTaskListValue(entry.id),
     })),
+    ...declaredItems(group),
   ]);
   const calls = tasks.map((entry) => entry.call);
   const { done, total, running, failed } = workflowCallTally(calls);

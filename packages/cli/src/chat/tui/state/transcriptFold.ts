@@ -51,7 +51,7 @@ import {
 } from '../panes/transcriptEntries';
 import type { TranscriptFoldItem, TranscriptFoldState } from './cliState';
 
-const log = createLog('transcriptFold');
+const logger = createLog('transcriptFold');
 
 // Canonical dashboard rows retained when a workflow stream is compacted.
 // Compaction activity passes through like a local row: a run that compacted
@@ -242,10 +242,12 @@ function projectWorkflowPlanIncrementally(
     state.applied.set(entry.id, entry);
     const parsed = WorkflowPlanMarkerSchema.safeParse(entry.data);
     if (!parsed.success) {
-      // A malformed marker hides the plan, never the run — but say so.
-      log.warn(
+      // The newest marker is the live attempt's plan; when it is unreadable
+      // the plan is unknown, not the previous attempt's. Hide it and say so.
+      logger.warn(
         `Ignoring malformed workflow plan marker ${entry.id}: ${parsed.error.message}`,
       );
+      state.snapshot = undefined;
       continue;
     }
     state.snapshot = parsed.data;

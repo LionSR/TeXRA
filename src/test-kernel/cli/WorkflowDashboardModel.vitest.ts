@@ -214,6 +214,7 @@ describe('workflow dashboard model', () => {
         phases: [
           { title: 'Map', index: 0 },
           { title: 'Reduce', index: 1 },
+          { title: 'Publish', index: 2 },
         ],
         tasks: [
           { id: 'inspect', label: 'inspect', phase: 'Map' },
@@ -223,27 +224,39 @@ describe('workflow dashboard model', () => {
       },
     };
     const model = workflowDashboardModel(root, WIDE_COLUMNS);
-
-    expect(
-      model.groups.map((group) => [
+    const summarize = (groups: typeof model.groups) =>
+      groups.map((group) => [
         group.heading.phaseLabel,
         group.opened,
         group.tasks.length,
         group.declaredTasks.map((task) => task.id),
-      ]),
-    ).toEqual([
+      ]);
+
+    expect(summarize(model.groups)).toEqual([
       ['Map', true, 1, ['extract']],
       ['Reduce', false, 0, ['merge']],
+      ['Publish', false, 0, []],
     ]);
     expect(model.groups[1]?.heading).toEqual({
       phaseLabel: 'Reduce',
       phaseIndex: 1,
-      phaseTotal: 2,
+      phaseTotal: 3,
     });
+    // Once the run has settled, a plan-only phase it never reached and that
+    // holds no declared task is gone; one still holding declared tasks stays.
+    expect(
+      summarize(
+        workflowDashboardModel(root, WIDE_COLUMNS, { runSettled: true }).groups,
+      ),
+    ).toEqual([
+      ['Map', true, 1, ['extract']],
+      ['Reduce', false, 0, ['merge']],
+    ]);
     // The declared phase is a keyboard-reachable row; declared tasks are not.
     expect(model.listValues).toEqual([
       model.groups[0]?.value,
       model.groups[1]?.value,
+      model.groups[2]?.value,
       'workflowTask:task-inspect',
     ]);
   });

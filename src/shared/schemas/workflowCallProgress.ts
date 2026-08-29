@@ -44,7 +44,7 @@ export const WorkflowPlanMarkerSchema = z.strictObject({
   kind: z.literal('workflowPlan'),
   attemptId: z.string().min(1),
   phases: z.array(
-    z.strictObject({ title: z.string().min(1), index: z.int().min(0) }),
+    z.strictObject({ title: z.string().min(1), index: z.int().nonnegative() }),
   ),
   tasks: z.array(WorkflowCallIdentitySchema),
 });

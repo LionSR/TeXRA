@@ -443,14 +443,23 @@ export async function runPersistedWorkflowScriptWithProgress(
             title: stage.title,
             index: stage.order,
           })),
-          tasks: snapshot.calls.map((call) => {
-            const phase = stageTitleFor(snapshot, call);
-            return {
-              id: call.id,
-              label: call.label,
-              ...(phase !== undefined ? { phase } : {}),
-            };
-          }),
+          // A resumed run's reusable results (completed or cached) are
+          // history, not plan: they are never re-emitted as cards, so listing
+          // them here would show finished work as declared.
+          tasks: snapshot.calls
+            .filter(
+              (call) =>
+                call.status !== WORKFLOW_CALL_STATUS.COMPLETED &&
+                call.status !== WORKFLOW_CALL_STATUS.CACHED,
+            )
+            .map((call) => {
+              const phase = stageTitleFor(snapshot, call);
+              return {
+                id: call.id,
+                label: call.label,
+                ...(phase !== undefined ? { phase } : {}),
+              };
+            }),
         });
       }
       for (const stage of snapshot.stages) {

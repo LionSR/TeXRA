@@ -303,12 +303,23 @@ export function App(props: AppProps): React.JSX.Element {
   // The only derivation: `SubagentList` renders this instance and
   // `ConversationRegion` budgets its rows from it, so rows cannot be grouped,
   // ordered, or deduplicated twice and drift the keyboard off the screen.
+  // A plan-only phase a finished run never reached is nothing to list; only
+  // a known, no-longer-active phase counts as settled (an unknown phase is a
+  // stream still being created, not a finished run).
+  const workflowRootPhase =
+    workflowDashboardRoot === undefined
+      ? undefined
+      : streamPhaseFor(workflowDashboardRoot.streamId)?.phase;
+  const workflowRunSettled =
+    workflowRootPhase !== undefined && !isActivePhase(workflowRootPhase);
   const workflowDashboard = useMemo(
     () =>
       workflowDashboardRoot
-        ? workflowDashboardModel(workflowDashboardRoot, columns)
+        ? workflowDashboardModel(workflowDashboardRoot, columns, {
+            runSettled: workflowRunSettled,
+          })
         : undefined,
-    [columns, workflowDashboardRoot],
+    [columns, workflowDashboardRoot, workflowRunSettled],
   );
   // Stream-less approvals fold onto the root of the visible surface: the
   // scoped child-list root while one replaces the session list, else the

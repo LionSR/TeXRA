@@ -563,11 +563,22 @@ export function attachTranscriptRecorder(
         }
 
         case 'workflow.plan': {
+          // Display strings pass through record-time redaction like every
+          // stage label and card the recorder persists; ids stay verbatim.
           const marker = {
             kind: 'workflowPlan',
             attemptId: event.attemptId,
-            phases: event.phases,
-            tasks: event.tasks,
+            phases: event.phases.map((phase) => ({
+              title: redactSecrets(phase.title),
+              index: phase.index,
+            })),
+            tasks: event.tasks.map((task) => ({
+              ...task,
+              label: redactSecrets(task.label),
+              ...(task.phase !== undefined && {
+                phase: redactSecrets(task.phase),
+              }),
+            })),
           } satisfies WorkflowPlanMarker;
           writer.appendSettled({
             id: `workflow-plan-${event.attemptId}`,
