@@ -173,7 +173,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     title: CHATGPT_AUTH.subscriptionLabel,
     description:
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
-    note: 'The subscription currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
+    note: 'Subscription routing uses a 272,000-token input budget by default. Advanced users can raise texra.chatgptCodex.contextWindow up to 872,000 for GPT-5.6 models; the displayed context also includes the output budget.',
     preferLabel: CHATGPT_AUTH.preferLabel,
     preferDescription: 'Use the subscription for eligible Codex models.',
     accountTitle: 'ChatGPT account',

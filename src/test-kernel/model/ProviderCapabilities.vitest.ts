@@ -115,6 +115,41 @@ describe('provider capabilities', () => {
       });
     },
   );
+
+  describe('context window override', () => {
+    afterEach(() => installPlatform());
+
+    it('raises the subscription input and displayed context windows', async () => {
+      await installPlatform({
+        config: { 'texra.chatgptCodex.contextWindow': 872_000 },
+      });
+
+      expect(
+        resolveCodexSubscriptionProfile({
+          model: gpt55Config,
+          useOpenRouter: false,
+        }),
+      ).toMatchObject({
+        inputTokenLimit: 872_000,
+        contextWindow: 1_000_000,
+      });
+    });
+
+    it('falls back when the configured context window is out of range', async () => {
+      await installPlatform({
+        config: { 'texra.chatgptCodex.contextWindow': 900_000 },
+      });
+
+      expect(
+        resolveCodexSubscriptionProfile({
+          model: gpt55Config,
+          useOpenRouter: false,
+        }),
+      ).toMatchObject({
+        inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+      });
+    });
+  });
 });
 
 describe('ChatGPT subscription model routing', () => {
