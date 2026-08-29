@@ -103,5 +103,4 @@ export interface SessionRendererPort {
 
   /** Drop buffered conversation-progress pushes for a stream (new RUNNING). */
   clearPendingConversationProgress(streamId: StreamTabId): void;
-
 }
