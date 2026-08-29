@@ -43,6 +43,7 @@ const GUIDANCE_FILES = [
   'src/agent/runtime/README.md',
   'src/agent/workflowScript/README.md',
   'src/replacement/README.md',
+  'src/latex/README.md',
 ];
 // Standing docs: architecture notes and the published guide. Dated proposals
 // and PRDs stay out — they are historical by design (see issue #9730).
