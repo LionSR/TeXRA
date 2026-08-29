@@ -1,5 +1,11 @@
 {
+  "$schema": "https://raw.githubusercontent.com/Effect-TS/language-service/refs/heads/main/schema.json",
   "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service"
+      }
+    ],
     "module": "nodenext",
     "target": "ES2022",
     "jsx": "react-jsx",
