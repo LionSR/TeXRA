@@ -38,7 +38,7 @@ export class ResponseCycleNode extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<CyclePrepInput> {
     const { context } = shared;
 
     if (!context) {
@@ -73,7 +73,7 @@ export class ResponseCycleNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
+  override async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
     const { context } = prepRes;
 
     const [outputAlreadyComplete, initializedMessages] =
@@ -150,7 +150,7 @@ export class ResponseCycleNode extends BaseNode<
     }
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
@@ -159,7 +159,7 @@ export class ResponseCycleNode extends BaseNode<
     return { outcome: 'failed', lastError };
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     prepRes: CyclePrepInput,
     execRes: CycleOutcome,

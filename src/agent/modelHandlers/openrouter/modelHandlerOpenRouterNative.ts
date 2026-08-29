@@ -478,7 +478,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // Media
   // ---------------------------------------------------------------------------
 
-  createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
+  override createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
     return mediaMessage.flatMap((media): ChatContentItems[] => {
       const classification = classifyMediaEntry(media);
 

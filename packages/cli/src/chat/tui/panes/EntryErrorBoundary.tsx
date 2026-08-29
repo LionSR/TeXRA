@@ -52,13 +52,13 @@ export class EntryErrorBoundary extends Component<
 > {
   // `hasError` is tracked separately from `error` so a thrown `null`/`undefined`
   // still latches the fallback instead of re-rendering children and looping.
-  state: EntryErrorBoundaryState = { hasError: false, error: null };
+  override state: EntryErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: unknown): EntryErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: unknown): void {
+  override componentDidCatch(error: unknown): void {
     // Best-effort: while the TUI owns the screen the CLI log sink is a no-op,
     // so the inline marker below is the primary surfacing. Logging serves the
     // verbose / trace path and must never itself break the error unwind.
@@ -75,7 +75,7 @@ export class EntryErrorBoundary extends Component<
     }
   }
 
-  render(): ReactNode {
+  override render(): ReactNode {
     if (!this.state.hasError) return this.props.children;
     const detail = formatRenderError(this.state.error);
     return (

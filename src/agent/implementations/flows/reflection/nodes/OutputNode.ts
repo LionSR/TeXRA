@@ -46,7 +46,7 @@ export class OutputNode extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     if (!shared.outputLocation) {
       throw new Error(
         'Output location not set - ResponseCycleNode must run first',
@@ -60,7 +60,7 @@ export class OutputNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
+  override async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputState, xmlManager, diffManager, setting, logger, baseFiles } =
       this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
@@ -161,7 +161,7 @@ export class OutputNode extends BaseNode<
     };
   }
 
-  async execFallback(
+  override async execFallback(
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<OutputExecResult> {
@@ -204,7 +204,7 @@ export class OutputNode extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,

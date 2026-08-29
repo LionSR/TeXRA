@@ -759,7 +759,9 @@ export class ModelHandlerOpenAI<
   }
 
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
-  createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
+  override createMediaContent(
+    mediaMessage: MediaEntry[],
+  ): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
       const classification = classifyMediaEntry(media);
 

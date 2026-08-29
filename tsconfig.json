@@ -171,6 +171,7 @@
     },
     "moduleResolution": "nodenext",
     "strict": true,
+    "noImplicitOverride": true,
     "skipLibCheck": true,
     "types": ["node", "vscode"]
   },

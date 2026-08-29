@@ -1220,7 +1220,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /** Formats image/audio content for the Responses API. */
-  createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
+  override createMediaContent(
+    mediaMessage: MediaEntry[],
+  ): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
       const mediaType = media.media_type ?? '';
       const classification = classifyMediaEntry(media);

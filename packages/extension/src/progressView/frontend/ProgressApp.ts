@@ -140,7 +140,7 @@ export class ProgressApp extends ProgressAppBase {
     super.disconnectedCallback();
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const isEditorMode = placement.get() === 'editor';
     const desktopView = this.getAttribute('data-desktop-view');
     const isDesktopMode = desktopView !== null;

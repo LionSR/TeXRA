@@ -146,7 +146,7 @@ export class ModelHandlerValidation extends ModelHandler<
     return {};
   }
 
-  async createResponse(
+  override async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, unknown>,
   ): Promise<
     CreateResponseResult<ValidationResponse, ChatCompletionMessageParam>
@@ -203,7 +203,7 @@ export class ModelHandlerValidation extends ModelHandler<
     return [...messages, { role: 'user', content: userMessage }];
   }
 
-  createMediaContent(_mediaMessage: MediaEntry[]): unknown[] {
+  override createMediaContent(_mediaMessage: MediaEntry[]): unknown[] {
     return [];
   }
 
@@ -230,7 +230,7 @@ export class ModelHandlerValidation extends ModelHandler<
     return false;
   }
 
-  addContinueMessage(
+  override addContinueMessage(
     _messages: ChatCompletionMessageParam[],
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
@@ -251,7 +251,7 @@ export class ModelHandlerValidation extends ModelHandler<
     };
   }
 
-  updateMessageContent(
+  override updateMessageContent(
     messages: ChatCompletionMessageParam[],
     _bestConnector: string,
     newResponse: string,
@@ -260,7 +260,7 @@ export class ModelHandlerValidation extends ModelHandler<
     messages.push(this.createAssistantMessage(newResponse));
   }
 
-  shouldContinue(
+  override shouldContinue(
     _stopReason: ProviderStopReason,
     _newResponse: string,
     _agentSetting: AgentSetting,

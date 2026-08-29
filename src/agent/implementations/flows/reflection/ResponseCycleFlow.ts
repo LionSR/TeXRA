@@ -88,7 +88,9 @@ class ResponsePrepNode extends BaseNode<
   ResponseCycleShared,
   ResponseCycleServices
 > {
-  async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
+  override async prep(
+    shared: ResponseCycleShared,
+  ): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, runScope } = this.services;
     const interrupted = runScope.signal.aborted;
     const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
@@ -99,7 +101,7 @@ class ResponsePrepNode extends BaseNode<
     return { interrupted, exists, systemPrompt };
   }
 
-  async post(
+  override async post(
     shared: ResponseCycleShared,
     prepRes: ResponsePrepResult,
   ): Promise<string | undefined> {
@@ -188,7 +190,7 @@ class ResponseProcessNode extends BaseNode<
   ResponseCycleShared,
   ResponseCycleServices
 > {
-  async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
+  override async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
     const { assembly } = this.services.workspace;
     return {
       shouldStop: shared.shouldStop,
@@ -199,7 +201,7 @@ class ResponseProcessNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
+  override async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
     const { logger } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
@@ -293,7 +295,7 @@ class ResponseProcessNode extends BaseNode<
     });
   }
 
-  async post(
+  override async post(
     shared: ResponseCycleShared,
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
@@ -393,7 +395,7 @@ class ResponseCycleFinalizeNode extends BaseNode<
   ResponseCycleServices
 > {
   /** Finalize the round by recording stats and invoking callback. */
-  async exec(): Promise<void> {
+  override async exec(): Promise<void> {
     const { round, run, onRoundFinalized, logger } = this.services;
     recordCycleMetrics(run, round.responseTimeMs, round.normalizedUsage);
     // Best-effort finalization callback. `ResponseCycleNode` (the reflection
@@ -420,7 +422,9 @@ class ResponseContinuationNode extends BaseNode<
   ResponseCycleShared,
   ResponseCycleServices
 > {
-  async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
+  override async prep(
+    shared: ResponseCycleShared,
+  ): Promise<ContinuationPrepResult> {
     if (
       shared.shouldStop ||
       !shared.stopReason ||
@@ -439,7 +443,9 @@ class ResponseContinuationNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
+  override async exec(
+    prepRes: ContinuationPrepResult,
+  ): Promise<ContinuationNodeResult> {
     const { round, run, setting } = this.services;
     const modelHandler = this.services.modelCell.handler;
 
@@ -490,7 +496,7 @@ class ResponseContinuationNode extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ResponseCycleShared,
     _prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,

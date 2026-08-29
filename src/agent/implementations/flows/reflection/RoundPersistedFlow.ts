@@ -143,7 +143,7 @@ export class RoundPersistedFlow<
    *
    * Returns the canonical run outcome directly.
    */
-  async run(shared: S): Promise<RunOutcome> {
+  override async run(shared: S): Promise<RunOutcome> {
     let outcome: RunOutcome = RUN_OUTCOME.FAILED;
 
     await this.ensureRecord(shared);

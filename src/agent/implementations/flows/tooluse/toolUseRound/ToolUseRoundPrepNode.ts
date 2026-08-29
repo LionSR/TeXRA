@@ -39,7 +39,9 @@ export class ToolUseRoundPrepNode extends BaseNode<
   ToolUseRoundShared,
   ToolUseRoundServices
 > {
-  async prep(_shared: ToolUseRoundShared): Promise<ToolUseRoundPrepResult> {
+  override async prep(
+    _shared: ToolUseRoundShared,
+  ): Promise<ToolUseRoundPrepResult> {
     const interrupted = this.services.runScope.signal.aborted;
     // Draining is destructive — `FollowUpQueue.waitForNext` shifts before it
     // checks the abort signal — and `post()` drops the batch on an interrupted
@@ -60,7 +62,7 @@ export class ToolUseRoundPrepNode extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRoundShared,
     prepRes: ToolUseRoundPrepResult,
   ): Promise<string | undefined> {

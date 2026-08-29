@@ -146,12 +146,12 @@ class Flow<S = unknown, Svc = unknown> extends BaseNode<S, Svc> {
       current = current.getNextNode(action)?.clone();
     }
   }
-  async _run(shared: S): Promise<Action | undefined> {
+  override async _run(shared: S): Promise<Action | undefined> {
     const pr = await this.prep(shared);
     await this._orchestrate(shared);
     return await this.post(shared, pr, undefined);
   }
-  async exec(_prepRes: unknown): Promise<unknown> {
+  override async exec(_prepRes: unknown): Promise<unknown> {
     throw new Error("Flow can't exec.");
   }
 }

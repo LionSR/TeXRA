@@ -109,7 +109,7 @@ export class LogList extends LitElement {
     super.disconnectedCallback();
   }
 
-  protected willUpdate(): void {
+  protected override willUpdate(): void {
     const streamId = this.streamContext.streamName;
 
     // Detect stream switch

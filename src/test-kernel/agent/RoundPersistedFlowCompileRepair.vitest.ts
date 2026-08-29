@@ -54,7 +54,7 @@ interface FakeShared extends RoundAwareState {
  * round is scripted to fail compilation.
  */
 class FakeRoundNode extends BaseNode<FakeShared> {
-  async post(shared: FakeShared): Promise<undefined> {
+  override async post(shared: FakeShared): Promise<undefined> {
     shared.roundsRun.push(shared.currentRound);
     shared.contextSeenByRound[shared.currentRound] =
       shared.compileFailureContext;
@@ -185,7 +185,7 @@ class OutcomeRoundNode extends BaseNode<OutcomeShared> {
     super();
   }
 
-  async post(shared: OutcomeShared): Promise<undefined> {
+  override async post(shared: OutcomeShared): Promise<undefined> {
     if (shared.currentRound + 1 !== shared.totalRounds) return undefined;
 
     if (this.control.terminalOutcome === 'throws') {
