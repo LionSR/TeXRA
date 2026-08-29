@@ -62,8 +62,7 @@ export const GroupLogPayloadSchema = z.looseObject(groupLogPayloadFields);
 /**
  * Permanent exported-trace recovery for group rows written by older versions.
  * Each display-only field recovers independently so one stale value does not
- * discard the whole trace entry. Attempt identity remains strict because
- * erasing malformed ownership would attach work to the wrong physical run.
+ * discard the whole trace entry.
  */
 export const TraceGroupLogPayloadSchema = z.looseObject({
   ...groupLogPayloadFields,

@@ -1,5 +1,4 @@
 import {
-  isTerminalWorkflowCallProgress,
   WORKFLOW_TASK_STATUS_LABEL,
   type TaskGroup,
   type WorkflowCallKind,
