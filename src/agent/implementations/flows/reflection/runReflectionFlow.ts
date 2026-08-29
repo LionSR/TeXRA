@@ -28,7 +28,6 @@ import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -36,7 +35,6 @@ import {
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readPlatformSetting } from '@utils/config/platformSettings';
 import { LatexDiffManager } from './output/LatexDiffManager';
 import { XmlOutputManager } from './output/XmlOutputManager';
 import {
@@ -280,36 +278,12 @@ export async function runReflectionFlow(
             parent: parent ?? undefined,
             kind: 'round',
             index: roundIndex,
-            // A granted compile-repair round (#7077) opens with
-            // `roundIndex === totalRounds`, so widen the total rather than
-            // render an over-total "Round 3 of 2".
-            total: Math.max(shared.totalRounds, roundIndex + 1),
+            total: shared.totalRounds,
           }),
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
         },
         signal: runScope.signal,
-        // Bounded compile-repair round (#7077): a compile failure on what
-        // would otherwise be the final round gets exactly one extra round
-        // so the model sees the failure context via PrepareContextNode
-        // instead of the run silently ending on a broken output. Gated on
-        // the same setting that produced compileFailureContext in the
-        // first place, and on the one-shot `compileRepairRoundGranted`
-        // flag so a repair round that itself fails to compile doesn't
-        // chain a second one — even across resume.
-        grantExtraRound: (s) => {
-          if (
-            !s.compileFailureContext ||
-            s.compileRepairRoundGranted ||
-            !readPlatformSetting<boolean>(
-              WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-            )
-          ) {
-            return false;
-          }
-          s.compileRepairRoundGranted = true;
-          return true;
-        },
       },
     },
   );

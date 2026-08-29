@@ -1,7 +1,7 @@
 /**
  * RoundPersistedFlow - the reflection flow's round loop, over a PersistedFlow.
- * Rounds — including the bounded compile-repair round — are reflection-product
- * policy, so this lives here and not in the generic `@agent/node` engine.
+ * Round orchestration is reflection-product policy, so this lives here and not
+ * in the generic `@agent/node` engine.
  *
  * Extends PersistedFlow to centrally manage round transitions:
  * - Round counter increment (single source of truth)
@@ -76,17 +76,6 @@ interface RoundCallbacks<S extends RoundAwareState> {
 
   /** Reset workspace state for a new round. */
   resetForNextRound?: (shared: S) => void;
-
-  /**
-   * Called only when the round loop would otherwise stop because
-   * `currentRound + 1 >= totalRounds`. Return true to run exactly one more
-   * round beyond the configured total (e.g. a compile-repair round). The
-   * callback owns recording that the extra round was granted (a persisted
-   * boolean on shared state) so it isn't asked again once it has said yes
-   * — this is what keeps the extra round bounded to exactly one per run,
-   * including across resume.
-   */
-  grantExtraRound?: (shared: S) => boolean;
 }
 
 // ============================================================================
@@ -147,9 +136,17 @@ export class RoundPersistedFlow<
     let outcome: RunOutcome = RUN_OUTCOME.FAILED;
 
     await this.ensureRecord(shared);
-    let currentShared = shared;
+    let currentShared = (await this.getShared()) ?? shared;
 
     try {
+      // A persisted cursor may point into a legacy extra repair round, or the
+      // configured total may have been lowered since persistence. In either
+      // case the hard round limit takes precedence over resuming that cursor.
+      if (currentShared.currentRound >= currentShared.totalRounds) {
+        outcome = this.resolveOutcome(currentShared);
+        return outcome;
+      }
+
       // Create initial round stage (r0)
       this.createStage(currentShared.currentRound, currentShared);
 
@@ -203,10 +200,7 @@ export class RoundPersistedFlow<
     ) {
       return false;
     }
-    if (shared.currentRound + 1 < shared.totalRounds) return true;
-    // Otherwise this would be the last round. Give the caller one chance to
-    // grant a bounded extra round (e.g. a compile-repair round) instead.
-    return this.callbacks.grantExtraRound?.(shared) ?? false;
+    return shared.currentRound + 1 < shared.totalRounds;
   }
 
   /** Derive the canonical RunOutcome from the current round state. */
