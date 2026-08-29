@@ -187,26 +187,43 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
  * already merged it at read time. Shape-detected rather than tried as a union
  * member: the canonical record is loose, so a legacy record with one malformed
  * variable would otherwise fall through and parse as a flat record carrying
- * two junk keys instead of failing. An envelope carrying either legacy key
- * without both channels being records is corrupt durable state and fails
- * here, rather than resuming with every fixed variable silently absent.
+ * two junk keys instead of failing. The legacy shape always carried both
+ * keys, so only a record with both is treated as an envelope (a lone
+ * `input`/`transient` key stays an ordinary custom variable), and each
+ * channel is validated on its own before merging so a malformed value one
+ * channel would override still fails as the old two-channel schema did.
  *
  * Legacy reader introduced 2026-08-29 with the collapse (#11568); remove
  * after 2026-11-29 once pre-collapse checkpoints have aged out.
  */
 export const UserVariableChannelsSchema = z.preprocess((value, ctx) => {
   if (!isPlainRecord(value)) return value;
+  if (!('input' in value) || !('transient' in value)) return value;
   const { input, transient } = value;
-  if (!('input' in value) && !('transient' in value)) return value;
-  if (isPlainRecord(input) && isPlainRecord(transient)) {
-    return { ...input, ...transient };
+  if (!isPlainRecord(input) || !isPlainRecord(transient)) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'Malformed legacy user-variable envelope: `input`/`transient` present but not both records',
+    });
+    return z.NEVER;
   }
-  ctx.addIssue({
-    code: 'custom',
-    message:
-      'Malformed legacy user-variable envelope: `input`/`transient` present but not both records',
-  });
-  return z.NEVER;
+  for (const [channel, record] of [
+    ['input', input],
+    ['transient', transient],
+  ] as const) {
+    const parsed = UserVariableChannelRecordSchema.safeParse(record);
+    if (!parsed.success) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Malformed legacy user-variable \`${channel}\` channel: ${
+          parsed.error.issues[0]?.message ?? 'invalid record'
+        }`,
+      });
+      return z.NEVER;
+    }
+  }
+  return { ...input, ...transient };
 }, UserVariableChannelRecordSchema);
 
 /** Derived from UserVariableChannelsSchema - single source of truth. */
