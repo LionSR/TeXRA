@@ -17,13 +17,11 @@ import {
   STATUS_DOT,
   TICK,
   WARNING,
-  TODO_ACTIVE,
-  TODO_DONE,
-  TODO_PENDING,
   TOOL_OUTPUT_CORNER,
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { WorkflowCallProgress } from '@shared/schemas';
+import { WORKFLOW_CALL_STATUS_GLYPH } from '@shared/copy/workflowCall';
 import {
   isSelfSettledRow,
   type TranscriptRow,
@@ -160,17 +158,31 @@ export const COMPACTION_ACTIVITY_STATUS_STYLE = {
   { readonly marker: string; readonly color: string | undefined }
 >;
 
+/** Colour per call status; the marker is the shared per-status glyph, so the
+ *  strip, the popup rows, and the transcript rows can never disagree. */
 export const WORKFLOW_TASK_STATUS_STYLE = {
-  declared: { marker: TODO_PENDING, color: COLOR_BORDER },
-  planned: { marker: TODO_PENDING, color: undefined },
-  awaitingApproval: { marker: TODO_PENDING, color: COLOR_HINT },
-  queued: { marker: TODO_PENDING, color: undefined },
-  running: { marker: TODO_ACTIVE, color: COLOR_HINT },
-  completed: { marker: TODO_DONE, color: COLOR_SUCCESS },
-  cached: { marker: TICK, color: COLOR_SUCCESS },
-  skipped: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
-  cancelled: { marker: SKIP_CIRCLE, color: COLOR_BORDER },
-  failed: { marker: CROSS, color: COLOR_ERROR },
+  declared: {
+    marker: WORKFLOW_CALL_STATUS_GLYPH.declared,
+    color: COLOR_BORDER,
+  },
+  planned: { marker: WORKFLOW_CALL_STATUS_GLYPH.planned, color: undefined },
+  awaitingApproval: {
+    marker: WORKFLOW_CALL_STATUS_GLYPH.awaitingApproval,
+    color: COLOR_HINT,
+  },
+  queued: { marker: WORKFLOW_CALL_STATUS_GLYPH.queued, color: undefined },
+  running: { marker: WORKFLOW_CALL_STATUS_GLYPH.running, color: COLOR_HINT },
+  completed: {
+    marker: WORKFLOW_CALL_STATUS_GLYPH.completed,
+    color: COLOR_SUCCESS,
+  },
+  cached: { marker: WORKFLOW_CALL_STATUS_GLYPH.cached, color: COLOR_SUCCESS },
+  skipped: { marker: WORKFLOW_CALL_STATUS_GLYPH.skipped, color: COLOR_BORDER },
+  cancelled: {
+    marker: WORKFLOW_CALL_STATUS_GLYPH.cancelled,
+    color: COLOR_BORDER,
+  },
+  failed: { marker: WORKFLOW_CALL_STATUS_GLYPH.failed, color: COLOR_ERROR },
 } as const satisfies Record<
   WorkflowCallProgress['status'],
   { readonly marker: string; readonly color: string | undefined }

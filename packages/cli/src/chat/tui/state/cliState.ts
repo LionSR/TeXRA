@@ -23,6 +23,7 @@ import type {
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import type { StreamArtifactAuthority } from '@transcript';
+import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
@@ -436,9 +437,6 @@ export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });
 }
 
-/** The counted groups a workflow phase's quiet rows collapse into. */
-export type WorkflowPopupGroupKind = 'queued' | 'done' | 'declared';
-
 /** View state of the workflow popup — which phase tab is open, which row is
  *  highlighted, which counted groups are unfolded, and the live filter. Held
  *  here rather than in the component so a repaint or a foreground surface
@@ -446,7 +444,7 @@ export type WorkflowPopupGroupKind = 'queued' | 'done' | 'declared';
 export interface WorkflowPopupView {
   readonly phaseIndex: number;
   readonly selectedKey: string | undefined;
-  readonly expanded: ReadonlySet<WorkflowPopupGroupKind>;
+  readonly expanded: ReadonlySet<WorkflowRowGroup>;
   /** Live filter text; empty means none. */
   readonly filter: string;
   /** True while keystrokes edit the filter instead of moving the selection. */

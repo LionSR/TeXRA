@@ -159,9 +159,6 @@ interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
   readonly focused?: boolean;
   readonly selectionKillable?: boolean;
-  /** True while the focused row is an in-flight workflow-script grandchild
-   *  that can be skipped or retried. */
-  readonly selectionWorkflowControllable?: boolean;
 }
 
 interface StatusBarShortcutsInput {
@@ -737,10 +734,7 @@ function foregroundBindingsText(
 }
 
 function childListBindingsText(
-  {
-    selectionKillable = false,
-    selectionWorkflowControllable = false,
-  }: StatusBarChildListInput,
+  { selectionKillable = false }: StatusBarChildListInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
 ): string {
@@ -748,12 +742,6 @@ function childListBindingsText(
   const enterBinding = keyHintText({ key: 'Enter', action: 'focus' });
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
-    : undefined;
-  const skipBinding = selectionWorkflowControllable
-    ? keyHintText({ key: 's', action: 'skip' })
-    : undefined;
-  const retryBinding = selectionWorkflowControllable
-    ? keyHintText({ key: 'r', action: 'retry' })
     : undefined;
   const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
   const tabBinding = keyHintText({ key: 'Tab', action: 'input' });
@@ -764,8 +752,6 @@ function childListBindingsText(
         selectBinding,
         enterBinding,
         killBinding,
-        skipBinding,
-        retryBinding,
         tabBinding,
         escBinding,
         ctrlCBinding,

@@ -20,7 +20,6 @@ import { projectWorkflowCallEntry } from '@model/projectWorkflowCallEntry';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  WorkflowPlanMarkerSchema,
   isPlainAgentIdentity,
   type RunIdentity,
   type StreamLogEntry,
@@ -42,6 +41,7 @@ import {
   type CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { workflowMarkerOf } from '@shared/streams/workflowRunModel';
 import type { StreamLog } from '@transcript';
 import { truncateSummary } from '@utils/text/stringUtils';
 import {
@@ -207,12 +207,6 @@ function projectTaskGroupsIncrementally(
   return state.snapshot;
 }
 
-function internalMarkerKind(data: unknown): unknown {
-  return typeof data === 'object' && data !== null
-    ? (data as { readonly kind?: unknown }).kind
-    : undefined;
-}
-
 /**
  * The newest `workflowPlan` marker in transcript order. A relaunch under the
  * same meta.name appends its own marker after the attempt it supersedes, so
@@ -229,36 +223,26 @@ function projectWorkflowPlanIncrementally(
     fold.workflowPlanProjection = state;
   }
   for (const entry of entries) {
-    if (
-      entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-      entry.messageType !== MESSAGE_TYPES.INTERNAL
-    ) {
-      continue;
-    }
-    const markerKind = internalMarkerKind(entry.data);
-    if (markerKind !== 'workflowPlan' && markerKind !== 'workflowAttempt') {
-      continue;
-    }
+    const marker = workflowMarkerOf(entry);
+    if (!marker) continue;
     if (state.applied.get(entry.id) === entry) continue;
     state.applied.set(entry.id, entry);
-    if (markerKind === 'workflowAttempt') {
-      // A new attempt starts with no plan of its own until it records one;
-      // an attempt that fails before then must not inherit its
-      // predecessor's.
-      state.snapshot = undefined;
-      continue;
+    switch (marker.kind) {
+      case 'attempt':
+        // A new attempt starts with no plan of its own until it records one.
+        state.snapshot = undefined;
+        break;
+      case 'malformedPlan':
+        // An unreadable plan is an unknown plan, not the previous attempt's.
+        logger.warn(
+          `Ignoring malformed workflow plan marker ${entry.id}: ${marker.error}`,
+        );
+        state.snapshot = undefined;
+        break;
+      case 'plan':
+        state.snapshot = marker.plan;
+        break;
     }
-    const parsed = WorkflowPlanMarkerSchema.safeParse(entry.data);
-    if (!parsed.success) {
-      // The newest marker is the live attempt's plan; when it is unreadable
-      // the plan is unknown, not the previous attempt's. Hide it and say so.
-      logger.warn(
-        `Ignoring malformed workflow plan marker ${entry.id}: ${parsed.error.message}`,
-      );
-      state.snapshot = undefined;
-      continue;
-    }
-    state.snapshot = parsed.data;
   }
   return state.snapshot;
 }

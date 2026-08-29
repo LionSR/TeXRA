@@ -2,10 +2,11 @@
 //
 // A workflow-script run is never a viewport you stand in — its transcript is
 // chrome about other streams. This foreground surface (the same mechanics as
-// the Ctrl-T reader: row-budgeted, Esc restores the parent untouched) shows
-// the run's phases as tabs and the selected phase's rows: calls that need a
-// decision, then calls worth watching, then counted groups that open in
-// place. Screen rows scale with states, not with agents.
+// the Ctrl-T reader: row-budgeted, Esc restores the parent untouched) paints
+// the shared run model (`@shared/streams/workflowRunModel`): the run's phases
+// as tabs and the selected phase's rows — calls that need a decision, then
+// calls worth watching, then counted groups that open in place. Every fold is
+// the model's; this file only decides how a row looks in a terminal.
 
 // Third-party imports
 import { Box, Text, useInput, useWindowSize } from 'ink';
@@ -22,18 +23,13 @@ import {
 } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import {
-  POINTER,
-  STATUS_DIAMOND,
-  STATUS_DIAMOND_OUTLINE,
-  TOKENS_GENERATED,
-} from '@cli/tui/ui/glyphs';
+import { POINTER, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { fillRows, textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 
-// Local imports - shared schemas and copy
+// Local imports - shared schemas, model, and copy
 import {
   WORKFLOW_TASK_STATUS_LABEL,
   isTerminalWorkflowCallProgress,
@@ -44,10 +40,20 @@ import {
   type WorkflowControlAction,
 } from '@shared/schemas';
 import {
-  formatWorkflowCallMetadataParts,
+  WORKFLOW_CALL_STATUS_GLYPH,
+  WORKFLOW_PHASE_GLYPH,
   formatWorkflowPhaseHeading,
-  workflowCallTally,
+  formatWorkflowPhaseTally,
+  formatWorkflowTally,
 } from '@shared/copy/workflowCall';
+import {
+  workflowPhaseRows,
+  type WorkflowPhaseModel,
+  type WorkflowPhaseRow,
+  type WorkflowRowGroup,
+  type WorkflowRunModel,
+} from '@shared/streams/workflowRunModel';
+import type { WorkflowTaskRow as WorkflowTaskRowModel } from '@shared/transcript';
 import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
@@ -62,7 +68,6 @@ import {
 import {
   streamPhaseFor,
   type StreamSlice,
-  type WorkflowPopupGroupKind,
   type WorkflowPopupView,
 } from '../state/cliState';
 import {
@@ -70,23 +75,10 @@ import {
   streamArtifactRevision,
 } from '../state/subscribeStreamArtifacts';
 import { useSignal } from '../state/useSignal';
-import {
-  uniqueWorkflowChildStreamId,
-  workflowPopupRows,
-  type WorkflowDashboardModel,
-  type WorkflowPhaseGroup,
-  type WorkflowPopupRow,
-  type WorkflowTaskEntry,
-} from '../state/workflowDashboardModel';
 
 // Local imports - sibling panes
 import { ApprovalSegments, RowSegment } from './SubagentList';
-import {
-  dashboardMarkerCell,
-  pendingApprovalRowDisplay,
-  workflowPhaseStatusStrip,
-  workflowPhaseTallyText,
-} from './SubagentListDisplay';
+import { pendingApprovalRowDisplay } from './SubagentListDisplay';
 import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
@@ -94,7 +86,7 @@ const GROUP_LABEL = {
   queued: 'queued',
   done: 'done',
   declared: 'declared',
-} as const satisfies Record<WorkflowPopupGroupKind, string>;
+} as const satisfies Record<WorkflowRowGroup, string>;
 
 /** Rows of chrome inside the panel beyond what the shared budget already
  *  counts: the tab strip and the per-call status strip. The filter line adds
@@ -103,8 +95,15 @@ const POPUP_CHROME_ROWS = 2;
 const TAB_SEPARATOR = '    ';
 const TAB_SCROLL_MARK = '‹ ';
 
-function phaseTabText(group: WorkflowPhaseGroup): string {
-  return `${group.opened ? STATUS_DIAMOND : STATUS_DIAMOND_OUTLINE} ${formatWorkflowPhaseHeading(group.heading)} · ${phaseTallyText(group)}`;
+/** The three-column marker cell every popup row starts its text after, so a
+ *  phase's rows line up whether or not one is focused. A glyph that counts as
+ *  two columns takes its own cell instead of shoving the label right. */
+function markerCell(marker: string): string {
+  return fillRows(` ${marker}`, 3);
+}
+
+function phaseTabText(phase: WorkflowPhaseModel): string {
+  return `${phase.opened ? WORKFLOW_PHASE_GLYPH.opened : WORKFLOW_PHASE_GLYPH.declared} ${formatWorkflowPhaseHeading(phase.heading)} · ${formatWorkflowPhaseTally(phase)}`;
 }
 
 /** First tab to draw so the active one is on screen: walk the window start
@@ -119,7 +118,7 @@ function tabWindowStart(
     for (let index = from; index <= activeIndex; index++) {
       used +=
         (index > from ? textDisplayWidth(TAB_SEPARATOR) : 0) +
-        textDisplayWidth(tabs[index] ?? '');
+        textDisplayWidth(tabs[index]!);
     }
     return used <= width;
   };
@@ -128,34 +127,38 @@ function tabWindowStart(
   return start;
 }
 
-function phaseTallyText(group: WorkflowPhaseGroup): string {
-  const declared = group.declaredTasks.length;
-  const declaredText = declared > 0 ? `${declared} declared` : undefined;
-  if (!group.opened) return declaredText ?? 'declared';
-  return [
-    workflowPhaseTallyText(group.tasks.map((entry) => entry.call)),
-    declaredText,
-  ]
-    .filter(filterNotNullish)
-    .join(' · ');
+/** One glyph per card, in issue order. Past `maxCells` the strip ends in a
+ *  `+N` count rather than wrapping, so it stays one row at any width. */
+function statusStrip(
+  cells: readonly WorkflowCallProgress['status'][],
+  maxCells: number,
+): string {
+  const glyph = (status: WorkflowCallProgress['status']): string =>
+    WORKFLOW_CALL_STATUS_GLYPH[status];
+  const budget = Math.max(1, maxCells);
+  if (cells.length <= budget) return cells.map(glyph).join('');
+  // Reserve the widest `+N` the hidden count can need, so the strip never
+  // exceeds `maxCells` at a digit rollover.
+  const shownCount = Math.max(1, budget - (1 + String(cells.length).length));
+  return `${cells.slice(0, shownCount).map(glyph).join('')}+${cells.length - shownCount}`;
 }
 
-function workflowTaskMetadata(
-  call: WorkflowCallProgress,
+function liveTaskMetadata(
+  row: WorkflowTaskRowModel,
   streamId: StreamTabId | undefined,
   nowMs: number,
 ): string | undefined {
-  // The shared parts name the call (kind · agent · model · attempt · files)
+  // The row's own parts name the call (kind · agent · model · attempt · files)
   // and, once it settles, what it cost; the live segments below cover the
   // in-flight window the card itself cannot: elapsed, generated tokens, and
   // the running spend read off the child stream.
-  const live = !isTerminalWorkflowCallProgress(call);
+  const live = !isTerminalWorkflowCallProgress(row.call);
   const usage = streamId
     ? readStreamArtifacts(streamId)?.cumulativeUsage
     : undefined;
   const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
   const parts = [
-    ...formatWorkflowCallMetadataParts(call),
+    ...row.metadataParts,
     live && runStartedAt !== undefined
       ? formatCompactDuration(nowMs - runStartedAt)
       : undefined,
@@ -169,21 +172,21 @@ function workflowTaskMetadata(
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
-function WorkflowTaskRow({
-  entry,
+function TaskRow({
   focused,
   nowMs,
   pendingKinds,
+  row,
   streamId,
 }: {
-  readonly entry: WorkflowTaskEntry;
   readonly focused: boolean;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
+  readonly row: WorkflowTaskRowModel;
   readonly streamId: StreamTabId | undefined;
 }): React.JSX.Element {
-  const style = WORKFLOW_TASK_STATUS_STYLE[entry.call.status];
-  const metadata = workflowTaskMetadata(entry.call, streamId, nowMs);
+  const style = WORKFLOW_TASK_STATUS_STYLE[row.call.status];
+  const metadata = liveTaskMetadata(row, streamId, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -192,16 +195,14 @@ function WorkflowTaskRow({
           {focused ? POINTER : ' '}
         </Text>
         <Text aria-hidden color={style.color}>
-          {dashboardMarkerCell(style.marker)}
+          {markerCell(style.marker)}
         </Text>
       </Box>
-      <RowSegment flexShrink={1}>{entry.call.label}</RowSegment>
+      <RowSegment flexShrink={1}>{row.call.label}</RowSegment>
       {/* The status word outranks the metadata column: it is its own segment
           at the label's shrink weight, so a wide row sheds metadata (weight 2)
           long before it clips `· Running`. */}
-      <RowSegment flexShrink={1}>
-        {` · ${WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}`}
-      </RowSegment>
+      <RowSegment flexShrink={1}>{` · ${row.statusLabel}`}</RowSegment>
       <ApprovalSegments approval={approval} />
       {metadata ? (
         <RowSegment dimColor flexShrink={2}>{`  ${metadata}`}</RowSegment>
@@ -223,7 +224,7 @@ function DeclaredTaskRow({
       <Box flexShrink={0}>
         <Text aria-hidden> </Text>
         <Text aria-hidden color={style.color}>
-          {dashboardMarkerCell(style.marker)}
+          {markerCell(style.marker)}
         </Text>
       </Box>
       <RowSegment dimColor flexShrink={1}>
@@ -246,7 +247,7 @@ function GroupRow({
   readonly count: number;
   readonly expanded: boolean;
   readonly focused: boolean;
-  readonly group: WorkflowPopupGroupKind;
+  readonly group: WorkflowRowGroup;
 }): React.JSX.Element {
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
@@ -255,7 +256,7 @@ function GroupRow({
           {focused ? POINTER : ' '}
         </Text>
         <Text aria-hidden dimColor>
-          {dashboardMarkerCell(expanded ? '▾' : '▸')}
+          {markerCell(expanded ? '▾' : '▸')}
         </Text>
       </Box>
       <RowSegment dimColor={!focused} flexShrink={1}>
@@ -269,7 +270,7 @@ interface WorkflowPopupProps {
   readonly availableRows: number;
   /** The workflow-script stream the popup looks into. */
   readonly streamId: StreamTabId;
-  readonly model: WorkflowDashboardModel;
+  readonly model: WorkflowRunModel;
   readonly view: WorkflowPopupView;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
@@ -307,21 +308,21 @@ export function WorkflowPopup({
   const frameWidth = formFrameWidth(columns);
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
 
-  const { groups } = model;
+  const { phases } = model;
   const phaseIndex = Math.min(
     Math.max(0, view.phaseIndex),
-    Math.max(0, groups.length - 1),
+    Math.max(0, phases.length - 1),
   );
-  const group = groups[phaseIndex];
+  const phase = phases[phaseIndex];
   const rows = useMemo(
     () =>
-      group
-        ? workflowPopupRows(group, {
+      phase
+        ? workflowPhaseRows(phase, {
             expanded: view.expanded,
             filter: view.filter,
           })
         : [],
-    [group, view.expanded, view.filter],
+    [phase, view.expanded, view.filter],
   );
   const rowByKey = useMemo(
     () => new Map(rows.map((row) => [row.key, row] as const)),
@@ -339,25 +340,30 @@ export function WorkflowPopup({
   const selectedRow =
     selectedKey !== undefined ? rowByKey.get(selectedKey) : undefined;
 
-  const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
-    uniqueWorkflowChildStreamId(entry, model.childTaskIndex, streams);
+  // The model names the card's child stream; whether that stream exists in
+  // this host is the host's question.
+  const childStreamOf = (
+    row: WorkflowTaskRowModel,
+  ): StreamTabId | undefined => {
+    const childStreamId = model.childStreamOf.get(row.id);
+    return childStreamId !== undefined && streams.has(childStreamId)
+      ? childStreamId
+      : undefined;
+  };
   const runStartedAt = streamPhaseFor(streamId)?.runStartedAt;
   const nowMs = useLiveNowMsSince([
     runStartedAt,
     ...model.tasks.map(
-      (entry) => streamPhaseFor(uniqueChildId(entry))?.runStartedAt,
+      (row) => streamPhaseFor(childStreamOf(row))?.runStartedAt,
     ),
   ]);
 
   const identity = streamMetadataFor(streamId)?.identity;
   const name = identity ? runIdentityDisplayName(identity) : 'Workflow';
-  const tally = workflowCallTally(model.tasks.map((entry) => entry.call));
   const cost = readStreamArtifacts(streamId)?.cumulativeUsage?.cost;
   const title = [
     name,
-    `${tally.done}/${tally.total}`,
-    tally.running > 0 ? `${tally.running} running` : undefined,
-    tally.failed > 0 ? `${tally.failed} failed` : undefined,
+    formatWorkflowTally(model.tally),
     runStartedAt !== undefined
       ? formatCompactDuration(nowMs - runStartedAt)
       : undefined,
@@ -366,10 +372,10 @@ export function WorkflowPopup({
     .filter(filterNotNullish)
     .join(' · ');
 
-  const selectedEntry =
-    selectedRow?.kind === 'task' ? selectedRow.entry : undefined;
-  const selectedChildStreamId = selectedEntry
-    ? uniqueChildId(selectedEntry)
+  const selectedTask =
+    selectedRow?.kind === 'task' ? selectedRow.row : undefined;
+  const selectedChildStreamId = selectedTask
+    ? childStreamOf(selectedTask)
     : undefined;
   const selectedExecutionId =
     selectedChildStreamId !== undefined
@@ -413,12 +419,15 @@ export function WorkflowPopup({
   const filterShown = view.filterEditing || view.filter.length > 0;
   const listRows = Math.max(
     1,
-    scrollableModalTextRowsBudget({ availableRows, columns, title }) -
-      POPUP_CHROME_ROWS -
-      (hintRows - 1) -
-      (filterShown ? 1 : 0),
+    scrollableModalTextRowsBudget({
+      availableRows,
+      columns,
+      title,
+      extraFixedRows:
+        POPUP_CHROME_ROWS + (hintRows - 1) + (filterShown ? 1 : 0),
+    }),
   );
-  const tabTexts = groups.map(phaseTabText);
+  const tabTexts = phases.map(phaseTabText);
   const tabStart = tabWindowStart(tabTexts, phaseIndex, width);
 
   const clearFilterOrClose = (): void => {
@@ -461,7 +470,7 @@ export function WorkflowPopup({
     if (key.leftArrow || key.rightArrow) {
       const next = Math.min(
         Math.max(0, phaseIndex + (key.rightArrow ? 1 : -1)),
-        Math.max(0, groups.length - 1),
+        Math.max(0, phases.length - 1),
       );
       if (next !== phaseIndex) {
         onViewChange({ phaseIndex: next, selectedKey: undefined });
@@ -480,8 +489,7 @@ export function WorkflowPopup({
       const failed = rows
         .map((row, index) => ({ row, index }))
         .filter(
-          ({ row }) =>
-            row.kind === 'task' && row.entry.call.status === 'failed',
+          ({ row }) => row.kind === 'task' && row.row.call.status === 'failed',
         );
       const next = failed.find(({ index }) => index > current) ?? failed[0];
       if (next) onViewChange({ selectedKey: next.row.key });
@@ -513,12 +521,12 @@ export function WorkflowPopup({
     if (!row) return null;
     switch (row.kind) {
       case 'task': {
-        const childStreamId = uniqueChildId(row.entry);
+        const childStreamId = childStreamOf(row.row);
         return (
-          <WorkflowTaskRow
-            entry={row.entry}
+          <TaskRow
             focused={state.focused}
             nowMs={nowMs}
+            row={row.row}
             streamId={childStreamId}
             pendingKinds={
               childStreamId === undefined
@@ -542,10 +550,10 @@ export function WorkflowPopup({
     }
   };
   const activate = (key: string): void => {
-    const row = rowByKey.get(key);
+    const row: WorkflowPhaseRow | undefined = rowByKey.get(key);
     if (!row) return;
     if (row.kind === 'task') {
-      const childStreamId = uniqueChildId(row.entry);
+      const childStreamId = childStreamOf(row.row);
       if (childStreamId !== undefined) onFocusStream(childStreamId);
       return;
     }
@@ -559,8 +567,8 @@ export function WorkflowPopup({
 
   const emptyText = (() => {
     if (view.filter.length > 0) return `No agents match "${view.filter}"`;
-    if (!group) return 'No phases yet';
-    return group.opened ? 'No calls in this phase yet' : 'Not started';
+    if (!phase) return 'No phases yet';
+    return phase.opened ? 'No calls in this phase yet' : 'Not started';
   })();
 
   return (
@@ -574,11 +582,11 @@ export function WorkflowPopup({
         <Box height={1} overflowY="hidden">
           <Text wrap="truncate-end">
             {tabStart > 0 ? <Text dimColor>{TAB_SCROLL_MARK}</Text> : null}
-            {groups.slice(tabStart).map((phase, offset) => {
+            {phases.slice(tabStart).map((tab, offset) => {
               const index = tabStart + offset;
               const active = index === phaseIndex;
               return (
-                <Text key={phase.key}>
+                <Text key={tab.key}>
                   {offset > 0 ? TAB_SEPARATOR : ''}
                   <Text
                     bold={active}
@@ -594,12 +602,7 @@ export function WorkflowPopup({
         </Box>
         <Box height={1} overflowY="hidden">
           <Text dimColor wrap="truncate-end">
-            {group
-              ? (workflowPhaseStatusStrip(
-                  group.tasks.map((entry) => entry.call),
-                  Math.max(1, width - 1),
-                ) ?? '')
-              : ''}
+            {phase ? statusStrip(phase.cells, Math.max(1, width - 1)) : ''}
           </Text>
         </Box>
         {filterShown ? (
@@ -609,7 +612,7 @@ export function WorkflowPopup({
               <Text bold>{view.filter}</Text>
               {view.filterEditing ? <Text color={COLOR_HINT}>▏</Text> : null}
               <Text dimColor>
-                {`  ${rows.length} of ${group ? group.tasks.length + group.declaredTasks.length : 0}`}
+                {`  ${rows.length} of ${phase ? phase.tasks.length + phase.declaredTasks.length : 0}`}
                 {view.filterEditing ? ' · Enter keep · Esc clear' : ''}
               </Text>
             </Text>

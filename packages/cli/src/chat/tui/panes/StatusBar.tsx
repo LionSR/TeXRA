@@ -60,7 +60,6 @@ interface StatusBarProps {
   readonly chatInputAvailable: boolean;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
-  readonly childListSelectionWorkflowControllable?: boolean;
   readonly runningSessions?: number;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
@@ -333,8 +332,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     childList: {
       focused: props.childListFocused,
       selectionKillable: props.childListSelectionKillable,
-      selectionWorkflowControllable:
-        props.childListSelectionWorkflowControllable,
     },
     shortcuts: {
       agentSelectionAvailable: !rootRunPending,

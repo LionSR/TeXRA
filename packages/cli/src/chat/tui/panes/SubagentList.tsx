@@ -10,11 +10,7 @@ import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import {
-  type StreamTabId,
-  type TokenUsageStats,
-  type WorkflowControlAction,
-} from '@shared/schemas';
+import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -32,11 +28,7 @@ import {
   readStreamArtifacts,
   streamArtifactRevision,
 } from '../state/subscribeStreamArtifacts';
-import {
-  childListStreamId,
-  childStreamListValue,
-  type ChildListValue,
-} from '../state/childListSelection';
+import type { ChildListValue } from '../state/childListSelection';
 
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
@@ -219,23 +211,12 @@ function SessionRow({
   );
 }
 
-/** The workflow control each key press requests, so the handler holds no ladder. */
-const WORKFLOW_CONTROL_KEYS = {
-  s: 'skip',
-  r: 'retry',
-} as const satisfies Record<string, WorkflowControlAction>;
-
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
   readonly onFocusStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution?: (executionId: string) => void;
-  /** Skip or retry the focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onWorkflowControl?: (
-    executionId: string,
-    action: WorkflowControlAction,
-  ) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   /**
    * Pending approval kinds per stream id (see `pendingApprovalSummaries`; the
@@ -256,9 +237,6 @@ export interface SubagentListProps {
   /** Stream `selectedValue` points at, resolved once by `App` — the same
    *  stream the status bar advertises as killable. */
   readonly selectedChildStreamId?: StreamTabId;
-  /** Whether `selectedChildStreamId` is a skip/retry-able workflow-script
-   *  grandchild, resolved once by `App` alongside the status bar's hint. */
-  readonly selectedChildWorkflowControllable?: boolean;
   /** Stream the list is rooted on — its row never shows a summary. */
   readonly listRootStreamId?: StreamTabId;
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
@@ -280,9 +258,8 @@ export function SubagentList(
     // would desynchronise the Alt+1..9 numbers it assigns from the rows on
     // screen.
     for (const session of sessions) {
-      const value = childStreamListValue(session.id);
-      nextItems.push({ label: session.label, value });
-      byValue.set(value, session);
+      nextItems.push({ label: session.label, value: session.id });
+      byValue.set(session.id, session);
     }
     return { items: nextItems, sessionsByValue: byValue };
   }, [sessions]);
@@ -296,14 +273,9 @@ export function SubagentList(
       if (key.ctrl || key.meta) return;
       const streamId = props.selectedChildStreamId;
       if (!streamId) return;
-      const pressed = input.toLowerCase();
-      if (pressed !== 'k' && pressed !== 's' && pressed !== 'r') return;
+      if (input.toLowerCase() !== 'k') return;
       const executionId = props.activeSubagentExecutionIds?.get(streamId);
-      if (!executionId) return;
-      if (pressed === 'k') props.onKillExecution?.(executionId);
-      // Skip/retry fire only where the status bar advertises them.
-      else if (props.selectedChildWorkflowControllable)
-        props.onWorkflowControl?.(executionId, WORKFLOW_CONTROL_KEYS[pressed]);
+      if (executionId) props.onKillExecution?.(executionId);
     },
     { isActive: props.keyboardActive ?? false },
   );
@@ -326,9 +298,7 @@ export function SubagentList(
       width={metadataColumn ? columns : undefined}
     >
       <Select
-        activeValue={
-          activeSession ? childStreamListValue(activeSession.id) : undefined
-        }
+        activeValue={activeSession?.id}
         highlightedValue={props.selectedValue ?? null}
         hotkeys={false}
         isActive={props.keyboardActive}
@@ -341,7 +311,7 @@ export function SubagentList(
         wrap={false}
         onHighlightChange={(value) => props.onSelectionChange?.(value)}
         onSelect={(value) => {
-          const streamId = childListStreamId(value);
+          const streamId = value;
           if (streamId) props.onFocusStream?.(streamId);
         }}
         renderItem={(item, state) => {

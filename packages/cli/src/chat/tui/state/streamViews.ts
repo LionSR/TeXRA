@@ -5,7 +5,7 @@
 
 // Local imports - shared schemas
 import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
+import type { RunIdentity, StreamTabId, StreamTabInfo } from '@shared/schemas';
 
 // Local imports - CLI state
 import {
@@ -107,6 +107,23 @@ export function nearestActiveStreamAncestor<T>(init: {
  * `run.start` has not landed yet (`child.activity` can arrive first — the
  * `roster-first` child-event order).
  */
+/** A stream's identity: its own metadata, else the roster row its parent
+ *  rendered it from (`child.activity` can arrive before `run.start`). */
+export function streamIdentityFor(init: {
+  readonly childRosters: ChildRosters;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streamId: StreamTabId;
+}): RunIdentity | undefined {
+  const own = streamMetadataFor(init.streamId)?.identity;
+  if (own) return own;
+  const parentStreamId = init.parentStream.get(init.streamId);
+  return parentStreamId
+    ? visibleSubagentRows(parentStreamId, init.childRosters).find(
+        (child) => child.childStreamId === init.streamId,
+      )?.identity
+    : undefined;
+}
+
 function streamTabInfoFor(init: {
   readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -114,14 +131,7 @@ function streamTabInfoFor(init: {
 }): StreamTabInfo | undefined {
   const metadata = streamMetadataFor(init.streamId);
   if (!metadata) return undefined;
-  const parentStreamId = init.parentStream.get(init.streamId);
-  const identity =
-    metadata.identity ??
-    (parentStreamId
-      ? visibleSubagentRows(parentStreamId, init.childRosters).find(
-          (child) => child.childStreamId === init.streamId,
-        )?.identity
-      : undefined);
+  const identity = streamIdentityFor(init);
   return buildStreamTabInfo({
     streamId: init.streamId,
     metadata: identity ? { ...metadata, identity } : metadata,

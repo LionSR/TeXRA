@@ -61,9 +61,6 @@ interface ConversationRegionSnapshot {
   readonly selectedChildValue: ChildListValue | undefined;
   /** Stream `selectedChildValue` points at, resolved once by `App`. */
   readonly selectedChildStreamId: StreamTabId | undefined;
-  /** Whether that stream is a skip/retry-able workflow-script grandchild —
-   *  the fact the status bar's `s`/`r` hint reads. */
-  readonly selectedChildWorkflowControllable: boolean;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -270,14 +267,10 @@ export function ConversationRegion({
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
-              onWorkflowControl={onWorkflowControl}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.listRootStreamId}
               selectedChildStreamId={snapshot.selectedChildStreamId}
-              selectedChildWorkflowControllable={
-                snapshot.selectedChildWorkflowControllable
-              }
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}

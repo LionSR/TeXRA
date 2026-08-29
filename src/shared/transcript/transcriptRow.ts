@@ -272,11 +272,6 @@ export type TranscriptRow =
 
 export type TranscriptRowKind = TranscriptRow['kind'];
 
-export type TranscriptRowOf<K extends TranscriptRowKind> = Extract<
-  TranscriptRow,
-  { kind: K }
->;
-
 // ---------------------------------------------------------------------------
 // Settlement
 // ---------------------------------------------------------------------------
