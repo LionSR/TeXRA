@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { BaseNode, Flow } from '@agent/node';
 import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
-import { recordRound } from '@agent/core/state/AgentState';
+import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
@@ -403,12 +403,12 @@ class ResponseCycleFinalizeNode extends BaseNode<
   /** Finalize the round by recording stats and invoking callback. */
   async exec(): Promise<void> {
     const { round, run, onRoundFinalized, logger } = this.services;
-    recordRound(run, round);
+    recordCycleMetrics(run, round.responseTimeMs, round.normalizedUsage);
     // Best-effort finalization callback. `ResponseCycleNode` (the reflection
-    // wrapper) re-runs recordRound + onRoundFinalized from its catch block as a
-    // safety net for nodes that throw *before* reaching this single
+    // wrapper) re-runs recordCycleMetrics + onRoundFinalized from its catch
+    // block as a safety net for nodes that throw *before* reaching this single
     // finalization point. Guarding the callback here keeps this node from
-    // throwing *after* recordRound has already mutated run state — otherwise
+    // throwing *after* the metrics have already mutated run state — otherwise
     // that catch would re-record the round and double-count usage/response time.
     try {
       await onRoundFinalized(run);

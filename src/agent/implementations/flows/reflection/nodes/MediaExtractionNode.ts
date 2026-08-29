@@ -105,7 +105,7 @@ export class MediaExtractionNode extends BaseNode<
       if (mediaFiles?.length && shared.context) {
         attachmentKinds =
           await this.services.modelCell.handler.addMediaToUserMessage(
-            shared.context.messages,
+            shared.context,
             mediaFiles,
           );
       }

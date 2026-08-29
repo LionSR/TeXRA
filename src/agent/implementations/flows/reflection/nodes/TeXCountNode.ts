@@ -45,7 +45,7 @@ export class TeXCountNode extends BaseNode<
   ): Promise<string | undefined> {
     if (execRes && shared.context) {
       this.services.modelCell.handler.prependTextToUserMessage(
-        shared.context.messages,
+        shared.context,
         execRes,
       );
     }
