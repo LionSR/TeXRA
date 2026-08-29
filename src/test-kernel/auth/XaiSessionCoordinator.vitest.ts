@@ -2,12 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   XaiAuthError,
-  XaiSessionCoordinator,
   type XaiOAuthClient,
-  type XaiSession,
   type XaiSessionStorage,
-  type XaiTokenResponse,
 } from '@auth/xai';
+import { XaiSessionCoordinator } from '@auth/xai/XaiSessionCoordinator';
+import type { XaiSession, XaiTokenResponse } from '@auth/xai/xaiSessionTypes';
 import * as logger from '@logger/logUtils';
 import { createDeferred } from '@test/support/asyncTestUtils';
 

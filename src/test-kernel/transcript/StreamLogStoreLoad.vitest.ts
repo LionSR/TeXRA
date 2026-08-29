@@ -24,8 +24,8 @@ import {
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
-  type StreamLogAppendInput,
 } from '@transcript';
+import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import { clearPersistedSummaryParentStream } from '@transcript/StreamLogStore';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';

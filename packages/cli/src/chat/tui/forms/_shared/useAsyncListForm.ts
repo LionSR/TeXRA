@@ -25,11 +25,6 @@ export interface AsyncListFormState<T> {
   readonly pendingInput: string | undefined;
   readonly clearPendingInput: () => void;
   /**
-   * Replace the loaded data after mount. Used by forms whose loaded list is
-   * mutable in place (e.g. `/tools` re-reading statuses after a toggle).
-   */
-  readonly setData: (next: T) => void;
-  /**
    * Re-run the loader and replace the loaded data, keeping the current data
    * on screen until the next result arrives. Used by forms that must re-fetch
    * after a mutation (e.g. a roster write). Clears the error on success and
@@ -186,7 +181,6 @@ export function useAsyncListForm<T>(
     error,
     pendingInput,
     clearPendingInput,
-    setData,
     reload,
     reportError,
   };

@@ -34,7 +34,6 @@ import {
   parseSlashInput,
   prefixSlashCommands,
   shouldRedactSlashInput,
-  slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
 } from '../commands/slashRegistry';
@@ -361,12 +360,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // Unmatched input falls through to the unknown-command suggestion.
         const chosen = prefixSlashCommands(slash.name)[0];
         if (chosen !== undefined) {
-          acceptSlashCommand(
-            chosen,
-            slashPickIntent(chosen, 'enter'),
-            slash.name,
-            slash.remainder,
-          );
+          acceptSlashCommand(chosen, 'submit', slash.name, slash.remainder);
           return;
         }
       }

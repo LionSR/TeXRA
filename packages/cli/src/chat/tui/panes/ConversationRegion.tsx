@@ -21,10 +21,7 @@ import {
   staticScrollbackTarget,
   staticTranscriptRowBudget,
 } from '../appLayout';
-import {
-  isScopedTranscriptViewport,
-  transcriptViewportKey,
-} from '../state/transcriptViewportMode';
+import { activeTranscriptViewport } from '../state/transcriptViewportMode';
 import { ConversationPane } from './ConversationPane';
 import {
   QueuedFollowUpsPanel,
@@ -51,7 +48,6 @@ import {
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { ChildListTarget } from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -80,7 +76,7 @@ interface ConversationRegionSnapshot {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly subagentExecutionLabels: ExecutionLabels;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
-  readonly childListTarget: ChildListTarget;
+  readonly listRootStreamId: StreamTabId | undefined;
   readonly pendingApprovals: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
@@ -122,11 +118,11 @@ export function ConversationRegion({
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
-  const viewportKey = transcriptViewportKey({
-    activeStreamId: snapshot.activeStreamId,
-    parentStream: snapshot.parentStream,
-  });
-  const scopedTranscript = isScopedTranscriptViewport(viewportKey);
+  const { key: viewportKey, scoped: scopedTranscript } =
+    activeTranscriptViewport({
+      activeStreamId: snapshot.activeStreamId,
+      parentStream: snapshot.parentStream,
+    });
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
     rootStreamId: snapshot.rootStreamId,
@@ -292,7 +288,7 @@ export function ConversationRegion({
               onWorkflowControl={onWorkflowControl}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
-              listRootStreamId={snapshot.childListTarget.streamId}
+              listRootStreamId={snapshot.listRootStreamId}
               dashboard={snapshot.workflowDashboard}
               selectedChildStreamId={snapshot.selectedChildStreamId}
               selectedChildWorkflowControllable={

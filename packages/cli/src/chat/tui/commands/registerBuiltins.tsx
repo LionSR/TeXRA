@@ -32,9 +32,7 @@ import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import {
-  activeForm,
   formProgress,
-  getCliStateGeneration,
   patchSessionMeta,
   sessionMeta,
   setTransientNotice,
@@ -115,11 +113,12 @@ function formSelectionHandler<T>({
 }): (value: T) => void {
   return (value) => {
     if (completion === 'busy') {
-      const generation = getCliStateGeneration();
+      // The submission token is the single owner of "is this submission still
+      // live": resetCliState clears `formProgress`, so a stale token can never
+      // match the current progress.
       const token = Symbol('form submission');
       const actionController: { abort?: () => void } = {};
       const currentProgress = () => {
-        if (generation !== getCliStateGeneration()) return undefined;
         const current = formProgress.get();
         return current?.token === token ? current : undefined;
       };
@@ -138,9 +137,7 @@ function formSelectionHandler<T>({
         }
         formProgress.set(undefined);
         onDone(value);
-        if (!canAbort && generation === getCliStateGeneration()) {
-          setTransientNotice(abandonNotice);
-        }
+        if (!canAbort) setTransientNotice(abandonNotice);
       };
       const title = busyTitle?.(value) ?? 'Working';
       const archiveCopyable = (): void => {
@@ -296,22 +293,6 @@ export function registerBuiltinSlashCommands(options?: {
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
   const canSelectModel = options?.canSelectModel ?? (() => true);
 
-  // Picking the root agent and the root model is a single up-front choice
-  // before the first message, so advance straight from the agent picker into
-  // the model picker instead of closing — the user chooses both in one flow.
-  function openModelSelectionForm(): void {
-    activeForm.set({
-      commandName: 'model',
-      render: (close, availableRows) => (
-        <ModelListFormAdapter
-          remainder=""
-          availableRows={availableRows}
-          onDone={() => close()}
-        />
-      ),
-    });
-  }
-
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = sessionMeta.get().agent;
     const selectable = canSelectAgent();
@@ -322,12 +303,17 @@ export function registerBuiltinSlashCommands(options?: {
         selectable={selectable}
         onSelect={formSelectionHandler<string>({
           action: onAgentSelect,
-          // Chain into the model picker only while still choosing the root
+          // Picking the root agent and the root model is a single up-front
+          // choice before the first message, so chain straight into the model
+          // picker instead of closing — but only while still choosing the root
           // and model selection is available.
           onDone:
             selectable && canSelectModel()
-              ? () => openModelSelectionForm()
+              ? () => {
+                  openCliSlashCommandForm('model', '');
+                }
               : props.onDone,
+          onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
@@ -365,6 +351,7 @@ export function registerBuiltinSlashCommands(options?: {
         onSelect={formSelectionHandler<TexraApprovalPolicy>({
           action: (value) => options?.onApprovalPolicySelect?.(value),
           onDone: props.onDone,
+          onError: options?.onError,
           completion: 'beforeAction',
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,

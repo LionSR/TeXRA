@@ -32,7 +32,7 @@ import {
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   createTuiViewportController,
   type TuiRepaintOptions,
@@ -1981,17 +1981,12 @@ describe('CLI conversation transcript', () => {
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [CHILD_STREAM, ROOT_STREAM],
     ]);
-    const rootViewportKey = transcriptViewportKey({
-      activeStreamId: ROOT_STREAM,
-      parentStream,
-    });
-    const childViewportKey = transcriptViewportKey({
-      activeStreamId: CHILD_STREAM,
-      parentStream,
-    });
-
-    expect(rootViewportKey).toBe('root-scrollback');
-    expect(childViewportKey).toBe(`scoped:${CHILD_STREAM}`);
+    expect(
+      activeTranscriptViewport({ activeStreamId: ROOT_STREAM, parentStream }),
+    ).toEqual({ key: 'root-scrollback', scoped: false });
+    expect(
+      activeTranscriptViewport({ activeStreamId: CHILD_STREAM, parentStream }),
+    ).toEqual({ key: `scoped:${CHILD_STREAM}`, scoped: true });
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {

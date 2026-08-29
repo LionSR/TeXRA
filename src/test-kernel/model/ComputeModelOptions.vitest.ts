@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { CODEX_SESSION_SECRET_KEY, resetCodexCoordinator } from '@auth/codex';
+import { resetCodexCoordinator } from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import {
   computeModelOptionsData,

@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  modelListDescription,
-  modelSelectWindow,
-} from '@cli/chat/tui/forms/ModelListForm';
+import { modelListDescription } from '@cli/chat/tui/forms/ModelListForm';
 import {
   shouldBufferAsyncListFormInput,
   shouldCloseAsyncListFormOnInput,
 } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
-import {
-  COMPACT_FORM_MAX_ROWS,
-  isCompactFormRows,
-} from '@cli/tui/selectWindow';
+import { isCompactFormRows } from '@cli/tui/selectWindow';
 import {
   nextSelectHighlightIndex,
   selectInitialHighlightIndex,
@@ -355,37 +349,7 @@ describe('CLI Select disabled-row focus', () => {
 
 describe('CLI ModelListForm row budget', () => {
   it('uses compact slash forms before bordered content clips titles', () => {
-    expect(COMPACT_FORM_MAX_ROWS).toBe(9);
     expect(isCompactFormRows(9)).toBe(true);
     expect(isCompactFormRows(10)).toBe(false);
   });
-
-  it.each<{
-    availableRows: number;
-    expected: ReturnType<typeof modelSelectWindow>;
-  }>([
-    {
-      availableRows: 6,
-      expected: { maxVisibleItems: 1, showOverflow: false },
-    },
-    {
-      availableRows: 7,
-      expected: { maxVisibleItems: 1, showOverflow: false },
-    },
-    {
-      availableRows: 8,
-      expected: { maxVisibleItems: 2, showOverflow: false },
-    },
-    {
-      availableRows: 12,
-      expected: { maxVisibleItems: 4, showOverflow: true },
-    },
-  ])(
-    'sizes the window for $availableRows available rows',
-    ({ availableRows, expected }) => {
-      expect(modelSelectWindow({ availableRows, itemCount: 8 })).toEqual(
-        expected,
-      );
-    },
-  );
 });

@@ -2305,7 +2305,7 @@ function appendHarnessStatus(): void {
       modelAccess: resolveCliModelAccessRoute({
         usageRoute: readStreamArtifacts(streamId)?.cumulativeUsage?.usageRoute,
       }),
-      approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),
+      approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: slice?.bypass,
       status: streamPhaseFor(streamId)?.phase,
       goal: GoalStore.getForStream(streamId),

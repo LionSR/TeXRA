@@ -34,11 +34,8 @@ import {
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
-import {
-  StreamSnapshotPreloadError,
-  StreamSnapshotStore,
-  streamDataDir,
-} from '@transcript';
+import { StreamSnapshotPreloadError, StreamSnapshotStore } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import {
   stagedStreamDataDir,

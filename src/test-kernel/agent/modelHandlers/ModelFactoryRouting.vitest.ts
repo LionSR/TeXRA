@@ -28,12 +28,12 @@ import {
 } from '@agent/runtime/ModelFactory';
 import {
   CODEX_BACKEND_BASE_URL,
-  CODEX_SESSION_SECRET_KEY,
   CodexAuthError,
   codexCoordinator,
   resetCodexCoordinator,
-  type CodexSession,
 } from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
+import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   invalidateRuntimeModelRegistry,

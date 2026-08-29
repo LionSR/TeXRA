@@ -13,7 +13,8 @@ import type {
   StreamTabId,
   TodoItem,
 } from '@shared/schemas';
-import type { StreamSnapshotStore, StreamLogAppendInput } from '@transcript';
+import type { StreamSnapshotStore } from '@transcript';
+import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import type {
   StreamLogStore,
   TranscriptWriter,

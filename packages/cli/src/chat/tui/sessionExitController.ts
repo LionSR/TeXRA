@@ -51,6 +51,7 @@ import {
   chatTuiSigintAction,
   type TuiSession,
 } from './state/sessionRunState';
+import { terminalCapabilities } from './state/terminalCapabilities';
 import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 
@@ -74,10 +75,6 @@ interface SessionExitControllerContext {
   readonly cwd: string;
   /** Whether this session persists a resumable transcript. */
   readonly canResume: boolean;
-  /** Clear iTerm2 progress on teardown (mirrors the render-time flag). */
-  readonly clearItermProgress: boolean;
-  /** Re-arm the Kitty keyboard protocol on SIGCONT when the terminal supports it. */
-  readonly kittyKeyboardEnabled: boolean;
   /** Session-scoped subscriptions torn down on graceful exit. */
   readonly disposables: DisposableStore;
   /** Removes the process-exit terminal backstop after terminal restoration. */
@@ -262,7 +259,7 @@ export function createSessionExitController(
   const handleSigtstp = (): void => {
     if (!terminalJobControlSupported) return;
     ctx.suspendTerminalTitle();
-    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+    cleanupTerminalModes();
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.kill(process.pid, 'SIGSTOP');
   };
@@ -273,7 +270,9 @@ export function createSessionExitController(
   // clear-and-reprint path as a width change is the only safe redraw.
   const handleSigcont = (): void => {
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
-    restoreTuiInputModes({ kittyKeyboard: ctx.kittyKeyboardEnabled });
+    restoreTuiInputModes({
+      kittyKeyboard: terminalCapabilities.get().kittyKeyboard,
+    });
     ctx.resumeTerminalTitle();
     ctx.repaintAfterTerminalResume();
   };
@@ -312,7 +311,7 @@ export function createSessionExitController(
       // This synchronous prefix is load-bearing: force/signal exits must restore
       // the terminal before the first await so a stalled flush cannot strand raw
       // mode or emulator keyboard state.
-      cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+      cleanupTerminalModes();
       printResumeHintOnExit(childRosters);
       return persistBeforePlatformShutdown().finally(() =>
         process.exit(cause.exitCode),
@@ -342,7 +341,7 @@ export function createSessionExitController(
       await session.runPromise;
     }
     await ctx.flushArtifacts();
-    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+    cleanupTerminalModes();
     ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.

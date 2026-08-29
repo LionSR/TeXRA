@@ -12,7 +12,7 @@ function sessionStatus(overrides: Partial<CliSessionStatusInput> = {}): string {
     agent: 'chat',
     model: 'harness-model',
     modelAccess: 'personal',
-    approval: 'ask',
+    approvalPolicy: 'ask',
     status: STREAM_PHASE.RUNNING,
     activeSkills: [],
     queuedFollowUpMessages: [],
@@ -34,7 +34,7 @@ describe('CLI session status formatter', () => {
         'agent: chat',
         'model: harness-model',
         'model access: Your own API keys',
-        'approval: ask',
+        'approval: Control Bash and edit prompts independently.',
         'status: running',
         'queued follow-ups: 2',
         '1. First queued follow-up is to re-run the narrow layout proof check.',
@@ -106,7 +106,6 @@ describe('CLI session status formatter', () => {
     {
       name: 'includes the active non-default approval policy',
       overrides: {
-        approval: 'deny privileged actions',
         approvalPolicy: 'never' as const,
         status: 'waiting' as const,
         commandName: 'texra-local',
@@ -117,7 +116,6 @@ describe('CLI session status formatter', () => {
     {
       name: 'includes cwd and approval policy when both apply',
       overrides: {
-        approval: 'deny privileged actions',
         approvalPolicy: 'never' as const,
         status: 'waiting' as const,
         commandName: 'texra-local',
@@ -162,7 +160,6 @@ describe('CLI session status formatter', () => {
 
   it('reports active session approval bypasses', () => {
     const status = sessionStatus({
-      approval: 'ask before privileged actions',
       approvalBypasses: { superYolo: true, bash: true, toolEdit: true },
       status: STREAM_PHASE.WAITING,
     });
@@ -176,7 +173,6 @@ describe('CLI session status formatter', () => {
   it('surfaces an active goal in status details', () => {
     const status = sessionStatus({
       modelAccess: 'included',
-      approval: 'ask before privileged actions',
       status: STREAM_PHASE.CANCELLED,
       goal: {
         status: 'active',
@@ -201,7 +197,10 @@ describe('CLI session status formatter', () => {
 
     expect(status).toContain('model: GPT-5.6 Terra');
     expect(status).toContain(
-      ['model access: ChatGPT subscription', 'approval: ask'].join('\n'),
+      [
+        'model access: ChatGPT subscription',
+        'approval: Control Bash and edit prompts independently.',
+      ].join('\n'),
     );
   });
 
@@ -232,7 +231,6 @@ describe('CLI session status formatter', () => {
         agent: 'research',
         model: 'deepseekT',
         modelAccess: 'included',
-        approval: 'ask before privileged actions',
         status: STREAM_PHASE.WAITING,
       }),
     ).toContain('status: idle');

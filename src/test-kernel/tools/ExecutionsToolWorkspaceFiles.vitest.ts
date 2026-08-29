@@ -25,7 +25,8 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
 const tempDirs = useTempDirs();

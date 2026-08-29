@@ -317,8 +317,14 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   );
 }
 
-function MultiSelectQuestion(props: QuestionVariantProps): React.JSX.Element {
+/**
+ * One choice picker for both single- and multi-select questions: `Select`
+ * already models both through one props shape, so the only differences are
+ * the hint wording and whether the selected set is carried.
+ */
+function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
   const [selected, setSelected] = useState<readonly string[]>([]);
+  const multi = props.question.multiSelect === true;
   const options = props.question.options;
   const maxVisibleOptions = userQuestionChoiceRowsBudget({
     availableRows: props.availableRows,
@@ -336,26 +342,29 @@ function MultiSelectQuestion(props: QuestionVariantProps): React.JSX.Element {
       hints={[
         ...userQuestionChoiceHints({
           optionCount: options.length,
-          shortcutAction: 'toggle',
+          shortcutAction: multi ? 'toggle' : 'select now',
         }),
-        { key: 'Space', action: 'toggle' },
-        { key: 'Enter', action: 'submit' },
+        ...(multi ? [{ key: 'Space', action: 'toggle' }] : []),
+        { key: 'Enter', action: multi ? 'submit' : 'select' },
         { key: 'Esc', action: 'skip' },
       ]}
     >
       <Select
-        mode="multi"
+        mode={multi ? 'multi' : 'single'}
         items={options.map((option) => ({
           value: option.label,
           label: option.label,
           description: option.description ?? undefined,
         }))}
         maxVisibleItems={maxVisibleOptions}
-        selectedValues={selectedValues}
-        onToggle={(label) =>
-          setSelected((s) => toggleUserQuestionSelection(s, label))
+        selectedValues={multi ? selectedValues : undefined}
+        onToggle={
+          multi
+            ? (label: string) =>
+                setSelected((s) => toggleUserQuestionSelection(s, label))
+            : undefined
         }
-        onSelect={() => props.onSubmit([...selected])}
+        onSelect={multi ? () => props.onSubmit([...selected]) : props.onSubmit}
         onCancel={props.onCancel}
       />
     </QuestionShell>
@@ -432,41 +441,6 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
   );
 }
 
-function SingleSelectQuestion(props: QuestionVariantProps): React.JSX.Element {
-  const optionRows = userQuestionChoiceRowsBudget({
-    availableRows: props.availableRows,
-    optionCount: props.question.options.length,
-  });
-  return (
-    <QuestionShell
-      availableRows={props.availableRows}
-      controlRows={optionRows}
-      payload={props.payload}
-      question={props.question}
-      index={props.index}
-      hints={[
-        ...userQuestionChoiceHints({
-          optionCount: props.question.options.length,
-          shortcutAction: 'select now',
-        }),
-        { key: 'Enter', action: 'select' },
-        { key: 'Esc', action: 'skip' },
-      ]}
-    >
-      <Select
-        items={props.question.options.map((option) => ({
-          value: option.label,
-          label: option.label,
-          description: option.description ?? undefined,
-        }))}
-        maxVisibleItems={optionRows}
-        onSelect={props.onSubmit}
-        onCancel={props.onCancel}
-      />
-    </QuestionShell>
-  );
-}
-
 export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<UserQuestionAnswers>({});
@@ -502,7 +476,11 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
     onCancel: cancel,
   };
 
-  if (question.multiSelect) return <MultiSelectQuestion {...variantProps} />;
-  if (question.allowFreeText) return <FreeTextQuestion {...variantProps} />;
-  return <SingleSelectQuestion {...variantProps} />;
+  if (question.allowFreeText && !question.multiSelect) {
+    return <FreeTextQuestion {...variantProps} />;
+  }
+  // Keyed by question index: the folded picker is now one element type across
+  // consecutive questions, so without a key React would reuse the instance and
+  // carry the previous question's toggled set into the next one.
+  return <ChoiceQuestion key={index} {...variantProps} />;
 }

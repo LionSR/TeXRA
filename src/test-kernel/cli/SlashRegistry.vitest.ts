@@ -12,7 +12,6 @@ import {
   parseSlashInput,
   prefixSlashCommands,
   registerSlashCommand,
-  slashPickIntent,
   suggestSlashCommand,
   unregisterSlashCommand,
   type SlashCommand,
@@ -771,14 +770,6 @@ describe('slashRegistry', () => {
     expect(findSlashCommand('age')).toBeUndefined();
   });
 
-  it('submits no-form commands on Enter and completes on Tab', () => {
-    const help = { name: 'help', description: 'show help', aliases: ['h'] };
-    registerSlashCommand(help);
-
-    expect(slashPickIntent(help, 'enter')).toBe('submit');
-    expect(slashPickIntent(help, 'tab')).toBe('complete');
-  });
-
   it('suggests the closest command for a typo within the shared threshold', () => {
     registerBuiltinSlashCommands();
 
@@ -801,17 +792,6 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands();
 
     expect(suggestSlashCommand('frobnicate')).toBeUndefined();
-  });
-
-  it('does not directly submit structured-form commands from the palette', () => {
-    const agent = {
-      name: 'agent',
-      description: 'pick an agent',
-      formComponent: () => null,
-    };
-    registerSlashCommand(agent);
-
-    expect(slashPickIntent(agent, 'enter')).toBe('complete');
   });
 });
 
