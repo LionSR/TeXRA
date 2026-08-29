@@ -56,6 +56,8 @@ import {
   AgentSkillsEnabledSchema,
 } from '@shared/schemas/agentSkills';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ActiveSkillSourceScopeSchema } from './activeSkills';
+import { SkillNameSchema } from './skillName';
 
 // ============================================================================
 // Git defaults
@@ -131,7 +133,6 @@ type SettingSlots = {
 };
 
 export type SettingsViewSnapshot =
-  | 'agent-skills'
   | 'approval'
   | 'git-author'
   | 'latex'
@@ -139,6 +140,7 @@ export type SettingsViewSnapshot =
   | 'models'
   | 'multi-agent'
   | 'profile'
+  | 'skills'
   | 'telemetry';
 
 interface CliRuntimeReachability {
@@ -741,9 +743,9 @@ const CORE_SETTING_ROWS: Record<
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
-    title: 'Make skills available to tool-use agents',
+    title: 'Enable skills for tool-use agents',
     description:
-      'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
+      'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
     honoredBy: everyHost('src/agent/prompt/userVars.ts', {
       command:
@@ -751,7 +753,7 @@ const CORE_SETTING_ROWS: Record<
       through:
         'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
     }),
-    surfaces: { settingsView: 'agent-skills', cliConfig: true },
+    surfaces: { settingsView: 'skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {
     schema: z.boolean().prefault(true),
@@ -963,6 +965,19 @@ const GIT_AUTHOR_SLOTS: SettingSlots = {
   desktop: 'workspaceState',
   cli: 'config',
 };
+
+const SKILL_AVAILABILITY_SLOTS: SettingSlots = {
+  vscode: 'workspaceState',
+  desktop: 'workspaceState',
+  cli: 'config',
+};
+
+const SKILL_AVAILABILITY_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
+} satisfies CliRuntimeReachability;
 
 const GIT_AUTHOR_HONORED_BY: SettingHonoredBy = {
   vscode: { reader: 'packages/extension/src/frontend/git/gitAuthorSetup.ts' },
@@ -1600,6 +1615,34 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     ),
     openForm: 'tools',
     surfaces: { cliConfig: true },
+  }),
+  surfacedSetting({
+    key: WorkspaceStateKey.DISABLED_SKILLS,
+    schema: z.array(SkillNameSchema).prefault([]),
+    title: 'Skills',
+    description: 'Enable or disable individual skills in this workspace.',
+    category: 'tools',
+    slots: SKILL_AVAILABILITY_SLOTS,
+    honoredBy: everyHost(
+      'src/skills/runtimeSkills.ts',
+      SKILL_AVAILABILITY_REACHABILITY,
+    ),
+    openForm: 'skills',
+    surfaces: { settingsView: 'skills', cliConfig: true },
+  }),
+  surfacedSetting({
+    key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    schema: z.array(ActiveSkillSourceScopeSchema).prefault([]),
+    title: 'Skill sources',
+    description: 'Enable or disable skill source groups in this workspace.',
+    category: 'tools',
+    slots: SKILL_AVAILABILITY_SLOTS,
+    honoredBy: everyHost(
+      'src/skills/runtimeSkills.ts',
+      SKILL_AVAILABILITY_REACHABILITY,
+    ),
+    openForm: 'skills',
+    surfaces: { settingsView: 'skills', cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,

@@ -29,6 +29,7 @@ import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
@@ -158,6 +159,14 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  async function postSkillsList(): Promise<void> {
+    const result = await loadRuntimeSkillDisplay();
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+      ...result,
+    });
+  }
+
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
     await options.ui.openPath(StorageFS.fullPath(resolvedPath));
@@ -193,11 +202,12 @@ export function createDesktopSettingsIpc(
     const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
     postSettingsSnapshot('multi-agent');
     postSettingsSnapshot('approval');
-    postSettingsSnapshot('agent-skills');
+    postSettingsSnapshot('skills');
     postSettingsSnapshot('telemetry');
     postSettingsSnapshot('memory');
     await Promise.all([
       goalListPosted,
+      postSkillsList(),
       settingsHost.sendMemoryData(),
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
@@ -228,7 +238,6 @@ export function createDesktopSettingsIpc(
   }
 
   const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
-    'agent-skills': () => postSettingsSnapshot('agent-skills'),
     approval: () => postSettingsSnapshot('approval'),
     'git-author': () => {
       // Git identity is also process env, so the write must reach `git` before
@@ -241,6 +250,10 @@ export function createDesktopSettingsIpc(
     models: () => settingsHost.sendModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),
     profile: () => options.credentialSettingsController.postProfileData(),
+    skills: async () => {
+      postSettingsSnapshot('skills');
+      await postSkillsList();
+    },
     telemetry: () => postSettingsSnapshot('telemetry'),
   };
 

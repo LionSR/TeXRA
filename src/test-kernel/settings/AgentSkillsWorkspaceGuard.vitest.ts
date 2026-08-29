@@ -63,11 +63,9 @@ describe('agent skills workspace guard', () => {
     expect(mocks.writeSetting).not.toHaveBeenCalled();
     expect(mocks.showLoggedInfoMessage).toHaveBeenCalledWith(
       'SettingsViewMessageHandler',
-      'Open a workspace folder before changing the “Make skills available to tool-use agents” setting.',
+      'Open a workspace folder before changing the “Enable skills for tool-use agents” setting.',
     );
-    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
-      'agent-skills',
-    );
+    expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('skills');
   });
 
   it('writes user-wide telemetry in an empty VS Code window', async () => {

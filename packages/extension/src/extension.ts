@@ -498,6 +498,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // (`initNodeAgentRuntime`, which registers the direct Lean adapter, stays
   // out: VS Code drives Lean through its own integration.)
   initializeNodeRuntimeSkills({
+    host: 'vscode',
     cwd: workspaceRoot,
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });

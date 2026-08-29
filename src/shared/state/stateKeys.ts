@@ -21,6 +21,10 @@ export enum WorkspaceStateKey {
   AGENT_ROSTER_SELECTION = 'texra.agentRosterSelection',
   CUSTOM_AGENT_PRESETS = 'texra.customAgentPresets',
 
+  // Skill availability
+  DISABLED_SKILLS = 'texra.skills.disabled',
+  DISABLED_SKILL_SOURCES = 'texra.skills.disabledSources',
+
   // Codex settings
   CODEX_SANDBOX_MODE = 'texra.codexSandboxMode',
   CODEX_REASONING_EFFORT = 'texra.codexReasoningEffort',

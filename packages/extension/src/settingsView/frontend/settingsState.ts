@@ -58,6 +58,8 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
+  type SkillDisplayIssue,
+  type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
 } from '@shared/schemas';
@@ -245,6 +247,14 @@ export const toolPathProtectionEnabled = settingSignal<boolean>(
 export const agentSkillsEnabled = settingSignal<boolean>(
   AGENT_SKILLS_CONFIG_KEY,
 );
+export const disabledSkills = settingSignal<string[]>(
+  WorkspaceStateKey.DISABLED_SKILLS,
+);
+export const disabledSkillSources = settingSignal<string[]>(
+  WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+);
+export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
+export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);
 export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);
 export const codexSandboxMode = settingSignal<CodexSandboxMode>(
   WorkspaceStateKey.CODEX_SANDBOX_MODE,

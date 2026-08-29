@@ -27,6 +27,10 @@ import {
   settingsViewSnapshotEntries,
   type SettingsViewSnapshot,
 } from './stateSettings';
+import {
+  SkillDisplayIssueSchema,
+  SkillDisplayItemSchema,
+} from './skillDisplay';
 import { GoalSchema } from './goal';
 
 import {
@@ -102,6 +106,7 @@ export const SETTINGS_TAB_ORDER = [
   'AGENTS',
   'MULTI_AGENT',
   'TOOLS',
+  'SKILLS',
   'AI_AGENTS',
   'GIT',
   'LATEX',
@@ -164,7 +169,7 @@ export const SETTINGS_TAB_GROUPS = [
   { label: 'Account', tabs: ['ACCOUNT', 'SUBSCRIPTIONS'] },
   { label: 'Models', tabs: ['MODELS'] },
   { label: 'Agents', tabs: ['AGENTS', 'MULTI_AGENT'] },
-  { label: 'Capabilities', tabs: ['TOOLS', 'AI_AGENTS', 'LATEX'] },
+  { label: 'Capabilities', tabs: ['TOOLS', 'SKILLS', 'AI_AGENTS', 'LATEX'] },
   { label: 'Workspace', tabs: ['GIT', 'SHORTCUTS'] },
   { label: 'Data & Activity', tabs: ['MEMORY', 'GOAL'] },
 ] as const satisfies readonly {
@@ -195,7 +200,7 @@ const SetTabMessageSchema = z.object({
 export const SETTINGS_SNAPSHOT_COMMANDS = {
   approval: SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS,
   'git-author': SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
-  'agent-skills': SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
+  skills: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS,
   telemetry: SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS,
   'multi-agent': SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED,
   latex: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
@@ -482,8 +487,12 @@ const UpdateToolDashboardMessageSchema = z.object({
 const UpdateApprovalAndSafetySettingsMessageSchema =
   snapshotMessage('approval');
 
-/** Outbound: backend → frontend agent skill-catalog setting. */
-const UpdateAgentSkillsSettingsMessageSchema = snapshotMessage('agent-skills');
+/** Outbound: discovered skill inventory for the consolidated Skills tab. */
+const UpdateSkillsListMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
+  skills: z.array(SkillDisplayItemSchema),
+  issues: z.array(SkillDisplayIssueSchema),
+});
 
 /** Outbound: backend → frontend telemetry preference. */
 const UpdateTelemetrySettingsMessageSchema = snapshotMessage('telemetry');
@@ -672,7 +681,8 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateReliabilityAndOrchestrationMessageSchema,
   UpdateAgentModePresetsMessageSchema,
   UpdateApprovalAndSafetySettingsMessageSchema,
-  UpdateAgentSkillsSettingsMessageSchema,
+  snapshotMessage('skills'),
+  UpdateSkillsListMessageSchema,
   UpdateTelemetrySettingsMessageSchema,
   UpdateToolDashboardMessageSchema,
   UpdateGitAuthorSettingsMessageSchema,

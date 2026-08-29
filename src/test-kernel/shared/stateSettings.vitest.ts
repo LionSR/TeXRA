@@ -154,6 +154,8 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.GLM_USE_CHINA]: true,
   [GlobalStateKey.GLM_CODING_PLAN]: false,
   [GlobalStateKey.DISABLED_TOOLS]: [],
+  [WorkspaceStateKey.DISABLED_SKILLS]: [],
+  [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
 };
 
 /** Every canonical `texra.*` key in the state-backed catalog. */
@@ -440,6 +442,8 @@ describe('state settings catalog', () => {
     //    dual-backend Kimi models in CLI runs.
     //  - agent skills is read by buildUserVars (userVars) when assembling
     //    tool-use agent prompts, skipping skill discovery when disabled.
+    //  - skill and source exclusions are read by runtimeSkills before prompt
+    //    injection and explicit `/skills` activation.
     //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
     //    SessionHandle before bash/edit approval boundaries decide.
     //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
@@ -485,6 +489,8 @@ describe('state settings catalog', () => {
         GlobalStateKey.GLM_USE_CHINA,
         GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
+        WorkspaceStateKey.DISABLED_SKILLS,
+        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
         AGENT_SKILLS_CONFIG_KEY,
         CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
         MODEL_COMPACTION_THRESHOLD_SETTING.configKey,

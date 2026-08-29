@@ -186,6 +186,7 @@ describe('settings view tab definitions', () => {
       'agents',
       'multi-agent',
       'tools',
+      'skills',
       'ai-agents',
       'git',
       'latex',
