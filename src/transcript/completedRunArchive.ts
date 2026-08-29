@@ -7,6 +7,7 @@
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
+import { KVStore } from '@common/storage/KVStore';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -21,7 +22,8 @@ import {
 import { assertNever, isObject } from '@utils/core';
 
 import { StreamLogStore } from './StreamLogStore';
-import { StreamSnapshotStore } from './StreamSnapshotStore';
+import { streamDataDir } from './streamDataPaths';
+import { readWorkPlan } from './streamSnapshotRead';
 
 /**
  * The execution→stream foreign key: the `streamId` stamped on execution
@@ -58,8 +60,10 @@ export async function readCompletedRunTodos(
 ): Promise<TodoEntry[]> {
   const resolution = await resolveStreamForExecution(executionId);
   if (!resolution) return [];
-  const snapshot = await new StreamSnapshotStore().read(resolution.streamId);
-  return snapshot.todos.map((todo): TodoEntry => ({
+  const workPlan = await readWorkPlan(
+    new KVStore(streamDataDir(resolution.streamId)),
+  );
+  return workPlan.todos.map((todo): TodoEntry => ({
     content: todo.content,
     status: todo.status,
   }));

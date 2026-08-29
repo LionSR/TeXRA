@@ -192,6 +192,16 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   });
 }
 
+/**
+ * Read only `workPlan.json` for a stream. Completed-run todo readers use this
+ * so a run that never created tasks reads one file instead of five, and an
+ * I/O error in an unrelated sidecar (e.g. `outputFiles.json`) cannot fail a
+ * todos lookup.
+ */
+export async function readWorkPlan(kv: KVStore): Promise<WorkPlanSnapshot> {
+  return readPersistedWorkPlan(await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN));
+}
+
 /** Read every per-stream sidecar file once. */
 export async function readStreamData(kv: KVStore): Promise<StreamData> {
   const meta = await readMeta(kv);
