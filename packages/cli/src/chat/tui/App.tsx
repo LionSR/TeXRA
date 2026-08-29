@@ -94,8 +94,8 @@ import {
   childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
   sessionStateRevision,
-  sessionStreamExecution,
   streamMetadataFor,
+  streamStateFor,
   subagentExecutionLabels as subagentExecutionLabelsSignal,
   visibleSubagentRows,
 } from './state/childExecutions';
@@ -352,7 +352,7 @@ export function App(props: AppProps): React.JSX.Element {
       childProgress.set(child.childStreamId, {
         ...(runStartedAt !== undefined ? { runStartedAt } : {}),
         toolCallCount:
-          sessionStreamExecution(child.childStreamId)?.conversationProgress
+          streamStateFor(child.childStreamId)?.conversationProgress
             .toolCallCount ?? 0,
         ...(usage ? { outputTokens: usage.outputTokens } : {}),
         ...(usage?.cost !== undefined ? { costUsd: usage.cost } : {}),

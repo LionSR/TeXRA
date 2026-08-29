@@ -91,14 +91,6 @@ export function sessionStreamPhase(
   return BOUND.get()?.state.streamStatus.getStreamState(streamId);
 }
 
-/** A stream's execution state (tool-call progress, stage), off the session's
- *  own record of it. */
-export function sessionStreamExecution(
-  streamId: StreamTabId,
-): StreamExecutionState | undefined {
-  return BOUND.get()?.state.getStreamState(streamId);
-}
-
 /** Queued follow-up messages for a stream, from the session-owned queue. */
 export function queuedFollowUpsFor(streamId: StreamTabId): readonly string[] {
   return BOUND.get()?.state.followUps.getAll(streamId) ?? [];

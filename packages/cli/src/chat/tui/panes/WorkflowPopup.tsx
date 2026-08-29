@@ -32,7 +32,6 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 // Local imports - shared schemas, model, and copy
 import {
   WORKFLOW_TASK_STATUS_LABEL,
-  isTerminalWorkflowCallProgress,
   runIdentityDisplayName,
   type StreamTabId,
   type WorkflowCallIdentity,
@@ -57,7 +56,7 @@ import {
   type WorkflowRowGroup,
   type WorkflowRunModel,
 } from '@shared/streams/workflowRunModel';
-import { filterNotNullish, formatCompactTokenCount } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
