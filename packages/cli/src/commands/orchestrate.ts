@@ -59,6 +59,7 @@ import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 import {
+  mergeCliTexraAccountStatus,
   readCliModelAccessStatus,
   updateCliModelAccess,
 } from '../runtime/modelAccessSelection';
@@ -183,11 +184,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // One shape for one fact: the launcher's "Account & access" row and its
     // step are built from the same record, so they cannot disagree about who
     // is signed in.
-    const launcherModelAccess = {
-      ...modelAccess,
-      texraSignedIn: authProfile.authenticated,
-      texraAccountLabel: authProfile.accountLabel,
-    };
+    const launcherModelAccess = mergeCliTexraAccountStatus(
+      modelAccess,
+      authProfile,
+    );
     const items = buildCliOrchestrationItems({
       presetPlans: presetPlanSet.plans,
       history,
@@ -200,7 +200,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
       getCliModelAccessList().catch((): readonly CliModelAccess[] => []),
-      loadCliApiStatus(),
+      loadCliApiStatus(authProfile),
     ]);
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
       context,

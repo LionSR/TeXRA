@@ -55,9 +55,11 @@ export interface CliModelAccessStatus {
   >;
   readonly texraSignedIn?: boolean;
   readonly texraAccountLabel?: string;
-  /** Display names of providers with configured API keys (e.g. `['DeepSeek']`). */
-  readonly personalKeyProviders?: readonly string[];
 }
+
+export type CliAccountStatus = CliModelAccessStatus & {
+  readonly texraSignedIn: boolean;
+};
 
 interface CliModelAccessItem {
   readonly value: CliModelAccessSelection;

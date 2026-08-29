@@ -33,6 +33,7 @@ import {
   buildCliAccountAccessRows,
   buildCliModelAccessItems,
   formatCliAccountAccessSummary,
+  type CliAccountStatus,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -95,16 +96,6 @@ export interface BuildCliOrchestrationItemsInput {
 
 type CliAccountProvider = 'chatgpt' | 'grok' | 'texra';
 type CliAccountOperation = 'sign-in' | 'sign-out';
-
-/**
- * The launcher's account view is the model-access status with the TeXRA
- * session merged in — `readCliModelAccessStatus` never sets `texraSignedIn`,
- * so requiring it here keeps the compile-time proof that the auth profile was
- * merged before the account rows are built.
- */
-export type CliAccountStatus = CliModelAccessStatus & {
-  readonly texraSignedIn: boolean;
-};
 
 export function isCliOrchestrationModelPickAction(
   action: CliOrchestrationAction,
