@@ -90,6 +90,8 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly disableQuotaRoute?: QuotaFallbackRouteId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
+  /** Run-as-goal only: extend automatic commands to edits and delegated work. */
+  readonly goalAutoApproveAll?: true;
 }
 
 export interface PendingApproval {

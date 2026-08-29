@@ -43,7 +43,8 @@ import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,
-  setGoalSessionBashAutoApproval,
+  setGoalSessionAutoApproval,
+  type GoalAutoApprovalScope,
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
@@ -180,7 +181,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
       );
     }
     const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
-    await this.setBashAutoApproval(streamId, false);
+    await this.setGoalAutoApproval(streamId, false);
     return executed(
       `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
       'Goal paused.',
@@ -188,19 +189,19 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   }
 
   /**
-   * Engage/clear the goal's bash auto-approval bypass when the run context can
-   * reach the host. Best-effort: without a runtime host (e.g.
+   * Engage or clear the goal's selected auto-approval scope when the run
+   * context can reach the host. Best-effort: without a runtime host (e.g.
    * tests or headless edge paths) approvals simply keep prompting.
    */
-  private async setBashAutoApproval(
+  private async setGoalAutoApproval(
     streamId: string,
-    enabled: boolean,
+    scope: GoalAutoApprovalScope | false,
   ): Promise<void> {
     const interactions = getRunContextInteractions(
       getCurrentToolContexts()?.runContext,
     );
     if (interactions) {
-      await setGoalSessionBashAutoApproval(streamId, enabled);
+      await setGoalSessionAutoApproval(streamId, scope);
     }
   }
 
@@ -220,7 +221,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     // archived one. The autonomous loop stops because no `active` record
     // remains for the next wait-node continuation check.
     await GoalStore.forget(streamId);
-    await this.setBashAutoApproval(streamId, false);
+    await this.setGoalAutoApproval(streamId, false);
     return executed(
       `Goal ${goal.goalId} marked complete.\n\n` +
         `Reason: ${reason}\n\n` +
@@ -261,7 +262,11 @@ pause/complete only affect autonomous goals; with no goal running they return gu
 
     if (result.action === 'approve_and_goal') {
       logger.info('Plan approved by user with goal mode');
-      return this.startGoalForPlan(plan, streamId);
+      return this.startGoalForPlan(
+        plan,
+        streamId,
+        result.autoApproveAll ? 'allAgentWork' : 'commands',
+      );
     }
 
     // Rejected — clear the plan from UI
@@ -326,6 +331,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   private async startGoalForPlan(
     plan: Plan,
     streamId: string,
+    autoApprovalScope: GoalAutoApprovalScope,
   ): Promise<ToolResult> {
     if (!isGoalEnabled()) {
       logger.warn(
@@ -355,7 +361,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           retargeted.status === 'paused'
             ? ((await GoalStore.setStatus(streamId, 'active')) ?? retargeted)
             : retargeted;
-        await this.setBashAutoApproval(streamId, true);
+        await this.setGoalAutoApproval(streamId, autoApprovalScope);
         return executed(
           `The user approved a new plan while goal ${active.goalId} ` +
             `was already in flight. The goal has been retargeted to the ` +
@@ -391,7 +397,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
 
     try {
       const goal = await GoalStore.start(streamId, objective);
-      await this.setBashAutoApproval(streamId, true);
+      await this.setGoalAutoApproval(streamId, autoApprovalScope);
       return executed(
         `The user approved this plan and started an autonomous goal ` +
           `(${goal.goalId}) toward its stopping condition.\n\n` +

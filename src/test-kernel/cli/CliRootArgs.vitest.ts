@@ -1321,7 +1321,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('/status');
     expect(stdout).toContain('/goal');
     expect(stdout).toContain(
-      'explain autonomous goal mode and approved-plan startup',
+      'configure autonomous goal mode and auto-approval scope',
     );
     expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('ChatGPT or Researcher Access');

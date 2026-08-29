@@ -78,6 +78,7 @@ import {
   closeForegroundReader,
   foregroundReader as foregroundReaderSignal,
   formProgress as formProgressSignal,
+  goalAutoApproveAll as goalAutoApproveAllSignal,
   infoPane as infoPaneSignal,
   openTranscriptReader,
   openWorkflowPopup,
@@ -183,6 +184,7 @@ export function App(props: AppProps): React.JSX.Element {
   const subagentExecutionLabels = useSignal(subagentExecutionLabelsSignal);
   const activeForm = useSignal(activeFormSignal);
   const formProgress = useSignal(formProgressSignal);
+  const goalAutoApproveAll = useSignal(goalAutoApproveAllSignal);
   const infoPane = useSignal(infoPaneSignal);
   const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
@@ -485,7 +487,11 @@ export function App(props: AppProps): React.JSX.Element {
         ) : null;
       case 'approval':
         return activeApprovalVisible && pending ? (
-          <ApprovalModal pending={pending} availableRows={availableRows} />
+          <ApprovalModal
+            availableRows={availableRows}
+            goalAutoApproveAll={goalAutoApproveAll}
+            pending={pending}
+          />
         ) : null;
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;

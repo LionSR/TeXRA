@@ -9,7 +9,7 @@ import {
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
 import { STREAM_PHASE } from '@shared/schemas';
-import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
+import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 
 import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
@@ -210,7 +210,7 @@ export class ToolUseWaitNode extends BaseNode<
     // Route the bypass mutation through the session this flow already owns
     // (`runScope.session`) rather than `currentSession()`, so the goal-pause
     // path stays drivable without an ambient RunContext/ALS frame.
-    await setGoalSessionBashAutoApproval(streamId, false, {
+    await setGoalSessionAutoApproval(streamId, false, {
       session: this.services.runScope.session,
     });
     emitRunFact(this.services.logger, 'goalPaused', { streamId });
