@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -159,7 +160,7 @@ export const loginCommand = withUsageSections(
   defineCliCommand({
     meta: {
       name: 'login',
-      description: 'Sign in with Researcher Access',
+      description: `Sign in with ${RESEARCHER_ACCESS.label}`,
     },
     args: {
       ...GLOBAL_ARGS,
@@ -201,8 +202,11 @@ export const loginCommand = withUsageSections(
       rows: [
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
-        ['texra login', 'sign in with Researcher Access'],
-        ['texra login --device', 'sign in to Researcher Access over SSH'],
+        ['texra login', `sign in with ${RESEARCHER_ACCESS.label}`],
+        [
+          'texra login --device',
+          `sign in to ${RESEARCHER_ACCESS.label} over SSH`,
+        ],
       ],
     },
   ],

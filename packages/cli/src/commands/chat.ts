@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+
 import { assertExplicitModelKnown } from '../runtime/runModel';
 import {
   defaultShortcutModifierLabel,
@@ -57,7 +59,10 @@ export const chatCommand = withUsageSections(
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
         ['/goal', 'configure autonomous goal mode and auto-approval scope'],
-        ['/login, /logout', 'sign in or out of ChatGPT or Researcher Access'],
+        [
+          '/login, /logout',
+          `sign in or out of ChatGPT or ${RESEARCHER_ACCESS.label}`,
+        ],
         [
           'Ctrl-T',
           "open the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
