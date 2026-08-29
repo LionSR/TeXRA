@@ -35,8 +35,7 @@ import {
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
-  classifyCliRetryAction,
-  cliRetryApiSwitchDecision,
+  cliRetryQuotaRoute,
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
@@ -125,26 +124,15 @@ import {
 function maybeAutoSwitchRetry(
   payload: RetryApprovalPayload,
 ): ApprovalDecision | undefined {
-  const action = classifyCliRetryAction(payload.data);
-
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
   // OAuth subscriptions (ChatGPT, Grok) stay explicit: the user must confirm.
-  // Kimi Code-exclusive models never reach this branch: the classifier above
-  // gates them to 'none', keeping the modal without an API-key switch.
-  if (action.startsWith('disable-quota-route:')) {
-    const decision = cliRetryApiSwitchDecision(payload.data);
-    if (
-      decision.disableQuotaRoute === undefined ||
-      !isCodingPlanQuotaRoute(decision.disableQuotaRoute)
-    ) {
-      return undefined;
-    }
-    if (payload.tui.personalApiKeyAvailable !== true) return undefined;
-    return decision;
-  }
-
-  return undefined;
+  // Kimi Code-exclusive models never reach this branch: the classifier gates
+  // them to no route, keeping the modal without an API-key switch.
+  const route = cliRetryQuotaRoute(payload.data);
+  if (!route || !isCodingPlanQuotaRoute(route.id)) return undefined;
+  if (payload.tui.personalApiKeyAvailable !== true) return undefined;
+  return { accepted: true, disableQuotaRoute: route.id };
 }
 
 /**
