@@ -52,31 +52,47 @@ export function extractToolAttachments(
 ): ExtractedToolAttachments {
   // The parse IS the field whitelist: `ToolResultSchema` has no catchall, so
   // every undeclared key is already stripped here. Re-listing the declared
-  // fields by hand would only add a place for a newly declared field to be
-  // silently dropped.
-  const { files, diagnostics: rawDiagnostics, ...rest } = ToolResultSchema.parse(
-    result,
-  );
+  // fields by hand would only add a place for a newly declared field to go
+  // missing before it reaches `formatToolResultAsText`.
+  const parsed = ToolResultSchema.parse(result);
+
+  if (parsed.status === 'error') {
+    // No binary-bearing field exists on this branch of the schema
+    // (output/edits/files are all `z.undefined()` here), so the parsed value
+    // needs nothing but its sanitized diagnostics.
+    const { diagnostics: rawDiagnostics, ...rest } = parsed;
+    const diagnostics = sanitizeDiagnostics(rawDiagnostics);
+    return {
+      attachments: [],
+      sanitizedResult: {
+        ...rest,
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
+      },
+    };
+  }
+
+  const { files, diagnostics: rawDiagnostics, ...rest } = parsed;
   const diagnostics = sanitizeDiagnostics(rawDiagnostics);
   const attachments: ToolFileAttachment[] = files ?? [];
 
-  const sanitizedResult = {
-    ...rest,
-    // Binary payloads (base64Data/bytes) are the one thing the schema keeps
-    // and this projection must not: `FileReferenceSchema` is a loose object.
-    ...(attachments.length > 0
-      ? {
-          files: attachments.map(
-            (file): FileReference => ({
-              path: file.path,
-              mimeType: file.mimeType,
-              ...(file.description ? { description: file.description } : {}),
-            }),
-          ),
-        }
-      : {}),
-    ...(diagnostics !== undefined ? { diagnostics } : {}),
-  } as ToolResult;
-
-  return { attachments, sanitizedResult };
+  return {
+    attachments,
+    sanitizedResult: {
+      ...rest,
+      // Binary payloads (base64Data/bytes) are the one thing the schema keeps
+      // and this projection must not: `FileReferenceSchema` is a loose object.
+      ...(attachments.length > 0
+        ? {
+            files: attachments.map(
+              (file): FileReference => ({
+                path: file.path,
+                mimeType: file.mimeType,
+                ...(file.description ? { description: file.description } : {}),
+              }),
+            ),
+          }
+        : {}),
+      ...(diagnostics !== undefined ? { diagnostics } : {}),
+    },
+  };
 }
