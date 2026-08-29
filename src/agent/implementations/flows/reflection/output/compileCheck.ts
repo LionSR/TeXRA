@@ -46,9 +46,16 @@ const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 export interface CompileCheckResult {
-  failures: CompileFailure[];
   artifacts: CompiledPdfArtifact[];
+  /** Absent when no check ran at all, which is not the same as zero failures. */
   compileResult?: CompileResult;
+}
+
+/** The failures a compile result carries; empty when it passed or never ran. */
+export function compileFailuresOf(
+  result: CompileResult | undefined,
+): CompileFailure[] {
+  return result?.status === 'failed' ? result.failures : [];
 }
 
 /** Workflow auto-compile timeout, floored at the config-range minimum. */
@@ -111,7 +118,7 @@ export async function runCompileCheck(
   currentRound: number,
 ): Promise<CompileCheckResult> {
   if (!readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_COMPILE)) {
-    return { failures: [], artifacts: [] };
+    return { artifacts: [] };
   }
 
   const { runDirectory } = ctx.fileService;
@@ -119,7 +126,7 @@ export async function runCompileCheck(
   const texOutputs = (
     getOutputFilesByRound(ctx.outputState)[currentRound] ?? []
   ).filter((f) => hasExtension(f.location.absolutePath, '.tex'));
-  if (texOutputs.length === 0) return { failures: [], artifacts: [] };
+  if (texOutputs.length === 0) return { artifacts: [] };
 
   // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
   // leave stray `compile/<name>.log` artifacts that the orchestrator would
@@ -128,7 +135,7 @@ export async function runCompileCheck(
     ctx.logger.debug(
       'Compile check skipped: neither latexmk nor pdflatex is installed',
     );
-    return { failures: [], artifacts: [] };
+    return { artifacts: [] };
   }
 
   const timeoutMs = getWorkflowAutoCompileTimeoutMs();
@@ -175,12 +182,9 @@ export async function runCompileCheck(
       // compile log" action around `log.absolutePath` — a placeholder string
       // here would silently break both. Fall back to the output file's own
       // comparable path (still useful context, even though it isn't a log).
-      let fallbackRelativePath: string;
-      try {
-        fallbackRelativePath = fileLocationDisplayPath(outputFile.location);
-      } catch {
-        fallbackRelativePath = outputFile.location.absolutePath;
-      }
+      const fallbackRelativePath = fileLocationDisplayPath(
+        outputFile.location,
+      );
       failures.push({
         round: currentRound,
         displayName,
@@ -207,7 +211,7 @@ export async function runCompileCheck(
           round: currentRound,
         };
 
-  return { failures, artifacts, compileResult };
+  return { artifacts, compileResult };
 }
 
 interface PerFileOptions {

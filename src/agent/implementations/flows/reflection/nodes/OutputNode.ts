@@ -4,7 +4,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
-  type CompileFailure,
   type CompileResult,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -16,7 +15,7 @@ import {
   roundsToPersisted,
   setCompileFailures,
 } from '../output/outputState';
-import { runCompileCheck } from '../output/compileCheck';
+import { compileFailuresOf, runCompileCheck } from '../output/compileCheck';
 import { extractFilesFromXml } from '../output/outputFileExtraction';
 import { traceFileLineage } from '../output/lineageMapping';
 import { resolveBaseFilesForDiff } from '../output/snapshotResolution';
@@ -38,7 +37,6 @@ interface OutputPrepInput {
 
 interface OutputExecResult {
   summary: RoundSummary;
-  compileFailures: CompileFailure[];
   compileResult?: CompileResult;
   compiledArtifacts: CompiledPdfArtifact[];
   emitCompileFailures: boolean;
@@ -75,7 +73,6 @@ export class OutputNode extends BaseNode<
     );
 
     let mapping: RoundFileMapping | undefined;
-    let compileFailures: CompileFailure[] = [];
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: CompiledPdfArtifact[] = [];
     let emitCompileFailures = false;
@@ -124,7 +121,7 @@ export class OutputNode extends BaseNode<
             outputState,
             currentRound,
           );
-          const compileResult = await runCompileCheck(
+          const check = await runCompileCheck(
             {
               fileService: this.services.fileService,
               outputState,
@@ -133,9 +130,9 @@ export class OutputNode extends BaseNode<
             },
             currentRound,
           );
-          compileFailures = compileResult.failures;
-          compileRoundResult = compileResult.compileResult;
-          compiledArtifacts.push(...compileResult.artifacts);
+          compileRoundResult = check.compileResult;
+          compiledArtifacts.push(...check.artifacts);
+          const compileFailures = compileFailuresOf(check.compileResult);
           setCompileFailures(outputState, currentRound, compileFailures);
           emitCompileFailures =
             compileFailures.length > 0 || hadCompileFailures;
@@ -158,7 +155,6 @@ export class OutputNode extends BaseNode<
 
     return {
       summary,
-      compileFailures,
       compileResult: compileRoundResult,
       compiledArtifacts,
       emitCompileFailures,
@@ -202,7 +198,6 @@ export class OutputNode extends BaseNode<
 
     return {
       summary,
-      compileFailures: [],
       compileResult: undefined,
       compiledArtifacts: [],
       emitCompileFailures: false,
@@ -219,6 +214,7 @@ export class OutputNode extends BaseNode<
     const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary } = execRes;
+    const compileFailures = compileFailuresOf(execRes.compileResult);
 
     // Emit output files event
     emitRunFact(logger, 'addOutputFiles', {
@@ -229,7 +225,7 @@ export class OutputNode extends BaseNode<
     if (execRes.emitCompileFailures) {
       emitRunFact(logger, 'updateCompileFailures', {
         streamId,
-        filesByRound: { [currentRound]: execRes.compileFailures },
+        filesByRound: { [currentRound]: compileFailures },
       });
     }
 
@@ -242,8 +238,8 @@ export class OutputNode extends BaseNode<
       endTurn &&
       readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
     ) {
-      if (execRes.compileFailures.length > 0) {
-        for (const failure of execRes.compileFailures) {
+      if (compileFailures.length > 0) {
+        for (const failure of compileFailures) {
           interactions.emit('requestOpenFile', {
             location: failure.log,
             preserveFocus: true,

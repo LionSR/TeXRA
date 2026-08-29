@@ -195,7 +195,6 @@ describe('output progress events', () => {
             fileInfos: [fileInfo],
             filesToOpen: [openedLocation],
           },
-          compileFailures: [],
           compiledArtifacts: [],
           emitCompileFailures: false,
         },
@@ -253,7 +252,6 @@ describe('output progress events', () => {
       },
       {
         summary: fixture.summary,
-        compileFailures: [fixture.compileFailure],
         compileResult: fixture.compileResult,
         compiledArtifacts: [],
         emitCompileFailures: false,
@@ -290,7 +288,6 @@ describe('output progress events', () => {
       },
       {
         summary: fixture.summary,
-        compileFailures: [],
         compileResult,
         compiledArtifacts: [],
         emitCompileFailures: false,
