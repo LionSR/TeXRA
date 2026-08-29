@@ -133,7 +133,11 @@ type NoRejectionProvenance = {
 
 export type PlanApprovalResult =
   | ({ action: 'approve' } & NoRejectionProvenance)
-  | ({ action: 'approve_and_goal' } & NoRejectionProvenance)
+  | ({
+      action: 'approve_and_goal';
+      /** Auto-approve commands, edits, and delegated work for this goal. */
+      autoApproveAll?: true;
+    } & NoRejectionProvenance)
   | ({ action: 'reject' } & RejectionProvenance);
 
 export type ProposalResult =

@@ -302,10 +302,7 @@ describe('handleTuiSlashCommand', () => {
 
     closeInfoPane();
     await handleTuiSlashCommand('/goal', context);
-    expect(infoPane.get()).toMatchObject({ title: '/goal' });
-    expect(infoPane.get()?.lines.join('\n')).toContain(
-      'Goal mode starts from an approved plan',
-    );
+    expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
     expect(localEntries()).toEqual([]);
   });
 

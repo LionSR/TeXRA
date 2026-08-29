@@ -28,6 +28,7 @@ import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
+import { GoalModeForm } from '../forms/GoalModeForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
@@ -35,6 +36,7 @@ import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import {
   formProgress,
+  goalAutoApproveAll,
   patchSessionMeta,
   sessionMeta,
   setTransientNotice,
@@ -393,6 +395,20 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
+  function GoalModeFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <GoalModeForm
+        autoApproveAll={goalAutoApproveAll.get()}
+        availableRows={props.availableRows}
+        onToggle={(enabled) => {
+          goalAutoApproveAll.set(enabled);
+          props.onDone(enabled);
+        }}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
+
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
       <ProviderApiKeyForm
@@ -620,11 +636,12 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'goal',
-    description: 'Explain autonomous goal mode',
+    description: 'Configure autonomous goal mode',
     aliases: ['goals'],
     category: 'session',
     echo: 'never',
     handler: showCliGoalModeHelp,
+    formComponent: GoalModeFormAdapter,
   });
   registerSlashCommand({
     name: 'resume',

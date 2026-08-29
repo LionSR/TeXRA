@@ -56,7 +56,7 @@ export const chatCommand = withUsageSections(
       rows: [
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
-        ['/goal', 'explain autonomous goal mode and approved-plan startup'],
+        ['/goal', 'configure autonomous goal mode and auto-approval scope'],
         ['/login, /logout', 'sign in or out of ChatGPT or Researcher Access'],
         [
           'Ctrl-T',

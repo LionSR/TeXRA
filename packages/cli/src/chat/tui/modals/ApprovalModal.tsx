@@ -16,6 +16,7 @@ import type { PendingApproval } from '../state/approvalQueue';
 
 export interface ApprovalModalProps {
   readonly availableRows?: number;
+  readonly goalAutoApproveAll: boolean;
   readonly pending: PendingApproval | undefined;
 }
 
@@ -45,6 +46,7 @@ export function ApprovalModal(
     case 'planApproval':
       return (
         <PlanApproval
+          autoApproveAll={props.goalAutoApproveAll}
           availableRows={availableRows}
           payload={payload.data}
           onDecide={decide}

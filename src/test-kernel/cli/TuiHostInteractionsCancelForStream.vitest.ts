@@ -127,10 +127,12 @@ describe('createTuiHostInteractions', () => {
     await waitForApproval('planApproval', { streamId: 'stream-a' });
     currentApproval.get()?.decide({
       accepted: true,
+      goalAutoApproveAll: true,
       planAction: 'approve_and_goal',
     });
     await expect(goalResult).resolves.toEqual({
       action: 'approve_and_goal',
+      autoApproveAll: true,
     });
 
     const rejected = interactions.requestPlanApproval?.({

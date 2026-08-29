@@ -13,6 +13,7 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { approvalQueueStatus } from './state/approvalQueue';
+import { sessionStateRevision } from './state/childExecutions';
 import {
   rootRunPending,
   rootRunStreamId,
@@ -136,7 +137,13 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [approvalQueueStatus, rootRunPending, rootRunStreamId, streams],
+    [
+      approvalQueueStatus,
+      rootRunPending,
+      rootRunStreamId,
+      sessionStateRevision,
+      streams,
+    ],
     synchronize,
   );
   synchronize();

@@ -420,9 +420,9 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      // No AsyncLocalStorage frame: `pauseActiveGoal` routes the bash bypass
-      // mutation through `services.runScope.session` (the owner session), never
-      // through `currentSession()`/`defaultSession()`.
+      // No AsyncLocalStorage frame: `pauseActiveGoal` clears every possible
+      // goal bypass through `services.runScope.session` (the owner session),
+      // never through `currentSession()`/`defaultSession()`.
       const exec = await node.exec(waitPrep(true));
 
       const goal = GoalStore.getForStream(streamId);
@@ -439,9 +439,14 @@ describe('ToolUseWaitNode', () => {
         kind: 'bash',
         bypassActive: false,
       });
-      expect(setApprovalBypassState).not.toHaveBeenCalledWith({
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
         streamId,
         kind: 'toolEdit',
+        bypassActive: false,
+      });
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
+        streamId,
+        kind: 'superYolo',
         bypassActive: false,
       });
     } finally {

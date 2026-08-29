@@ -381,6 +381,9 @@ export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
   ActiveSlashForm | undefined
 >(undefined);
 
+/** Session-local approval scope captured by the next Run as Goal action. */
+export const goalAutoApproveAll = signal(false);
+
 interface InfoPaneContent {
   readonly title: string;
   readonly lines: readonly string[];
@@ -781,6 +784,7 @@ export function resetCliState(
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);
+  goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
   WORKFLOW_POPUP_VIEW.set({

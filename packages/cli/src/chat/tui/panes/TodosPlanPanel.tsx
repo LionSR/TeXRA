@@ -45,6 +45,7 @@ function TodoRow({ todo }: { readonly todo: TodoItem }): React.JSX.Element {
 
 export type CompactTodosPlanRow =
   | { kind: 'todo'; sourceIndex: number; todo: TodoItem }
+  | { kind: 'completedSummary'; sourceIndex: number; count: number }
   | { kind: 'planSummary'; sourceIndex: number; summary: string };
 
 // Sort priority by (row kind, status). The map is total, so a new status
@@ -55,12 +56,22 @@ const COMPACT_TODO_ROW_PRIORITY: Record<TodoStatus, number> = {
   [TODO_STATUS.PENDING]: 1,
   [TODO_STATUS.COMPLETED]: 4,
 };
+const COMPLETED_SUMMARY_PRIORITY = 2;
 const PLAN_SUMMARY_PRIORITY = 5;
 
 function compactRowPriority(row: CompactTodosPlanRow): number {
-  return row.kind === 'todo'
-    ? COMPACT_TODO_ROW_PRIORITY[row.todo.status]
-    : PLAN_SUMMARY_PRIORITY;
+  switch (row.kind) {
+    case 'todo':
+      return COMPACT_TODO_ROW_PRIORITY[row.todo.status];
+    case 'completedSummary':
+      return COMPLETED_SUMMARY_PRIORITY;
+    case 'planSummary':
+      return PLAN_SUMMARY_PRIORITY;
+  }
+}
+
+function representedSourceRows(row: CompactTodosPlanRow): number {
+  return row.kind === 'completedSummary' ? row.count : 1;
 }
 
 export function compactTodosPlanRows({
@@ -96,10 +107,30 @@ export function compactTodosPlanRows({
     return { hiddenCount: allRows.length, rows: [] };
   }
 
+  // Once the full checklist no longer fits, completed history becomes one
+  // quiet count. Keep the current and remaining work as individual rows.
+  const completedRows = allRows.filter(
+    (row) => row.kind === 'todo' && row.todo.status === TODO_STATUS.COMPLETED,
+  );
+  const compactRows = allRows.filter(
+    (row) => row.kind !== 'todo' || row.todo.status !== TODO_STATUS.COMPLETED,
+  );
+  if (completedRows.length > 0) {
+    compactRows.push({
+      kind: 'completedSummary',
+      sourceIndex: completedRows.at(-1)?.sourceIndex ?? 0,
+      count: completedRows.length,
+    });
+    compactRows.sort((left, right) => left.sourceIndex - right.sourceIndex);
+  }
+  if (compactRows.length <= rowBudget) {
+    return { hiddenCount: 0, rows: compactRows };
+  }
+
   // At one row, show the highest-signal item instead of spending the only row
   // on the hidden-count marker.
   const visibleCount = rowBudget === 1 ? 1 : rowBudget - 1;
-  const rows = [...allRows]
+  const rows = [...compactRows]
     .sort(
       (left, right) =>
         compactRowPriority(left) - compactRowPriority(right) ||
@@ -109,7 +140,9 @@ export function compactTodosPlanRows({
     .sort((left, right) => left.sourceIndex - right.sourceIndex);
 
   return {
-    hiddenCount: allRows.length - rows.length,
+    hiddenCount: compactRows
+      .filter((row) => !rows.includes(row))
+      .reduce((count, row) => count + representedSourceRows(row), 0),
     rows,
   };
 }
@@ -130,6 +163,14 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   switch (row.kind) {
     case 'todo':
       return <TodoRow todo={row.todo} />;
+    case 'completedSummary':
+      return (
+        <Box height={1} minWidth={0} overflowY="hidden">
+          <Text color={COLOR_SUCCESS} dimColor wrap="truncate-end">
+            {TODO_DONE} {row.count} completed
+          </Text>
+        </Box>
+      );
     case 'planSummary':
       return (
         <Box height={1} minWidth={0} overflowY="hidden">

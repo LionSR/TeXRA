@@ -315,7 +315,10 @@ async function requestPlanInteraction(
   // `approve_and_goal` is a TUI-only plan action; every other outcome is the
   // shared approve/reject settlement.
   if (decision.accepted && decision.planAction) {
-    return { action: decision.planAction };
+    return {
+      action: decision.planAction,
+      ...(decision.goalAutoApproveAll ? { autoApproveAll: true } : {}),
+    };
   }
   return toApprovalSettlement(decision);
 }
