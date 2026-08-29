@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resetCodexCoordinator } from '@auth/codex';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import * as logger from '@logger/logUtils';
 import {
   computeModelOptionsData,
   getModelUnavailableReason,
@@ -21,6 +22,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
 const OPENAI_KEY_SECRETS = { [apiKeySecretName('openai')]: 'sk-openai' };
@@ -133,6 +135,46 @@ describe('computeModelOptionsData availability', () => {
     const [model] = await computeModelOptionsData(['gpt55']);
 
     expect(model.availability).toBe('missing-key');
+  });
+
+  it('warns once per provider when concurrent option contexts cannot read credentials', async () => {
+    const readError = new Error('credential store unavailable');
+    const secrets = new FakeSecrets();
+    vi.spyOn(secrets, 'get').mockRejectedValue(readError);
+    await installPlatform(
+      {
+        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+      },
+      { secrets },
+    );
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    const [[gpt55], [gpt56]] = await Promise.all([
+      computeModelOptionsData(['gpt55']),
+      computeModelOptionsData(['gpt56']),
+    ]);
+
+    expect(gpt55.availability).toBe('missing-key');
+    expect(gpt56.availability).toBe('missing-key');
+    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledWith(
+      'PlatformSecrets',
+      'Failed to read OpenAI API key status; treating it as unavailable.',
+      { data: readError },
+    );
+    expect(warn).toHaveBeenCalledWith(
+      'PlatformSecrets',
+      'Failed to read OpenRouter API key status; treating it as unavailable.',
+      { data: readError },
+    );
+    expect(warn).toHaveBeenCalledWith(
+      'PlatformSecrets',
+      'Failed to read Kimi Code API key status; treating it as unavailable.',
+      { data: readError },
+    );
+    warn.mockRestore();
   });
 
   it('labels models the registry no longer describes instead of shipping a bare row', async () => {

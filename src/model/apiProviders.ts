@@ -6,8 +6,11 @@
  */
 import { LRUCache } from 'lru-cache';
 
-import type { PlatformSecrets } from '@platform/secrets';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import { type PlatformSecrets, warnSecretReadFailure } from '@platform/secrets';
+import {
+  API_KEY_PROVIDER_IDS,
+  providerDisplayName,
+} from '@shared/constants/providers';
 import { coalesceAsync, isNonEmptyString } from '@utils/core';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
@@ -66,7 +69,15 @@ async function resolveApiKeyUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Promise<ResolvedApiKey> {
-  const stored = await secrets.get(apiKeySecretName(provider));
+  let stored: string | undefined;
+  try {
+    stored = await secrets.get(apiKeySecretName(provider));
+  } catch (error: unknown) {
+    warnSecretReadFailure(
+      `${providerDisplayName(provider)} API key status`,
+      error,
+    );
+  }
   if (isNonEmptyString(stored)) {
     return { value: stored.trim(), origin: 'secret' };
   }

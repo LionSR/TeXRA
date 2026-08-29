@@ -235,15 +235,12 @@ async function getPersonalAccessKindForModel(
   const provider = resolveDirectModelApiKeyProvider(config);
   if (!provider) return null;
 
-  try {
-    if (await ctx.hasUsableApiKey(provider)) {
-      return 'provider-key';
-    }
-  } catch {
-    // Treat unreadable provider keys as absent, but still allow OpenRouter
-    // fallback below when this model has an OpenRouter route.
+  if (await ctx.hasUsableApiKey(provider)) {
+    return 'provider-key';
   }
 
+  // A false result covers both absent and unreadable provider keys; either can
+  // still use OpenRouter when this model has a route.
   return config.openrouterFullName && ctx.hasOpenRouter
     ? 'openrouter-key'
     : null;
