@@ -219,7 +219,6 @@ export function App(props: AppProps): React.JSX.Element {
       activeStreamId,
       parentStream,
       metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
-      phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
     }).kind === 'reject';
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused

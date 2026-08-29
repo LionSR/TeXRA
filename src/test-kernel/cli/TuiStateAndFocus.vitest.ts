@@ -1665,7 +1665,6 @@ describe('CLI TUI row allocation', () => {
           agentCategory: fixture.category,
           creationTimestamp: 0,
         },
-        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
   });
@@ -1700,7 +1699,6 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: new Map([[child1, root]]),
         metadata: { creationTimestamp: 0, ...metadata },
-        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: 'reject', streamId: child1 });
   });

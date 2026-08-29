@@ -45,7 +45,6 @@ import {
 import {
   nextSelectHighlightIndex,
   selectControlledHighlightIndex,
-  visibleSelectRange,
   type SelectItem,
 } from '@cli/tui/ui/Select';
 import { SessionState } from '@controllers/session/SessionState';
@@ -736,32 +735,6 @@ describe('CLI child list display model', () => {
         previousIndex: 1,
       }),
     ).toBe(2);
-  });
-
-  it('keeps a non-first selected row visible after the row budget shrinks', () => {
-    const sessions = [
-      session('main', true),
-      session('strategy'),
-      session('lean'),
-      session('review'),
-    ];
-    const selected = sessions[2]?.id;
-    const selectedIndex = sessions.findIndex(({ id }) => id === selected);
-
-    expect(
-      visibleSelectRange({
-        highlight: selectedIndex,
-        itemCount: sessions.length,
-        maxVisibleItems: 2,
-      }),
-    ).toEqual({ start: 1, end: 3 });
-    expect(
-      visibleSelectRange({
-        highlight: selectedIndex,
-        itemCount: sessions.length,
-        maxVisibleItems: 1,
-      }),
-    ).toEqual({ start: 2, end: 3 });
   });
 
   it('formats the row metadata column from elapsed and generated tokens', () => {

@@ -2275,7 +2275,6 @@ function handleHarnessSubmit(line: string): void {
     metadata: focusedActiveStreamId
       ? streamMetadataFor(focusedActiveStreamId)
       : undefined,
-    phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(

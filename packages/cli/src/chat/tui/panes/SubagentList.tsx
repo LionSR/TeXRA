@@ -5,11 +5,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
-import {
-  Select,
-  visibleSelectRange,
-  type SelectItem,
-} from '@cli/tui/ui/Select';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
   POINTER,
@@ -685,26 +681,6 @@ export function SubagentList(
   const dashboard = props.dashboard;
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
-  const selectedIndex = Math.max(
-    0,
-    items.findIndex((item) => item.value === props.selectedValue),
-  );
-  const visibleRange = visibleSelectRange({
-    highlight: selectedIndex,
-    itemCount: items.length,
-    maxVisibleItems: contentRows,
-  });
-  const visibleValues = new Set(
-    items.slice(visibleRange.start, visibleRange.end).map((item) => item.value),
-  );
-  const hiddenSessionCount = sessions.filter(
-    (session) => !visibleValues.has(childStreamListValue(session.id)),
-  ).length;
-  const hiddenRowSummary =
-    hiddenSessionCount > 0
-      ? `+${formatResultCount(hiddenSessionCount, 'session')}`
-      : undefined;
-
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta) return;
@@ -783,7 +759,11 @@ export function SubagentList(
               active={state.active}
               cumulativeUsage={readStreamArtifacts(session.id)?.cumulativeUsage}
               focused={state.focused}
-              hiddenRowSummary={hiddenRowSummary}
+              hiddenRowSummary={
+                state.hiddenItemCount > 0
+                  ? `+${formatResultCount(state.hiddenItemCount, 'session')}`
+                  : undefined
+              }
               metadataColumn={metadataColumn}
               nowMs={nowMs}
               pendingKinds={props.pendingApprovals?.get(session.id)}
