@@ -550,8 +550,9 @@ export class TaskGroupList extends LitElement {
 
   /**
    * One phase's cards in the model's order — the CLI popup's order: cards
-   * needing attention first, the rest as counted groups that open in place,
-   * and the plan's tasks the run has not issued yet.
+   * needing attention first, finished cards as ticked rows, the unstarted
+   * ones as counted groups that open in place, and the plan's tasks the run
+   * has not issued yet.
    */
   private renderPhaseRows(phase: WorkflowPhaseModel): TemplateResult {
     const rows = workflowPhaseRows(phase, {
