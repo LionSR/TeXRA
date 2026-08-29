@@ -1,5 +1,4 @@
 import {
-  isTerminalWorkflowCallProgress,
   WORKFLOW_TASK_STATUS_LABEL,
   type TaskGroup,
   type WorkflowCallKind,
@@ -67,63 +66,6 @@ export function formatWorkflowCallMetadataParts(
       ? formatCostUsd(call.totalCostUsd)
       : undefined,
   ].filter(filterNotNullish);
-}
-
-/**
- * Completion fold for a caller-selected list of calls — `done/total · N
- * running · N failed` — shared by every host so the terminal and the
- * progress view can never disagree on what a phase, or a whole run, has
- * done. The caller selects the calls (each host already holds them in its
- * own container, and matching them here would duplicate that ownership), so
- * the same helper serves both a phase-scoped fold and a whole-run fold from
- * two different call lists.
- *
- * Cancelled calls remain distinct from failures and do not contribute to
- * `failed`. Snapshot consumers (`/executions`) derive their own per-status
- * tallies with `deriveWorkflowCounts` and do not need this helper.
- */
-export function workflowCallTally(calls: readonly WorkflowCallProgress[]): {
-  readonly done: number;
-  readonly total: number;
-  readonly running: number;
-  readonly failed: number;
-} {
-  return {
-    done: calls.filter((call) => isTerminalWorkflowCallProgress(call)).length,
-    total: calls.length,
-    running: calls.filter((call) => call.status === 'running').length,
-    failed: calls.filter((call) => call.status === 'failed').length,
-  };
-}
-
-/**
- * Scope a caller-selected list of workflow-task rows to the newest resume
- * attempt, shared by every host's live tally and row selection. A relaunch
- * under the same `meta.name` appends a second projection attempt to the same
- * deterministic transcript with fresh card ids, so without this, dashboards
- * and boards fold every attempt together — doubling totals and keeping stale
- * failures the resume is actively re-running.
- *
- * "Newest" is the last attempt id observed while scanning `entries` in the
- * caller's own (transcript) order, since a resume's cards are appended after
- * the attempt they supersede. Entries with no attempt id (older, pre-attempt
- * transcripts) are never filtered out — only a defined id that disagrees
- * with the newest one drops a row.
- */
-export function latestWorkflowAttemptEntries<T>(
-  entries: readonly T[],
-  attemptIdOf: (entry: T) => string | undefined,
-): readonly T[] {
-  let latestAttemptId: string | undefined;
-  for (const entry of entries) {
-    const attemptId = attemptIdOf(entry);
-    if (attemptId !== undefined) latestAttemptId = attemptId;
-  }
-  if (latestAttemptId === undefined) return entries;
-  return entries.filter((entry) => {
-    const attemptId = attemptIdOf(entry);
-    return attemptId === undefined || attemptId === latestAttemptId;
-  });
 }
 
 /** One workflow phase as its emitter names and orders it. */
@@ -233,16 +175,23 @@ export const TOKENS_GENERATED = '↓';
  *  declared. */
 export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;
 
-interface WorkflowTallyCounts {
+/**
+ * A run's or a phase's tally as the run model folds it: `done` counts every
+ * settled call (cancelled and skipped included — they are distinct from
+ * `failed`), `declared` how many plan tasks are still unissued. Snapshot
+ * consumers (`/executions`) derive their own per-status counts with
+ * `deriveWorkflowCounts` over the engine's vocabulary.
+ */
+export interface WorkflowTally {
   readonly done: number;
   readonly total: number;
   readonly running: number;
   readonly failed: number;
-  readonly declared?: number;
+  readonly declared: number;
 }
 
 /** `done/total · N running · N failed` — the one spelling of a tally. */
-export function formatWorkflowTally(tally: WorkflowTallyCounts): string {
+export function formatWorkflowTally(tally: WorkflowTally): string {
   return [
     `${tally.done}/${tally.total}`,
     tally.running > 0 ? `${tally.running} running` : undefined,
@@ -257,9 +206,9 @@ export function formatWorkflowTally(tally: WorkflowTallyCounts): string {
  *  plan has no calls to count, so its declared count is the whole story. */
 export function formatWorkflowPhaseTally(phase: {
   readonly opened: boolean;
-  readonly tally: WorkflowTallyCounts;
+  readonly tally: WorkflowTally;
 }): string {
-  const declared = phase.tally.declared ?? 0;
+  const { declared } = phase.tally;
   const declaredText = declared > 0 ? `${declared} declared` : undefined;
   if (!phase.opened) return declaredText ?? 'declared';
   return [formatWorkflowTally(phase.tally), declaredText]

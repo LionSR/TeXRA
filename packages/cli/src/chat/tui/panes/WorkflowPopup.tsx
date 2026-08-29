@@ -81,7 +81,7 @@ import { useSignal } from '../state/useSignal';
 // Local imports - sibling panes
 import { ApprovalSegments, RowSegment } from './SubagentList';
 import { pendingApprovalRowDisplay } from './SubagentListDisplay';
-import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
+import { WORKFLOW_TASK_STATUS_COLOR } from './transcriptEntryLayout';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Rows of chrome inside the panel beyond what the shared budget already
@@ -152,7 +152,6 @@ function TaskRow({
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly row: WorkflowTaskRowModel;
 }): React.JSX.Element {
-  const style = WORKFLOW_TASK_STATUS_STYLE[row.call.status];
   // The row's own parts name the call and, once settled, what it cost; the
   // model's live join adds the in-flight window the card cannot carry.
   const parts = [
@@ -167,8 +166,8 @@ function TaskRow({
         <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
           {focused ? POINTER : ' '}
         </Text>
-        <Text aria-hidden color={style.color}>
-          {markerCell(style.marker)}
+        <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR[row.call.status]}>
+          {markerCell(WORKFLOW_CALL_STATUS_GLYPH[row.call.status])}
         </Text>
       </Box>
       <RowSegment flexShrink={1}>{row.call.label}</RowSegment>
@@ -191,13 +190,12 @@ function DeclaredTaskRow({
 }: {
   readonly task: WorkflowCallIdentity;
 }): React.JSX.Element {
-  const style = WORKFLOW_TASK_STATUS_STYLE.declared;
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
         <Text aria-hidden> </Text>
-        <Text aria-hidden color={style.color}>
-          {markerCell(style.marker)}
+        <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR.declared}>
+          {markerCell(WORKFLOW_CALL_STATUS_GLYPH.declared)}
         </Text>
       </Box>
       <RowSegment dimColor flexShrink={1}>

@@ -13,7 +13,6 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { workflowCallTally } from '@shared/copy/workflowCall';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -231,7 +230,6 @@ return await agent('Inspect', { id: 'inspect' })`,
         kind: 'phase',
         index: 0,
         total: 2,
-        attemptId: planned?.call.attemptId,
       }),
     );
     expect(events.some((event) => event.type === 'child.activity')).toBe(false);
@@ -428,12 +426,8 @@ return await agent('Run loose', { id: 'loose' })`,
     const researchId = stageId(events, 'Research');
     const latest = latestWorkflowCallEvents(events);
     expect(
-      workflowCallTally(
-        latest.flatMap((event) =>
-          event.call.phase === 'Research' ? [event.call] : [],
-        ),
-      ),
-    ).toMatchObject({ done: 0, total: 0 });
+      latest.filter((event) => event.call.phase === 'Research'),
+    ).toHaveLength(0);
     expect(latest.filter((event) => event.stageId === researchId)).toHaveLength(
       0,
     );

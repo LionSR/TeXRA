@@ -134,7 +134,7 @@ const ROW_GEOMETRY = {
   },
   workflowTask: {
     // Two spaces nest the task under the `◆` phase divider that heads it. The
-    // first-line marker is per-status (WORKFLOW_TASK_STATUS_STYLE), so
+    // first-line marker is per-status (WORKFLOW_CALL_STATUS_GLYPH), so
     // `firstPrefix` carries the indent alone and continuation lines add the
     // marker's own width on top of it.
     firstPrefix: '  ',
@@ -158,31 +158,19 @@ export const COMPACTION_ACTIVITY_STATUS_STYLE = {
   { readonly marker: string; readonly color: string | undefined }
 >;
 
-/** Colour per call status; the marker is the shared per-status glyph, so the
- *  strip, the popup rows, and the transcript rows can never disagree. */
-export const WORKFLOW_TASK_STATUS_STYLE = {
-  declared: {
-    marker: WORKFLOW_CALL_STATUS_GLYPH.declared,
-    color: COLOR_BORDER,
-  },
-  planned: { marker: WORKFLOW_CALL_STATUS_GLYPH.planned, color: undefined },
-  queued: { marker: WORKFLOW_CALL_STATUS_GLYPH.queued, color: undefined },
-  running: { marker: WORKFLOW_CALL_STATUS_GLYPH.running, color: COLOR_HINT },
-  completed: {
-    marker: WORKFLOW_CALL_STATUS_GLYPH.completed,
-    color: COLOR_SUCCESS,
-  },
-  cached: { marker: WORKFLOW_CALL_STATUS_GLYPH.cached, color: COLOR_SUCCESS },
-  skipped: { marker: WORKFLOW_CALL_STATUS_GLYPH.skipped, color: COLOR_BORDER },
-  cancelled: {
-    marker: WORKFLOW_CALL_STATUS_GLYPH.cancelled,
-    color: COLOR_BORDER,
-  },
-  failed: { marker: WORKFLOW_CALL_STATUS_GLYPH.failed, color: COLOR_ERROR },
-} as const satisfies Record<
-  WorkflowCallProgress['status'],
-  { readonly marker: string; readonly color: string | undefined }
->;
+/** Colour per call status; the glyph beside it is the shared
+ *  `WORKFLOW_CALL_STATUS_GLYPH`, read directly wherever a row is painted. */
+export const WORKFLOW_TASK_STATUS_COLOR = {
+  declared: COLOR_BORDER,
+  planned: undefined,
+  queued: undefined,
+  running: COLOR_HINT,
+  completed: COLOR_SUCCESS,
+  cached: COLOR_SUCCESS,
+  skipped: COLOR_BORDER,
+  cancelled: COLOR_BORDER,
+  failed: COLOR_ERROR,
+} as const satisfies Record<WorkflowCallProgress['status'], string | undefined>;
 
 export interface TranscriptEntryLayout {
   readonly columns: number;
@@ -366,7 +354,7 @@ function entryLines(
         ...wrapWithPrefix(
           headline,
           columns,
-          `${ROW_GEOMETRY.workflowTask.firstPrefix}${WORKFLOW_TASK_STATUS_STYLE[row.call.status].marker} `,
+          `${ROW_GEOMETRY.workflowTask.firstPrefix}${WORKFLOW_CALL_STATUS_GLYPH[row.call.status]} `,
           ROW_GEOMETRY.workflowTask.continuationPrefix,
         ),
         ...body,
