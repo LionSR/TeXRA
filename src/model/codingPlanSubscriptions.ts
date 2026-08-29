@@ -88,10 +88,10 @@ const RUNTIME_BY_ID = {
   CodingPlanSubscription['id'],
   Omit<CodingPlanSubscriptionRuntime, 'descriptor'> & {
     /**
-     * Whether this plan currently serves the model. Removed from the public
-     * {@link CodingPlanSubscriptionRuntime} interface (the spread into
-     * `codingPlanSubscriptionRuntimes` still carries it at runtime); the one
-     * intended reader is {@link activeCodingPlanForModel}, which
+     * Whether this plan currently serves the model. Module-private: excluded
+     * from the public {@link CodingPlanSubscriptionRuntime} interface and the
+     * exported catalog's element type; the one reader is
+     * {@link activeCodingPlanForModel}, which
      * {@link activeSubscriptionUsageRoute} owns as the single public answer to
      * "which subscription serves this model next".
      */
@@ -99,8 +99,8 @@ const RUNTIME_BY_ID = {
   }
 >;
 
-/** Runtime catalog consumed by retry policy and host route presentation. */
-export const codingPlanSubscriptionRuntimes = Object.freeze(
+/** Rich rows (with `isActiveForModel`) for the module-private reader. */
+const RUNTIMES = Object.freeze(
   CODING_PLAN_SUBSCRIPTIONS.map((descriptor) =>
     Object.freeze({
       descriptor,
@@ -109,12 +109,16 @@ export const codingPlanSubscriptionRuntimes = Object.freeze(
   ),
 );
 
+/** Runtime catalog consumed by retry policy and host route presentation. */
+export const codingPlanSubscriptionRuntimes: readonly CodingPlanSubscriptionRuntime[] =
+  RUNTIMES;
+
 /** Resolve the coding plan currently serving a model, if any. */
 async function activeCodingPlanForModel(
   modelId: string,
 ): Promise<CodingPlanSubscriptionRuntime | undefined> {
   const active = await Promise.all(
-    codingPlanSubscriptionRuntimes.map(async (runtime) => ({
+    RUNTIMES.map(async (runtime) => ({
       runtime,
       active: await runtime.isActiveForModel(modelId),
     })),
