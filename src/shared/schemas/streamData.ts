@@ -13,8 +13,6 @@
 
 import { z } from 'zod';
 
-import { logWarn } from '@shared/log';
-
 import { ExecutionIdSchema } from './identifiers';
 import { formatZodIssuesMessage } from './toolResult';
 import {
@@ -120,7 +118,7 @@ export function parseUsageData(raw: unknown): ParsedUsageData {
     } else {
       rawKind = typeof raw;
     }
-    logWarn(
+    console.warn(
       `[streamData] usageStats.json is not a per-run object (got ${rawKind}); ` +
         'ignoring for this read instead of silently zeroing usage.',
     );
@@ -130,7 +128,7 @@ export function parseUsageData(raw: unknown): ParsedUsageData {
   for (const [runId, value] of Object.entries(raw as Record<string, unknown>)) {
     const parsed = TokenUsageStatsParsingBaseSchema.safeParse(value);
     if (!parsed.success) {
-      logWarn(
+      console.warn(
         `[streamData] Preserving unparseable usage entry for run "${runId}" ` +
           `unchanged (not dropped): ${formatZodIssuesMessage(parsed.error.issues)}`,
       );
