@@ -96,6 +96,11 @@ export class SubscriptionUsageRow extends LitElement {
           grid-template-columns: minmax(0, 1fr) auto;
         }
 
+        .usage-summary {
+          grid-column: 1;
+          grid-row: 1;
+        }
+
         .usage-window progress {
           grid-column: 1 / -1;
           grid-row: 2;
@@ -152,7 +157,7 @@ export class SubscriptionUsageRow extends LitElement {
               );
               return html`
                 <div class="usage-window">
-                  <span>${label}: ${percent}</span>
+                  <span class="usage-summary">${label}: ${percent}</span>
                   <progress
                     max="100"
                     value=${window.percentUsed}
