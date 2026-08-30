@@ -64,6 +64,7 @@ import {
   approvalPolicy,
   bashApprovalEnabled,
   chatgptAuth,
+  chatgptCodexContextWindow,
   grokAuth,
   childRunConcurrencyBudget,
   claudeAgentEffort,
@@ -363,7 +364,9 @@ export class SettingsApp extends SettingsAppBase {
       case 'subscriptions':
         return html`
           <subscriptions-tab
+            .ackGeneration=${multiAgentSettingsRevision.get()}
             .chatgptAuth=${chatgptAuth.get()}
+            .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
             .grokAuth=${grokAuth.get()}
             .usage=${subscriptionUsage.get()}
             .copilotModels=${copilotRouteInfos.get()}

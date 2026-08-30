@@ -70,7 +70,7 @@ export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
   min: 1,
   max: 872_000,
   description:
-    "Input token budget for ChatGPT-subscription (Codex) routing, mirroring Codex CLI's model_context_window. The default 272,000 matches the Codex default; GPT-5.6 models accept up to 872,000. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+    "Input token budget for ChatGPT-subscription (Codex) routing, mirroring Codex CLI's model_context_window. The default 272,000 matches the Codex default; GPT-5.6 models accept up to 872,000. Automatic compaction may run earlier according to the separate compaction threshold. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
 } as const);
 
 /**
