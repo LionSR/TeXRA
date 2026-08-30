@@ -288,7 +288,11 @@ export class SettingsApp extends SettingsAppBase {
 
     return html`
       <nav class="settings-navigation" aria-label="Settings">
-        <div class="settings-category-nav" aria-label="Settings categories">
+        <div
+          class="settings-category-nav"
+          role="group"
+          aria-label="Settings categories"
+        >
           ${SETTINGS_NAV_GROUPS.map((group) => {
             const entries = this.entriesForGroup(group, goalSupported);
             if (entries.length === 0) return nothing;
@@ -316,6 +320,7 @@ export class SettingsApp extends SettingsAppBase {
              actual behavior — same pattern as the category nav above. -->
         <div
           class="settings-page-nav"
+          role="group"
           aria-label=${`${activeGroup.label} pages`}
         >
           ${activeEntries.map((entry) => {
