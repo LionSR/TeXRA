@@ -154,10 +154,13 @@ function compileContextCase(streamId: string): {
   };
 }
 
+type FinalCompileServices = ReflectionServices & {
+  abortAfterCompile?: () => void;
+};
+
 class FinalCompileOutputNode extends OutputNode {
   constructor(
     private readonly fixture: ReturnType<typeof createCompileFailureFixture>,
-    private readonly abortController?: AbortController,
   ) {
     super();
   }
@@ -188,7 +191,7 @@ class FinalCompileOutputNode extends OutputNode {
   ): ReturnType<OutputNode['post']> {
     // Model an interrupt arriving after compile completes but before OutputNode
     // projects its result into the flow's terminal state.
-    this.abortController?.abort();
+    (this.services as FinalCompileServices).abortAfterCompile?.();
     return super.post(shared, prepRes, execRes);
   }
 }
@@ -367,10 +370,7 @@ describe('output progress events', () => {
       const streamId = `stream:final-compile-failure-${expectedOutcome}`;
       const controller = new AbortController();
       const fixture = createCompileFailureFixture();
-      const node = new FinalCompileOutputNode(
-        fixture,
-        abortAfterCompile ? controller : undefined,
-      );
+      const node = new FinalCompileOutputNode(fixture);
       const { host } = createRecordingHost();
       const runScope = testRunScope(streamId, {
         interactions: host,
@@ -381,7 +381,10 @@ describe('output progress events', () => {
         runScope,
         logger: noopTrace,
         outputState: createOutputState(),
-      } as unknown as ReflectionServices;
+        abortAfterCompile: abortAfterCompile
+          ? () => controller.abort()
+          : undefined,
+      } as unknown as FinalCompileServices;
       const flow = new RoundPersistedFlow<
         ReflectionFlowShared,
         ReflectionServices
