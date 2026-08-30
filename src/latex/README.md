@@ -13,10 +13,10 @@ The files have distinct roles:
   type-level membership check — it catches a renamed/removed shared tool, not
   a new one added there that this list doesn't yet cover; `latexLogging.ts`
   defines the shared log channel that `texcount.ts` and the `formatter/`
-  backends log under. `latexdiff/`'s service instead takes a caller-supplied
-  channel (agent runs use their
-  stream id; desktop and the tool-approval preview use their own) — only the
-  extension's own latexdiff command group reuses this shared channel.
+  backends log under. `latexdiff.ts`'s `LaTeXdiffService` instead takes a
+  caller-supplied channel (agent runs use their stream id; desktop and the
+  tool-approval preview use their own) — only the extension's own latexdiff
+  command group, via `latexdiff/service.ts`, reuses this shared channel.
 - **Content extraction** — `extractFigure.ts` pulls figure paths out of LaTeX
   source; `extractBibliography.ts` extracts bibliography-file references and
   citation keys from the source (`extractBibliographyContext`) and separately
