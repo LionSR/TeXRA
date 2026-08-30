@@ -71,7 +71,7 @@ export const streamTabStyles = css`
     border: none;
     background: none;
     color: var(--wa-color-text-normal);
-    text-align: left;
+    text-align: start;
     font-family: var(--font-family);
     min-width: 0;
     overflow-x: hidden;
@@ -313,7 +313,12 @@ export const streamTabStyles = css`
 
   .tab-expand wa-icon {
     font-size: var(--font-size-xs);
-    transition: transform var(--transition-fast);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .tab-expand wa-icon {
+      transition: transform var(--transition-fast);
+    }
   }
 
   .tab-expand[aria-expanded='true'] wa-icon {
