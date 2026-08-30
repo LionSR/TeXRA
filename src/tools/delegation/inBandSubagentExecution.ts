@@ -13,13 +13,18 @@
  */
 
 // Local imports
-import { getExecutionStore, type ResultMeta } from '@agent/storage';
+import {
+  getExecutionStore,
+  type ExecutionKVStore,
+  type ResultMeta,
+} from '@agent/storage';
 import {
   ExecutionLeaseLostError,
   runWithInactiveExecutionLease,
 } from '@agent/storage/executionLease';
 import {
   AgentConfigSchema,
+  type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { AgentFinalResult } from '@agent/runtime/AgentFinalResult';
@@ -325,6 +330,151 @@ async function throwRetryableDurabilityError(
 }
 
 /**
+ * Register the child execution and resolve its stream tab.
+ *
+ * The failure classification is the whole point of the wrapper: under the
+ * typed-result contract a registration failure means no attempt ever launched,
+ * which is a durability fault the stable-attempt ledger must see; best-effort
+ * delivery surfaces the raw cause instead.
+ */
+async function registerInBandChild(
+  options: InBandSubagentDeliveryOptions,
+  config: AgentConfig,
+  executionId: ExecutionId,
+  mode: PersistenceMode,
+): Promise<StreamTabId> {
+  try {
+    const { childStreamId } = await registerChildExecution({
+      executionId,
+      config,
+      agentName: options.agentName,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      parentExecutionId: options.parentExecutionId,
+    });
+    return childStreamId;
+  } catch (cause) {
+    if (mode === 'required-result') {
+      throw new SubagentDurabilityError(
+        `Failed to register subagent ${executionId}.`,
+        { cause },
+      );
+    }
+    throw cause;
+  }
+}
+
+/**
+ * Post-drain, pre-lease-release durable commit: attest that the child's result
+ * manifest is on disk, then flip the stable attempt marker to `committed`.
+ *
+ * Returns whether the commit happened. A non-stable call, an errored turn, or
+ * a non-completed outcome is a deliberate no-op — only a durably completed
+ * child earns the marker that later recovery treats as attestable.
+ */
+async function commitStableCompletion(
+  store: ExecutionKVStore,
+  executionId: ExecutionId,
+  stableAttempt: StableSubagentAttempt | undefined,
+  settledTurn: SettledInBandTurn | undefined,
+): Promise<boolean> {
+  const settledResultMeta = settledTurn?.resultMeta;
+  if (
+    !stableAttempt ||
+    settledTurn?.isError === true ||
+    settledResultMeta?.producer !== 'subagent' ||
+    settledResultMeta.result.outcome !== RUN_OUTCOME.COMPLETED
+  ) {
+    return false;
+  }
+  let persisted: ResultMeta | null;
+  try {
+    persisted = await store.readResultMeta();
+  } catch (cause) {
+    throw new SubagentCommitError(
+      `Failed to verify durable completion for subagent ${executionId}.`,
+      { cause },
+    );
+  }
+  if (!persisted || persisted.producer !== 'subagent') {
+    throw new SubagentCommitError(
+      `Failed to persist result for subagent ${executionId}.`,
+    );
+  }
+  try {
+    await writeStableSubagentAttempt(store, {
+      ...stableAttempt,
+      phase: 'committed',
+    });
+  } catch (cause) {
+    throw new SubagentCommitError(
+      `Failed to commit durable completion for subagent ${executionId}.`,
+      { cause },
+    );
+  }
+  return true;
+}
+
+/**
+ * Required-result mode only: confirm the manifest this caller is about to
+ * report actually landed on disk. Returns normally when it did; every other
+ * outcome throws.
+ *
+ * The ledger recovers restarts by inspecting the persisted manifest, so the
+ * in-memory copy is not enough here. A FAILED child's attempt is marked
+ * retryable (re-running a failed child is safe); a COMPLETED child whose
+ * manifest did not persist keeps its 'launched' marker, so a later run refuses
+ * to repeat side-effectful work rather than executing it twice.
+ */
+async function verifyPersistedResultManifest(
+  store: ExecutionKVStore,
+  executionId: ExecutionId,
+  stableAttempt: StableSubagentAttempt | undefined,
+  childFailed: boolean,
+  childError: () => unknown,
+): Promise<void> {
+  let persisted: ResultMeta | null;
+  // A read failure is NOT the same fact as a missing manifest: keep it so
+  // the thrown error names the I/O cause instead of blaming persistence.
+  let readFailure: unknown;
+  try {
+    persisted = await store.readResultMeta();
+  } catch (cause) {
+    log.warn('Failed to read the persisted result manifest', {
+      data: { executionId, error: cause },
+    });
+    persisted = null;
+    readFailure = cause;
+  }
+  if (!persisted) {
+    if (childFailed) {
+      const error = childError();
+      await throwRetryableDurabilityError(
+        executionId,
+        stableAttempt,
+        new SubagentDurabilityError(
+          `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+          {
+            cause: new AggregateError(
+              readFailure === undefined ? [error] : [error, readFailure],
+              `Subagent ${executionId} execution and persistence both failed.`,
+            ),
+          },
+        ),
+      );
+    }
+    if (readFailure !== undefined) {
+      throw new SubagentDurabilityError(
+        `Failed to verify the persisted result for subagent ${executionId}.`,
+        { cause: readFailure },
+      );
+    }
+    throw new SubagentDurabilityError(
+      `Failed to persist result for subagent ${executionId}.`,
+    );
+  }
+}
+
+/**
  * Execute one child through the one shared driver and read its typed result
  * back from the durable record. The child runs under the same detached
  * child-run loop every native child uses (single-cycle strategy, persist-only
@@ -353,24 +503,12 @@ async function executeInBand(
   const workingDirectory = config.workingDirectory ?? undefined;
   const store = getExecutionStore(executionId);
 
-  let childStreamId: StreamTabId;
-  try {
-    ({ childStreamId } = await registerChildExecution({
-      executionId,
-      config,
-      agentName: options.agentName,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentExecutionId: options.parentExecutionId,
-    }));
-  } catch (cause) {
-    if (mode === 'required-result') {
-      throw new SubagentDurabilityError(
-        `Failed to register subagent ${executionId}.`,
-        { cause },
-      );
-    }
-    throw cause;
-  }
+  const childStreamId = await registerInBandChild(
+    options,
+    config,
+    executionId,
+    mode,
+  );
   let stableCompletionCommitted = false;
   const completed = await (async () => {
     let settledTurn: SettledInBandTurn | undefined;
@@ -388,41 +526,13 @@ async function executeInBand(
         settledTurn = settled;
       },
       afterArtifactsDrained: async () => {
-        const settledResultMeta = settledTurn?.resultMeta;
-        if (
-          !stableAttempt ||
-          settledTurn?.isError === true ||
-          settledResultMeta?.producer !== 'subagent' ||
-          settledResultMeta.result.outcome !== RUN_OUTCOME.COMPLETED
-        ) {
-          return;
-        }
-        let persisted: ResultMeta | null;
-        try {
-          persisted = await store.readResultMeta();
-        } catch (cause) {
-          throw new SubagentCommitError(
-            `Failed to verify durable completion for subagent ${executionId}.`,
-            { cause },
-          );
-        }
-        if (!persisted || persisted.producer !== 'subagent') {
-          throw new SubagentCommitError(
-            `Failed to persist result for subagent ${executionId}.`,
-          );
-        }
-        try {
-          await writeStableSubagentAttempt(store, {
-            ...stableAttempt,
-            phase: 'committed',
-          });
-          stableCompletionCommitted = true;
-        } catch (cause) {
-          throw new SubagentCommitError(
-            `Failed to commit durable completion for subagent ${executionId}.`,
-            { cause },
-          );
-        }
+        const committed = await commitStableCompletion(
+          store,
+          executionId,
+          stableAttempt,
+          settledTurn,
+        );
+        if (committed) stableCompletionCommitted = true;
       },
       buildLaunch: async () => {
         // Inside the loop's lease launch guard, like every attempt-scoped
@@ -509,52 +619,13 @@ async function executeInBand(
     }
 
     if (mode === 'required-result') {
-      // The ledger recovers restarts by inspecting the persisted manifest, so
-      // the in-memory copy is not enough here: verify the write landed. A
-      // FAILED child's attempt is marked retryable (re-running a failed child
-      // is safe); a COMPLETED child whose manifest did not persist keeps its
-      // 'launched' marker, so a later run refuses to repeat side-effectful
-      // work rather than executing it twice.
-      let persisted: ResultMeta | null;
-      // A read failure is NOT the same fact as a missing manifest: keep it so
-      // the thrown error names the I/O cause instead of blaming persistence.
-      let readFailure: unknown;
-      try {
-        persisted = await store.readResultMeta();
-      } catch (cause) {
-        log.warn('Failed to read the persisted result manifest', {
-          data: { executionId, error: cause },
-        });
-        persisted = null;
-        readFailure = cause;
-      }
-      if (!persisted) {
-        if (childFailed) {
-          const error = childError();
-          await throwRetryableDurabilityError(
-            executionId,
-            stableAttempt,
-            new SubagentDurabilityError(
-              `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-              {
-                cause: new AggregateError(
-                  readFailure === undefined ? [error] : [error, readFailure],
-                  `Subagent ${executionId} execution and persistence both failed.`,
-                ),
-              },
-            ),
-          );
-        }
-        if (readFailure !== undefined) {
-          throw new SubagentDurabilityError(
-            `Failed to verify the persisted result for subagent ${executionId}.`,
-            { cause: readFailure },
-          );
-        }
-        throw new SubagentDurabilityError(
-          `Failed to persist result for subagent ${executionId}.`,
-        );
-      }
+      await verifyPersistedResultManifest(
+        store,
+        executionId,
+        stableAttempt,
+        childFailed,
+        childError,
+      );
     }
 
     if (
