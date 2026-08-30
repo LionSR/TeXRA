@@ -31,18 +31,13 @@ export interface StreamPhaseState {
   readonly phase: StreamPhase;
   readonly substate?: StreamSubstate;
   /**
-   * Epoch ms when the stream entered its CURRENT active phase, held across
-   * substate changes and cleared the moment the phase stops being active —
-   * it resets on every WAITING→RUNNING transition. The one owner of
-   * "when did the active window now in progress start"; hosts render
-   * elapsed-while-active time from it instead of each stamping a clock read
-   * of their own. `AgentExecutionHandle.startedAt` (`ExecutionHandle.ts`)
-   * tracks a related but distinct fact — the current handle generation's
-   * start, feeding the roster's `Started:` display — and differs only in
-   * when it resets: it lingers through a WAITING interval where this field
-   * clears immediately, but like this field it is replaced by a fresh
-   * timestamp once a resume installs a new handle generation. Neither field
-   * is the run's original creation time.
+   * Epoch ms when the stream entered its current active phase. Held across
+   * substate changes, cleared when the phase stops being active, and stamped
+   * again on a later WAITING→RUNNING transition. Hosts render
+   * elapsed-while-active time from this value. This is not durable execution
+   * creation time; that is `ExecutionMeta.timestamp`.
+   * `AgentExecutionHandle.startedAt` separately timestamps a handle generation
+   * and may remain present on a parked handle after this field has cleared.
    */
   readonly runStartedAt?: number;
 }

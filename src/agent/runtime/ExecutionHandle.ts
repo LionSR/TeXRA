@@ -114,18 +114,12 @@ export type LiveToolUseFlowContext = {
  */
 export class AgentExecutionHandle {
   /**
-   * Epoch ms when this generation's handle was created. Retained, not
-   * cleared, while this handle sits parked at WAITING — but a resume
-   * constructs a fresh `AgentExecutionHandle` that `ExecutionRegistry.track`
-   * installs in its place ("a resumed generation taking over from its
-   * predecessor", `executionRegistry.ts`), so this value does not survive a
-   * resume; it is the current generation's start, not the run's original
-   * creation time. It feeds `executionRegistry.getStatus`'s elapsed, the
-   * roster's `ActiveChildInfo.startedAt`, and the `executions` tool's
-   * `Started:` line. Distinct from `StreamPhaseState.runStartedAt`
-   * (`StreamStatusService.ts`): that field clears the instant the phase
-   * leaves active, while this one lingers through a WAITING interval — but
-   * neither survives an actual resume.
+   * Epoch ms when this handle generation was created. The value remains on a
+   * handle while it is parked at WAITING. Resume constructs and tracks a
+   * replacement handle, whose `startedAt` is stamped anew. This feeds
+   * `executionRegistry.getStatus`'s elapsed, the roster's
+   * `ActiveChildInfo.startedAt`, and the `executions` tool's `Started:` line.
+   * Durable execution creation time is `ExecutionMeta.timestamp`.
    */
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
