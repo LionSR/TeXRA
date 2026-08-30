@@ -163,28 +163,6 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
     : undefined;
 }
 
-function formatClaudeDelivery(
-  executionId: string,
-  prompt: string,
-  wallTimeMs: number,
-  turn: TurnResult,
-): string {
-  return formatChildRunDelivery(
-    {
-      tag: DELIVERY_TAG.claudeAgentResult,
-      executionId,
-      prompt,
-      attributes: [{ name: 'session-id', value: turn.sessionId || null }],
-    },
-    {
-      wallTime: formatWallTimeSeconds(wallTimeMs),
-      response: turn.finalResponse,
-      usage: toDeliveryUsage(turn.usage),
-      lines: claudeCostLines(turn),
-    },
-  );
-}
-
 // ============================================================================
 // Stream tab helpers
 // ============================================================================
@@ -479,7 +457,20 @@ function startClaudeAgentLoop(params: {
       if (turn.errorMessage) log.error(turn.errorMessage);
     },
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
-      formatClaudeDelivery(executionId, lastPrompt, wallTimeMs, turn),
+      formatChildRunDelivery(
+        {
+          tag: DELIVERY_TAG.claudeAgentResult,
+          executionId,
+          prompt: lastPrompt,
+          attributes: [{ name: 'session-id', value: turn.sessionId || null }],
+        },
+        {
+          wallTime: formatWallTimeSeconds(wallTimeMs),
+          response: turn.finalResponse,
+          usage: toDeliveryUsage(turn.usage),
+          lines: claudeCostLines(turn),
+        },
+      ),
     formatError: (turn, err, lastPrompt) =>
       formatChildRunError(
         { tag: DELIVERY_TAG.claudeAgentError, executionId, prompt: lastPrompt },

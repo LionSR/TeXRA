@@ -128,33 +128,6 @@ const CodexInputSchema = z.strictObject({
 export type CodexInput = z.infer<typeof CodexInputSchema>;
 
 // ============================================================================
-// Result formatting
-// ============================================================================
-
-/** Format a Codex result for delivery as XML on the parent's follow-up queue. */
-function formatCodexDelivery(
-  executionId: string,
-  prompt: string,
-  wallTimeMs: number,
-  turn: RunResult,
-  threadId?: string | null,
-): string {
-  return formatChildRunDelivery(
-    {
-      tag: DELIVERY_TAG.codexResult,
-      executionId,
-      prompt,
-      attributes: [{ name: 'thread-id', value: threadId || null }],
-    },
-    {
-      wallTime: formatWallTimeSeconds(wallTimeMs),
-      response: turn.finalResponse,
-      usage: toDeliveryUsage(turn.usage),
-    },
-  );
-}
-
-// ============================================================================
 // Stream tab helpers
 // ============================================================================
 
@@ -425,7 +398,19 @@ function startCodexLoop(params: {
     buildUsageStats: (turn) =>
       turn.usage ? buildCodexUsageStats(turn.usage) : undefined,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
-      formatCodexDelivery(executionId, lastPrompt, wallTimeMs, turn, thread.id),
+      formatChildRunDelivery(
+        {
+          tag: DELIVERY_TAG.codexResult,
+          executionId,
+          prompt: lastPrompt,
+          attributes: [{ name: 'thread-id', value: thread.id || null }],
+        },
+        {
+          wallTime: formatWallTimeSeconds(wallTimeMs),
+          response: turn.finalResponse,
+          usage: toDeliveryUsage(turn.usage),
+        },
+      ),
     formatError: (_turn, err, lastPrompt) =>
       formatChildRunError(
         { tag: DELIVERY_TAG.codexError, executionId, prompt: lastPrompt },
