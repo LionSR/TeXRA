@@ -1,12 +1,15 @@
 import { isEscapeInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
 import {
   KEY_HINT_SEPARATOR,
-  keyHintText,
+  keyHintsText,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import {
+  firstFittingCandidate,
+  textDisplayWidth,
+} from '@cli/runtime/terminalText';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 type ConfirmCardKeyAction =
@@ -102,19 +105,6 @@ export function confirmCardFeedbackHints(): KeyHint[] {
   ];
 }
 
-// Reuses the canonical `keyHintText` projection (see its doc comment) so this
-// measures exactly what KeyHints renders, instead of re-deriving the format.
-function hintColumns(hints: readonly KeyHint[]): number {
-  return textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR));
-}
-
-function hintsFit(
-  hints: readonly KeyHint[],
-  maxColumns: number | undefined,
-): boolean {
-  return maxColumns === undefined || hintColumns(hints) <= maxColumns;
-}
-
 const COMPACT_HINT_ACTIONS: Readonly<Record<string, string>> = {
   'reject & note': 'reject',
   'approve commands for session': 'all commands',
@@ -131,25 +121,22 @@ export function confirmCardKeyHintsForWidth(
   options: ConfirmCardHintWidthOptions,
 ): KeyHint[] {
   const fullHints = confirmCardKeyHints(options);
-  if (hintsFit(fullHints, options.maxColumns)) return fullHints;
-
   const compactHints = fullHints.map((hint) => ({
     ...hint,
     action: COMPACT_HINT_ACTIONS[hint.action] ?? hint.action,
   }));
-  if (hintsFit(compactHints, options.maxColumns)) return compactHints;
-
-  const withoutExtraActions = compactHints.filter(
-    (hint) => isCoreApprovalHint(hint) || hint.key === 'a',
-  );
-  if (hintsFit(withoutExtraActions, options.maxColumns)) {
-    return withoutExtraActions;
-  }
-
-  const coreHints = compactHints.filter(isCoreApprovalHint);
-  if (hintsFit(coreHints, options.maxColumns)) return coreHints;
-
-  return fullHints.slice(-1);
+  const candidates: readonly KeyHint[][] = [
+    fullHints,
+    compactHints,
+    compactHints.filter((hint) => isCoreApprovalHint(hint) || hint.key === 'a'),
+    compactHints.filter(isCoreApprovalHint),
+  ];
+  return firstFittingCandidate({
+    candidates,
+    fallback: fullHints.slice(-1),
+    maxColumns: options.maxColumns,
+    measure: (hints) => textDisplayWidth(keyHintsText(hints)),
+  });
 }
 
 export function confirmCardCompactHintLayout({

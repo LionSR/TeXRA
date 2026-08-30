@@ -33,6 +33,13 @@ export function keyHintText(hint: KeyHint): string {
   return `${hint.key} ${hint.action}`;
 }
 
+/** Plain-text projection of a whole hint strip, joined exactly as the
+ *  component below renders it. Width math and row-budget math measure this
+ *  rather than re-deriving the separator. */
+export function keyHintsText(hints: readonly KeyHint[]): string {
+  return hints.map(keyHintText).join(KEY_HINT_SEPARATOR);
+}
+
 const DEFAULT_TAIL: readonly KeyHint[] = [
   { key: 'Enter', action: 'confirm' },
   { key: 'Esc', action: 'cancel' },

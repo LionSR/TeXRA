@@ -7,6 +7,7 @@ import {
   metaChordLabel,
 } from '@cli/runtime/shortcutLabels';
 import {
+  firstFittingCandidate,
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
@@ -599,24 +600,8 @@ function statusBarBindingRow(
     .join(KEY_HINT_SEPARATOR);
 }
 
-// Every bindings row below is a widest-first cascade: candidates are built
-// eagerly, and the first one that fits the row wins. Inapplicable candidates
-// are left in place as `false`/`undefined` so each list still reads top to
-// bottom as "this layout, else this one".
-function firstRowThatFits(
-  candidates: readonly (string | false | undefined)[],
-  maxColumns: number | undefined,
-  fallback: string,
-): string {
-  return (
-    candidates.find(
-      (candidate): candidate is string =>
-        typeof candidate === 'string' &&
-        (maxColumns === undefined || textDisplayWidth(candidate) <= maxColumns),
-    ) ?? fallback
-  );
-}
-
+// Every bindings row below is a widest-first `firstFittingCandidate` cascade.
+//
 // No module-level memo: the bindings cascade below eagerly builds ~13
 // candidate rows and stringWidth-measures them until one fits, and its inputs
 // are a handful of flags that change far less often than the StatusBar
@@ -709,7 +694,12 @@ function statusBarBindingsText(
   );
   if (parentBack) candidates.push(parentBack);
 
-  return firstRowThatFits(candidates, maxColumns, ctrlC);
+  return firstFittingCandidate({
+    candidates,
+    fallback: ctrlC,
+    maxColumns,
+    measure: textDisplayWidth,
+  });
 }
 
 function foregroundBindingsText(
@@ -719,8 +709,8 @@ function foregroundBindingsText(
 ): string {
   const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   const escBinding = keyHintText({ key: 'Esc', action: escapeAction });
-  return firstRowThatFits(
-    [
+  return firstFittingCandidate({
+    candidates: [
       statusBarBindingRow([
         FOREGROUND_OWNERSHIP.keysGoAbove,
         escBinding,
@@ -728,9 +718,10 @@ function foregroundBindingsText(
       ]),
       statusBarBindingRow([escBinding, ctrlCBinding]),
     ],
+    fallback: ctrlCBinding,
     maxColumns,
-    ctrlCBinding,
-  );
+    measure: textDisplayWidth,
+  });
 }
 
 function childListBindingsText(
@@ -746,8 +737,8 @@ function childListBindingsText(
   const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
   const tabBinding = keyHintText({ key: 'Tab', action: 'input' });
   const escBinding = keyHintText({ key: 'Esc', action: 'input' });
-  return firstRowThatFits(
-    [
+  return firstFittingCandidate({
+    candidates: [
       statusBarBindingRow([
         selectBinding,
         enterBinding,
@@ -767,9 +758,10 @@ function childListBindingsText(
       statusBarBindingRow([enterBinding, escBinding, ctrlCBinding]),
       ctrlCBinding,
     ],
+    fallback: ctrlCBinding,
     maxColumns,
-    ctrlCBinding,
-  );
+    measure: textDisplayWidth,
+  });
 }
 
 function rootActiveSegment(

@@ -47,6 +47,33 @@ export function truncateSummaryToWidth(
   return truncateToWidth(collapseWhitespace(text), maxColumns);
 }
 
+/**
+ * Widest-first layout cascade: the first candidate whose measured width fits
+ * `maxColumns` wins, `fallback` when none does. `false`/`undefined` entries are
+ * inapplicable layouts left in place, so a candidate list still reads top to
+ * bottom as "this layout, else this one". An undefined `maxColumns` — an
+ * unknown terminal width, as in tests and headless runs — fits everything.
+ */
+export function firstFittingCandidate<T>({
+  candidates,
+  fallback,
+  maxColumns,
+  measure,
+}: {
+  readonly candidates: readonly (T | false | undefined)[];
+  readonly fallback: T;
+  readonly maxColumns: number | undefined;
+  readonly measure: (candidate: T) => number;
+}): T {
+  for (const candidate of candidates) {
+    if (candidate === false || candidate === undefined) continue;
+    if (maxColumns === undefined || measure(candidate) <= maxColumns) {
+      return candidate;
+    }
+  }
+  return fallback;
+}
+
 /** Pad each visual row to `width` display columns. */
 export function fillRows(text: string, width: number): string {
   return text
