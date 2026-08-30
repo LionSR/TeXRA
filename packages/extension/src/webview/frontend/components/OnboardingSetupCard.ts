@@ -36,9 +36,9 @@ export class OnboardingSetupCard extends LitElement {
 
       .title {
         display: block;
+        margin: 0 0 var(--wa-space-2xs);
         font-weight: var(--font-weight-semibold, 600);
         font-size: 1.05em;
-        margin-bottom: var(--wa-space-2xs);
       }
 
       .copy {
@@ -71,7 +71,7 @@ export class OnboardingSetupCard extends LitElement {
     return html`
       <wa-callout id="onboardingSetupCard" variant="brand">
         ${waIcon('rocket', { slot: 'icon' })}
-        <span class="title">Credential ready</span>
+        <h2 class="title">Credential ready</h2>
         <p class="copy">${ONBOARDING_SETUP_HANDOFF}</p>
         <div class="actions">
           <wa-button

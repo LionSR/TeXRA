@@ -85,6 +85,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
                       class="dependency-install-button"
                       appearance="plain"
                       size="s"
+                      aria-label=${`Install ${this.getToolLabel(tool)}`}
                       @click=${() => this.handleInstall(tool)}
                     >
                       ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
