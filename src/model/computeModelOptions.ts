@@ -1,11 +1,11 @@
 import { LRUCache } from 'lru-cache';
 
-import { createLog } from '@logger/logUtils';
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
+import { warnSecretReadFailure } from '@platform/secrets';
 import { platform } from '@platform/platform';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
@@ -59,8 +59,6 @@ import type { ProviderCapabilityProfile } from './providerCapabilities';
 import type { ModelConfig } from 'llm-zoo';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
-
-const log = createLog('computeModelOptions');
 
 /**
  * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
@@ -360,9 +358,9 @@ function hasUsableApiKeyForAvailability(
 
   const check = hasUsableApiKey(platform().secrets, provider).catch(
     (error: unknown) => {
-      log.warn(
-        `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-        { data: error },
+      warnSecretReadFailure(
+        `${providerDisplayName(provider)} API key status`,
+        error,
       );
       return false;
     },

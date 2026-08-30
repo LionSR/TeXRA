@@ -5,6 +5,10 @@
  * process.env fallback. CLI/Electron uses process.env + config file.
  */
 
+import { createLog } from '@logger/logUtils';
+
+const log = createLog('PlatformSecrets');
+
 /**
  * Provider for secure secret storage (API keys, tokens).
  */
@@ -41,6 +45,16 @@ export interface PlatformSecrets {
    * and mockable in tests.
    */
   getEnv(name: string): string | undefined;
+}
+
+/** Surface a credential read failure before a caller degrades to unavailable. */
+export function warnSecretReadFailure(
+  credentialLabel: string,
+  error: unknown,
+): void {
+  log.warn(`Failed to read ${credentialLabel}; treating it as unavailable.`, {
+    data: error,
+  });
 }
 
 /**
