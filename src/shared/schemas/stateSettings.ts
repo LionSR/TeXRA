@@ -344,13 +344,15 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
 }
 
 /**
- * A Models-tab provider toggle: a globally-stored boolean that renders both as
+ * A Models-tab provider toggle: a globally-scoped boolean that renders both as
  * a profile row and as one per-provider control on the Models tab. These rows
  * differ only in their default, copy, honoring reader, and Models-tab control,
- * so the uniform `configTarget: 'global'` / `category: 'model'` /
- * `settingsView: 'profile'` framing is written once here — the same tabulation
- * the region toggles already use through `PROVIDER_ROUTING_SETTINGS`. Returns a
- * `CORE_SETTING_ROWS` body (key and slot are added by the config-tree mapping).
+ * so the uniform framing is written once here: the `category: 'model'` /
+ * `settingsView: 'profile'` / Models-tab surface the region toggles already
+ * share through `PROVIDER_ROUTING_SETTINGS`, plus the `configTarget: 'global'`
+ * these config-tree rows require (the region toggles instead live in
+ * `globalState` and set `cliConfig`). Returns a `CORE_SETTING_ROWS` body (key
+ * and slot are added by the config-tree mapping).
  */
 function modelProviderToggle(opts: {
   readonly default: boolean;
