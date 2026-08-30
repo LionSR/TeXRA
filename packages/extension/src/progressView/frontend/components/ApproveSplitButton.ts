@@ -25,6 +25,14 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 const MENU_EVENTS = ['approve-session', 'approve-all-delegated-work'] as const;
 type MenuEvent = (typeof MENU_EVENTS)[number];
 
+/** Keep the visible "Approve" text in the accessible name while adding the
+ * request-specific context supplied by the parent panel. */
+function accessibleApproveLabel(title: string): string {
+  const context = title.trim();
+  if (!context || /^approve\b/i.test(context)) return context || 'Approve';
+  return `Approve: ${context}`;
+}
+
 /**
  * Approve control for approval prompts, used declaratively:
  *
@@ -87,9 +95,11 @@ export class ApproveSplitButton extends LitElement {
   override render(): TemplateResult {
     const hasMenu =
       !this.disabled && (this.canBypass || this.canApproveAllDelegatedWork);
+    const approveLabel = accessibleApproveLabel(this.approveTitle);
     const approveButton = renderLabeledActionButton({
       icon: 'check',
       text: 'Approve',
+      label: approveLabel,
       title: this.approveTitle,
       action: 'approve',
       kind: hasMenu ? undefined : 'primary',

@@ -82,6 +82,14 @@ export class TerminalOutput extends LitElement {
         overflow: hidden;
       }
 
+      /* xterm removes its own outline. Restore the shared focus treatment on
+         the visible terminal surface when its hidden textarea receives
+         keyboard focus. Keep it inset so the container does not clip it. */
+      .xterm:has(.xterm-helper-textarea:focus-visible) {
+        outline: var(--focus-ring-width) solid var(--wa-color-focus);
+        outline-offset: calc(-1 * var(--focus-ring-offset));
+      }
+
       :host([fill]),
       :host([fill]) .terminal-container {
         height: 100%;
@@ -124,18 +132,28 @@ export class TerminalOutput extends LitElement {
 
   override firstUpdated(): void {
     const { theme, fontFamily } = resolveXtermTheme(this);
+    const editorFontSize = Number.parseFloat(
+      getComputedStyle(this).getPropertyValue('--wa-editor-font-size'),
+    );
     this.terminal = new Terminal({
       disableStdin: true,
       convertEol: true,
       scrollback: MIN_SCROLLBACK,
       fontFamily,
-      fontSize: 12,
+      fontSize: Number.isFinite(editorFontSize) ? editorFontSize : 12,
+      // Without this, xterm paints the buffer only to a canvas. Its supported
+      // accessibility tree exposes the read-only output as text instead.
+      screenReaderMode: true,
       theme,
     });
 
     this.fitAddon = new FitAddon();
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.open(this.terminalContainer);
+    this.terminal.textarea?.setAttribute('aria-label', 'Terminal output');
+    this.terminal.element
+      ?.querySelector<HTMLElement>('.live-region')
+      ?.setAttribute('aria-live', 'off');
 
     this.attachResizeHooks();
     this.refitIfVisible();

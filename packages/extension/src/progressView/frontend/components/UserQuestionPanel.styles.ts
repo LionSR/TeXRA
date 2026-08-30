@@ -15,6 +15,8 @@ export const userQuestionPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: ${sp.small};
+    min-inline-size: 0;
+    margin: 0;
     padding: ${sp.medium};
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius);
@@ -23,11 +25,15 @@ export const userQuestionPanelStyles: CSSResult = css`
 
   .user-question-request__heading {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: ${sp.small};
+    max-inline-size: 100%;
+    padding: 0;
     color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-normal);
+    overflow-wrap: anywhere;
   }
 
   .user-question-request__header {
@@ -53,6 +59,21 @@ export const userQuestionPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
+  /* Web Awesome requires its label API to name the internal radio group. The
+     fieldset legend is the visible label, so keep the duplicate text available
+     only to assistive technology. */
+  wa-radio-group::part(form-control-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .user-question-request__option {
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
@@ -63,10 +84,24 @@ export const userQuestionPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: ${sp.tiny};
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
   }
 
   .user-question-request__option small {
     color: var(--wa-color-text-quiet);
     font-size: var(--font-size-xs);
+  }
+
+  .user-question-request__free-text {
+    min-inline-size: 0;
+  }
+
+  .user-question-request__answer-requirement {
+    min-height: calc(var(--font-size-xs) * var(--line-height-normal));
+    margin: 0;
+    color: var(--wa-color-text-quiet);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-normal);
   }
 `;

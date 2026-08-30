@@ -18,6 +18,12 @@ import { ELEMENT_IDS } from '../constants';
 // Local imports - base class
 import { CollapsiblePanel } from './CollapsiblePanel';
 
+const TODO_STATUS_LABELS: Readonly<Record<TodoItem['status'], string>> = {
+  [TODO_STATUS.PENDING]: 'Pending',
+  [TODO_STATUS.IN_PROGRESS]: 'In progress',
+  [TODO_STATUS.COMPLETED]: 'Completed',
+};
+
 @customElement('todo-list')
 export class TodoList extends CollapsiblePanel {
   static override styles = [
@@ -32,6 +38,9 @@ export class TodoList extends CollapsiblePanel {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-3xs);
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
 
       .todo-item {
@@ -52,15 +61,16 @@ export class TodoList extends CollapsiblePanel {
 
       .todo-item__content {
         flex: 1;
-        word-break: break-word;
+        min-width: 0;
+        overflow-wrap: anywhere;
       }
 
       .todo-item--pending {
-        opacity: var(--opacity-subtle);
+        color: var(--color-text-secondary);
       }
 
       .todo-item--pending .todo-item__icon {
-        color: var(--color-text-secondary);
+        color: var(--color-text-muted);
       }
 
       .todo-item--in-progress {
@@ -68,11 +78,11 @@ export class TodoList extends CollapsiblePanel {
       }
 
       .todo-item--in-progress .todo-item__icon {
-        color: var(--wa-color-progress-bg);
+        color: var(--color-pending);
       }
 
       .todo-item--completed {
-        opacity: var(--opacity-disabled);
+        color: var(--color-text-secondary);
       }
 
       .todo-item--completed .todo-item__icon {
@@ -96,20 +106,31 @@ export class TodoList extends CollapsiblePanel {
       (t) => t.status === TODO_STATUS.COMPLETED,
     ).length;
     const total = this.todos.length;
+    const activeTodo = this.todos.find(
+      (todo) => todo.status === TODO_STATUS.IN_PROGRESS,
+    );
+    const progressText = `${completed} of ${total} ${total === 1 ? 'task' : 'tasks'} complete`;
 
-    return this.renderCollapsibleDetails({
-      id: ELEMENT_IDS.TODO_LIST_CONTAINER,
-      summary: `Todos (${completed}/${total})`,
-      body: html`
-        <div id=${ELEMENT_IDS.TODO_LIST} class="todo-list">
-          ${repeat(
-            this.todos,
-            (_todo, index) => index,
-            (todo) => this.renderTodo(todo),
-          )}
-        </div>
-      `,
-    });
+    return html`
+      <div class="visually-hidden" role="status">
+        ${progressText}.${
+          activeTodo ? ` In progress: ${activeTodo.activeForm}.` : nothing
+        }
+      </div>
+      ${this.renderCollapsibleDetails({
+        id: ELEMENT_IDS.TODO_LIST_CONTAINER,
+        summary: `Tasks (${completed} of ${total} complete)`,
+        body: html`
+          <ol id=${ELEMENT_IDS.TODO_LIST} class="todo-list" aria-label="Tasks">
+            ${repeat(
+              this.todos,
+              (_todo, index) => index,
+              (todo) => this.renderTodo(todo),
+            )}
+          </ol>
+        `,
+      })}
+    `;
   }
 
   private renderTodo(todo: TodoItem): TemplateResult {
@@ -119,13 +140,14 @@ export class TodoList extends CollapsiblePanel {
     const content = isInProgress ? todo.activeForm : todo.content;
 
     return html`
-      <div
+      <li
         class=${classMap({
           'todo-item': true,
           'todo-item--pending': status === TODO_STATUS.PENDING,
           'todo-item--in-progress': status === TODO_STATUS.IN_PROGRESS,
           'todo-item--completed': status === TODO_STATUS.COMPLETED,
         })}
+        aria-current=${isInProgress ? 'step' : nothing}
       >
         ${
           isInProgress
@@ -135,8 +157,9 @@ export class TodoList extends CollapsiblePanel {
               ></wa-spinner>`
             : waIcon(icon, { className: 'todo-item__icon' })
         }
-        <span class="todo-item__content">${content}</span>
-      </div>
+        <span class="visually-hidden">${TODO_STATUS_LABELS[status]}: </span>
+        <bdi class="todo-item__content">${content}</bdi>
+      </li>
     `;
   }
 }

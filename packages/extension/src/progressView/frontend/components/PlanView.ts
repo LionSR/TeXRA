@@ -34,7 +34,8 @@ export class PlanView extends CollapsiblePanel {
 
       .plan-document {
         white-space: pre-wrap;
-        word-break: break-word;
+        overflow-wrap: anywhere;
+        unicode-bidi: plaintext;
         font-size: var(--font-size);
         line-height: var(--line-height-relaxed);
         color: var(--color-text-secondary);

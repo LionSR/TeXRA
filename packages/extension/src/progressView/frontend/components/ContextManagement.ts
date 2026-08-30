@@ -79,7 +79,9 @@ export class ContextManagement extends LitElement {
             (item) => item.label,
             (item, index) => html`
               <span id="context-stat-${index}" class="stat-item">
-                ${waIcon(item.icon)} ${item.value}
+                ${waIcon(item.icon)}
+                <span class="visually-hidden">${item.label}: </span>
+                <bdi class="stat-value">${item.value}</bdi>
               </span>
               <wa-tooltip for="context-stat-${index}">${item.label}</wa-tooltip>
             `,
@@ -91,7 +93,7 @@ export class ContextManagement extends LitElement {
                     <div class="summary-title">
                       ${waIcon('note-sticky')} Compaction summary
                     </div>
-                    <pre class="summary-text">${this.summary}</pre>
+                    <pre class="summary-text" dir="auto">${this.summary}</pre>
                   </div>
                 `
               : nothing

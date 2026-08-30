@@ -116,12 +116,19 @@ export abstract class BaseApprovalPanel<
    * surface via the overridable members above; none re-template this markup.
    */
   protected renderApproveButton(approveTitle: string): TemplateResult {
+    // Rejection feedback is a distinct decision mode. Keep the one-off
+    // Approve action available so the user can change course, but hide the
+    // conflicting run-scoped grants just as handleKeyboardShortcut blocks
+    // their `a` accelerator while feedback is open.
+    const canUseRunScopedApproval = !this.showFeedback;
     return html`
       <approve-split-button
         .approveTitle=${approveTitle}
-        .canBypass=${this.canBypass}
+        .canBypass=${canUseRunScopedApproval && this.canBypass}
         .bypassAction=${this.bypassAction}
-        .canApproveAllDelegatedWork=${this.canApproveAllDelegatedWork}
+        .canApproveAllDelegatedWork=${
+          canUseRunScopedApproval && this.canApproveAllDelegatedWork
+        }
         .disabled=${this.archived}
         @approve=${() => this.emitAction(this.approvalDecision)}
         @approve-session=${() => this.approveSessionHandler()}

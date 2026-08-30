@@ -78,9 +78,9 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     return html`
       <div class="retry-request">
         <div class="retry-request__details">
-          <div class="retry-request__operation">
+          <h3 class="retry-request__operation">
             ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
-          </div>
+          </h3>
           <div class="retry-request__meta">${renderDotMeta(metaParts)}</div>
           ${when(
             data.errorMessage,

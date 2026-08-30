@@ -26,7 +26,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .workflow-proposal__model::before {
     content: '\u2022';
-    margin-right: ${sp.small};
+    margin-inline-end: ${sp.small};
   }
 
   .workflow-proposal__agent-select,
@@ -42,9 +42,9 @@ export const proposalRequestPanelStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  /* Model dropdown floats to the right edge of the header row. */
+  /* Model dropdown floats to the trailing edge of the header row. */
   .workflow-proposal__model-select {
-    margin-left: auto;
+    margin-inline-start: auto;
   }
 
   .proposal-model-dropdown {
@@ -110,7 +110,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
   .workflow-proposal__instruction {
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
-    word-break: break-word;
+    overflow-wrap: anywhere;
     max-height: 12em;
     overflow-y: auto;
     line-height: var(--line-height-normal);
@@ -126,14 +126,14 @@ export const proposalRequestPanelStyles: CSSResult = css`
     display: flex;
     gap: ${sp.small};
     flex-wrap: wrap;
-    margin-top: ${sp.small};
+    margin-block-start: ${sp.small};
   }
 
   .workflow-proposal__files {
     display: flex;
     flex-direction: column;
     gap: ${sp.small};
-    margin-top: ${sp.small};
+    margin-block-start: ${sp.small};
   }
 
   .workflow-proposal__files > div {
@@ -174,7 +174,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
   }
 
   .workflow-proposal__file-name--wrap {
-    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .workflow-proposal__input-files .workflow-proposal__file-label {

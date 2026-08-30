@@ -70,17 +70,20 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
         <div class="user-question-request__actions">
           ${renderLabeledActionButton({
             icon: 'check',
-            text: 'Submit',
+            text: 'Submit answers',
             title: canSubmit
               ? 'Submit answers (y)'
               : 'Select or type at least one answer before submitting',
             action: 'submit',
             kind: 'primary',
-            disabled: !canSubmit,
+            disabled: this.archived,
             onClick: () => this.submitAnswers(),
           })}
           ${this.renderRejectButton('Reject this question (n)')}
         </div>
+        <p class="user-question-request__answer-requirement" role="status">
+          ${canSubmit ? '' : 'Answer at least one question to continue.'}
+        </p>
         ${this.renderFeedbackSection(
           'user-question-request__feedback',
           'user-question-request__feedback-input',
@@ -93,11 +96,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   override handleKeyboardShortcut(key: string): boolean {
     if (key !== 'y') return super.handleKeyboardShortcut(key);
     if (this.showFeedback) return false;
-    // Swallow 'y' when nothing is answerable, mirroring the disabled submit
-    // button, so the shortcut doesn't fall through to other handlers.
-    if (this.hasAnyAnswer(this.permission.data)) {
-      this.submitAnswers();
-    }
+    this.submitAnswers();
     return true;
   }
 
@@ -105,8 +104,8 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     const current = this.selections[question.question] ?? [];
 
     return html`
-      <section class="user-question-request__question">
-        <div class="user-question-request__heading">
+      <fieldset class="user-question-request__question">
+        <legend class="user-question-request__heading">
           ${
             question.header
               ? html`<span class="user-question-request__header">
@@ -115,7 +114,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
               : nothing
           }
           <span>${question.question}</span>
-        </div>
+        </legend>
         <div class="user-question-request__options">
           ${
             question.multiSelect
@@ -127,8 +126,12 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
                 )
               : html`
                   <wa-radio-group
-                    aria-label=${question.question}
-                    .value=${current[0] ?? ''}
+                    label=${question.question}
+                    .value=${
+                      this.freeText[question.question]?.trim()
+                        ? ''
+                        : (current[0] ?? '')
+                    }
                     @change=${(event: Event) =>
                       this.updateSingleSelection(question, event)}
                   >
@@ -145,16 +148,22 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
           question.allowFreeText
             ? html`<wa-textarea
                 class="user-question-request__free-text"
-                aria-label=${`Another answer for: ${question.question}`}
-                placeholder="Type another answer"
+                label="Another answer"
+                hint=${
+                  question.multiSelect
+                    ? 'Adds to the selected options.'
+                    : 'Replaces the selected option.'
+                }
                 rows="2"
+                resize="vertical"
+                autocomplete="off"
+                spellcheck
                 .value=${this.freeText[question.question] ?? ''}
-                @input=${(event: Event) =>
-                  this.updateFreeText(question.question, event)}
+                @input=${(event: Event) => this.updateFreeText(question, event)}
               ></wa-textarea>`
             : nothing
         }
-      </section>
+      </fieldset>
     `;
   }
 
@@ -222,24 +231,33 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
       ...this.selections,
       [question.question]: value ? [value] : [],
     };
+    if (value && this.freeText[question.question]) {
+      this.freeText = { ...this.freeText, [question.question]: '' };
+    }
   }
 
-  private updateFreeText(question: string, event: Event): void {
+  private updateFreeText(question: UserQuestionPrompt, event: Event): void {
     const value =
       (event.currentTarget as HTMLElement & { value?: string }).value ?? '';
-    this.freeText = { ...this.freeText, [question]: value };
+    this.freeText = { ...this.freeText, [question.question]: value };
   }
 
   private submitAnswers(): void {
     if (this.archived) return;
     const data = this.permission.data;
+    if (!this.hasAnyAnswer(data)) {
+      this.renderRoot
+        .querySelector<HTMLElement>('wa-radio-group, wa-checkbox, wa-textarea')
+        ?.focus();
+      return;
+    }
     const answers: UserQuestionAnswers = {};
 
     for (const question of data.questions) {
       const custom = this.freeText[question.question]?.trim();
       const selected = this.selections[question.question] ?? [];
       if (question.multiSelect) {
-        // The box is labelled "Type another answer", so on a multi-select
+        // The box is labelled "Another answer", so on a multi-select
         // question it adds to the checked options instead of replacing them.
         const merged = custom ? [...selected, custom] : selected;
         const answer = [...new Set(merged)];

@@ -220,13 +220,22 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       #activeStreamName {
         flex: 1;
         min-width: 0;
+        margin: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         color: var(--wa-color-text-normal);
         font-size: var(--font-size);
         font-weight: var(--font-weight-semibold);
+        line-height: 1.2;
         letter-spacing: -0.012em;
+      }
+
+      .status-label {
+        flex: 0 0 auto;
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+        white-space: nowrap;
       }
 
       .header-actions {
@@ -236,6 +245,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         min-width: 0;
         max-width: 100%;
         margin-inline-start: auto;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
       }
 
       .header-actions wa-button-group {
@@ -342,7 +354,19 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         font-size: var(--font-size-xs);
       }
 
+      wa-tag.progress-badge {
+        font-variant-numeric: tabular-nums;
+      }
+
+      :dir(rtl) .parent-link wa-icon {
+        transform: scaleX(-1);
+      }
+
       @container (max-width: 520px) {
+        .status-label {
+          display: none;
+        }
+
         .log-header {
           padding-inline: var(--wa-space-xs);
           flex-wrap: wrap;
@@ -522,12 +546,12 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       <div class="log-header">
         <div class="header-left">
           ${this.renderParentLink()}
-          <span
+          <h1
             id=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
             data-stream=${this.stream.name}
           >
             ${streamDisplayLabel(this.stream)}
-          </span>
+          </h1>
           ${
             this.stream.label
               ? html`<wa-tooltip for=${ELEMENT_IDS.ACTIVE_STREAM_NAME}
@@ -547,6 +571,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
           <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
             ${streamStatusTooltip(state, statusLabel)}
           </wa-tooltip>
+          <span class="status-label" aria-hidden="true">${statusLabel}</span>
           ${this.renderRunElapsed(state?.runStartedAt)}
           ${this.renderGoalChip(goal)}
           ${this.renderProgressBadge(progress, stage)}
@@ -669,6 +694,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         class="parent-link"
         role="button"
         tabindex="0"
+        aria-label=${`Go to parent session: ${displayName}`}
         @click=${this.navigateToParent}
         @keydown=${this.handleParentLinkKey}
       >

@@ -27,8 +27,9 @@ const planApprovalRequestPanelStyles: CSSResult = css`
   .plan-approval-request__objective {
     margin: ${sp.small} 0;
     color: var(--wa-color-text-normal);
+    line-height: var(--line-height-normal);
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .plan-approval-request__goal-explanation {
@@ -49,7 +50,9 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
   protected readonly approvalDecision = { action: 'approve' } as const;
 
   protected override handleExtraKey(key: string): boolean {
-    if (key !== 'r' || !this.permission.data.goalEnabled) return false;
+    if (key !== 'r' || this.archived || !this.permission.data.goalEnabled) {
+      return false;
+    }
     this.emitAction({ action: 'approve_and_goal' });
     return true;
   }
@@ -79,6 +82,7 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
             title:
               'Approve this plan and keep working across turns until it completes or needs your input (r)',
             action: 'approve_and_goal',
+            disabled: this.archived,
             onClick: () => this.emitAction({ action: 'approve_and_goal' }),
           })
         : nothing,
@@ -87,7 +91,8 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
 
   /** Kept to one line so the pre-wrap body gets no template whitespace. */
   private renderObjective(text: string): TemplateResult {
-    return html`<div class="plan-approval-request__objective">${text}</div>`;
+    // prettier-ignore
+    return html`<div class="plan-approval-request__objective" dir="auto">${text}</div>`;
   }
 }
 

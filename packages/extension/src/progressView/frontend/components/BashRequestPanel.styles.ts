@@ -6,6 +6,14 @@ export const bashRequestPanelStyles: CSSResult = css`
   .bash-approval-request__command {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
+    font-variant-ligatures: none;
+    line-height: var(--line-height-normal);
+    text-align: start;
+  }
+
+  .bash-approval-request__command .tool-command-input {
+    direction: ltr;
+    text-align: left;
   }
 
   /* The directory a command will run in is the security-relevant field of
@@ -22,12 +30,7 @@ export const bashRequestPanelStyles: CSSResult = css`
     overflow-wrap: anywhere;
   }
 
-  .bash-approval-request__cwd span {
+  .bash-approval-request__cwd bdi {
     color: var(--wa-color-text-normal);
-  }
-
-  .bash-approval-request__command .code-block pre {
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 `;

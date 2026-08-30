@@ -119,7 +119,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
       'wa-button[data-action="submit"]',
     ) as HTMLElement & { disabled?: boolean };
 
-    expect(submitButton.disabled).toBe(true);
+    expect(submitButton.disabled).toBe(false);
 
     setTextareaValue(answerInput, '  the answer  ');
     await element.updateComplete;

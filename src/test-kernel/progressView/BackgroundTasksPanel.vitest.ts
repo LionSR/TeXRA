@@ -120,7 +120,11 @@ describe('background-tasks-panel', () => {
     expect(names).toEqual(['reviewer', 'polisher']);
     for (const name of shadow.querySelectorAll<HTMLElement>('.task-name')) {
       expect(name.hasAttribute('title')).toBe(false);
-      expect(shadow.querySelector(`wa-tooltip[for="${name.id}"]`)).toBeTruthy();
+      const button = name.closest<HTMLButtonElement>('button');
+      expect(button).not.toBeNull();
+      expect(
+        shadow.querySelector(`wa-tooltip[for="${button?.id}"]`),
+      ).toBeTruthy();
     }
 
     const rows = [...shadow.querySelectorAll('.task-header')];
