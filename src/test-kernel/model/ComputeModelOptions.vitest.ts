@@ -22,6 +22,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { ModelOptionData } from '@shared/schemas';
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 
@@ -160,17 +161,17 @@ describe('computeModelOptionsData availability', () => {
     expect(gpt56.availability).toBe('missing-key');
     expect(warn).toHaveBeenCalledTimes(3);
     expect(warn).toHaveBeenCalledWith(
-      'PlatformSecrets',
+      'computeModelOptions',
       'Failed to read OpenAI API key status; treating it as unavailable.',
       { data: readError },
     );
     expect(warn).toHaveBeenCalledWith(
-      'PlatformSecrets',
+      'computeModelOptions',
       'Failed to read OpenRouter API key status; treating it as unavailable.',
       { data: readError },
     );
     expect(warn).toHaveBeenCalledWith(
-      'PlatformSecrets',
+      'computeModelOptions',
       'Failed to read Kimi Code API key status; treating it as unavailable.',
       { data: readError },
     );
@@ -352,6 +353,49 @@ describe('computeModelOptionsData availability', () => {
     const [model] = await computeModelOptionsData(['gpt55']);
 
     expect(model.availability).toBe('subscription-access');
+  });
+
+  it('does not let invalidated picker checks repopulate caches with stale key state', async () => {
+    const staleRead = createDeferred<string | undefined>();
+    const readStarted = createDeferred();
+    const secrets = new FakeSecrets();
+    let openaiReads = 0;
+    vi.spyOn(secrets, 'get').mockImplementation(async (key) => {
+      if (key !== apiKeySecretName('openai')) {
+        return undefined;
+      }
+      openaiReads += 1;
+      if (openaiReads === 1) {
+        readStarted.resolve();
+        return staleRead.promise;
+      }
+      return secrets.getStored(key);
+    });
+    await installPlatform(
+      {
+        globalState: { [GlobalStateKey.ENABLED_MODELS]: ['gpt55'] },
+      },
+      { secrets },
+    );
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+
+    const staleOptions = computeModelOptionsData(['gpt55']);
+    await readStarted.promise;
+    await secrets.set(apiKeySecretName('openai'), 'sk-fresh');
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+
+    const freshOptions = await computeModelOptionsData(['gpt55']);
+    expect(freshOptions[0].availability).toBe('provider-key');
+
+    staleRead.resolve(undefined);
+    const staleResult = await staleOptions;
+    expect(staleResult[0].availability).toBe('missing-key');
+
+    const subsequentOptions = await computeModelOptionsData(['gpt55']);
+    expect(subsequentOptions).toBe(freshOptions);
+    expect(subsequentOptions[0].availability).toBe('provider-key');
   });
 
   it('caches explicit model-list availability', async () => {

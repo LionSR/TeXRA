@@ -5,7 +5,6 @@ import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
-import { warnSecretReadFailure } from '@platform/secrets';
 import { platform } from '@platform/platform';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
@@ -25,6 +24,7 @@ import {
 } from '@utils/config/providerConfig';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
+import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
@@ -358,8 +358,8 @@ function hasUsableApiKeyForAvailability(
 
   const check = hasUsableApiKey(platform().secrets, provider).catch(
     (error: unknown) => {
-      warnSecretReadFailure(
-        `${providerDisplayName(provider)} API key status`,
+      warnModelAvailability(
+        `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
         error,
       );
       return false;
