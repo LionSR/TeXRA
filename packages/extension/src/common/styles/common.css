@@ -388,6 +388,8 @@ body {
   padding: 20px;
   font-family: var(--wa-font-family-body);
   font-size: var(--wa-font-size-m);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   color: var(--wa-color-text-normal);
   background-color: var(--wa-color-surface-default);
   box-sizing: border-box;
