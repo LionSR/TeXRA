@@ -24,6 +24,7 @@ import {
 } from '@utils/config/providerConfig';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
+import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
@@ -235,15 +236,12 @@ async function getPersonalAccessKindForModel(
   const provider = resolveDirectModelApiKeyProvider(config);
   if (!provider) return null;
 
-  try {
-    if (await ctx.hasUsableApiKey(provider)) {
-      return 'provider-key';
-    }
-  } catch {
-    // Treat unreadable provider keys as absent, but still allow OpenRouter
-    // fallback below when this model has an OpenRouter route.
+  if (await ctx.hasUsableApiKey(provider)) {
+    return 'provider-key';
   }
 
+  // At the picker boundary, absent and unreadable provider keys both degrade to
+  // unavailable while still allowing an OpenRouter route below.
   return config.openrouterFullName && ctx.hasOpenRouter
     ? 'openrouter-key'
     : null;
@@ -350,11 +348,35 @@ async function resolveModelAvailability(
   return availabilityStatus('missing-key');
 }
 
+const pendingAvailabilityKeyChecks = new Map<ApiProvider, Promise<boolean>>();
+
+function hasUsableApiKeyForAvailability(
+  provider: ApiProvider,
+): Promise<boolean> {
+  const pending = pendingAvailabilityKeyChecks.get(provider);
+  if (pending) return pending;
+
+  const check = hasUsableApiKey(platform().secrets, provider).catch(
+    (error: unknown) => {
+      warnModelAvailability(
+        `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+        error,
+      );
+      return false;
+    },
+  );
+  pendingAvailabilityKeyChecks.set(provider, check);
+  void check.then(() => {
+    if (pendingAvailabilityKeyChecks.get(provider) === check) {
+      pendingAvailabilityKeyChecks.delete(provider);
+    }
+  });
+  return check;
+}
+
 async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
-  const secrets = platform().secrets;
   const useOpenRouter = getUseOpenRouter();
-  const hasApiKey = (provider: ApiProvider) =>
-    hasUsableApiKey(secrets, provider);
+  const hasApiKey = hasUsableApiKeyForAvailability;
   const [hasOpenRouter, codexSignedIn, xaiSignedIn, kimiCodeKeySet] =
     await Promise.all([
       hasApiKey('openRouter'),
@@ -549,6 +571,7 @@ const pendingModelOptions = new Map<string, Promise<ModelOptionData[]>>();
 export function invalidateModelOptionsCache(): void {
   resolvedModelOptions.clear();
   pendingModelOptions.clear();
+  pendingAvailabilityKeyChecks.clear();
 }
 
 /**
