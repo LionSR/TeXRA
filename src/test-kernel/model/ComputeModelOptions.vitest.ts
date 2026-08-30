@@ -160,17 +160,17 @@ describe('computeModelOptionsData availability', () => {
     expect(gpt56.availability).toBe('missing-key');
     expect(warn).toHaveBeenCalledTimes(3);
     expect(warn).toHaveBeenCalledWith(
-      'PlatformSecrets',
+      'computeModelOptions',
       'Failed to read OpenAI API key status; treating it as unavailable.',
       { data: readError },
     );
     expect(warn).toHaveBeenCalledWith(
-      'PlatformSecrets',
+      'computeModelOptions',
       'Failed to read OpenRouter API key status; treating it as unavailable.',
       { data: readError },
     );
     expect(warn).toHaveBeenCalledWith(
-      'PlatformSecrets',
+      'computeModelOptions',
       'Failed to read Kimi Code API key status; treating it as unavailable.',
       { data: readError },
     );
