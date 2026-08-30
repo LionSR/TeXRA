@@ -24,6 +24,7 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { focusRingStyles } from '@shared/styles/controlStyles';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   progressHeaderStatus,
@@ -127,7 +128,7 @@ function buildTooltip(
  */
 @customElement('stream-tab')
 class StreamTab extends LitElement {
-  static override styles = [designTokens, streamTabStyles];
+  static override styles = [designTokens, focusRingStyles, streamTabStyles];
 
   @property({ attribute: false }) info!: StreamTabInfo;
   @property({ attribute: false }) status: StreamLifecycleStatus =
