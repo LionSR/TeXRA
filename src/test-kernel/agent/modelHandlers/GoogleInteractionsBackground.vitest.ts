@@ -41,6 +41,38 @@ type Step = Interactions.Step;
 
 const POLL_INTERVAL_MS = 5000;
 const MAX_DURATION_MS = 3 * 60 * 60 * 1000;
+const TRANSIENT_RETRIEVAL_MESSAGE_403 =
+  'There was a problem processing your request. You will not be charged.';
+const TRANSIENT_RETRIEVAL_MESSAGE_400 = 'Request contains an invalid argument.';
+
+function googleApiError(
+  status: number,
+  message: string,
+  providerStatus: string,
+): ApiError {
+  return new ApiError({
+    status,
+    message: JSON.stringify({
+      error: { code: status, message, status: providerStatus },
+    }),
+  });
+}
+
+function transientRetrieval403(): ApiError {
+  return googleApiError(
+    403,
+    TRANSIENT_RETRIEVAL_MESSAGE_403,
+    'PERMISSION_DENIED',
+  );
+}
+
+function transientRetrieval400(): ApiError {
+  return googleApiError(
+    400,
+    TRANSIENT_RETRIEVAL_MESSAGE_400,
+    'INVALID_ARGUMENT',
+  );
+}
 
 interface Interaction {
   id: string;
@@ -792,6 +824,95 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
       gets: ['int_forbidden', 'int_forbidden'],
     });
   });
+
+  it('rejects the ambiguous retrieval 400 before a recognized 403', async () => {
+    useBackgroundTimers();
+    const handler = createHandler();
+    const invalidArgument = transientRetrieval400();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_unarmed', status: 'in_progress' }),
+      getSequence: [invalidArgument],
+    });
+
+    expect(await failFirstRetrieval(handler, client)).toBe(invalidArgument);
+    expectLedger(calls, 1, ['int_unarmed']);
+  });
+
+  it('tolerates the Google retrieval fingerprint across retry and preserves timeout diagnostics', async () => {
+    mockConfig();
+    const startedAt = new Date('2026-08-01T00:00:00.000Z');
+    vi.useFakeTimers({ now: startedAt });
+    const handler = createHandler();
+    const warn = vi.fn();
+    handler.setLogger({ ...noopTrace, warn });
+    const transportFailure = new ApiError({
+      message: 'temporarily unavailable',
+      status: 503,
+    });
+    const invalidArgument = transientRetrieval400();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_slow', status: 'in_progress' }),
+      getSequence: [transientRetrieval403(), transportFailure, invalidArgument],
+    });
+
+    const firstError = await runWithPolls(
+      captureRejection(respond(handler, client, [userStep('a')])),
+      2,
+    );
+    expect(firstError).toBe(transportFailure);
+
+    const timeoutPromise = captureRejection(
+      respond(handler, client, [userStep('a')]),
+    );
+    await runWithPolls(Promise.resolve(), 58);
+    vi.setSystemTime(startedAt.getTime() + MAX_DURATION_MS);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    const timeout = await timeoutPromise;
+
+    expect(timeout.message).toContain(
+      'Polling tolerated 60 recognized retrieval errors',
+    );
+    expect(timeout.cause).toBe(invalidArgument);
+    const transientWarnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('classification=known-provider-retrieval-lag'),
+    );
+    expect(transientWarnings).toHaveLength(2);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(
+      TRANSIENT_RETRIEVAL_MESSAGE_403,
+    );
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toHaveLength(61);
+    expect(calls.get.every((id) => id === 'int_slow')).toBe(true);
+    expect(calls.cancel).toEqual(['int_slow']);
+  });
+
+  it.each([
+    { label: 'success', terminal: completedInteraction('int_reused') },
+    { label: 'failure', terminal: { id: 'int_reused', status: 'failed' } },
+  ])(
+    'clears transient retrieval state after terminal $label',
+    async ({ terminal }) => {
+      useBackgroundTimers();
+      const handler = createHandler();
+      const invalidArgument = transientRetrieval400();
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_reused', status: 'in_progress' }),
+        getSequence: [transientRetrieval403(), terminal, invalidArgument],
+      });
+
+      const first = respond(handler, client, [userStep('a')]);
+      if (terminal.status === 'completed') {
+        await runWithPolls(first, 2);
+      } else {
+        await runWithPolls(captureRejection(first), 2);
+      }
+
+      expect(
+        await failFirstRetrieval(handler, client, undefined, [userStep('b')]),
+      ).toBe(invalidArgument);
+      expectLedger(calls, 2, ['int_reused', 'int_reused', 'int_reused']);
+    },
+  );
 
   it.each([404, 410])(
     'clears a definitively missing interaction on HTTP %i and requires manual retry',
