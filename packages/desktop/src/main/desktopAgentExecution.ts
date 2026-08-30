@@ -1245,11 +1245,14 @@ export class DesktopProgressBridge {
     );
     if (launch.status === 'cancelled') return;
     if (launch.status === 'error') {
-      await this.options.host.showErrorMessage(launch.message);
+      void this.options.host.showErrorMessage(launch.message);
       return;
     }
     if (launch.infoMessage) {
-      await this.options.host.showInfoMessage(launch.infoMessage);
+      void this.settleHostDialog(
+        this.options.host.showInfoMessage(launch.infoMessage),
+        'Failed to present the launch information dialog',
+      );
     }
     const { preparation } = launch;
     if (!preparation.valid) {
