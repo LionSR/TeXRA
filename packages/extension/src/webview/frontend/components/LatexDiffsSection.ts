@@ -102,8 +102,8 @@ const COMMIT_MANAGE_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'cleanLatexdiffvcButton',
     icon: 'trash',
-    label: 'Clean',
-    tooltip: 'Delete the latexdiff-vc output files',
+    label: 'Delete output',
+    tooltip: 'Delete generated latexdiff-vc output files',
     action: 'cleanLatexdiffvc',
   },
 ];
