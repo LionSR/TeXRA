@@ -416,7 +416,11 @@ export class FileSelectGroup extends LitElement {
             </span>
             <span class="file-select-label">${config.label}</span>
             <span class="file-select-count" role="status" aria-atomic="true">
-              ${formatResultCount(this.currentFiles.length, 'file')}
+              ${
+                this.currentFiles.length === 0
+                  ? nothing
+                  : formatResultCount(this.currentFiles.length, 'file')
+              }
             </span>
             ${
               config.toolConfig === 'tool'
