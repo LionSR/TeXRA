@@ -13,6 +13,7 @@ import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { getCodexStatus } from '@auth/codex';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
+import { createLog } from '@logger/logUtils';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -26,6 +27,8 @@ import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform as currentPlatform } from '@platform/platform';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
+
+const credentialLog = createLog('Setup Credentials');
 
 /** Per-provider API key surface. */
 export interface SetupSecretsAdapter {
@@ -139,7 +142,7 @@ export const setupSecrets: SetupSecretsAdapter =
         apiKeySecretName(provider),
       ),
     anyUsableCredentialExists: () =>
-      hasUsableSetupCredential(currentPlatform().secrets),
+      hasUsableSetupCredential(currentPlatform().secrets, credentialLog.warn),
     gitHubTokenExists: () =>
       resolveGitHubTokenSource(currentPlatform().secrets),
     listStoredKeys: () => currentPlatform().secrets.listStoredKeys(),

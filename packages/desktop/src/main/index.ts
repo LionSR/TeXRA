@@ -37,6 +37,7 @@ import { LatexToolingController } from '@controllers/settingsView/LatexToolingCo
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
+import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
@@ -150,6 +151,7 @@ import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const desktopMainDir = findDesktopMainDir(moduleDirname);
+const credentialLog = createLog('Setup Credentials');
 
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
@@ -974,7 +976,8 @@ function createWindow(options: {
       // Single source of truth for "does the user have a usable credential",
       // shared by every host (extension, desktop, CLI) so this credential-gating
       // logic can't drift between them.
-      hasCredential: () => hasUsableSetupCredential(platform().secrets),
+      hasCredential: () =>
+        hasUsableSetupCredential(platform().secrets, credentialLog.warn),
       selectSetupAgent: async () => {
         const entry = getAgent('setup', AgentCategory.ToolUse);
         ipcRef.current?.postToRenderer({

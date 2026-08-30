@@ -1,5 +1,9 @@
+import { createLog } from '@logger/logUtils';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionActive,
+  isXaiSubscriptionActive,
+} from '@model/providerCapabilities';
 import {
   decideRunModel,
   type RunModelCandidate,
@@ -8,9 +12,11 @@ import {
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
+  XAI_SETUP_MODEL,
 } from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { probeSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory, type MainViewExecuteMessage } from '@shared/schemas';
@@ -18,13 +24,15 @@ import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
+const credentialLog = createLog('Setup Credentials');
+
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =
   'Finish installing TeXRA. Probe my environment, install anything missing, and configure a working credential.';
 
 /**
  * Scan non-OpenRouter setup credentials in host-shared priority order:
- * ChatGPT/Codex subscription, then direct provider key.
+ * ChatGPT/Codex subscription, Grok subscription, then direct provider key.
  */
 export async function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
@@ -34,9 +42,23 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
   // When it is enabled, only managed direct credentials can bypass it.
   if (
     !useOpenRouter &&
-    (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL))
+    (await probeSetupCredential(
+      'ChatGPT subscription',
+      () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+      credentialLog.warn,
+    ))
   ) {
     return CHATGPT_SETUP_MODEL;
+  }
+  if (
+    !useOpenRouter &&
+    (await probeSetupCredential(
+      'Grok subscription',
+      () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+      credentialLog.warn,
+    ))
+  ) {
+    return XAI_SETUP_MODEL;
   }
 
   for (const provider of API_PROVIDERS) {
@@ -47,9 +69,12 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
     if (!config || shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
       continue;
     }
-    if (isNonEmptyString(await lookupApiKey(secrets, provider))) {
-      return model;
-    }
+    const hasApiKey = await probeSetupCredential(
+      `${provider} API key`,
+      async () => isNonEmptyString(await lookupApiKey(secrets, provider)),
+      credentialLog.warn,
+    );
+    if (hasApiKey) return model;
   }
 
   return null;
@@ -73,9 +98,12 @@ export async function resolveSetupLaunchModel(
   includeAccessListFallback: boolean,
 ): Promise<SetupModelResolution | null> {
   const useOpenRouter = getUseOpenRouter();
-  const openRouterModel = isNonEmptyString(
-    await lookupApiKey(secrets, 'openRouter'),
-  )
+  const hasOpenRouterKey = await probeSetupCredential(
+    'OpenRouter API key',
+    async () => isNonEmptyString(await lookupApiKey(secrets, 'openRouter')),
+    credentialLog.warn,
+  );
+  const openRouterModel = hasOpenRouterKey
     ? SETUP_MODEL_BY_PROVIDER.openRouter
     : null;
   const credentialModel =

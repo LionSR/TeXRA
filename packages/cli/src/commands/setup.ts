@@ -1,10 +1,12 @@
 import { defineCommand } from 'citty';
 
+import { createLog } from '@logger/logUtils';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { platform } from '@platform/platform';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
-import { hasCliRunCredential } from '../runtime/credentialStatus';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initInteractiveCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -21,6 +23,8 @@ import {
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
 import { type CliContext } from '../runtime/cliContext';
+
+const credentialLog = createLog('Setup Credentials');
 
 /** Exported for the test kernel — the command's `run` is the only other caller. */
 export async function runSetup(context: CliContext): Promise<number> {
@@ -45,7 +49,9 @@ export async function runSetup(context: CliContext): Promise<number> {
   // one step no agent can do for the user. With a credential already in place
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary.
-  if (!(await hasCliRunCredential())) {
+  if (
+    !(await hasUsableSetupCredential(platform().secrets, credentialLog.warn))
+  ) {
     const { runCliOnboarding } = await import('../onboarding/runOnboarding');
     const result = await runCliOnboarding(context.stdoutColorEnabled);
     // Skipped or abandoned the picker: exit cleanly (the skip summary already
