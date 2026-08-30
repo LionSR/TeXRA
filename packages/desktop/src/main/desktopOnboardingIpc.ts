@@ -3,6 +3,7 @@ import {
   type OnboardingFunnelState,
 } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
+import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
@@ -21,6 +22,8 @@ import {
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
+
+const logger = createLog('DesktopOnboarding');
 
 export interface DesktopOnboardingIpcOptions {
   state?: StateStore;
@@ -77,9 +80,18 @@ export function createDesktopOnboardingIpc(
   }
 
   async function runOnboardingFunnelRefresh(): Promise<void> {
-    const hasCredential = await Promise.resolve(options.hasCredential()).catch(
-      () => false,
-    );
+    // A failed probe still has to paint the funnel, but never silently: it
+    // demotes a mid-setup user back to the sign-in card, and the two states
+    // are indistinguishable on screen. The call is inside the `try` so a
+    // synchronous throw from the host wiring is reported too.
+    let hasCredential = false;
+    try {
+      hasCredential = await options.hasCredential();
+    } catch (error) {
+      logger.warn('Credential probe failed; treating as no credential', {
+        data: error,
+      });
+    }
     const flags = readOnboardingFlags(state);
     const transition = planOnboardingFunnelTransition(previousFunnelState, {
       hasCredential,

@@ -10,6 +10,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
+  parseTexraApprovalPolicy,
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
@@ -17,7 +18,6 @@ import {
 import {
   type ToolCategory,
   type ToolDashboardItem,
-  AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
@@ -29,6 +29,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSelectValue } from '@shared/utils/selectTemplates';
 import { groupBy } from '@utils/core';
 
 // Side-effect imports - register WA button, icon, and switch components
@@ -42,7 +43,6 @@ import {
   postStateSetting,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 // Side-effect: register tool card component
 import '../components/tools/ToolCard';
@@ -165,19 +165,14 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
-  @property({ type: Boolean }) agentSkillsEnabled = true;
 
   private handleRecheck(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
   }
 
   private handleApprovalPolicyChange = (e: Event): void => {
-    const target = e.target as WaSelect | null;
-    const value = target?.value;
-    if (value !== 'ask' && value !== 'never' && value !== 'yolo') {
-      return;
-    }
-    postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, value);
+    const policy = parseTexraApprovalPolicy(readSelectValue(e));
+    if (policy) postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
   };
 
   private renderApprovalSettings(): TemplateResult {
@@ -190,13 +185,12 @@ export class ToolsTab extends LitElement {
         })}
         <div class="settings-section">
           <div class="setting-block">
-            <label class="setting-label" for="texra-approval-policy">
+            <label class="settings-row-label" for="texra-approval-policy">
               Approval policy
             </label>
             <wa-select
               id="texra-approval-policy"
               value=${this.approvalPolicy}
-              class="setting-enum-select"
               @change=${this.handleApprovalPolicyChange}
             >
               ${TEXRA_APPROVAL_POLICY_OPTIONS.map(
@@ -210,37 +204,11 @@ export class ToolsTab extends LitElement {
           </div>
           ${renderStateSettingToggleRow({
             key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
-            label: 'Under Ask: require approval for file edits',
-            description:
-              'When policy is Ask, review a diff before an agent changes files. Inert under Never and Auto-approve.',
             checked: this.editApprovalEnabled,
           })}
           ${renderStateSettingToggleRow({
             key: BASH_APPROVAL_CONFIG_KEY,
-            label: 'Under Ask: require approval for shell commands',
-            description:
-              'When policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
             checked: this.bashApprovalEnabled,
-          })}
-        </div>
-      </div>
-    `;
-  }
-
-  private renderAgentSkillsSettings(): TemplateResult {
-    return html`
-      <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: 'robot',
-          title: 'Agent skills',
-          description: 'Extend tool-use agents with reusable skill packages.',
-        })}
-        <div class="settings-section">
-          ${renderStateSettingToggleRow({
-            key: AGENT_SKILLS_CONFIG_KEY,
-            label: 'Make skills available to tool-use agents',
-            description: 'Includes built-in TeXRA skills and imported skills.',
-            checked: this.agentSkillsEnabled,
           })}
         </div>
       </div>
@@ -290,9 +258,6 @@ export class ToolsTab extends LitElement {
                       >
                         ${renderStateSettingToggleRow({
                           key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-                          label: 'Restrict tool paths to the working directory',
-                          description:
-                            'Keep file, search, diagnostics, and PDF tools inside the working directory.',
                           checked: this.toolPathProtectionEnabled,
                         })}
                       </div>
@@ -330,7 +295,7 @@ export class ToolsTab extends LitElement {
             onClick: () => this.handleRecheck(),
           })}
         </div>
-        ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
+        ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.flatMap((cat) => {
           const catItems = groups.get(cat);
           return catItems ? [this.renderCategory(cat, catItems)] : [];

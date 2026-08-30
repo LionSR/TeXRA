@@ -2,18 +2,6 @@
   "semantics": "Single baseline for the two Knip inputs owned by scripts/check-dead-code-ratchet.mjs: the normal run preserves ordinary findings, while findings emitted by the production run but absent from the normal run are categorized as production-dead. Each finding is identified by (file, category, kind, name), never by line number. Category is unused or production-dead; kind preserves Knip’s files, exports, types, or duplicates issue kind so same-name findings of different kinds remain distinct. The ratchet fails when the combined result contains a finding not in this list. Removing resolved entries is always welcome; an intentional new finding must be added in sorted order by file, category, kind, then name. Run `npm run check:dead-code-ratchet` as the authoritative dead-code check.",
   "findings": [
     {
-      "file": "packages/cli/src/chat/tui/appLayout.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "allocateConversationBottomPanelRows"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/appLayout.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "allocateSidePanelRows"
-    },
-    {
       "file": "packages/cli/src/chat/tui/chatSubmitDriver.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -119,25 +107,7 @@
       "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "agentRosterSelectWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "buildChatDefaultAgentItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectedAgentKeys"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "setChatDefaultAgent"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/CliConfigForm.tsx",
@@ -206,22 +176,10 @@
       "name": "validateSettingInput"
     },
     {
-      "file": "packages/cli/src/chat/tui/forms/LoginForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "LOGIN_FORM_ITEMS"
-    },
-    {
       "file": "packages/cli/src/chat/tui/forms/ModelListForm.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "modelListDescription"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ModelListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "modelSelectWindow"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ProviderApiKeyForm.tsx",
@@ -404,18 +362,6 @@
       "name": "userQuestionPromptRowsBudget"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/ConversationPane.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workflowRunStatusSummary"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/EntryErrorBoundary.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatRenderError"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/InfoPane.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -432,12 +378,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "queuedFollowUpPanelDisplay"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/QueuedFollowUpsPanel.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "QueuedFollowUpPanelDisplay"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
@@ -488,18 +428,6 @@
       "name": "StaticTranscriptRingBudgets"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/StaticConversationTranscript.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StaticTranscriptState"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/statusBarDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ctrlCActionForFocus"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/TodosPlanPanel.tsx",
       "category": "production-dead",
       "kind": "exports",
@@ -512,28 +440,10 @@
       "name": "CompactTodosPlanRow"
     },
     {
-      "file": "packages/cli/src/chat/tui/panes/toolRenderers.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "toolHeaderPreviewBudget"
-    },
-    {
       "file": "packages/cli/src/chat/tui/panes/ToolUseRow.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "toolDisplaySpanTextProps"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/transcriptEntries.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "terminalVisibleTranscriptText"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/transcriptEntryLayout.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "liveAssistantDisplayLines"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/TranscriptReader.tsx",
@@ -578,12 +488,6 @@
       "name": "TuiRepaintOptions"
     },
     {
-      "file": "packages/cli/src/chat/tui/state/childExecutions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "retainedChildStreamsFor"
-    },
-    {
       "file": "packages/cli/src/chat/tui/state/cliState.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -600,18 +504,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "enqueueTuiApproval"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "invalidateTranscriptFoldForTest"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamRenderCacheSizesForTest"
     },
     {
       "file": "packages/cli/src/chat/tui/state/subscribeStreamLog.ts",
@@ -701,12 +593,6 @@
       "file": "packages/cli/src/commands/init.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "defaultInitAgentOptions"
-    },
-    {
-      "file": "packages/cli/src/commands/init.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "defaultInitAnswers"
     },
     {
@@ -746,34 +632,10 @@
       "name": "initWizardModelSelectItems"
     },
     {
-      "file": "packages/cli/src/init/runInitWizard.tsx",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "InitWizardAgentOption"
-    },
-    {
-      "file": "packages/cli/src/onboarding/onboardingState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "describeSavedKeyLocation"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationBlockRowCost"
-    },
-    {
       "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "orchestrationFooterHints"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationKeyHints"
     },
     {
       "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
@@ -786,12 +648,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "orchestrationPreviousStep"
-    },
-    {
-      "file": "packages/cli/src/orchestration/runOrchestrationTui.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "orchestrationWrappedLineRows"
     },
     {
       "file": "packages/cli/src/runtime/apiStatus.ts",
@@ -812,6 +668,12 @@
       "name": "BrowserLaunchCommand"
     },
     {
+      "file": "packages/cli/src/runtime/chatDefaults.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "__resetUserConfigWarningDedupeForTests"
+    },
+    {
       "file": "packages/cli/src/runtime/cliContext.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -830,18 +692,6 @@
       "name": "cliSecretsPath"
     },
     {
-      "file": "packages/cli/src/runtime/completion.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CLI_COMPLETION_SHELLS"
-    },
-    {
-      "file": "packages/cli/src/runtime/defaultAgents.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "BUILTIN_DEFAULT_CHAT_AGENT"
-    },
-    {
       "file": "packages/cli/src/runtime/doctor.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -854,28 +704,10 @@
       "name": "formatDoctorText"
     },
     {
-      "file": "packages/cli/src/runtime/initConfig.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "gitignoreWithTexra"
-    },
-    {
-      "file": "packages/cli/src/runtime/initConfig.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "serializeInitConfig"
-    },
-    {
       "file": "packages/cli/src/runtime/initPlatform.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "installCliShutdownSignalHandlers"
-    },
-    {
-      "file": "packages/cli/src/runtime/logSinks.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isCliPipeClosureError"
     },
     {
       "file": "packages/cli/src/runtime/logSinks.ts",
@@ -888,12 +720,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "findCliModelAccessEntry"
-    },
-    {
-      "file": "packages/cli/src/runtime/modelAccess.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatCliNoRunnableModelsMessage"
     },
     {
       "file": "packages/cli/src/runtime/modelAccess.ts",
@@ -947,12 +773,6 @@
       "file": "packages/cli/src/runtime/tools.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "cliToolIds"
-    },
-    {
-      "file": "packages/cli/src/runtime/tools.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "findCliToolDef"
     },
     {
@@ -966,12 +786,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "buildUpdateCommand"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "checkCliUpdateAvailable"
     },
     {
       "file": "packages/cli/src/runtime/updateChecker.ts",
@@ -995,25 +809,7 @@
       "file": "packages/cli/src/runtime/updateChecker.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "formatUpdateCommand"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "isPackageManagerInstall"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "resetCliUpdateNotifyLatchForTests"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CheckCliUpdateAvailableOptions"
     },
     {
       "file": "packages/cli/src/runtime/updateChecker.ts",
@@ -1037,12 +833,6 @@
       "file": "packages/cli/src/runtime/workflowInputs.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "expandWorkflowInputSpecs"
-    },
-    {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "workflowInputGlobOptions"
     },
     {
@@ -1052,46 +842,10 @@
       "name": "StdinWorkflowInputMaterializer"
     },
     {
-      "file": "packages/cli/src/runtime/workflowInputs.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "WorkflowInputExpansionOptions"
-    },
-    {
       "file": "packages/cli/src/runtime/workflowOutput.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "probeOutputPathForTests"
-    },
-    {
-      "file": "packages/cli/src/schemas/cliOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CliNdjsonRecordSchema"
-    },
-    {
-      "file": "packages/cli/src/tui/noColorOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "sgrStrippingWriteStream"
-    },
-    {
-      "file": "packages/cli/src/tui/noColorOutput.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "stripAnsiSgrChunk"
-    },
-    {
-      "file": "packages/cli/src/tui/selectWindow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "COMPACT_FORM_MAX_ROWS"
-    },
-    {
-      "file": "packages/cli/src/tui/terminalCleanup.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "tuiInputModeRestoreSequence"
     },
     {
       "file": "packages/cli/src/tui/ui/Select.tsx",
@@ -1334,12 +1088,6 @@
       "name": "EXTENSION_INTERNAL_COMMAND_IDS"
     },
     {
-      "file": "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "EXTENSION_REGISTRY_CATALOG_COMMAND_IDS"
-    },
-    {
       "file": "packages/extension/src/frontend/auth/agentCatalogRefreshScope.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1358,58 +1106,10 @@
       "name": "TraceDataSchema"
     },
     {
-      "file": "packages/trace-viewer/vite.standalone.config.ts",
-      "category": "unused",
-      "kind": "files",
-      "name": "packages/trace-viewer/vite.standalone.config.ts"
-    },
-    {
       "file": "src/agent/core/flows/ModelInvocationNode.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "handleInvocationResult"
-    },
-    {
-      "file": "src/agent/core/state/TaskState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TaskStateSchema"
-    },
-    {
-      "file": "src/agent/implementations/flows/reflection/output/outputFileExtraction.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "processMultipleOutputs"
-    },
-    {
-      "file": "src/agent/implementations/flows/reflection/ResponseCycleFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "responseCycleToolsForModel"
-    },
-    {
-      "file": "src/agent/implementations/flows/reflection/runReflectionFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "computeRoundStageTotal"
-    },
-    {
-      "file": "src/agent/index/AgentDirectoryService.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AbsoluteDirectoryAccess"
-    },
-    {
-      "file": "src/agent/index/AgentDirectoryService.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AgentDirectoryPathStorage"
-    },
-    {
-      "file": "src/agent/index/AgentDirectoryService.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "AgentDirectoryServiceLogger"
     },
     {
       "file": "src/agent/index/agentRegistry.ts",
@@ -1422,12 +1122,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "entriesToOptionData"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getAgentsBySource"
     },
     {
       "file": "src/agent/index/agentRegistry.ts",
@@ -1514,30 +1208,6 @@
       "name": "resolveOutputFiles"
     },
     {
-      "file": "src/agent/prompt/userVars.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "USER_VAR_RUNTIME_TOKENS"
-    },
-    {
-      "file": "src/agent/runtime/AgentLaunchContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getAgentPath"
-    },
-    {
-      "file": "src/agent/runtime/childRunBudget.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_CHILD_RUN_BUDGET"
-    },
-    {
-      "file": "src/agent/runtime/HostInteractions.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "OpenPdfRequest"
-    },
-    {
       "file": "src/agent/runtime/index.ts",
       "category": "production-dead",
       "kind": "types",
@@ -1550,28 +1220,10 @@
       "name": "shouldUseResponsesAPI"
     },
     {
-      "file": "src/agent/runtime/RunContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "useRunContext"
-    },
-    {
       "file": "src/agent/runtime/sessionDescription.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "cleanSessionDescription"
-    },
-    {
-      "file": "src/agent/runtime/terminalResultToast.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "terminalResultToast"
-    },
-    {
-      "file": "src/agent/runtime/textConnection.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "bestConnectionMethod"
     },
     {
       "file": "src/agent/storage/conversationFormat.ts",
@@ -1610,42 +1262,6 @@
       "name": "MCP_STOP"
     },
     {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "runWorkflowScript"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WORKFLOW_SKIPPED_RESULT"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "workflowScriptCheckpointKvKey"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WorkflowScriptParseError"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WorkflowScriptPersistenceError"
-    },
-    {
-      "file": "src/agent/workflowScript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "writeWorkflowScriptCheckpoint"
-    },
-    {
       "file": "src/agent/workflowScript/persistence.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1656,12 +1272,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "writeWorkflowScriptCheckpoint"
-    },
-    {
-      "file": "src/auth/authCallback.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getAuthCallbackBasePath"
     },
     {
       "file": "src/auth/codex/codexAuthAccess.ts",
@@ -1685,30 +1295,6 @@
       "file": "src/auth/codex/index.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "CODEX_CALLBACK_PATH"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_SESSION_SECRET_KEY"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CodexSessionCoordinator"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "extractCodexClaims"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "resetCodexCoordinator"
     },
     {
@@ -1721,25 +1307,7 @@
       "file": "src/auth/codex/index.ts",
       "category": "production-dead",
       "kind": "types",
-      "name": "CodexSession"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CodexSessionStatus"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
       "name": "CodexSessionStorage"
-    },
-    {
-      "file": "src/auth/codex/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "CodexTokenResponse"
     },
     {
       "file": "src/auth/oauth/pkce.ts",
@@ -1780,18 +1348,6 @@
     {
       "file": "src/auth/xai/index.ts",
       "category": "production-dead",
-      "kind": "exports",
-      "name": "decodeXaiJwtClaims"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "XaiSessionCoordinator"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
       "kind": "types",
       "name": "XaiOAuthClient"
     },
@@ -1799,19 +1355,7 @@
       "file": "src/auth/xai/index.ts",
       "category": "production-dead",
       "kind": "types",
-      "name": "XaiSession"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "types",
       "name": "XaiSessionStorage"
-    },
-    {
-      "file": "src/auth/xai/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "XaiTokenResponse"
     },
     {
       "file": "src/auth/xai/XaiSessionCoordinator.ts",
@@ -1910,12 +1454,6 @@
       "name": "SettingsAgentDirectoryEntry"
     },
     {
-      "file": "src/controllers/settingsView/SettingsTeamRosterController.ts",
-      "category": "unused",
-      "kind": "types",
-      "name": "SettingsTeamRosterPresentation"
-    },
-    {
       "file": "src/eventBus/AppSignals.ts",
       "category": "production-dead",
       "kind": "types",
@@ -1982,36 +1520,6 @@
       "name": "PROVIDER_KEY_REDACTION_RULES"
     },
     {
-      "file": "src/model/codex/codexPreference.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CODEX_PREFER_SUBSCRIPTION_KEY"
-    },
-    {
-      "file": "src/model/codingPlanSubscriptions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "activeCodingPlanForModel"
-    },
-    {
-      "file": "src/model/kimiCodeSubscriptionRouting.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "kimiCodeRuntimeConfig"
-    },
-    {
-      "file": "src/model/kimiCodeSubscriptionRouting.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "kimiCodeWireModelId"
-    },
-    {
-      "file": "src/model/kimiCodeSubscriptionRouting.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveKimiCodeRoute"
-    },
-    {
       "file": "src/model/modelOptionsBasic.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -2070,36 +1578,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "REGEX_CATEGORIES"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_POLICY_DENIED_MESSAGE"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_POLICY_DISPLAY_ORDER"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE"
-    },
-    {
-      "file": "src/shared/approvalPolicy.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "TEXRA_APPROVAL_YOLO_RETRY_MESSAGE"
     },
     {
       "file": "src/shared/commands/catalog.ts",
@@ -2210,30 +1688,6 @@
       "name": "resolveStateSettingWrite"
     },
     {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "projectRunOutcome"
-    },
-    {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "RUN_OUTCOME_PROJECTION"
-    },
-    {
-      "file": "src/shared/streams/streamStatus.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "RunOutcomeProjection"
-    },
-    {
-      "file": "src/shared/streams/streamStatusDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamStatusDisplayKey"
-    },
-    {
       "file": "src/shared/streams/streamStatusDisplay.ts",
       "category": "production-dead",
       "kind": "types",
@@ -2270,28 +1724,10 @@
       "name": "isUnsupported"
     },
     {
-      "file": "src/skills/loadSkills.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "discoverSkills"
-    },
-    {
-      "file": "src/skills/loadSkills.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DiscoverSkillsResult"
-    },
-    {
       "file": "src/telemetry/UsageLogService.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "USAGE_LOG_FLUSH_OUTCOME"
-    },
-    {
-      "file": "src/test-kernel/support/setupFakePlatform.ts",
-      "category": "unused",
-      "kind": "files",
-      "name": "src/test-kernel/support/setupFakePlatform.ts"
     },
     {
       "file": "src/tools/agentCliShared.ts",
@@ -2300,25 +1736,7 @@
       "name": "publishAgentCliStreamUsage"
     },
     {
-      "file": "src/tools/approval/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cleanupApprovalsForStream"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "ToolEditApprovalRequest"
-    },
-    {
-      "file": "src/tools/approval/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "ToolEditApprovalResult"
-    },
-    {
-      "file": "src/tools/citation/rateLimiter.ts",
+      "file": "src/tools/support/rateLimiter.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "abandonOnAbort"
@@ -2340,18 +1758,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "runStreamedTurn"
-    },
-    {
-      "file": "src/tools/comment/InlineCommentTool.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "InlineCommentInputSchema"
-    },
-    {
-      "file": "src/tools/delegation/delegationAvailability.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceDelegationDescriptionBlock"
     },
     {
       "file": "src/tools/delegation/inBandSubagentExecution.ts",
@@ -2378,34 +1784,10 @@
       "name": "computeAndWriteWorkflowDiffs"
     },
     {
-      "file": "src/tools/delegation/workflowScriptRun.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "WorkflowJournalCostError"
-    },
-    {
       "file": "src/tools/DiagnosticsTool.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "DiagnosticsInputSchema"
-    },
-    {
-      "file": "src/tools/fileEditFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "findOccurrenceLineNumbers"
-    },
-    {
-      "file": "src/tools/fileEditFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceAllLiteral"
-    },
-    {
-      "file": "src/tools/fileEditFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "replaceFirstLiteral"
     },
     {
       "file": "src/tools/github/githubSubscriptionTool.ts",
@@ -2514,24 +1896,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "STREAM_LOGS_DIR"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamDataDir"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StreamLogAppendInput"
-    },
-    {
-      "file": "src/transcript/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "StreamLogDelta"
     },
     {
       "file": "src/transcript/spillArtifacts.ts",

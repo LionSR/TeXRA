@@ -1,19 +1,23 @@
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports - core flow primitives
-import { BaseCycleFieldsSchema } from '@agent/core/flows/CommonCycleTypes';
+import type { BaseCycleFields } from '@agent/core/flows/CommonCycleTypes';
 import type {
   FinalTool,
   SdkToolCall,
 } from '@agent/types/ModelHandlerContracts';
-import { NormalizedUsageSchema } from '@agent/types/NormalizedUsage';
 
 /**
- * Schema for serializable tool-use round fields. Extends BaseCycleFieldsSchema
- * with tool-specific fields using the same flat pattern as ResponseCycleFlow.
+ * Shared state for tool-use round flows.
+ *
+ * Flat, and deliberately narrower than the reflection cycle's state: per-round
+ * counters and accumulators are not mirrored here. The round index is
+ * `services.run.totalRounds`, and the response time and usage of the one model
+ * call a round makes are read straight off that call's result.
+ *
+ * ## Architecture
+ * - Mutable state: `shared` (this interface) - flat, no nested wrappers
+ * - Immutable services: `this.services` (ToolUseRoundServices)
  */
-const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
+export interface ToolUseRoundShared extends BaseCycleFields {
   /**
    * System prompt for providers that pass `system` per-call (Anthropic,
    * Google) rather than embedding it into `messages` at session init.
@@ -21,52 +25,15 @@ const ToolUseRoundFieldsSchema = BaseCycleFieldsSchema.extend({
    * session — never regenerated mid-round, since providers like Anthropic
    * treat any byte change to this string as a full cache-prefix miss.
    */
-  systemPrompt: z.string().optional(),
+  systemPrompt?: string;
   /** Raw response from model (provider-specific, not schematized) */
-  response: z.unknown().optional(),
-  /**
-   * Tool calls extracted from response.
-   * Uses z.custom<SdkToolCall>() because SdkToolCall is a complex discriminated
-   * union of provider-specific types without a Zod schema of its own.
-   */
-  toolCalls: z.array(z.custom<SdkToolCall>()).optional(),
+  response?: unknown;
+  /** Tool calls extracted from response. */
+  toolCalls?: SdkToolCall[];
   /** Text content from response */
-  text: z.string().optional(),
-  /**
-   * Current round index (0-based).
-   *
-   * Used for debug file naming and usage tracking. Incremented after each
-   * successful round in ToolUseProcessNode.post().
-   */
-  roundIndex: z.int().nonnegative(),
-  /**
-   * Accumulated response time for current round (milliseconds).
-   * Reset after finalization when continuing to next round.
-   */
-  roundResponseTimeMs: z.number().nonnegative(),
-  /**
-   * Normalized usage for current round.
-   * Reset after finalization when continuing to next round.
-   */
-  roundNormalizedUsage: NormalizedUsageSchema.optional(),
+  text?: string;
   /** Last tool-result message index that received a blank-turn continuation. */
-  blankToolResultContinuationMessageIndex: z.int().nonnegative().optional(),
-});
-
-/** Tool-use round fields derived from schema */
-type ToolUseRoundFields = z.infer<typeof ToolUseRoundFieldsSchema>;
-
-/**
- * Shared state for tool-use round flows.
- *
- * Uses flat structure (like ResponseCycleFlow) for consistency.
- * All fields come from ToolUseRoundFieldsSchema.
- *
- * ## Architecture
- * - Mutable state: `shared` (this interface) - flat, no nested wrappers
- * - Immutable services: `this.services` (ToolUseRoundServices)
- */
-export interface ToolUseRoundShared extends ToolUseRoundFields {
+  blankToolResultContinuationMessageIndex?: number;
   /** Latest non-empty assistant text produced anywhere in this cycle. */
   latestAssistantText?: string;
   /** Current user instruction, refreshed when the round consumes user input. */

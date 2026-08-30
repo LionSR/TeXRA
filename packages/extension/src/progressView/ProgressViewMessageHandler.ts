@@ -6,7 +6,7 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/state/executionRequests';
-import { apiKeyCommands } from '@commands/api/apiKeyCommands';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { BaseViewMessageHandler } from '@common/webview';
 import { ProgressApiKeyRetryController } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressFollowUpPolishController } from '@controllers/progressView/ProgressFollowUpPolishController';
@@ -130,13 +130,43 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     showWarning: this.showWarning,
     showError: this.showError,
     logError: (message, error) => {
-      this.logger.error(this.channel, message, { data: error });
+      this.log.error(message, { data: error });
     },
     post: (message) => {
       this.postToActiveView(message);
     },
     runCompileFixer: (request) =>
       this.executeValidated(request, { preferHelperModel: true }),
+  };
+
+  /**
+   * One adapter over the snapshot store for every progress-view port that
+   * wants one. The store cannot be passed raw -- `preload` takes a list and
+   * the workspace-only path read has a different name -- and each controller
+   * asks for a different subset, so this is the superset. Passed by reference,
+   * excess-property checking does not apply and each port's type still narrows
+   * it to the members that port declares.
+   *
+   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
+   * copies every member in at runtime, so those objects carry accessors their
+   * port type does not declare. Harmless today -- nothing enumerates or
+   * serializes them -- but do not add a member here whose mere presence would
+   * change a consumer's behavior.
+   */
+  private readonly snapshotPort = {
+    getActiveStream: () => this.provider.backend.presentation.activeStream,
+    getRunMetadata: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getRunMetadata(stream),
+    getOutputFiles: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getOutputFiles(stream),
+    getCompileFailures: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getCompileFailures(stream),
+    getKnownWorkspaceOutputPaths: (stream: StreamTabId) =>
+      this.provider.state.snapshots.getKnownFilePaths(stream, {
+        workspaceOnly: true,
+      }),
+    preload: (stream: StreamTabId) =>
+      this.provider.state.snapshots.preload([stream]),
   };
 
   constructor(
@@ -215,9 +245,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
 
     const secondTierActions: ProgressViewSecondTierActions = {
-      getRunMetadata: (stream) =>
-        this.provider.state.snapshots.getRunMetadata(stream),
-      preload: (stream) => this.provider.state.snapshots.preload([stream]),
+      ...this.snapshotPort,
       workflowActions: this.workflowActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -241,16 +269,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         const restored =
           await this.agentProposalController.restoreProposalConfig(proposal);
         if (!restored) return;
-        this.logger.info(
-          this.channel,
-          'Restored proposal config to main view',
-          {
-            data: {
-              agent: proposal.agent,
-              agentCategory: proposal.agentCategory,
-            },
+        this.log.info('Restored proposal config to main view', {
+          data: {
+            agent: proposal.agent,
+            agentCategory: proposal.agentCategory,
           },
-        );
+        });
       },
       retry: {
         submit: (stream, requestId, feedback) =>
@@ -270,7 +294,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         showWarning: this.showWarning,
         showError: this.showError,
         reportDetail: (message, data) => {
-          this.logger.error(this.channel, message, { data });
+          this.log.error(message, { data });
         },
         getController: () => Promise.resolve(this.getChatExportController()),
         getTraceViewerTemplate: () =>
@@ -289,7 +313,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     return {
       // Common handlers - passthrough to webview
       [PROGRESS_VIEW_COMMANDS.WEBVIEW_READY]: async () => {
-        this.logger.debug(this.channel, 'Webview ready signal received');
+        this.log.debug('Webview ready signal received');
         const view = this.getActiveView();
         if (view) {
           await this.provider.markWebviewReady(view);
@@ -407,24 +431,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
     return new ProgressWorkflowFileActionsController({
-      state: {
-        getActiveStream: () => this.provider.backend.presentation.activeStream,
-        getRunMetadata: (stream) =>
-          this.provider.state.snapshots.getRunMetadata(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        preload: (stream) => this.provider.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       host: {
         compareFiles: (baseFile, editedFile) =>
           this.runViewCommand('texra.compare', [
-            pathToLocation(''), // inputFile unused
             pathToLocation(baseFile),
             pathToLocation(editedFile),
           ]),
         acceptEditedFile: (baseFile, editedFile, copyMeta) =>
           this.runViewCommand<boolean>('texra.acceptEdited', [
-            pathToLocation(''), // inputFile unused
             pathToLocation(baseFile),
             pathToLocation(editedFile),
             copyMeta,
@@ -448,7 +463,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         showInfo: this.showInfo,
         showError: this.showError,
         logError: (message, error) => {
-          this.logger.error(this.channel, message, {
+          this.log.error(message, {
             data: error instanceof Error ? error : undefined,
           });
         },
@@ -477,30 +492,25 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           result,
         );
         if (!resolved) {
-          this.logger.warn(
-            this.channel,
+          this.log.warn(
             `No pending host interaction found for proposal: ${requestId}`,
           );
         }
       },
       onMissingProposal: (requestId) => {
-        this.logger.warn(
-          this.channel,
+        this.log.warn(
           `No pending agent proposal found for setup: ${requestId}`,
         );
       },
       onInvalidProposal: (issues) => {
-        this.logger.warn(this.channel, 'Invalid proposal config', {
+        this.log.warn('Invalid proposal config', {
           data: { errors: issues },
         });
       },
       onSetupComplete: (proposal) => {
-        this.logger.info(
-          this.channel,
+        this.log.info(
           `Agent proposal ${proposal.requestId} set up in main view`,
-          {
-            data: { agent: proposal.agent },
-          },
+          { data: { agent: proposal.agent } },
         );
       },
     });
@@ -511,11 +521,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   > {
     return createProgressViewCommandHandlers({
       run: {
-        state: {
-          getRunMetadata: (stream) =>
-            this.provider.state.snapshots.getRunMetadata(stream),
-          preload: (stream) => this.provider.state.snapshots.preload([stream]),
-        },
+        state: this.snapshotPort,
         // Workflow actions intentionally wait for the run to finish.
         runExecutionRequest: (request) => this.executeValidated(request),
       },
@@ -529,17 +535,39 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         stopStream: (stream) => this.provider.backend.stopStream(stream),
       },
       followUp: {
-        acknowledge: (stream, accepted) =>
-          this.postToActiveView({
-            command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
-            stream,
-            accepted,
-          }),
+        captureAdmissionReporter: () => {
+          const source = this.getActiveView()?.webview;
+          return (stream, accepted) => {
+            if (!source) return;
+            void Promise.resolve(
+              source.postMessage({
+                command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+                stream,
+                accepted,
+              }),
+            ).then(
+              (delivered) => {
+                if (!delivered) {
+                  this.log.debug(
+                    'Follow-up result target did not accept the message',
+                  );
+                }
+              },
+              (error: unknown) => {
+                this.log.debug(
+                  'Follow-up result target is no longer attached',
+                  {
+                    data: error,
+                  },
+                );
+              },
+            );
+          };
+        },
         reportImageSaveError: (_image, error) => {
           // Best-effort: a failed image save must not block the text, but log
           // it so a missing attachment is diagnosable.
-          this.logger.warn(
-            this.channel,
+          this.log.warn(
             `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
           );
         },
@@ -634,17 +662,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
-      state: {
-        getRunMetadata: (stream) =>
-          this.provider.state.snapshots.getRunMetadata(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        getKnownWorkspaceOutputPaths: (stream) =>
-          this.provider.state.snapshots.getKnownFilePaths(stream, {
-            workspaceOnly: true,
-          }),
-        preload: (stream) => this.provider.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       runDiff: async (request) => {
         await this.runViewCommand('texra.runLatexdiff', [request]);
       },
@@ -660,7 +678,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       readKey: (provider) => platform().secrets.get(apiKeySecretName(provider)),
       hasUsableKey: (provider) => SecretManager.hasUsableApiKey(provider),
       promptForApiKey: async (provider) => {
-        await this.runViewCommand(apiKeyCommands.setApiKey, [provider]);
+        await this.runViewCommand(EXTENSION_COMMANDS.SET_API_KEY, [provider]);
       },
       invalidateModelOptionsCache,
       isRetryPending: (stream, requestId) =>
@@ -673,18 +691,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       loadModelOptions: async () => {
-        const { modelOptionsByCategory } = await loadOptions();
-        return modelOptionsByCategory.workflow;
+        const { modelOptions } = await loadOptions();
+        return modelOptions;
       },
-      state: {
-        getRunMetadata: (stream) =>
-          this.provider.state.snapshots.getRunMetadata(stream),
-        getOutputFiles: (stream) =>
-          this.provider.state.snapshots.getOutputFiles(stream),
-        getCompileFailures: (stream) =>
-          this.provider.state.snapshots.getCompileFailures(stream),
-        preload: (stream) => this.provider.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
         exists: (relativePath) => WorkspaceFS.exists(relativePath),
@@ -851,7 +861,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       error: errorMsg,
     });
     void this.host.error(`Could not polish the follow-up: ${errorMsg}`);
-    this.logger.error(this.channel, `Error polishing follow-up: ${errorMsg}`, {
+    this.log.error(`Error polishing follow-up: ${errorMsg}`, {
       data: error instanceof Error ? error : undefined,
     });
   }
@@ -883,7 +893,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
-      this.logger.error(this.channel, validation.message);
+      this.log.error(validation.message);
       await this.host.error(validation.message);
       return;
     }
@@ -901,7 +911,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<boolean> {
     const validation = validateExecutionRequest(request);
     if (!validation.valid) {
-      this.logger.error(this.channel, validation.message);
+      this.log.error(validation.message);
       await this.host.error(validation.message);
       return false;
     }

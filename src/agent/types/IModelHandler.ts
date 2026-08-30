@@ -13,7 +13,7 @@ import type { ProviderMessage } from './ProviderMessage';
  * members consumers
  * actually call through this port are picked. Omitted members are reached
  * through the concrete class instead: this includes internal-only helpers
- * such as `computePrice` and `supportsReasoningLevelOverride`, plus
+ * such as `supportsReasoningLevelOverride`, plus
  * `extractResponse`, which `helperModel` calls on its concrete handler.
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
@@ -69,7 +69,6 @@ export type IModelHandler<
   | 'createAssistantMessageFromResponse'
   | 'isEndTurnStop'
   | 'extractAssistantContent'
-  | 'extractAssistantText'
   | 'prependTextToUserMessage'
   | 'addMediaToUserMessage'
   | 'consumeInsertedAttachmentKinds'

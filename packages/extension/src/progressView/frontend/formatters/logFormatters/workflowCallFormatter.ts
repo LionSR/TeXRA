@@ -5,7 +5,11 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { ProgressEvents } from '@progressView/frontend/events';
 
 // Local imports - shared contracts
-import type { WorkflowCallProgress } from '@shared/schemas';
+import {
+  WORKFLOW_TASK_STATUS_LABEL,
+  type WorkflowCallIdentity,
+  type WorkflowCallProgress,
+} from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
@@ -13,12 +17,18 @@ import { assertNever } from '@utils/core';
 
 function statusIcon(call: WorkflowCallProgress): TemplateResult {
   switch (call.status) {
+    case 'declared':
+      return waIcon('circle');
     case 'planned':
+    case 'queued':
+      return waIcon('circle-dot');
     case 'running':
       return waIcon(terminalStatusIcon('running'));
     case 'completed':
-    case 'cached':
       return waIcon(terminalStatusIcon('completed'));
+    case 'cached':
+      // A replayed result from an earlier attempt: nothing ran this time.
+      return waIcon('clock-rotate-left');
     case 'skipped':
     case 'cancelled':
       return waIcon(terminalStatusIcon('cancelled'));
@@ -29,7 +39,7 @@ function statusIcon(call: WorkflowCallProgress): TemplateResult {
   }
 }
 
-function terminalMetadata(
+function callMetadata(
   parts: readonly string[],
 ): TemplateResult | typeof nothing {
   return parts.length > 0
@@ -37,9 +47,31 @@ function terminalMetadata(
     : nothing;
 }
 
-/** Render one workflow call as a status card updated in place by log id. */
+/** A plan task the run has not issued yet: the card's quiet, dashed twin. */
+export function formatWorkflowDeclaredTaskTemplate(
+  task: WorkflowCallIdentity,
+): TemplateResult {
+  return html`
+    <div
+      class="workflow-task workflow-task--declared"
+      data-declared-id=${task.id}
+    >
+      <span class="workflow-task-icon">${waIcon('circle')}</span>
+      <span class="workflow-task-body">
+        <span class="workflow-task-title">${task.label}</span>
+      </span>
+      <span class="workflow-task-status"
+        >${WORKFLOW_TASK_STATUS_LABEL.declared}</span
+      >
+    </div>
+  `;
+}
+
+/** Render one workflow call as a status card updated in place by log id;
+ *  `liveParts` are the in-flight segments the run model joins to it. */
 export function formatWorkflowCallTemplate(
   row: WorkflowTaskRow,
+  liveParts: readonly string[] = [],
 ): TemplateResult {
   const { call, detail } = row;
   const hasChildStream = call.childStreamId !== undefined;
@@ -70,7 +102,7 @@ export function formatWorkflowCallTemplate(
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
         <span class="workflow-task-title">${call.label}</span>
-        ${terminalMetadata(row.metadataParts)}
+        ${callMetadata([...row.metadataParts, ...liveParts])}
         ${
           detail
             ? html`<span

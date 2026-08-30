@@ -15,7 +15,10 @@ import { ReasoningEffort } from 'llm-zoo';
 // Local imports
 import { logProgressStatus } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import {
+  ModelHandler,
+  type CreatedMedia,
+} from '@agent/modelHandlers/ModelHandler';
 import { reportMediaAttachmentFailure } from '@agent/modelHandlers/support/mediaAttachmentPolicy';
 import { parseToolInputAsObject } from '@agent/core/flows/toolCallParsing';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -30,6 +33,7 @@ import type {
   ExtractResponseResult,
   GoogleToolCall,
   ModelCredentialSelection,
+  ResolvedClientCredential,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
@@ -39,14 +43,12 @@ import {
   firstBodyStringField,
   pickStringField,
 } from '@common/errors/sdkError/errorInspection';
-import {
-  attachManualRetryOnlyError,
-  attachPartialText,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachManualRetryOnlyError } from '@common/errors/sdkError/errorMetadata';
 import {
   PARTIAL_TEXT_TAIL_MAX,
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
+import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
 import {
   type FileLocation,
@@ -62,16 +64,11 @@ import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
 import {
-  resolveGoogleClient,
   uploadGoogleMediaEntries,
-  type GoogleClientCache,
   type GoogleMediaSource,
 } from './googleHandlerShared';
 import { tagGoogleSdkError } from './googleSdkError';
-import {
-  computeGoogleInteractionsPrice,
-  normalizeGoogleInteractionsUsage,
-} from './googleInteractionsUsage';
+import { normalizeGoogleInteractionsUsage } from './googleInteractionsUsage';
 import {
   BackgroundRunLifecycle,
   type BackgroundRetrieveFailureVerdict,
@@ -520,10 +517,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
 
   /** Whether server-side conversation state (store:true chaining) is enabled. */
   private serverStateEnabled(): boolean {
-    return getConfig<boolean>(
-      'texra.model.useGoogleInteractionsServerState',
-      true,
-    );
+    return getConfig<boolean>('texra.model.useGoogleInteractionsServerState');
   }
 
   // ===========================================================================
@@ -537,9 +531,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * impossible in stateless mode, so `stateful` is load-bearing (unlike OpenAI,
    * which always sends store:true). Workflow-only mirrors OpenAI's exclusion of
    * tool-use loops (which rely on per-step streaming). There is no Gemini
-   * analogue of isGptFamilyModelName, and not every Interactions-capable model
-   * supports background (gemini-2.5-flash 400s), so the per-model gate is the
-   * runtime `backgroundUnsupported` fallback rather than a model-name check.
+   * analogue of OpenAI's GPT-family name check, and not every
+   * Interactions-capable model supports background (gemini-2.5-flash 400s), so
+   * the per-model gate is the runtime `backgroundUnsupported` fallback rather
+   * than a model-name check.
    */
   private useBackgroundMode(stateful: boolean): boolean {
     return (
@@ -547,7 +542,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       !this.backgroundUnsupported &&
       stateful &&
       this.isWorkflowMode() &&
-      getConfig<boolean>('texra.model.useBackgroundResponses', true)
+      getConfig<boolean>('texra.model.useGoogleBackgroundResponses')
     );
   }
 
@@ -619,7 +614,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    */
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
-  private googleClient: GoogleClientCache | null = null;
+  private googleClient: {
+    readonly client: GoogleGenAI;
+    readonly credential: ResolvedClientCredential;
+  } | null = null;
 
   /** Whether the model can accept file attachments (image/video or native audio). */
   protected supportsFileUploads(): boolean {
@@ -637,21 +635,48 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     return ModelHandlerGoogleInteractions.INLINE_MEDIA_LIMIT_BYTES;
   }
 
+  /**
+   * Resolve a `GoogleGenAI` client, cached per credential.
+   *
+   * The client is built without `retryOptions` so that only the flow-level
+   * retry loop (`RetryState`'s `getNodeMaxRetries`/`RETRY_BACKOFF_MS`) governs
+   * the user's retry budget; see the note below for why passing any value
+   * there is worse than passing none.
+   */
   async getClient(
     selection: ModelCredentialSelection = 'configured',
   ): Promise<GoogleGenAI> {
     const credential = await this.resolveClientCredential(selection);
-    return resolveGoogleClient({
-      sdkLabel: 'Interactions',
-      credential,
-      logger: this.logger,
-      cached: this.googleClient,
-      setCached: (cache) => {
-        this.googleClient = cache;
-      },
-      rememberRoute: (client, route, credentialSecret) =>
-        this.rememberClientCredentialRoute(client, route, credentialSecret),
-    });
+    const cached = this.googleClient;
+    if (
+      cached?.credential.apiKey === credential.apiKey &&
+      cached.credential.baseUrl === credential.baseUrl &&
+      cached.credential.route === credential.route
+    ) {
+      return cached.client;
+    }
+
+    this.logger.debug(
+      `Using Google GenAI Interactions SDK. Base URL: ${credential.baseUrl}`,
+    );
+    // No `retryOptions`: absent, the SDK's apiCall does a single plain fetch
+    // (zero SDK retries — the node loop owns retries) and failures surface as
+    // structured ApiError WITH `status`. Any retryOptions value — including
+    // `{ attempts: 1 }` — switches apiCall into a pRetry wrapper that converts
+    // non-ok responses into bare Errors with no status field, blinding the
+    // route gate's 429/5xx classification for Google.
+    const client = this.rememberClientCredentialRoute(
+      new GoogleGenAI({
+        apiKey: credential.apiKey,
+        httpOptions: {
+          baseUrl: credential.baseUrl ?? undefined,
+        },
+      }),
+      credential.route,
+      credential.apiKey,
+    );
+    this.googleClient = { client, credential };
+    return client;
   }
 
   override async refreshClient(
@@ -736,17 +761,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     }
   }
 
-  private hasSupportedMedia(
-    mediaFiles: FileLocation[] | undefined,
-  ): mediaFiles is FileLocation[] {
+  private canAttachMedia(mediaFiles: FileLocation[] | undefined): boolean {
     return Boolean(mediaFiles?.length) && this.supportsFileUploads();
   }
 
   protected override async createMediaMessage(
     mediaFiles: FileLocation[],
-  ): Promise<Content[]> {
-    if (!this.hasSupportedMedia(mediaFiles)) {
-      return [];
+  ): Promise<CreatedMedia<Content>> {
+    if (!this.canAttachMedia(mediaFiles)) {
+      return { media: [], entries: [] };
     }
 
     const { entries, results } =
@@ -754,16 +777,20 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     this.mediaProcessor.logResults(results);
 
     if (entries.length === 0) {
-      return [];
+      return { media: [], entries: [] };
     }
 
     return this.uploadMediaEntries(entries);
   }
 
-  /** Media blocks for the entries (inline when small enough, uploaded otherwise). */
+  /**
+   * Media blocks for the entries (inline when small enough, uploaded
+   * otherwise). Unlike the base template this reports only the entries that
+   * were actually appended, since an upload can drop one.
+   */
   protected async uploadMediaEntries(
     entries: MediaEntry[],
-  ): Promise<Content[]> {
+  ): Promise<CreatedMedia<Content>> {
     const insertedEntries: MediaEntry[] = [];
     const media = await uploadGoogleMediaEntries<Content>(entries, {
       getClient: () => this.getClient(),
@@ -776,8 +803,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         ),
       onInsertedEntry: (entry) => insertedEntries.push(entry),
     });
-    this.setCreatedMediaEntriesForAttachmentLog(insertedEntries);
-    return media;
+    return { media, entries: insertedEntries };
   }
 
   // ===========================================================================
@@ -944,13 +970,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   // Usage / price (PORT — delegate to the snake_case adapter)
   // ===========================================================================
 
-  computePrice(responseUsage: Usage | null): number {
-    return computeGoogleInteractionsPrice(
-      responseUsage,
-      this.standardPricingConfig(),
-    );
-  }
-
   normalizeUsage(
     rawUsage: Usage | null,
     responseTimeMs: number,
@@ -974,9 +993,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   ): Promise<Step[]> {
     // System prompt is NOT a step — it rides on request-level system_instruction
     // (resent on every create, spec §6.2).
-    const media = this.hasSupportedMedia(mediaFiles)
-      ? await this.createMediaForRound(mediaFiles, 'initial')
-      : [];
+    const media =
+      mediaFiles && this.canAttachMedia(mediaFiles)
+        ? await this.createMediaForRound(mediaFiles, 'initial')
+        : [];
     const content: Content[] = [
       ...(userPrefix.trim() ? [this.textMedia(userPrefix)] : []),
       ...media,
@@ -1000,9 +1020,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     userMessage: string,
     mediaFiles?: FileLocation[],
   ): Promise<Step[]> {
-    const media = this.hasSupportedMedia(mediaFiles)
-      ? await this.createMediaForRound(mediaFiles, 'followUp')
-      : [];
+    const media =
+      mediaFiles && this.canAttachMedia(mediaFiles)
+        ? await this.createMediaForRound(mediaFiles, 'followUp')
+        : [];
     const content: Content[] = [
       ...media,
       ...(userMessage.trim() ? [this.textMedia(userMessage)] : []),
@@ -1040,13 +1061,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       type: 'model_output',
       content: [this.textMedia(text)],
     } satisfies ModelOutputStep;
-  }
-
-  override extractAssistantText(message: Step): string | undefined {
-    if (message.type !== 'model_output') return undefined;
-    return joinNonEmpty(
-      (message.content ?? []).filter(isTextContent).map((c) => c.text),
-    );
   }
 
   protected textMedia(text: string): TextContent {
@@ -1136,19 +1150,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         stopReason = status;
     }
 
-    // If the model completed naturally without the end tag, append it (mirrors
-    // the chat handler's STOP behavior, keyed on the terminal completion).
-    if (
-      stopReason === GOOGLE_FINISH.STOP &&
-      endTag &&
-      responseText.length > 0 &&
-      !responseText.endsWith(endTag)
-    ) {
-      this.logger.debug(
-        `Model completed but didn't include end tag. Appending ${endTag}.`,
-      );
-      responseText += `\n${endTag}`;
-    }
+    // A terminal 'completed' is this route's "natural stop" predicate for the
+    // end tag configured as a stop sequence above (`stop_sequences: [endTag]`).
+    // The empty-text guard is Google-specific: 'completed' here cannot tell a
+    // stop-sequence match from a natural end of turn, so an empty completion
+    // must not be stamped as finished.
+    responseText = this.appendEndTagIfNeeded(
+      responseText,
+      endTag,
+      stopReason === GOOGLE_FINISH.STOP && responseText.length > 0,
+    );
 
     return { text: responseText, usage, stopReason };
   }
@@ -1447,7 +1458,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     messages: Step[],
     mediaFiles: FileLocation[],
   ): Promise<MediaAttachmentKind[]> {
-    if (!mediaFiles.length || !this.supportsFileUploads()) return [];
+    if (!this.canAttachMedia(mediaFiles)) return [];
     const media = await this.createMediaForRound(mediaFiles, 'insert');
     if (media.length === 0) return [];
     const trailing = messages.at(-1);
@@ -1749,13 +1760,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.chainState.invalidateChain();
         return this.createResponseImpl(options);
       }
-      if (aggregatedText) {
-        attachPartialText(
-          error,
-          takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX),
-        );
-      }
-      throw error;
+      return handleStreamingFailure(error, {
+        // No `finalizeOnError` hook: a streaming call's own `finally` already
+        // finalized the progress streams before this outer catch ever runs.
+        partialTail: () =>
+          aggregatedText ? takeTail(aggregatedText, PARTIAL_TEXT_TAIL_MAX) : '',
+      });
     }
   }
 

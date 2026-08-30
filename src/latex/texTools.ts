@@ -90,10 +90,7 @@ export function buildLatexInputEnv(
   bibSearchParts: readonly string[],
   env: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {
-  const needsTexInputs = texInputParts.length > 1 || !!env.TEXINPUTS;
-  const texInputs = needsTexInputs
-    ? buildKpathseaSearchPath(texInputParts, env.TEXINPUTS)
-    : undefined;
+  const texInputs = buildKpathseaSearchPath(texInputParts, env.TEXINPUTS);
   const bibInputs = buildKpathseaSearchPath(bibSearchParts, env.BIBINPUTS);
   const bstInputs = buildKpathseaSearchPath(bibSearchParts, env.BSTINPUTS);
   return {
@@ -181,11 +178,9 @@ export async function compileLatex2Pdf(
 
     const tikzInputDirectory = getConfig<string>(
       'texra.latex.tikzInputDirectory',
-      '',
     );
     const includeWorkspace = getConfig<boolean>(
       'texra.latex.includeWorkspaceInTexinputs',
-      true,
     );
     const workspacePath = includeWorkspace ? WorkspaceFS.getPath() : null;
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({

@@ -1,4 +1,4 @@
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 import { StatusCodes } from 'http-status-codes';
 import prettyMilliseconds from 'pretty-ms';
 
@@ -411,9 +411,14 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  // Unrecognized error — extract what we can
-  const statusCode =
-    detectStatusCode(err) ?? inferStatusCodeFromBody(rawErrorBody);
+  // Unrecognized error — extract what we can. Route through the shared
+  // resolver so a misleading sub-400 code (an SSE 200, a wrapper's errno)
+  // cannot outrank a status inferable from the body, exactly as it cannot on
+  // the SDK-matched path above.
+  const statusCode = resolveErrorStatusCode(
+    detectStatusCode(err),
+    rawErrorBody,
+  );
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
   const { statusText, message } = describeHttpError(

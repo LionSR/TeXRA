@@ -1,13 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { describeResumeFailure, resolveAndResumeStream } from '@agent/runtime';
 import {
-  executionHeldMessage,
-  getExecutionStore,
-  inspectExecutionLease,
-  reclaimExecutionLease,
-} from '@agent/storage';
+  classifyRun,
+  describeFollowUpFailure,
+  resumeRun,
+} from '@agent/runtime';
+import { executionHeldMessage, getExecutionStore } from '@agent/storage';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -24,26 +23,15 @@ import {
   resumeWorkflowOutputDirectory,
   resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
-import { initializeHeadlessTranscriptSession } from '../runtime/transcriptSession';
+import { initializeCliTranscriptSession } from '../runtime/transcriptSession';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-function noResumeStateMessage(id: ExecutionId): string {
-  return `Execution ${id} cannot be resumed (it completed or was cleared).`;
-}
-
 function loadFailureMessage(id: ExecutionId, error: unknown): string {
   return `Could not load session ${id}: ${toErrorMessage(error)}`;
-}
-
-function leaseInspectionFailureMessage(
-  id: ExecutionId,
-  error: unknown,
-): string {
-  return `Could not check whether execution ${id} is active: ${toErrorMessage(error)}`;
 }
 
 async function workflowRecoveryInputsAreDurable(
@@ -66,20 +54,14 @@ async function workflowRecoveryInputsAreDurable(
 }
 
 /**
- * Continue a stored session. Funnels through the shared
- * `resolveAndResumeStream` orchestrator: a tool-use session reopens the
- * interactive chat TUI (so a usable terminal is required), while a workflow
- * run resumes headless under its persisted execution id — the same branch
- * vocabulary the extension and desktop resume paths speak.
+ * Continue a stored session through the shared `resumeRun`: a tool-use
+ * session reopens the interactive chat TUI (so a usable terminal is
+ * required), whose `/resume` calls it; a workflow run resumes headless under
+ * its persisted execution id.
  */
 export async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
-  /**
-   * Remove a lease whose owner cannot be reached before resuming. Never
-   * removes a lease whose owner is provably alive.
-   */
-  reclaim = false,
 ): Promise<number> {
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
@@ -95,37 +77,31 @@ export async function runResumeExecution(
     writeTextStderr(`Execution not found: ${id}`);
     return CliExitCode.Usage;
   }
-  // Gate resume on the lease: a provably live owner refuses, and an owner
-  // that cannot be reached refuses unless `--reclaim` was given. The record
-  // itself is removed only after the preflight below, so a refused resume
-  // never leaves the run unowned. `--reclaim` is offered only where the
-  // reclaim would succeed; a pid on this machine whose identity could not
-  // be read is refused by the reclaim too, so the user is told to wait.
-  let reclaimFrom: { pid: number; hostname: string } | undefined;
-  try {
-    const lease = await inspectExecutionLease(id);
-    if (lease.status === 'owned' || lease.status === 'foreign') {
-      if (lease.provable || !lease.reclaimable) {
-        writeTextStderr(executionHeldMessage(id, lease));
-        return CliExitCode.Usage;
-      }
-      if (!reclaim) {
-        writeTextStderr(
-          `${executionHeldMessage(id, lease)} If you are sure it is gone, rerun with --reclaim.`,
-        );
-        return CliExitCode.Usage;
-      }
-      reclaimFrom = lease.owner;
-    }
-  } catch (error) {
-    writeTextStderr(leaseInspectionFailureMessage(id, error));
-    return CliExitCode.AgentError;
+  // Gate resume on ownership: a run held by any owner that is alive or cannot
+  // be proven dead refuses, naming that owner.
+  const classification = await classifyRun(id);
+  switch (classification.kind) {
+    case 'held_elsewhere':
+      writeTextStderr(executionHeldMessage(id, classification.owner));
+      return CliExitCode.Usage;
+    case 'owned_here':
+      writeTextStderr(`Execution ${id} is already running in this process.`);
+      return CliExitCode.Usage;
+    case 'unclassified':
+      writeTextStderr(
+        `Could not read the state of execution ${id}: ${classification.cause}`,
+      );
+      return CliExitCode.AgentError;
+    case 'finished':
+      writeTextStderr(describeFollowUpFailure('finished'));
+      return CliExitCode.Usage;
+    case 'resumable':
+      break;
   }
   // FK-first: the stream id stamped at registration is the reproduction
   // contract. A row without one has no persisted stream to continue.
-  const streamId = meta?.streamId;
-  if (!streamId) {
-    writeTextStderr(noResumeStateMessage(id));
+  if (!meta?.streamId) {
+    writeTextStderr(describeFollowUpFailure('finished'));
     return CliExitCode.Usage;
   }
 
@@ -153,108 +129,67 @@ export async function runResumeExecution(
       );
       return CliExitCode.Usage;
     }
-  } else {
-    try {
-      await resolveCliLaunchAgent(config.agent, 'run');
-    } catch (error) {
-      if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(loadFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
+    const { runChat } = await import('../chat/tui/runChatTui');
+    return (await runChat(context, { initialResume: { id, config } })).exitCode;
   }
 
-  if (reclaimFrom !== undefined) {
-    let outcome: Awaited<ReturnType<typeof reclaimExecutionLease>>;
-    try {
-      outcome = await reclaimExecutionLease(id);
-    } catch (error) {
-      writeTextStderr(leaseInspectionFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
-    if (outcome === 'alive') {
-      writeTextStderr(
-        `Execution ${id} is held by a process that is still running; nothing was reclaimed.`,
-      );
+  try {
+    await resolveCliLaunchAgent(config.agent, 'run');
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      writeTextStderr(error.message);
       return CliExitCode.Usage;
     }
-    if (outcome === 'missing') {
-      writeTextStderr(`Execution ${id} is no longer held; resuming.`);
-    } else {
-      writeTextStderr(
-        `Reclaimed execution ${id} from pid ${reclaimFrom.pid} on ${reclaimFrom.hostname}.`,
-      );
-    }
+    writeTextStderr(loadFailureMessage(id, error));
+    return CliExitCode.AgentError;
   }
 
-  // The funnel's guards need the live session planes; the TUI and the
-  // headless skeleton both adopt this session rather than re-initializing.
-  const { session } = await initializeHeadlessTranscriptSession();
-
+  // `resumeRun`'s guards need the live session planes; the headless skeleton
+  // adopts this session rather than re-initializing.
+  const { session } = await initializeCliTranscriptSession();
   let exitCode: number = CliExitCode.Usage;
-  let failed = false;
-  let failureExitCode: CliExitCode = CliExitCode.AgentError;
-  const resumed = await resolveAndResumeStream(streamId, {
-    executions: session.executions,
-    resolveResumeState: async () => ({
-      status: 'resolved',
-      state: { runState: config, executionId: id },
-    }),
-    resumeToolUse: async (resume) => {
-      const { runChat } = await import('../chat/tui/runChatTui');
-      const result = await runChat(context, {
-        initialResume: { id, resolution: resume },
-      });
-      exitCode = result.exitCode;
-      return true;
-    },
-    executeWorkflow: async (
-      workflowConfig,
-      executionId,
-      modelHandlerCompatibilityKey,
-    ) => {
-      const output = resumeWorkflowOutputFile(workflowConfig);
-      const outputDir = resumeWorkflowOutputDirectory(workflowConfig);
-      await assertOutputFileAvailable(output, context.cwd);
-      await assertOutputDirAvailable(outputDir, context.cwd);
-      exitCode = await executeCliWorkflowConfig(
+  try {
+    const result = await resumeRun(id, {
+      session,
+      executeWorkflow: async (
         workflowConfig,
-        buildHeadlessRunContext(context),
-        {
-          executionId: executionId ?? id,
-          modelHandlerCompatibilityKey,
-          // Honor the original run's persisted output destination.
-          output,
-          outputDir,
-          expectedOutputFiles:
-            workflowConfig.cliExpectedOutputFiles ?? undefined,
-          recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
-            workflowConfig,
-            context.cwd,
-          ),
-          categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
-        },
-      );
-    },
-    reportNoResumableSession: () => {
-      writeTextStderr(noResumeStateMessage(id));
-    },
-    reportFailure: (_streamId, error) => {
-      failed = true;
-      const description = describeResumeFailure(error);
-      if (description.kind === 'lease-active') {
-        writeTextStderr(description.message);
-      } else if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-      } else {
-        writeTextStderr(loadFailureMessage(id, error));
-        return;
-      }
-      failureExitCode = CliExitCode.Usage;
-    },
-  });
-  if (failed) return failureExitCode;
-  return resumed ? exitCode : CliExitCode.Usage;
+        executionId,
+        modelHandlerCompatibilityKey,
+      ) => {
+        // Fast-fail on an unusable destination before the run restarts;
+        // `executeCliWorkflowConfig` reads the same persisted `cli` block.
+        await assertOutputFileAvailable(
+          resumeWorkflowOutputFile(workflowConfig),
+          context.cwd,
+        );
+        await assertOutputDirAvailable(
+          resumeWorkflowOutputDirectory(workflowConfig),
+          context.cwd,
+        );
+        exitCode = await executeCliWorkflowConfig(
+          workflowConfig,
+          buildHeadlessRunContext(context),
+          {
+            executionId,
+            modelHandlerCompatibilityKey,
+            recoveryInputIsDurable: await workflowRecoveryInputsAreDurable(
+              workflowConfig,
+              context.cwd,
+            ),
+            categoryMismatchMessage: `Execution ${id} resolved to a non workflow run.`,
+          },
+        );
+      },
+    });
+    if ('started' in result) return exitCode;
+    writeTextStderr(describeFollowUpFailure(result.failed));
+    return CliExitCode.Usage;
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      writeTextStderr(error.message);
+      return CliExitCode.Usage;
+    }
+    writeTextStderr(loadFailureMessage(id, error));
+    return CliExitCode.AgentError;
+  }
 }

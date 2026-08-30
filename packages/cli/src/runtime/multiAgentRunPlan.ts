@@ -6,6 +6,7 @@ import {
   planTeamRuns,
   refreshRemoteCatalogForGaps,
   teamPlanHasGaps,
+  type TeamPreset,
 } from '@common/teams/TeamPlan';
 import { byCategory } from '@shared/schemas';
 
@@ -15,7 +16,6 @@ import { writeTextStderr } from './logSinks';
 import {
   formatCliMultiAgentPresetRunWarnings,
   readCliMultiAgentPresets,
-  type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
 
@@ -24,12 +24,12 @@ interface MultiAgentRunPlanInit {
   readonly agent?: string;
 }
 
-export interface MultiAgentRunPlanLoadResult {
+interface MultiAgentRunPlanLoadResult {
   readonly plan: CliMultiAgentPresetRunPlan;
   readonly remoteCatalogRefreshAttempted: boolean;
 }
 
-export interface MultiAgentPresetPlansLoadResult {
+interface MultiAgentPresetPlansLoadResult {
   readonly plans: readonly CliMultiAgentPresetRunPlan[];
   readonly remoteCatalogRefreshAttempted: boolean;
 }
@@ -48,7 +48,7 @@ function planCurrentMultiAgentRun(
 }
 
 function planLoadedCliMultiAgentPresets(
-  presets: readonly CliMultiAgentPreset[],
+  presets: readonly TeamPreset[],
 ): CliMultiAgentPresetRunPlan[] {
   return planTeamRuns(presets, {
     agents: byCategory((category) => getAgentsByCategory(category)),
@@ -86,7 +86,7 @@ export async function loadCliMultiAgentRunPlan(
 }
 
 export async function loadCliMultiAgentPresetPlanSet(
-  presets: readonly CliMultiAgentPreset[],
+  presets: readonly TeamPreset[],
 ): Promise<MultiAgentPresetPlansLoadResult> {
   await loadAgents({ includeRemote: false });
   const result = await reloadRemoteAgentsForGaps(

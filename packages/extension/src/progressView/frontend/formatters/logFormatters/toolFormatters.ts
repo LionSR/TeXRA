@@ -165,7 +165,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Setup this proposal configuration" @click=${(event: Event) => { event.preventDefault(); postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal }); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>`
     : nothing;
   // prettier-ignore
-  const extraContent = html`${timerTemplate ?? nothing}${model.spillPath ? buildSpillArtifactButton(model.spillPath) : nothing}${setupButton}`;
+  const extraContent = html`${timerTemplate ?? nothing}${row.spillPath ? buildSpillArtifactButton(row.spillPath) : nothing}${setupButton}`;
 
   return buildToolUseDetails({
     row,

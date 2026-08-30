@@ -100,9 +100,7 @@ vi.mock('@utils/system/toolUtils', () => ({
   getToolDocsCommand: mocks.getToolDocsCommand,
 }));
 
-class ManagerStub {
-  attachWebview = vi.fn();
-}
+class ManagerStub {}
 
 vi.mock('@webview/managers/DiffManager', () => ({ DiffManager: ManagerStub }));
 vi.mock('@webview/managers/FileManager', () => ({ FileManager: ManagerStub }));

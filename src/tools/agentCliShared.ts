@@ -3,7 +3,7 @@
 
 import { registerExecution } from '@agent/storage';
 import { type AgentTrace } from '@agent/trace';
-import { releaseOwnedExecutionLeaseAfterFailure } from '@agent/storage/executionLease';
+import { runWithOwnedExecutionLeaseLaunchGuard } from '@agent/storage/executionLease';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   currentSession,
@@ -32,7 +32,6 @@ import {
 import {
   ToolError,
   type ExecutionId,
-  type StorageKey,
   type StreamTabId,
   type TokenUsageStats,
   type ToolResult,
@@ -45,6 +44,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { executed } from '@tools/core/result';
 import { generateExecutionId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
@@ -76,7 +76,7 @@ export function publishAgentCliStreamUsage(
   logger.usage(
     {
       streamId: childStreamId,
-      storageKey: executionId as StorageKey,
+      storageKey: executionId,
       usage,
     },
     { recordTranscript: false },
@@ -103,6 +103,7 @@ function requireCallerOwnership(
 }
 
 async function queueAgentCliFollowUp(
+  registry: AgentCliSessionRegistry,
   stored: AgentCliSessionEntry,
   params: {
     id: string;
@@ -115,8 +116,12 @@ async function queueAgentCliFollowUp(
   // Ownership is a live-handle fact: a detached or re-parented child must not
   // accept follow-ups from its former orchestrator. A missing handle falls
   // through to submitFollowUp's no-session outcome below.
-  const handle = stored.executions.getHandle(stored.executionId);
-  requireCallerOwnership(id, callerStreamId, handle, labels);
+  requireCallerOwnership(
+    id,
+    callerStreamId,
+    registry.getHandle(stored),
+    labels,
+  );
 
   const result = await submitFollowUp(stored.childStreamId, prompt, {
     session: currentSession(),
@@ -177,7 +182,7 @@ async function resumeOrLaunchAgentCliSession(
 
     const stored = await store.waitForActive(id);
     if (!stored) continue;
-    return queueAgentCliFollowUp(stored, {
+    return queueAgentCliFollowUp(store, stored, {
       id,
       prompt: params.prompt,
       callerStreamId: params.callerStreamId,
@@ -229,36 +234,48 @@ export async function launchAgentCliSession(
       parentExecutionId: params.parentExecutionId,
       description: childStreamDescription(params.description),
     });
-  } catch {
-    throw new ToolError(params.registerFailedMessage);
-  }
-  let childStream: ChildStream | undefined;
-  try {
-    childStream = createChildStream(executionId, params.parentStreamId, {
-      streamPrefix: params.streamPrefix,
-      run: identity,
-      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-      description: params.description,
-      config: params.config,
-    });
-    await params.startLoop({ childStream, executionId });
   } catch (error) {
-    let failure = error;
-    if (childStream) {
-      try {
-        await childStream.finalize({
-          outcome: { kind: 'failed', error },
-          persistence: { kind: 'finalize', flowRecord: 'delete' },
-        });
-      } catch (finalizeError) {
-        failure = new AggregateError(
-          [error, finalizeError],
-          `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
-        );
-      }
-    }
-    throw await releaseOwnedExecutionLeaseAfterFailure(executionId, failure);
+    // Keep the cause: registration aggregates real store-write failures
+    // (unwritable storage root, torn record) that the per-provider prefix
+    // alone cannot diagnose.
+    throw new ToolError(
+      `${params.registerFailedMessage} ${toErrorMessage(error)}`,
+      { cause: error },
+    );
   }
+  // The launch guard owns the release-on-failure policy for every launch site
+  // (bash background, the two detached child paths, and this one): a failed
+  // launch must not leave a record that refuses a relaunch for the rest of the
+  // process's life.
+  const childStream = await runWithOwnedExecutionLeaseLaunchGuard(
+    executionId,
+    async () => {
+      const stream = createChildStream(executionId, params.parentStreamId, {
+        streamPrefix: params.streamPrefix,
+        run: identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+        description: params.description,
+        config: params.config,
+      });
+      try {
+        await params.startLoop({ childStream: stream, executionId });
+      } catch (error) {
+        try {
+          await stream.finalize({
+            outcome: { kind: 'failed', error },
+            persistence: { kind: 'finalize', flowRecord: 'delete' },
+          });
+        } catch (finalizeError) {
+          throw new AggregateError(
+            [error, finalizeError],
+            `Agent CLI execution ${executionId} failed and its child stream could not be finalized`,
+          );
+        }
+        throw error;
+      }
+      return stream;
+    },
+  );
 
   return executed(
     [
@@ -350,11 +367,10 @@ export function dispatchAgentCliTool(params: {
     const registry = store(currentSession());
     const callerStreamId = getRunContextStreamId(runContext);
     if (sourceId) {
-      const source = registry.lookup(sourceId);
       requireCallerOwnership(
         sourceId,
         callerStreamId,
-        source?.executions.getHandle(source.executionId),
+        registry.getHandle(registry.lookup(sourceId)),
         labels,
       );
     }
@@ -410,8 +426,6 @@ interface AgentCliLoopParams<TTurn> {
     ports: ChildRunPorts,
     abortController: AbortController,
   ) => Promise<TTurn>;
-  /** Build the store entry to register/track for the currently active session. */
-  buildEntry: (session: SessionHandle) => AgentCliSessionEntry;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
    * entries (not-yet-known ids) are skipped.
@@ -459,7 +473,6 @@ export function startAgentCliLoop<TTurn>(
     store,
     releaseFallbackClaim,
     runProviderTurn,
-    buildEntry,
     resolveSessionIds,
     getUsage,
     buildUsageStats,
@@ -474,12 +487,16 @@ export function startAgentCliLoop<TTurn>(
   // `startChildRunLoop` captures for its strategy callbacks below.
   const registry = store(currentSession());
 
+  // The one entry this loop registers and tracks: the child run's identity
+  // and follow-up address. Live handles are resolved by the registry itself.
+  const target: AgentCliSessionEntry = { childStreamId, executionId };
+
   // Fresh and resumed session/thread ids are registered after the first
   // successful turn is persisted, immediately before its result reaches the
   // parent.
-  const registerSessionId = (id: string, session: SessionHandle): void => {
+  const registerSessionId = (id: string): void => {
     if (registry.lookup(id)) return;
-    registry.register(id, buildEntry(session));
+    registry.register(id, target);
   };
 
   // The joined prompt text for whichever turn is currently in flight —
@@ -508,12 +525,12 @@ export function startAgentCliLoop<TTurn>(
     getUsage,
     isTurnError,
     onTurnError,
-    onLoopStart: (session) => {
-      registry.trackInFlight(buildEntry(session));
+    onLoopStart: () => {
+      registry.trackInFlight(target);
     },
-    onTurnSuccess: (turn, session) => {
+    onTurnSuccess: (turn) => {
       for (const id of resolveSessionIds(turn)) {
-        if (id) registerSessionId(id, session);
+        if (id) registerSessionId(id);
       }
     },
     publishUsage: (turn) => {

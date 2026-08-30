@@ -9,8 +9,9 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
+import { getCoreSettingDefault } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -27,12 +28,15 @@ vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
 }));
 
+// Mirrors production: JsonConfigProvider resolves the settings-catalog default
+// when no user value is stored, so callers no longer pass a literal fallback.
 vi.mock('@utils/config/configUtils', () => ({
-  getConfig: <T>(_key: string, fallback: T) => fallback,
+  getConfig: <T>(key: string, fallback?: T) =>
+    (getCoreSettingDefault(key) as T | undefined) ?? (fallback as T),
 }));
 
 describe('LaTeXdiffService shadow output', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   function installNodeBackedPlatform(
     workspaceDir: string,
@@ -93,7 +97,6 @@ describe('LaTeXdiffService shadow output', () => {
 
   afterEach(async () => {
     vi.clearAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('writes generated diff sources to the requested output directory', async () => {
@@ -105,8 +108,10 @@ describe('LaTeXdiffService shadow output', () => {
 
     const result = await runShadowDiff(sourceDir, shadowDir);
 
-    expect(result).toMatchObject({ success: true });
-    expect(path.basename(result.diffPath ?? '')).toBe('revised_diff.tex');
+    if (!result.success) {
+      throw new Error(`Expected diff run to succeed: ${result.message}`);
+    }
+    expect(path.basename(result.diffPath)).toBe('revised_diff.tex');
     await expect(
       readFile(path.join(shadowDir, 'revised_diff.tex'), 'utf8'),
     ).resolves.toContain('changed');
@@ -161,7 +166,7 @@ describe('LaTeXdiffService shadow output', () => {
       source,
       location,
       round,
-      lineage: { original: base, diffBase: null, diffFile: null },
+      lineage: { original: base, diffBase: null },
       diff: null,
     });
     const { runLatexdiffFromMetadata } =

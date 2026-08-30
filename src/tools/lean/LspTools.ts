@@ -139,7 +139,7 @@ Commands:
 - "list" (default): Full diagnostic messages with locations
 - "count": Summary counts only (faster for checking if file compiles)
 
-Returns diagnostics from the Lean 4 VS Code extension including:
+Returns diagnostics from the Lean 4 language server including:
 - Compilation errors with location
 - Type mismatches
 - Unsolved goals
@@ -214,12 +214,12 @@ Tips:
 
 export class LeanFileTool extends defineTool({
   name: 'lean_file',
-  description: `Execute Lean 4 extension commands on a specific file.
+  description: `Execute Lean 4 language-server commands on a specific file.
 
 Commands:
 ${FILE_COMMAND_PROSE}
 
-Requires: Lean 4 VS Code extension installed and active.`,
+In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanFileInputSchema,
 }) {
   protected async execute(input: LeanFileInput): Promise<ToolResult> {
@@ -233,7 +233,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
       );
       if (!success) {
         return errorResult(
-          `Could not execute "${command}". Is the file open and the Lean 4 extension active?`,
+          `Could not execute "${command}" on ${file}. ${LEAN_TOOLCHAIN_HELP}`,
           { summary: 'Command failed' },
         );
       }
@@ -249,7 +249,7 @@ Requires: Lean 4 VS Code extension installed and active.`,
 
 export class LeanProjectTool extends defineTool({
   name: 'lean_project',
-  description: `Execute global Lean 4 extension commands (no file required).
+  description: `Execute global Lean 4 language-server commands (no file required).
 
 ${PROJECT_COMMAND_PROSE}
 
@@ -298,7 +298,7 @@ a tactic block).
 
 Line and column are 1-indexed.
 
-Requires: Lean 4 VS Code extension installed and active.`,
+In VS Code, this uses the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanInspectInputSchema,
 }) {
   protected async execute(input: LeanInspectInput): Promise<ToolResult> {

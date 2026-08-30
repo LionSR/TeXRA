@@ -8,7 +8,7 @@ import type {
 import type { z } from 'zod';
 
 import type { AgentCategory } from './agent';
-import type { ExecutionId, StorageKey, StreamTabId } from './identifiers';
+import type { ExecutionId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
 import type { RoundStage } from './streamState';
 import type { ExtendedTokenUsageStats } from './usage';
@@ -33,11 +33,6 @@ export interface SetActiveStreamPayload {
    * stream tab appears without yanking the user away from their current view.
    */
   suppressViewSwitch?: boolean;
-  /**
-   * When suppressing a switch, widen a restrictive category filter so this
-   * stream remains reachable. Used for interaction requests with pending UI.
-   */
-  ensureVisible?: boolean;
 }
 
 export interface UpdateStreamDescriptionPayload {
@@ -88,20 +83,11 @@ export interface UpdateCompileFailuresPayload {
   >;
 }
 
-/**
- * Clear the "missing outputs" marker on exactly one tab. The initiator
- * selects the `StreamTabId` it acted on; agent/model/config identity is
- * query/display data, not command authorization, so configuration-based
- * fan-out addressing does not exist (#9590 rule A3).
- */
-export interface ClearMissingOutputsPayload {
-  streamId: StreamTabId;
-}
-
-/** Usage is storage-key scoped: tool-use can resume → multiple runs per tab. */
+/** Usage is execution-scoped; a resume accumulates onto the same key. The
+ *  field name is frozen by the public NDJSON vocabulary. */
 export interface UpdateStreamUsagePayload {
   streamId: StreamTabId;
-  storageKey: StorageKey;
+  storageKey: ExecutionId;
   usage: ExtendedTokenUsageStats;
 }
 

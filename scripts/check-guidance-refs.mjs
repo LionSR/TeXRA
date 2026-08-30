@@ -30,8 +30,21 @@ const repoRoot = process.argv[2]
   ? resolve(process.argv[2])
   : join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Files whose prose is read as instructions by an agent or contributor.
-const GUIDANCE_FILES = ['CLAUDE.md', 'AGENTS.md', 'src/README.md'];
+// Files whose prose is read as instructions by an agent or contributor. The
+// nested module READMEs are here for the same reason as the root ones: they
+// are the module map an agent reads instead of opening every file, so a path
+// that moves out from under them is a confidently wrong answer.
+const GUIDANCE_FILES = [
+  'CLAUDE.md',
+  'AGENTS.md',
+  'src/README.md',
+  'src/agent/core/README.md',
+  'src/agent/modelHandlers/README.md',
+  'src/agent/runtime/README.md',
+  'src/agent/workflowScript/README.md',
+  'src/replacement/README.md',
+  'src/latex/README.md',
+];
 // Standing docs: architecture notes and the published guide. Dated proposals
 // and PRDs stay out — they are historical by design (see issue #9730).
 const GUIDANCE_DIRS = [

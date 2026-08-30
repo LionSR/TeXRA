@@ -156,8 +156,7 @@ export interface ConfigFormProps {
     value: unknown,
   ) => void | Promise<void>;
   /** Reset a setting to its default (delete the key). */
-  readonly resetValue?: (entry: SurfacedSettingEntry) => void | Promise<void>;
-  readonly openForm?: (formName: string) => void;
+  readonly resetValue: (entry: SurfacedSettingEntry) => void | Promise<void>;
   readonly formLinks?: readonly {
     readonly name: string;
     readonly label: string;
@@ -287,11 +286,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
   const resetEntry = (entry: SurfacedSettingEntry): void => {
-    if (!props.resetValue) {
-      commit(entry, '');
-      return;
-    }
-    runWrite(entry, settingDefault(entry), () => props.resetValue?.(entry));
+    runWrite(entry, settingDefault(entry), () => props.resetValue(entry));
   };
 
   useInput((input, key) => {
@@ -301,13 +296,6 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       setMode({ kind: 'list', category: mode.category });
     }
   });
-
-  // A form-backed setting renders inline when this host supplied a renderer;
-  // otherwise the host opens the standalone form itself.
-  const openNamedForm = (name: string): void => {
-    if (props.formRenderers?.[name]) setMode({ kind: 'linked-form', name });
-    else props.openForm?.(name);
-  };
 
   if (mode.kind === 'linked-form') {
     return (
@@ -421,7 +409,10 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
           showOverflow={window.showOverflow}
           onSelect={(category) => {
             if (category.startsWith('form:')) {
-              openNamedForm(category.slice('form:'.length));
+              setMode({
+                kind: 'linked-form',
+                name: category.slice('form:'.length),
+              });
               return;
             }
             setMode({ kind: 'list', category });
@@ -465,7 +456,8 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         commit(entry, !(effective(entry) as boolean));
         return;
       case 'form':
-        if (entry.openForm) openNamedForm(entry.openForm);
+        if (entry.openForm)
+          setMode({ kind: 'linked-form', name: entry.openForm });
         return;
       case 'enum':
         setMode({ kind: 'enum', entry, category });

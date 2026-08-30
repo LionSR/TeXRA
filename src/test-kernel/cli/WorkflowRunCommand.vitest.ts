@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
   return {
     executeCliConfig: vi.fn(),
     emitCliResult: vi.fn(),
-    finalizeExecution: vi.fn(),
+    finalizeRun: vi.fn(),
     withExpandedRunInputs: vi.fn(),
     resolveCliLaunchAgent: vi.fn(),
     selectCliRunModel: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock('@agent/storage', async (importOriginal) => {
       createFakeKv(executionId, { writeResultMeta: mocks.writeResultMeta }),
     ),
     deriveResumability: mocks.deriveResumability,
-    finalizeExecution: mocks.finalizeExecution,
+    finalizeRun: mocks.finalizeRun,
     // Mirrors the real result-object conversion over the same writeResultMeta
     // fake, so failure injection keeps flowing through mocks.writeResultMeta.
     persistChildRunResultMeta: vi.fn(
@@ -97,7 +97,6 @@ vi.mock('@cli/runtime/workflowInputs', () => ({
     );
     return specs.has('-') && specs.size > 1;
   }),
-  isMaterializedStdinWorkflowInputPath: vi.fn(() => false),
   STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
 }));
 
@@ -296,7 +295,7 @@ function expectNoModelOrInputWork(): void {
 describe('CLI workflow run command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.finalizeExecution.mockResolvedValue(durableFinalizationResult());
+    mocks.finalizeRun.mockResolvedValue(durableFinalizationResult());
     mocks.resolveCliLaunchAgent.mockResolvedValue({
       name: 'polish',
       category: AgentCategory.Workflow,
@@ -309,8 +308,7 @@ describe('CLI workflow run command', () => {
         model ?? 'deepseekT',
     );
     mocks.deriveResumability.mockResolvedValue({
-      resumable: true,
-      cause: 'interrupted-with-flow',
+      kind: 'checkpoint',
       flowRecord: {
         shared: {},
         cursor: { nextNodeId: 'start' },
@@ -325,7 +323,7 @@ describe('CLI workflow run command', () => {
         run: (inputs: {
           readonly inputFiles: string[];
           readonly contextFiles: string[];
-          readonly hasMaterializedStdinInput?: boolean;
+          readonly stdinInputPath?: string;
         }) => Promise<unknown>,
       ) => run({ inputFiles: ['paper.tex'], contextFiles: [] }),
     );
@@ -492,9 +490,11 @@ describe('CLI workflow run command', () => {
       expect(config).toMatchObject({
         inputFiles: ['paper.tex'],
         outputFiles: [],
-        cliOutputFile: path.join(root, 'polished.tex'),
-        cliOutputDirectory: undefined,
-        cliExpectedOutputFiles: undefined,
+        cli: {
+          outputFile: path.join(root, 'polished.tex'),
+          outputDirectory: undefined,
+          expectedOutputFiles: undefined,
+        },
       });
       await expect(
         fs.readFile(path.join(root, 'polished.tex'), 'utf8'),
@@ -555,9 +555,11 @@ describe('CLI workflow run command', () => {
 
       expect(exitCode).toBe(0);
       expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
-        cliOutputFile: undefined,
-        cliOutputDirectory: path.join(workspace, 'out'),
-        cliExpectedOutputFiles: ['paper.tex'],
+        cli: {
+          outputFile: undefined,
+          outputDirectory: path.join(workspace, 'out'),
+          expectedOutputFiles: ['paper.tex'],
+        },
       });
       await expect(
         fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
@@ -626,7 +628,7 @@ describe('CLI workflow run command', () => {
         compileFailures: [],
       }),
     );
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
   });
 
   it('leaves failed output finalization to the live run lifecycle', async () => {
@@ -642,7 +644,7 @@ describe('CLI workflow run command', () => {
       CliExitCode.AgentError,
     );
 
-    expect(mocks.finalizeExecution).not.toHaveBeenCalled();
+    expect(mocks.finalizeRun).not.toHaveBeenCalled();
     expect(cliLogSinksMock.writeErrorStderr).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ code: 'ENOENT' }),
     );
@@ -906,7 +908,7 @@ describe('CLI workflow run command', () => {
         run({
           inputFiles: [stdinPath],
           contextFiles: [],
-          hasMaterializedStdinInput: true,
+          stdinInputPath: stdinPath,
         }),
     );
     mockWorkflowExecution(
@@ -940,11 +942,7 @@ describe('CLI workflow run command', () => {
     );
     mocks.withExpandedRunInputs.mockImplementationOnce(
       async (_inputs, _contexts, _cwd, _options, run) =>
-        run({
-          inputFiles: [lookalike],
-          contextFiles: [],
-          hasMaterializedStdinInput: false,
-        }),
+        run({ inputFiles: [lookalike], contextFiles: [] }),
     );
     mockWorkflowExecution(
       workflowExecution('exec-stdin-lookalike', {
@@ -969,8 +967,7 @@ describe('CLI workflow run command', () => {
 
     expect(
       canAdvertise?.({
-        resumable: true,
-        cause: 'interrupted-with-flow',
+        kind: 'checkpoint',
         flowRecord: {
           shared: { lastError: { message: 'provider failed' } },
           cursor: { nextNodeId: 'start' },

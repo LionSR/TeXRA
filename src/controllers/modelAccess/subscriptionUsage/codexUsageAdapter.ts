@@ -2,7 +2,7 @@ import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 import {
   asObject,
-  assertSubscriptionUsageResponse,
+  fetchSubscriptionUsage,
   numberField,
   stringField,
   timestampField,
@@ -134,11 +134,11 @@ export async function fetchChatGptUsage(
   if (credential.accountId) {
     headers['ChatGPT-Account-Id'] = credential.accountId;
   }
-  const response = await http(CHATGPT_USAGE_URL, {
-    method: 'GET',
-    headers,
-    signal,
-  });
-  assertSubscriptionUsageResponse(response);
-  return parseChatGptUsage(await response.json());
+  return parseChatGptUsage(
+    await fetchSubscriptionUsage(http, {
+      url: CHATGPT_USAGE_URL,
+      headers,
+      signal,
+    }),
+  );
 }

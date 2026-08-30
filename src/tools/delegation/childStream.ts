@@ -5,6 +5,7 @@ import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
+import type { ChildRunOutcome } from '@agent/runtime/childRunLoop';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   currentSession,
@@ -12,7 +13,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME, STREAM_PHASE, type AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import type {
   ExecutionId,
   RunIdentity,
@@ -39,16 +40,6 @@ interface CreateChildStreamOptions {
   reservedWriter?: TranscriptWriter;
 }
 
-/**
- * What the child observed about its own exit. It is a report, not a verdict:
- * the stream phase owns the terminal outcome, so an explicit stop/kill that
- * already landed CANCELLED outranks the non-zero exit it caused.
- */
-type ChildStreamOutcome =
-  | { kind: 'completed' }
-  | { kind: 'failed'; error?: unknown; errorMessage?: string }
-  | { kind: 'cancelled' };
-
 interface FinalizeChildStreamOptions {
   wallTimeMs?: number;
   usage?: {
@@ -56,7 +47,7 @@ interface FinalizeChildStreamOptions {
     output_tokens: number;
   } | null;
   /** Defaults to `{ kind: 'completed' }` when omitted. */
-  outcome?: ChildStreamOutcome;
+  outcome?: ChildRunOutcome;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
   /** Durable execution-state action. */
@@ -307,14 +298,10 @@ async function finalizeChildStream(
   let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
   try {
     const outcomeOption = options?.outcome ?? { kind: 'completed' as const };
-    let errorMessage: string | undefined;
-    if (outcomeOption.kind === 'failed') {
-      errorMessage =
-        outcomeOption.errorMessage ??
-        (outcomeOption.error != null
-          ? toErrorMessage(outcomeOption.error)
-          : undefined);
-    }
+    const errorMessage =
+      outcomeOption.kind === 'failed' && outcomeOption.error != null
+        ? toErrorMessage(outcomeOption.error)
+        : undefined;
 
     if (errorMessage) {
       logger.error(errorMessage);

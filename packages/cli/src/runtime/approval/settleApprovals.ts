@@ -8,6 +8,7 @@
  */
 
 import { defaultSession } from '@agent/runtime';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   decideHumanInputRequest,
   decideRetryApproval,
@@ -25,6 +26,7 @@ import {
   type RetryPermission,
 } from '@shared/schemas';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { type CliContext } from '../cliContext';
 
@@ -151,10 +153,18 @@ export function denyExternalInquiryIfNoHumanInput(
 ): boolean {
   const denial = settleHumanInputDenial(context, EXTERNAL_INQUIRY_YOLO_MESSAGE);
   if (denial == null) return false;
-  void handleExternalInquiryAction({
+  // Persisting the drop writes the inquiry thread; nothing else owns this
+  // promise, so its rejection is logged here instead of surfacing as an
+  // unhandled rejection.
+  handleExternalInquiryAction({
     action: 'drop',
     threadId,
     reason: denial.reason,
+  }).catch((error: unknown) => {
+    logWarning(
+      'cli.approval',
+      `External inquiry ${threadId} drop failed: ${toErrorMessage(error)}`,
+    );
   });
   return true;
 }

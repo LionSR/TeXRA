@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
   formatCliSkillIssue,
@@ -25,6 +26,7 @@ async function listSkills(
     readonly additionalPaths: readonly string[];
   },
 ): Promise<number> {
+  await initCliPlatform({ ...context, quietLogs: true });
   const result = await readCliSkills(context, options);
   const exitCode = result.errors.some(
     (issue) =>

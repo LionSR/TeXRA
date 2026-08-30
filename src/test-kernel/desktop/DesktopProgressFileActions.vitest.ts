@@ -2,6 +2,8 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { LaTeXdiffResult } from '@latex/latexdiff';
+import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { OutputFileInfo } from '@shared/schemas';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
@@ -9,17 +11,6 @@ import { createStubDesktopAgentExecutionHost } from './desktopAgentExecutionTest
 import { loadSourceModule } from './loadSourceModule.ts';
 
 const mocks = createModuleMocks();
-
-type DiffOutcome = {
-  results: Array<{
-    success: boolean;
-    message?: string;
-    diffPath?: string;
-  }>;
-  totalOperations: number;
-};
-
-type DiffResult = DiffOutcome['results'][number];
 
 function absolutePath(...segments: string[]): string {
   return path.join(path.sep, ...segments);
@@ -29,11 +20,18 @@ function absolutePath(...segments: string[]): string {
 function successResult(
   basePath: string,
   diffFileName = 'main_diff.tex',
-): DiffResult {
+): DiffRunResult {
   return {
     success: true,
     diffPath: path.join(path.dirname(basePath), diffFileName),
+    message: 'diff written',
+    description: basePath,
   };
+}
+
+/** A failed run, as the shared core reports it. */
+function failureResult(message: string): DiffRunResult {
+  return { success: false, message, description: message };
 }
 
 function expectOpenedDiff(
@@ -57,20 +55,15 @@ function outputInfo(filePath: string): OutputFileInfo {
         absolutePath: absolutePath('workspace', 'main.tex'),
       },
       diffBase: null,
-      diffFile: null,
     },
     diff: null,
   };
 }
 
 async function loadFileActions(options: {
-  outcome?: DiffOutcome;
+  outcome?: DiffRunOutcome;
   throws?: boolean;
-  fallbackResult?: {
-    success: boolean;
-    message?: string;
-    diffPath?: string;
-  };
+  fallbackResult?: LaTeXdiffResult;
 }): Promise<{
   actions: InstanceType<
     typeof import('@desktop/main/desktopProgressFileActions').DesktopProgressFileActions
@@ -88,15 +81,16 @@ async function loadFileActions(options: {
   const runLatexdiffForExecution = vi.fn(async () => {
     if (options.throws) throw new Error('No workspace path found');
     return {
-      outcome: options.outcome ?? { results: [], totalOperations: 0 },
+      outcome: options.outcome ?? { results: [] },
       source: 'metadata' as const,
     };
   });
   const runDiff = vi.fn(
-    async () =>
+    async (): Promise<LaTeXdiffResult> =>
       options.fallbackResult ?? {
         success: true,
         diffPath: absolutePath('workspace', 'main_diff.tex'),
+        message: 'diff written',
       },
   );
 
@@ -152,9 +146,8 @@ describe('DesktopProgressFileActions latexdiff', () => {
   });
 
   it('passes pre-resolved round outputs to the shared core', async () => {
-    const outcome = {
+    const outcome: DiffRunOutcome = {
       results: [successResult(absolutePath('run', 'r1', 'main.tex'))],
-      totalOperations: 1,
     };
     const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({ outcome });
@@ -187,9 +180,8 @@ describe('DesktopProgressFileActions latexdiff', () => {
   });
 
   it('passes the scan identity (and no rounds) when only a workspace scan is available', async () => {
-    const outcome = {
+    const outcome: DiffRunOutcome = {
       results: [successResult(absolutePath('workspace', 'main.tex'))],
-      totalOperations: 1,
     };
     const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({ outcome });
@@ -227,10 +219,11 @@ describe('DesktopProgressFileActions latexdiff', () => {
   it('falls back to single-file latexdiff when the shared core finds no operations', async () => {
     const { actions, openBuildDisplay, runLatexdiffForExecution, runDiff } =
       await loadFileActions({
-        outcome: { results: [], totalOperations: 0 },
+        outcome: { results: [] },
         fallbackResult: {
           success: true,
           diffPath: absolutePath('workspace', 'fallback_diff.tex'),
+          message: 'diff written',
         },
       });
 
@@ -253,13 +246,12 @@ describe('DesktopProgressFileActions latexdiff', () => {
   });
 
   it('opens every successful diff, not just the first', async () => {
-    const outcome = {
+    const outcome: DiffRunOutcome = {
       results: [
         successResult(absolutePath('run', 'r1', 'main.tex')),
         successResult(absolutePath('run', 'r2', 'main.tex')),
-        { success: false, message: 'one failed' },
+        failureResult('one failed'),
       ],
-      totalOperations: 3,
     };
     const { actions, openBuildDisplay, runDiff } = await loadFileActions({
       outcome,
@@ -293,6 +285,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       fallbackResult: {
         success: true,
         diffPath: absolutePath('workspace', 'fallback_diff.tex'),
+        message: 'diff written',
       },
     });
 
@@ -315,12 +308,12 @@ describe('DesktopProgressFileActions latexdiff', () => {
   it('falls back to single-file latexdiff when every shared operation failed', async () => {
     const { actions, openBuildDisplay, runDiff } = await loadFileActions({
       outcome: {
-        results: [{ success: false, message: 'missing base' }],
-        totalOperations: 1,
+        results: [failureResult('missing base')],
       },
       fallbackResult: {
         success: true,
         diffPath: absolutePath('workspace', 'fallback_diff.tex'),
+        message: 'diff written',
       },
     });
 
@@ -347,7 +340,6 @@ describe('DesktopProgressFileActions latexdiff', () => {
         results: [
           successResult(absolutePath('workspace', 'a.tex'), 'a_diff.tex'),
         ],
-        totalOperations: 1,
       },
     });
 

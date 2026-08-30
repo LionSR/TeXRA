@@ -17,7 +17,7 @@
  * a workflow flow never produces a WAITING result, so `isTerminal` is always
  * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
  * terminal turn before ever consulting `runTurn`.
- * `allowWaitingResult: true` is likewise inert for workflow —
+ * The subagent WAITING admission is likewise inert for workflow —
  * `isWaitingFlowResult` requires `category === 'toolUse'`, so a workflow
  * result can never satisfy it. Delivery choreography (format/persist/
  * manifest/deliver), duplicate-delivery prevention (there is exactly one
@@ -44,14 +44,15 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { createLog } from '@logger/logUtils';
 import {
   AgentCategory,
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
-  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { onAbort, unique } from '@utils/core';
@@ -86,6 +87,8 @@ export interface AgentEngine {
     options?: ResumeToolUseFromResumeDataOptions,
   ) => Promise<AgentRuntimeFlowResult>;
 }
+
+const log = createLog('nativeSubagentStrategy');
 
 let agentEngine: AgentEngine | undefined;
 
@@ -153,8 +156,12 @@ interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly executionMode?: 'single-cycle';
   /** Persist the typed result without constructing fallible prose delivery. */
   readonly resultOnly?: boolean;
-  /** Fires with the resolved child stream id — the caller inherits approvals onto it. */
-  readonly onStreamResolved: (streamId: StreamTabId) => void;
+  /**
+   * Whether the launched child can take user follow-ups. Decided by the caller
+   * (which also registers the child's roster row with it) so the two can't
+   * disagree about the same run.
+   */
+  readonly userFollowUpSupport: UserFollowUpSupport;
 }
 
 /**
@@ -193,12 +200,7 @@ function bindAbortSignals(
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<AgentRuntimeFlowResult> & {
-  /** Shared typed result construction used by detached and in-band drivers. */
-  readonly buildResult: (
-    turn: AgentRuntimeFlowResult,
-  ) => Promise<BuiltSubagentResult>;
-} {
+): ChildRunStrategy<AgentRuntimeFlowResult> {
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent`/`resumeToolUseTurn` never reject for a
@@ -290,10 +292,6 @@ export function createNativeSubagentStrategy(
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
           session: params.session,
-          // True by construction: this strategy only ever launches child runs
-          // (`parentStreamId` is required), matching `handle.isChildExecution`
-          // once the run handle exists.
-          isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,
           parentStreamId: params.parentStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
@@ -313,12 +311,13 @@ export function createNativeSubagentStrategy(
           params.executionId,
           {
             ...executeOptions,
-            allowWaitingResult: true,
-            userFollowUpSupport:
-              params.executionMode !== 'single-cycle' &&
-              params.config.agentCategory === AgentCategory.ToolUse
-                ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-                : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            // True by construction: this strategy only ever launches child
+            // runs (`parentStreamId` is required), matching
+            // `handle.isChildExecution` once the run handle exists. Written
+            // inline as a literal `true` so overload resolution admits the
+            // WAITING result this strategy consumes as a loop turn.
+            isSubagent: true,
+            userFollowUpSupport: params.userFollowUpSupport,
             ...(params.executionMode === 'single-cycle'
               ? { stopAfterCycle: true }
               : {}),
@@ -409,8 +408,6 @@ export function createNativeSubagentStrategy(
 
     resolveDeliveryTarget,
 
-    buildResult,
-
     formatDelivery: async (turn) => {
       if (cachedDelivery === undefined) {
         const built = await buildResult(turn);
@@ -467,10 +464,13 @@ export function createNativeSubagentStrategy(
             Date.now() - params.startedAt,
             failureOptions,
           );
-        } catch {
+        } catch (buildError) {
           // Even an unconstructable failure result must leave a durable
           // failure manifest (with the child's real error), never a stale
           // interim record. The category-only form cannot throw.
+          log.warn('Failed to build the full subagent failure manifest', {
+            data: { executionId: params.executionId, error: buildError },
+          });
           return buildSubagentFailureResultMeta(
             params.agentName,
             params.config.agentCategory,

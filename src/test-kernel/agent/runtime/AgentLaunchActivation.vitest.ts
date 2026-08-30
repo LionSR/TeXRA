@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   acquireResumedExecutionLease: vi.fn(),
   buildVars: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(),
   createHandler: vi.fn(),
   createTrace: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
@@ -37,10 +36,8 @@ vi.mock('@agent/storage/executionLifecycle', () => ({
   hasPersistedParent: mocks.hasPersistedParent,
 }));
 vi.mock('@agent/storage/executionLease', () => ({
-  abandonOwnedExecutionLease: vi.fn(),
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
   releaseOwnedExecutionLeaseAfterFailure:
     mocks.releaseOwnedExecutionLeaseAfterFailure,
 }));
@@ -140,7 +137,6 @@ describe('native agent launch activation', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
   });
 
   it.each([
@@ -149,12 +145,19 @@ describe('native agent launch activation', () => {
   ])(
     'emits the expected activation payload for a fresh $label launch',
     async ({ isSubagent, suppressViewSwitch }) => {
+      // The subagent flag picks an `executeAgent` overload, so the literal
+      // has to be visible at the call site rather than widened by `it.each`.
       const payload = await captureActivation((session) =>
-        executeAgent(config, 'fresh-launch' as ExecutionId, {
-          session,
-          isSubagent,
-          modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
-        }),
+        isSubagent
+          ? executeAgent(config, 'fresh-launch' as ExecutionId, {
+              session,
+              isSubagent: true,
+              modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+            })
+          : executeAgent(config, 'fresh-launch' as ExecutionId, {
+              session,
+              modelHandlerCompatibilityKey: MODEL_HANDLER_KEY,
+            }),
       );
 
       expectActivation(payload, suppressViewSwitch);

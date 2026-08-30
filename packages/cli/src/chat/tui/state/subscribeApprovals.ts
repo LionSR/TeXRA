@@ -35,8 +35,7 @@ import {
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
-  classifyCliRetryAction,
-  cliRetryApiSwitchDecision,
+  cliRetryQuotaRoute,
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
@@ -83,7 +82,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { notify } from '../notifications/terminalNotifier';
-import { patchStream } from './cliState';
+import { foregroundReader, patchStream } from './cliState';
+import { directChildStreamIds, isWorkflowScriptStream } from './childControls';
+import { childRosters, parentStream } from './childExecutions';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
@@ -125,26 +126,15 @@ import {
 function maybeAutoSwitchRetry(
   payload: RetryApprovalPayload,
 ): ApprovalDecision | undefined {
-  const action = classifyCliRetryAction(payload.data);
-
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
   // OAuth subscriptions (ChatGPT, Grok) stay explicit: the user must confirm.
-  // Kimi Code-exclusive models never reach this branch: the classifier above
-  // gates them to 'none', keeping the modal without an API-key switch.
-  if (action.startsWith('disable-quota-route:')) {
-    const decision = cliRetryApiSwitchDecision(payload.data);
-    if (
-      decision.disableQuotaRoute === undefined ||
-      !isCodingPlanQuotaRoute(decision.disableQuotaRoute)
-    ) {
-      return undefined;
-    }
-    if (payload.tui.personalApiKeyAvailable !== true) return undefined;
-    return decision;
-  }
-
-  return undefined;
+  // Kimi Code-exclusive models never reach this branch: the classifier gates
+  // them to no route, keeping the modal without an API-key switch.
+  const route = cliRetryQuotaRoute(payload.data);
+  if (!route || !isCodingPlanQuotaRoute(route.id)) return undefined;
+  if (payload.tui.personalApiKeyAvailable !== true) return undefined;
+  return { accepted: true, disableQuotaRoute: route.id };
 }
 
 /**
@@ -207,7 +197,6 @@ export function createTuiHostInteractions(
     },
     async openExternalInquiry(request) {
       handleExternalInquiry(request, context);
-      return { threadId: request.threadId };
     },
     setApprovalBypassState(update) {
       setTuiApprovalBypassState(update);
@@ -328,7 +317,10 @@ async function requestPlanInteraction(
   // `approve_and_goal` is a TUI-only plan action; every other outcome is the
   // shared approve/reject settlement.
   if (decision.accepted && decision.planAction) {
-    return { action: decision.planAction };
+    return {
+      action: decision.planAction,
+      ...(decision.goalAutoApproveAll ? { autoApproveAll: true } : {}),
+    };
   }
   return toApprovalSettlement(decision);
 }
@@ -406,9 +398,13 @@ async function requestRetryInteraction(
                 platform().secrets,
                 provider,
               );
-            } catch {
+            } catch (error) {
               // A keychain failure must not permit an automatic credential
               // switch.
+              logWarning(
+                'cli.tui',
+                `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
+              );
               missingPersonalApiKeyMessage = missingApiKeyRetryMessage(
                 provider,
                 'unavailable',
@@ -471,7 +467,6 @@ async function requestRetryInteraction(
       // the user must not be told a switch happened that did not.
       if (
         retryDecision.source === 'automatic' &&
-        decision.disableQuotaRoute !== undefined &&
         isCodingPlanQuotaRoute(decision.disableQuotaRoute)
       ) {
         notify('credentialSwitched');
@@ -534,7 +529,17 @@ export function enqueueTuiApproval(
 /** Focus the asking stream and ring the terminal when a modal appears. */
 function announceApproval(payload: ApprovalPayload): void {
   const streamId = approvalPayloadStreamId(payload);
-  if (streamId) {
+  const reader = foregroundReader.get();
+  const workflowOwnsApproval =
+    streamId !== undefined &&
+    reader !== undefined &&
+    isWorkflowScriptStream(reader.streamId) &&
+    directChildStreamIds({
+      parentStreamId: reader.streamId,
+      childRosters: childRosters.get(),
+      parentStream: parentStream.get(),
+    }).has(streamId);
+  if (streamId && !workflowOwnsApproval) {
     defaultSession().events.emit({
       scope: 'session',
       event: {
@@ -613,14 +618,16 @@ async function rollbackChangedSettings(
  * Rollback config for one coding-plan preference, shared by the pre-commit
  * restore (a switch that failed before or during client preparation) and the
  * commit task's rollback (a later access-settings write failed).
+ *
+ * Both callers sit past the point where the plan write was attempted, so
+ * `writeStarted` is always true here.
  */
 function codingPlanRollbackConfig(
   runtime: CodingPlanSubscriptionRuntime,
   previous: boolean,
-  writeStarted: boolean,
 ): RetrySettingRollbackConfig {
   return {
-    writeStarted,
+    writeStarted: true,
     needsRollback: () => runtime.getEnabled() !== previous,
     restore: async () => {
       await runtime.restoreEnabled(previous);
@@ -683,11 +690,14 @@ async function applyRetryCredentialCommit(
   signal: AbortSignal,
   codingPlanRollback?: RetrySettingRollbackConfig,
 ): Promise<void> {
-  signal.throwIfAborted();
   const oauth = oauthCliPreference(decision.disableQuotaRoute);
   const previousOauthPreference = oauth?.isPrefer() ?? false;
   let subscriptionWriteStarted = false;
   try {
+    // Inside the try: a cancel landing on the coding-plan branch (where there
+    // is no oauth write and so nothing else can throw here) must still roll
+    // the already-disabled plan back rather than escape past the rollback.
+    signal.throwIfAborted();
     if (oauth) {
       subscriptionWriteStarted = true;
       const update = await runRetryTask(() => oauth.setPrefer(false), signal);
@@ -796,9 +806,7 @@ async function switchRetryToPersonalCredentials(
         options.commitQueue.add(async () => {
           signal.throwIfAborted();
           const previousCodingPlanEnabled = runtime.getEnabled();
-          let codingPlanWriteStarted = false;
           try {
-            codingPlanWriteStarted = true;
             await runRetryTask(
               () => setCliCodingPlanSubscription(codingPlanId, false),
               signal,
@@ -809,22 +817,14 @@ async function switchRetryToPersonalCredentials(
             throwWithRollbackFailures(
               error,
               await rollbackChangedSettings([
-                codingPlanRollbackConfig(
-                  runtime,
-                  previousCodingPlanEnabled,
-                  codingPlanWriteStarted,
-                ),
+                codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
               ]),
             );
           }
           await applyRetryCredentialCommit(
             decision,
             signal,
-            codingPlanRollbackConfig(
-              runtime,
-              previousCodingPlanEnabled,
-              codingPlanWriteStarted,
-            ),
+            codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
           );
         }),
       signal,
@@ -858,33 +858,24 @@ function handleExternalInquiry(
     (decision) => {
       // User-accept with text submits an answer; empty text, reject, and
       // modal-cancel all drop the durable inquiry thread.
+      let action: Parameters<typeof handleExternalInquiryAction>[0];
       if (decision.accepted && decision.userMessage) {
-        void handleExternalInquiryAction({
-          action: 'submit',
-          threadId,
-          answer: decision.userMessage,
-        });
-        return;
+        action = { action: 'submit', threadId, answer: decision.userMessage };
+      } else if (decision.rejectionCause !== undefined) {
+        action = { action: 'drop', threadId, cause: decision.rejectionCause };
+      } else if (decision.userMessage) {
+        action = { action: 'drop', threadId, feedback: decision.userMessage };
+      } else {
+        action = { action: 'drop', threadId };
       }
-      if (decision.rejectionCause !== undefined) {
-        void handleExternalInquiryAction({
-          action: 'drop',
-          threadId,
-          cause: decision.rejectionCause,
-        });
-        return;
-      }
-      if (decision.userMessage) {
-        void handleExternalInquiryAction({
-          action: 'drop',
-          threadId,
-          feedback: decision.userMessage,
-        });
-        return;
-      }
-      void handleExternalInquiryAction({
-        action: 'drop',
-        threadId,
+      // Persisting the action writes the inquiry thread; nothing else owns
+      // this promise, so its rejection is logged here instead of surfacing as
+      // an unhandled rejection.
+      handleExternalInquiryAction(action).catch((error: unknown) => {
+        logWarning(
+          'cli.tui',
+          `External inquiry ${threadId} ${action.action} failed: ${toErrorMessage(error)}`,
+        );
       });
     },
   );

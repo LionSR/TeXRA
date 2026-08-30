@@ -595,6 +595,32 @@ describe('OpenAI Chat Completions', () => {
     expectSingleNode(nodes, 'tool-call', { name: 'valid_tool' });
   });
 
+  it('drops a function entry with no .function payload, keeping valid calls', () => {
+    const nodes = normalize([
+      {
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call_a',
+            type: 'function',
+            function: { name: 'first_tool', arguments: '{}' },
+          },
+          { id: 'call_malformed', type: 'function' },
+          {
+            id: 'call_b',
+            type: 'function',
+            function: { name: 'second_tool', arguments: '{}' },
+          },
+        ],
+      },
+    ]);
+
+    expect(nodesOfKind(nodes, 'tool-call').map((node) => node.name)).toEqual([
+      'first_tool',
+      'second_tool',
+    ]);
+  });
+
   it('handles tool role messages', () => {
     const nodes = normalize([
       { role: 'tool', tool_call_id: 'call_1', content: 'result text' },

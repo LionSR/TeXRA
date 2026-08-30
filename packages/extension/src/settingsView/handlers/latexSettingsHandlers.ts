@@ -7,10 +7,8 @@
 import * as vscode from 'vscode';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { platform } from '@platform/platform';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
-import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
@@ -141,8 +139,7 @@ export class LatexSettingsHandlers {
       autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
     }),
     onDetectionError: (error) => {
-      this.ctx.logger.error(
-        this.ctx.channel,
+      this.ctx.log.error(
         `LaTeX settings detection failed: ${toErrorMessage(error)}`,
       );
     },
@@ -199,27 +196,11 @@ export class LatexSettingsHandlers {
     );
   }
 
-  /** Push the catalog-derived LaTeX/compile/diff settings snapshot. */
-  async sendLatexConfigValues(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(
-      buildSettingsSnapshotMessage(
-        'latex',
-        {
-          config: platform().config,
-          workspaceState: platform().workspaceState,
-          globalState: platform().globalState,
-        },
-        'vscode',
-      ),
-    );
-  }
-
   async handleRunInstallCommand(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
   ): Promise<void> {
     if (!this.toolingController.isAllowedInstallCommand(data.installCommand)) {
-      this.ctx.logger.warn(
-        this.ctx.channel,
+      this.ctx.log.warn(
         `Rejected unknown install command: ${data.installCommand}`,
       );
       return;

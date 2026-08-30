@@ -82,17 +82,6 @@ export function isOAuthProvider(
 }
 
 /**
- * Check if Supabase is configured.
- * Returns false if using placeholder values.
- */
-export function isSupabaseConfigured(): boolean {
-  return (
-    !SUPABASE_CONFIG.url.includes('placeholder') &&
-    SUPABASE_CONFIG.publicKey !== 'placeholder-public-key'
-  );
-}
-
-/**
  * Default OAuth provider to use.
  * Users can choose during sign-in if multiple are configured in Supabase.
  */
@@ -134,58 +123,12 @@ export function getExtensionId(): string {
  * Get the OAuth callback URI for redirects.
  * Used by the OAuth flow.
  *
- * Note: This returns the base URI. Use getExternalAuthCallbackInfo() for
- * the environment-appropriate callback URL (handles Codespaces, Remote SSH, etc.)
+ * Note: This returns the base URI. Hosts that must route web redirects through
+ * their own environment (VS Code's `env.asExternalUri()` for Codespaces and
+ * Remote SSH) wrap it themselves — see `SupabaseAuthProvider.buildOAuthOptions`.
  */
 export function getAuthCallbackUri(uriScheme: string): string {
   return `${uriScheme}://${getExtensionId()}/auth-callback`;
-}
-
-/**
- * Result of resolving the external auth callback URI.
- * In Codespaces, VS Code adds a ?state= routing token to the URL that must be
- * preserved on redirect_to for the callback to route back into the editor, so
- * the OAuth flow uses this full URL (token included) as its redirectTo.
- */
-export interface ExternalAuthCallbackInfo {
-  /** Full callback URL, including any VS Code ?state= routing token. */
-  fullUrl: string;
-}
-
-export type ExternalAuthCallbackResolver =
-  () => Promise<ExternalAuthCallbackInfo>;
-
-let externalAuthCallbackResolver: ExternalAuthCallbackResolver | null = null;
-
-/**
- * Register the host-specific OAuth callback adapter.
- *
- * VS Code must route web auth redirects through env.asExternalUri(), but shared
- * auth config also loads in Electron. Keeping the adapter host-owned prevents
- * Electron bundles from carrying a runtime dependency on the VS Code module.
- */
-export function setExternalAuthCallbackResolver(
-  resolver: ExternalAuthCallbackResolver | null,
-): void {
-  externalAuthCallbackResolver = resolver;
-}
-
-/**
- * Get the external auth callback URI with parsed components.
- * Uses the host-provided adapter to handle different environments:
- * - Desktop VS Code: returns vscode://texra-ai.texra/auth-callback
- * - Cursor: returns cursor://texra-ai.texra/auth-callback
- * - Codespaces: returns https://*.github.dev/extension-auth-callback
- * - Remote SSH: handles port forwarding automatically
- *
- * In Codespaces, VS Code generates a state parameter that MUST be preserved
- * and passed through the OAuth flow for the callback routing to work.
- */
-export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
-  if (!externalAuthCallbackResolver) {
-    return { fullUrl: getAuthCallbackUri('vscode') };
-  }
-  return externalAuthCallbackResolver();
 }
 
 /**

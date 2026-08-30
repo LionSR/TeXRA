@@ -15,7 +15,7 @@ import {
   roundIndexedEntries,
   RoundKeySchema,
 } from '@shared/schemas';
-import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
+import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import {
   legacyWorkflowOutputRoundRegex,
   midEraWorkflowOutputStem,
@@ -89,19 +89,14 @@ async function executeDiffOperations(
             { cwd: operation.cwd },
           );
 
-    results.push({
-      success: diffResult.success,
-      message: diffResult.message,
-      diffPath: diffResult.diffPath,
-      description: operation.description,
-    });
+    results.push({ ...diffResult, description: operation.description });
   }
 
   return { results };
 }
 
 export async function runLatexdiffFromMetadata(params: {
-  rounds: RoundIndexed<OutputFileInfo>;
+  rounds: ReadonlyRoundIndexed<OutputFileInfo>;
   mathMarkup?: MathMarkupOption;
   generateBetweenRoundDiffs: boolean;
   latexdiff: LatexdiffRuntime;

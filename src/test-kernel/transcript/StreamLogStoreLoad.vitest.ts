@@ -24,8 +24,9 @@ import {
   StreamLogStore,
   STREAM_LOGS_DIR,
   STREAM_LOG_SUMMARIES_DIR,
-  type StreamLogAppendInput,
 } from '@transcript';
+import type { StreamLogAppendInput } from '@transcript/StreamLog';
+import { clearPersistedSummaryParentStream } from '@transcript/StreamLogStore';
 import { delay } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -46,7 +47,6 @@ interface MockStorageOptions {
   onLogRead?: (key: string) => Promise<void> | void;
   onLogDelete?: (key: string) => Promise<void> | void;
   onLogWrite?: (key: string) => Promise<void> | void;
-  onSummaryWrite?: (key: string) => Promise<void> | void;
   pauseLogWriteKey?: string;
 }
 
@@ -218,7 +218,6 @@ function mockStorage({
   onLogRead,
   onLogDelete,
   onLogWrite,
-  onSummaryWrite,
   pauseLogWriteKey,
 }: MockStorageOptions): {
   deletes: string[];
@@ -308,9 +307,6 @@ function mockStorage({
     }
     if (areaOf(target) === 'log') {
       await onLogWrite?.(streamKeyFromFile(target));
-    }
-    if (areaOf(target) === 'summary') {
-      await onSummaryWrite?.(streamKeyFromFile(target));
     }
 
     const text =
@@ -873,81 +869,6 @@ describe('StreamLogStore load', () => {
       'StreamLogStore',
       expect.stringContaining('Failed to clear transcript summary cache'),
     );
-  });
-
-  it('preserves live state when a transactional reload fails', async () => {
-    const logs: Record<string, unknown> = {
-      alpha: [logEntry('alpha', 1, 100)],
-    };
-    mockStorage({
-      logs,
-      summaries: {
-        alpha: summary(100, 100, { hasRunningGroup: false }),
-      },
-    });
-    const store = await StreamLogStore.open();
-    await store.ensureLoaded('alpha');
-    const liveAlpha = store.get('alpha');
-    logs.beta = { corrupted: true };
-
-    await expect(store.reload()).rejects.toThrow(
-      'persisted log is not an array',
-    );
-
-    expect(store.keys()).toEqual(['alpha']);
-    expect(store.get('alpha')).toBe(liveAlpha);
-    expect(
-      store
-        .get('alpha')
-        ?.getRange(0)
-        .map((entry) => entry.id),
-    ).toEqual(['alpha-1']);
-    expect(store.getTimestampRange('alpha').first).toBe(100);
-    expect(store.has('beta')).toBe(false);
-  });
-
-  it('discards pending writes when restoring a previously flushed root', async () => {
-    const storage = mockStorage({
-      logs: {
-        alpha: [logEntry('alpha', 1, 100)],
-      },
-      summaries: {
-        alpha: summary(100, 100, { hasRunningGroup: false }),
-      },
-    });
-    const store = await StreamLogStore.open();
-    appendTranscriptEntry(
-      store,
-      'new-root-dirty',
-      logEntry('new-root-dirty', 1, 200),
-    );
-
-    await store.reload({ discardPendingWrites: true });
-
-    expect(store.keys()).toEqual(['alpha']);
-    expect(
-      [...storage.writes.keys()].some((target) =>
-        target.includes(encodeURIComponent('new-root-dirty')),
-      ),
-    ).toBe(false);
-  });
-
-  it('prepares transcript directories again after a storage-root reload', async () => {
-    const storage = mockStorage({ logs: {}, summaries: {} });
-    const store = await StreamLogStore.open();
-    appendTranscriptEntry(store, 'old-root', logEntry('old-root', 1, 100));
-    await store.flush();
-    const oldRootPreparations = storage.ensuredDirs.filter(
-      (dir) => dir === STREAM_LOGS_DIR,
-    ).length;
-
-    await store.reload();
-    appendTranscriptEntry(store, 'new-root', logEntry('new-root', 1, 200));
-    await store.flush();
-
-    expect(
-      storage.ensuredDirs.filter((dir) => dir === STREAM_LOGS_DIR),
-    ).toHaveLength(oldRootPreparations + 1);
   });
 
   it('uses stream summaries without reading full log files at startup', async () => {
@@ -1832,35 +1753,6 @@ describe('StreamLogStore save throttle', () => {
     expect(writtenLog(storage.writes, 'alpha')[0]?.text).toBe('first second');
   });
 
-  it('drains an in-flight write batch before a discarding reload', async () => {
-    const storage = mockStorage({
-      logs: {},
-      summaries: {},
-      pauseLogWriteKey: 'alpha',
-    });
-    const store = await StreamLogStore.open();
-    vi.useFakeTimers();
-
-    const writer = store.acquireWriter('alpha', 'execution-alpha');
-    writer.append(namedEntry('m1', 1, 'first'));
-    await vi.advanceTimersByTimeAsync(300);
-    await storage.waitForPausedWrite();
-
-    // A rollback reload must not resolve while a write batch is still
-    // running against the pre-rollback adapters.
-    let reloaded = false;
-    const reload = store.reload({ discardPendingWrites: true }).then(() => {
-      reloaded = true;
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(reloaded).toBe(false);
-
-    storage.releasePausedWrite();
-    await reload;
-    expect(reloaded).toBe(true);
-    writer.close();
-  });
-
   it('releases a writer that starts after terminal eviction once its flush is durable', async () => {
     mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 100)] },
@@ -1993,96 +1885,6 @@ describe('StreamLogStore summary metadata mirror', () => {
     });
   });
 
-  it('drains a queued metadata write before a discard-pending reload', async () => {
-    const summaryWriteStarted = createDeferred();
-    const releaseSummaryWrite = createDeferred();
-    mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: { alpha: summary(200, 200) },
-      onSummaryWrite: async (streamId) => {
-        if (streamId !== 'alpha') return;
-        summaryWriteStarted.resolve();
-        await releaseSummaryWrite.promise;
-      },
-    });
-    const store = await StreamLogStore.open();
-
-    store.recordSummaryMeta('alpha', META);
-    await summaryWriteStarted.promise;
-
-    let reloaded = false;
-    const reload = store.reload({ discardPendingWrites: true }).then(() => {
-      reloaded = true;
-    });
-    await delay(0);
-    expect(reloaded).toBe(false);
-
-    releaseSummaryWrite.resolve();
-    await reload;
-    expect(reloaded).toBe(true);
-  });
-
-  it('drops metadata awaiting a stream that is absent after reload', async () => {
-    mockStorage({ logs: {}, summaries: {} });
-    const store = await StreamLogStore.open();
-    store.recordSummaryMeta('old-root-stream', META);
-
-    await store.reload({ discardPendingWrites: true });
-
-    expect(store.getSummaryMeta('old-root-stream')).toBeUndefined();
-  });
-
-  it('preserves metadata recorded while reload reads are in flight', async () => {
-    const reloadReadStarted = createDeferred();
-    const releaseReloadRead = createDeferred();
-    let reads = 0;
-    mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: {},
-      onLogRead: async () => {
-        reads += 1;
-        if (reads === 2) {
-          reloadReadStarted.resolve();
-          await releaseReloadRead.promise;
-        }
-      },
-    });
-    const store = await StreamLogStore.open();
-
-    const reload = store.reload({ discardPendingWrites: true });
-    await reloadReadStarted.promise;
-    store.recordSummaryMeta('new-run', META);
-    releaseReloadRead.resolve();
-
-    await expect(reload).rejects.toThrow('state changed during reload');
-    expect(store.getSummaryMeta('new-run')).toEqual(META);
-  });
-
-  it('preserves metadata recorded while reload flushes pending writes', async () => {
-    const summaryWriteStarted = createDeferred();
-    const releaseSummaryWrite = createDeferred();
-    mockStorage({
-      logs: { alpha: [logEntry('alpha', 1, 200)] },
-      summaries: { alpha: summary(200, 200) },
-      onSummaryWrite: async (streamId) => {
-        if (streamId !== 'alpha') return;
-        summaryWriteStarted.resolve();
-        await releaseSummaryWrite.promise;
-      },
-    });
-    const store = await StreamLogStore.open();
-    await store.ensureLoaded('alpha');
-    appendTranscriptEntry(store, 'alpha', logEntry('alpha', 2, 300));
-
-    const reload = store.reload();
-    await summaryWriteStarted.promise;
-    store.recordSummaryMeta('new-run', META);
-    releaseSummaryWrite.resolve();
-
-    await expect(reload).rejects.toThrow('state changed during reload');
-    expect(store.getSummaryMeta('new-run')).toEqual(META);
-  });
-
   it('discards a stale-shaped summary cache loudly and rebuilds from the log', async () => {
     const storage = mockStorage({
       logs: { alpha: [logEntry('alpha', 1, 200)] },
@@ -2138,5 +1940,30 @@ describe('StreamLogStore summary metadata mirror', () => {
     expect(store.keys()).toEqual(['gamma']);
     expect(store.getSummaryMeta('gamma')).toEqual(META);
     await store.flush();
+  });
+});
+
+describe('clearPersistedSummaryParentStream', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('clears the parent edge from a metadata-only summary with no timestamps', async () => {
+    // `recordSummaryMeta` can persist metadata before a stream's first
+    // append, so the cache entry has a `meta.parentStreamId` but neither
+    // timestamp. The patch path must not apply the loader's
+    // registration-evidence gate (which would treat this as absent).
+    const storage = mockStorage({
+      logs: {},
+      summaries: { alpha: { meta: { parentStreamId: 'parent-stream' } } },
+    });
+
+    await clearPersistedSummaryParentStream('alpha');
+
+    const persisted = writtenSummary(storage.writes, 'alpha') as Record<
+      string,
+      unknown
+    >;
+    expect(persisted.meta).not.toHaveProperty('parentStreamId');
   });
 });

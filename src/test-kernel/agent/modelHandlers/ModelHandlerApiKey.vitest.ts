@@ -18,10 +18,6 @@ import { installPlatform } from '@test/support/setupPlatform';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
 class ExposedKeyHandler extends ModelHandlerOpenRouterNative {
-  exposeGetApiKey(): Promise<string> {
-    return this.getApiKey();
-  }
-
   exposeResolveClientCredential(
     selection?: ModelCredentialSelection,
   ): Promise<ResolvedClientCredential> {
@@ -54,7 +50,7 @@ function newHandler(
   );
 }
 
-describe('ModelHandler.getApiKey resolution', () => {
+describe('ModelHandler credential resolution', () => {
   beforeEach(async () => {
     await initFakePlatform();
     // Most cases exercise the direct-provider route; the OpenRouter-routed
@@ -74,7 +70,8 @@ describe('ModelHandler.getApiKey resolution', () => {
 
     const handler = newHandler({ openRouterOnly: true });
 
-    assert.equal(await handler.exposeGetApiKey(), 'openrouter-key');
+    const { apiKey } = await handler.exposeResolveClientCredential();
+    assert.equal(apiKey, 'openrouter-key');
   });
 
   it('uses a managed direct key even while OpenRouter is on', async () => {
@@ -90,7 +87,8 @@ describe('ModelHandler.getApiKey resolution', () => {
     });
 
     assert.equal(handler.getBaseUrl(), 'https://api.kimi.com/coding/v1');
-    assert.equal(await handler.exposeGetApiKey(), 'kimi-code-key');
+    const { apiKey } = await handler.exposeResolveClientCredential();
+    assert.equal(apiKey, 'kimi-code-key');
   });
 
   it('uses the personal provider key', async () => {
@@ -100,7 +98,8 @@ describe('ModelHandler.getApiKey resolution', () => {
 
     const handler = newHandler();
 
-    assert.equal(await handler.exposeGetApiKey(), 'personal-key');
+    const { apiKey } = await handler.exposeResolveClientCredential();
+    assert.equal(apiKey, 'personal-key');
   });
 
   it('tags its missing-key throw so the run classifies it without reading the message', async () => {

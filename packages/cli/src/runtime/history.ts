@@ -16,7 +16,8 @@ import {
 import { tryDefaultSession, type AgentConfig } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { createSessionStores } from '@controllers/session/sessionStores';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import {
   ExecutionIdSchema,
   HISTORY_RUN_STATUS,
@@ -42,7 +43,9 @@ import {
   resolveAdjacentStreamCleanup,
 } from '@transcript/adjacentStreamCleanup';
 import { byStringProp } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { CliUsageError } from './cliContext';
 import { readCliResumeDataForListing } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
@@ -88,7 +91,7 @@ export interface CliHistoryEntry {
   readonly parentExecutionId?: ExecutionId;
 }
 
-export interface CliHistoryDetails {
+interface CliHistoryDetails {
   readonly id: ExecutionId;
   readonly status: HistoryRunStatus;
   readonly meta: ExecutionMeta | null;
@@ -118,17 +121,16 @@ export interface CliHistoryConversationPreviewMessage {
 /** A run's generated files and its edited workspace files render alike. */
 type CliHistoryFile = RunGeneratedFile;
 
-export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
-
 /** Rows the resume surfaces offer. Both the launcher's resume browser and the
  *  `/resume` form read this, and the launcher's Resume row counts against it,
- *  so the advertised count can never exceed the list it opens. */
-export const RESUME_LIST_LIMIT = 50;
+ *  so the advertised count can never exceed the list it opens. Filtering and
+ *  capping live together so a caller cannot honor one half of the rule. */
+const RESUME_LIST_LIMIT = 50;
 
-export function resumableCliHistoryEntries<
+export function listResumableCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'resumable'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter((entry) => entry.resumable);
+  return entries.filter((entry) => entry.resumable).slice(0, RESUME_LIST_LIMIT);
 }
 
 export type CliHistoryDeleteResult =
@@ -240,7 +242,7 @@ export async function readCliHistoryDetails(
 }
 
 /** Outcome of loading a stored execution's export input (see {@link readCliHistoryExportInput}). */
-export type CliHistoryExportInputResult =
+type CliHistoryExportInputResult =
   | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
   /** No trace of this execution at all — matches `history show`'s notion of "not found". */
   | { readonly status: 'not_found' }
@@ -286,9 +288,12 @@ const TRACE_VIEWER_SHARED_DIR_NAME = 'traceViewerShared';
  * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
  * default export opens correctly via `file://` with no server. Returns `null`
- * (without throwing) when the CLI install doesn't have the bundled template
- * — e.g. a dev checkout where `packages/trace-viewer` hasn't been built —
- * so the caller can report a clear error instead of an ENOENT stack trace.
+ * (without throwing) only when the template is absent — e.g. a dev checkout
+ * where `packages/trace-viewer` hasn't been built — so the caller can report a
+ * clear error instead of an ENOENT stack trace. Any other read failure
+ * (EACCES, a transient I/O error) is a different problem and must not be
+ * reported as "rebuild the CLI", so it surfaces as a usage error naming the
+ * real cause.
  */
 export async function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
@@ -298,7 +303,14 @@ export async function readCliHistoryStandaloneTemplate(
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return readFile(templatePath, 'utf8').catch(() => null);
+  try {
+    return await readFile(templatePath, 'utf8');
+  } catch (error) {
+    if (isFileNotFoundError(error) || isNotADirectoryError(error)) return null;
+    throw new CliUsageError(
+      `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
+    );
+  }
 }
 
 /**
@@ -315,9 +327,11 @@ export async function readCliHistoryStandaloneTemplate(
  * nesting under it, so staging is safe to repeat across multiple exports
  * pointed at the same shared directory.
  *
- * Returns `'missing'` (without throwing) when the CLI install doesn't have
- * the bundled assets — e.g. a dev checkout where `copy:resources` hasn't run
- * — so the caller can warn instead of failing the export outright.
+ * Returns `'missing'` (without throwing) only when the bundled assets are
+ * absent — e.g. a dev checkout where `copy:resources` hasn't run — so the
+ * caller can warn instead of failing the export outright. Any other probe
+ * failure (EACCES, a transient I/O error) is a different problem and surfaces
+ * as a usage error naming the real cause rather than a "rebuild the CLI" hint.
  */
 export async function stageCliHistoryTraceViewerAssets(params: {
   readonly resourcesPath: string;
@@ -327,9 +341,18 @@ export async function stageCliHistoryTraceViewerAssets(params: {
     params.resourcesPath,
     TRACE_VIEWER_SHARED_DIR_NAME,
   );
-  const sourceExists = await stat(assetsSrc)
-    .then((info) => info.isDirectory())
-    .catch(() => false);
+  let sourceExists: boolean;
+  try {
+    sourceExists = (await stat(assetsSrc)).isDirectory();
+  } catch (error) {
+    if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
+      throw new CliUsageError(
+        `history export: cannot read ${assetsSrc}: ${toErrorMessage(error)}`,
+      );
+    }
+    sourceExists = false;
+  }
+  // A plain file where the bundle should be is also "this install lacks it".
   if (!sourceExists) return 'missing';
 
   await cp(assetsSrc, params.destDir, { recursive: true });
@@ -377,32 +400,6 @@ export async function deleteCliHistory(options: {
     found: result.status !== 'not-found',
     status: result.status,
   };
-}
-
-/**
- * `texra history delete --all` is destructive and unrecoverable. The command
- * handler must call this first: if `--all` is set without `--yes`, it should
- * refuse and quote the count back to the user; otherwise it can pass `count`
- * into the confirmation message before deletion.
- */
-export interface CliHistoryDeleteAllPreflight {
-  readonly proceed: boolean;
-  readonly count: number;
-}
-
-export async function preflightCliHistoryDeleteAll(options: {
-  all?: boolean;
-  yes?: boolean;
-}): Promise<CliHistoryDeleteAllPreflight> {
-  if (!options.all) return { proceed: false, count: 0 };
-  // Unlike list, a full wipe intentionally counts (and later clears) every
-  // stored execution, including `isUserVisibleExecution`-hidden
-  // process-bookkeeping entries and agent-spawned child runs — don't add the
-  // visibility filter here.
-  // (`show`/`export` were never filtered either — both are explicit-id
-  // lookups, a different contract from browsing a list.)
-  const count = (await listExecutions()).length;
-  return { proceed: options.yes === true, count };
 }
 
 export function formatCliHistoryText(
@@ -487,7 +484,7 @@ export function formatCliHistoryDetailsText(
   const { config, meta } = details;
   const model = details.currentModel ?? config?.model;
   const teamPreset = teamPresetId(config);
-  const cliOutputFile = config?.cliOutputFile?.trim();
+  const cliOutputFile = config?.cli?.outputFile?.trim();
   const lines = [
     `Execution: ${details.id}`,
     `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
@@ -561,5 +558,5 @@ async function toCliHistoryEntry(
 }
 
 function teamPresetId(config: AgentConfig | null): string | undefined {
-  return config?.cliMultiAgentPresetId?.trim() || undefined;
+  return config?.cli?.multiAgentPresetId?.trim() || undefined;
 }

@@ -194,7 +194,6 @@ export interface ToolRowModel {
   readonly isUserFeedback: boolean;
   readonly isInProgress: boolean;
   readonly exitCode?: number;
-  readonly spillPath?: string;
 }
 
 export interface ToolRowModelContext {
@@ -489,7 +488,7 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     typeof viewRange[1] === 'number'
   ) {
     sections.push(
-      textSection('Range:', `lines ${viewRange[0]}–${viewRange[1]}`),
+      textSection('Range:', `lines ${viewRange[0]}-${viewRange[1]}`),
     );
   }
   if (typeof input.offset === 'number') {
@@ -998,6 +997,5 @@ export function toolRowModel(
     ...(normalized.exitCode !== undefined
       ? { exitCode: normalized.exitCode }
       : {}),
-    ...(normalized.spillPath ? { spillPath: normalized.spillPath } : {}),
   };
 }

@@ -31,10 +31,11 @@ export {
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
-  finalizeExecution,
+  finalizeRun,
   registerExecution,
   type FinalizeExecutionInput,
   writeWorkflowExecutionSnapshot,
+  retainFlowRecordUnlessCompleted,
 } from './executionLifecycle';
 export {
   type AgentExecutionListingEntry,
@@ -48,11 +49,9 @@ export {
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
+  ExecutionLeaseActiveError,
   ExecutionLeaseLostError,
   executionHeldMessage,
-  inspectExecutionLease,
-  markOwnedExecutionLeaseUndurable,
-  reclaimExecutionLease,
 } from './executionLease';
 export { persistChildRunResultMeta } from './childRunPersistence';
 export { resolveChildRunOutput } from './childRunOutput';

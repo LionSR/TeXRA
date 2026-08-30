@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CheckForDesktopUpdateOptions } from '@desktop/main/desktopUpdateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -13,10 +13,6 @@ type DesktopLatestRelease = Parameters<
 >[0];
 
 describe('desktop update checker', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('exposes a known-constant releases page URL (never opens API-provided URLs)', async () => {
     const { DESKTOP_RELEASES_PAGE_URL } = await loadSourceModule(
       '@desktop/main/desktopUpdateChecker',
@@ -32,17 +28,14 @@ describe('desktop update checker', () => {
       version: '0.40.0',
     };
     const CURRENT_VERSION = '0.39.3';
-    const DAY_MS = 24 * 60 * 60 * 1000;
     let checkForDesktopUpdate: DesktopUpdateCheckerModule['checkForDesktopUpdate'];
     let globalState: FakeStateStore;
-    let nowMs: number;
 
     beforeEach(async () => {
       ({ checkForDesktopUpdate } = await loadSourceModule(
         '@desktop/main/desktopUpdateChecker',
       ));
       globalState = new FakeStateStore();
-      nowMs = Date.UTC(2026, 0, 1);
     });
 
     /** One check with the packaged, update-enabled defaults these cases share. */
@@ -58,12 +51,6 @@ describe('desktop update checker', () => {
         fetchRelease: async () => release,
         ...overrides,
       });
-    }
-
-    function lastCheckedAt(): number | undefined {
-      return globalState.get(
-        GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_CHECKED_AT,
-      );
     }
 
     it('skips entirely for unpackaged (dev) runs', async () => {
@@ -84,6 +71,9 @@ describe('desktop update checker', () => {
       expect(fetchRelease).not.toHaveBeenCalled();
     });
 
+    // Wiring smoke case: the throttle/no-repeat semantics themselves are
+    // owned by SemverUpdateCheck.vitest.ts (runDailyUpdateCheck); this pins
+    // that desktop actually wires the once-per-release key through.
     it('notifies once when a newer release is found, and persists the notified version', async () => {
       const notify = vi.fn();
 
@@ -95,101 +85,6 @@ describe('desktop update checker', () => {
           GlobalStateKey.DESKTOP_UPDATE_CHECK_LAST_NOTIFIED_VERSION,
         ),
       ).toBe('0.40.0');
-    });
-
-    it('does not notify when the latest release is not newer', async () => {
-      const notify = vi.fn();
-
-      await runCheck({ currentVersion: release.version, notify });
-
-      expect(notify).not.toHaveBeenCalled();
-    });
-
-    it('throttles repeated checks within the same day', async () => {
-      const fetchRelease = vi.fn(async () => release);
-      // A realistic epoch timestamp: on the very first check ever,
-      // `lastCheckedAt` defaults to 0, and this must be far enough past that
-      // default to *not* be throttled (matching a real first launch).
-      const run = () => runCheck({ now: () => nowMs, fetchRelease });
-
-      await run();
-      expect(fetchRelease).toHaveBeenCalledTimes(1);
-
-      // Same process, ten minutes later: still throttled.
-      nowMs += 10 * 60 * 1000;
-      await run();
-      expect(fetchRelease).toHaveBeenCalledTimes(1);
-
-      // A full day later: throttle window has elapsed.
-      nowMs += DAY_MS;
-      await run();
-      expect(fetchRelease).toHaveBeenCalledTimes(2);
-    });
-
-    it('does not re-notify for a release version already notified', async () => {
-      const notify = vi.fn();
-      const run = () => runCheck({ now: () => nowMs, notify });
-
-      await run();
-      expect(notify).toHaveBeenCalledTimes(1);
-
-      // Next day, same latest release: throttle window elapsed so it fetches
-      // again, but must not re-notify for a version already announced.
-      nowMs += DAY_MS;
-      await run();
-      expect(notify).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
-      // `undefined` is how a network or API failure reaches the checker.
-      const failingFetch = vi.fn(async () => undefined);
-
-      await runCheck({ now: () => nowMs, fetchRelease: failingFetch });
-
-      expect(failingFetch).toHaveBeenCalledOnce();
-      expect(lastCheckedAt()).toBeUndefined();
-
-      // Immediately "relaunching" (same day) must retry rather than being
-      // throttled for a full 24h off the back of the earlier failure.
-      const retriedFetch = vi.fn(async () => release);
-
-      await runCheck({ now: () => nowMs + 1000, fetchRelease: retriedFetch });
-
-      expect(retriedFetch).toHaveBeenCalledOnce();
-      expect(lastCheckedAt()).toBe(nowMs + 1000);
-    });
-
-    it('treats an empty release tag as a failed fetch', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async () => ({
-          ok: true,
-          json: async () => ({ tag_name: '' }),
-        })) as unknown as typeof fetch,
-      );
-
-      // No `fetchRelease`: this drives the real GitHub fetch path.
-      await runCheck({ fetchRelease: undefined });
-
-      expect(lastCheckedAt()).toBeUndefined();
-    });
-
-    it('does not persist the throttle stamp when notification fails', async () => {
-      let dialogFails = true;
-      const notify = vi.fn(() => {
-        if (dialogFails) throw new Error('dialog failed');
-      });
-
-      await expect(runCheck({ now: () => nowMs, notify })).rejects.toThrow(
-        'dialog failed',
-      );
-      expect(lastCheckedAt()).toBeUndefined();
-
-      dialogFails = false;
-      await runCheck({ now: () => nowMs, notify });
-
-      expect(notify).toHaveBeenCalledTimes(2);
-      expect(lastCheckedAt()).toBe(nowMs);
     });
 
     it('coalesces concurrent checks into one fetch and notification', async () => {

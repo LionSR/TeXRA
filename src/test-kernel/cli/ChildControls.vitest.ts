@@ -13,7 +13,6 @@ import {
 import {
   STREAM_PHASE,
   type ActiveChildInfo,
-  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { buildChildRosters } from '@test/support/childRosters';
@@ -21,10 +20,6 @@ import { buildChildRosters } from '@test/support/childRosters';
 const root = 'root' as StreamTabId;
 const child = 'child' as StreamTabId;
 const leaf = 'leaf' as StreamTabId;
-
-function slice(overrides: Partial<StreamSlice> = {}): StreamSlice {
-  return { ...emptySlice(root), ...overrides };
-}
 
 /** A live agent roster row whose execution id follows its name. */
 function rosterChild(
@@ -42,14 +37,12 @@ function rosterChild(
   };
 }
 
+/** Slices for the given identities. These selectors read slice presence
+ *  only — lifecycle phase lives on the session status machine. */
 function streamMap(
-  ...entries: ReadonlyArray<readonly [StreamTabId, StreamPhase?]>
+  ...streamIds: readonly StreamTabId[]
 ): Map<StreamTabId, StreamSlice> {
-  return new Map(
-    entries.map(
-      ([streamId, status]) => [streamId, slice({ streamId, status })] as const,
-    ),
-  );
+  return new Map(streamIds.map((streamId) => [streamId, emptySlice(streamId)]));
 }
 
 describe('CLI child controls', () => {
@@ -72,7 +65,7 @@ describe('CLI child controls', () => {
         }),
       ],
     });
-    const streams = streamMap([root], [child, STREAM_PHASE.COMPLETED], [leaf]);
+    const streams = streamMap(root, child, leaf);
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [child, root],
       [leaf, child],
@@ -85,10 +78,7 @@ describe('CLI child controls', () => {
         parentStream,
         streams,
       }),
-    ).toMatchObject({
-      streamId: root,
-      slice: streams.get(root),
-    });
+    ).toBe(root);
   });
 
   it('roots nested child-list rows at the resolved target stream', () => {
@@ -102,11 +92,7 @@ describe('CLI child controls', () => {
         rows: [rosterChild('leaf', leaf)],
       }),
     ]);
-    const streams = streamMap(
-      [root],
-      [child, STREAM_PHASE.RUNNING],
-      [leaf, STREAM_PHASE.RUNNING],
-    );
+    const streams = streamMap(root, child, leaf);
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [child, root],
       [leaf, child],
@@ -118,13 +104,13 @@ describe('CLI child controls', () => {
       streams,
     });
 
-    expect(target.streamId).toBe(child);
+    expect(target).toBe(child);
     expect(
       streamTreeViews({
         activeStreamId: child,
         childRosters: entries,
         parentStream,
-        rootStreamId: target.streamId,
+        rootStreamId: target,
         streams,
       }).map((view) => view.id),
     ).toEqual([child, leaf]);
@@ -156,10 +142,7 @@ describe('CLI child controls', () => {
         rosterChild('e', e, { workflowPhase: 'Map' }),
       ],
     });
-    const streams = streamMap(
-      [root],
-      ...ids.map((id) => [id, STREAM_PHASE.RUNNING] as const),
-    );
+    const streams = streamMap(root, ...ids);
     const parentStream = new Map(
       ids.filter((id) => id !== b).map((id) => [id, root] as const),
     );
@@ -210,7 +193,7 @@ describe('CLI child controls', () => {
       parentStreamId: root,
       rows: [rosterChild('critic', child)],
     });
-    const streams = streamMap([root], [child, STREAM_PHASE.RUNNING]);
+    const streams = streamMap(root, child);
 
     expect(
       numericFocusTargetForActiveStream({

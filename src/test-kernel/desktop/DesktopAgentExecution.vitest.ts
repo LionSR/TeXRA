@@ -37,8 +37,8 @@ import {
 } from '@shared/schemas';
 import type {
   ExecutionId,
+  InstructionAction,
   OutputFileInfo,
-  StorageKey,
   StreamPhase,
   StreamTabId,
   ProgressViewInboundHandlerRegistry,
@@ -48,12 +48,14 @@ import {
   MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
+import { createOutputFile } from '@test/support/ProgressControllerHarnesses';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import type { PayloadSessionFact } from '@test/agent/progressTestUtils';
 import {
@@ -134,7 +136,6 @@ type TestableBridge = {
       close(): void;
     };
     requestEviction(streamId: StreamTabId): void;
-    reload(): Promise<void>;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
     getUnfinishedStreamIds(): StreamTabId[];
     get(streamId: StreamTabId):
@@ -293,6 +294,10 @@ type CreateBridgeOptions = {
   repairRestartedStreams?: RepairRestartedStreamsMock;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
+  showInstructionDialog?: (
+    message: string,
+    actions: readonly InstructionAction[] | undefined,
+  ) => Promise<void>;
   onRunCompleted?: () => void;
   openPath?: (filePath: string, line?: number) => Promise<void>;
   /** Seeds the fake filesystem (e.g. a transcript spill artifact). */
@@ -548,6 +553,9 @@ async function createBridge(
         : {}),
       ...(options.showInfoMessage
         ? { showInfoMessage: options.showInfoMessage }
+        : {}),
+      ...(options.showInstructionDialog
+        ? { showInstructionDialog: options.showInstructionDialog }
         : {}),
       ...(options.onRunCompleted
         ? { onRunCompleted: options.onRunCompleted }
@@ -879,6 +887,28 @@ function emitSearchRunConfig(bridge: TestableBridge): void {
   });
 }
 
+/**
+ * Durable execution rows `resumeRun` resolves before dispatching: the run
+ * record plus registration-stamped `meta.streamId`.
+ */
+function executionSeed(
+  executionId: string,
+  streamId: string,
+  config: AgentConfig,
+): [string, unknown][] {
+  return [
+    [`executions/${executionId}/config`, config],
+    [
+      `executions/${executionId}/meta`,
+      {
+        timestamp: '2026-07-10T00:00:00.000Z',
+        streamId,
+        identity: { kind: 'agent', agent: config.agent },
+      },
+    ],
+  ];
+}
+
 function stubWorkflowResumeData(
   runConfig: AgentConfig,
   executionId: string,
@@ -948,6 +978,78 @@ describe('DesktopProgressBridge', () => {
     });
   });
 
+  it('snapshots latexdiff outputs before later snapshot mutations', async () => {
+    const streamId = 'latexdiff-snapshot' as StreamTabId;
+    const executionId = 'ec00d1' as ExecutionId;
+    const bridge = await createBridge([]);
+    const initialOutput = createOutputFile({ round: 1 });
+    const laterOutput = createOutputFile({ round: 2 });
+    const config = workflowConfig();
+    emitRunEvent(bridge, streamId, {
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
+    });
+    emitRunConfigFact(bridge, { streamId, executionId, config });
+    emitRunEvent(bridge, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 1: [initialOutput] },
+    });
+    activateStream(bridge, streamId);
+    await settleProgressEvents();
+
+    const actionGate = createDeferred();
+    const contextCaptured = createDeferred<unknown>();
+    const fileActions = bridge as unknown as {
+      fileActions: {
+        diffAcceptedFilePair(
+          baseFile: string,
+          editedFile: string,
+          context: unknown,
+        ): Promise<void>;
+      };
+    };
+    vi.spyOn(
+      fileActions.fileActions,
+      'diffAcceptedFilePair',
+    ).mockImplementation(async (_baseFile, _editedFile, context) => {
+      contextCaptured.resolve(context);
+      await actionGate.promise;
+    });
+    const latexdiffFile = assertSupported(
+      bridge.progressViewInboundHandlers[PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE],
+    );
+    const action = latexdiffFile({
+      command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
+      file: '/workspace/paper.tex',
+      base: '/workspace/base.tex',
+    });
+    const context = await contextCaptured.promise;
+    emitRunEvent(bridge, streamId, {
+      type: 'addOutputFiles',
+      streamId,
+      filesByRound: { 2: [laterOutput] },
+    });
+    expect(bridgeSnapshots(bridge).getOutputFiles(streamId)).toEqual({
+      1: [initialOutput],
+      2: [laterOutput],
+    });
+    actionGate.resolve();
+    await action;
+
+    expect(context).toEqual({
+      outputsByRound: { 1: [initialOutput] },
+      executionId,
+      workspaceScan: {
+        agent: config.agent,
+        model: config.model,
+        inputFile: '/workspace/paper.tex',
+      },
+    });
+  });
+
   it('reports a completed root result while canonical initialization is gated exactly once', async () => {
     const {
       initializationStarted,
@@ -1005,9 +1107,11 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const showErrorMessage = vi.fn();
     const showInfoMessage = vi.fn();
+    const showInstructionDialog = vi.fn();
     const bridge = await createBridge(messages, {
       showErrorMessage,
       showInfoMessage,
+      showInstructionDialog,
     });
     messages.length = 0;
 
@@ -1043,30 +1147,32 @@ describe('DesktopProgressBridge', () => {
     expect(showErrorMessage).toHaveBeenCalledWith('Root run failed');
     expect(showErrorMessage).toHaveBeenCalledTimes(1);
     // Instructions are actionable guidance, not failures: they use the info
-    // dialog, with action tokens rendered as trailing hint text.
-    expect(showInfoMessage).toHaveBeenCalledWith(
-      'API key not found. Set your API key in Settings and run again. ' +
-        '(set your API key in Settings, see the configuration guide)',
+    // dialog, with action tokens rendered as real buttons (not trailing hint
+    // text — desktop's dialog has no click target for hint text).
+    expect(showInfoMessage).not.toHaveBeenCalled();
+    expect(showInstructionDialog).toHaveBeenCalledWith(
+      'API key not found. Set your API key in Settings and run again.',
+      ['set-api-key', 'open-configuration-guide'],
     );
   });
 
   it('observes the instruction dialog promise before reporting delivery', async () => {
-    // The concrete showInfoMessage awaits dialog.showMessageBox, which can
-    // reject while its window is being torn down. Delivery must be reported
-    // from that promise's settlement — not synchronously — so a rejected
-    // dialog reads as non-delivery instead of an unhandled rejection plus a
-    // falsely "presented" launch error (#10399).
+    // The concrete showInstructionDialog awaits dialog.showMessageBox, which
+    // can reject while its window is being torn down. Delivery must be
+    // reported from that promise's settlement — not synchronously — so a
+    // rejected dialog reads as non-delivery instead of an unhandled
+    // rejection plus a falsely "presented" launch error (#10399).
     const messages: unknown[] = [];
     let resolveDialog: (() => void) | undefined;
     let rejectDialog: ((error: unknown) => void) | undefined;
-    const showInfoMessage = vi.fn(
+    const showInstructionDialog = vi.fn(
       () =>
         new Promise<void>((resolve, reject) => {
           resolveDialog = resolve;
           rejectDialog = reject;
         }),
     );
-    const bridge = await createBridge(messages, { showInfoMessage });
+    const bridge = await createBridge(messages, { showInstructionDialog });
 
     const instruction = {
       key: 'modelNotRecognized',
@@ -1077,7 +1183,7 @@ describe('DesktopProgressBridge', () => {
       'requestShowInstruction',
       instruction,
     );
-    expect(showInfoMessage).toHaveBeenCalledOnce();
+    expect(showInstructionDialog).toHaveBeenCalledOnce();
 
     // Nothing is reported until the dialog settles.
     const settled: unknown[] = [];
@@ -1628,15 +1734,13 @@ describe('DesktopProgressBridge', () => {
     });
 
     // One unreadable run never takes the host down: the stream is shown as
-    // unclassified with its cause, nothing is mutated, and its transcript
-    // stays open for the Resume retry.
+    // unavailable with its cause, nothing is mutated, and its transcript
+    // stays open.
     expect(repairRestartedStreams).toHaveBeenCalledOnce();
     expect(bridgeStatus(bridge).get(mappedStream)).toBeUndefined();
-    expect(bridgeStatus(bridge).holdState(mappedStream)).toEqual({
-      kind: 'unclassified',
-      cause: 'flow records unavailable',
-      retryable: true,
-    });
+    expect(bridgeStatus(bridge).holdState(mappedStream)).toBe(
+      streamUnreadableMessage('flow records unavailable'),
+    );
     expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
   });
 
@@ -1803,8 +1907,8 @@ describe('DesktopProgressBridge', () => {
           ),
         );
 
-        const attach = session.useHostInteractions.bind(session);
-        vi.spyOn(session, 'useHostInteractions').mockImplementation(
+        const attach = session.interactions.use.bind(session.interactions);
+        vi.spyOn(session.interactions, 'use').mockImplementation(
           (interactions) => {
             expect(interactions.requestPlanApproval).toEqual(
               expect.any(Function),
@@ -1949,9 +2053,9 @@ describe('DesktopProgressBridge', () => {
     });
     const bridge = await createBridge(messages, {
       canonicalStreamIds: [streamId],
-      kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, runConfig],
-      ]),
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed(executionId, streamId, runConfig),
+      ),
       configureProgressSnapshotStore: (store) => {
         snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
       },
@@ -2286,6 +2390,7 @@ describe('DesktopProgressBridge', () => {
       if (key === 'meta') {
         return {
           executionId,
+          streamId: 'stream-1',
           timestamp: '2026-07-10T00:00:00.000Z',
           identity: { kind: 'agent', agent: runConfig.agent },
           description: 'Persisted workflow',
@@ -2373,9 +2478,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       runAgent,
       canonicalStreamIds: [streamId],
-      kvStoreBacking: new Map<string, unknown>([
-        [`executions/${executionId}/config`, runConfig],
-      ]),
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed(executionId, streamId, runConfig),
+      ),
       configureProgressSnapshotStore: (store) => {
         snapshots = store;
         snapshotFacts(store).setRunConfig(streamId, runConfig, executionId);
@@ -2433,6 +2538,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
     try {
       emitSearchRunConfig(bridge);
@@ -2490,6 +2598,9 @@ describe('DesktopProgressBridge', () => {
       retrieveSessionResumeData,
       resumeToolUseFromResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
 
     try {
@@ -2537,6 +2648,9 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], {
       retrieveSessionResumeData,
       canonicalStreamIds: ['stream-1'],
+      kvStoreBacking: new Map<string, unknown>(
+        executionSeed('ec1001', 'stream-1', SEARCH_TOOL_USE_AGENT_CONFIG),
+      ),
     });
 
     try {
@@ -2729,7 +2843,6 @@ describe('DesktopProgressBridge', () => {
 
     await bridgeSession(bridge).flushArtifacts();
     bridge.streamLogs.requestEviction(streamId);
-    await bridge.streamLogs.reload();
     await bridge.streamLogs.ensureLoaded(streamId);
 
     expect(
@@ -2806,12 +2919,11 @@ describe('DesktopProgressBridge', () => {
         sessionStores,
         resourcesPath: '/tmp/texra-test-resources',
         host: createStubDesktopAgentExecutionHost({
-          openDiff: async (original, proposed, title) => {
+          openDiff: async (original, proposed) => {
             diffPathsA.push({
               original: original.filePath,
               proposed: proposed.filePath,
             });
-            return { original, proposed, title };
           },
           showErrorMessage: async (message) => {
             errorsA.push(message);
@@ -2991,7 +3103,7 @@ describe('DesktopProgressBridge', () => {
         type: 'usage',
         payload: {
           streamId: childStreamId,
-          storageKey: childExecutionId as StorageKey,
+          storageKey: childExecutionId as ExecutionId,
           usage: { inputTokens: 5, outputTokens: 2, cost: 0.01 },
         },
       });
@@ -3637,13 +3749,15 @@ describe('DesktopProgressBridge', () => {
       owner.close();
 
       // The deletion is pending while its ownership read is in flight: the
-      // child stream has no resident run metadata, so the read goes to disk.
+      // child stream has no resident run metadata, so the read goes to the
+      // authored stream index.
       const leaseReleased = createDeferred();
+      const executionListing = await import('@agent/storage/executionListing');
       const waitForRelease = vi
-        .spyOn(owner.progressSnapshotStore, 'readPersistedExecutionId')
+        .spyOn(executionListing, 'readExecutionStreamIndex')
         .mockImplementation(async () => {
           await leaseReleased.promise;
-          return undefined;
+          return { byStream: new Map(), unreadable: new Map() };
         });
 
       try {
@@ -3655,9 +3769,7 @@ describe('DesktopProgressBridge', () => {
           },
         });
 
-        await vi.waitFor(() =>
-          expect(waitForRelease).toHaveBeenCalledWith(childStreamId),
-        );
+        await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalled());
         owner.processSession.events.emit({
           scope: 'session',
           event: {
@@ -3789,9 +3901,10 @@ describe('DesktopProgressBridge', () => {
       const failure = new Error('execution metadata unavailable');
       const deletionStarted = createDeferred();
       const deletionGate = createDeferred();
+      const executionListing = await import('@agent/storage/executionListing');
       vi.spyOn(
-        owner.progressSnapshotStore,
-        'readPersistedExecutionId',
+        executionListing,
+        'readExecutionStreamIndex',
       ).mockImplementationOnce(async () => {
         deletionStarted.resolve();
         await deletionGate.promise;
@@ -4214,7 +4327,7 @@ describe('DesktopProgressBridge', () => {
           type: 'usage',
           payload: {
             streamId: childStreamId,
-            storageKey: childExecutionId as StorageKey,
+            storageKey: childExecutionId as ExecutionId,
             usage: {
               inputTokens: 11,
               outputTokens: 7,

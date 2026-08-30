@@ -1,5 +1,3 @@
-import PQueue from 'p-queue';
-
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import type {
@@ -9,16 +7,18 @@ import type {
   ApprovalDecision,
 } from '@shared/schemas';
 import {
-  quotaFallbackRouteById,
   quotaFallbackRouteForExhaustion,
+  type QuotaFallbackRoute,
   type QuotaFallbackRouteId,
 } from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
+import type PQueue from 'p-queue';
 
 /**
  * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
@@ -66,12 +66,7 @@ const cliPromptQueues = new WeakMap<CliContext, PQueue>();
 const warnedApprovalContexts = new WeakSet<CliContext>();
 
 function cliPromptQueue(context: CliContext): PQueue {
-  let queue = cliPromptQueues.get(context);
-  if (!queue) {
-    queue = new PQueue({ concurrency: 1 });
-    cliPromptQueues.set(context, queue);
-  }
-  return queue;
+  return getOrCreatePQueue(cliPromptQueues, context);
 }
 
 /**
@@ -95,59 +90,39 @@ export function warnApprovalDenied(context: CliContext, gate?: string): void {
 }
 
 /**
- * The canonical action for a failed retry, decided once in one place. Every
- * `RetryPermission` maps to exactly one action; consumers (the retry modal's
- * switch decision, the retry request message, and the auto-switch) switch on
- * this instead of re-deriving precedence from overlapping predicates.
+ * The quota-fallback route a failed retry would switch off, decided once in
+ * one place, or `undefined` when the retry offers no API-key switch. Consumers
+ * (the retry modal's switch decision, the retry request message, and the
+ * auto-switch) read this instead of re-deriving precedence from overlapping
+ * predicates.
  */
-type CliRetryAction = `disable-quota-route:${QuotaFallbackRouteId}` | 'none';
-
-const DISABLE_QUOTA_ROUTE_PREFIX = 'disable-quota-route:';
-
-function quotaRouteIdFromAction(
-  action: CliRetryAction,
-): QuotaFallbackRouteId | undefined {
-  if (!action.startsWith(DISABLE_QUOTA_ROUTE_PREFIX)) return undefined;
-  return action.slice(
-    DISABLE_QUOTA_ROUTE_PREFIX.length,
-  ) as QuotaFallbackRouteId;
-}
-
-export function classifyCliRetryAction(
+export function cliRetryQuotaRoute(
   payload: RetryPermission,
-): CliRetryAction {
+): QuotaFallbackRoute | undefined {
   const details = payload.errorDetails;
   const route = quotaFallbackRouteForExhaustion(details?.exhaustionReason);
-  if (route) {
-    // Kimi Code-exclusive models are served only by the coding endpoint, so
-    // turning the plan off cannot reroute them to a Moonshot fallback. They
-    // keep the retry modal without an API-key switch, exactly like the
-    // auto-switch gate in the TUI.
-    if (
-      route.id === 'kimiCode' &&
-      isKimiCodeExclusiveRetryModel(payload.model)
-    ) {
-      return 'none';
-    }
-    return `${DISABLE_QUOTA_ROUTE_PREFIX}${route.id}`;
+  if (!route) return undefined;
+  // Kimi Code-exclusive models are served only by the coding endpoint, so
+  // turning the plan off cannot reroute them to a Moonshot fallback. They
+  // keep the retry modal without an API-key switch, exactly like the
+  // auto-switch gate in the TUI.
+  if (route.id === 'kimiCode' && isKimiCodeExclusiveRetryModel(payload.model)) {
+    return undefined;
   }
-  return 'none';
+  return route;
 }
 
-/** The switch hint line for a retry action, or undefined for 'none'. */
-export function cliRetryActionHint(action: CliRetryAction): string | undefined {
-  const routeId = quotaRouteIdFromAction(action);
-  if (routeId !== undefined) {
-    const route = quotaFallbackRouteById(routeId);
-    if (!route) return undefined;
-    return `Press \`k\` on the retry prompt to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
-  }
-  return undefined;
+/** The switch hint line for a retry's quota route, or undefined when there is none. */
+export function cliRetryActionHint(
+  route: QuotaFallbackRoute | undefined,
+): string | undefined {
+  if (!route) return undefined;
+  return `Press \`k\` on the retry prompt to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
 }
 
 /** Whether a retry could be re-run against a personal API key. */
 export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
-  return classifyCliRetryAction(payload) !== 'none';
+  return cliRetryQuotaRoute(payload) !== undefined;
 }
 
 /**
@@ -166,20 +141,16 @@ interface CliRetryApiSwitchDecision {
  * Map a failed retry to the quota-fallback route it disables: a catalogued
  * route turns off the preference that routed onto the exhausted credential
  * so the retry rebuilds onto the stored fallback key. Drives off
- * {@link classifyCliRetryAction} so the modal cannot drift from the classifier.
+ * {@link cliRetryQuotaRoute} so the modal cannot drift from the classifier.
  */
 export function cliRetryApiSwitchDecision(
   payload: RetryPermission,
 ): CliRetryApiSwitchDecision {
-  const action = classifyCliRetryAction(payload);
-  const routeId = quotaRouteIdFromAction(action);
-  if (routeId !== undefined) {
-    return {
-      accepted: true,
-      disableQuotaRoute: routeId,
-    };
-  }
-  return { accepted: true };
+  const route = cliRetryQuotaRoute(payload);
+  return {
+    accepted: true,
+    ...(route ? { disableQuotaRoute: route.id } : {}),
+  };
 }
 
 async function askCliApprovalQuestion(
@@ -273,17 +244,13 @@ export async function askApproval(
       const parsed = parseApprovalAnswer(answer);
       let feedback = parsed.feedback;
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
-        try {
-          hooks.beforePrompt?.();
-          const feedbackAnswer = await askCliApprovalQuestion(context, {
-            kind: 'approval',
-            summary: '',
-            prompt: 'Rejection feedback (optional, Enter to skip): ',
-          });
-          feedback = feedbackAnswer.trim() || undefined;
-        } catch {
-          feedback = undefined;
-        }
+        hooks.beforePrompt?.();
+        const feedbackAnswer = await askCliApprovalQuestion(context, {
+          kind: 'approval',
+          summary: '',
+          prompt: 'Rejection feedback (optional, Enter to skip): ',
+        });
+        feedback = feedbackAnswer.trim() || undefined;
       }
 
       return {

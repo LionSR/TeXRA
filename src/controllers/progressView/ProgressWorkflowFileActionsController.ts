@@ -6,7 +6,7 @@ import { createLog } from '@logger/logUtils';
 import type {
   AcceptCopyMeta,
   OutputFileInfo,
-  RoundIndexed,
+  ReadonlyRoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
 import { ensureRunDir, findRunDir, getRunDir } from '@utils/files/runStorageFs';
@@ -258,7 +258,7 @@ export class ProgressWorkflowFileActionsController {
   }
 
   private findOutputDirectory(
-    runOutputs: RoundIndexed<OutputFileInfo>,
+    runOutputs: ReadonlyRoundIndexed<OutputFileInfo>,
   ): string | undefined {
     const match = Object.values(runOutputs)
       .flat()

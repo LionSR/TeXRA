@@ -19,7 +19,6 @@ import {
   agentResponseTextConnector,
   attachTerminalResultToast,
   SessionHandle,
-  settleLiveSessionExecutions,
 } from '@agent/runtime';
 import {
   computeAgentOptionsData,
@@ -31,27 +30,33 @@ import {
 } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
-  formatUnavailableTeamMembersMessage,
-  TEAM_LAUNCH_CANCEL_LABEL,
-  TEAM_LAUNCH_CONTINUE_LABEL,
-  TEAM_LAUNCH_SIGN_IN_LABEL,
+  teamAvailabilityPrompt,
+  type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import type { SettingsTeamAvailabilityPrompt } from '@controllers/settingsView/SettingsTeamRosterController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
-import { readPersistedTexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { AgentCategory, agentKeyOf, type AgentSource } from '@shared/schemas';
+import {
+  AgentCategory,
+  agentKeyOf,
+  INSTRUCTION_ACTION,
+  type AgentSource,
+  type InstructionAction,
+} from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
@@ -71,6 +76,8 @@ import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
+import { handoffDesktopWorkspaceRelaunchFromMainProcess } from './desktopWorkspaceRelaunch.js';
+import { installDesktopLifecycleComposition } from './desktopLifecycleComposition.js';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
@@ -126,7 +133,10 @@ import { installDesktopMainViewIpc } from './mainViewIpc.js';
 import { initializeDesktopCrashReporting } from './desktopCrashReporting.js';
 import { initializeElectronPlatform } from './platform/index.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
-import { DESKTOP_DOCS_URL } from '../shared/desktopCommandSurface.js';
+import {
+  DESKTOP_DOCS_URL,
+  postDesktopSettingsView,
+} from '../shared/desktopCommandSurface.js';
 import {
   DESKTOP_WORKSPACE_PATH_STATE_KEY,
   serializeWorkspacePresenceArg,
@@ -387,7 +397,7 @@ function createWindow(options: {
    * cannot drift.
    */
   const presentTeamAvailabilityPrompt = async (
-    prompt: SettingsTeamAvailabilityPrompt,
+    prompt: TeamAvailabilityPrompt,
   ): Promise<'sign-in' | 'continue' | 'cancel'> => {
     const { response } = await dialog.showMessageBox(window, {
       type: prompt.severity,
@@ -402,47 +412,36 @@ function createWindow(options: {
     unavailableNames: readonly string[],
     presetName?: string,
   ) =>
-    presentTeamAvailabilityPrompt({
-      severity: 'warning',
-      message: formatUnavailableTeamMembersMessage(
-        unavailableNames,
-        presetName,
-      ),
-      actions: [
-        { choice: 'sign-in', label: TEAM_LAUNCH_SIGN_IN_LABEL },
-        { choice: 'continue', label: TEAM_LAUNCH_CONTINUE_LABEL },
-        { choice: 'cancel', label: TEAM_LAUNCH_CANCEL_LABEL },
-      ],
-    });
+    presentTeamAvailabilityPrompt(
+      teamAvailabilityPrompt(unavailableNames, presetName),
+    );
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with
-  // TEXRA_NO_UPDATE_CHECK=1. Gated on owning the
-  // single-instance lock so an "open folder in new window" launch (which
-  // deliberately runs as its own process) never duplicates the check or
-  // dialog alongside the primary process.
-  if (protocolLifecycle.ownsSingleInstanceLock) {
-    checkForDesktopUpdate({
-      currentVersion: app.getVersion(),
-      globalState: platform().globalState,
-      isPackaged: app.isPackaged,
-      notify: async (release) => {
-        const { response } = await dialog.showMessageBox(window, {
-          type: 'info',
-          message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-          buttons: ['Download', 'Later'],
-          defaultId: 0,
-          cancelId: 1,
-        });
-        if (response === 0) {
-          // Open the known-constant releases page rather than any
-          // network-provided URL, so an unauthenticated API response can
-          // never influence what shell.openExternal opens.
-          await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
-        }
-      },
-    }).catch(reportBackgroundError);
-  }
+  // TEXRA_NO_UPDATE_CHECK=1. `createWindow` only ever runs inside the
+  // `app.whenReady()` block, which the lock-losing process never reaches, so
+  // no extra single-instance gate is needed here; `checkForDesktopUpdate`
+  // itself dedupes concurrent calls and window reopens.
+  checkForDesktopUpdate({
+    currentVersion: app.getVersion(),
+    globalState: platform().globalState,
+    isPackaged: app.isPackaged,
+    notify: async (release) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: 'info',
+        message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+        buttons: ['Download', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      if (response === 0) {
+        // Open the known-constant releases page rather than any
+        // network-provided URL, so an unauthenticated API response can
+        // never influence what shell.openExternal opens.
+        await shell.openExternal(DESKTOP_RELEASES_PAGE_URL);
+      }
+    },
+  }).catch(reportBackgroundError);
   const previewHost = createDesktopPreviewHost({
     shell,
     showErrorMessage,
@@ -453,6 +452,58 @@ function createWindow(options: {
     // external viewer (`shell.openPath`) so previews never silently disappear.
     postToRenderer: postToRendererIfAlive,
   });
+  // Button labels for the instruction dialog below. Desktop has one settings
+  // home (Settings tab), so SET_API_KEY opens it directly rather than the
+  // extension's separate "enter a key" quick pick.
+  const INSTRUCTION_ACTION_BUTTON_LABELS: Record<InstructionAction, string> = {
+    [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API Key',
+    [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
+    [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
+  };
+  const dispatchInstructionAction = (action: InstructionAction): void => {
+    switch (action) {
+      case INSTRUCTION_ACTION.SET_API_KEY:
+        postDesktopSettingsView(postToRendererIfAlive, 'models');
+        return;
+      case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
+        previewHost
+          .openExternal('https://texra.ai/guide/configuration.html')
+          .catch(reportBackgroundError);
+        return;
+      case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
+        previewHost
+          .openExternal('https://texra.ai/guide/models.html')
+          .catch(reportBackgroundError);
+        return;
+    }
+  };
+  /**
+   * Instructions (e.g. a missing API key) are actionable guidance, not
+   * failures, so this stays an 'info' dialog — but each action token now
+   * renders as a real button instead of degrading to trailing hint text with
+   * nothing to click. `showSuppress` still has no affordance to attach to: a
+   * native dialog has no persistent "never remind again" control.
+   */
+  const showInstructionDialog = async (
+    message: string,
+    actions: readonly InstructionAction[] | undefined,
+  ): Promise<void> => {
+    const tokens = actions ?? [];
+    const buttons = [
+      ...tokens.map((token) => INSTRUCTION_ACTION_BUTTON_LABELS[token]),
+      'Dismiss',
+    ];
+    const dismissId = buttons.length - 1;
+    const { response } = await dialog.showMessageBox(window, {
+      type: 'info',
+      message,
+      buttons,
+      defaultId: dismissId,
+      cancelId: dismissId,
+    });
+    const action = tokens[response];
+    if (action) dispatchInstructionAction(action);
+  };
   let teamSignInPending = false;
   const refreshDesktopAuthSurfaces = async () => {
     const authenticated = await SupabaseClient.isAuthenticated();
@@ -513,32 +564,7 @@ function createWindow(options: {
   initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
   const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
-  // The renderer owns editor dirtiness. This event is the main process's only
-  // reading of it: Chromium emits it after the renderer's beforeunload handler
-  // observes a dirty Monaco buffer and refuses the unload, so every close path
-  // (quit, workspace switch, window close) asks here and nowhere else.
-  window.webContents.on('will-prevent-unload', (event) => {
-    if (isFatalDesktopShutdownRequested()) {
-      pendingWorkspaceRelaunch = undefined;
-      event.preventDefault();
-      return;
-    }
-    const response = dialog.showMessageBoxSync(window, {
-      type: 'warning',
-      buttons: ['Keep Editing', 'Discard Changes'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Unsaved Changes',
-      message: 'This workspace has unsaved editor changes.',
-      detail: 'Discard the changes and continue?',
-    });
-    if (response === 1) {
-      event.preventDefault();
-      return;
-    }
-    pendingWorkspaceRelaunch = undefined;
-    continueQuitAfterWindowClose = undefined;
-  });
+
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
@@ -594,6 +620,7 @@ function createWindow(options: {
     showWarningMessage,
     showErrorMessage: (message) =>
       showErrorMessage(message).catch(reportBackgroundError),
+    showInstructionDialog,
     pickTranscriptExportFormat: async () => {
       const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
         await import('@controllers/progressView/exportTranscript');
@@ -1110,16 +1137,32 @@ function createWindow(options: {
   // reload: the app-signal subscription must survive a reload and die with the
   // window, or macOS dock reactivation would stack one listener per reopen.
   windowResources.add(() => workspaceIpc.dispose());
-  let initialRendererNavigationComplete = false;
-  window.webContents.on('did-navigate', () => {
-    if (!initialRendererNavigationComplete) {
-      initialRendererNavigationComplete = true;
-      return;
-    }
-    // A fresh renderer has its own terminal IDs and browser-tab layout. Tear
-    // down the previous document's main-process resources before those IDs can
-    // be reused or an old WebContentsView can cover the new page.
-    workspaceIpc.disposeRendererResources();
+  // The renderer owns editor dirtiness. This event is the main process's only
+  // reading of it: Chromium emits it after the renderer's beforeunload handler
+  // observes a dirty Monaco buffer and refuses the unload, so every close path
+  // (quit, workspace switch, window close) asks here and nowhere else.
+  installDesktopLifecycleComposition({
+    window: {
+      window,
+      workspaceIpc,
+      showDiscardDialog: () =>
+        dialog.showMessageBoxSync(window, {
+          type: 'warning',
+          buttons: ['Keep Editing', 'Discard Changes'],
+          defaultId: 0,
+          cancelId: 0,
+          title: 'Unsaved Changes',
+          message: 'This workspace has unsaved editor changes.',
+          detail: 'Discard the changes and continue?',
+        }),
+      isFatalShutdownRequested: isFatalDesktopShutdownRequested,
+      clearPendingWorkspaceRelaunch: () => {
+        pendingWorkspaceRelaunch = undefined;
+      },
+      clearContinueQuitAfterWindowClose: () => {
+        continueQuitAfterWindowClose = undefined;
+      },
+    },
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {
     workspace: workspaceIpc,
@@ -1193,14 +1236,14 @@ function createWindow(options: {
         }
         // The development supervisor owns Vite and the Electron child. Let it
         // replace the child so the new process keeps a live renderer URL.
-        if (
-          process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1' &&
-          typeof process.send === 'function'
-        ) {
-          process.send(workspaceRelaunch.args);
-        } else {
-          app.relaunch({ args: workspaceRelaunch.args });
-        }
+        handoffDesktopWorkspaceRelaunchFromMainProcess(workspaceRelaunch.args, {
+          supervised: process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1',
+          send:
+            typeof process.send === 'function'
+              ? (args) => process.send?.(args)
+              : undefined,
+          relaunch: (args) => app.relaunch({ args }),
+        });
         // Use the lifecycle-aware path so the process session drains before
         // Electron starts the replacement process.
         app.quit();
@@ -1233,7 +1276,7 @@ function createWindow(options: {
   void window.loadFile(join(desktopMainDir, '../renderer/index.html'));
 }
 
-if (protocolLifecycle.shouldContinue) {
+if (protocolLifecycle.ownsSingleInstanceLock) {
   app
     .whenReady()
     .then(async () => {
@@ -1272,33 +1315,23 @@ if (protocolLifecycle.shouldContinue) {
       processResources.add(() => processSession.dispose());
       processResources.add(detachTerminalResultToast);
       let sessionStores!: SessionStores;
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        agentResumeHandler.dispose(),
-      );
-      registerAgentShutdownHandlers(lifecycle);
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
-      // Agent shutdown runs first so its final events enter the process-owned
-      // stores. Flush in BEFORE so persistence cannot be delayed by a later
-      // ON-phase language-service disposal.
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        processSession.flushArtifacts(),
-      );
-      // Each window's closed handler starts diff temp-dir removal before the
-      // quit lifecycle drains; awaiting the queue's idle here keeps the
-      // process alive until the directories are actually gone.
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        diffHostDisposeQueue.onIdle(),
-      );
-      // First ON handler: every BEFORE handler above has had its turn at the
-      // runs it owns, so this settles what quitting left mid-run — a durable
-      // CANCELLED outcome and a released lease instead of a record the next
-      // launch has to repair — before the disposal below.
-      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-        settleLiveSessionExecutions(signal),
-      );
-      lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
-        agentResumeHandler.dispose();
-        processResources.dispose();
+      registerRuntimeShutdownHandlers(lifecycle, {
+        beforeAgentShutdown: [() => agentResumeHandler.dispose()],
+        afterAgentShutdown: [() => killActiveRecording()],
+        // Agent shutdown runs first so its final events enter the
+        // process-owned stores. Flush in BEFORE so persistence cannot be
+        // delayed by a later ON-phase language-service disposal.
+        flushArtifacts: () => processSession.flushArtifacts(),
+        // Each window's closed handler starts diff temp-dir removal before the
+        // quit lifecycle drains; awaiting idle keeps the process alive until
+        // the directories are actually gone.
+        afterFlushArtifacts: [() => diffHostDisposeQueue.onIdle()],
+        afterExecutionSettlement: [
+          () => {
+            agentResumeHandler.dispose();
+            processResources.dispose();
+          },
+        ],
       });
 
       // Until the initial window is fully wired, any startup failure must run
@@ -1310,8 +1343,8 @@ if (protocolLifecycle.shouldContinue) {
         processResources.add(() => processStores.dispose());
         await processSession.waitUntilReady();
         processSession.setApprovalPolicy(
-          readPersistedTexraApprovalPolicy((key, fallback) =>
-            platform().config.get(key, fallback),
+          readPlatformSetting<TexraApprovalPolicy>(
+            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
           ),
         );
         sessionStores = processStores.stores;
@@ -1322,23 +1355,15 @@ if (protocolLifecycle.shouldContinue) {
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
         // listener proceeds with the ordinary shutdown chain.
-        let shutdownStarted = false;
-        let quitting = false;
-        app.on('before-quit', (event) => {
-          if (quitting) return;
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            event.preventDefault();
-            continueQuitAfterWindowClose = () => app.quit();
-            mainWindow.close();
-            return;
-          }
-          event.preventDefault();
-          if (shutdownStarted) return;
-          shutdownStarted = true;
-          void lifecycle.runShutdown().finally(() => {
-            quitting = true;
-            app.quit();
-          });
+        installDesktopLifecycleComposition({
+          beforeQuit: {
+            app,
+            getMainWindow: () => mainWindow,
+            lifecycle,
+            continueAfterWindowClose: (continueQuit) => {
+              continueQuitAfterWindowClose = continueQuit;
+            },
+          },
         });
 
         void initializeDesktopCrashReporting({

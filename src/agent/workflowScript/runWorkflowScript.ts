@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 
-import stableStringify from 'fast-json-stable-stringify';
+import stableStringify from 'safe-stable-stringify';
 import PQueue from 'p-queue';
 import pTimeout from 'p-timeout';
 import type {
@@ -10,6 +10,7 @@ import type {
   WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import {
+  WORKFLOW_CALL_KIND,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   WorkflowScriptFilesSchema,
@@ -24,7 +25,7 @@ import { WorkflowExecutionState } from './workflowExecutionState';
 import {
   WORKFLOW_SKIPPED_RESULT,
   WorkflowAgentCallOptionsSchema,
-  normalizeWorkflowScriptPhaseTitle,
+  WorkflowScriptPhaseTitleSchema,
   type WorkflowAgentCallOptions,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
@@ -35,9 +36,10 @@ import {
 /**
  * Stable execution identity for one agent() call. Current keys exclude
  * display-only labels and phases, so editing a declarative task plan does not
- * invalidate otherwise identical completed work. A prior entry at the same
- * call index with a matching key replays its cached result. sha256 (truncated)
- * makes a collision that replays the wrong result impractical.
+ * invalidate otherwise identical completed work. A prior entry with a
+ * matching key replays its cached result wherever the call now sits in the
+ * script. sha256 (truncated) makes a collision that replays the wrong result
+ * impractical.
  */
 function journalKey(
   prompt: string,
@@ -47,16 +49,19 @@ function journalKey(
   const executionOptions: WorkflowAgentCallOptions = { ...options };
   delete executionOptions.label;
   delete executionOptions.phase;
-  return truncatedHexId(
-    stableStringify({
-      options: executionOptions,
-      prompt,
-      dependencyFingerprint,
-    }),
-    16,
-  );
+  // Typed binding so safe-stable-stringify resolves to its string-returning
+  // overload; an object input never yields undefined.
+  const source: object = {
+    options: executionOptions,
+    prompt,
+    dependencyFingerprint,
+  };
+  return truncatedHexId(stableStringify(source), 16);
 }
 
+// Library fallback only: the TeXRA host passes the session's child-run budget
+// (`resolveChildRunConcurrencyBudget`) as `concurrency`, so this value
+// governs no product run.
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;
@@ -74,6 +79,7 @@ type WorkflowFailedCallStatus =
  * the action can never outlive or precede the attempt it belongs to.
  */
 interface InFlightAgentCall {
+  readonly index: number;
   readonly controller: AbortController;
   action?: WorkflowControlAction;
 }
@@ -214,7 +220,6 @@ class CoalescedSnapshotWriter {
   #pending: WorkflowExecutionSnapshot | undefined;
   #running: Promise<void> | undefined;
   #failure: WorkflowRunAbortError | undefined;
-  #sealed = false;
 
   constructor(
     write: WorkflowScriptRunOptions['onSnapshot'],
@@ -225,24 +230,27 @@ class CoalescedSnapshotWriter {
   }
 
   publish(snapshot: WorkflowExecutionSnapshot): void {
-    if (!this.#write || this.#failure !== undefined || this.#sealed) return;
+    if (!this.#write || this.#failure !== undefined) return;
     this.#pending = snapshot;
     this.#running ??= this.#drain();
   }
 
   async flush(): Promise<void> {
-    while (this.#running) await this.#running;
+    // `#drain()` can settle synchronously — a synchronous `onSnapshot` throw
+    // runs the whole body, `catch` and `finally` included, before `publish`'s
+    // `??=` stores the handle, so `#running` ends up holding an already
+    // settled promise that nothing will clear. Stop once the handle stops
+    // changing, or that stale handle spins this loop forever and the run
+    // hangs instead of reporting its `kind: 'checkpoint'` failure.
+    let awaited: Promise<void> | undefined;
+    while (this.#running && this.#running !== awaited) {
+      awaited = this.#running;
+      await awaited;
+    }
   }
 
   throwIfFailed(): void {
     if (this.#failure !== undefined) throw this.#failure;
-  }
-
-  seal(): void {
-    if (this.#running || this.#pending) {
-      throw new Error('Cannot seal workflow snapshot writes before flush.');
-    }
-    this.#sealed = true;
   }
 
   async #drain(): Promise<void> {
@@ -264,10 +272,10 @@ class CoalescedSnapshotWriter {
       this.#pending = undefined;
       this.#onFailure(failure);
     } finally {
+      // The loop exits only with `#pending` already undefined (the `catch`
+      // clears it too) and nothing awaits between that test and here, so
+      // there is never a leftover snapshot left to re-drain.
       this.#running = undefined;
-      if (this.#pending && this.#failure === undefined) {
-        this.#running = this.#drain();
-      }
     }
   }
 }
@@ -277,7 +285,7 @@ class CoalescedSnapshotWriter {
  * agents. The script's control flow (loops, fan-out, joins, reduction) runs
  * as plain code with zero model round-trips between steps; every agent()
  * call is bounded by one shared p-queue concurrency limit and journaled for
- * resume (same call index + same prompt/execution options → cached result).
+ * resume (same prompt/execution options → cached result, at any position).
  *
  * On wall-clock timeout the sandbox preempts guest execution, fires the run's
  * AbortSignal (passed to every runAgent invocation), and refuses new calls.
@@ -298,8 +306,13 @@ export async function runWorkflowScript(
 
   const { meta, body } = parseWorkflowScript(options.script);
   const timeoutMs = options.timeoutMs ?? meta.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const priorEntries = new Map<number, WorkflowJournalEntry>(
-    (options.journal ?? []).map((entry) => [entry.index, entry]),
+  // Journal identity is the content key alone: keys are unique within a run
+  // (a duplicate is a contract fault below) and the durable child id is
+  // already index-free, so a call that moved because the script inserted,
+  // removed, or reordered a sibling still replays. `index` stays on every
+  // entry as an ordering fact for the resume journal and cost attribution.
+  const priorEntries = new Map<string, WorkflowJournalEntry>(
+    (options.journal ?? []).map((entry) => [entry.key, entry]),
   );
   const journal = new Map<number, WorkflowJournalEntry>();
   const queue = new PQueue({ concurrency });
@@ -320,19 +333,16 @@ export async function runWorkflowScript(
         cause: error,
       }),
     );
-  // One record per in-flight call, keyed by call index and linked to runAbort
-  // (a run abort cascades to every entry; a per-call abort leaves the others
-  // running). skip()/retry() target a single entry; the entry is removed as
-  // soon as its call settles, and the attempt reads its own requested action
+  // Live child execution id → the in-flight attempt that launched it, linked
+  // to runAbort (a run abort cascades to every entry; a per-call abort leaves
+  // the others running). The runner reports the id it actually launched
+  // (attempt-specific after a durable retry), so a host targets exactly the
+  // child it can see; skip()/retry() act on that one record, entries die with
+  // the attempt that stamped them, so a stale id can never reach the fresh
+  // attempt a retry starts, and the attempt reads its own requested action
   // from the record it still holds. Control state is control-plane only —
   // never journaled, so resume identity is untouched.
-  const inFlightCalls = new Map<number, InFlightAgentCall>();
-  // Live child execution id → the call index that attempt belongs to. The
-  // runner reports the id it actually launched (attempt-specific after a
-  // durable retry), so a host targets exactly the child it can see; entries die
-  // with the attempt that stamped them, so a stale id can never reach the fresh
-  // attempt a retry starts.
-  const callIndexByChildExecution = new Map<ExecutionId, number>();
+  const inFlightCalls = new Map<ExecutionId, InFlightAgentCall>();
   // Journal replays are free: only live runAgent executions count against
   // the runaway-loop cap, so a resume can replay past the cap and finish
   // the remaining work.
@@ -359,8 +369,8 @@ export async function runWorkflowScript(
     // Live projections observe every transition synchronously; the durable
     // writer behind onSnapshot coalesces under backpressure. Same source,
     // two delivery guarantees.
-    publish: (snapshot, transition) => {
-      options.onTransition?.(snapshot, transition);
+    publish: (snapshot) => {
+      options.onTransition?.(snapshot);
       snapshotWriter.publish(snapshot);
     },
   });
@@ -368,15 +378,13 @@ export async function runWorkflowScript(
   snapshotWriter.throwIfFailed();
 
   const control: WorkflowScriptControl = (childExecutionId, action) => {
-    const index = callIndexByChildExecution.get(childExecutionId);
-    // No-op when the id belongs to no live attempt of this run, or when the
-    // call it named is no longer in flight (already settled).
-    if (index === undefined) return;
-    const call = inFlightCalls.get(index);
+    // No-op when the id belongs to no live attempt of this run (already
+    // settled, or never registered).
+    const call = inFlightCalls.get(childExecutionId);
     if (!call) return;
     call.action = action;
     call.controller.abort(
-      new Error(`Workflow agent() call ${index} ${action}.`),
+      new Error(`Workflow agent() call ${call.index} ${action}.`),
     );
   };
   onControl?.(control);
@@ -535,7 +543,12 @@ export async function runWorkflowScript(
         id: progressId,
         label,
         phase: callOptions.phase,
+        kind:
+          callOptions.schema === undefined
+            ? WORKFLOW_CALL_KIND.DOCUMENT
+            : WORKFLOW_CALL_KIND.STRUCTURED,
         agent: callOptions.agentName,
+        model: callOptions.model,
         files: {
           input: (callOptions.inputFiles ?? []).map((file) => basename(file)),
           context: (callOptions.contextFiles ?? []).map((file) =>
@@ -629,8 +642,8 @@ export async function runWorkflowScript(
 
     // `key` still holds journalKey(prompt, callOptions, dependencyFingerprint)
     // here: refreshDependencyIdentity only runs at launch time, below.
-    const prior = priorEntries.get(index);
-    if (prior && prior.key === key) {
+    const prior = priorEntries.get(key);
+    if (prior) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
         'Cached agent() result',
@@ -643,20 +656,19 @@ export async function runWorkflowScript(
     }
     // The execution snapshot solely owns the queued fact (QUEUED status); no
     // event duplicates it.
-    executionState.queueCall(progressId);
+    executionState.queueCall(progressId, { model: callOptions.model });
 
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
     // Every physical model attempt is charged against liveCallCounter; the
-    // logical call key and eventual journal entry remain index-scoped.
+    // logical call key stays stable while its current index records order.
     for (;;) {
       const callController = new AbortController();
-      const call: InFlightAgentCall = { controller: callController };
+      const call: InFlightAgentCall = { index, controller: callController };
       // Link this call to the run: any run-level abort cascades to it, so a
       // runner watching invocation.signal still stops on timeout/cap.
       const cascade = () => callController.abort(runAbort.signal.reason);
       const detachCascade = onAbort(runAbort.signal, cascade);
-      inFlightCalls.set(index, call);
       let result: unknown;
       let attemptError: { readonly error: unknown } | undefined;
       try {
@@ -679,9 +691,6 @@ export async function runWorkflowScript(
             );
           }
           executionState.beginAttempt(progressId);
-          executionState.updateCall(progressId, {
-            status: WORKFLOW_CALL_STATUS.RUNNING,
-          });
           const launch = () => {
             callController.signal.throwIfAborted();
             return runAgent({
@@ -701,10 +710,7 @@ export async function runWorkflowScript(
                   // out: their result is already authoritative, so a stale
                   // skip/retry must not be able to discard or re-run it
                   // during the recovery path's async metadata reads.
-                  callIndexByChildExecution.set(
-                    attemptFacts.childExecutionId,
-                    index,
-                  );
+                  inFlightCalls.set(attemptFacts.childExecutionId, call);
                 }
                 if (
                   Object.values(attemptFacts).some((fact) => fact !== undefined)
@@ -733,16 +739,11 @@ export async function runWorkflowScript(
         attemptError = { error };
       } finally {
         detachCascade();
-        if (inFlightCalls.get(index) === call) {
-          inFlightCalls.delete(index);
-        }
         // This attempt's child ids are dead the moment it settles: a retry
         // launches under a fresh id, and a stale one must no-op. Deleting
         // during for...of is spec-safe for Map iterators.
-        for (const [childExecutionId, callIndex] of callIndexByChildExecution) {
-          if (callIndex === index) {
-            callIndexByChildExecution.delete(childExecutionId);
-          }
+        for (const [childExecutionId, inFlight] of inFlightCalls) {
+          if (inFlight === call) inFlightCalls.delete(childExecutionId);
         }
       }
 
@@ -755,7 +756,7 @@ export async function runWorkflowScript(
       // did: a deliberate skip/retry discards this attempt's outcome.
       const action = call.action;
       if (action === 'retry') {
-        executionState.queueCall(progressId);
+        executionState.queueCall(progressId, { model: callOptions.model });
         continue;
       }
       if (action === 'skip') {
@@ -868,7 +869,7 @@ export async function runWorkflowScript(
               return undefined;
             },
             phase: (args) => {
-              const nextPhase = normalizeWorkflowScriptPhaseTitle(
+              const nextPhase = WorkflowScriptPhaseTitleSchema.parse(
                 String(args[0]),
               );
               try {
@@ -958,7 +959,6 @@ export async function runWorkflowScript(
   }
 
   snapshotWriter.throwIfFailed();
-  snapshotWriter.seal();
 
   // Guest code may catch an agent() rejection, and an abandoned call can
   // reject while the final drain is running. Checkpoint failure is a run-level

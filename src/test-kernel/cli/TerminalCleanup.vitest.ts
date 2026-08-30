@@ -1,6 +1,15 @@
+import '@test/support/defaultSessionTestSetup';
+
 import { writeSync } from 'node:fs';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  bindChildStreamState,
+  invalidateChildStreams,
+  unbindChildStreamState,
+} from '@cli/chat/tui/state/childExecutions';
 
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import {
@@ -11,18 +20,23 @@ import {
   resetCliState,
   rootRunPending,
   rootRunStreamId,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
+  restoreTuiInputModes,
   supportsTerminalJobControl,
-  tuiInputModeRestoreSequence,
 } from '@cli/tui/terminalCleanup';
 import {
   installTerminalTitleUpdates,
   terminalTitleText,
 } from '@cli/chat/tui/terminalTitle';
+import { SessionState } from '@controllers/session/SessionState';
 import { STREAM_PHASE } from '@shared/schemas';
+import {
+  clearAllStreamStatusesForTest,
+  seedStreamStatusForTest,
+} from '@test/support/streamStatusTestUtils';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -34,7 +48,18 @@ const NO_TERMINAL_CAPABILITIES = {
   oscColorReports: false,
 };
 
+// The title projects stream phases, which live on the session status machine
+// and reach the CLI through the bound `SessionState`.
+let sessionState: SessionState;
+
+beforeEach(() => {
+  sessionState = new SessionState(defaultSession());
+  bindChildStreamState(sessionState);
+});
+
 afterEach(() => {
+  unbindChildStreamState(sessionState);
+  clearAllStreamStatusesForTest(defaultSession().status);
   clearApprovals();
   resetCliState();
   vi.useRealTimers();
@@ -65,27 +90,27 @@ function queueTitleApproval(streamId: string): void {
 describe('terminalTitleText', () => {
   it('names the tab after the project folder', () => {
     expect(terminalTitleText('/Users/ray/projects/coauthor')).toBe(
-      'TeXRA — coauthor',
+      '{T}·coauthor',
     );
   });
 
   it('falls back to the bare brand name at the filesystem root', () => {
-    expect(terminalTitleText('/')).toBe('TeXRA');
+    expect(terminalTitleText('/')).toBe('{T}');
   });
 
-  it('adds running and approval labels before the project name', () => {
+  it('leads with running and approval labels ahead of the brand name', () => {
     expect(terminalTitleText('/Users/ray/projects/coauthor', 'running')).toBe(
-      'TeXRA — Running — coauthor',
+      '⠋ {T}·coauthor',
     );
     expect(terminalTitleText('/Users/ray/projects/coauthor', 'approval')).toBe(
-      'TeXRA — Approval needed — coauthor',
+      '⚠ {T}·coauthor',
     );
-    expect(terminalTitleText('/', 'running')).toBe('TeXRA — Running');
+    expect(terminalTitleText('/', 'running')).toBe('⠋ {T}');
   });
 
   it('strips control characters out of a hostile folder name', () => {
     expect(terminalTitleText('/tmp/evil\x07\x1b]0;pwned\x07')).toBe(
-      'TeXRA — evil]0;pwned',
+      '{T}·evil]0;pwned',
     );
   });
 });
@@ -119,7 +144,7 @@ describe('installTerminalTitleUpdates', () => {
 
     await flushTitleUpdate();
 
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
     updates.dispose();
   });
 
@@ -132,7 +157,7 @@ describe('installTerminalTitleUpdates', () => {
 
     const updates = installTerminalTitleUpdates('/work/coauthor');
 
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
     updates.dispose();
   });
 
@@ -143,31 +168,31 @@ describe('installTerminalTitleUpdates', () => {
     const updates = installTerminalTitleUpdates('/work/coauthor');
     rootRunPending.set(true);
     rootRunStreamId.set('transition-root');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'transition-root',
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'transition-child',
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
 
     queueTitleApproval('title-transition');
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Approval needed — coauthor');
+    expectLastTitle('⚠ {T}·coauthor');
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
 
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'transition-child',
       status: STREAM_PHASE.WAITING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     updates.dispose();
   });
 
@@ -176,52 +201,79 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'animated-root',
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
 
-    // Frame comes from `loadingFrameAt(Date.now())` on the shared 1 Hz tick
-    // (see LOADING_FRAMES in LoadingIndicator.tsx), not a private timer, so
+    // Frame comes from `loadingFrameAt(Date.now(), TITLE_FRAMES)` on the
+    // shared 1 Hz tick (braille dots, not the TUI's ASCII spin cycle: a bare
+    // `-` reads as punctuation in a tab), not a private timer, so
     // each check advances a full second and the frame is whatever wall time
     // projects to — not reset to index 0 on each animation restart.
-    expectLastTitle('TeXRA — | — coauthor');
+    expectLastTitle('⠋ {T}·coauthor');
     vi.advanceTimersByTime(1000);
-    expectLastTitle('TeXRA — / — coauthor');
+    expectLastTitle('⠹ {T}·coauthor');
     vi.advanceTimersByTime(1000);
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('⠴ {T}·coauthor');
 
     queueTitleApproval('animated-root');
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — Approval needed — coauthor');
+    expectLastTitle('⚠ {T}·coauthor');
     expectNoTitleWrites();
 
     clearApprovals();
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — \\ — coauthor');
+    expectLastTitle('⠦ {T}·coauthor');
     updates.suspend();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
 
     updates.resume();
-    expectLastTitle('TeXRA — / — coauthor');
-    setStreamStatusInCliState({
+    expectLastTitle('⠹ {T}·coauthor');
+    setCliStreamPhase({
       streamId: 'animated-root',
       status: STREAM_PHASE.WAITING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expectNoTitleWrites();
 
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'animated-root',
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — - — coauthor');
+    expectLastTitle('⠴ {T}·coauthor');
     updates.dispose();
     expectNoTitleWrites();
+  });
+
+  it('returns to idle when only the canonical stream phase changes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    enableOscTitles();
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    setCliStreamPhase({
+      streamId: 'status-only-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+    expectLastTitle('⠋ {T}·coauthor');
+
+    // Status is no longer mirrored into `streams`: production publishes this
+    // repaint revision after the machine changes, without rewriting the CLI
+    // slice. The title must subscribe to that same revision as the status bar.
+    seedStreamStatusForTest(defaultSession().status, 'status-only-root', {
+      phase: STREAM_PHASE.WAITING,
+    });
+    invalidateChildStreams();
+    await flushTitleUpdate();
+
+    expectLastTitle('{T}·coauthor');
+    expectNoTitleWrites();
+    updates.dispose();
   });
 
   it('deduplicates unchanged title projections and resets an active title on teardown', async () => {
@@ -230,12 +282,12 @@ describe('installTerminalTitleUpdates', () => {
     const off = vi.spyOn(process, 'off');
     const updates = installTerminalTitleUpdates('/work/coauthor');
     const exitListener = on.mock.calls.find(([event]) => event === 'exit')?.[1];
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'dedup-root',
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'dedup-child',
       status: STREAM_PHASE.RUNNING,
     });
@@ -244,7 +296,7 @@ describe('installTerminalTitleUpdates', () => {
     expect(writeSync).toHaveBeenCalledTimes(2);
     updates.dispose();
     expect(writeSync).toHaveBeenCalledTimes(3);
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expect(off).toHaveBeenCalledWith('exit', exitListener);
   });
 
@@ -255,7 +307,7 @@ describe('installTerminalTitleUpdates', () => {
     const exitListener = on.mock.calls.find(
       ([event]) => event === 'exit',
     )?.[1] as ((code: number) => void) | undefined;
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'exit-root',
       status: STREAM_PHASE.RUNNING,
     });
@@ -263,7 +315,7 @@ describe('installTerminalTitleUpdates', () => {
 
     exitListener?.(0);
 
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     expect(writeSync).toHaveBeenCalledTimes(3);
     updates.dispose();
     expect(writeSync).toHaveBeenCalledTimes(3);
@@ -272,20 +324,20 @@ describe('installTerminalTitleUpdates', () => {
   it('shows the idle title while suspended and re-projects live state on resume', async () => {
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: 'suspend-root',
       status: STREAM_PHASE.RUNNING,
     });
     await flushTitleUpdate();
 
     updates.suspend();
-    expectLastTitle('TeXRA — coauthor');
+    expectLastTitle('{T}·coauthor');
     queueTitleApproval('title-suspend');
     await flushTitleUpdate();
     expect(writeSync).toHaveBeenCalledTimes(3);
 
     updates.resume();
-    expectLastTitle('TeXRA — Approval needed — coauthor');
+    expectLastTitle('⚠ {T}·coauthor');
     updates.dispose();
   });
 
@@ -304,20 +356,23 @@ describe('installTerminalTitleUpdates', () => {
     );
     rootRunPending.set(false);
     await flushTitleUpdate();
-    expectLastTitle('TeXRA — evil]0;pwned');
+    expectLastTitle('{T}·evil]0;pwned');
     capableUpdates.dispose();
   });
 });
 
-describe('tuiInputModeRestoreSequence', () => {
+describe('restoreTuiInputModes', () => {
   it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
-    expect(tuiInputModeRestoreSequence({ kittyKeyboard: false })).toBe(
-      '\x1b[?2004h\x1b[?25l',
-    );
+    restoreTuiInputModes({ kittyKeyboard: false });
+
+    expect(writeSync).toHaveBeenLastCalledWith(1, '\x1b[?2004h\x1b[?25l');
   });
 
   it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
-    expect(tuiInputModeRestoreSequence({ kittyKeyboard: true })).toBe(
+    restoreTuiInputModes({ kittyKeyboard: true });
+
+    expect(writeSync).toHaveBeenLastCalledWith(
+      1,
       '\x1b[>1u\x1b[?2004h\x1b[?25l',
     );
   });

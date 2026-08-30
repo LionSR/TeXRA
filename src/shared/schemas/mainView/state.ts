@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
-import { AgentCategorySchema } from '@shared/schemas/agent';
+import { AgentCategorySchema, AgentSourceSchema } from '@shared/schemas/agent';
 import {
   TEXRA_ICON_CANONICAL_NAMES,
   type TeXRAIconName,
@@ -107,9 +107,8 @@ export function isModelOptionAvailable(model: ModelOptionData): boolean {
 export const AgentOptionDataSchema = PickerOptionBaseSchema.extend({
   isToolUse: z.boolean().optional(),
   isOrchestrator: z.boolean().optional(),
-  isRemote: z.boolean().optional(),
-  isCustom: z.boolean().optional(),
-  isInline: z.boolean().optional(),
+  /** Provenance, in the canonical agent vocabulary rather than one-hot flags. */
+  source: AgentSourceSchema.optional(),
 });
 export type AgentOptionData = z.infer<typeof AgentOptionDataSchema>;
 
@@ -229,7 +228,7 @@ export type SingleFiles = z.infer<typeof SingleFilesSchema>;
 const FileOptionsSchema = z.object({
   baseFile: z.array(z.string()),
   editedFile: z.array(z.string()),
-  commit: z.array(z.string()).optional(),
+  commit: z.array(z.string()),
 });
 export type FileOptions = z.infer<typeof FileOptionsSchema>;
 

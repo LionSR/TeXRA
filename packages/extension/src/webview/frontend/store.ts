@@ -131,27 +131,13 @@ export const SINGLE_FILE_TYPE_TO_KEY: Record<
 // Placeholder Configuration
 // =========================================================================
 
-/** Onboarding placeholder texts by session type (+ orchestrator override) */
+/** Onboarding placeholder text by session type (+ orchestrator override) */
 export const ONBOARDING_PLACEHOLDERS = {
-  workflow: [
+  workflow:
     'Correct LaTeX errors, tighten language, and keep math notation intact.',
-    'Convert this section into Beamer slides with bullet points.',
-    'Derive the gradient of the loss function step by step.',
-  ],
-  toolUse: [
-    'Find missing citations, then suggest BibTeX entries.',
-    'Scan for TODOs and draft fixes with file paths.',
-    'Run LaTeX checks and report compilation warnings.',
-  ],
-  orchestrator: [
-    'Use polish on the intro, then have review audit the math.',
-    'Run correct across the paper, then have review check every derivation.',
-    'Leave blank — the orchestrator will plan the pipeline for you.',
-    'Ask the orchestrator which agent to use for your literature review.',
-    'Ask which agent should tighten the conclusion — the orchestrator picks and dispatches.',
-    'Ask the orchestrator which agent should work on the methodology section.',
-  ],
-} satisfies Record<SessionType | 'orchestrator', string[]>;
+  toolUse: 'Find missing citations, then suggest BibTeX entries.',
+  orchestrator: 'Use polish on the intro, then have review audit the math.',
+} satisfies Record<SessionType | 'orchestrator', string>;
 
 export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
   {

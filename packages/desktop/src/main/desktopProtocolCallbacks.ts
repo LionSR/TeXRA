@@ -7,7 +7,6 @@ import {
 } from '../shared/desktopProtocol.js';
 
 export interface DesktopProtocolCallback {
-  rawUrl: string;
   path: string;
   query: string;
 }
@@ -22,7 +21,7 @@ type DesktopProtocolCallbackListener = (
 
 export interface DesktopProtocolCallbackRouter {
   routeUrl(rawUrl: string): boolean;
-  routeArgv(argv: readonly string[]): number;
+  routeArgv(argv: readonly string[]): void;
   subscribe(
     listener: DesktopProtocolCallbackListener,
   ): DesktopProtocolCallbackSubscription;
@@ -54,7 +53,6 @@ export interface DesktopProtocolApp {
 
 export interface DesktopProtocolLifecycle {
   router: DesktopProtocolCallbackRouter;
-  shouldContinue: boolean;
   /** True only for the process holding Electron's single-instance lock. */
   ownsSingleInstanceLock: boolean;
 }
@@ -78,7 +76,6 @@ export function parseDesktopProtocolCallback(
   if (!isAuthCallbackPath(path)) return null;
 
   return {
-    rawUrl,
     path,
     query: url.search.slice(1),
   };
@@ -124,11 +121,9 @@ export function createDesktopProtocolCallbackRouter(
     routeUrl,
 
     routeArgv(argv) {
-      let routedCount = 0;
       for (const rawUrl of findDesktopProtocolUrls(argv)) {
-        if (routeUrl(rawUrl)) routedCount++;
+        routeUrl(rawUrl);
       }
-      return routedCount;
     },
 
     subscribe(listener) {
@@ -155,7 +150,7 @@ export function installDesktopProtocolCallbackLifecycle(
 
   if (!ownsSingleInstanceLock) {
     app.quit();
-    return { router, shouldContinue: false, ownsSingleInstanceLock };
+    return { router, ownsSingleInstanceLock };
   }
 
   registerProtocolClient(options);
@@ -167,15 +162,15 @@ export function installDesktopProtocolCallbackLifecycle(
 
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    const didRoute = router.routeUrl(url);
-    if (didRoute || isDesktopProtocolUrl(url)) {
+    router.routeUrl(url);
+    if (isDesktopProtocolUrl(url)) {
       options.focusMainWindow?.();
     }
   });
 
   router.routeArgv(options.argv ?? []);
 
-  return { router, shouldContinue: true, ownsSingleInstanceLock };
+  return { router, ownsSingleInstanceLock };
 }
 
 function normalizeProtocolPath(url: URL): string {

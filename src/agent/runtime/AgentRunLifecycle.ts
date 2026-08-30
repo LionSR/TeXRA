@@ -6,7 +6,10 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
+import {
+  finalizeRun,
+  retainFlowRecordUnlessCompleted,
+} from '@agent/storage/executionLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -201,16 +204,23 @@ export async function finalizeRunTerminal(
   let outcomePersisted = false;
   if (params.persistence.kind === 'finalize') {
     const { flowRecord } = params.persistence;
-    const persisted = await persistTerminalExecution({
+    const finalization = await finalizeRun({
       executionId: handle.executionId,
-      agentName: handle.agentName,
       outcome,
       flowRecord:
         typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
-      logger,
-      failedMessage: 'Failed to finalize durable execution state',
     });
-    outcomePersisted = persisted.outcomePersisted;
+    outcomePersisted = finalization.ok || finalization.outcomePersisted;
+    if (!finalization.ok) {
+      logger.warn('Failed to finalize durable execution state', {
+        data: {
+          agentIdentifier: handle.agentName,
+          executionId: handle.executionId,
+          outcomePersisted: finalization.outcomePersisted,
+          error: finalization.error,
+        },
+      });
+    }
   }
   if (params.stage) {
     try {
@@ -533,10 +543,7 @@ export async function runFlowWithLifecycle(
         // private lifecycle control. Other flows retain the historical
         // policy, read against the outcome finalization resolves rather
         // than this arm's report.
-        flowRecord:
-          flowRecordDisposition ??
-          ((resolved) =>
-            resolved === RUN_OUTCOME.COMPLETED ? 'delete' : 'preserve'),
+        flowRecord: flowRecordDisposition ?? retainFlowRecordUnlessCompleted,
       },
       ...arm,
     });

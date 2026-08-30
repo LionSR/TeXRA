@@ -1,5 +1,6 @@
 import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
+import { storeCredential } from '@common/secrets/storeCredential';
 import { SettingsViewHost } from '@controllers/settingsView/SettingsViewHost';
 import {
   listGitHubSubscriptionEntries,
@@ -28,6 +29,7 @@ import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
@@ -71,11 +73,11 @@ export interface DesktopSettingsUiHost {
    */
   getStreamLabel(streamId: string): string | undefined;
   /** Prompt for a secret (masked). Used for the GitHub personal access token. */
-  promptForSecret?(input: {
+  promptForSecret(input: {
     title: string;
     prompt: string;
   }): Promise<string | undefined>;
-  openExternal?(url: string): Promise<void>;
+  openExternal(url: string): Promise<void>;
   showInfoMessage(message: string): Promise<void>;
   showErrorMessage(message: string): Promise<void>;
   confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
@@ -157,6 +159,14 @@ export function createDesktopSettingsIpc(
     );
   }
 
+  async function postSkillsList(): Promise<void> {
+    const result = await loadRuntimeSkillDisplay();
+    options.postToRenderer({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+      ...result,
+    });
+  }
+
   async function openMemoryFile(input: { storagePath: string }): Promise<void> {
     const resolvedPath = resolveMemoryStoragePath(input.storagePath);
     await options.ui.openPath(StorageFS.fullPath(resolvedPath));
@@ -189,15 +199,15 @@ export function createDesktopSettingsIpc(
     postSettingsSnapshot('git-author');
     options.toolingSettingsController.postLatexConfigValues();
     const goalListPosted = postGoalList();
-    const memoryEnabledPosted = settingsHost.sendMemoryEnabled();
     const modelSelectionDataPosted = settingsHost.sendModelSelectionData();
     postSettingsSnapshot('multi-agent');
     postSettingsSnapshot('approval');
-    postSettingsSnapshot('agent-skills');
+    postSettingsSnapshot('skills');
     postSettingsSnapshot('telemetry');
+    postSettingsSnapshot('memory');
     await Promise.all([
       goalListPosted,
-      memoryEnabledPosted,
+      postSkillsList(),
       settingsHost.sendMemoryData(),
       modelSelectionDataPosted,
       postGitHubTokenStatus(),
@@ -228,7 +238,6 @@ export function createDesktopSettingsIpc(
   }
 
   const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
-    'agent-skills': () => postSettingsSnapshot('agent-skills'),
     approval: () => postSettingsSnapshot('approval'),
     'git-author': () => {
       // Git identity is also process env, so the write must reach `git` before
@@ -237,9 +246,14 @@ export function createDesktopSettingsIpc(
       postSettingsSnapshot('git-author');
     },
     latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    memory: () => postSettingsSnapshot('memory'),
     models: () => settingsHost.sendModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),
     profile: () => options.credentialSettingsController.postProfileData(),
+    skills: async () => {
+      postSettingsSnapshot('skills');
+      await postSkillsList();
+    },
     telemetry: () => postSettingsSnapshot('telemetry'),
   };
 
@@ -319,12 +333,16 @@ export function createDesktopSettingsIpc(
   // `refreshToolAvailability` emits `toolAvailabilityChanged`, which is what
   // repaints the dashboard.
   async function setGitHubToken(): Promise<void> {
-    const token = await options.ui.promptForSecret?.({
+    const token = await options.ui.promptForSecret({
       title: 'GitHub token',
       prompt: GITHUB_TOKEN_PROMPT,
     });
-    if (!token?.trim()) return;
-    await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, token.trim());
+    if (token == null) return;
+    await storeCredential(platform().secrets, {
+      secretName: GITHUB_TOKEN_STORAGE_KEY,
+      value: token,
+      kind: 'github',
+    });
     await options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
     await postGitHubTokenStatus();
     await refreshToolAvailability();
@@ -352,6 +370,11 @@ export function createDesktopSettingsIpc(
   subscriptions.push(
     appSignals.on('githubSubscriptionsChanged', () =>
       runAsync(postGitHubSubscriptions()),
+    ),
+    // `apply_team` writes the roster straight from the setup agent, so the
+    // open view is showing agents and a team it just replaced.
+    appSignals.on('agentRosterChanged', () =>
+      runAsync(options.agentSettingsController.refreshCatalogData()),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: `resolveGitHubTokenSource` reports only
@@ -401,8 +424,6 @@ export function createDesktopSettingsIpc(
     openMemoryFile,
     openMemoryFolder,
     deleteMemory: (message) => settingsHost.deleteMemory(message),
-    setMemoryEnabled: (message) =>
-      settingsHost.setMemoryEnabled(message.enabled),
     pinMemory: (message) =>
       settingsHost.setMemoryPinned(message.storagePath, true),
     unpinMemory: (message) =>
@@ -421,7 +442,7 @@ export function createDesktopSettingsIpc(
     setGitHubToken,
     removeGitHubToken,
     openGitHubTokenUrl: async () => {
-      await options.ui.openExternal?.(GITHUB_TOKEN_CREATE_URL);
+      await options.ui.openExternal(GITHUB_TOKEN_CREATE_URL);
     },
     getPRSubscriptions: postGitHubSubscriptions,
     unsubscribePR: unsubscribeGitHub,

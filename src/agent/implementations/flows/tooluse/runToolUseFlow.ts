@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import type { Action } from '@agent/node';
+import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
@@ -55,13 +56,10 @@ import {
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
-import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
-export interface RunToolUseFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
+export interface RunToolUseFlowInput extends BaseFlowContextInit {
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
@@ -84,8 +82,8 @@ export interface RunToolUseFlowInput<
   isSubagent?: boolean;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
-  onIdle?: (lastResponse: string | undefined) => void;
+  /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: () => void;
   /**
    * Fires after a running tool-use chat changes its model, once the shared
    * `ModelCell` already holds the new pair. The handler is deliberately not
@@ -147,9 +145,9 @@ export interface ToolUseFlowAttachment {
   detach(context: ToolUseFlowContext): void;
 }
 
-class ToolUsePersistedFlow<C> extends PersistedFlow<
+class ToolUsePersistedFlow extends PersistedFlow<
   ToolUseRunShared,
-  ToolUseServices<C>
+  ToolUseServices
 > {
   async prepareForFollowUp(shared: ToolUseRunShared): Promise<void> {
     shared.shouldSkipCycle = true;
@@ -164,27 +162,22 @@ const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
 const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
   'different conversation format; start new chat';
 
-export async function runToolUseFlow<C = unknown>(
-  input: RunToolUseFlowInput<C>,
+export async function runToolUseFlow(
+  input: RunToolUseFlowInput,
   toolRegistry?: IToolRegistry,
   attachment?: ToolUseFlowAttachment,
 ): Promise<RunToolUseFlowResult> {
   const { logger, setting, runScope, toolPolicy } = input;
   const { streamId, executionId, session: runSession, signal } = runScope;
-  const continuationGenerationId =
-    runSession.followUps.currentChildGenerationId(streamId) ??
-    input.resume?.shared.continuationGenerationId ??
-    randomUUID();
   // Capture the run's scope at setup. The interrupt closure below fires from
   // the host thread outside the ALS, so it must use this captured session
   // handle instead of asking for an ambient current session later.
   const sessionLifecycle = new ToolUseSessionLifecycle(
     streamId,
     runSession.followUps,
-    continuationGenerationId,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
-  const { tools: resolvedTools } = await resolveAgentTools({
+  const resolvedTools = await resolveAgentTools({
     tools: setting.tools,
     registry: baseRegistry,
     logger,
@@ -229,7 +222,7 @@ export async function runToolUseFlow<C = unknown>(
       : undefined;
   let pendingStructuredOutput: ToolUseRunShared['structured'];
   let response: string | undefined;
-  let finalTool: ToolUseServices<C>['finalTool'];
+  let finalTool: ToolUseServices['finalTool'];
   if (outputSchema) {
     const terminalTool = buildTerminalTool(outputSchema, (value) => {
       pendingStructuredOutput = value;
@@ -243,7 +236,7 @@ export async function runToolUseFlow<C = unknown>(
 
   const kv = getExecutionStore(executionId);
 
-  const services: ToolUseServices<C> = {
+  const services: ToolUseServices = {
     ...input,
     setting: { ...setting, tools: resolvedTools },
     session: sessionLifecycle,
@@ -256,16 +249,26 @@ export async function runToolUseFlow<C = unknown>(
     },
     fileService: new TaskRunFileService(executionId),
   };
-  let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
+  let activePersistedFlow: ToolUsePersistedFlow | undefined;
 
   const persistModelSwitch = async (model: string): Promise<void> => {
     const flow = activePersistedFlow;
     const liveShared = await flow?.getShared();
-    if (!flow || !liveShared || !setToolUseSharedModel(liveShared, model)) {
+    if (!flow || !liveShared?.stateSlices) {
       throw new Error(
         'Cannot save the model switch because the resumable session state is unavailable.',
       );
     }
+    // `modelId` is the resume SSOT; `MODEL` remains the prompt-facing user
+    // variable for the live run.
+    liveShared.modelId = model;
+    liveShared.stateSlices = {
+      ...liveShared.stateSlices,
+      userChannels: {
+        ...liveShared.stateSlices.userChannels,
+        [USER_VAR_MODEL]: model,
+      },
+    };
     await flow.setShared(liveShared);
   };
 
@@ -309,7 +312,7 @@ export async function runToolUseFlow<C = unknown>(
     const nextHandler = (await createModelHandler(
       nextConfig,
       services.runScope.session.responseTextProcessing,
-    )) as RunModelHandler<C>;
+    )) as RunModelHandler;
     if (
       !modelHandlersShareConversationFormat(
         services.modelCell.handler,
@@ -343,16 +346,14 @@ export async function runToolUseFlow<C = unknown>(
     });
   };
 
-  // A resume completes its one-shot handoff immediately after the live context
-  // is attached, before the flow is interruptible. An async cancellation racing
-  // in during the recovery read must not erase follow-ups appended to the
-  // now-live session after attachment, so this window asks the lifecycle to
-  // preserve the queue, matching the startup preservation guard below.
-  // Cleared once the flow has passed both guards and moved into real work, so a
-  // later mid-run cancellation asks for the normal destructive clear. Whether
-  // that clear actually happens is the lifecycle's call: it alone knows whether
-  // this flow owns the queue or borrowed an outer consumer's.
-  let inResumeStartupWindow = input.resume !== undefined;
+  // Startup cancellation must not clear a potentially reused queue before the
+  // non-resume recovery read establishes whether this invocation owns a
+  // checkpoint. Cleared once the flow has passed the startup guards and moved
+  // into real work, so a later mid-run cancellation asks for the normal
+  // destructive clear. Whether that clear actually happens is the lifecycle's
+  // call: it alone knows whether this flow owns the queue or borrowed an outer
+  // consumer's.
+  let inStartupWindow = true;
 
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
@@ -363,7 +364,7 @@ export async function runToolUseFlow<C = unknown>(
     interrupt(): void {
       input.interrupt();
       runSession.interactions.cancel({ streamId, cause: 'Run interrupted.' });
-      sessionLifecycle.interrupt(inResumeStartupWindow ? 'preserve' : 'clear');
+      sessionLifecycle.interrupt(inStartupWindow ? 'preserve' : 'clear');
     },
     requestImmediateCompaction(): void {
       services.modelCell.handler.requestCompaction();
@@ -384,9 +385,9 @@ export async function runToolUseFlow<C = unknown>(
   let resumeStartupPreservation:
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
+  let persistedFlowRecordExists = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
-  let earlyResult: RunToolUseFlowResult | undefined;
   const startupInterruption = new Error('Tool-use startup interrupted.');
   const teardownFailures: Array<{
     readonly operation: string;
@@ -423,7 +424,8 @@ export async function runToolUseFlow<C = unknown>(
 
   let shared: ToolUseRunShared = {
     messages: [],
-    continuationGenerationId,
+    // Persisted-shape compatibility only: nothing reads this field any more.
+    continuationGenerationId: randomUUID(),
     modelId: services.modelCell.modelId,
     modelHandlerCompatibilityKey: compatibilityKey,
     shouldSkipCycle: false,
@@ -435,9 +437,8 @@ export async function runToolUseFlow<C = unknown>(
     attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
-    if (signal.aborted) {
-      if (input.resume) resumeStartupPreservation = 'cancellation';
-      earlyResult = { outcome };
+    if (signal.aborted && input.resume) {
+      resumeStartupPreservation = 'cancellation';
       throw startupInterruption;
     }
 
@@ -451,11 +452,11 @@ export async function runToolUseFlow<C = unknown>(
     } else {
       persistenceRecoveryPending = true;
       const flowRecord = await readPersistedFlowRecord(kv, executionId);
+      persistedFlowRecordExists = flowRecord != null;
       // Cancellation can also arrive while the recovery read is pending. Do
       // not start a repair write after that handoff.
       if (signal.aborted) {
         persistenceRecoveryPending = false;
-        earlyResult = { outcome };
         throw startupInterruption;
       }
       if (flowRecord) {
@@ -474,7 +475,7 @@ export async function runToolUseFlow<C = unknown>(
     // Past both startup cancellation guards: any later interrupt() is a
     // genuine mid-run cancellation, so go back to the normal destructive
     // queue clear instead of the resume-startup rescue above.
-    inResumeStartupWindow = false;
+    inStartupWindow = false;
 
     let resumedFollowUps: readonly FollowUpQueueBatchItem[] = [
       ...(input.drainedFollowUps ?? []),
@@ -482,13 +483,13 @@ export async function runToolUseFlow<C = unknown>(
     ];
     let finalAction: Action | undefined;
     do {
-      const prepareNode = new ToolUsePrepareNode<C>();
-      const cycleNode = new ToolUseCycleNode<C>();
-      const waitNode = new ToolUseWaitNode<C>(resumedFollowUps);
+      const prepareNode = new ToolUsePrepareNode();
+      const cycleNode = new ToolUseCycleNode();
+      const waitNode = new ToolUseWaitNode(resumedFollowUps);
       prepareNode.next(cycleNode);
       cycleNode.next(waitNode);
       waitNode.on(FlowTransition.CONTINUE, cycleNode);
-      const pf = new ToolUsePersistedFlow<C>(
+      const pf = new ToolUsePersistedFlow(
         prepareNode,
         kv,
         executionId,
@@ -582,6 +583,16 @@ export async function runToolUseFlow<C = unknown>(
       outcome === RUN_OUTCOME.COMPLETED &&
       shared.structured === undefined
     ) {
+      // Rewind before throwing. The outcome was COMPLETED, so the rewind above
+      // was skipped and the cursor still points past the terminal step; the
+      // `catch` below then preserves the record. Preserving an un-rewound
+      // cursor produces a checkpoint `deriveResumability` reports as unreadable,
+      // which `classifyRun` maps to unclassified: `ResumableFlowRecordSchema`
+      // rejects `nextNodeId === null`, so only `history delete` can clear it
+      // (#11314). Rewinding makes the preserved
+      // record mean what preservation is for: a resume gets another model turn
+      // to call `submit_output`.
+      await activePersistedFlow?.prepareForFollowUp(shared);
       throw new Error(
         'Structured-output run completed without calling submit_output.',
       );
@@ -603,11 +614,28 @@ export async function runToolUseFlow<C = unknown>(
         'Flow record preserved after persistence recovery failure';
     } else if (outcome === STREAM_PHASE.WAITING) {
       preservationReason = 'Flow record preserved for native subagent WAITING';
+    } else if (signal.aborted && !flowRunStarted && persistedFlowRecordExists) {
+      // Startup cancellation can happen before this invocation owns or starts
+      // the flow. Preserve a reused checkpoint, including when cancellation
+      // arrives before the recovery read can establish whether one exists
+      // (#11430).
+      preservationReason = 'Flow record preserved after startup interruption';
     } else if (flowRunStarted && signal.aborted) {
       preservationReason = 'Flow record preserved after user interruption';
     } else if (shared.userCancelledRetry) {
       preservationReason =
         'Flow record preserved for resume after retry cancellation';
+    } else if (primaryFailure !== undefined && !flowRunStarted) {
+      // Setup can fail before `persistenceRecoveryPending` is armed --
+      // `liveAttachment.attach()` and `takePendingFollowUps()` both run ahead
+      // of the existing-record guard. A non-resume launch reusing an
+      // executionId that already has a checkpoint would otherwise fall through
+      // to `'delete'` and destroy a record this run never owned (#11313).
+      // Preserving is safe in the ordinary case too: a genuinely fresh launch
+      // has no record, so this is a no-op rather than a leak. Scoped to a
+      // failure before the flow ran: a mid-run failure is preserved by the
+      // arm below, which names the checkpoint it can be retried from.
+      preservationReason = 'Flow record preserved after setup failure';
     } else if (flowRunStarted || input.resume) {
       // A checkpoint can exist once the flow ran or a resume snapshot was
       // handed in. Only a genuinely completed run reports `'delete'`; a
@@ -673,7 +701,6 @@ export async function runToolUseFlow<C = unknown>(
   if (!runAlreadyFailed && firstTeardownFailure) {
     throw firstTeardownFailure.error;
   }
-  if (earlyResult) return earlyResult;
 
   return {
     outcome,

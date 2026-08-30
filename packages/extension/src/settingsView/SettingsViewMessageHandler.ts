@@ -75,7 +75,6 @@ import {
   dispatchSettingsViewInbound,
   SETTINGS_VIEW_CMD,
 } from '@shared/schemas';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 
 import {
   applyStateSettingUpdate,
@@ -85,6 +84,7 @@ import {
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -126,9 +126,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
-      logger: this.logger,
+      log: this.log,
       extensionContext: context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
+      postMessageToActiveWebview: (message) =>
+        this.postMessageToActiveWebview(message),
     };
 
     // Must build inside the constructor: the platform is initialized by
@@ -183,21 +185,19 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
     this.chatgptHandlers = new SubscriptionHandlers(
       'chatgpt',
-      () =>
-        buildAuthStatusMessage(
-          SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-          getChatGptAuthStatus,
-        ),
+      async () => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
+        status: await getChatGptAuthStatus(),
+      }),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange('chatgpt'),
     );
     this.grokHandlers = new SubscriptionHandlers(
       'grok',
-      () =>
-        buildAuthStatusMessage(
-          SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
-          getGrokAuthStatus,
-        ),
+      async () => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_GROK_AUTH_STATUS,
+        status: await getGrokAuthStatus(),
+      }),
       ctx,
       () => this.refreshAfterSubscriptionAuthChange(),
     );
@@ -216,6 +216,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
           void this.withActiveWebview((w) =>
             this.sendToolDashboardData(w, { skipChecks: true }),
           );
+        }),
+      },
+      {
+        // `apply_team` writes the roster straight from the setup agent, so
+        // the open view is showing agents and a team it just replaced. The
+        // catalog is already fresh: a team change moves no agent files, and
+        // the agent-creator reloads before it emits. Without that flag this
+        // listener would rescan the YAML and re-fetch the remote catalog on
+        // every roster write.
+        dispose: appSignals.on('agentRosterChanged', () => {
+          void this.refreshAfterAgentMutation(undefined, true);
         }),
       },
       {
@@ -255,8 +266,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       openMemoryFolder: () => this.memoryHandlers.handleOpenMemoryFolder(),
       deleteMemory: (message) =>
         this.memoryHandlers.handleDeleteMemory(message),
-      setMemoryEnabled: (message) =>
-        this.memoryHandlers.handleSetMemoryEnabled(message),
       pinMemory: (message) =>
         this.memoryHandlers.setMemoryPinned(message.storagePath, true),
       unpinMemory: (message) =>
@@ -393,7 +402,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       commandKind: data.kind,
     });
     if (action.kind === 'none') {
-      this.logger.debug(this.channel, 'No command for tool', {
+      this.log.debug('No command for tool', {
         data: { ...data, reason: action.reason },
       });
       return;
@@ -439,7 +448,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     await Promise.all([
       this.memoryHandlers.sendMemoryData(webview),
-      this.memoryHandlers.sendMemoryEnabled(webview),
+      this.sendSettingsSnapshot(webview, 'memory'),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendSettingsSnapshot(webview, 'multi-agent'),
@@ -450,10 +459,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.grokHandlers.sendAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendSettingsSnapshot(webview, 'approval'),
-      this.sendSettingsSnapshot(webview, 'agent-skills'),
+      this.sendSettingsSnapshot(webview, 'skills'),
+      this.sendSkillsList(webview),
       this.sendSettingsSnapshot(webview, 'telemetry'),
       this.latexHandlers.sendLatexSettingsStatus(webview),
-      this.latexHandlers.sendLatexConfigValues(webview),
+      this.sendSettingsSnapshot(webview, 'latex'),
       this.sendInlineCriticismEnabled(webview),
       this.sendGoalList(webview),
     ]);
@@ -524,6 +534,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
+  private async sendSkillsList(webview: vscode.Webview): Promise<void> {
+    const result = await loadRuntimeSkillDisplay();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+      ...result,
+    });
+  }
+
   /**
    * Generic write path for catalog-backed settings-view rows.
    */
@@ -576,7 +594,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     snapshot: SettingsViewSnapshot,
   ): Promise<void> {
     await dispatchStateSettingSnapshot(snapshot, {
-      'agent-skills': () => this.rebroadcastSnapshot('agent-skills'),
       approval: () => this.rebroadcastSnapshot('approval'),
       'git-author': () => {
         // Git identity is also process env, so the write must reach `git`
@@ -584,14 +601,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         applyGitAuthorConfig();
         return this.rebroadcastSnapshot('git-author');
       },
-      latex: () =>
-        this.withActiveWebview((w) =>
-          this.latexHandlers.sendLatexConfigValues(w),
-        ),
+      latex: () => this.rebroadcastSnapshot('latex'),
+      memory: () => this.rebroadcastSnapshot('memory'),
       models: () =>
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),
       profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
+      skills: async () => {
+        await this.rebroadcastSnapshot('skills');
+        await this.withActiveWebview((w) => this.sendSkillsList(w));
+      },
       telemetry: () => this.rebroadcastSnapshot('telemetry'),
     });
   }
@@ -719,7 +738,12 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
-  /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
+  /**
+   * Refresh settings-view agent list and main-view dropdown after agent
+   * mutations. The team presets ride along because every roster mutation can
+   * move the effective team: enabling one agent rewrites the selection as
+   * `custom`, which retires whatever team was applied.
+   */
   private async refreshAfterAgentMutation(
     selectedToolUseAgent?: string,
     agentCatalogAlreadyFresh = false,
@@ -728,6 +752,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.withActiveWebview((w) =>
         this.agentHandlers.sendAgentSelectionData(w),
       ),
+      this.withActiveWebview((w) => this.agentHandlers.sendAgentModePresets(w)),
       safeExecuteCommand(
         'texra.refreshAllOptions',
         selectedToolUseAgent || agentCatalogAlreadyFresh
@@ -758,13 +783,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async openExternalUrl(url: string): Promise<void> {
     await vscode.env.openExternal(vscode.Uri.parse(url));
-  }
-
-  private async postMessageToActiveWebview(message: unknown): Promise<void> {
-    if (message == null) return;
-    await this.withActiveWebview(async (webview) => {
-      await webview.postMessage(message);
-    });
   }
 
   private async setModelEnabled(

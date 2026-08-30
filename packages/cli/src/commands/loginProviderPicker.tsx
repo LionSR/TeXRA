@@ -7,11 +7,12 @@ import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 
 /** Browser-based provider sign-in, or the device-code flow for remote shells. */
-export type LoginPickerChoice = OAuthProvider | 'device';
+type LoginPickerChoice = OAuthProvider | 'device';
 
 const LOGIN_PICKER_ITEMS: readonly SelectItem<LoginPickerChoice>[] = [
   ...CLI_OAUTH_PROVIDER_ITEMS,
@@ -35,7 +36,7 @@ function LoginProviderPicker(props: {
   return (
     <BorderedPanel
       color={COLOR_HINT}
-      title="TeXRA login"
+      title={`${RESEARCHER_ACCESS.label} sign-in`}
       footer={
         <KeyHints
           hints={[

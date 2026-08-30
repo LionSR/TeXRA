@@ -27,7 +27,7 @@ const CITATION_PATTERN = new RegExp(
   'g',
 );
 
-export interface BibliographyReferenceResult {
+interface BibliographyReferenceResult {
   /** Paths to bibliography files that exist, relative to the workspace. */
   bibliographyFiles: string[];
   /** Bibliography files referenced but not found. */
@@ -36,7 +36,7 @@ export interface BibliographyReferenceResult {
   citationKeys: string[];
 }
 
-export interface BibliographyEntriesResult {
+interface BibliographyEntriesResult {
   /** Map of citation key to raw BibTeX entry text. */
   entries: Map<string, string>;
   /** Citation keys without matching entries across the loaded files. */

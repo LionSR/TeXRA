@@ -10,10 +10,6 @@ export const MainViewExecuteFilesSchema = z.object({
   inputFiles: z.array(z.string()).optional(),
   contextFiles: z.array(z.string()).optional(),
   mediaFiles: z.array(z.string().nullable()).optional(),
-  outputFiles: z.array(z.string()).optional(),
-  editedFile: z.string().optional(),
-  editedFiles: z.array(z.string()).optional(),
-  baseFile: z.string().optional(),
 });
 
 /**
@@ -32,8 +28,12 @@ export const MainViewExecuteMessageSchema = z.object({
   session: z
     .object({
       workingDirectory: z.string().nullish(),
-      cliOutputFile: z.string().nullish(),
-      cliMultiAgentPresetId: z.string().nullish(),
+      cli: z
+        .object({
+          outputFile: z.string().nullish(),
+          multiAgentPresetId: z.string().nullish(),
+        })
+        .nullish(),
       // Team runs send team identity only; hosts resolve the roster at the
       // execution boundary where catalog/auth state is authoritative.
       launchTarget: LaunchTargetSchema.nullish(),

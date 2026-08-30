@@ -14,7 +14,10 @@ const HISTORY_PATH = `${HISTORY_DIR}/input-history.jsonl`;
 const MAX_LINES = 1000;
 const MAX_LINE_CHARS = 4000;
 
-const HistoryRecordSchema = z.object({ t: z.number().catch(0), v: z.string() });
+// No `.catch` on `t`: a record with a missing or corrupt timestamp fails
+// validation and is skipped by the reader below, per the malformed-line
+// policy — never rewritten into the file with a fabricated epoch-0 time.
+const HistoryRecordSchema = z.object({ t: z.number(), v: z.string() });
 type HistoryRecord = z.infer<typeof HistoryRecordSchema>;
 
 export interface InputHistory {

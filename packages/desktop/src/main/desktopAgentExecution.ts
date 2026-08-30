@@ -26,7 +26,10 @@ import {
 } from '@agent/core/state/executionRequests';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
+import {
+  createProgressHostInteractions,
+  type ProgressHostInteractions,
+} from '@controllers/progressView/backend/progressHostInteractions';
 import { replayApprovalRequestHandlers } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { buildStreamInfo } from '@controllers/session/streamInfoUtils';
 import { ProgressBackend } from '@controllers/progressView/backend/ProgressBackend';
@@ -80,12 +83,12 @@ import type {
   SettingsTabPanelName,
   StreamTabId,
 } from '@shared/schemas';
+import { cloneRoundIndexed } from '@shared/schemas';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
 } from '@shared/copy/executionHistory';
-import { formatInstructionActionHint } from '@shared/copy/instructionActionHint';
 import {
   ALL_STREAMS_DELETED_CAUSE,
   RETRY_REQUEST_CLEARED_CAUSE,
@@ -109,7 +112,6 @@ import {
 import { buildDesktopOnboardingSetStateMessage } from '../shared/desktopOnboardingMessages.js';
 import { DESKTOP_SHELL_COMMANDS } from '../shared/desktopShellMessages.js';
 import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
-import { createDesktopHostInteractions } from './desktopHostInteractions.js';
 import { listDesktopWorkspaceFiles } from './desktopFileSelection.js';
 import { toLogData } from './desktopLogUtils.js';
 import {
@@ -161,6 +163,35 @@ export class DesktopProgressBridge {
   private readonly logger: AgentTrace;
   private readonly backend: ProgressBackend;
   private readonly state: ProgressBackend['state'];
+
+  /**
+   * One adapter over the snapshot store for every progress-view port that
+   * wants one. The store cannot be passed raw -- `preload` takes a list and
+   * the workspace-only path read has a different name -- and each controller
+   * asks for a different subset, so this is the superset. Passed by reference,
+   * excess-property checking does not apply and each port's type still narrows
+   * it to the members that port declares.
+   *
+   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
+   * copies every member in at runtime, so those objects carry accessors their
+   * port type does not declare. Harmless today -- nothing enumerates or
+   * serializes them -- but do not add a member here whose mere presence would
+   * change a consumer's behavior.
+   *
+   * `getRunMetadata` is deliberately this class's override, not the store's:
+   * it falls back to the summary mirror for the execution id.
+   */
+  private readonly snapshotPort = {
+    getActiveStream: () => this.backend.presentation.activeStream,
+    getRunMetadata: (stream: StreamTabId) => this.getRunMetadata(stream),
+    getOutputFiles: (stream: StreamTabId) =>
+      this.state.snapshots.getOutputFiles(stream),
+    getCompileFailures: (stream: StreamTabId) =>
+      this.state.snapshots.getCompileFailures(stream),
+    getKnownWorkspaceOutputPaths: (stream: StreamTabId) =>
+      this.state.snapshots.getKnownFilePaths(stream, { workspaceOnly: true }),
+    preload: (stream: StreamTabId) => this.state.snapshots.preload([stream]),
+  };
   private readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private agentProposalController!: ProgressAgentProposalController;
   private workflowFileActions!: ProgressWorkflowFileActionsController;
@@ -220,20 +251,19 @@ export class DesktopProgressBridge {
           this.options.host.showErrorMessage(message),
           'Failed to present the error dialog',
         ),
-      requestShowInstruction: (instruction) => {
+      requestShowInstruction: (instruction) =>
         // An instruction is actionable guidance, not a failure, so it uses
-        // the info dialog. The desktop dialog carries no buttons, so the
-        // action tokens the extension renders as buttons become trailing
-        // hint text and `showSuppress` has no affordance to attach to.
-        const hint = formatInstructionActionHint(
-          instruction.actions,
-          'desktop',
-        );
-        return this.settleHostDialog(
-          this.options.host.showInfoMessage(`${instruction.message}${hint}`),
+        // the info-style dialog. `showInstructionDialog` renders each action
+        // token as a real button; `showSuppress` still has no affordance to
+        // attach to (a native dialog has no persistent "never remind again"
+        // control).
+        this.settleHostDialog(
+          this.options.host.showInstructionDialog(
+            instruction.message,
+            instruction.actions,
+          ),
           'Failed to present the instruction dialog',
-        );
-      },
+        ),
       showAgentConfigBanner: ({ agentName }) =>
         this.postToRenderer({
           command: MAIN_VIEW_COMMANDS.SET_BANNER,
@@ -337,14 +367,19 @@ export class DesktopProgressBridge {
         this.backend.approvalHandlers.toolEdit.dismiss(requestId),
       detachCause: SESSION_DISPOSED_CAUSE,
     });
-    this.hostInteractions = createDesktopHostInteractions({
-      interactions: presentationHost,
-      session: this.session,
-      getApprovalHandlers: () => this.backend.approvalHandlers,
-      getToolEditApprovals: () => this.toolEditApprovals!,
-      setApprovalBypassState: this.backend.setApprovalBypassState,
+    this.hostInteractions = {
+      // The shared progress-view host port plus the Electron shell's
+      // notification surface, which the runtime reaches through
+      // `session.interactions`.
+      ...createProgressHostInteractions({
+        interactions: presentationHost,
+        session: this.session,
+        getApprovalHandlers: () => this.backend.approvalHandlers,
+        getToolEditApprovals: () => this.toolEditApprovals!,
+        setApprovalBypassState: this.backend.setApprovalBypassState,
+      }),
       showInfoMessage: (message) => this.options.host.showInfoMessage(message),
-    });
+    };
     this.fileActions = new DesktopProgressFileActions(this.options.host, {
       startExecution: (request) => {
         const logger = this.logger;
@@ -385,11 +420,11 @@ export class DesktopProgressBridge {
     // Canonical state and restart repair are complete before any window-owned
     // adapter can receive a replay. Subscribe first because attachment
     // synchronously redispatches pending approvals and their visibility facts.
-    const detachHostInteractions = this.session.useHostInteractions(
+    const detachHostInteractions = this.session.interactions.use(
       this.hostInteractions,
     );
     // Attachment synchronously replays pending requests. That replay can close
-    // the window before useHostInteractions returns its disposer.
+    // the window before interactions.use returns its disposer.
     if (this.disposed) {
       detachHostInteractions();
       return;
@@ -440,15 +475,7 @@ export class DesktopProgressBridge {
    */
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
-      state: {
-        getRunMetadata: (stream) => this.getRunMetadata(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        getKnownWorkspaceOutputPaths: (stream) =>
-          this.state.snapshots.getKnownFilePaths(stream, {
-            workspaceOnly: true,
-          }),
-        preload: (stream) => this.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       runDiff: (request) => this.runWorkflowDiff(request),
       runFileOperation: (operation, request) =>
         this.runWorkflowFileOperation(operation, request),
@@ -492,13 +519,7 @@ export class DesktopProgressBridge {
   private createFollowUpController(): ProgressFollowUpController {
     return new ProgressFollowUpController({
       loadModelOptions: () => computeModelOptionsData(),
-      state: {
-        getRunMetadata: (stream) => this.getRunMetadata(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        getCompileFailures: (stream) =>
-          this.state.snapshots.getCompileFailures(stream),
-        preload: (stream) => this.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       workspace: {
         locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
         exists: (relativePath) => WorkspaceFS.exists(relativePath),
@@ -616,7 +637,7 @@ export class DesktopProgressBridge {
     result: FileOpResult,
     inputFile: string,
   ): Promise<void> {
-    const { verb, gerund } = operationLabel(operation);
+    const { verb } = operationLabel(operation);
     switch (result.status) {
       case 'success': {
         const folder = result.outputFolder;
@@ -633,11 +654,6 @@ export class DesktopProgressBridge {
           `No files found to ${verb} for ${inputFile}`,
         );
         return;
-      case 'missingParams':
-        await this.options.host.showErrorMessage(
-          `Select an input file before ${gerund}.`,
-        );
-        return;
       case 'error':
         await this.options.host.showErrorMessage(
           `Error during ${verb}: ${result.error}`,
@@ -648,12 +664,7 @@ export class DesktopProgressBridge {
 
   private createWorkflowFileActionsController(): ProgressWorkflowFileActionsController {
     return new ProgressWorkflowFileActionsController({
-      state: {
-        getActiveStream: () => this.backend.presentation.activeStream,
-        getRunMetadata: (stream) => this.getRunMetadata(stream),
-        getOutputFiles: (stream) => this.state.snapshots.getOutputFiles(stream),
-        preload: (stream) => this.state.snapshots.preload([stream]),
-      },
+      state: this.snapshotPort,
       host: {
         compareFiles: (baseFile, editedFile) =>
           this.fileActions.compareFiles(baseFile, editedFile),
@@ -732,10 +743,7 @@ export class DesktopProgressBridge {
   > {
     return createProgressViewCommandHandlers({
       run: {
-        state: {
-          getRunMetadata: (stream) => this.getRunMetadata(stream),
-          preload: (stream) => this.state.snapshots.preload([stream]),
-        },
+        state: this.snapshotPort,
         runExecutionRequest: (request) =>
           this.runValidatedExecutionRequest(request),
       },
@@ -750,7 +758,7 @@ export class DesktopProgressBridge {
       },
       followUp: {
         session: this.session,
-        acknowledge: (stream, accepted) => {
+        captureAdmissionReporter: () => (stream, accepted) => {
           this.postToRenderer({
             command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
             stream,
@@ -842,8 +850,7 @@ export class DesktopProgressBridge {
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
-      getRunMetadata: (stream) => this.getRunMetadata(stream),
-      preload: (stream) => this.state.snapshots.preload([stream]),
+      ...this.snapshotPort,
       workflowActions: this.workflowActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
@@ -1136,7 +1143,15 @@ export class DesktopProgressBridge {
     // (and opened) in order, matching the VS Code command, with no separate
     // sort needed. A defensive re-sort would only mask a schema regression,
     // not add safety.
-    const outputsByRound = this.state.snapshots.getOutputFiles(stream);
+    // Frozen here, not read here. `getOutputFiles` returns the store's live
+    // record (#11402), and this context is carried across several more awaits
+    // -- runLatexdiffFile -> diffAcceptedFilePair -> runSharedLatexdiff ->
+    // runLatexdiffForExecution -- before anything enumerates it. A workflow
+    // still producing output would otherwise change the diff scope after the
+    // user began the action. Mirrors ProgressWorkflowActionsController.diffStream.
+    const outputsByRound = cloneRoundIndexed(
+      this.state.snapshots.getOutputFiles(stream),
+    );
     const { config, executionId } = this.getRunMetadata(stream);
     const workspaceScan = config
       ? this.getLatexdiffWorkspaceScan(config, editedFile)
@@ -1230,11 +1245,14 @@ export class DesktopProgressBridge {
     );
     if (launch.status === 'cancelled') return;
     if (launch.status === 'error') {
-      await this.options.host.showErrorMessage(launch.message);
+      void this.options.host.showErrorMessage(launch.message);
       return;
     }
     if (launch.infoMessage) {
-      await this.options.host.showInfoMessage(launch.infoMessage);
+      void this.settleHostDialog(
+        this.options.host.showInfoMessage(launch.infoMessage),
+        'Failed to present the launch information dialog',
+      );
     }
     const { preparation } = launch;
     if (!preparation.valid) {

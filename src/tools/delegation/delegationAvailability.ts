@@ -30,6 +30,7 @@ import {
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import type {
   AgentCategory,
@@ -55,7 +56,7 @@ import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
  * `replacement` may be a thunk so the caller can defer any config/registry read
  * until the tool is confirmed to need the block (matched, or appended).
  */
-export function replaceDelegationDescriptionBlock(
+function replaceDelegationDescriptionBlock(
   tool: ToolDefinition,
   pattern: RegExp,
   replacement: string | (() => string),
@@ -134,11 +135,11 @@ export function formatAgentList(
  * Build the "Available agents:" block for a delegation tool's category from the
  * currently visible roster. An empty roster yields a single actionable line
  * rather than a bare header, mirroring the empty-state messaging on the models
- * line. The only caller, `resolveAgentTools`, runs inside an agent flow that
- * has already loaded the registry, so an empty result means the user genuinely
- * has no visible agents in this category — not a not-yet-loaded cache.
+ * line. Annotation runs inside an agent flow that has already loaded the
+ * registry, so an empty result means the user genuinely has no visible agents
+ * in this category — not a not-yet-loaded cache.
  */
-export function visibleDelegationAgentsBlock(category: AgentCategory): string {
+function visibleDelegationAgentsBlock(category: AgentCategory): string {
   const agents = getDelegationAgents(category);
   if (agents.length === 0) return NO_AGENTS_LINE;
   return `Available agents:\n${formatAgentList(agents)}`;
@@ -177,25 +178,6 @@ export function getDelegationAgent(
   );
 }
 
-/**
- * Replace the "Available agents:" block in a delegation tool's description with
- * the supplied block, appending it when the description has no such block yet.
- * A `$` in an agent description (e.g. inline LaTeX math) stays literal.
- */
-export function withDelegationAgentAvailability(
-  tool: ToolDefinition,
-  agentsBlock: string,
-): ToolDefinition {
-  return replaceDelegationDescriptionBlock(
-    tool,
-    AVAILABLE_AGENTS_BLOCK,
-    agentsBlock,
-    {
-      appendIfMissing: true,
-    },
-  );
-}
-
 /* -------------------------------------------------------------------------
  * Models
  * ---------------------------------------------------------------------- */
@@ -223,13 +205,20 @@ function formatAvailableModelsLine(
   return `Available models: ${modelNames.join(', ')}`;
 }
 
-export function selectDelegationModelFromAvailableNames(input: {
+/**
+ * Decide which model a delegated run uses: an explicit override, else the
+ * parent run's model, else the first model the user has access to — checked
+ * against the live availability list so an unavailable choice fails here rather
+ * than after launch.
+ */
+export async function selectAvailableDelegationModel(input: {
   readonly requestedModel?: string | null;
   readonly parentModel?: string | null;
-  readonly availableModels: readonly string[];
-}): string {
+}): Promise<string> {
   const availableModels = unique(
-    input.availableModels.map((model) => model.trim()).filter(Boolean),
+    availableModelNamesFromOptions(await computeModelOptionsData())
+      .map((model) => model.trim())
+      .filter(Boolean),
   );
   if (availableModels.length === 0) {
     throw new Error(NO_DELEGATION_MODELS_MESSAGE);
@@ -259,18 +248,6 @@ export function selectDelegationModelFromAvailableNames(input: {
   return decision.model;
 }
 
-export function withDelegationModelAvailability(
-  tool: ToolDefinition,
-  modelNames: readonly string[] | null,
-): ToolDefinition {
-  return replaceDelegationDescriptionBlock(
-    tool,
-    AVAILABLE_MODELS_LINE,
-    () => formatAvailableModelsLine(modelNames),
-    { appendIfMissing: true },
-  );
-}
-
 /* -------------------------------------------------------------------------
  * Worktree support
  * ---------------------------------------------------------------------- */
@@ -282,25 +259,56 @@ const WORKTREE_ENABLED_LINE =
   'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.';
 
 const WORKTREE_DISABLED_LINE =
-  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because it will be rejected at schema validation. Ask the user to turn on `texra.git.worktreeSupport` ("Allow agents to work in git worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
+  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because it will be rejected at schema validation. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
+
+/* -------------------------------------------------------------------------
+ * Annotation
+ * ---------------------------------------------------------------------- */
 
 /**
- * Replace the "Git worktree support:" line of a delegation tool's description
- * with the line for the current workspace setting. Tools without that line
- * (and non-delegation tools, and tools without a description) are returned
- * untouched, and the worktree setting is read only when the line is present.
+ * Refresh a delegation tool's "Available models:", "Available agents:", and
+ * "Git worktree support:" lines from current state. A tool declaring no
+ * `availabilityCategory` returns untouched at the early guard.
+ * `availableModelNames` is `undefined` only when the resolved list held no
+ * delegation tool at all, so in that case every tool reaching this function is a
+ * non-delegation tool that returns early — `category` and `availableModelNames`
+ * are independent (one keys off the tool name, the other off the whole list),
+ * not causally linked.
  *
- * Unlike the roster annotation, this one is replace-only: a tool without a
- * "Git worktree support:" line (e.g. delegate_workflow, which has no
- * working_directory) takes no working directory, so a line must never be
- * appended to it. The schema's `working_directory` field already enforces the
- * real state at validation time; this only keeps the guidance in step with it.
+ * The roster block is appended when its anchor is missing; the worktree line is
+ * replace-only, because a tool without that line (e.g. delegate_workflow, which
+ * has no `working_directory`) takes no working directory and must never be told
+ * it does. The schema's `working_directory` field already enforces the real
+ * state at validation time; this only keeps the guidance in step with it. A `$`
+ * in an agent description (e.g. inline LaTeX math) stays literal.
  */
-export function withDelegationWorktreeAvailability(
+export function annotateDelegationAvailability(
   tool: ToolDefinition,
+  availableModelNames: readonly string[] | null | undefined,
 ): ToolDefinition {
+  const category = tool.availabilityCategory;
+  if (!category) return tool;
+  const withModels =
+    availableModelNames === undefined
+      ? tool
+      : replaceDelegationDescriptionBlock(
+          tool,
+          AVAILABLE_MODELS_LINE,
+          () => formatAvailableModelsLine(availableModelNames),
+          { appendIfMissing: true },
+        );
+  // The replacements no-op without a description, and resolving the roster /
+  // worktree state reaches platform state — skip those lookups when there is
+  // nothing to annotate (e.g. a tool config that carries only a name).
+  if (!withModels.description) return withModels;
+  const withAgents = replaceDelegationDescriptionBlock(
+    withModels,
+    AVAILABLE_AGENTS_BLOCK,
+    visibleDelegationAgentsBlock(category),
+    { appendIfMissing: true },
+  );
   return replaceDelegationDescriptionBlock(
-    tool,
+    withAgents,
     WORKTREE_LINE,
     () =>
       isWorktreeSupportEnabled()

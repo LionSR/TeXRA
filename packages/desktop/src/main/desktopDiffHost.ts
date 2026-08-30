@@ -3,12 +3,9 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 import { nanoid } from 'nanoid';
+import pDefer from 'p-defer';
 
-import {
-  type DiffSession,
-  type DiffSource,
-  type DiffViewHost,
-} from '@hosts/uiHosts';
+import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -27,8 +24,7 @@ import {
 export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   /**
    * Falls back to the OS default editor (writes a `.diff` patch file and
-   * calls `openPath`). Used when the renderer overlay is unavailable or
-   * `forceExternal === true`.
+   * calls `openPath`). Used when the renderer overlay is unavailable.
    */
   openPath(filePath: string): Promise<void>;
 }
@@ -97,13 +93,10 @@ export function createDesktopDiffHost(
   // `inFlightFallbacks`. The promise resolves only, so callers never have to
   // handle a rejection from the bookkeeping slot.
   function trackFallbackSetup(): () => void {
-    let settle!: () => void;
-    const setup = new Promise<void>((resolve) => {
-      settle = resolve;
-    });
-    inFlightFallbacks.add(setup);
-    void setup.finally(() => inFlightFallbacks.delete(setup));
-    return settle;
+    const setup = pDefer<void>();
+    inFlightFallbacks.add(setup.promise);
+    void setup.promise.finally(() => inFlightFallbacks.delete(setup.promise));
+    return setup.resolve;
   }
 
   function takeDirSnapshot(): string[] {
@@ -120,31 +113,40 @@ export function createDesktopDiffHost(
   // snapshot; a registration after the snapshot is already past the drain and
   // self-cleans through the `disposed` branch on its own.
   async function drainFallbackSetups(): Promise<string[]> {
-    const deadline = performance.now() + DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS;
-    let observedEmpty = false;
-    while (true) {
-      if (inFlightFallbacks.size === 0) {
-        if (observedEmpty) {
+    // One deadline timer for the whole drain, aborted in the finally so an
+    // early fully-drained return does not leave a live timer behind. Listed
+    // first in the race so an elapsed deadline outranks settled fallbacks,
+    // matching the old per-iteration remaining-time check.
+    const abort = new AbortController();
+    const deadline = sleep(
+      DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS,
+      'deadline' as const,
+      { signal: abort.signal },
+    ).catch(() => 'deadline' as const);
+    try {
+      let observedEmpty = false;
+      while (true) {
+        if (inFlightFallbacks.size === 0) {
+          if (observedEmpty) {
+            return takeDirSnapshot();
+          }
+          observedEmpty = true;
+          await Promise.resolve();
+          continue;
+        }
+        observedEmpty = false;
+        const winner = await Promise.race([
+          deadline,
+          Promise.allSettled([...inFlightFallbacks]).then(
+            () => 'settled' as const,
+          ),
+        ]);
+        if (winner === 'deadline') {
           return takeDirSnapshot();
         }
-        observedEmpty = true;
-        await Promise.resolve();
-        continue;
       }
-      observedEmpty = false;
-      const remainingMs = deadline - performance.now();
-      if (remainingMs <= 0) {
-        return takeDirSnapshot();
-      }
-      const abort = new AbortController();
-      try {
-        await Promise.race([
-          Promise.allSettled([...inFlightFallbacks]),
-          sleep(remainingMs, undefined, { signal: abort.signal }),
-        ]);
-      } finally {
-        abort.abort();
-      }
+    } finally {
+      abort.abort();
     }
   }
 
@@ -152,7 +154,7 @@ export function createDesktopDiffHost(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Promise<DiffSession> {
+  ): Promise<void> {
     const settleFallbackSetup = trackFallbackSetup();
     try {
       const [originalContent, proposedContent] = await Promise.all([
@@ -166,7 +168,7 @@ export function createDesktopDiffHost(
 
       // Prefer the in-app Review workbench when wired. A `false` return value
       // or a thrown error opts into the external-editor fallback (covers the
-      // startup IPC race, destroyed BrowserWindow, and `forceExternal`).
+      // startup IPC race and a destroyed BrowserWindow).
       const shownInRenderer = tryShowInRenderer(
         { ...options, source: 'desktopDiffHost', fallback: 'external editor' },
         {
@@ -180,7 +182,7 @@ export function createDesktopDiffHost(
           language: monacoLanguageForPath(proposed.filePath ?? ''),
         } satisfies DesktopShowDiffMessage,
       );
-      if (shownInRenderer) return { original, proposed, title };
+      if (shownInRenderer) return;
 
       // External-editor fallback: write a unified patch file and open it.
       const diffBody = unifiedDiffText(originalContent, proposedContent);
@@ -225,8 +227,6 @@ export function createDesktopDiffHost(
         );
         throw error;
       }
-
-      return { original, proposed, title };
     } finally {
       settleFallbackSetup();
     }

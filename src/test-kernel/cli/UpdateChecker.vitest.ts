@@ -2,18 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildUpdateCommand,
-  checkCliUpdateAvailable,
   detectInstallMethod,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
-  formatUpdateCommand,
-  isPackageManagerInstall,
   notifyCliUpdate,
   resetCliUpdateNotifyLatchForTests,
 } from '@cli/runtime/updateChecker';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeStateStore } from '@test/support/FakePlatform';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const mocks = vi.hoisted(() => ({ readCliAmbientState: vi.fn() }));
@@ -24,128 +19,101 @@ vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
 }));
 
 describe('detectInstallMethod', () => {
-  it('recognizes pnpm, yarn, and bun global layouts', () => {
-    expect(
-      detectInstallMethod('/Users/me/Library/pnpm/global/5/node_modules/x'),
-    ).toBe('pnpm');
-    expect(detectInstallMethod('/usr/local/.pnpm/x/node_modules/x')).toBe(
-      'pnpm',
-    );
-    expect(detectInstallMethod('/Users/me/.config/yarn/global/x')).toBe('yarn');
+  it.each([
+    // npm/pnpm/yarn/bun globals all install under a node_modules tree; the
+    // manager-specific segment is what separates them.
+    {
+      path: '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist',
+      expected: 'pnpm',
+    },
+    {
+      path: '/usr/local/.pnpm/x/node_modules/@texra-ai/cli/dist',
+      expected: 'pnpm',
+    },
+    {
+      path: '/Users/me/.config/yarn/global/node_modules/@texra-ai/cli/dist',
+      expected: 'yarn',
+    },
     // Yarn Classic's global bin: dotted `.yarn` segment.
-    expect(detectInstallMethod('/Users/me/.yarn/bin/x')).toBe('yarn');
-    expect(detectInstallMethod('/Users/me/.bun/install/global/x')).toBe('bun');
-  });
-
-  it('recognizes Homebrew Cellar layouts across platforms', () => {
-    // Apple Silicon.
-    expect(
-      detectInstallMethod(
-        '/opt/homebrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
-      ),
-    ).toBe('brew');
-    // Intel macOS.
-    expect(
-      detectInstallMethod(
-        '/usr/local/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
-      ),
-    ).toBe('brew');
-    // Linuxbrew.
-    expect(
-      detectInstallMethod(
-        '/home/linuxbrew/.linuxbrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
-      ),
-    ).toBe('brew');
-  });
-
-  it('falls back to npm for the unmarked global layout', () => {
-    expect(
-      detectInstallMethod('/usr/local/lib/node_modules/@texra-ai/cli/dist'),
-    ).toBe('npm');
-  });
-
-  it('does not treat Homebrew-managed Node npm globals as brew installs', () => {
-    expect(
-      detectInstallMethod(
-        '/opt/homebrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe('npm');
-    expect(
-      detectInstallMethod(
-        '/home/linuxbrew/.linuxbrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe('npm');
-  });
-});
-
-describe('isPackageManagerInstall', () => {
-  it('treats node_modules-resident installs as managed', () => {
-    // npm/pnpm/yarn/bun globals all live under node_modules.
-    expect(
-      isPackageManagerInstall(
-        '/usr/local/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe(true);
-    expect(
-      isPackageManagerInstall(
-        '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe(true);
-  });
-
-  it('treats a Homebrew Cellar install as managed even without node_modules', () => {
-    // The tap formula installs the bundled binary under Cellar/<v>/, which need
-    // not contain a node_modules segment — the `cellar` segment marks it (same
-    // path shape detectInstallMethod recognizes as brew).
-    const brewPath =
-      '/opt/homebrew/Cellar/texra/0.38.10/libexec/dist/bin/texra.js';
-    expect(brewPath.toLowerCase().includes('node_modules')).toBe(false);
-    expect(isPackageManagerInstall(brewPath)).toBe(true);
-    expect(detectInstallMethod(brewPath)).toBe('brew');
-  });
-
-  it('is case-insensitive for Windows paths', () => {
-    expect(
-      isPackageManagerInstall(
-        'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@texra-ai\\cli\\dist\\bin\\texra.js',
-      ),
-    ).toBe(true);
-  });
-
-  it('treats a source/dev or linked checkout as unmanaged', () => {
-    // A dev build runs straight from packages/cli/dist — no node_modules
-    // segment — which is exactly why this gate is needed: detectInstallMethod
-    // would otherwise fall back to 'npm' and prompt `npm install -g`.
-    const devPath = '/Users/me/projects/texra/packages/cli/dist/bin/texra.js';
-    expect(isPackageManagerInstall(devPath)).toBe(false);
-    expect(detectInstallMethod(devPath)).toBe('npm');
-    expect(
-      isPackageManagerInstall('/Users/me/.local/share/texra/dist/bin/texra.js'),
-    ).toBe(false);
+    {
+      path: '/Users/me/.yarn/global/node_modules/@texra-ai/cli/dist',
+      expected: 'yarn',
+    },
+    {
+      path: '/Users/me/.bun/install/global/node_modules/@texra-ai/cli/dist',
+      expected: 'bun',
+    },
+    // npm's global layout carries no manager segment, so it is the fallback.
+    {
+      path: '/usr/local/lib/node_modules/@texra-ai/cli/dist',
+      expected: 'npm',
+    },
+    // Case-insensitive for Windows paths.
+    {
+      path: 'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@texra-ai\\cli\\dist\\bin\\texra.js',
+      expected: 'npm',
+    },
+    // Homebrew's tap formula installs under Cellar/<version>/ with no
+    // node_modules segment; `Cellar` alone marks it (Apple Silicon, Intel
+    // macOS, Linuxbrew).
+    {
+      path: '/opt/homebrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      expected: 'brew',
+    },
+    {
+      path: '/usr/local/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      expected: 'brew',
+    },
+    {
+      path: '/home/linuxbrew/.linuxbrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      expected: 'brew',
+    },
+    // Homebrew-managed Node hosts plain npm globals — the broader `homebrew` /
+    // `linuxbrew` prefix must not be read as a brew formula install.
+    {
+      path: '/opt/homebrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      expected: 'npm',
+    },
+    {
+      path: '/home/linuxbrew/.linuxbrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      expected: 'npm',
+    },
+    // A source/dev or linked checkout runs straight from packages/cli/dist and
+    // was installed by no package manager: an `npm install -g` prompt could
+    // not update it, so the update check has to skip entirely.
+    {
+      path: '/Users/me/projects/texra/packages/cli/dist/bin/texra.js',
+      expected: undefined,
+    },
+    {
+      path: '/Users/me/.local/share/texra/dist/bin/texra.js',
+      expected: undefined,
+    },
+  ])('classifies $path as $expected', ({ path, expected }) => {
+    expect(detectInstallMethod(path)).toBe(expected);
   });
 });
 
-describe('buildUpdateCommand / formatUpdateCommand', () => {
+describe('buildUpdateCommand', () => {
   it('produces the matching install invocation per manager', () => {
-    expect(formatUpdateCommand('npm')).toBe(
-      'npm install -g @texra-ai/cli@latest',
-    );
-    expect(formatUpdateCommand('pnpm')).toBe(
-      'pnpm add -g @texra-ai/cli@latest',
-    );
-    expect(formatUpdateCommand('yarn')).toBe(
-      'yarn global add @texra-ai/cli@latest',
-    );
-    expect(formatUpdateCommand('bun')).toBe('bun add -g @texra-ai/cli@latest');
-    // Homebrew upgrades through brew, not the npm registry; refresh the tap
-    // first so the just-detected version is actually available locally.
-    expect(formatUpdateCommand('brew')).toBe(
-      'brew update && brew upgrade texra',
-    );
     expect(buildUpdateCommand('npm')).toEqual({
       command: 'npm',
       args: ['install', '-g', '@texra-ai/cli@latest'],
     });
+    expect(buildUpdateCommand('pnpm')).toEqual({
+      command: 'pnpm',
+      args: ['add', '-g', '@texra-ai/cli@latest'],
+    });
+    expect(buildUpdateCommand('yarn')).toEqual({
+      command: 'yarn',
+      args: ['global', 'add', '@texra-ai/cli@latest'],
+    });
+    expect(buildUpdateCommand('bun')).toEqual({
+      command: 'bun',
+      args: ['add', '-g', '@texra-ai/cli@latest'],
+    });
+    // Homebrew upgrades through brew, not the npm registry; refresh the tap
+    // first so the just-detected version is actually available locally.
     expect(buildUpdateCommand('brew')).toEqual({
       command: 'brew',
       args: ['update', '&&', 'brew', 'upgrade', 'texra'],
@@ -301,220 +269,5 @@ describe('notifyCliUpdate', () => {
     await notifyCliUpdate(context);
 
     expect(mocks.readCliAmbientState).toHaveBeenCalledTimes(2);
-  });
-});
-
-describe('checkCliUpdateAvailable', () => {
-  const currentVersion = '0.39.3';
-  const latestVersion = '0.40.0';
-  const noopNotify = async () => {};
-
-  function lastCheckedAt(globalState: FakeStateStore): unknown {
-    return globalState.get(GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT);
-  }
-
-  function recordingNotify(notified: string[]) {
-    return async (version: string) => {
-      notified.push(version);
-    };
-  }
-
-  function checkAvailable(options: {
-    globalState: FakeStateStore;
-    currentVersion?: string;
-    now?: () => number;
-    fetchLatest?: () => Promise<{
-      version: string | undefined;
-      refreshed: boolean;
-    }>;
-    notify?: (version: string) => Promise<void>;
-  }): Promise<string | undefined> {
-    return checkCliUpdateAvailable({
-      currentVersion: options.currentVersion ?? currentVersion,
-      globalState: options.globalState,
-      now: options.now,
-      fetchLatest:
-        options.fetchLatest ??
-        (async () => ({ version: latestVersion, refreshed: true })),
-      notify: options.notify ?? noopNotify,
-    });
-  }
-
-  it('checks on a first launch (no prior lastCheckedAt) and reports a newer version', async () => {
-    const globalState = new FakeStateStore();
-    let fetchCalls = 0;
-    const notified: string[] = [];
-
-    const latest = await checkAvailable({
-      globalState,
-      fetchLatest: async () => {
-        fetchCalls += 1;
-        return { version: latestVersion, refreshed: true };
-      },
-      notify: recordingNotify(notified),
-    });
-
-    expect(fetchCalls).toBe(1);
-    expect(latest).toBe(latestVersion);
-    expect(notified).toEqual([latestVersion]);
-  });
-
-  it('returns undefined and does not notify when the fetched version is not newer', async () => {
-    const globalState = new FakeStateStore();
-    const notified: string[] = [];
-
-    const latest = await checkAvailable({
-      globalState,
-      currentVersion: latestVersion,
-      notify: recordingNotify(notified),
-    });
-
-    expect(latest).toBeUndefined();
-    expect(notified).toEqual([]);
-    // The check itself completed, so the day's stamp is still persisted.
-    expect(lastCheckedAt(globalState)).toBeDefined();
-  });
-
-  it('throttles repeated checks within the same day', async () => {
-    const globalState = new FakeStateStore();
-    let fetchCalls = 0;
-    // A realistic epoch timestamp: on the very first check ever,
-    // `lastCheckedAt` defaults to 0, and this must be far enough past that
-    // default to *not* be throttled (matching a real first launch).
-    let nowMs = Date.UTC(2026, 0, 1);
-
-    const run = () =>
-      checkAvailable({
-        globalState,
-        now: () => nowMs,
-        fetchLatest: async () => {
-          fetchCalls += 1;
-          return { version: latestVersion, refreshed: true };
-        },
-      });
-
-    await run();
-    expect(fetchCalls).toBe(1);
-
-    // Same process/day, ten minutes later: still throttled — no network hit.
-    nowMs += 10 * 60 * 1000;
-    await run();
-    expect(fetchCalls).toBe(1);
-
-    // A full day later: throttle window has elapsed.
-    nowMs += 24 * 60 * 60 * 1000;
-    await run();
-    expect(fetchCalls).toBe(2);
-  });
-
-  it('does not persist the throttle stamp on a failed fetch, so the next launch retries', async () => {
-    const globalState = new FakeStateStore();
-    let fetchCalls = 0;
-    const nowMs = Date.UTC(2026, 0, 1);
-
-    await checkAvailable({
-      globalState,
-      now: () => nowMs,
-      fetchLatest: async () => {
-        fetchCalls += 1;
-        // simulates a network/registry failure
-        return { version: undefined, refreshed: false };
-      },
-    });
-
-    expect(fetchCalls).toBe(1);
-    expect(lastCheckedAt(globalState)).toBeUndefined();
-
-    // Immediately "relaunching" (same day) must retry rather than being
-    // throttled for a full 24h off the back of the earlier failure.
-    await checkAvailable({
-      globalState,
-      now: () => nowMs + 1000,
-      fetchLatest: async () => {
-        fetchCalls += 1;
-        return { version: latestVersion, refreshed: true };
-      },
-    });
-
-    expect(fetchCalls).toBe(2);
-    expect(lastCheckedAt(globalState)).toBe(nowMs + 1000);
-  });
-
-  it('does not persist the throttle stamp on a stale (unrefreshed) version, but still offers it', async () => {
-    // #8223: a failed `brew update` that still yields the locally cached
-    // formula version must not count as a completed check — the next launch
-    // retries the tap refresh instead of going silent for 24h.
-    const globalState = new FakeStateStore();
-    const nowMs = Date.UTC(2026, 0, 1);
-    const notified: string[] = [];
-
-    const latest = await checkAvailable({
-      globalState,
-      now: () => nowMs,
-      fetchLatest: async () => ({ version: latestVersion, refreshed: false }),
-      notify: recordingNotify(notified),
-    });
-
-    expect(latest).toBe(latestVersion);
-    expect(notified).toEqual([latestVersion]);
-    expect(lastCheckedAt(globalState)).toBeUndefined();
-  });
-
-  it('does not persist the throttle stamp when the notify prompt throws', async () => {
-    // #8224: the stamp must be written only after the user actually saw the
-    // notice — a prompt killed mid-way (closed stdin) leaves the attempt
-    // un-stamped so the next launch re-checks.
-    const globalState = new FakeStateStore();
-    const nowMs = Date.UTC(2026, 0, 1);
-
-    await expect(
-      checkAvailable({
-        globalState,
-        now: () => nowMs,
-        notify: async () => {
-          throw new Error('stdin closed');
-        },
-      }),
-    ).rejects.toThrow('stdin closed');
-
-    expect(lastCheckedAt(globalState)).toBeUndefined();
-  });
-
-  it('still reports the update when the throttle stamp write fails', async () => {
-    // A readable-but-unwritable global state file lets `JsonStore.open`
-    // succeed while `update` rejects. The stamp is best-effort: its failure
-    // must not reject the completed attempt (which would cancel an update the
-    // user already accepted via the notify prompt) — the next launch just
-    // re-checks a day early.
-    const globalState = new FakeStateStore();
-    vi.spyOn(globalState, 'update').mockRejectedValue(
-      new Error('EACCES: permission denied'),
-    );
-    const notified: string[] = [];
-
-    const latest = await checkAvailable({
-      globalState,
-      notify: recordingNotify(notified),
-    });
-
-    expect(latest).toBe(latestVersion);
-    expect(notified).toEqual([latestVersion]);
-  });
-
-  it('persists the throttle stamp only after notify completes', async () => {
-    const globalState = new FakeStateStore();
-    const nowMs = Date.UTC(2026, 0, 1);
-    let stampAtNotifyTime: unknown = 'unread';
-
-    await checkAvailable({
-      globalState,
-      now: () => nowMs,
-      notify: async () => {
-        stampAtNotifyTime = lastCheckedAt(globalState);
-      },
-    });
-
-    expect(stampAtNotifyTime).toBeUndefined();
-    expect(lastCheckedAt(globalState)).toBe(nowMs);
   });
 });

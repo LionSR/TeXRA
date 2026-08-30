@@ -65,7 +65,7 @@ const API_MAX_IMAGE_DIMENSION = 8000;
 /** Resize an image if it exceeds the maximum dimensions. Returns the original path if no resize needed. */
 async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   const maxDimension = Math.min(
-    getConfig<number>('texra.maxImageDimension', 2000),
+    getConfig<number>('texra.maxImageDimension'),
     API_MAX_IMAGE_DIMENSION,
   );
   const { width, height } = getImageDimensions(imagePath);
@@ -227,6 +227,13 @@ export async function processPdf2Png(
     const tempDir = await createTexraTempDir('texra-pdf-conversion-');
     try {
       const pagesToConvert = Math.min(pageCount, PDF_MAX_PAGES);
+      if (pagesToConvert < pageCount) {
+        // The cap protects against pathological PDFs, but dropping pages
+        // silently lets a model reason about a paper it has only part of.
+        log.warn(
+          `Rasterizing only the first ${pagesToConvert} of ${pageCount} pages from ${pdfPath}; the rest are not attached.`,
+        );
+      }
       const base64Images: string[] = [];
       for (let pageNum = 1; pageNum <= pagesToConvert; pageNum++) {
         base64Images.push(

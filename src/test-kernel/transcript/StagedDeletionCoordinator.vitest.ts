@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { StreamTabId } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
@@ -29,7 +29,7 @@ import { StorageFS } from '@utils/files/storageFS';
  * StreamSnapshotStore.vitest.ts; these cases pin the port itself.
  */
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const PLAN_KEY = 'workPlan';
 
@@ -67,9 +67,6 @@ function createFakeHost(): FakeHost {
       calls.push('bumpStreamVersion');
     },
     seedChain: () => undefined,
-    invalidateKvHandles: () => {
-      calls.push('invalidateKvHandles');
-    },
     evict: () => {
       calls.push('evict');
     },
@@ -103,10 +100,6 @@ describe('StagedDeletionCoordinator', () => {
   setupPlatform(() =>
     createTempDirPlatform('texra-staged-deletion-', tempDirs),
   );
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('cancels and invalidates queued writes before the staging rename', async () => {
     const { calls, coordinator } = setupCoordinator();
@@ -214,8 +207,8 @@ describe('StagedDeletionCoordinator', () => {
     );
   });
 
-  it('reconcile restores a crash-left staged directory and invalidates cached KV handles', async () => {
-    const { calls, coordinator } = setupCoordinator();
+  it('reconcile restores a crash-left staged directory', async () => {
+    const { coordinator } = setupCoordinator();
     const stagedDir = stagedStreamDataDir(STREAM);
     await StorageFS.ensureDir(stagedDir);
     await StorageFS.write(
@@ -230,8 +223,6 @@ describe('StagedDeletionCoordinator', () => {
       pendingCleanup: [],
       discarded: [],
     });
-    // The store cached a KV handle for the directory that just moved.
-    expect(calls).toContain('invalidateKvHandles');
     expect(
       await StorageFS.readJson(
         path.join(streamDataDir(STREAM), `${PLAN_KEY}.json`),

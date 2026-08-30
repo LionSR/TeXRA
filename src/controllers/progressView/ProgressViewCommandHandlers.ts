@@ -21,6 +21,7 @@ import { AgentCategory, isPlainAgentIdentity } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   isApprovalBypassedForStream,
+  isBashApprovalBypassedForStream,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
 } from '@tools/approval';
@@ -78,7 +79,14 @@ async function resolveNativeAgentRun(
     return null;
   }
   const { config } = metadata;
-  if (!config) return null;
+  if (!config) {
+    // Say so: the doc above promises a user-facing refusal for both halves of
+    // this guard, and a button the user just clicked must not go quiet.
+    await showInfo(
+      `This run's configuration was not saved, so it cannot be ${action}.`,
+    );
+    return null;
+  }
   // The config guard above guarantees the resolved metadata carries a config,
   // so the return type narrows `config` to defined for callers.
   return { ...metadata, config };
@@ -190,8 +198,12 @@ interface ProgressViewFollowUpCommandActions {
    * extension omits it so the module default applies.
    */
   session?: SessionHandle;
-  /** Admission ack back to the composer that sent the draft. */
-  acknowledge(stream: StreamTabId, accepted: boolean): void;
+  /**
+   * Capture the admission-result route before image persistence yields. The
+   * extension has two progress surfaces, so resolving through whichever view
+   * is active later can clear a different composer's draft.
+   */
+  captureAdmissionReporter(): (stream: StreamTabId, accepted: boolean) => void;
   reportImageSaveError(image: ProgressViewFollowUpImage, error: unknown): void;
 }
 
@@ -299,6 +311,19 @@ export function createProgressViewCommandHandlers(
     );
   };
 
+  // AUTO-TASK is the complete grant. Revoking one per-kind constituent must
+  // drop only the composite flag so the other kind stays granted.
+  const dropCompleteGrantIfRevokingKind = (
+    stream: StreamTabId,
+    enabled: boolean,
+  ): void => {
+    if (enabled) return;
+    const { approvals } = session ?? currentSession();
+    if (approvals.proposal.isBypassed(stream)) {
+      approvals.proposal.setBypass(stream, false);
+    }
+  };
+
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream, data.requestId),
@@ -335,6 +360,7 @@ export function createProgressViewCommandHandlers(
       workflowFileActions.openLabel(data.label),
 
     [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
+      const acknowledge = followUp.captureAdmissionReporter();
       const mediaFiles = await saveFollowUpImages(
         data.images ?? [],
         followUp.reportImageSaveError,
@@ -347,28 +373,38 @@ export function createProgressViewCommandHandlers(
           text: data.text,
           ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
         },
-        acknowledge: (accepted) => followUp.acknowledge(data.stream, accepted),
+        acknowledge: (accepted) => acknowledge(data.stream, accepted),
         showInfo,
       });
     },
 
-    // The shield is the explicit both-kinds preset: one click sets file edits
-    // and shell commands together, and its label says so. Its on/off reading
-    // comes from the tool-edit state.
+    // Header AUTO-EDIT / AUTO-BASH toggles are independent: flipping one
+    // kind must not take the other with it. AUTO-TASK is the complete-grant
+    // control below.
     [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
       const enabled = !isApprovalBypassedForStream(data.stream, session);
       setToolEditApprovalSessionBypass(data.stream, enabled, { session });
-      setBashApprovalSessionBypass(data.stream, enabled, { session });
+      dropCompleteGrantIfRevokingKind(data.stream, enabled);
       await showInfo(
         enabled
-          ? 'File edits and shell commands will be auto-approved for this run.'
-          : 'File edits and shell commands will require approval for this run.',
+          ? 'File edits will be auto-approved for this run.'
+          : 'File edits will require approval for this run.',
+      );
+    },
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS]: async (data) => {
+      const enabled = !isBashApprovalBypassedForStream(data.stream, session);
+      setBashApprovalSessionBypass(data.stream, enabled, { session });
+      dropCompleteGrantIfRevokingKind(data.stream, enabled);
+      await showInfo(
+        enabled
+          ? 'Shell commands will be auto-approved for this run.'
+          : 'Shell commands will require approval for this run.',
       );
     },
     // Inline prompt button: force the prompt's own kind ON and nothing else.
     // Approving always from an edit prompt leaves shell commands gated, and
     // vice versa. Set-on (not toggle) keeps it from inverting a grant the
-    // shield or an inherited delegated child already made.
+    // header toggle or an inherited delegated child already made.
     [PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS]: async (data) => {
       if (data.kind === PERMISSION_KIND.TOOL_EDIT) {
         setToolEditApprovalSessionBypass(data.stream, true, { session });
@@ -623,7 +659,14 @@ export function createProgressViewSecondTierHandlers(
     [CMD.POLISH_FOLLOW_UP]: async (data) => {
       await deps.preload?.(data.stream);
       const config = deps.getRunMetadata(data.stream).config;
-      if (!config) return;
+      if (!config) {
+        // Same port the polish failures use, rather than a silent return.
+        await deps.onPolishError(
+          data.stream,
+          new Error('This run has no saved configuration to polish against.'),
+        );
+        return;
+      }
       try {
         deps.onPolishProgress?.('Sending to AI for polishing...');
         const result = await deps.followUpPolish.polishFollowUp({

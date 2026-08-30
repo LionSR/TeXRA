@@ -50,12 +50,9 @@ export class ToolTimer extends LitElement {
 
   private _update(): void {
     if (!this.startTime) return;
-    const elapsed = Date.now() - this.startTime;
-    const formatted = formatDuration(elapsed);
-    // Only trigger re-render when the display string actually changes
-    if (formatted !== this._elapsed) {
-      this._elapsed = formatted;
-    }
+    // Lit's default `hasChanged` is `!==`, so an unchanged string schedules
+    // no update on its own.
+    this._elapsed = formatDuration(Date.now() - this.startTime);
   }
 
   override render(): TemplateResult | typeof nothing {

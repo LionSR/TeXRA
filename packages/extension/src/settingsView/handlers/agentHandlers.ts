@@ -17,11 +17,9 @@ import {
 } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import {
-  applySettingsTeamRoster,
-  type SettingsTeamAvailabilityPrompt,
-} from '@controllers/settingsView/SettingsTeamRosterController';
+import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
@@ -45,6 +43,7 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import {
@@ -101,7 +100,7 @@ export class AgentHandlers {
         await showLoggedMessage(this.ctx.channel, message);
       },
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: (_command, failureMessage, action) =>
+      run: (failureMessage, action) =>
         withHandlerErrorHandling(this.ctx, failureMessage, action),
     });
   }
@@ -291,6 +290,7 @@ export class AgentHandlers {
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -320,8 +320,15 @@ export class AgentHandlers {
                 void vscode.window.showInformationMessage(message);
                 return Promise.resolve();
               },
-              showErrorMessage: async (message) => {
-                await showLoggedMessage(this.ctx.channel, message);
+              showErrorMessage: (message) => {
+                void showLoggedMessage(this.ctx.channel, message).catch(
+                  (err: unknown) => {
+                    this.ctx.log.warn(
+                      `Error notification failed after handoff: ${toErrorMessage(err)}`,
+                    );
+                  },
+                );
+                return Promise.resolve();
               },
             },
             refreshAfterApply: (selectedToolUseAgent) =>
@@ -350,10 +357,7 @@ export class AgentHandlers {
 
         await this.catalogController.saveCurrentPreset(name);
 
-        await Promise.all([
-          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-          this.refreshAfterAgentMutation(undefined, true),
-        ]);
+        await this.refreshAfterAgentMutation(undefined, true);
 
         void vscode.window.showInformationMessage(
           `Saved team "${name.trim()}"`,
@@ -380,23 +384,25 @@ export class AgentHandlers {
 
         await this.catalogController.deleteCustomPreset(data.presetId);
 
-        await Promise.all([
-          this.ctx.withActiveWebview((w) => this.sendAgentModePresets(w)),
-          this.refreshAfterAgentMutation(undefined, true),
-        ]);
+        await this.refreshAfterAgentMutation(undefined, true);
       },
     );
   }
 
   // ── Private helpers ──
 
-  private async chooseTeamAvailability(prompt: SettingsTeamAvailabilityPrompt) {
+  private async chooseTeamAvailability(prompt: TeamAvailabilityPrompt) {
+    const items = prompt.actions.map((action) => ({
+      title: action.label,
+      isCloseAffordance: action.choice === 'cancel',
+    }));
     const choice = await vscode.window.showWarningMessage(
       prompt.message,
       { modal: true },
-      ...prompt.actions.map((action) => action.label),
+      ...items,
     );
-    return prompt.actions.find((action) => action.label === choice)?.choice;
+    return prompt.actions.find((action) => action.label === choice?.title)
+      ?.choice;
   }
 
   private async createAgentFromTemplate(

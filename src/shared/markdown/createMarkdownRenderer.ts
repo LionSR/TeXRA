@@ -30,13 +30,22 @@ interface MarkdownRendererConfig {
   readonly configure?: (md: MarkdownItInstance) => void;
 }
 
+/**
+ * Parser flags every renderer in the repo is built with. Exported so the
+ * beg_end probe in `createMarkdownProcessor` parses under the same flags as
+ * the renderer whose output it is protecting.
+ */
+export const MARKDOWN_PARSER_OPTIONS = Object.freeze({
+  breaks: false,
+  linkify: true,
+  html: false,
+});
+
 export function createMarkdownRenderer(
   config: MarkdownRendererConfig,
 ): MarkdownItInstance {
   let md = new MarkdownIt({
-    breaks: false,
-    linkify: true,
-    html: false,
+    ...MARKDOWN_PARSER_OPTIONS,
     highlight: config.highlight,
   });
   md.linkify.set({ fuzzyLink: true, urlAuth: true });

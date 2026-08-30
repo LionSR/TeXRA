@@ -63,7 +63,7 @@ interface MainViewIpcModule {
       getAuthStatus?: () => Promise<{ authenticated: boolean }>;
       loadStartupOptions?: () => Promise<{
         agentOptions: { workflow: unknown[]; toolUse: unknown[] };
-        modelOptionsByCategory: { workflow: unknown[]; toolUse: unknown[] };
+        modelOptions: unknown[];
       }>;
       logs: {
         readLog(): {
@@ -207,10 +207,7 @@ function createMainViewCommandCapabilities() {
 function emptyStartupOptionsLoader(teamOptions?: unknown[]) {
   return async () => ({
     agentOptions: { workflow: [] as unknown[], toolUse: [] as unknown[] },
-    modelOptionsByCategory: {
-      workflow: [] as unknown[],
-      toolUse: [] as unknown[],
-    },
+    modelOptions: [] as unknown[],
     ...(teamOptions === undefined ? {} : { teamOptions }),
   });
 }

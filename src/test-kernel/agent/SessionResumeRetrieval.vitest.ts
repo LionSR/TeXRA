@@ -148,28 +148,23 @@ async function retrieveToolUseResume(
 }
 
 // Most flow-record fixtures below persist a fresh run/workspace snapshot
-// with only the current model and (occasionally) a transient override
-// varying between cases.
+// with only the current model and (occasionally) an override varying
+// between cases.
 function defaultStateSlices(
   model = 'gpt54',
-  transient: Record<string, string> = {},
+  overrides: Record<string, string> = {},
 ): StateSlicesSnapshot {
   return {
     runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
     workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    userChannels: {
-      input: Object.freeze({ MODEL: model }),
-      transient,
-    },
+    userChannels: { MODEL: model, ...overrides },
   };
 }
 
 function createTaggedModelCell(
   compatibilityKey: ModelHandlerCompatibilityKey,
   modelId: string,
-  handler: Record<string, unknown> = {
-    extractAssistantText: () => undefined,
-  },
+  handler: Record<string, unknown> = {},
 ): RunToolUseFlowInput['modelCell'] {
   // ModelFactory installs this non-enumerable tag on every active handler.
   Object.defineProperty(handler, '__texraModelHandlerCompatibilityKey', {
@@ -273,7 +268,6 @@ function buildResponseResumeData(
 ): ToolUseResumeData {
   const shared = {
     messages: [{ role: 'assistant', content: response }],
-    lastResponse: response,
     continuationGenerationId: CONTINUATION_GENERATION_ID,
     shouldSkipCycle: false,
     stateSlices: defaultStateSlices(),
@@ -318,8 +312,7 @@ async function runPersistedFlow(
   const session = options.session ?? createTestSession();
   const config = options.config ?? resume?.agentConfig ?? CONFIG;
   const userVarChannels = resume?.shared.stateSlices.userChannels ?? {
-    input: Object.freeze({ MODEL: config.model }),
-    transient: {},
+    MODEL: config.model,
   };
   const abortController = new AbortController();
   const runScope = createRunScope({
@@ -402,7 +395,7 @@ async function runResumedFlowToWaiting(
 function abortOnFirstFlowStepWrite(
   store: ReturnType<typeof getExecutionStore>,
   getFlowContext: () => ToolUseSetupContext | undefined,
-  options: { onlyStepWrite?: boolean; followUpText?: string } = {},
+  options: { onlyStepWrite?: boolean; onFlowStepWrite?: () => void } = {},
 ): { writeSpy: ReturnType<typeof vi.spyOn>; abortError: DOMException } {
   const abortError = createAbortError();
   const realWrite = store.write.bind(store);
@@ -419,11 +412,7 @@ function abortOnFirstFlowStepWrite(
         : isCursorWrite;
       if (!fired && isTargetWrite) {
         fired = true;
-        if (options.followUpText) {
-          getFlowContext()?.session.appendFollowUp({
-            text: options.followUpText,
-          });
-        }
+        if (getFlowContext()) options.onFlowStepWrite?.();
         getFlowContext()?.interrupt();
         throw abortError;
       }
@@ -525,16 +514,12 @@ describe('retrieveSessionResumeData', () => {
     });
   });
 
-  it('retrieves a workflow record with the current conversation field', async () => {
-    const executionId = 'workflow-current-conversation' as ExecutionId;
-    const streamId =
-      'reflection@gpt54#workflow-current-conversation' as StreamTabId;
+  it('retrieves a workflow record in the current shape', async () => {
+    const executionId = 'workflow-current-shape' as ExecutionId;
+    const streamId = 'reflection@gpt54#workflow-current-shape' as StreamTabId;
     await writeFlowRecord(
       executionId,
-      reflectionFlowShared({
-        currentRound: 1,
-        conversation: [{ role: 'user', content: 'Continue.' }],
-      }),
+      reflectionFlowShared({ currentRound: 1 }),
     );
 
     await expect(
@@ -573,7 +558,6 @@ describe('retrieveSessionResumeData', () => {
         continuationGenerationId,
         structured: { title: 'Durable result' },
       }),
-      changed: false,
     });
   });
 
@@ -585,7 +569,7 @@ describe('retrieveSessionResumeData', () => {
       stateSlices: defaultStateSlices('gpt54', { MODEL: 'gpt55' }),
     });
 
-    expect(result).toMatchObject({ success: true, changed: false });
+    expect(result).toMatchObject({ success: true });
     if (!result.success) return;
     expect(result.data).not.toHaveProperty('modelId');
   });
@@ -603,7 +587,6 @@ describe('retrieveSessionResumeData', () => {
     expect(result).toMatchObject({
       success: true,
       data: { continuationGenerationId, modelId: 'gpt55' },
-      changed: false,
     });
   });
 
@@ -665,7 +648,7 @@ describe('retrieveSessionResumeData', () => {
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: { input: Object.freeze({}), transient: {} },
+        userChannels: {},
       },
     });
 
@@ -1121,10 +1104,12 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       await expect(
         runPersistedFlow(executionId, streamId, snapshot, {
           attachment: {
-            attach: (context) => {
-              context.session.appendFollowUp({
-                text: 'queued before recovery',
-              });
+            attach: () => {
+              session.followUps.submit(
+                streamId,
+                { text: 'queued before recovery' },
+                'live_owner',
+              );
             },
           },
           session,
@@ -1183,7 +1168,6 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
         message: 'provider failed after partial output',
         userRetryable: true,
       },
-      lastResponse: 'partial assistant response',
     };
     const snapshot: ToolUseResumeData = {
       ...base,
@@ -1283,6 +1267,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     ).rejects.toThrow(
       'Structured-output run completed without calling submit_output.',
     );
+
+    // #11314: this exit preserves the record, so the cursor must have been
+    // rewound before the throw. A preserved record still sitting on the
+    // terminal cursor fails `ResumableFlowRecordSchema`'s `nextNodeId !== null`
+    // refinement, which makes it unresumable garbage only `history delete` can
+    // clear -- strictly worse than not keeping it at all.
+    const persisted = await readFlowRecord(executionId);
+    expect(persisted?.cursor.nextNodeId).not.toBeNull();
   });
 
   it.each([
@@ -1370,35 +1362,171 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     }
   });
 
-  it('cleans up a fresh launch cancelled before persistence recovery', async () => {
-    const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
-    const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
-    const store = getExecutionStore(executionId);
-    const session = createTestSession();
-    const readSpy = vi.spyOn(store, 'read');
-    const deleteSpy = vi.spyOn(store, 'delete');
-    const releaseSpy = vi.spyOn(session.followUps, 'release');
-    const dispositions: Array<'preserve' | 'delete'> = [];
+  it('distinguishes reused and fresh startup cancellation checkpoint and queue disposition', async () => {
+    {
+      const executionId = 'abc-reused-cancel-setup' as ExecutionId;
+      const streamId = 'chat@gpt54#abc-reused-cancel-setup' as StreamTabId;
+      const storedShared = activeHandlerShared();
+      await writeFlowRecord(executionId, storedShared);
+      const store = getExecutionStore(executionId);
+      const deleteSpy = vi.spyOn(store, 'delete');
+      const session = createTestSession();
+      const releaseSpy = vi.spyOn(session.followUps, 'release');
+      const realRead = store.read.bind(store);
+      let flowContext: ToolUseSetupContext | undefined;
+      const readSpy = vi
+        .spyOn(store, 'read')
+        .mockImplementation(async (key) => {
+          const record = await realRead(key);
+          flowContext?.interrupt();
+          return record;
+        });
+      const dispositions: Array<'preserve' | 'delete'> = [];
 
-    try {
-      const result = await runPersistedFlow(executionId, streamId, undefined, {
-        attachment: { attach: (flowContext) => flowContext.interrupt() },
-        session,
-        onFlowRecordDisposition: (value) => dispositions.push(value),
+      try {
+        const result = await runPersistedFlow(
+          executionId,
+          streamId,
+          undefined,
+          {
+            attachment: {
+              attach: (context) => {
+                flowContext = context;
+                session.followUps.submit(
+                  streamId,
+                  { text: 'reused recovery input' },
+                  'live_owner',
+                );
+              },
+            },
+            session,
+            deferDispose: true,
+            onFlowRecordDisposition: (value) => dispositions.push(value),
+          },
+        );
+
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+        expect(dispositions).toEqual(['preserve']);
+        expect(releaseSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ streamId, kind: 'flow' }),
+          'recoverable',
+        );
+        expect(await readFlowRecord(executionId)).toMatchObject({
+          shared: storedShared,
+        });
+        expect(session.followUps.getAll(streamId)).toEqual([
+          'reused recovery input',
+        ]);
+      } finally {
+        readSpy.mockRestore();
+        deleteSpy.mockRestore();
+        releaseSpy.mockRestore();
+        session.dispose();
+      }
+    }
+
+    {
+      const executionId = 'abc-reused-cancel-attachment' as ExecutionId;
+      const streamId = 'chat@gpt54#abc-reused-cancel-attachment' as StreamTabId;
+      const storedShared = activeHandlerShared();
+      await writeFlowRecord(executionId, storedShared);
+      const session = createTestSession();
+      const releaseSpy = vi.spyOn(session.followUps, 'release');
+      const dispositions: Array<'preserve' | 'delete'> = [];
+
+      try {
+        const result = await runPersistedFlow(
+          executionId,
+          streamId,
+          undefined,
+          {
+            attachment: {
+              attach: (flowContext) => {
+                session.followUps.submit(
+                  streamId,
+                  { text: 'reused attachment input' },
+                  'live_owner',
+                );
+                flowContext.interrupt();
+              },
+            },
+            session,
+            deferDispose: true,
+            onFlowRecordDisposition: (value) => dispositions.push(value),
+          },
+        );
+
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(dispositions).toEqual(['preserve']);
+        expect(releaseSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ streamId, kind: 'flow' }),
+          'recoverable',
+        );
+        expect(session.followUps.getAll(streamId)).toEqual([
+          'reused attachment input',
+        ]);
+        expect(await readFlowRecord(executionId)).toMatchObject({
+          shared: storedShared,
+        });
+      } finally {
+        releaseSpy.mockRestore();
+        session.dispose();
+      }
+    }
+
+    {
+      const executionId = 'abc-fresh-cancel-setup' as ExecutionId;
+      const streamId = 'chat@gpt54#abc-fresh-cancel-setup' as StreamTabId;
+      const store = getExecutionStore(executionId);
+      const session = createTestSession();
+      let flowContext: ToolUseSetupContext | undefined;
+      const readSpy = vi.spyOn(store, 'read').mockImplementation(async () => {
+        flowContext?.interrupt();
+        return undefined;
       });
+      const deleteSpy = vi.spyOn(store, 'delete');
+      const releaseSpy = vi.spyOn(session.followUps, 'release');
+      const dispositions: Array<'preserve' | 'delete'> = [];
 
-      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      expect(readSpy).not.toHaveBeenCalled();
-      expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
-      expect(dispositions).toEqual(['delete']);
-      expect(releaseSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ streamId, kind: 'flow' }),
-        'terminal',
-      );
-    } finally {
-      readSpy.mockRestore();
-      deleteSpy.mockRestore();
-      releaseSpy.mockRestore();
+      try {
+        const result = await runPersistedFlow(
+          executionId,
+          streamId,
+          undefined,
+          {
+            attachment: {
+              attach: (context) => {
+                flowContext = context;
+                session.followUps.submit(
+                  streamId,
+                  { text: 'fresh recovery input' },
+                  'live_owner',
+                );
+              },
+            },
+            session,
+            deferDispose: true,
+            onFlowRecordDisposition: (value) => dispositions.push(value),
+          },
+        );
+
+        expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+        expect(readSpy).toHaveBeenCalledOnce();
+        expect(deleteSpy).not.toHaveBeenCalledWith(flowKey(executionId));
+        expect(dispositions).toEqual(['delete']);
+        expect(releaseSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ streamId, kind: 'flow' }),
+          'terminal',
+        );
+        expect(await readFlowRecord(executionId)).toBeUndefined();
+        expect(session.followUps.getAll(streamId)).toEqual([]);
+      } finally {
+        readSpy.mockRestore();
+        deleteSpy.mockRestore();
+        releaseSpy.mockRestore();
+        session.dispose();
+      }
     }
   });
 
@@ -1488,7 +1616,11 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       const result = await runPersistedFlow(executionId, streamId, snapshot, {
         attachment: {
           attach: (context) => {
-            context.session.appendFollowUp({ text: 'queued during resume' });
+            session.followUps.submit(
+              streamId,
+              { text: 'queued during resume' },
+              'live_owner',
+            );
             context.interrupt();
           },
         },
@@ -1525,7 +1657,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
       store,
       () => flowContext,
-      { followUpText: 'late active-turn input' },
+      {
+        onFlowStepWrite: () =>
+          session.followUps.submit(
+            streamId,
+            { text: 'late active-turn input' },
+            'live_owner',
+          ),
+      },
     );
 
     try {
@@ -1572,7 +1711,14 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
     const { writeSpy, abortError } = abortOnFirstFlowStepWrite(
       store,
       () => flowContext,
-      { followUpText: 'queued for next turn' },
+      {
+        onFlowStepWrite: () =>
+          session.followUps.submit(
+            streamId,
+            { text: 'queued for next turn' },
+            'live_owner',
+          ),
+      },
     );
 
     try {
@@ -1679,7 +1825,7 @@ describe('runToolUseFlow consumes the resume boundary instead of re-parsing', ()
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: { todos: [], plan: null },
-        userChannels: { input: Object.freeze({}), transient: {} },
+        userChannels: {},
       },
     });
 

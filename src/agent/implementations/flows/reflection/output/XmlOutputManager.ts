@@ -7,7 +7,11 @@ import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
-import { OUTPUT_DOCUMENT_TAG, OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
+import {
+  OUTPUT_DOCUMENT_TAG,
+  OUTPUT_DOCUMENTS_TAG,
+  SCRATCHPAD_TAG,
+} from '@shared/schemas';
 import { getExtractedDocOutputFileName } from '@utils/files/outputFileUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
@@ -62,7 +66,6 @@ const XML_PARSER_OPTIONS = {
 
 /** Human-readable descriptions for document extraction methods */
 const EXTRACTION_METHOD_MESSAGES: Record<string, string> = {
-  simple: 'using fallback method',
   latex_document: 'from legacy <latex_document> tag',
   latex: 'from \\documentclass block',
 };
@@ -147,11 +150,8 @@ export class XmlOutputManager {
     });
   }
 
-  private collectLatexFencedBlocks(
-    outputContent: string,
-    thinkingTag: string,
-  ): string[] {
-    return collectLatexFencedBlocksFromResponse(outputContent, thinkingTag, {
+  private collectLatexFencedBlocks(outputContent: string): string[] {
+    return collectLatexFencedBlocksFromResponse(outputContent, {
       onUnclosedFence: (lineCount) => {
         debugInternal(
           this.logger,
@@ -173,10 +173,9 @@ export class XmlOutputManager {
     outputContent: string,
     outputLocation: FileLocation,
     round: number,
-    thinkingTag: string,
     baseFiles: readonly FileLocation[],
   ): Promise<NamedDocument[] | null> {
-    const blocks = this.collectLatexFencedBlocks(outputContent, thinkingTag);
+    const blocks = this.collectLatexFencedBlocks(outputContent);
     if (blocks.length === 0) return null;
 
     const inputFiles = this.agentConfig.inputFiles;
@@ -228,7 +227,6 @@ export class XmlOutputManager {
   async splitScratchpadMultipleOutputXml(
     outputLocation: FileLocation,
     round: number,
-    thinkingTag: string = 'scratchpad',
     baseFiles: readonly FileLocation[] = [],
   ): Promise<OutputFileInfo[]> {
     const rawOutputContent = await AbsoluteFS.read(outputLocation.absolutePath);
@@ -241,7 +239,7 @@ export class XmlOutputManager {
     // parser treats thinking/document bodies as opaque text); the header and
     // similarity tiers below read the raw response instead.
     const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
-      thinkingTag,
+      SCRATCHPAD_TAG,
       OUTPUT_DOCUMENT_TAG,
     ]);
 
@@ -287,13 +285,11 @@ export class XmlOutputManager {
 
     if (!documents) {
       documents = extractFilenameHeaderDocuments(rawOutputContent, {
-        thinkingTag,
         roundDir: getFileDirectory(outputLocation),
         labelFiles: expectedFiles,
         synthesisName: soleExpectedFile,
         coalesceRepeatedName:
           this.agentConfig.outputFiles.length === 1 ? soleExpectedFile : null,
-        wrapperTag: OUTPUT_DOCUMENTS_TAG,
       });
       if (documents) {
         logInternal(
@@ -331,10 +327,7 @@ export class XmlOutputManager {
       // because it strips the thinking tag first — a scratchpad that drafts
       // inside a ```latex fence would otherwise be written to the user's file
       // as if it were the answer.
-      const fencedBlocks = this.collectLatexFencedBlocks(
-        rawOutputContent,
-        thinkingTag,
-      );
+      const fencedBlocks = this.collectLatexFencedBlocks(rawOutputContent);
       // A single-artifact agent (ocr/paper2slide: one declared output, many
       // inputs) emits one fence per input, so all of them belong to the
       // output. An edit agent reusing its input name emits the revised
@@ -392,7 +385,6 @@ export class XmlOutputManager {
         rawOutputContent,
         outputLocation,
         round,
-        thinkingTag,
         baseFiles,
       );
     }

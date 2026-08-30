@@ -9,11 +9,7 @@ import { createLog } from '@logger/logUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { SUPABASE_GOTRUE_STORAGE_KEY } from './config';
 import type { SessionSecretStore } from './oauth/sessionAccess';
-import type {
-  AuthTokenProvider,
-  SessionTokens,
-  StoredSessionState,
-} from './TokenProvider';
+import type { AuthTokenProvider, StoredSessionState } from './TokenProvider';
 
 const log = createLog('SupabaseClient');
 
@@ -230,35 +226,17 @@ export class SupabaseClient {
   /**
    * Get the current GoTrue session access token.
    * Returns null if no session is authenticated or auth system is not ready.
-   * @param forceRefresh - When true, forces a token refresh.
    */
-  static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
+  static async getAccessToken(): Promise<string | null> {
     if (!this.authProvider) {
       // Auth provider not set - system not initialized
       return null;
     }
 
     try {
-      return await this.authProvider.ensureFreshToken(forceRefresh);
+      return await this.authProvider.ensureFreshToken();
     } catch (error) {
       log.error(`Error getting access token: ${toErrorMessage(error)}`);
-      return null;
-    }
-  }
-
-  /**
-   * Get access and refresh tokens from secure storage.
-   * Ensures tokens are fresh before returning.
-   */
-  static async getSessionTokens(): Promise<SessionTokens | null> {
-    if (!this.authProvider) {
-      return null;
-    }
-
-    try {
-      return await this.authProvider.getSessionTokens();
-    } catch (error) {
-      log.error(`Error getting session tokens: ${toErrorMessage(error)}`);
       return null;
     }
   }
@@ -306,8 +284,8 @@ export class SupabaseClient {
     try {
       return await this.authProvider.getStoredAccountLabel();
     } catch (error) {
-      // Callers render "N/A" for null, so a failed read would otherwise be
-      // indistinguishable from "no session stored".
+      // A failed read is otherwise indistinguishable from "no session
+      // stored", and both collapse to the generic account label in the UI.
       log.warn(`Error reading stored account label: ${toErrorMessage(error)}`);
       return null;
     }

@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 
-export type Raced<T> = { timedOut: false; value: T } | { timedOut: true };
+type Raced<T> = { timedOut: false; value: T } | { timedOut: true };
 
 /**
  * Race a one-shot event subscription against a timeout. Disposes the

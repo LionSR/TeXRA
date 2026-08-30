@@ -4,8 +4,7 @@ import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
@@ -124,22 +123,8 @@ export async function initializeElectronPlatform(
   // Copilot route preferences are swept on every startup. Runs here so it is
   // upstream of the settings view's first model-list paint.
   try {
-    const { added, removed, reordered, routePreferencesCleared } =
-      await refreshModelListStateIfNeeded(globalStateStore);
-    const changed = added.length > 0 || removed.length > 0 || reordered;
-    if (changed || routePreferencesCleared.length > 0) {
-      invalidateModelOptionsCache();
-      if (changed) {
-        console.info(
-          `[desktop] Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-        );
-      }
-      if (routePreferencesCleared.length > 0) {
-        console.info(
-          `[desktop] Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-        );
-      }
-    }
+    const { messages } = await refreshModelListAndLog(globalStateStore);
+    for (const message of messages) console.info(`[desktop] ${message}`);
   } catch (error) {
     console.error(
       `[desktop] Failed to refresh model list: ${toErrorMessage(error)}`,
@@ -161,6 +146,7 @@ export async function initializeElectronPlatform(
   // desktop cannot wire one prompt and forget another the way it once did.
   initializeBundledPrompts(resourcesPath);
   initializeNodeRuntimeSkills({
+    host: 'desktop',
     cwd: workspacePath ?? app.getPath('home'),
     resourcesPath,
   });

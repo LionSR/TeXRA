@@ -1,6 +1,12 @@
+// Third-party imports
+import { ReasoningEffort } from 'llm-zoo';
+
 // Local imports - agent
 import type { StandardPricingConfig } from '@agent/modelHandlers/support/priceUtils';
-import { clampReasoningEffortToHighOrMax } from '@agent/modelHandlers/support/reasoningEffort';
+import {
+  clampReasoningEffortToHighOrMax,
+  normalizeSupportedReasoningEffort,
+} from '@agent/modelHandlers/support/reasoningEffort';
 
 // Local file imports
 import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
@@ -39,27 +45,57 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
     return false;
   }
 
-  /**
-   * GLM effort-capable models accept only high/max on the OpenAI-compatible
-   * surface; delegate to the shared high-or-max clamp (see
-   * `clampReasoningEffortToHighOrMax`).
-   */
-  protected override validateReasoningEffort(effort: string): string {
-    return clampReasoningEffortToHighOrMax(effort);
+  private normalizeReasoningEffort(effort: ReasoningEffort): ReasoningEffort {
+    const supported = this.capabilities.supportedReasoningEfforts;
+    return supported?.length
+      ? normalizeSupportedReasoningEffort(
+          effort,
+          supported,
+          this.capabilities.reasoningEffort,
+        )
+      : clampReasoningEffortToHighOrMax(effort);
+  }
+
+  protected override getReasoningEffortParameter(): string | undefined {
+    const effort = this.getEffectiveReasoningEffort();
+    if (!this.capabilities.supportsReasoning || !effort) return undefined;
+
+    const normalized = this.normalizeReasoningEffort(effort);
+    return normalized === ReasoningEffort.NONE ? undefined : normalized;
   }
 
   /**
    * GLM models require explicit `thinking` parameter to control reasoning.
-   * Thinking models (e.g. GLM-4.5) need it enabled; non-thinking variants
-   * get it explicitly disabled to prevent unexpected reasoning activation.
+   * Models whose vocabulary includes none can disable it; forced-thinking
+   * variants such as GLM-5.3 keep it enabled.
    */
   protected override getThinkingParameter(): { type: 'enabled' | 'disabled' } {
-    return this.capabilities.supportsReasoning
-      ? { type: 'enabled' }
-      : { type: 'disabled' };
+    if (!this.capabilities.supportsReasoning) return { type: 'disabled' };
+
+    const supported = this.capabilities.supportedReasoningEfforts;
+    if (!supported?.length) return { type: 'enabled' };
+
+    const effort = this.getEffectiveReasoningEffort();
+    const normalized = effort
+      ? normalizeSupportedReasoningEffort(
+          effort,
+          supported,
+          this.capabilities.reasoningEffort,
+        )
+      : this.capabilities.reasoningEffort;
+    return normalized === ReasoningEffort.NONE
+      ? { type: 'disabled' }
+      : { type: 'enabled' };
   }
 
-  // GLM stringifies content for non-vision models; vision models (GLM-4.5v,
-  // GLM-4.6v) use the standard OpenAI image_url format.
-  protected override readonly convertContentToStringUnlessVision = true;
+  protected override getCompactionReasoningParameters() {
+    const supported = this.capabilities.supportedReasoningEfforts;
+    if (supported?.length && !supported.includes(ReasoningEffort.NONE)) {
+      return {
+        thinking: { type: 'enabled' as const },
+        reasoning_effort: this.normalizeReasoningEffort(ReasoningEffort.NONE),
+      };
+    }
+    return super.getCompactionReasoningParameters();
+  }
 }

@@ -17,7 +17,7 @@ import {
 } from '@shared/model/kimiCodeRetryGate';
 import { isNonEmptyString } from '@utils/core';
 
-export interface ProgressApiKeyRetryRequest {
+interface ProgressApiKeyRetryRequest {
   stream: StreamTabId;
   requestId: string;
   provider?: ApiProvider;
@@ -37,7 +37,7 @@ interface ProgressApiKeyPreparationResult {
   disabledQuotaRoutes: readonly ExhaustionReason[];
 }
 
-export interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
+interface ProgressApiKeyRetryResult extends ProgressApiKeyPreparationResult {
   retried: boolean;
 }
 

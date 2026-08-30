@@ -2,7 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
@@ -48,10 +48,6 @@ export class MultiAgentTab extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
-      }
-
-      .setting-number-input {
-        width: 80px;
       }
 
       /* Team cards */
@@ -197,10 +193,14 @@ export class MultiAgentTab extends LitElement {
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
-  @state() private activePresetId: string | null = null;
+  /**
+   * The applied team, from the backend roster. Deliberately not local state:
+   * an apply can be cancelled or blocked by unavailable members, and an
+   * optimistic flip would badge a team the roster never adopted.
+   */
+  @property({ attribute: false }) activePresetId: string | null = null;
 
   private handlePresetClick(preset: AgentModePreset): void {
-    this.activePresetId = preset.id;
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
       presetId: preset.id,
     });
@@ -341,23 +341,14 @@ export class MultiAgentTab extends LitElement {
         <div class="settings-section">
           ${renderStateSettingToggleRow({
             key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-            label: 'Let orchestrator stop agents early',
-            description:
-              'The orchestrator can cancel agents that are stuck or no longer needed. Turn this off if you want every agent to finish.',
             checked: this.allowOrchestratorKill,
           })}
           ${renderStateSettingToggleRow({
             key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            label: 'Keep agents running after you stop the orchestrator',
-            description:
-              'Let agents that are already mid-task finish independently.',
             checked: this.detachSubagentsOnStop,
           })}
           ${renderStateSettingToggleRow({
             key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-            label: 'Allow agents to work in git worktrees',
-            description:
-              'Delegated agents can use isolated worktrees, with every tool call rooted in that worktree.',
             checked: this.worktreeSupport,
           })}
           ${renderSettingsNumberRow({

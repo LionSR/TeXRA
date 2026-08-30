@@ -13,6 +13,7 @@ import {
   type ToolUseStreamState,
   type WorkflowStreamState,
 } from '@shared/schemas';
+import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
 
 // Local file imports
@@ -318,11 +319,33 @@ describe('stream-header', () => {
       });
 
       const tooltip = element.shadowRoot?.querySelector(
-        `wa-tooltip[for="${ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN}"]`,
+        `wa-tooltip[for="${ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN}"]`,
       );
       expect(tooltip?.textContent?.trim()).toBe(
         DELEGATION_APPROVAL_COPY.progressViewToggle,
       );
+    });
+
+    it('presses AUTO-EDIT and AUTO-BASH independently', async () => {
+      const element = await mount({
+        stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
+        state: baseState({ toolEditBypass: true, bashBypass: false }),
+      });
+
+      const editButton = element.shadowRoot?.querySelector(
+        `#${ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN}`,
+      );
+      const bashButton = element.shadowRoot?.querySelector(
+        `#${ELEMENT_IDS.BASH_TOGGLE_BTN}`,
+      );
+      expect(editButton?.getAttribute('aria-label')).toBe(
+        APPROVAL_BYPASS_BADGE.toolEdit,
+      );
+      expect(bashButton?.getAttribute('aria-label')).toBe(
+        APPROVAL_BYPASS_BADGE.bash,
+      );
+      expect(editButton?.getAttribute('aria-pressed')).toBe('true');
+      expect(bashButton?.getAttribute('aria-pressed')).toBe('false');
     });
 
     it('dispatches toolbar-command with the button-specific command on click', async () => {

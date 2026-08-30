@@ -11,6 +11,7 @@
 // `CHILD_STREAMS` state machine — single-substrate plan, Wave A.)
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
+import type { StreamPhaseState } from '@agent/runtime';
 import type {
   SessionState,
   SessionStreamMetadata,
@@ -44,7 +45,7 @@ export function unbindChildStreamState(state: SessionState): void {
 /**
  * Re-derive the child-stream snapshots from the bound `SessionState`. Called
  * by the adapter after any change that can move rosters, parent edges, or
- * tombstones: `onBadgesChanged`, `invalidate(…, 'parentStreamId')`,
+ * tombstones: `invalidate(…, 'subagents')`, `invalidate(…, 'parentStreamId')`,
  * `onStreamMetadataChanged` (a new RUNNING drops the previous run's retained
  * rows and surfaces only here), and the adapter's `deleteStream` removal hook
  * (removal fires no renderer-port callback by design).
@@ -78,6 +79,16 @@ export function streamStateFor(
   streamId: StreamTabId,
 ): StreamExecutionState | undefined {
   return BOUND.get()?.state.getStreamState(streamId);
+}
+
+/** Lifecycle state for a stream — phase, substate, and the run-window start
+ *  elapsed time is rendered from — straight off the session's status machine,
+ *  the single owner that stamps all three. Renderers go through
+ *  `streamPhaseFor` in `cliState`, which adds the no-slice-no-paint gate. */
+export function sessionStreamPhase(
+  streamId: StreamTabId,
+): StreamPhaseState | undefined {
+  return BOUND.get()?.state.streamStatus.getStreamState(streamId);
 }
 
 /** Queued follow-up messages for a stream, from the session-owned queue. */
@@ -169,21 +180,6 @@ export function activeSubagentsFor(
   const roster = rosters.get(parentStreamId);
   if (!roster) return [];
   return roster.filter((child) => child.finishedAt === undefined);
-}
-
-/**
- * Finished children the shared roster retains for display under a parent
- * (`finishedAt` set), ascending `finishedAt`, capped by the applier. A new
- * run on the parent drops the previous run's retained rows (shared
- * `resetPerRunChildState` policy — all hosts agree).
- */
-export function retainedChildStreamsFor(
-  parentStreamId: StreamTabId,
-  rosters: ChildRosters,
-): readonly ActiveChildInfo[] {
-  const roster = rosters.get(parentStreamId);
-  if (!roster) return [];
-  return roster.filter((child) => child.finishedAt !== undefined);
 }
 
 /** Display rows for a parent: the shared roster verbatim (live rows first,

@@ -6,6 +6,7 @@ import type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,
@@ -31,6 +32,7 @@ import {
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 
 const mocks = vi.hoisted(() => ({
   getAgent: vi.fn(),
@@ -124,6 +126,7 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
 type TestRunProgressRenderer = RunProgressRenderer & {
   emit(event: SessionEvent): void;
   detach(): void;
+  readonly session: SessionHandle;
 };
 
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
@@ -132,6 +135,7 @@ function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   return Object.assign(renderer, {
     emit: (event: SessionEvent) => session.events.emit(event),
     detach,
+    session,
   });
 }
 
@@ -255,6 +259,13 @@ function handleStreamStatus(
   status: StreamPhase,
   previousStatus: StreamPhase = STREAM_PHASE.RUNNING,
 ): void {
+  // The status machine holds the phase before the fact is published, which is
+  // where the renderer reads it back from. No run window is stamped: elapsed
+  // then falls back to the renderer's injected clock, which is what these
+  // fixed-`now` cases assert on.
+  seedStreamStatusForTest(renderer.session.status, streamId as StreamTabId, {
+    phase: status,
+  });
   // Status reaches the renderer on the session-fact rail only.
   renderer.emit({
     scope: 'session',
@@ -762,7 +773,7 @@ describe('CLI run progress renderer', () => {
 
   it('fits the delegated task within an ANSI terminal row', () => {
     const output = outputBuffer();
-    const renderer = ansiRenderer(output, { columns: 80 });
+    const renderer = ansiRenderer(output, { getColumns: () => 80 });
 
     handleOrchestratorRootRun(renderer);
     handleStreamDescription(renderer, 'child-stream', 'A'.repeat(100));
@@ -1218,11 +1229,14 @@ describe('CLI run progress renderer', () => {
 
   it('maps the global quiet flag into CLI context args', () => {
     expect(
-      pickGlobalArgs({
-        quiet: true,
-        'output-format': 'text',
-        'approval-policy': 'never',
-      }).quiet,
+      pickGlobalArgs(
+        {
+          quiet: true,
+          'output-format': 'text',
+          'approval-policy': 'never',
+        },
+        { skillSourcePaths: [] },
+      ).quiet,
     ).toBe(true);
   });
 });

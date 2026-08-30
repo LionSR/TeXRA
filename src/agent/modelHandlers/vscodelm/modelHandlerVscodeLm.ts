@@ -332,7 +332,7 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     ];
   }
 
-  createMediaContent(mediaMessage: MediaEntry[]): VscodeLmMediaPart[] {
+  override createMediaContent(mediaMessage: MediaEntry[]): VscodeLmMediaPart[] {
     return mediaMessage.flatMap((media): VscodeLmMediaPart[] => {
       if (
         media.media_category !== 'image' ||
@@ -395,10 +395,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
     messages[assistantIndex] = appendText(assistant, text);
     if (options.afterContinuationPrompt) messages.pop();
     return true;
-  }
-
-  computePrice(_responseUsage: VscodeLmUsage): number {
-    return 0;
   }
 
   normalizeUsage(
@@ -465,12 +461,6 @@ export class ModelHandlerVscodeLm extends ModelHandler<
 
   createAssistantMessage(text: string): LanguageModelMessage {
     return { role: 'assistant', content: [textPart(text)] };
-  }
-
-  override extractAssistantText(
-    message: LanguageModelMessage,
-  ): string | undefined {
-    return message.role === 'assistant' ? messageText(message) : undefined;
   }
 
   prependTextToUserMessage(

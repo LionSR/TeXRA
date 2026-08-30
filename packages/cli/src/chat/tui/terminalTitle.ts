@@ -2,9 +2,10 @@ import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
-import { subscribeToSharedTick } from '@cli/tui/useLiveNowMs';
+import { subscribeToPolling } from '@cli/tui/usePollingInterval';
 import {
   formatSessionTitle,
+  TERMINAL_TAB_TITLE,
   type SessionTitleState,
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
@@ -12,7 +13,13 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { approvalQueueStatus } from './state/approvalQueue';
-import { rootRunPending, rootRunStreamId, streams } from './state/cliState';
+import { sessionStateRevision } from './state/childExecutions';
+import {
+  rootRunPending,
+  rootRunStreamId,
+  streamPhaseFor,
+  streams,
+} from './state/cliState';
 import { chatTuiCanStopActiveRun } from './state/sessionRunState';
 import { terminalCapabilities } from './state/terminalCapabilities';
 
@@ -24,6 +31,12 @@ import { terminalCapabilities } from './state/terminalCapabilities';
 // eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
 const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
 
+// The TUI's ASCII spin cycle reads as stray punctuation once a frame stands
+// alone in a tab title (a `-` is indistinguishable from a separator), so the
+// title spins through braille dots instead. Quarter-turn steps, because the
+// shared clock ticks at 1 Hz and a ten-frame cycle would crawl.
+const TITLE_FRAMES = ['⠋', '⠹', '⠴', '⠦'] as const;
+
 /** Project-aware terminal title, optionally annotated with live TUI state. */
 export function terminalTitleText(
   cwd: string,
@@ -34,7 +47,10 @@ export function terminalTitleText(
     invalidCharPattern: TITLE_INVALID_CHARS,
     replacement: '',
   });
-  return formatSessionTitle(project, state, activityDetail);
+  return formatSessionTitle(project, state, {
+    detail: activityDetail,
+    style: TERMINAL_TAB_TITLE,
+  });
 }
 
 /** Write the title only when terminal capability discovery admitted OSC. */
@@ -55,9 +71,11 @@ function currentTerminalTitleState(): SessionTitleState {
     chatTuiCanStopActiveRun({
       runPending: rootRunPending.get(),
       streamId: rootStreamId,
-      status: rootStreamId ? streamSlices.get(rootStreamId)?.status : undefined,
+      status: streamPhaseFor(rootStreamId)?.phase,
     }) ||
-    [...streamSlices.values()].some((stream) => isActivePhase(stream.status))
+    [...streamSlices.keys()].some((streamId) =>
+      isActivePhase(streamPhaseFor(streamId)?.phase),
+    )
   ) {
     return 'running';
   }
@@ -91,12 +109,12 @@ export function installTerminalTitleUpdates(
   // rotation `LoadingIndicator` and the status bar use, so the tab title
   // joins the shared clock instead of running its own interval.
   const runningTitle = (): string =>
-    terminalTitleText(cwd, 'running', loadingFrameAt(Date.now()));
+    terminalTitleText(cwd, 'running', loadingFrameAt(Date.now(), TITLE_FRAMES));
   const startRunningAnimation = (): void => {
     if (stopSharedTick !== undefined) return;
     if (!terminalCapabilities.get().oscColorReports) return;
     updateTitle(runningTitle());
-    stopSharedTick = subscribeToSharedTick(() => {
+    stopSharedTick = subscribeToPolling(1000, () => {
       if (!terminalCapabilities.get().oscColorReports) {
         stopRunningAnimation();
         return;
@@ -119,7 +137,13 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [approvalQueueStatus, rootRunPending, rootRunStreamId, streams],
+    [
+      approvalQueueStatus,
+      rootRunPending,
+      rootRunStreamId,
+      sessionStateRevision,
+      streams,
+    ],
     synchronize,
   );
   synchronize();

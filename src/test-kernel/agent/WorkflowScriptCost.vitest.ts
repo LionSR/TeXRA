@@ -4,16 +4,13 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  runWorkflowScript,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
 } from '@agent/workflowScript';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  createWorkflowAttemptCostTracker,
-  WorkflowJournalCostError,
-} from '@tools/delegation/workflowScriptRun';
+import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 
 const executionId = '7154costtest' as ExecutionId;
 const key = '0000000000000000';
@@ -164,27 +161,6 @@ return await agent('retry cost')`,
     expect(tracker.total([cheapJournal])).toBeCloseTo(0.5);
   });
 
-  it('separates sequential duplicate keys when only the first call is live', () => {
-    const live = entry(0, workflowResult(0.4), 'duplicate');
-    const recovered = entry(1, workflowResult(0.7), 'duplicate');
-    const tracker = createWorkflowAttemptCostTracker();
-
-    tracker.record(live, 0.4);
-    expect(tracker.total([live, recovered])).toBe(0.4);
-  });
-
-  it('separates parallel duplicate keys when only one call retries', () => {
-    const retried = entry(0, workflowResult(0.5), 'duplicate');
-    const singleAttempt = entry(1, workflowResult(0.4), 'duplicate');
-    const tracker = createWorkflowAttemptCostTracker();
-
-    // Interleaved callback order models parallel calls. Only index 0 retries.
-    tracker.record(retried, 0.1);
-    tracker.record(singleAttempt, 0.4);
-    tracker.record(retried, 0);
-    expect(tracker.total([retried, singleAttempt])).toBeCloseTo(1);
-  });
-
   it('settles zero for empty-baseline stable recovery with no callback', () => {
     const recovered = entry(0, workflowResult(0.5), 'recovered');
     const tracker = createWorkflowAttemptCostTracker();
@@ -210,7 +186,7 @@ return await agent('retry cost')`,
 
     expect(tracker.record({ index: 0, key: 'live' }, 0.2)).toBe(0.2);
     expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
-      WorkflowJournalCostError,
+      /is not an agent final result/,
     );
   });
 });
@@ -238,7 +214,7 @@ describe('workflow-script completed journal cost', () => {
     ['negative cost', entry(7, workflowResult(-1))],
   ])('rejects %s with the journal index', (_label, invalidEntry) => {
     expect(() => settleJournalCost([invalidEntry])).toThrow(
-      WorkflowJournalCostError,
+      /is not an agent final result/,
     );
     expect(() => settleJournalCost([invalidEntry])).toThrow(
       new RegExp(`entry ${invalidEntry.index}`),

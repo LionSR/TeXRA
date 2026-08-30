@@ -12,11 +12,11 @@ import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/Tool
 import {
   extractTouchedFiles,
   type ToolUseRunShared,
+  type WaitExecResult,
 } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
@@ -30,7 +30,7 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-import { cleanupApprovalsForStream } from '@tools/approval';
+import { releaseStreamResources } from '@tools/approval';
 import { GoalStore } from '@tools/goal';
 
 import {
@@ -95,7 +95,6 @@ function createWaitNodeServices(
         ...capabilities,
       },
       createUserFollowUpMessages: vi.fn(async () => []),
-      extractAssistantText: () => undefined,
       ...modelHandlerOverrides,
     }),
     session: {
@@ -181,10 +180,6 @@ describe('ToolUseWaitNode', () => {
 
       const node = new ToolUseWaitNode().setServices(services);
       const prep = await node.prep(shared);
-      // The child-run loop reads the turn facts off the flow result and
-      // delivers them after suspension (see childRunLoop.ts), so the node
-      // carries none.
-      expect(prep.lastResponse).toBeUndefined();
 
       const transition = await withTestRunContext(
         services.runScope,
@@ -302,7 +297,6 @@ describe('ToolUseWaitNode', () => {
 
     const services = createWaitNodeServices({
       isSubagent: false,
-      modelHandler: { extractAssistantText: () => 'partial response' },
       onIdle,
       session: { waitForFollowUp },
     });
@@ -312,7 +306,6 @@ describe('ToolUseWaitNode', () => {
     await withTestRunContext(services.runScope, () => node.exec(prep));
 
     expect(onIdle).toHaveBeenCalledOnce();
-    expect(onIdle).toHaveBeenCalledWith('partial response');
     expect(waitForFollowUp).toHaveBeenCalledOnce();
   });
 
@@ -427,9 +420,9 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      // No AsyncLocalStorage frame: `pauseActiveGoal` routes the bash bypass
-      // mutation through `services.runScope.session` (the owner session), never
-      // through `currentSession()`/`defaultSession()`.
+      // No AsyncLocalStorage frame: `pauseActiveGoal` clears every possible
+      // goal bypass through `services.runScope.session` (the owner session),
+      // never through `currentSession()`/`defaultSession()`.
       const exec = await node.exec(waitPrep(true));
 
       const goal = GoalStore.getForStream(streamId);
@@ -446,16 +439,21 @@ describe('ToolUseWaitNode', () => {
         kind: 'bash',
         bypassActive: false,
       });
-      expect(setApprovalBypassState).not.toHaveBeenCalledWith({
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
         streamId,
         kind: 'toolEdit',
+        bypassActive: false,
+      });
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
+        streamId,
+        kind: 'superYolo',
         bypassActive: false,
       });
     } finally {
       detachTrace();
       recorded.detach();
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      releaseStreamResources(streamId);
     }
   });
 
@@ -469,8 +467,8 @@ describe('ToolUseWaitNode', () => {
     const createUserFollowUpMessages = appendUserFollowUpMessages();
     const onFollowUpConsumed = vi.fn();
     const waitForFollowUp = vi.fn();
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined);
+    const streamStatus = ownerSession.status;
     const services = createWaitNodeServices({
       isSubagent: false,
       modelHandler: {
@@ -664,8 +662,8 @@ describe('ToolUseWaitNode', () => {
 
   it('updates the run session status while waiting and resuming', async () => {
     const streamId = 'wait-node-owner' as StreamTabId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined);
+    const streamStatus = ownerSession.status;
     const shared = toolUseRunShared();
     const createUserFollowUpMessages = vi.fn(async () => []);
     const services = createWaitNodeServices({
@@ -707,8 +705,8 @@ describe('ToolUseWaitNode', () => {
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
     const statusHub = new SessionEventHub();
-    const streamStatus = new StreamStatusMachine(statusHub);
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined, statusHub);
+    const streamStatus = ownerSession.status;
     // Status is a session fact on the machine's own hub — the single rail.
     const recorded = recordSessionEvents(statusHub);
     const waitForFollowUp = vi.fn(async () => null);
@@ -757,10 +755,7 @@ describe('ToolUseWaitNode', () => {
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: {
-          input: Object.freeze({ INSTRUCTION: 'initial request' }),
-          transient: { INSTRUCTION: 'initial request' },
-        },
+        userChannels: { INSTRUCTION: 'initial request' },
       },
     });
     const createUserFollowUpMessages = appendUserFollowUpMessages();
@@ -777,8 +772,8 @@ describe('ToolUseWaitNode', () => {
     const detachSequence = statusHub.subscribeStatus(() =>
       sequence.push('status'),
     );
-    const streamStatus = new StreamStatusMachine(statusHub);
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined, statusHub);
+    const streamStatus = ownerSession.status;
     const services = createWaitNodeServices({
       logger,
       modelHandler: {
@@ -848,7 +843,7 @@ describe('ToolUseWaitNode', () => {
     expect(info).toHaveBeenCalledWith('please revise the theorem', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
-    expect(shared.stateSlices?.userChannels.transient.INSTRUCTION).toBe(
+    expect(shared.stateSlices?.userChannels.INSTRUCTION).toBe(
       'please revise the theorem',
     );
   });
@@ -902,7 +897,7 @@ describe('ToolUseWaitNode', () => {
       expect(setApprovalBypassState).not.toHaveBeenCalled();
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      releaseStreamResources(streamId);
     }
   });
 
@@ -953,7 +948,7 @@ describe('ToolUseWaitNode', () => {
       });
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId);
+      releaseStreamResources(streamId);
     }
   });
 
@@ -977,6 +972,149 @@ describe('ToolUseWaitNode', () => {
 
     expect(exec).toEqual({ kind: 'stop' });
     expect(waitForFollowUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('ToolUseWaitNode follow-up transcript logging (regression: #7508 pattern on resume)', () => {
+  function transcriptLogServices(
+    overrides: WaitNodeServiceOverrides = {},
+  ): ToolUseServices {
+    return createWaitNodeServices({
+      logger: Object.assign(new TraceEmitter(), {
+        info: vi.fn(),
+        warn: vi.fn(),
+      }),
+      modelHandler: {
+        createUserFollowUpMessages: vi.fn(
+          async (messages: ProviderMessage[]) => messages,
+        ),
+      },
+      ...overrides,
+    });
+  }
+
+  function userFollowUp(): WaitExecResult {
+    return {
+      kind: 'continue',
+      followUps: [{ text: 'Do the thing.', origin: 'user' }],
+    };
+  }
+
+  function failAppend(services: ToolUseServices, message: string): void {
+    (
+      services.modelCell.handler.createUserFollowUpMessages as ReturnType<
+        typeof vi.fn
+      >
+    ).mockRejectedValue(new Error(message));
+  }
+
+  function runPost(
+    services: ToolUseServices,
+    execRes: WaitExecResult,
+  ): Promise<unknown> {
+    const node = new ToolUseWaitNode().setServices(services);
+    const shared = toolUseRunShared();
+    return withTestRunContext(services.runScope, () =>
+      node.post(shared, waitPrep(), execRes),
+    );
+  }
+
+  async function runPostWithFailedAppend(
+    services: ToolUseServices,
+    message: string,
+    execRes: WaitExecResult = userFollowUp(),
+  ): Promise<void> {
+    failAppend(services, message);
+    await expect(runPost(services, execRes)).rejects.toThrow(message);
+  }
+
+  it('logs a follow-up transcript row even when appendFollowUpAsUserMessage throws', async () => {
+    // A failed follow-up append on resume (corrupt/oversized media, provider
+    // validation error, ...) must still leave a record of what the user
+    // asked for — otherwise that turn's transcript row silently vanishes.
+    const services = transcriptLogServices();
+    await runPostWithFailedAppend(services, 'follow-up append failed');
+
+    expect(services.logger.info).toHaveBeenCalledWith(
+      'Do the thing.',
+      expect.objectContaining({ messageType: expect.any(String) }),
+    );
+  });
+
+  it('does not acknowledge consumption when the append throws', async () => {
+    // The resume wrapper restores an unacknowledged drained batch; firing
+    // onFollowUpConsumed before a failing append would mark the lost input
+    // as consumed and drop it instead of replaying it on the next resume.
+    const onFollowUpConsumed = vi.fn();
+    const services = transcriptLogServices({ onFollowUpConsumed });
+    await runPostWithFailedAppend(services, 'follow-up append failed');
+
+    expect(onFollowUpConsumed).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges consumption after a successful append', async () => {
+    const onFollowUpConsumed = vi.fn();
+    const services = transcriptLogServices({ onFollowUpConsumed });
+
+    await runPost(services, userFollowUp());
+
+    expect(onFollowUpConsumed).toHaveBeenCalledOnce();
+  });
+
+  it('still logs exactly once per follow-up on the success path', async () => {
+    const services = transcriptLogServices();
+
+    await runPost(services, userFollowUp());
+
+    expect(services.logger.info).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a workflow delivery with its typed summary beside the collapsed text', async () => {
+    // The delivery envelope carries the summary typed at the write site; the
+    // transcript row producer parses it once and attaches it structured, so
+    // renderers never re-extract it from the row text.
+    const summary = {
+      name: 'proofread-pipeline',
+      outcome: 'completed',
+      phaseCount: 1,
+      taskDone: 2,
+      taskTotal: 2,
+      costUsd: 0.19,
+      durationMs: 5_000,
+      files: [{ path: 'paper.tex', added: 12, removed: 8 }],
+      scriptPath: '.texra/workflow-scripts/proofread-pipeline.mjs',
+      errorCause: null,
+    };
+    const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
+    const text = [
+      '<workflow-script-result id="abc">',
+      '<response>raw run log</response>',
+      `<workflow-summary>${escaped}</workflow-summary>`,
+      '</workflow-script-result>',
+    ].join('\n');
+    const services = transcriptLogServices();
+
+    await runPost(services, {
+      kind: 'continue',
+      followUps: [{ text, origin: 'subagent_result' }],
+    });
+
+    expect(services.logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('✓ proofread-pipeline completed'),
+      expect.objectContaining({ data: { workflowSummary: summary } }),
+    );
+  });
+
+  it('does not log synthetic (idle-continuation) follow-ups', async () => {
+    const services = transcriptLogServices();
+
+    await runPostWithFailedAppend(services, 'boom', {
+      kind: 'continue',
+      followUps: [{ text: 'synthesized', origin: 'user' }],
+      synthetic: true,
+    });
+
+    expect(services.logger.info).not.toHaveBeenCalled();
   });
 });
 

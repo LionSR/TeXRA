@@ -9,12 +9,8 @@ import {
   type ByCategory,
 } from '@shared/schemas';
 
-interface TeamRosterState {
+interface TeamRosterAgentCatalog {
   getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
-  setEnabledAgentKeys(
-    category: AgentCategory,
-    enabledKeys: string[],
-  ): Promise<void>;
 }
 
 export interface TeamRosterResolution {
@@ -25,9 +21,10 @@ export interface TeamRosterResolution {
   readonly keys: ByCategory<string[]>;
   /**
    * Roster member names that did not resolve to a catalog entry at resolve
-   * time, per category. These persist alongside `keys` as name-matched slots,
-   * so an agent activates the moment it appears in the catalog (sign-in,
-   * install) — never silently dropped.
+   * time, per category. Nothing persists these: the roster stores the team
+   * reference and re-resolves `preset.agents` on read, so a member activates
+   * the moment it appears in the catalog (sign-in, install) without a stored
+   * slot. They exist to feed `unresolvedNames` for the availability preflight.
    */
   readonly nameSlots: ByCategory<string[]>;
   /** Unresolved member names across all categories, in canonical order. */
@@ -45,15 +42,18 @@ export type TeamRosterPresetResolution =
 
 export interface TeamRosterCatalog {
   resolvePreset(presetId: string): TeamRosterPresetResolution;
-  commitPresetResolution(
-    preset: AgentModePreset,
-    resolution: TeamRosterResolution,
-  ): Promise<void>;
+  /**
+   * Persist the symbolic preset. The resolution {@link resolvePreset} computed
+   * is preflight evidence only: the roster stores the team reference and
+   * re-resolves it against the catalog on read, so no committer freezes the
+   * per-agent-key snapshot.
+   */
+  commitPreset(preset: AgentModePreset): Promise<void>;
 }
 
 /** Resolve a team against the current catalog without writing roster state. */
 export function resolveTeamRoster(
-  state: Pick<TeamRosterState, 'getAgents'>,
+  state: TeamRosterAgentCatalog,
   preset: AgentModePreset,
 ): TeamRosterResolution {
   const resolved = byCategory((category) =>
@@ -66,21 +66,6 @@ export function resolveTeamRoster(
       (category) => resolved[category].nameSlots,
     ),
   };
-}
-
-/** Commit a previously resolved roster. */
-export async function commitTeamRoster(
-  state: Pick<TeamRosterState, 'setEnabledAgentKeys'>,
-  resolution: TeamRosterResolution,
-): Promise<void> {
-  for (const category of AGENT_CATEGORIES) {
-    // Resolved keys and unresolved name slots persist side by side so a
-    // name-matched member activates the moment it appears in the catalog.
-    await state.setEnabledAgentKeys(category, [
-      ...resolution.keys[category],
-      ...resolution.nameSlots[category],
-    ]);
-  }
 }
 
 /**
@@ -96,7 +81,7 @@ export function teamHostedNamesForPreflight(
 }
 
 function resolveAgentKeys(
-  state: Pick<TeamRosterState, 'getAgents'>,
+  state: TeamRosterAgentCatalog,
   category: AgentCategory,
   names: string[],
 ): { keys: string[]; nameSlots: string[] } {

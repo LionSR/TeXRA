@@ -3,65 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowCallLine,
-  latestWorkflowCallsById,
-  workflowCallFailureTally,
-  workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 
 describe('workflow call copy', () => {
-  it('selects the latest state per id in retained transcript order', () => {
-    const latestB = { id: 'b', label: 'B', status: 'running' as const };
-    const latestA = { id: 'a', label: 'A', status: 'cached' as const };
-
-    expect(
-      latestWorkflowCallsById([
-        { id: 'a', label: 'A', status: 'failed', error: 'old' },
-        { id: 'b', label: 'B', status: 'completed' },
-        latestB,
-        latestA,
-      ]),
-    ).toStrictEqual([latestB, latestA]);
-  });
-
-  it('uses the latest attempt as the current rerun task set', () => {
-    const currentB = {
-      id: 'b',
-      label: 'B revised',
-      status: 'running' as const,
-      attemptId: 'current',
-    };
-
-    expect(
-      latestWorkflowCallsById([
-        {
-          id: 'a',
-          label: 'A',
-          status: 'failed',
-          error: 'old',
-          attemptId: 'prior',
-        },
-        { id: 'b', label: 'B', status: 'completed', attemptId: 'prior' },
-        currentB,
-      ]),
-    ).toStrictEqual([currentB]);
-  });
-
-  it('honors an explicit attempt before it emits any calls', () => {
-    expect(
-      latestWorkflowCallsById(
-        [
-          {
-            id: 'old',
-            label: 'Old task',
-            status: 'completed',
-            attemptId: 'prior',
-          },
-        ],
-        'current',
-      ),
-    ).toStrictEqual([]);
-  });
-
   it('uses one terminal metadata representation across hosts', () => {
     expect(
       formatWorkflowCallMetadataParts({
@@ -110,53 +54,6 @@ describe('workflow call copy', () => {
     ).toBe(
       'Skipped: Audit later — The workflow ended before this call was reached.',
     );
-  });
-
-  it('counts an empty phase as no work rather than complete', () => {
-    expect(workflowPhaseCallProgress([])).toEqual({ done: 0, total: 0 });
-  });
-
-  it('tallys no failures for a clean or empty run', () => {
-    expect(workflowCallFailureTally([])).toEqual({ failed: 0 });
-    expect(
-      workflowCallFailureTally([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'running' },
-      ]),
-    ).toEqual({ failed: 0 });
-  });
-
-  it('tallys only failed calls across a mixed run', () => {
-    expect(
-      workflowCallFailureTally([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'failed', error: 'boom' },
-        { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
-        { id: 'd', label: 'D', status: 'failed', error: 'also boom' },
-      ]),
-    ).toEqual({ failed: 2 });
-  });
-
-  it('counts every terminal status as done, not just completions', () => {
-    expect(
-      workflowPhaseCallProgress([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'cached' },
-        { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
-        { id: 'd', label: 'D', status: 'cancelled' },
-        { id: 'e', label: 'E', status: 'failed', error: 'nope' },
-      ]),
-    ).toEqual({ done: 5, total: 5 });
-  });
-
-  it('leaves planned and running calls outstanding', () => {
-    expect(
-      workflowPhaseCallProgress([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'running' },
-        { id: 'c', label: 'C', status: 'planned' },
-      ]),
-    ).toEqual({ done: 1, total: 3 });
   });
 
   it('leaves a user skip without an explanatory clause', () => {

@@ -9,7 +9,7 @@ import { Text } from 'ink';
 import { fillRows } from '@cli/runtime/terminalText';
 import { renderAnsiMarkdown } from './ansiMarkdown';
 
-export interface MarkdownProps {
+interface MarkdownProps {
   readonly content: string;
   readonly width?: number;
   readonly colorEnabled?: boolean;

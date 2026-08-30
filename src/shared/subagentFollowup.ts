@@ -45,7 +45,7 @@ const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
 // `codex-result-partial`, letting a future hyphen-extended tag prefix-match
 // an existing one (no current DELIVERY_TAGS entry is a prefix of another, but
 // the vocabulary is a shared, growing const). Every producer
-// (deliveryEnvelope.ts / subagentResults.ts / sanitizeTag.ts) only ever
+// (deliveryEnvelope.ts / subagentResults.ts / github/formatUtils.ts) only ever
 // follows a tag name with whitespace (attributes), `>` (bare open, e.g.
 // `<execution-activity>`), or the exact `/>` self-closing delimiter, so anchor
 // on those delimiters instead of accepting any slash continuation.
@@ -178,10 +178,11 @@ function truncatedResultResponsePreview(response: string): string {
 
   if (!lineLimited && !charLimited) return trimmed;
 
-  const extraLines = lines.length - RESULT_RESPONSE_PREVIEW_LINES;
-  const hidden = lineLimited
-    ? formatResultCount(extraLines, 'more line')
-    : 'more text';
+  // Count from what actually survives: when the character cap also fired, the
+  // line cap alone understates how much is hidden.
+  const hiddenLines = lines.length - preview.split('\n').length;
+  const hidden =
+    hiddenLines > 0 ? formatResultCount(hiddenLines, 'more line') : 'more text';
   return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
 }
 
@@ -213,7 +214,7 @@ export function formatWorkflowScriptDeliverySummary(
   const status = summary.outcome === 'completed' ? 'completed' : 'failed';
   const facts = [
     `${formatResultCount(summary.phaseCount, 'phase')}`,
-    `${summary.taskDone}/${summary.taskTotal} tasks succeeded`,
+    `${summary.taskDone}/${summary.taskTotal} calls succeeded`,
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];

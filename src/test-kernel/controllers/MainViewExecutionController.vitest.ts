@@ -70,7 +70,7 @@ describe('MainViewExecutionController', () => {
       {
         agent: 'stale-renderer-agent',
         model: 'gpt-5.4',
-        session: { cliMultiAgentPresetId: 'stale-preset' },
+        session: { cli: { multiAgentPresetId: 'stale-preset' } },
       },
       {
         agent: 'builtInToolUse:lead',
@@ -78,7 +78,7 @@ describe('MainViewExecutionController', () => {
           workflow: ['builtInWorkflow:writer'],
           toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
-        cliMultiAgentPresetId: 'custom-team',
+        cli: { multiAgentPresetId: 'custom-team' },
       },
     );
 
@@ -92,7 +92,7 @@ describe('MainViewExecutionController', () => {
         workflow: ['builtInWorkflow:writer'],
         toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
       },
-      cliMultiAgentPresetId: 'custom-team',
+      cli: { multiAgentPresetId: 'custom-team' },
     });
   });
 
@@ -103,7 +103,7 @@ describe('MainViewExecutionController', () => {
         workflow: ['builtInWorkflow:writer'],
         toolUse: ['builtInToolUse:lead'],
       },
-      cliMultiAgentPresetId: 'custom-team',
+      cli: { multiAgentPresetId: 'custom-team' },
     };
 
     expect(
@@ -112,21 +112,5 @@ describe('MainViewExecutionController', () => {
     expect(
       prepareMainViewTeamExecutionRequest({ model: 'gpt-5.4' }, fields).valid,
     ).toBe(true);
-  });
-
-  it('ignores stale UI output file selections', () => {
-    const result = prepareMainViewExecutionRequest({
-      agent: 'direct-agent',
-      model: 'gpt-5.4',
-      agentCategory: AgentCategory.Workflow,
-      files: {
-        inputFiles: ['paper/main.tex'],
-        outputFiles: ['paper/old-output.tex'],
-      },
-    });
-
-    expect(result.valid).toBe(true);
-    if (!result.valid) return;
-    expect(result.request.config.outputFiles).toEqual([]);
   });
 });

@@ -7,11 +7,9 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import {
-  CODEX_SESSION_SECRET_KEY,
-  resetCodexCoordinator,
-  type CodexSession,
-} from '@auth/codex';
+import { resetCodexCoordinator } from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
+import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import {
   CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
@@ -96,7 +94,6 @@ describe('provider capabilities', () => {
         storesResponsesServerSide: false,
         supportsInlineInputFileUpload: false,
         supportsToolResultFileUpload: false,
-        failWhenFallbackOutputBudgetIsReduced: true,
       },
     });
   });
@@ -118,6 +115,41 @@ describe('provider capabilities', () => {
       });
     },
   );
+
+  describe('context window override', () => {
+    afterEach(() => installPlatform());
+
+    it('raises the subscription input and displayed context windows', async () => {
+      await installPlatform({
+        config: { 'texra.chatgptCodex.contextWindow': 872_000 },
+      });
+
+      expect(
+        resolveCodexSubscriptionProfile({
+          model: gpt55Config,
+          useOpenRouter: false,
+        }),
+      ).toMatchObject({
+        inputTokenLimit: 872_000,
+        contextWindow: 1_000_000,
+      });
+    });
+
+    it('falls back when the configured context window is out of range', async () => {
+      await installPlatform({
+        config: { 'texra.chatgptCodex.contextWindow': 900_000 },
+      });
+
+      expect(
+        resolveCodexSubscriptionProfile({
+          model: gpt55Config,
+          useOpenRouter: false,
+        }),
+      ).toMatchObject({
+        inputTokenLimit: CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+      });
+    });
+  });
 });
 
 describe('ChatGPT subscription model routing', () => {

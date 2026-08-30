@@ -37,13 +37,14 @@ import {
   patchStream,
   streams,
   transientNotice,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
+import { markWorkPlanArtifactHydrated } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -51,7 +52,6 @@ import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { SessionState } from '@controllers/session/SessionState';
-import type { StreamArtifactReader } from '@controllers/session/StreamArtifactProjection';
 import * as codexPreference from '@model/codex/codexPreference';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
@@ -66,8 +66,14 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
+import {
+  StreamSnapshotPreloadError,
+  type StreamArtifactAuthority,
+} from '@transcript';
 
 // Child rosters and parent edges live on the adapter-bound `SessionState`;
 // /status resolves both its child counts and the root transcript target from
@@ -85,15 +91,19 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+/** Bind a `SessionState` over the default session on first use: /status reads
+ *  child rosters, parent edges, and the stream's lifecycle phase through it. */
+function ensureBoundChildState(): SessionState {
+  childState ??= new SessionState(defaultSession());
+  bindChildStreamState(childState);
+  return childState;
+}
+
 function seedChildRoster(
   parentStreamId: StreamTabId,
   rows: readonly ActiveChildInfo[],
 ): void {
-  if (!childState) {
-    childState = new SessionState(defaultSession());
-    bindChildStreamState(childState);
-  }
-  const state = childState;
+  const state = ensureBoundChildState();
   state.streamLogs.ensureStream(parentStreamId);
   state.getOrCreateStreamState(parentStreamId, AgentCategory.ToolUse);
   state.updateStreamState(parentStreamId, (prev) => ({
@@ -124,6 +134,7 @@ function mockModelAccessOverview(): void {
       },
       chatGptSignedIn: false,
       grokSignedIn: false,
+      texraSignedIn: false,
     },
     lines: ['model access: Your own API keys'],
   });
@@ -148,7 +159,6 @@ function createContext(
   return {
     cliContext: createCliContext(),
     session,
-    cwd: '/tmp/workspace',
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',
@@ -293,10 +303,7 @@ describe('handleTuiSlashCommand', () => {
 
     closeInfoPane();
     await handleTuiSlashCommand('/goal', context);
-    expect(infoPane.get()).toMatchObject({ title: '/goal' });
-    expect(infoPane.get()?.lines.join('\n')).toContain(
-      'Goal mode starts from an approved plan',
-    );
+    expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
     expect(localEntries()).toEqual([]);
   });
 
@@ -483,6 +490,72 @@ describe('handleTuiSlashCommand', () => {
       'Could not load workflow artifacts: historical sidecar unreadable',
     );
   });
+
+  it.each([
+    {
+      label: 'plan',
+      workPlan: {
+        plan: { objective: 'Use the accepted live plan.' },
+        todos: [],
+      },
+      authority: { complete: false, todos: false, plan: true },
+    },
+    {
+      label: 'todos',
+      workPlan: {
+        plan: null,
+        todos: [
+          {
+            content: 'Use the accepted live todo',
+            activeForm: 'Using the accepted live todo',
+            status: 'in_progress',
+          },
+        ],
+      },
+      authority: { complete: false, todos: true, plan: false },
+    },
+  ] satisfies readonly {
+    label: string;
+    workPlan: {
+      readonly plan: Plan | null;
+      readonly todos: readonly TodoItem[];
+    };
+    authority: StreamArtifactAuthority;
+  }[])(
+    'opens accepted in-memory $label state when historical preload fails',
+    async ({ workPlan, authority }) => {
+      const { promise: preload, reject: rejectPreload } = deferred<void>();
+      const streamId = 'live-plan-after-load-error' as StreamTabId;
+      registerBuiltinSlashCommands({
+        workPlanSnapshots: workPlanSnapshots(
+          () => workPlan,
+          () => preload,
+        ),
+      });
+      patchStream(streamId, (slice) => ({ ...slice }));
+      activeStreamId.set(streamId);
+
+      const dispatched = handleTuiSlashCommand('/plan', createContext());
+      rejectPreload(
+        new StreamSnapshotPreloadError(
+          new Error('historical sidecar unreadable'),
+          streamId,
+          authority,
+        ),
+      );
+      await dispatched;
+
+      expect(foregroundReader.get()).toEqual({
+        kind: 'workPlan',
+        streamId,
+        authority: { plan: authority.plan, todos: authority.todos },
+      });
+      expect(transientNotice.get()).toBeUndefined();
+
+      markWorkPlanArtifactHydrated(streamId, authority.plan ? 'todos' : 'plan');
+      expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
+    },
+  );
 
   it('opens memory list and preview output in the reference pane', async () => {
     vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockResolvedValue([]);
@@ -859,7 +932,7 @@ describe('handleTuiSlashCommand', () => {
     session.streamId = streamId;
     session.executionId = 'exec-1' as ExecutionId;
     activeStreamId.set(streamId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.WAITING,
     });
@@ -881,11 +954,11 @@ describe('handleTuiSlashCommand', () => {
     const rootStreamId = 'stream-root' as StreamTabId;
     const childStreamId = 'stream-child' as StreamTabId;
     activeStreamId.set(rootStreamId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: rootStreamId,
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: childStreamId,
       status: STREAM_PHASE.RUNNING,
     });
@@ -920,20 +993,20 @@ describe('handleTuiSlashCommand', () => {
     const waitingChildId = 'stream-child-waiting' as StreamTabId;
     activeStreamId.set(parentStreamId);
     for (const streamId of rootSiblingIds) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId,
         status: STREAM_PHASE.RUNNING,
       });
     }
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: parentStreamId,
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: runningChildId,
       status: STREAM_PHASE.RUNNING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: waitingChildId,
       status: STREAM_PHASE.WAITING,
     });
@@ -976,12 +1049,12 @@ describe('handleTuiSlashCommand', () => {
       'stream-child-2',
     ] as StreamTabId[];
     activeStreamId.set(rootStreamId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: rootStreamId,
       status: STREAM_PHASE.WAITING,
     });
     for (const [index, childStreamId] of childStreamIds.entries()) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId: childStreamId,
         status: index === 0 ? STREAM_PHASE.WAITING : STREAM_PHASE.COMPLETED,
       });
@@ -1013,7 +1086,7 @@ describe('handleTuiSlashCommand', () => {
     const siblingChildId = 'stream-sibling-child' as StreamTabId;
     activeStreamId.set(focusedChildId);
     for (const streamId of [focusedChildId, siblingChildId]) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId,
         status: STREAM_PHASE.RUNNING,
       });
@@ -1045,15 +1118,15 @@ describe('handleTuiSlashCommand', () => {
     const runningSiblingId = 'stream-running-sibling' as StreamTabId;
     const idleSiblingId = 'stream-idle-sibling' as StreamTabId;
     activeStreamId.set(focusedChildId);
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: focusedChildId,
       status: STREAM_PHASE.WAITING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: runningSiblingId,
       status: STREAM_PHASE.RUNNING,
     });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: idleSiblingId,
       status: STREAM_PHASE.WAITING,
     });
@@ -1093,7 +1166,7 @@ describe('handleTuiSlashCommand', () => {
     const grandchildId = 'stream-grandchild' as StreamTabId;
     activeStreamId.set(parentStreamId);
     for (const streamId of [parentStreamId, ...rootSiblingIds, grandchildId]) {
-      setStreamStatusInCliState({
+      setCliStreamPhase({
         streamId,
         status: STREAM_PHASE.RUNNING,
       });
@@ -1126,16 +1199,20 @@ describe('handleTuiSlashCommand', () => {
     const streamId = 'stream-access' as StreamTabId;
     activeStreamId.set(streamId);
     patchSessionMeta({ model: 'gpt55' });
-    patchStream(streamId, (slice) => ({
-      ...slice,
-      usage: {
+    ensureBoundChildState();
+    patchStream(streamId, (slice) => ({ ...slice }));
+    // The access route comes off the store's cumulative usage projection.
+    snapshotFacts(defaultSession().snapshots).addUsage(
+      streamId,
+      'stream-access-run' as ExecutionId,
+      {
         inputTokens: 1_000,
         outputTokens: 100,
         cost: 0,
         usageRoute: 'relay',
       },
-    }));
-    setStreamStatusInCliState({
+    );
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.WAITING,
     });
@@ -1172,7 +1249,7 @@ describe('handleTuiSlashCommand', () => {
     session.executionId = 'exec-ephemeral' as ExecutionId;
     activeStreamId.set(streamId);
     patchSessionMeta({ transcriptMode: 'ephemeral' });
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId,
       status: STREAM_PHASE.WAITING,
     });

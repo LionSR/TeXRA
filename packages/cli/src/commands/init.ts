@@ -15,7 +15,7 @@ import {
 } from '../runtime/modelAccess';
 import {
   buildInitConfig,
-  configFileExists,
+  pathExists,
   ensureTexraGitignored,
   writeInitConfig,
   type GitignoreOutcome,
@@ -32,20 +32,12 @@ interface InitAgentOption {
   readonly name: string;
 }
 
-export function defaultInitAgentOptions(
-  agents: readonly InitAgentOption[],
-): InitAgentOption[] {
-  return implicitDefaultToolUseAgents(agents).map((agent) => ({
-    name: agent.name,
-  }));
-}
-
 async function gatherOptions(): Promise<{
-  agents: InitAgentOption[];
+  agents: readonly InitAgentOption[];
   models: CliModelAccess[];
 }> {
   await loadAgents({ includeRemote: false });
-  const agents = defaultInitAgentOptions(
+  const agents = implicitDefaultToolUseAgents(
     getVisibleAgents(AgentCategory.ToolUse),
   );
   const models = await getCliModelAccessList();
@@ -168,7 +160,7 @@ async function runInit(
   await initCliPlatform({ ...context, quietLogs: true });
 
   const filePath = workspaceTexraConfigPath(context.cwd);
-  if (!opts.force && (await configFileExists(filePath))) {
+  if (!opts.force && (await pathExists(filePath))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );

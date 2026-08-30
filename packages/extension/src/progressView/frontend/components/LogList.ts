@@ -32,11 +32,14 @@ import '@shared/wa/spinner';
 import type {
   StreamLifecycleStatus,
   StreamLogEntry,
+  StreamTabId,
   TaskGroup,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
+import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
 import { PersistedState } from '@shared/state/PersistedState';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
@@ -62,6 +65,8 @@ const LogListStateSchema = z.object({
 /** Cached per-stream data and DOM state */
 interface CachedStream {
   groups: TaskGroup[];
+  workflowPlan: WorkflowPlanMarker | undefined;
+  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   entries: StreamLogEntry[];
   rows: TranscriptRow[];
   updatedRowIndices: readonly number[];
@@ -109,7 +114,7 @@ export class LogList extends LitElement {
     super.disconnectedCallback();
   }
 
-  protected willUpdate(): void {
+  protected override willUpdate(): void {
     const streamId = this.streamContext.streamName;
 
     // Detect stream switch
@@ -128,6 +133,8 @@ export class LogList extends LitElement {
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
+      entry.workflowPlan = this.streamContext.workflowPlan;
+      entry.childProgress = this.streamContext.childProgress;
       entry.entries = this.streamContext.entries;
       entry.rows = this.streamContext.rows;
       entry.updatedRowIndices = this.streamContext.updatedRowIndices;
@@ -163,6 +170,8 @@ export class LogList extends LitElement {
           ${ref(data.ref)}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
+          .workflowPlan=${data.workflowPlan}
+          .childProgress=${data.childProgress}
           .entries=${data.entries}
           .rows=${data.rows}
           .updatedRowIndices=${data.updatedRowIndices}
@@ -188,7 +197,7 @@ export class LogList extends LitElement {
       // Re-sticky so future content updates auto-scroll.
       // Must wait for child TaskGroupList to finish rendering (updateComplete)
       // and then for a layout pass (requestAnimationFrame) so the log container
-      // has an accurate scrollMax before we scroll.
+      // has an accurate scrollHeight before we scroll.
       this.shouldScrollToBottom = false;
       void activeEl?.updateComplete.then(() => {
         requestAnimationFrame(() => {
@@ -232,6 +241,8 @@ export class LogList extends LitElement {
 
     const createdEntry: CachedStream = {
       groups: [],
+      workflowPlan: undefined,
+      childProgress: new Map(),
       entries: [],
       rows: [],
       updatedRowIndices: [],

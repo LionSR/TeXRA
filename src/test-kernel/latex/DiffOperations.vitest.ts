@@ -35,7 +35,8 @@ describe('diffOperations logger seam', () => {
       },
     });
     const runDiffForRound = vi.fn(async () => ({
-      success: true,
+      success: true as const,
+      diffPath: '/workspace/r1/paper_diff.tex',
       message: 'diff written',
     }));
     const base = createWorkspaceLocation('/workspace/paper.tex', 'paper.tex');
@@ -47,7 +48,7 @@ describe('diffOperations logger seam', () => {
       source: 'paper.tex',
       location: revised,
       round: 1,
-      lineage: { original: base, diffBase: null, diffFile: null },
+      lineage: { original: base, diffBase: null },
       diff: null,
     };
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});

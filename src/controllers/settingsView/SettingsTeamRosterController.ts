@@ -1,11 +1,9 @@
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
   formatTeamUnavailableMessage,
-  formatUnavailableTeamMembersMessage,
   formatUnknownTeamMessage,
-  TEAM_LAUNCH_CANCEL_LABEL,
-  TEAM_LAUNCH_CONTINUE_LABEL,
-  TEAM_LAUNCH_SIGN_IN_LABEL,
+  teamAvailabilityPrompt,
+  type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
 import {
   applyTeamRosterWithPreflight,
@@ -21,19 +19,9 @@ type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
   ): string | undefined;
 };
 
-export interface SettingsTeamAvailabilityPrompt {
-  readonly severity: 'warning';
-  readonly message: string;
-  readonly actions: readonly [
-    { readonly choice: 'sign-in'; readonly label: string },
-    { readonly choice: 'continue'; readonly label: string },
-    { readonly choice: 'cancel'; readonly label: string },
-  ];
-}
-
-export interface SettingsTeamRosterPresentation {
+interface SettingsTeamRosterPresentation {
   chooseTeamAvailability(
-    prompt: SettingsTeamAvailabilityPrompt,
+    prompt: TeamAvailabilityPrompt,
   ): Promise<TeamAvailabilityChoice | undefined>;
   showInfoMessage(message: string): Promise<void>;
   showErrorMessage(message: string): Promise<void>;
@@ -56,18 +44,9 @@ export async function applySettingsTeamRoster(
   const result = await applyTeamRosterWithPreflight(presetId, {
     ...options,
     choose: (preset, unavailableNames) =>
-      options.presentation.chooseTeamAvailability({
-        severity: 'warning',
-        message: formatUnavailableTeamMembersMessage(
-          unavailableNames,
-          preset.name,
-        ),
-        actions: [
-          { choice: 'sign-in', label: TEAM_LAUNCH_SIGN_IN_LABEL },
-          { choice: 'continue', label: TEAM_LAUNCH_CONTINUE_LABEL },
-          { choice: 'cancel', label: TEAM_LAUNCH_CANCEL_LABEL },
-        ],
-      }),
+      options.presentation.chooseTeamAvailability(
+        teamAvailabilityPrompt(unavailableNames, preset.name),
+      ),
   });
 
   switch (result.status) {

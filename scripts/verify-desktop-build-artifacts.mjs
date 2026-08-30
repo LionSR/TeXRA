@@ -4,11 +4,8 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  getDesktopSharedSourceDirs,
-  getDesktopVscodeFreeSourceDirs,
   readJson,
   requiredMonacoWorkers,
-  vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
 import { walkFiles } from './walkFiles.mjs';
@@ -24,12 +21,7 @@ function relative(filePath) {
 }
 
 function fileExists(filePath) {
-  try {
-    return fs.statSync(filePath).isFile();
-  } catch (error) {
-    if (error?.code === 'ENOENT') return false;
-    throw error;
-  }
+  return fs.statSync(filePath, { throwIfNoEntry: false })?.isFile() ?? false;
 }
 
 function collectFiles(dir) {
@@ -46,13 +38,6 @@ const requiredFiles = [
   path.join(desktopDir, 'dist', 'renderer', 'index.html'),
 ];
 const failures = [];
-const desktopSharedSourceDirs = getDesktopSharedSourceDirs(rootDir);
-const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(rootDir);
-const desktopSharedSourceDirSet = new Set(desktopSharedSourceDirs);
-const desktopVscodeFreeSourceDirSet = new Set(desktopVscodeFreeSourceDirs);
-const desktopSourceBoundaryDirs = [
-  ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
-];
 
 for (const filePath of requiredFiles) {
   if (!fileExists(filePath)) {
@@ -90,34 +75,6 @@ if (
   );
 }
 
-for (const dir of desktopSourceBoundaryDirs) {
-  if (!fs.existsSync(dir)) continue;
-  for (const filePath of collectFiles(dir)) {
-    if (!/\.[cm]?tsx?$/.test(filePath)) continue;
-    const source = fs.readFileSync(filePath, 'utf8');
-    if (
-      desktopSharedSourceDirSet.has(dir) &&
-      vscodeBackedStateImportPattern.test(source)
-    ) {
-      failures.push(
-        `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
-          filePath,
-        )}`,
-      );
-    }
-    if (
-      desktopVscodeFreeSourceDirSet.has(dir) &&
-      vscodeRuntimeImportPattern.test(source)
-    ) {
-      failures.push(
-        `Desktop-shared source imports the VS Code runtime module: ${relative(
-          filePath,
-        )}`,
-      );
-    }
-  }
-}
-
 if (failures.length > 0) {
   console.error('Desktop build artifact check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -133,5 +90,4 @@ const artifactList = [
 
 console.log('Desktop build artifact check passed:');
 for (const artifact of artifactList) console.log(`- ${artifact}`);
-console.log('- desktop-shared source avoids VS Code runtime imports');
 console.log('- Monaco worker assets are present');

@@ -14,7 +14,7 @@ import {
 const mocks = vi.hoisted(() => ({
   apiKeyExistsUncached: vi.fn(),
   hasUsableApiKey: vi.fn(),
-  handleExternalInquiryAction: vi.fn(),
+  handleExternalInquiryAction: vi.fn(async () => {}),
   invalidateApiKeyCache: vi.fn(),
   preferSubscription: true,
   preferKimiCode: false,
@@ -126,7 +126,7 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
-import { setGoalSessionBashAutoApproval } from '@tools/goal';
+import { setGoalSessionAutoApproval } from '@tools/goal';
 import {
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
@@ -165,7 +165,7 @@ function tui(
         ...options,
       }),
   };
-  const detachInteractions = defaultSession().useHostInteractions(interactions);
+  const detachInteractions = defaultSession().interactions.use(interactions);
   onTestFinished(detachInteractions);
   return {
     presentationHost,
@@ -379,7 +379,7 @@ afterEach(() => {
   mocks.retryCopyFailure = undefined;
   mocks.apiKeyExistsUncached.mockReset();
   mocks.hasUsableApiKey.mockReset();
-  mocks.handleExternalInquiryAction.mockReset();
+  mocks.handleExternalInquiryAction.mockClear();
   mocks.invalidateApiKeyCache.mockReset();
   mocks.notify.mockReset();
   mocks.setCliSubscriptionPreference.mockReset();
@@ -396,7 +396,6 @@ describe('TUI retry approvals', () => {
       requestId: 'inquiry-interrupted',
       allowBypass: false,
       streamId: 'inquiry-stream',
-      mode: 'new',
       question: 'Which external fact should be checked?',
       threadId: 'thread-interrupted',
       sessionLinks: null,
@@ -424,7 +423,6 @@ describe('TUI retry approvals', () => {
       requestId: 'inquiry-note-free',
       allowBypass: false,
       streamId: 'inquiry-stream',
-      mode: 'new',
       question: 'Which external fact should be checked?',
       threadId: 'thread-note-free',
       sessionLinks: null,
@@ -489,9 +487,9 @@ describe('TUI retry approvals', () => {
     });
   });
 
-  it('updates TUI bash bypass state when goal auto-approval is enabled and cleared', async () => {
+  it('updates TUI command bypass state when goal auto-approval is enabled and cleared', async () => {
     const { presentationHost } = tui();
-    await setGoalSessionBashAutoApproval('goal-bypass-stream', true);
+    await setGoalSessionAutoApproval('goal-bypass-stream', 'commands');
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(true);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'goal-bypass-stream',
@@ -499,12 +497,29 @@ describe('TUI retry approvals', () => {
       bypassActive: true,
     });
 
-    await setGoalSessionBashAutoApproval('goal-bypass-stream', false);
+    await setGoalSessionAutoApproval('goal-bypass-stream', false);
     expect(streams.get().get('goal-bypass-stream')?.bypass.bash).toBe(false);
     expect(presentationHost.emitApprovalBypassState).toHaveBeenCalledWith({
       streamId: 'goal-bypass-stream',
       kind: 'bash',
       bypassActive: false,
+    });
+  });
+
+  it('scopes goal auto-approval to all agent work and clears it together', async () => {
+    tui();
+    await setGoalSessionAutoApproval('goal-all-bypass-stream', 'allAgentWork');
+    expect(streams.get().get('goal-all-bypass-stream')?.bypass).toEqual({
+      bash: true,
+      superYolo: true,
+      toolEdit: true,
+    });
+
+    await setGoalSessionAutoApproval('goal-all-bypass-stream', false);
+    expect(streams.get().get('goal-all-bypass-stream')?.bypass).toEqual({
+      bash: false,
+      superYolo: false,
+      toolEdit: false,
     });
   });
 
@@ -630,7 +645,6 @@ describe('TUI retry approvals', () => {
         requestId: 'inquiry-excluded',
         allowBypass: false,
         streamId,
-        mode: 'new',
         question: 'What external fact should be checked?',
         threadId: 'thread-excluded',
       },

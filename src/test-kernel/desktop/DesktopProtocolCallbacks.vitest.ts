@@ -83,7 +83,6 @@ describe('desktop protocol callbacks', () => {
     },
   ])('$name', ({ url, path, query }) => {
     expect(parseDesktopProtocolCallback(url)).toEqual({
-      rawUrl: url,
       path,
       query,
     });
@@ -131,7 +130,6 @@ describe('desktop protocol callbacks', () => {
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
-        rawUrl: 'texra://texra-ai.texra/auth-callback?state=startup',
         path: '/auth-callback',
         query: 'state=startup',
       }),
@@ -144,9 +142,7 @@ describe('desktop protocol callbacks', () => {
     router.subscribe(listener);
 
     const { routeArgv } = router;
-    expect(
-      routeArgv(['texra://texra-ai.texra/auth-callback?state=standalone']),
-    ).toBe(1);
+    routeArgv(['texra://texra-ai.texra/auth-callback?state=standalone']);
 
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({ query: 'state=standalone' }),
@@ -213,7 +209,6 @@ describe('desktop protocol callback lifecycle', () => {
       name: 'stops a launch when another desktop instance owns the lock',
       lockAvailable: false,
       argv: [] as string[],
-      shouldContinue: false,
       requestCount: 1,
       quitCount: 1,
       protocolRegistrations: [] as string[],
@@ -222,7 +217,6 @@ describe('desktop protocol callback lifecycle', () => {
       name: 'allows the first desktop process to become primary',
       lockAvailable: true,
       argv: ['--texra-workspace-path=/Users/ray/paper'],
-      shouldContinue: true,
       requestCount: 1,
       quitCount: 0,
       protocolRegistrations: ['texra'],
@@ -232,7 +226,6 @@ describe('desktop protocol callback lifecycle', () => {
     ({
       lockAvailable,
       argv,
-      shouldContinue,
       requestCount,
       quitCount,
       protocolRegistrations,
@@ -241,7 +234,7 @@ describe('desktop protocol callback lifecycle', () => {
 
       const lifecycle = installDesktopProtocolCallbackLifecycle({ app, argv });
 
-      expect(lifecycle.shouldContinue).toBe(shouldContinue);
+      expect(lifecycle.ownsSingleInstanceLock).toBe(lockAvailable);
       expect(app.requestSingleInstanceLock).toHaveBeenCalledTimes(requestCount);
       expect(app.quit).toHaveBeenCalledTimes(quitCount);
       expect(

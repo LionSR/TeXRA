@@ -15,14 +15,16 @@ import {
   isTexraApprovalDenied,
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
-import type {
-  LineChanges,
-  StreamTabId,
-  ToolEditPermission,
-  ToolResult,
+import {
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+  type LineChanges,
+  type StreamTabId,
+  type ToolEditPermission,
+  type ToolResult,
 } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
+import { clamp } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { applyPatchToText } from '@utils/text/diff';
@@ -61,8 +63,6 @@ export type ToolEditApprovalResult =
       readonly startLine?: number;
     }
   | ({ readonly action: 'reject' } & RejectionProvenance);
-
-const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
 
@@ -178,11 +178,11 @@ export function firstChangedLine(
     // A deletion has no line of its own in the proposed text; reveal the
     // position it was removed from.
     if (marker === '-') {
-      return Math.min(Math.max(line - 1, 0), lastProposedLine);
+      return clamp(line - 1, 0, lastProposedLine);
     }
     line += 1;
   }
-  return Math.min(Math.max(hunk.newStart - 1, 0), lastProposedLine);
+  return clamp(hunk.newStart - 1, 0, lastProposedLine);
 }
 
 // ============================================================================
@@ -192,10 +192,7 @@ export function firstChangedLine(
 export async function requestToolEditApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  const approvalsEnabled = getConfig<boolean>(
-    TOOL_EDIT_APPROVAL_CONFIG_KEY,
-    true,
-  );
+  const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
 
   const context = tryUseRunContext();
   const session = getRunContextSession(context) ?? defaultSession();
@@ -230,16 +227,11 @@ export async function requestToolEditApproval(
   }
 
   return session.approvals.toolEdit.enqueue(streamId, {
-    prompt: async () => {
-      const hostInteraction =
-        session.interactions.requestToolEditApproval(preparedRequest);
-      if (!hostInteraction) {
-        throw new Error(
-          'Tool edit approval requires session.interactions.requestToolEditApproval.',
-        );
-      }
-      return finalizeApprovalResult(await hostInteraction, preparedRequest);
-    },
+    prompt: async () =>
+      finalizeApprovalResult(
+        await session.interactions.requestToolEditApproval(preparedRequest),
+        preparedRequest,
+      ),
     bypassed: acceptProposedAsIs,
   });
 }

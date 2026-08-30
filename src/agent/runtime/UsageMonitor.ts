@@ -3,8 +3,8 @@ import type { AgentRunStateSnapshot } from '@agent/core/state/AgentState';
 import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { ModelCell } from '@agent/runtime/ModelCell';
 import type {
+  ExecutionId,
   ExtendedTokenUsageStats,
-  StorageKey,
   StreamTabId,
   UsageRoute,
 } from '@shared/schemas';
@@ -55,20 +55,9 @@ interface UsageMonitorMetadata {
 interface UsageMonitorModelInfo {
   capabilities: Pick<
     ModelCapabilities,
-    | 'supportsPromptCaching'
-    | 'supportsAutoPromptCaching'
-    | 'supportsReasoning'
-    | 'cacheDiscountFactor'
+    'supportsPromptCaching' | 'supportsAutoPromptCaching' | 'supportsReasoning'
   >;
-  config: Pick<
-    ModelConfig,
-    | 'provider'
-    | 'name'
-    | 'fullName'
-    | 'inputPrice'
-    | 'openRouterOnly'
-    | 'requiresResponsesAPI'
-  >;
+  config: Pick<ModelConfig, 'fullName'>;
 }
 
 /**
@@ -76,12 +65,15 @@ interface UsageMonitorModelInfo {
  *
  * Takes individual fields instead of full AgentExecutionContext:
  * - logger: For error logging and the single `usage` trace event
- * - storageKey: The storage key for this execution (immutable)
+ * - executionId: Keys the per-stream usage map (immutable)
+ * - runStageId: The run stage this execution opened, used only to stamp the
+ *   trace event when usage is logged outside an ambient stage
  * - streamId: For backend logging
  */
 interface UsageMonitorContext {
   logger: AgentTrace;
-  storageKey: StorageKey;
+  executionId: ExecutionId;
+  runStageId: string | undefined;
   streamId: StreamTabId;
 }
 
@@ -122,7 +114,7 @@ export class UsageMonitor {
   }
 
   async recordUsage(stateGlobal: AgentRunStateSnapshot): Promise<void> {
-    const { logger, storageKey, streamId } = this.context;
+    const { logger, executionId, runStageId, streamId } = this.context;
     const { agentCategory } = this.metadata;
     const runKind: UsageMonitorRunKind =
       agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
@@ -188,20 +180,20 @@ export class UsageMonitor {
       logger.usage(
         {
           streamId,
-          storageKey,
+          storageKey: executionId,
           usage: payload,
         },
         {
           recordTranscript: agentCategory === AgentCategory.Workflow,
           // The ambient stage's AsyncLocalStorage scope stamps its structural
-          // id onto emitted events; fall back to storageKey when usage is
-          // logged outside a stage.
-          stageId: logger.activeStageId() ?? storageKey,
+          // id onto emitted events; fall back to this run's own stage when
+          // usage is logged outside a stage.
+          stageId: logger.activeStageId() ?? runStageId,
         },
       );
 
       // Log to backend for analytics/billing.
-      await this.logToBackend(
+      this.logToBackend(
         stateGlobal.totalResponseTimeMs,
         {
           inputTokens: roundInputTokens,
@@ -241,7 +233,7 @@ export class UsageMonitor {
    * Log per-round usage to backend for analytics/billing.
    * Errors are caught and logged, never thrown.
    */
-  private async logToBackend(
+  private logToBackend(
     totalResponseTimeMs: number,
     usage: Pick<
       UsageLogStats,
@@ -254,7 +246,7 @@ export class UsageMonitor {
     provider: NonNullable<
       AgentRunStateSnapshot['usageAccumulator']['latestUsage']
     >['provider'],
-  ): Promise<void> {
+  ): void {
     try {
       const { config } = this.modelInfo;
       const cachedInputTokens = usage.cachedInputTokens ?? 0;

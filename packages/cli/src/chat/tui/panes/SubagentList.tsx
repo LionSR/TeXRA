@@ -5,47 +5,17 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - shared stream state
-import {
-  Select,
-  visibleSelectRange,
-  type SelectItem,
-} from '@cli/tui/ui/Select';
+import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
-import {
-  POINTER,
-  STATUS_DIAMOND,
-  TICK,
-  TOKENS_GENERATED,
-} from '@cli/tui/ui/glyphs';
+import { POINTER, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
-import {
-  WORKFLOW_TASK_STATUS_LABEL,
-  isTerminalWorkflowCallProgress,
-  runIdentityDisplayName,
-  type StreamTabId,
-  type TokenUsageStats,
-  type WorkflowCallProgress,
-  type WorkflowControlAction,
-} from '@shared/schemas';
-import {
-  formatWorkflowPhaseHeading,
-  workflowCallFailureTally,
-  workflowPhaseCallProgress,
-  type WorkflowPhaseHeading,
-} from '@shared/copy/workflowCall';
+import { type StreamTabId, type TokenUsageStats } from '@shared/schemas';
 import { formatStageLabel } from '@shared/streams/streamStatusDisplay';
-import { formatCompactTokenCount } from '@utils/core';
-import {
-  formatCompactDuration,
-  formatCostUsd,
-  formatResultCount,
-} from '@utils/text/stringUtils';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - TUI rendering
 import { formatCliStatusLabel } from '../sessionStatus';
-import { WORKFLOW_TASK_STATUS_STYLE } from './transcriptEntryLayout';
 
 // Local imports - TUI state and controls
 import { childElapsed } from '../state/childControls';
@@ -55,22 +25,9 @@ import {
   streamStateFor,
 } from '../state/childExecutions';
 import {
+  readStreamArtifacts,
   streamArtifactRevision,
-  streamPreferredUsage,
 } from '../state/subscribeStreamArtifacts';
-import {
-  childListStreamId,
-  childStreamListValue,
-  workflowTaskListValue,
-  type ChildListValue,
-} from '../state/childListSelection';
-import {
-  uniqueWorkflowChildStreamId,
-  workflowDashboardSelection,
-  type WorkflowDashboardModel,
-  type WorkflowPhaseGroup,
-  type WorkflowTaskEntry,
-} from '../state/workflowDashboardModel';
 
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
@@ -80,35 +37,64 @@ import {
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
 import { useSignal } from '../state/useSignal';
+import { streamPhaseFor } from '../state/cliState';
+import type { ChildListValue } from '../state/childListSelection';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
 const SUBAGENT_SUMMARY_MAX_COLUMNS = 100;
 
-interface PhaseHeaderDetails extends WorkflowPhaseHeading {
-  readonly progress?: string;
+/** Emphasis a row segment inherits from its host row. */
+interface SegmentStyle {
+  readonly bold?: boolean;
+  readonly color?: string;
 }
 
-function PhaseHeader({
-  details,
-  focused = false,
-}: {
-  readonly details: PhaseHeaderDetails;
-  readonly focused?: boolean;
+/** One inline segment of a single-line row: a cell that may shrink to nothing
+ *  and truncates rather than wrapping. `flexShrink` carries the significance
+ *  order — higher numbers yield first as the row narrows. */
+export function RowSegment({
+  bold,
+  children,
+  color,
+  dimColor,
+  flexShrink,
+}: SegmentStyle & {
+  readonly children: React.ReactNode;
+  readonly dimColor?: boolean;
+  readonly flexShrink: number;
 }): React.JSX.Element {
-  const inlineProgress = details.progress ? ` · ${details.progress}` : '';
   return (
-    <Box flexDirection="row" flexGrow={1} minWidth={0}>
-      <Box minWidth={0} flexShrink={1}>
-        <Text aria-hidden dimColor>
-          {focused ? `${POINTER} ${STATUS_DIAMOND} ` : `    ${STATUS_DIAMOND} `}
-        </Text>
-        <Text dimColor wrap="truncate-end">
-          {`${formatWorkflowPhaseHeading(details)}${inlineProgress}`}
-        </Text>
-      </Box>
+    <Box minWidth={0} flexShrink={flexShrink}>
+      <Text bold={bold} color={color} dimColor={dimColor} wrap="truncate-end">
+        {children}
+      </Text>
     </Box>
+  );
+}
+
+/** The ` · <kind>` pending-approval suffix shared by session rows and the
+ *  workflow popup's task rows. The kind is actionable so it never shrinks; the
+ *  overflow count is informational and yields early. */
+export function ApprovalSegments({
+  approval,
+  bold,
+  color,
+}: SegmentStyle & {
+  readonly approval: ReturnType<typeof pendingApprovalRowDisplay>;
+}): React.JSX.Element | null {
+  if (!approval) return null;
+  return (
+    <>
+      <Box flexShrink={0}>
+        <Text bold={bold} color={color}>{` · ${approval.label}`}</Text>
+      </Box>
+      {approval.overflow ? (
+        <RowSegment bold={bold} color={color} flexShrink={3}>
+          {` ${approval.overflow}`}
+        </RowSegment>
+      ) : null}
+    </>
   );
 }
 
@@ -136,18 +122,15 @@ function SessionRow({
   useSignal(sessionStateRevision);
   const metadata = streamMetadataFor(session.id);
   const streamState = streamStateFor(session.id);
-  const status = session.slice?.status;
-  const substate = session.slice?.substate;
+  const phase = streamPhaseFor(session.id);
+  const status = phase?.phase;
   const statusLabel = formatCliStatusLabel(
     status,
-    substate,
+    phase?.substate,
     session.parentId !== undefined,
   );
   const elapsed = childElapsed(
-    {
-      status,
-      startedAt: session.slice?.runStartedAt,
-    },
+    { status, startedAt: phase?.runStartedAt },
     nowMs,
   );
   // Significance order — informational counts shed first, then the summary,
@@ -198,36 +181,23 @@ function SessionRow({
       <Text aria-hidden color={childStatusColor(status)}>
         {CHILD_STATUS_MARKER}
       </Text>
-      <Box minWidth={0} flexShrink={1}>
-        <Text bold={active} wrap="truncate-end">
-          {session.label}
-          {statusLabel ? ` ${statusLabel}` : ''}
-          {stageLabel ? ` · ${stageLabel}` : ''}
-          {modelLabel ? ` · ${modelLabel}` : ''}
-          {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
-        </Text>
-      </Box>
+      <RowSegment bold={active} flexShrink={1}>
+        {session.label}
+        {statusLabel ? ` ${statusLabel}` : ''}
+        {stageLabel ? ` · ${stageLabel}` : ''}
+        {modelLabel ? ` · ${modelLabel}` : ''}
+        {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
+      </RowSegment>
       {summary ? (
-        <Box minWidth={0} flexShrink={2}>
-          <Text dimColor wrap="truncate-end">
-            {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
-          </Text>
-        </Box>
+        <RowSegment dimColor flexShrink={2}>
+          {` · ${truncateSummaryToWidth(summary, SUBAGENT_SUMMARY_MAX_COLUMNS)}`}
+        </RowSegment>
       ) : null}
-      {approval ? (
-        <Box flexShrink={0}>
-          <Text>{` · ${approval.label}`}</Text>
-        </Box>
-      ) : null}
-      {approval?.overflow ? (
-        <Box minWidth={0} flexShrink={3}>
-          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
-        </Box>
-      ) : null}
+      <ApprovalSegments approval={approval} />
       {focused && hiddenRowSummary ? (
-        <Box minWidth={0} flexShrink={4}>
-          <Text dimColor wrap="truncate-end">{` · ${hiddenRowSummary}`}</Text>
-        </Box>
+        <RowSegment dimColor flexShrink={4}>
+          {` · ${hiddenRowSummary}`}
+        </RowSegment>
       ) : null}
       {metadataText ? (
         <>
@@ -241,398 +211,18 @@ function SessionRow({
   );
 }
 
-function workflowTaskMetadata(
-  call: WorkflowCallProgress,
-  child: StreamSlice | undefined,
-  configModel: string | undefined,
-  streamId: StreamTabId | undefined,
-  nowMs: number,
-): string | undefined {
-  const terminal = isTerminalWorkflowCallProgress(call);
-  const usage = streamPreferredUsage(streamId, child);
-  let elapsed: string | undefined;
-  let model: string | undefined;
-  let cost: number | undefined;
-  if (terminal) {
-    if ('durationMs' in call && call.durationMs !== undefined) {
-      elapsed = formatCompactDuration(call.durationMs);
-    }
-    model = ('model' in call ? call.model : undefined) ?? configModel;
-    cost =
-      ('totalCostUsd' in call ? call.totalCostUsd : undefined) ?? usage?.cost;
-  } else {
-    if (child?.runStartedAt !== undefined) {
-      elapsed = formatCompactDuration(nowMs - child.runStartedAt);
-    }
-    model = configModel;
-    cost = usage?.cost;
-  }
-  const parts = [
-    model ? getRuntimeModelLabel(model) : undefined,
-    elapsed,
-    usage && usage.outputTokens > 0
-      ? `${TOKENS_GENERATED}${formatCompactTokenCount(usage.outputTokens)}`
-      : undefined,
-    cost !== undefined && cost > 0 ? formatCostUsd(cost) : undefined,
-  ].filter((part): part is string => part !== undefined);
-  return parts.length > 0 ? parts.join(' · ') : undefined;
-}
-
-function WorkflowTaskRow({
-  child,
-  entry,
-  focused,
-  nowMs,
-  pendingKinds,
-  streamId,
-}: {
-  readonly child: StreamSlice | undefined;
-  readonly entry: WorkflowTaskEntry;
-  readonly focused: boolean;
-  readonly nowMs: number;
-  readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
-  readonly streamId: StreamTabId | undefined;
-}): React.JSX.Element {
-  useSignal(sessionStateRevision);
-  const style = WORKFLOW_TASK_STATUS_STYLE[entry.call.status];
-  // The resolved model rides the task's stream metadata, not the slice; a
-  // terminal call's own recorded model still wins inside the formatter.
-  const configModel =
-    streamId === undefined
-      ? undefined
-      : streamMetadataFor(streamId)?.config?.model;
-  const metadata = workflowTaskMetadata(
-    entry.call,
-    child,
-    configModel,
-    streamId,
-    nowMs,
-  );
-  const approval = pendingApprovalRowDisplay(pendingKinds);
-  return (
-    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-        {focused ? POINTER : ' '}
-      </Text>
-      <Text aria-hidden color={style.color}>{` ${style.marker} `}</Text>
-      <Box minWidth={0} flexShrink={1}>
-        <Text wrap="truncate-end">
-          {entry.call.label} · {WORKFLOW_TASK_STATUS_LABEL[entry.call.status]}
-        </Text>
-      </Box>
-      {approval ? (
-        <Box flexShrink={0}>
-          <Text>{` · ${approval.label}`}</Text>
-        </Box>
-      ) : null}
-      {approval?.overflow ? (
-        <Box minWidth={0} flexShrink={3}>
-          <Text wrap="truncate-end">{` ${approval.overflow}`}</Text>
-        </Box>
-      ) : null}
-      {metadata ? (
-        <Box minWidth={0} flexShrink={2}>
-          <Text dimColor wrap="truncate-end">{`  ${metadata}`}</Text>
-        </Box>
-      ) : null}
-    </Box>
-  );
-}
-
-function WorkflowDashboard({
-  columns,
-  keyboardActive,
-  maxRows,
-  model,
-  onCancel,
-  onFocusStream,
-  onSelectionChange,
-  pendingApprovals,
-  selectedValue,
-  streams,
-}: {
-  readonly columns: number;
-  readonly keyboardActive: boolean;
-  readonly maxRows: number | undefined;
-  readonly model: WorkflowDashboardModel;
-  readonly onCancel: () => void;
-  readonly onFocusStream: ((streamId: StreamTabId) => void) | undefined;
-  readonly onSelectionChange: ((value: ChildListValue) => void) | undefined;
-  readonly pendingApprovals:
-    ReadonlyMap<string, readonly PendingApprovalKind[]> | undefined;
-  readonly selectedValue: ChildListValue | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): React.JSX.Element | null {
-  useSignal(sessionStateRevision);
-  const { groups, tasks, taskByValue, groupByValue, wide } = model;
-  const { selectedGroup, selectedTask, selectedTaskGroup, activeGroup } =
-    workflowDashboardSelection(model, selectedValue);
-  const uniqueChildId = (entry: WorkflowTaskEntry): StreamTabId | undefined =>
-    uniqueWorkflowChildStreamId(entry, model.childTaskIndex, streams);
-  const nowMs = useLiveNowMsSince(
-    tasks.map((entry) => {
-      const childStreamId = uniqueChildId(entry);
-      return childStreamId === undefined
-        ? undefined
-        : streams.get(childStreamId)?.runStartedAt;
-    }),
-  );
-  const phaseItems: SelectItem<ChildListValue>[] = groups.map((group) => ({
-    label: group.label,
-    value: group.value,
-  }));
-  const taskItems: SelectItem<ChildListValue>[] = (
-    activeGroup?.tasks ?? []
-  ).map((entry) => ({
-    label: entry.call.label,
-    value: workflowTaskListValue(entry.id),
-  }));
-  const narrowItems: SelectItem<ChildListValue>[] = groups.flatMap((group) => [
-    {
-      label: group.label,
-      value: group.value,
-      disabled: group.tasks.length > 0,
-    },
-    ...group.tasks.map((entry) => ({
-      label: entry.call.label,
-      value: workflowTaskListValue(entry.id),
-    })),
-  ]);
-  const calls = tasks.map((entry) => entry.call);
-  const { done, total } = workflowPhaseCallProgress(calls);
-  const contentRows =
-    maxRows === undefined ? undefined : Math.max(0, maxRows - 2);
-
-  const selectTask = (value: ChildListValue): void => {
-    const entry = taskByValue.get(value);
-    if (!entry) return;
-    const childStreamId = uniqueChildId(entry);
-    if (childStreamId !== undefined) onFocusStream?.(childStreamId);
-  };
-  const enterPhase = (value: ChildListValue): void => {
-    const firstTask = groupByValue.get(value)?.tasks[0];
-    if (firstTask) onSelectionChange?.(workflowTaskListValue(firstTask.id));
-  };
-
-  useInput(
-    (_input, key) => {
-      if (!wide || key.ctrl || key.meta) return;
-      if (key.rightArrow && selectedGroup) {
-        enterPhase(selectedGroup.value);
-      } else if (key.leftArrow && selectedTaskGroup) {
-        onSelectionChange?.(selectedTaskGroup.value);
-      }
-    },
-    { isActive: keyboardActive },
-  );
-
-  const sessionApproval = pendingApprovalRowDisplay(
-    pendingApprovals?.get(model.root.streamId),
-  );
-  const approvalOnlyDashboard =
-    tasks.length === 0 && groups.length === 0 && sessionApproval !== undefined;
-  if (
-    (tasks.length === 0 &&
-      groups.length === 0 &&
-      sessionApproval === undefined) ||
-    (contentRows !== undefined && contentRows <= 0 && !approvalOnlyDashboard)
-  ) {
-    return null;
-  }
-  const headingPhase = activeGroup?.heading
-    ? formatWorkflowPhaseHeading({
-        phaseLabel: activeGroup.label,
-        ...(activeGroup.heading.phaseIndex !== undefined
-          ? { phaseIndex: activeGroup.heading.phaseIndex }
-          : {}),
-        ...(activeGroup.heading.phaseTotal !== undefined
-          ? { phaseTotal: activeGroup.heading.phaseTotal }
-          : {}),
-      })
-    : undefined;
-  // The heading leads with the run identity's display name — for a
-  // multi-agent workflow root that is the workflow name, matching what the
-  // retired slice `agent` field carried from `run.config`.
-  const rootIdentity = streamMetadataFor(model.root.streamId)?.identity;
-  const rootAgent = rootIdentity
-    ? runIdentityDisplayName(rootIdentity)
-    : undefined;
-  const heading = headingPhase
-    ? `${rootAgent ?? 'Workflow'} · ${headingPhase} · ${done}/${total} done`
-    : `${rootAgent ?? 'Workflow'} · ${done}/${total} done`;
-  const { failed } = workflowCallFailureTally(calls);
-  const renderTask = (
-    item: SelectItem<ChildListValue>,
-    state: { readonly focused: boolean },
-  ): React.JSX.Element | null => {
-    const entry = taskByValue.get(item.value);
-    if (!entry) return null;
-    const childStreamId = uniqueChildId(entry);
-    return (
-      <WorkflowTaskRow
-        child={
-          childStreamId === undefined ? undefined : streams.get(childStreamId)
-        }
-        entry={entry}
-        focused={state.focused}
-        nowMs={nowMs}
-        streamId={childStreamId}
-        pendingKinds={
-          childStreamId === undefined
-            ? undefined
-            : pendingApprovals?.get(childStreamId)
-        }
-      />
-    );
-  };
-  const groupDetails = (group: WorkflowPhaseGroup): PhaseHeaderDetails => {
-    const progress = workflowPhaseCallProgress(
-      group.tasks.map((entry) => entry.call),
-    );
-    return {
-      phaseLabel: group.label,
-      ...(group.heading?.phaseIndex !== undefined
-        ? { phaseIndex: group.heading.phaseIndex }
-        : {}),
-      ...(group.heading?.phaseTotal !== undefined
-        ? { phaseTotal: group.heading.phaseTotal }
-        : {}),
-      progress: `${progress.done}/${progress.total}`,
-    };
-  };
-  const selectProps = {
-    hotkeys: false,
-    maxVisibleItems: contentRows,
-    onCancel,
-    wrap: false,
-  } as const;
-
-  return (
-    <Box
-      flexDirection="column"
-      height={maxRows === undefined ? undefined : Math.max(0, maxRows - 1)}
-      marginTop={1}
-      paddingX={1}
-      width={columns}
-    >
-      <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-        <Box minWidth={0} flexShrink={1}>
-          <Text bold wrap="truncate-end">
-            {heading}
-          </Text>
-        </Box>
-        {failed > 0 ? (
-          // A pending approval needs action, so this tally yields before the
-          // fixed approval suffix when the two cannot both fit.
-          <Box minWidth={0} flexShrink={2}>
-            <Text bold color={COLOR_WARNING} wrap="truncate-end">
-              {` · ${failed} failed`}
-            </Text>
-          </Box>
-        ) : null}
-        {sessionApproval ? (
-          <Box flexShrink={0}>
-            <Text bold color={COLOR_WARNING}>
-              {` · ${sessionApproval.label}`}
-            </Text>
-          </Box>
-        ) : null}
-        {sessionApproval?.overflow ? (
-          <Box minWidth={0} flexShrink={3}>
-            <Text bold color={COLOR_WARNING} wrap="truncate-end">
-              {` ${sessionApproval.overflow}`}
-            </Text>
-          </Box>
-        ) : null}
-      </Box>
-      {wide ? (
-        <Box flexDirection="row" height={contentRows} minWidth={0}>
-          <Box flexDirection="column" width="32%" paddingRight={1}>
-            <Select
-              {...selectProps}
-              isActive={keyboardActive && selectedTask === undefined}
-              highlightedValue={selectedGroup ? (selectedValue ?? null) : null}
-              items={phaseItems}
-              onHighlightChange={(value) => onSelectionChange?.(value)}
-              onSelect={enterPhase}
-              renderItem={(item, state) => {
-                const group = groupByValue.get(item.value);
-                if (!group) return null;
-                const details = groupDetails(group);
-                return (
-                  <Box minWidth={0}>
-                    <Text aria-hidden>{state.focused ? POINTER : ' '}</Text>
-                    <Text wrap="truncate-end">
-                      {' '}
-                      {formatWorkflowPhaseHeading(details)} · {details.progress}
-                    </Text>
-                  </Box>
-                );
-              }}
-            />
-          </Box>
-          <Box flexDirection="column" minWidth={0} width="68%">
-            <Select
-              {...selectProps}
-              isActive={keyboardActive && selectedTask !== undefined}
-              highlightedValue={selectedTask ? (selectedValue ?? null) : null}
-              items={taskItems}
-              onHighlightChange={(value) => onSelectionChange?.(value)}
-              onSelect={selectTask}
-              renderItem={renderTask}
-            />
-          </Box>
-        </Box>
-      ) : (
-        <Select
-          {...selectProps}
-          isActive={keyboardActive}
-          highlightedValue={selectedValue ?? null}
-          items={narrowItems}
-          onHighlightChange={(value) => onSelectionChange?.(value)}
-          onSelect={selectTask}
-          renderItem={(item, state) => {
-            const group = groupByValue.get(item.value);
-            return group ? (
-              <PhaseHeader
-                details={groupDetails(group)}
-                focused={state.focused}
-              />
-            ) : (
-              renderTask(item, state)
-            );
-          }}
-        />
-      )}
-    </Box>
-  );
-}
-
-/** The workflow control each key press requests, so the handler holds no ladder. */
-const WORKFLOW_CONTROL_KEYS = {
-  s: 'skip',
-  r: 'retry',
-} as const satisfies Record<string, WorkflowControlAction>;
-
 export interface SubagentListProps {
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;
   readonly onCancel?: () => void;
   readonly onFocusStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution?: (executionId: string) => void;
-  /** Skip or retry the focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onWorkflowControl?: (
-    executionId: string,
-    action: WorkflowControlAction,
-  ) => void;
   readonly onSelectionChange?: (value: ChildListValue) => void;
   /**
    * Pending approval kinds per stream id (see `pendingApprovalSummaries`; the
    * caller folds stream-less approvals onto the visible surface root via
    * `groupPendingApprovalsByRow`).
    *
-   * When `dashboard` is present, per-task buckets render on their task rows and
-   * the root-folded stream-less bucket renders in the dashboard heading.
    * Stream-bound plan, proposal, and retry approvals remain keyed to their
    * actual owning stream. The queue remains the authority for approval
    * identity and order; this map only projects that state onto the rows which
@@ -644,11 +234,6 @@ export interface SubagentListProps {
   >;
   readonly selectedValue?: ChildListValue;
   readonly sessions?: readonly StreamView[];
-  readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
-  /** Dashboard rows for a workflow-script list root, derived once by `App`
-   *  (see `state/workflowDashboardModel`). Present iff the dashboard replaces
-   *  the plain session list. */
-  readonly dashboard?: WorkflowDashboardModel;
   /** Stream `selectedValue` points at, resolved once by `App` — the same
    *  stream the status bar advertises as killable. */
   readonly selectedChildStreamId?: StreamTabId;
@@ -663,7 +248,7 @@ export function SubagentList(
   const sessions = props.sessions ?? [];
   useSignal(streamArtifactRevision);
   const startedAts = useMemo(
-    () => sessions.map((session) => session.slice?.runStartedAt),
+    () => sessions.map((session) => streamPhaseFor(session.id)?.runStartedAt),
     [sessions],
   );
   const { items, sessionsByValue } = useMemo(() => {
@@ -673,74 +258,27 @@ export function SubagentList(
     // would desynchronise the Alt+1..9 numbers it assigns from the rows on
     // screen.
     for (const session of sessions) {
-      const value = childStreamListValue(session.id);
-      nextItems.push({ label: session.label, value });
-      byValue.set(value, session);
+      nextItems.push({ label: session.label, value: session.id });
+      byValue.set(session.id, session);
     }
     return { items: nextItems, sessionsByValue: byValue };
   }, [sessions]);
   const nowMs = useLiveNowMsSince(startedAts);
   const { columns } = useWindowSize();
   const metadataColumn = columns >= CHILD_ROW_METADATA_MIN_COLUMNS;
-  const dashboard = props.dashboard;
   const contentRows =
     props.maxRows === undefined ? undefined : Math.max(0, props.maxRows - 1);
-  const selectedIndex = Math.max(
-    0,
-    items.findIndex((item) => item.value === props.selectedValue),
-  );
-  const visibleRange = visibleSelectRange({
-    highlight: selectedIndex,
-    itemCount: items.length,
-    maxVisibleItems: contentRows,
-  });
-  const visibleValues = new Set(
-    items.slice(visibleRange.start, visibleRange.end).map((item) => item.value),
-  );
-  const hiddenSessionCount = sessions.filter(
-    (session) => !visibleValues.has(childStreamListValue(session.id)),
-  ).length;
-  const hiddenRowSummary =
-    hiddenSessionCount > 0
-      ? `+${formatResultCount(hiddenSessionCount, 'session')}`
-      : undefined;
-
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta) return;
       const streamId = props.selectedChildStreamId;
       if (!streamId) return;
-      const pressed = input.toLowerCase();
-      // Kill/skip/retry target only a focused subagent stream (a
-      // workflow-script grandchild); the session control registry no-ops for
-      // any execution id that is not an in-flight grandchild, so non-workflow
-      // rows are inert.
-      if (pressed !== 'k' && pressed !== 's' && pressed !== 'r') return;
+      if (input.toLowerCase() !== 'k') return;
       const executionId = props.activeSubagentExecutionIds?.get(streamId);
-      if (!executionId) return;
-      if (pressed === 'k') props.onKillExecution?.(executionId);
-      else
-        props.onWorkflowControl?.(executionId, WORKFLOW_CONTROL_KEYS[pressed]);
+      if (executionId) props.onKillExecution?.(executionId);
     },
     { isActive: props.keyboardActive ?? false },
   );
-
-  if (dashboard) {
-    return (
-      <WorkflowDashboard
-        columns={columns}
-        keyboardActive={props.keyboardActive ?? false}
-        maxRows={props.maxRows}
-        model={dashboard}
-        onCancel={props.onCancel ?? (() => undefined)}
-        onFocusStream={props.onFocusStream}
-        onSelectionChange={props.onSelectionChange}
-        pendingApprovals={props.pendingApprovals}
-        selectedValue={props.selectedValue}
-        streams={props.streams ?? new Map()}
-      />
-    );
-  }
 
   if (items.length === 0) return null;
   // The list is deliberately separated from the input/status chrome by one
@@ -760,9 +298,7 @@ export function SubagentList(
       width={metadataColumn ? columns : undefined}
     >
       <Select
-        activeValue={
-          activeSession ? childStreamListValue(activeSession.id) : undefined
-        }
+        activeValue={activeSession?.id}
         highlightedValue={props.selectedValue ?? null}
         hotkeys={false}
         isActive={props.keyboardActive}
@@ -775,7 +311,7 @@ export function SubagentList(
         wrap={false}
         onHighlightChange={(value) => props.onSelectionChange?.(value)}
         onSelect={(value) => {
-          const streamId = childListStreamId(value);
+          const streamId = value;
           if (streamId) props.onFocusStream?.(streamId);
         }}
         renderItem={(item, state) => {
@@ -784,9 +320,13 @@ export function SubagentList(
             <SessionRow
               isListRoot={session.id === props.listRootStreamId}
               active={state.active}
-              cumulativeUsage={streamPreferredUsage(session.id, session.slice)}
+              cumulativeUsage={readStreamArtifacts(session.id)?.cumulativeUsage}
               focused={state.focused}
-              hiddenRowSummary={hiddenRowSummary}
+              hiddenRowSummary={
+                state.hiddenItemCount > 0
+                  ? `+${formatResultCount(state.hiddenItemCount, 'agent')}`
+                  : undefined
+              }
               metadataColumn={metadataColumn}
               nowMs={nowMs}
               pendingKinds={props.pendingApprovals?.get(session.id)}

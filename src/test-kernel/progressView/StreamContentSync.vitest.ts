@@ -15,7 +15,7 @@ import type {
   FileLocation,
   OutputFileInfo,
   Plan,
-  StorageKey,
+  ExecutionId,
   StreamTabId,
   SyncStreamContentPayload,
   TodoItem,
@@ -42,7 +42,7 @@ const plan: Plan = {
 
 const stream = 'stream:shared-snapshot' as StreamTabId;
 const parentStream = 'stream:parent' as StreamTabId;
-const runId = 'run-1' as StorageKey;
+const runId = 'run-1' as ExecutionId;
 const activeSubagent: ActiveChildInfo = {
   executionId: 'child-1',
   agentName: 'search',
@@ -92,7 +92,7 @@ async function createSyncHarness(
     bashBypass: false,
     toolEditBypass: false,
     superYoloBypass: false,
-    goalActive: false,
+    goal: { active: false },
   }),
 ): Promise<SyncHarness> {
   const state = new SessionState();
@@ -139,7 +139,7 @@ describe('progress view stream-content projection', () => {
       subagents: [activeSubagent],
     }));
 
-    renderer.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream);
 
     expect(bridge.syncStream).toHaveBeenCalledWith(stream);
     expect(messages.at(-1)).toMatchObject({
@@ -186,7 +186,7 @@ describe('progress view stream-content projection', () => {
       stage: { kind: 'phase', label: 'Reduce', index: 1, total: 3 },
     }));
 
-    renderer.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream);
 
     expect(messages.at(-1)).toMatchObject({
       stream,
@@ -250,7 +250,7 @@ describe('progress view stream-content projection', () => {
     }));
     messages.length = 0;
 
-    renderer.syncStreamContent(stream, { includeActiveState: true });
+    renderer.syncStreamContent(stream);
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({
@@ -281,9 +281,11 @@ describe('progress view stream-content projection', () => {
           bashBypass: true,
           toolEditBypass: true,
           superYoloBypass: true,
-          goalActive: true,
-          goalStatus: 'active',
-          goalObjective: 'Keep making progress.',
+          goal: {
+            active: true,
+            status: 'active',
+            objective: 'Keep making progress.',
+          },
         };
       },
     );

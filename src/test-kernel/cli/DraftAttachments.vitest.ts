@@ -70,9 +70,9 @@ describe('DraftAttachmentStore', () => {
     expect(store.expandTextForHistory(`look ${text} ${image} done`)).toBe(
       'look A\nB\nC\nD done',
     );
-    expect(store.resolveMedia(`look ${text} ${image} done`)).toEqual([
-      '/p/a.png',
-    ]);
+    expect(
+      store.resolveImages(`look ${text} ${image} done`).map((e) => e.path),
+    ).toEqual(['/p/a.png']);
   });
 
   it('does not strip chip-like text from pasted text history', () => {
@@ -86,14 +86,15 @@ describe('DraftAttachmentStore', () => {
   it('resolves only image chips still present in the draft (orphan gate)', () => {
     const kept = store.addPastedImage(img('a.png'));
     store.addPastedImage(img('b.png')); // orphaned — chip removed from draft
-    expect(store.resolveMedia(`keep ${kept}`)).toEqual(['/p/a.png']);
+    expect(store.resolveImages(`keep ${kept}`).map((e) => e.path)).toEqual([
+      '/p/a.png',
+    ]);
   });
 
   it('clears entries and resets the id counter', () => {
-    store.addPastedText('a\nb\nc\nd');
-    expect(store.isEmpty()).toBe(false);
+    const chip = store.addPastedText('a\nb\nc\nd');
     store.clear();
-    expect(store.isEmpty()).toBe(true);
+    expect(store.expandText(chip)).toBe(chip);
     expect(store.addPastedText('x\ny\nz\nw')).toBe('[Pasted text #1 +3 lines]');
   });
 });

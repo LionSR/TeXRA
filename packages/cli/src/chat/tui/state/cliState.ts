@@ -3,6 +3,7 @@
  * focus, overlays, exit hints) lives here as signals.
  */
 import { computed, signal, type Signal } from '@lit-labs/signals';
+import type { StreamPhaseState } from '@agent/runtime';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -11,20 +12,20 @@ import {
 import type {
   AgentDelegationScope,
   StreamLogEntry,
-  StreamPhase,
-  StreamSubstate,
   StreamTabId,
   TaskGroup,
-  TokenUsageStats,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import { latestWorkflowAttemptId } from '@shared/copy/workflowCall';
 import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
-import { isChildStreamRemoved } from './childExecutions';
+import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
+import type { StreamArtifactAuthority } from '@transcript';
+import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
+import type { PastedImageEntry } from '../input/draftAttachments';
 
 // ---------------------------------------------------------------------------
 // types
@@ -34,25 +35,6 @@ import { isChildStreamRemoved } from './childExecutions';
 // `progressState` shape — same primitives (`@lit-labs/signals`), same shape
 // (one record per stream + an `activeStreamId`) so future feature parity is a
 // port, not a rewrite.
-
-/** Resolve the current workflow attempt from session state, with a legacy transcript fallback. */
-export function currentWorkflowAttemptId(
-  declaredAttemptId: string | undefined,
-  rows: readonly TranscriptRow[],
-  boundaryDeclared: boolean,
-): string | null | undefined {
-  if (boundaryDeclared) return declaredAttemptId ?? null;
-  return (
-    declaredAttemptId ??
-    latestWorkflowAttemptId(
-      rows.map((row) => {
-        if (row.kind === 'workflowTask') return row.call.attemptId;
-        if (row.kind === 'phase') return row.attemptId;
-        return undefined;
-      }),
-    )
-  );
-}
 
 /**
  * One transcript-projection candidate: a rendered row plus the ordering key
@@ -119,19 +101,8 @@ export interface TranscriptFoldState {
   readonly indexById: Map<string, number>;
   /** First index the contiguous settled-prefix promotion has not covered. */
   finalizedFrontier: number;
-  /** Index of the last user row with text, or -1 (latest-line fallback). */
-  latestUserPos: number;
-  /** Index of the last finalized model-response row with text, or -1. */
-  latestResponsePos: number;
-  /** Projection-mode bits `items` was built under; a flip forces a rebuild. */
-  workflowOperationalOnly: boolean;
+  /** Projection-mode bit `items` was built under; a flip forces a rebuild. */
   projectLifecycleToTaskGroups: boolean;
-  /** Highest-seq live-activity entry (drives the thinking indicator). */
-  liveActivityEntry?: StreamLogEntry;
-  /** Latest durable workflow-attempt marker and its source order. */
-  workflowAttemptId?: string;
-  workflowAttemptBoundaryDeclared: boolean;
-  workflowAttemptSeqNo: number;
   /** Local rows reconciled into `items`, in slice order, by identity. */
   synthetics: readonly TranscriptRow[];
   /** Incremental task-group / compaction memos. Unlike the fold fields above
@@ -140,6 +111,8 @@ export interface TranscriptFoldState {
    *  residency is released, and die with the slice like everything here. */
   taskGroupProjection?: TaskGroupProjectionState;
   compactionProjection?: CompactionProjectionState;
+  /** The newest `workflowPlan` marker folded so far (last wins). */
+  workflowPlan?: WorkflowPlanMarker;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
@@ -172,9 +145,10 @@ export interface BypassState {
 
 /**
  * CLI-only per-stream view state. Everything the shared substrate owns —
- * identity/config/description metadata (`streamMetadataFor`), conversation
- * progress and stage (`streamStateFor`), workflow artifacts and cumulative
- * usage (`readStreamArtifacts`/`StreamArtifactProjection`), queued follow-ups
+ * identity/config/description metadata (`streamMetadataFor`), lifecycle phase,
+ * substate and run-window start (`streamPhaseFor`), conversation progress and
+ * stage (`streamStateFor`), workflow artifacts and cumulative usage
+ * (`readStreamArtifacts`/`StreamArtifactProjection`), queued follow-ups
  * (`queuedFollowUpsFor`) — is read from it at paint and has no field here.
  * What remains is transcript-rail projection output (the fold rail stays
  * separate from the fact rail by design) and terminal modality.
@@ -183,25 +157,14 @@ export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
-  /** Latest physical workflow attempt declared by the durable stream. */
-  readonly workflowAttemptId?: string | undefined;
-  /** Whether the stream declared an attempt boundary, valid or malformed. */
-  readonly workflowAttemptBoundaryDeclared: boolean;
-  readonly status: StreamPhase | undefined;
-  readonly substate?: StreamSubstate;
-  /** Run-window start mirrored verbatim from the `status` fact — the session
-   *  status machine stamps and clears it (`StreamPhaseState.runStartedAt`).
-   *  Drives the StatusBar's live elapsed-time segment so a long token-less
-   *  "thinking" turn still shows liveness. */
-  readonly runStartedAt: number | undefined;
+  /** The newest attempt's declared phases and tasks, from the transcript's
+   *  `workflowPlan` marker; undefined until a workflow-script run records
+   *  one. What the dashboard lists that the run has not reached yet. */
+  readonly workflowPlan: WorkflowPlanMarker | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
    *  until the runtime supplies a `description`. */
   readonly latestLine: string | undefined;
-  /** Latest model usage snapshot, carried by the usage fact (no synchronous
-   *  shared read exists for the latest gauge). The StatusBar treats this as
-   *  current context occupancy, so it must not be accumulated across turns. */
-  readonly usage: TokenUsageStats | undefined;
   /** True while the latest hidden provider-side reasoning/thinking stream is
    *  the current live activity. The CLI never renders the content directly;
    *  this only drives a lightweight liveness indicator. */
@@ -236,16 +199,11 @@ export const NO_BYPASS: BypassState = {
 export function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
-    status: undefined,
-    substate: undefined,
-    runStartedAt: undefined,
     latestLine: undefined,
     taskGroups: [],
-    workflowAttemptId: undefined,
-    workflowAttemptBoundaryDeclared: false,
+    workflowPlan: undefined,
     thinkingActive: false,
     compactingActive: false,
-    usage: undefined,
     entries: [],
     finalizedFrontier: 0,
     bypass: NO_BYPASS,
@@ -270,107 +228,44 @@ export function isCliStreamRetired(streamId: StreamTabId): boolean {
   return RETIRED_STREAMS.has(streamId);
 }
 
-/** A stream slice minus the lifecycle triple. `status`, its `substate`, and
- *  the `runStartedAt` the status machine stamps beside them belong to
- *  {@link setStreamStatusInCliState}, which is the only writer that enforces
- *  the removed/retired liveness rule. */
-type PatchableStreamSlice = Omit<
-  StreamSlice,
-  'status' | 'substate' | 'runStartedAt'
->;
-
-/** What a `patchStream` updater may return: the patchable fields, with the
- *  lifecycle triple closed off so re-writing `status` from a patch is a
- *  compile error rather than a second, unguarded status owner. */
-type StreamSlicePatch = PatchableStreamSlice & {
-  readonly status?: never;
-  readonly substate?: never;
-  readonly runStartedAt?: never;
-};
-
-/**
- * Patch one stream's view state. The updater receives the same slice twice:
- * once typed for patching (no lifecycle fields to spread back) and once whole,
- * for the patches that derive from the current status.
- */
+/** Patch one stream's view state. */
 export function patchStream(
   streamId: StreamTabId,
-  update: (
-    slice: PatchableStreamSlice,
-    lifecycle: Readonly<
-      Pick<StreamSlice, 'status' | 'substate' | 'runStartedAt'>
-    >,
-  ) => StreamSlicePatch,
+  update: (slice: StreamSlice) => StreamSlice,
 ): void {
   RETIRED_STREAMS.delete(streamId);
   const current = streams.get();
   const slice = current.get(streamId) ?? emptySlice(streamId);
-  const next = update(slice, slice);
+  const next = update(slice);
   if (next === slice) return;
   const out = new Map(current);
-  out.set(streamId, {
-    ...next,
-    status: slice.status,
-    substate: slice.substate,
-    runStartedAt: slice.runStartedAt,
-  });
+  out.set(streamId, next);
   streams.set(out);
 }
 
-function streamSliceWithStatus(
-  slice: StreamSlice,
-  status: StreamPhase,
-  substate: StreamSubstate | undefined,
-  runStartedAt: number | undefined,
-): StreamSlice {
-  if (
-    slice.status === status &&
-    slice.substate === substate &&
-    slice.runStartedAt === runStartedAt
-  ) {
-    return slice;
-  }
-  return { ...slice, status, substate, runStartedAt };
+/** Whether this stream identity is still live in the current state lifetime.
+ *  A stream tombstoned by `removeStream`, or retired by `resetCliState`, is
+ *  final: it accepts no further status, folds no log, and paints no phase. */
+export function cliStreamAcceptsStatus(streamId: StreamTabId): boolean {
+  return !isChildStreamRemoved(streamId) && !RETIRED_STREAMS.has(streamId);
 }
 
 /**
- * Apply a stream-status event once to the CLI state mirror.
+ * Lifecycle state for a stream at paint: phase, substate, and the run-window
+ * start elapsed time is rendered from, all read from the session's status
+ * machine — the single owner that stamps them and writes its entry before
+ * publishing the matching `status` fact.
  *
- * Runtime status still originates in the default session's status machine
- * (`defaultSession().status`), but TUI renderers should read only
- * StreamSlice data, so the slice is the single status owner at paint.
- * A status for a stream tombstoned by `removeStream`, or retired by
- * `resetCliState`, is ignored — both are final for that stream identity.
+ * Gated on this state lifetime holding a slice for the identity, which is how
+ * the removed/retired rule the deleted status mirror enforced still holds: the
+ * machine remembers the last phase of a stream `removeStream` dropped or
+ * `resetCliState` retired, and no slice means no paint.
  */
-export function setStreamStatusInCliState({
-  runStartedAt,
-  status,
-  substate,
-  streamId,
-}: {
-  /** Run-window start stamped by the session status machine and carried on the
-   *  `status` fact; absent for any non-active phase. */
-  readonly runStartedAt?: number;
-  readonly status: StreamPhase;
-  readonly substate?: StreamSubstate;
-  readonly streamId: StreamTabId;
-}): boolean {
-  if (isChildStreamRemoved(streamId) || RETIRED_STREAMS.has(streamId)) {
-    return false;
-  }
-  const current = streams.get();
-  const existingSlice = current.get(streamId);
-  const targetSlice = streamSliceWithStatus(
-    existingSlice ?? emptySlice(streamId),
-    status,
-    substate,
-    runStartedAt,
-  );
-  if (targetSlice === existingSlice) return true;
-  const out = new Map(current);
-  out.set(streamId, targetSlice);
-  streams.set(out);
-  return true;
+export function streamPhaseFor(
+  streamId: StreamTabId | undefined,
+): StreamPhaseState | undefined {
+  if (streamId === undefined || !streams.get().has(streamId)) return undefined;
+  return sessionStreamPhase(streamId);
 }
 
 // ---------------------------------------------------------------------------
@@ -444,8 +339,6 @@ export function focusStream(
 
 /** The top-level stream the current session rooted at. */
 export const rootStreamId = signal<StreamTabId | undefined>(undefined);
-/** Whether starting a new root run is currently available. */
-export const rootRunStartAvailable = signal<boolean>(true);
 /** Whether the root session holds an unfinished run claim (run promise
  *  pending). Published only by `TuiSession`, so renders read the session
  *  run-state reactively instead of calling impure session closures that
@@ -482,6 +375,9 @@ export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
   ActiveSlashForm | undefined
 >(undefined);
 
+/** Session-local approval scope captured by the next Run as Goal action. */
+export const goalAutoApproveAll = signal(false);
+
 interface InfoPaneContent {
   readonly title: string;
   readonly lines: readonly string[];
@@ -514,10 +410,12 @@ interface WorkPlanReaderRequest {
 
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly streamId: StreamTabId }
+  | { readonly kind: 'workflow'; readonly streamId: StreamTabId }
   | {
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
       readonly loading?: false;
+      readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
     }
   | {
       readonly kind: 'workPlan';
@@ -534,6 +432,56 @@ export const foregroundReader: Signal.Computed<
 
 export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });
+}
+
+/** View state of the workflow popup — which phase tab is open, which row is
+ *  highlighted, which counted groups are unfolded, and the live filter. Held
+ *  here rather than in the component so a repaint or a foreground surface
+ *  taking over (an approval) hands the popup back exactly as it was. */
+export interface WorkflowPopupView {
+  readonly phaseIndex: number;
+  readonly selectedKey: string | undefined;
+  readonly expanded: ReadonlySet<WorkflowRowGroup>;
+  /** Live filter text; empty means none. */
+  readonly filter: string;
+  /** True while keystrokes edit the filter instead of moving the selection. */
+  readonly filterEditing: boolean;
+}
+
+const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
+  phaseIndex: 0,
+  selectedKey: undefined,
+  expanded: new Set(),
+  filter: '',
+  filterEditing: false,
+};
+
+/** The view belongs to the workflow stream, not to the mounted reader:
+ *  closing the popup to look at one of its agents and coming back lands
+ *  where the user left it; only a different workflow starts fresh. */
+const WORKFLOW_POPUP_VIEW = signal<{
+  readonly streamId: StreamTabId | undefined;
+  readonly view: WorkflowPopupView;
+}>({ streamId: undefined, view: INITIAL_WORKFLOW_POPUP_VIEW });
+export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
+  () => WORKFLOW_POPUP_VIEW.get().view,
+);
+
+/** Open the workflow popup on a workflow-script stream. A workflow is never
+ *  a viewport: this is the one way to look inside one (see
+ *  `presentStream`). */
+export function openWorkflowPopup(streamId: StreamTabId): void {
+  if (WORKFLOW_POPUP_VIEW.get().streamId !== streamId) {
+    WORKFLOW_POPUP_VIEW.set({ streamId, view: INITIAL_WORKFLOW_POPUP_VIEW });
+  }
+  FOREGROUND_READER.set({ kind: 'workflow', streamId });
+}
+
+export function updateWorkflowPopupView(
+  patch: Partial<WorkflowPopupView>,
+): void {
+  const current = WORKFLOW_POPUP_VIEW.get();
+  WORKFLOW_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
 }
 
 /** Capture one `/plan` invocation as the sole owner of async reader output. */
@@ -565,10 +513,47 @@ export function workPlanReaderRequestIsCurrent(
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
+  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
 ): boolean {
   if (!workPlanReaderRequestIsCurrent(request)) return false;
-  FOREGROUND_READER.set({ kind: 'workPlan', streamId: request.streamId });
+  FOREGROUND_READER.set({
+    kind: 'workPlan',
+    streamId: request.streamId,
+    ...(authority ? { authority } : {}),
+  });
   return true;
+}
+
+/** Promote fields whose provenance was established after a partial `/plan`
+ * load. Live writes and later successful preloads must replace the reader's
+ * failure-time mask rather than leaving a now-current field unavailable. */
+export function establishWorkPlanReaderAuthority(
+  streamId: StreamTabId,
+  fields: readonly (keyof Pick<StreamArtifactAuthority, 'plan' | 'todos'>)[],
+): void {
+  const target = FOREGROUND_READER.get();
+  if (
+    target?.kind !== 'workPlan' ||
+    target.loading === true ||
+    target.streamId !== streamId ||
+    target.authority === undefined
+  ) {
+    return;
+  }
+  const authority = { ...target.authority };
+  let changed = false;
+  for (const field of fields) {
+    if (!authority[field]) {
+      authority[field] = true;
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  FOREGROUND_READER.set(
+    authority.plan && authority.todos
+      ? { kind: 'workPlan', streamId }
+      : { ...target, authority },
+  );
 }
 
 export function cancelPendingWorkPlanReaderRequest(): void {
@@ -597,17 +582,27 @@ export function closeForegroundReader(): void {
 export const slashPaletteOpen = signal<boolean>(false);
 export const reverseSearchOpen = signal<boolean>(false);
 
-/** A refused follow-up handing its submitted text back to the InputBar,
- *  image chips included. `seq` makes two identical restores distinguishable;
- *  the InputBar consumes and clears. */
-export const draftRestoreRequest = signal<{
+/** Refused follow-ups handing their submitted drafts back to the InputBar.
+ * Requests stay ordered until the InputBar atomically drains the whole batch. */
+interface DraftRestoreRequest {
   readonly text: string;
-  readonly seq: number;
-} | null>(null);
-let draftRestoreSeq = 0;
-export function requestDraftRestore(text: string): void {
-  draftRestoreSeq += 1;
-  draftRestoreRequest.set({ text, seq: draftRestoreSeq });
+  readonly images: readonly PastedImageEntry[];
+}
+export const draftRestoreRequest = signal<readonly DraftRestoreRequest[]>([]);
+export function requestDraftRestore(
+  text: string,
+  images: readonly PastedImageEntry[] = [],
+): void {
+  draftRestoreRequest.set([
+    ...draftRestoreRequest.get(),
+    { text, images: [...images] },
+  ]);
+}
+
+export function takeDraftRestoreRequests(): readonly DraftRestoreRequest[] {
+  const requests = draftRestoreRequest.get();
+  if (requests.length > 0) draftRestoreRequest.set([]);
+  return requests;
 }
 
 /** Windowed content rows of the chat input's current draft (≥ 1), reported
@@ -780,14 +775,19 @@ export function resetCliState(
   activeStreamId.set(undefined);
   rootStreamId.set(undefined);
   streams.set(new Map());
-  rootRunStartAvailable.set(true);
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);
+  goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
+  WORKFLOW_POPUP_VIEW.set({
+    streamId: undefined,
+    view: INITIAL_WORKFLOW_POPUP_VIEW,
+  });
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
+  draftRestoreRequest.set([]);
   clearTransientNotice();
   for (const resetHook of RESET_HOOKS) resetHook();
 }

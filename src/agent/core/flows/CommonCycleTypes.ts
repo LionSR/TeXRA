@@ -1,34 +1,32 @@
 /** Common types shared across cycle flows (ResponseCycleFlow, ToolUseRoundFlow). */
 
-import { z } from 'zod';
-
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
-import {
-  ProviderMessageArraySchema,
-  type ProviderMessage,
-} from '@agent/types/ProviderMessage';
+import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { FinalTool } from '@agent/types/ModelHandlerContracts';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
 import { formatPostCompactionContext } from '@agent/core/flows/postCompactionContext';
-import { RetryErrorInfoSchema } from '@shared/schemas';
+import type { RetryErrorInfo } from '@shared/schemas';
 
-/** Base schema for fields common to all cycle flows. */
-export const BaseCycleFieldsSchema = z.object({
-  messages: ProviderMessageArraySchema,
-  shouldStop: z.boolean(),
+/**
+ * Runtime fields shared by every model invocation cycle.
+ *
+ * A plain interface, not a Zod schema: cycle state is per-turn in-memory
+ * state that is never parsed. The real parse boundaries — `ReflectionFlowState`
+ * and the tool-use run shared — compose `ProviderMessageArraySchema` directly.
+ */
+export interface BaseCycleFields {
+  messages: ProviderMessage[];
+  shouldStop: boolean;
   /** Distinguishes: completion (true) vs cancellation/failure (false) */
-  endTurn: z.boolean(),
-  responseTimeMs: z.number().nonnegative().optional(),
-  stopReason: z.string().nullish(),
-  lastError: RetryErrorInfoSchema.optional(),
-});
-
-/** Runtime fields shared by every model invocation cycle. */
-export type BaseCycleFields = z.infer<typeof BaseCycleFieldsSchema>;
+  endTurn: boolean;
+  responseTimeMs?: number;
+  stopReason?: string | null;
+  lastError?: RetryErrorInfo;
+}
 
 /** Result type for nodes that can be skipped based on flow state. */
 export type SkippableNodeResult<T> =
@@ -87,7 +85,6 @@ type WorkspaceScopedCore = AgentCore & { workspace: AgentWorkspaceState };
 export type CycleDebugFileOptions = {
   continuationCount: number;
   baseName: string;
-  outputFile?: string;
 };
 
 export async function saveCycleDebug(

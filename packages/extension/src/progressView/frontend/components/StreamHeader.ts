@@ -10,10 +10,9 @@ import { repeat } from 'lit/directives/repeat.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type {
   ConversationProgress,
-  GoalStatus,
+  GoalState,
   StreamStage,
   StreamState,
-  StreamSubstate,
   StreamTabInfo,
 } from '@shared/schemas';
 import {
@@ -22,8 +21,7 @@ import {
   isPlainAgentIdentity,
   isToolUseState,
   isWorkflowState,
-  STREAM_LIFECYCLE_HELD,
-  STREAM_LIFECYCLE_UNCLASSIFIED,
+  STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_PHASE,
   STREAM_SUBSTATE,
 } from '@shared/schemas';
@@ -33,7 +31,6 @@ import { CopyButtonController } from '@shared/litControllers/CopyButtonControlle
 import {
   progressHeaderStatus,
   streamStatusIndicatorClass,
-  isStreamStateMalformed,
   streamStatusTooltip,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
@@ -77,8 +74,9 @@ import {
  */
 const ACTIVE_STATE_BUTTONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
-  ELEMENT_IDS.YOLO_TOGGLE_BTN,
-  ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN,
+  ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
+  ELEMENT_IDS.BASH_TOGGLE_BTN,
+  ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
@@ -104,35 +102,16 @@ const TERMINAL_STATE_BUTTONS = [
 ];
 
 /**
- * Buttons enabled while another TeXRA process holds the run: read-only
- * verbs only. Stop, resume, re-run, restore, archive, clean, and diff all
- * act on a run this process does not own.
+ * Buttons enabled while the run is unavailable here (held by another TeXRA
+ * process, or its saved state unreadable): the read-only verbs only. Stop,
+ * resume, re-run, restore, archive, diff, pack, and clean all act on a run
+ * this process does not own. Removing the run is the tab's Delete.
  */
-const HELD_STATE_BUTTONS = [
+const UNAVAILABLE_STATE_BUTTONS = [
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
-
-/**
- * Buttons enabled while the run's state could not be read: the read-only
- * verbs plus Resume, which re-reads and re-acquires the run and so is the
- * retry for the failed classification.
- */
-const UNCLASSIFIED_STATE_BUTTONS = [
-  ...HELD_STATE_BUTTONS,
-  ELEMENT_IDS.RESUME_BTN,
-];
-
-/**
- * Buttons enabled while the run's saved state is malformed: ownership is
- * proven absent, Resume would fail deterministically, so the read-only verbs
- * plus Clean (which deletes this run's outputs) are what is left.
- */
-const MALFORMED_STATE_BUTTONS = new Set([
-  ...HELD_STATE_BUTTONS,
-  ELEMENT_IDS.CLEAN_STREAM_BTN,
-]);
 
 /**
  * Terminal-set buttons that make no sense before the stream's first run:
@@ -164,8 +143,7 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
   ),
   [STREAM_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
   [STREAM_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
-  [STREAM_LIFECYCLE_HELD]: new Set(HELD_STATE_BUTTONS),
-  [STREAM_LIFECYCLE_UNCLASSIFIED]: new Set(UNCLASSIFIED_STATE_BUTTONS),
+  [STREAM_LIFECYCLE_UNAVAILABLE]: new Set(UNAVAILABLE_STATE_BUTTONS),
 };
 
 /** Buttons that depend on having an executionId */
@@ -439,11 +417,16 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     const stage = state?.stage;
     // Tool-use-only bypass/goal indicators; workflow/process states report off.
     const toolUse = state && isToolUseState(state) ? state : null;
-    const yoloActive = Boolean(toolUse?.toolEditBypass);
-    const superYoloActive = Boolean(toolUse?.superYoloBypass);
-    const goalActive = Boolean(toolUse?.goalActive);
-    const goalStatus = toolUse?.goalStatus;
-    const goalObjective = toolUse?.goalObjective ?? '';
+    const bypassActive = {
+      bash: Boolean(toolUse?.bashBypass),
+      superYolo: Boolean(toolUse?.superYoloBypass),
+      toolEdit: Boolean(toolUse?.toolEditBypass),
+    };
+    const goal = deriveGoalState({
+      goalActive: toolUse?.goalActive,
+      goalStatus: toolUse?.goalStatus,
+      goalObjective: toolUse?.goalObjective,
+    });
     const hasExecutionId = Boolean(this.stream.executionId);
     const identity = this.stream.identity;
     const isNativeAgentRun = isPlainAgentIdentity(identity);
@@ -458,10 +441,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       isAgentOrPending && agentCategory
         ? TOOLBAR_BUTTONS[agentCategory]
         : NEUTRAL_TOOLBAR;
-    let enabledButtons = displayKey
+    const enabledButtons = displayKey
       ? ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey]
       : undefined;
-    if (isStreamStateMalformed(state)) enabledButtons = MALFORMED_STATE_BUTTONS;
     // Composed once per render: it both gates the copy button and is the
     // payload its click writes.
     const runContext = this.runContextText(this.stream, state);
@@ -491,12 +473,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         this.archived ||
         computedDisabled ||
         (isCopyRunContext && runContext === '');
-      const isActive = Boolean(
-        btn.isToggle &&
-        (btn.id === ELEMENT_IDS.SUPER_YOLO_TOGGLE_BTN
-          ? superYoloActive
-          : yoloActive),
-      );
+      const isActive = Boolean(btn.bypassKind && bypassActive[btn.bypassKind]);
       // A tooltip only shows on hover, so the copy confirmation also swaps the
       // icon — same pairing as the external-inquiry copy button.
       const copied = isCopyRunContext && this.copyRunContext.state.copied;
@@ -520,10 +497,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         className,
         size: 'm',
         disabled,
-        // Toggle state gates auto-approval of edits/shell — expose it as
-        // aria-pressed (toggles only; plain actions must not read as
-        // toggle buttons).
-        pressed: btn.isToggle ? isActive : undefined,
+        // Bypass toggles expose grant state as aria-pressed; plain actions
+        // must not read as toggle buttons.
+        pressed: btn.bypassKind === undefined ? undefined : isActive,
         ariaHidden: hidden,
         onClick: () => {
           if (disabled) return;
@@ -572,7 +548,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             ${streamStatusTooltip(state, statusLabel)}
           </wa-tooltip>
           ${this.renderRunElapsed(state?.runStartedAt)}
-          ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}
+          ${this.renderGoalChip(goal)}
           ${this.renderProgressBadge(progress, stage)}
         </div>
         <div class="header-actions">
@@ -617,20 +593,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     return { disabled, hidden };
   }
 
-  private renderGoalChip(
-    goalActive: boolean,
-    goalStatus: GoalStatus | undefined,
-    goalObjective: string,
-  ): TemplateResult | typeof nothing {
-    // `goalActive`/`goalStatus`/`goalObjective` are three independently-set
-    // state fields (mirroring the wire/storage shape) — derive the canonical
-    // "status/objective only meaningful when active" union once here rather
-    // than guarding ad hoc.
-    const goal = deriveGoalState({
-      goalActive,
-      goalStatus,
-      goalObjective: goalObjective || undefined,
-    });
+  private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {
     if (!goal.active) return nothing;
     const isPaused = goal.status === 'paused';
     const label = isPaused ? 'Goal paused' : 'Goal';

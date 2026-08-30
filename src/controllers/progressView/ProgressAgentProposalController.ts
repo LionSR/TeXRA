@@ -31,7 +31,7 @@ export interface ProgressAgentProposalControllerDeps {
 export class ProgressAgentProposalController {
   constructor(private readonly deps: ProgressAgentProposalControllerDeps) {}
 
-  async handleAction(input: AgentProposalActionInput): Promise<boolean> {
+  async handleAction(input: AgentProposalActionInput): Promise<void> {
     switch (input.action) {
       case 'setup':
         return this.setupProposal(input.requestId);
@@ -41,13 +41,13 @@ export class ProgressAgentProposalController {
           ...(input.model ? { model: input.model } : {}),
           ...(input.agent ? { agent: input.agent } : {}),
         });
-        return true;
+        return;
       case 'reject':
         this.deps.settleProposal(input.requestId, {
           action: 'reject',
           ...(input.feedback ? { feedback: input.feedback } : {}),
         });
-        return true;
+        return;
     }
   }
 
@@ -60,11 +60,11 @@ export class ProgressAgentProposalController {
     return this.deps.restoreRunConfig(result.data);
   }
 
-  private async setupProposal(requestId: string): Promise<boolean> {
+  private async setupProposal(requestId: string): Promise<void> {
     const proposal = this.deps.getPendingProposal(requestId);
     if (!proposal) {
       this.deps.onMissingProposal?.(requestId);
-      return false;
+      return;
     }
 
     if ('workflowScript' in proposal && proposal.workflowScript) {
@@ -79,7 +79,7 @@ export class ProgressAgentProposalController {
           action: 'reject',
           feedback: `Unable to open the workflow script for setup: ${toErrorMessage(error)}`,
         });
-        return false;
+        return;
       }
     } else {
       const restored = await this.restoreProposalConfig(proposal);
@@ -88,12 +88,11 @@ export class ProgressAgentProposalController {
           action: 'reject',
           feedback: 'Unable to restore the proposal configuration for setup.',
         });
-        return false;
+        return;
       }
     }
 
     this.deps.settleProposal(requestId, { action: 'setup' });
     this.deps.onSetupComplete?.(proposal);
-    return true;
   }
 }

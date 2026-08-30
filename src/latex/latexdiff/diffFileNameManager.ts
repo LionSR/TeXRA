@@ -12,7 +12,7 @@ import { COMMIT_HASH_HEX_RANGE } from '@utils/git/commitHashPattern';
 type GeneratedLatexdiffArtifactKind =
   'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
 
-export interface GeneratedLatexdiffArtifact {
+interface GeneratedLatexdiffArtifact {
   kind: GeneratedLatexdiffArtifactKind;
   sourcePath: string;
 }
@@ -139,7 +139,7 @@ export function detectGeneratedLatexdiffArtifact(
   return null;
 }
 
-export interface VersionControlDiffFilename {
+interface VersionControlDiffFilename {
   sourcePath: string;
   commitHash: string;
 }

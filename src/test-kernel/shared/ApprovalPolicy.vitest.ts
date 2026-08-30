@@ -1,35 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { warn } from '@logger/logUtils';
 import {
   TEXRA_APPROVAL_POLICIES,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  TEXRA_APPROVAL_POLICY_DEFAULT,
-  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
-  TEXRA_APPROVAL_POLICY_DISPLAY_ORDER,
   TEXRA_APPROVAL_POLICY_OPTIONS,
-  TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE,
-  TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
-  TEXRA_APPROVAL_YOLO_RETRY_MESSAGE,
   decideHumanInputRequest,
   decideRetryApproval,
   decideTexraApproval,
   parseTexraApprovalPolicy,
-  readPersistedTexraApprovalPolicy,
   texraApprovalDenialMessage,
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
 } from '@shared/approvalPolicy';
 
-vi.mock('@logger/logUtils', () => ({
-  warn: vi.fn(),
-}));
-
 describe('TeXRA approval policy', () => {
-  beforeEach(() => {
-    vi.mocked(warn).mockClear();
-  });
-
   it.each([
     ['never', true, true, true, 'deny-policy'],
     ['never', false, false, true, 'deny-policy'],
@@ -53,56 +36,22 @@ describe('TeXRA approval policy', () => {
   );
 
   it('publishes one ordered set of policy choices and accepts only those values', () => {
-    expect(TEXRA_APPROVAL_POLICY_OPTIONS.map(({ value }) => value)).toEqual([
-      'ask',
-      'never',
-      'yolo',
-    ]);
-    expect(new Set(TEXRA_APPROVAL_POLICY_DISPLAY_ORDER)).toEqual(
-      new Set(TEXRA_APPROVAL_POLICIES),
+    const optionValues = TEXRA_APPROVAL_POLICY_OPTIONS.map(
+      ({ value }) => value,
     );
-    expect(TEXRA_APPROVAL_POLICY_DISPLAY_ORDER).toHaveLength(
-      TEXRA_APPROVAL_POLICIES.length,
-    );
+    expect(optionValues).toEqual(['ask', 'never', 'yolo']);
+    expect(new Set(optionValues)).toEqual(new Set(TEXRA_APPROVAL_POLICIES));
+    expect(optionValues).toHaveLength(TEXRA_APPROVAL_POLICIES.length);
     expect(parseTexraApprovalPolicy(' Yolo ')).toBe('yolo');
     expect(parseTexraApprovalPolicy('auto')).toBeUndefined();
   });
 
-  it('reads a valid persisted policy without warning', () => {
-    expect(
-      readPersistedTexraApprovalPolicy((key, fallback) => {
-        expect(key).toBe(TEXRA_APPROVAL_POLICY_CONFIG_KEY);
-        return 'never' as typeof fallback;
-      }),
-    ).toBe('never');
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [
-      'auto',
-      `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "auto"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
-    ],
-    [
-      42,
-      `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value 42; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
-    ],
-  ] as const)(
-    'warns and falls back when the persisted policy value is invalid: %j',
-    (stored, expectedWarning) => {
-      expect(readPersistedTexraApprovalPolicy(() => stored as never)).toBe(
-        TEXRA_APPROVAL_POLICY_DEFAULT,
-      );
-      expect(warn).toHaveBeenCalledWith('approval-policy', expectedWarning);
-    },
-  );
-
   it('maps deny reasons to distinct user-facing messages', () => {
     expect(texraApprovalDenialMessage('deny-policy')).toBe(
-      TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+      'Denied by TeXRA approval policy.',
     );
     expect(texraApprovalDenialMessage('deny-unpresentable')).toBe(
-      TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE,
+      'Interactive approval requires a prompt; this run cannot present one.',
     );
   });
 
@@ -141,7 +90,7 @@ describe('TeXRA approval policy', () => {
 
   it('publishes retry denial copy beside the evaluator', () => {
     expect(texraRetryDenialMessage('yolo-retry')).toBe(
-      TEXRA_APPROVAL_YOLO_RETRY_MESSAGE,
+      'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.',
     );
   });
 
@@ -156,7 +105,7 @@ describe('TeXRA approval policy', () => {
 
   it('publishes human-input denial copy beside the evaluator', () => {
     expect(texraHumanInputDenialMessage('yolo-no-human')).toBe(
-      TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE,
+      'User question requires human input; yolo mode cannot synthesize an answer.',
     );
   });
 });

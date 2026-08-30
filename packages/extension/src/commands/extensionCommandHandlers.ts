@@ -5,10 +5,9 @@ import { z } from 'zod';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   CleanConfigSchema,
-  CleanMultipleCommandArgsSchema,
   FileOpCommandArgsSchema,
+  MultiFileOpCommandArgsSchema,
   PackConfigSchema,
-  PackMultipleCommandArgsSchema,
   type CleanConfig,
   type PackConfig,
 } from '@commands/housekeeping/fileOpSchemas';
@@ -71,31 +70,17 @@ const ShowProgressViewArgsSchema = z.tuple([
 ]);
 
 /** Positional arguments for opening a comparison between two files. */
-const CompareCommandArgsSchema = z
-  .tuple([
-    FileLocationSchema.nullish(),
-    FileLocationSchema.nullish(),
-    FileLocationSchema,
-  ])
-  .refine(
-    ([inputLocation, baseLocation]) =>
-      inputLocation != null || baseLocation != null,
-    { error: 'inputLocation or baseLocation required' },
-  );
+const CompareCommandArgsSchema = z.tuple([
+  FileLocationSchema,
+  FileLocationSchema,
+]);
 
 /** Positional arguments for accepting an edited file. */
-const AcceptEditedCommandArgsSchema = z
-  .tuple([
-    FileLocationSchema.nullish(),
-    FileLocationSchema.nullish(),
-    FileLocationSchema,
-    AcceptCopyMetaSchema.optional(),
-  ])
-  .refine(
-    ([inputLocation, baseLocation]) =>
-      inputLocation != null || baseLocation != null,
-    { error: 'inputLocation or baseLocation required' },
-  );
+const AcceptEditedCommandArgsSchema = z.tuple([
+  FileLocationSchema,
+  FileLocationSchema,
+  AcceptCopyMetaSchema.optional(),
+]);
 
 /**
  * Catalog ids whose extension registration is driven by the shared
@@ -131,23 +116,8 @@ export const EXTENSION_INTERNAL_COMMAND_IDS = [
 type InternalExtensionRegistryCommandId =
   (typeof EXTENSION_INTERNAL_COMMAND_IDS)[number];
 
-type OptionalFileLocation = FileLocation | null | undefined;
-
 export type ExtensionRegistryCommandId =
   ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
-
-/**
- * Runtime mirror of `ExtensionRegistryCatalogCommandId`, used by tests to
- * assert `EXTENSION_COMMAND_HANDLERS` registers every catalog entry tagged
- * `extensionRegistry: true` (and flag strays that no longer belong).
- */
-export const EXTENSION_REGISTRY_CATALOG_COMMAND_IDS: readonly ExtensionRegistryCatalogCommandId[] =
-  commandCatalog
-    .filter(
-      (entry): entry is ExtensionRegistryCatalogEntry =>
-        'extensionRegistry' in entry && entry.extensionRegistry === true,
-    )
-    .map((entry) => entry.id);
 
 /**
  * Capabilities the registry handlers need from the extension host. Mirrors
@@ -179,13 +149,11 @@ export interface ExtensionCommandActions {
     inputFiles: string[],
   ): Promise<void>;
   compare(
-    inputLocation: OptionalFileLocation,
-    baseLocation: OptionalFileLocation,
+    baseLocation: FileLocation,
     editedLocation: FileLocation,
   ): Promise<void>;
   acceptEdited(
-    inputLocation: OptionalFileLocation,
-    baseLocation: OptionalFileLocation,
+    baseLocation: FileLocation,
     editedLocation: FileLocation,
     copyMeta?: AcceptCopyMeta,
   ): Promise<boolean>;
@@ -255,7 +223,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
       awaitTrue(actions.packSingle(inputFile, agent, model)),
   ),
   'texra.packMultiple': definedHandler(
-    PackMultipleCommandArgsSchema,
+    MultiFileOpCommandArgsSchema,
     (actions: ExtensionCommandActions, inputFile, agent, model, inputFiles) =>
       awaitTrue(actions.packMultiple(inputFile, agent, model, inputFiles)),
   ),
@@ -270,35 +238,23 @@ export const EXTENSION_COMMAND_HANDLERS = {
       awaitTrue(actions.cleanSingle(inputFile, agent, model)),
   ),
   'texra.cleanMultiple': definedHandler(
-    CleanMultipleCommandArgsSchema,
+    MultiFileOpCommandArgsSchema,
     (actions: ExtensionCommandActions, inputFile, agent, model, inputFiles) =>
       awaitTrue(actions.cleanMultiple(inputFile, agent, model, inputFiles)),
   ),
   'texra.compare': definedHandler(
     CompareCommandArgsSchema,
-    (
-      actions: ExtensionCommandActions,
-      inputLocation,
-      baseLocation,
-      editedLocation,
-    ) =>
-      awaitTrue(actions.compare(inputLocation, baseLocation, editedLocation)),
+    (actions: ExtensionCommandActions, baseLocation, editedLocation) =>
+      awaitTrue(actions.compare(baseLocation, editedLocation)),
   ),
   'texra.acceptEdited': definedHandler(
     AcceptEditedCommandArgsSchema,
     (
       actions: ExtensionCommandActions,
-      inputLocation,
       baseLocation,
       editedLocation,
       copyMeta?: AcceptCopyMeta,
-    ) =>
-      actions.acceptEdited(
-        inputLocation,
-        baseLocation,
-        editedLocation,
-        copyMeta,
-      ),
+    ) => actions.acceptEdited(baseLocation, editedLocation, copyMeta),
   ),
   'texra.indentTeX': (actions) => awaitTrue(actions.indentTeX()),
   'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),

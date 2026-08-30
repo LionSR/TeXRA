@@ -6,7 +6,6 @@ import { notifyFollowUpSent } from '@agent/followUp';
 import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
-import { requestCliCompaction } from '@cli/chat/tui/state/compactionRequest';
 import {
   activeSubagentsFor,
   childRosters,
@@ -23,19 +22,19 @@ import {
   openInfoPane,
   sessionMeta,
   setTransientNotice,
+  streamPhaseFor,
   streams,
   workPlanReaderRequestIsCurrent,
 } from '@cli/chat/tui/state/cliState';
-import { hydrateStreamArtifacts } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import {
+  hydrateStreamArtifacts,
+  readStreamArtifacts,
+} from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
-import {
-  projectStreamArtifacts,
-  type StreamArtifactReader,
-} from '@controllers/session/StreamArtifactProjection';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
@@ -70,25 +69,44 @@ export async function showCliWorkPlan(
   }
   clearTransientNotice();
   const request = beginWorkPlanReaderRequest(streamId);
-  const hydrated = await hydrateStreamArtifacts(
-    snapshots,
-    streamId,
-    () => workPlanReaderRequestIsCurrent(request),
-    (error) => {
-      if (!cancelWorkPlanReaderRequest(request)) return;
-      setTransientNotice(
-        `Could not load workflow artifacts: ${toErrorMessage(error)}`,
-      );
-    },
+  const outcome = await hydrateStreamArtifacts(snapshots, streamId, () =>
+    workPlanReaderRequestIsCurrent(request),
   );
-  if (!hydrated || !workPlanReaderRequestIsCurrent(request)) return;
-  const projection = projectStreamArtifacts(snapshots, streamId);
-  if (projection.plan === null && projection.todos.length === 0) {
+  if (!outcome || !workPlanReaderRequestIsCurrent(request)) return;
+  if (outcome.kind === 'failed') {
     if (!cancelWorkPlanReaderRequest(request)) return;
+    setTransientNotice(
+      `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+    );
+    return;
+  }
+  const workPlan = snapshots.getWorkPlan(streamId);
+  const authority = {
+    plan: outcome.kind === 'complete' || outcome.authoritativeFields.plan,
+    todos: outcome.kind === 'complete' || outcome.authoritativeFields.todos,
+  };
+  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } = authority;
+  if (
+    (planIsAuthoritative && workPlan.plan !== null) ||
+    (todosAreAuthoritative && workPlan.todos.length > 0)
+  ) {
+    finishWorkPlanReaderRequest(
+      request,
+      outcome.kind === 'partial' ? authority : undefined,
+    );
+    return;
+  }
+  if (!cancelWorkPlanReaderRequest(request)) return;
+  if (
+    outcome.kind === 'complete' ||
+    (planIsAuthoritative && todosAreAuthoritative)
+  ) {
     setTransientNotice('The focused session has no work plan.');
     return;
   }
-  finishWorkPlanReaderRequest(request);
+  setTransientNotice(
+    `Could not load workflow artifacts: ${toErrorMessage(outcome.error)}`,
+  );
 }
 
 /**
@@ -116,6 +134,7 @@ export async function showCliSessionStatus(
   const activeStreamId = activeStreamIdSignal.get();
   const streamSlices = streams.get();
   const slice = activeStreamId ? streamSlices.get(activeStreamId) : undefined;
+  const activePhase = slice ? streamPhaseFor(activeStreamId) : undefined;
   const rosters = childRosters.get();
   const directActiveChildren = activeStreamId
     ? activeSubagentsFor(activeStreamId, rosters)
@@ -144,13 +163,14 @@ export async function showCliSessionStatus(
       model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: slice?.usage?.usageRoute,
+        usageRoute: activeStreamId
+          ? readStreamArtifacts(activeStreamId)?.cumulativeUsage?.usageRoute
+          : undefined,
         prospectiveRoute,
       }),
-      approval: formatTexraApprovalPolicy(context.getApprovalPolicy()),
       approvalBypasses: slice?.bypass,
-      status: slice?.status,
-      substate: slice?.substate,
+      status: activePhase?.phase,
+      substate: activePhase?.substate,
       activeChildSessions,
       goal: activeStreamId ? GoalStore.getForStream(activeStreamId) : undefined,
       activeSkills: activeSkillNamesFor(activeStreamId),
@@ -160,8 +180,8 @@ export async function showCliSessionStatus(
         slice && meta.transcriptMode === 'persistent'
           ? context.session.executionId
           : undefined,
-      commandName: context.commandName,
-      cwd: context.cwd,
+      commandName: context.cliContext.commandName,
+      cwd: context.cliContext.cwd,
       processCwd: context.processCwd,
       approvalPolicy: context.getApprovalPolicy(),
       queuedFollowUpMessages:
@@ -173,11 +193,28 @@ export async function showCliSessionStatus(
 }
 
 export function requestCliSessionCompaction(): void {
-  requestCliCompaction({
-    streamId: activeStreamIdSignal.get(),
-    requestManualCompaction: (streamId) =>
-      defaultSession().executions.requestManualCompaction(streamId),
-    notifyFollowUpSent,
-    appendTranscript: appendLocalAssistantTranscript,
-  });
+  const result = defaultSession().executions.requestManualCompaction(
+    activeStreamIdSignal.get(),
+  );
+  switch (result.kind) {
+    case 'no_active_tool_use':
+      appendLocalAssistantTranscript(
+        'No active tool-use session found for context compaction.',
+        result.streamId,
+      );
+      return;
+    case 'unsupported':
+      appendLocalAssistantTranscript(
+        'Manual context compaction is not available for this model.',
+        result.streamId,
+      );
+      return;
+    case 'requested':
+      notifyFollowUpSent(result.streamId, result.session);
+      appendLocalAssistantTranscript(
+        'Context compaction requested. The agent will process it on the next model call.',
+        result.streamId,
+      );
+      return;
+  }
 }

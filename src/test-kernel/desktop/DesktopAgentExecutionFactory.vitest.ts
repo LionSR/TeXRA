@@ -210,11 +210,13 @@ describe('createDesktopAgentExecution', () => {
       prepareMainViewExecutionRequest: vi.fn(),
       repairRestartedStreams,
       inspectSession: (session) => {
-        const useHostInteractions = session.useHostInteractions.bind(session);
-        vi.spyOn(session, 'useHostInteractions').mockImplementation(
+        const useInteractions = session.interactions.use.bind(
+          session.interactions,
+        );
+        vi.spyOn(session.interactions, 'use').mockImplementation(
           (interactions) => {
             attached();
-            const detach = useHostInteractions(interactions);
+            const detach = useInteractions(interactions);
             return () => {
               detached();
               detach();
@@ -372,7 +374,7 @@ describe('createDesktopAgentExecution', () => {
     await run;
 
     const firstEmit = vi.fn();
-    const detach = session.useHostInteractions({
+    const detach = session.interactions.use({
       emit: firstEmit,
       cancel: vi.fn(),
     });
@@ -388,7 +390,7 @@ describe('createDesktopAgentExecution', () => {
 
     detach();
     const secondEmit = vi.fn();
-    session.useHostInteractions({ emit: secondEmit, cancel: vi.fn() });
+    session.interactions.use({ emit: secondEmit, cancel: vi.fn() });
     await Promise.resolve();
     expect(secondEmit).not.toHaveBeenCalled();
   });

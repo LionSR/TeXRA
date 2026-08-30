@@ -21,10 +21,7 @@ export interface MainViewAuthStatus {
 }
 
 export interface MainViewStartupOptions {
-  modelOptionsByCategory: {
-    workflow: ModelOptionData[];
-    toolUse: ModelOptionData[];
-  };
+  modelOptions: ModelOptionData[];
   agentOptions: {
     workflow?: AgentOptionData[];
     toolUse?: AgentOptionData[];
@@ -69,7 +66,7 @@ export class MainViewStartupController {
   }
 
   async getOptionsAndLoginMessages(): Promise<MainViewStartupMessage[]> {
-    const [{ modelOptionsByCategory, agentOptions, teamOptions }, authStatus] =
+    const [{ modelOptions, agentOptions, teamOptions }, authStatus] =
       await Promise.all([this.deps.loadOptions(), this.deps.getAuthStatus()]);
 
     const showLoginBanner =
@@ -79,7 +76,7 @@ export class MainViewStartupController {
     return [
       {
         command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-        optionsDataByCategory: modelOptionsByCategory,
+        optionsData: modelOptions,
       },
       {
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,

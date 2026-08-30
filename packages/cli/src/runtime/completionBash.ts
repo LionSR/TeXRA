@@ -128,30 +128,22 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
 }
 
 // Positional completions keyed by command path, with the `compgen -W` word list
-// each one offers. Source-backed paths resolve their listing source from
-// POSITIONAL_COMPLETION_SOURCES; `completion` offers the fixed shell list.
-// Emitted in order after the flag-value cases.
+// each one offers. Derived from POSITIONAL_COMPLETION_SOURCES so a new
+// source-backed path completes here the moment it lands in the shared map (as
+// it already does for zsh and fish); `completion` offers the fixed shell list.
+// The emitted blocks are mutually exclusive `$path` equality tests, so their
+// order carries no meaning.
 const POSITIONAL_COMPLETIONS: readonly {
   readonly commandPath: string;
   readonly words: string;
 }[] = [
-  {
-    commandPath: 'run',
-    words: `"$(${POSITIONAL_COMPLETION_SOURCES.run.shellFunction})"`,
-  },
-  {
-    commandPath: 'agents run',
-    words: `"$(${POSITIONAL_COMPLETION_SOURCES['agents run'].shellFunction})"`,
-  },
+  ...Object.entries(POSITIONAL_COMPLETION_SOURCES).map(
+    ([commandPath, source]) => ({
+      commandPath,
+      words: `"$(${source.shellFunction})"`,
+    }),
+  ),
   { commandPath: 'completion', words: `'${CLI_COMPLETION_SHELLS.join(' ')}'` },
-  {
-    commandPath: 'agents show',
-    words: `"$(${POSITIONAL_COMPLETION_SOURCES['agents show'].shellFunction})"`,
-  },
-  {
-    commandPath: 'models show',
-    words: `"$(${POSITIONAL_COMPLETION_SOURCES['models show'].shellFunction})"`,
-  },
 ];
 
 function positionalCompletionBlocks(): string {
@@ -184,7 +176,6 @@ function commandCaseBlock(command: CompletionCommand): string {
 }
 
 export function bashCompletion(commands: readonly CompletionCommand[]): string {
-  const root = commands.find((command) => command.path.length === 0);
   const fixedValueCases = fixedFlagValueCases(commands);
   const dynamicValueCases = dynamicFlagValueCases(commands);
   const genericValueCases = genericFlagValueCases(commands);
@@ -254,7 +245,6 @@ _texra() {
   path="$(_texra_completion_path)"
   case "$path" in
     ${commands.map(commandCaseBlock).join('\n    ')}
-    *) subcommands='${root?.subcommands.join(' ') ?? ''}'; flags='' ;;
   esac
 
 ${positionalCompletionBlocks()}

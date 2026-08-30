@@ -15,8 +15,8 @@ vi.mock('@model/runtimeModelRegistry', () => ({ resolveRuntimeModelConfig }));
 const MODEL_CONFIGS = {
   deepseek: { capabilities: { supportsFunctionCalling: true } },
   chatonly: { capabilities: { supportsFunctionCalling: false } },
-  // Known model whose capabilities omit supportsFunctionCalling — the tool-use
-  // flow treats this as "no function calling".
+  // Known model whose capabilities omit supportsFunctionCalling — the provider
+  // adapters treat this as "no function calling".
   undeclared: { capabilities: {} },
 };
 
@@ -66,8 +66,8 @@ describe('applyHelperModelPreference', () => {
       helper: 'mysteryModel',
       scenario: 'the tool-use helper model is unknown to the registry',
     },
-    // Capabilities present but supportsFunctionCalling omitted — the tool-use
-    // flow would strip tools, so don't swap.
+    // Capabilities present but supportsFunctionCalling omitted — the provider
+    // adapters would strip the function tools, so don't swap.
     {
       helper: 'undeclared',
       scenario: "the tool-use helper model doesn't declare function calling",

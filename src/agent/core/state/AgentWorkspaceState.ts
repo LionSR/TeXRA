@@ -13,7 +13,6 @@ import {
   type WorkPlanSnapshot,
   WorkPlanSnapshotSchema,
 } from '@shared/schemas';
-import { pathToLocation } from '@utils/files/fileLocation';
 
 /** Schema for thinking blocks (used by model handlers). */
 const ThinkingBlockSchema = z.object({
@@ -109,17 +108,12 @@ export class FileInteractionState {
     return this.readFiles.has(path);
   }
 
-  recordEdits(edits: EditRecord[] | undefined): {
-    paths: string[];
-    lineChanges?: LineChanges;
-  } {
+  recordEdits(edits: EditRecord[] | undefined): string[] {
     if (!Array.isArray(edits)) {
-      return { paths: [] };
+      return [];
     }
 
     const touchedPaths = new Set<string>();
-    let totalAdded = 0;
-    let totalRemoved = 0;
 
     for (const entry of edits) {
       const path = entry?.path;
@@ -136,30 +130,15 @@ export class FileInteractionState {
         this.edits.set(path, { added, removed });
       }
       touchedPaths.add(path);
-
-      totalAdded += added;
-      totalRemoved += removed;
     }
 
-    return {
-      paths: [...touchedPaths],
-      lineChanges:
-        totalAdded || totalRemoved
-          ? { added: totalAdded, removed: totalRemoved }
-          : undefined,
-    };
+    return [...touchedPaths];
   }
 }
 
-const MediaFileEntrySchema = z
-  .union([z.string(), FileLocationSchema])
-  .transform((entry): FileLocation =>
-    typeof entry === 'string' ? pathToLocation(entry) : entry,
-  );
-
 /** Internal schema for media attachment state snapshot. */
 const MediaAttachmentStateSnapshotSchema = z.object({
-  files: z.array(MediaFileEntrySchema).prefault([]),
+  files: z.array(FileLocationSchema).prefault([]),
 });
 type MediaAttachmentStateSnapshot = z.output<
   typeof MediaAttachmentStateSnapshotSchema
@@ -205,14 +184,19 @@ const ReasoningCacheStateSchema = z.object({
 
 type ReasoningCacheState = z.output<typeof ReasoningCacheStateSchema>;
 
-/** Internal schema for server tool content state. */
-const ServerToolContentStateSchema = z.object({
-  // ServerToolContentBlock is internal state from SDK responses, validated upstream by the SDK
-  contentBlocks: z.array(z.custom<ServerToolContentBlock>()).prefault(() => []),
-  lastAssistantContent: z.array(z.unknown()).prefault(() => []),
-});
+/**
+ * Server-tool content carried across turns. Never persisted — every
+ * `AgentWorkspaceState` starts it empty — so it is a plain in-memory struct
+ * rather than a parse boundary.
+ */
+interface ServerToolContentState {
+  contentBlocks: ServerToolContentBlock[];
+  lastAssistantContent: unknown[];
+}
 
-type ServerToolContentState = z.output<typeof ServerToolContentStateSchema>;
+function emptyServerToolContent(): ServerToolContentState {
+  return { contentBlocks: [], lastAssistantContent: [] };
+}
 
 export class WorkPlanState {
   private _todos: TodoItem[] = [];
@@ -304,24 +288,18 @@ export class WorkPlanState {
   }
 }
 
-const AgentWorkspaceSnapshotFieldsSchema = z.object({
+/**
+ * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
+ * state has one supported format; an older record (one written before
+ * `workPlan` entered the shape) fails its resume parse here.
+ */
+export const AgentWorkspaceStateSnapshotSchema = z.object({
   assembly: ResponseAssemblyStateSchema.prefault({}),
   media: MediaAttachmentStateSnapshotSchema.prefault({}),
   reasoning: ReasoningCacheStateSchema.prefault({}),
   interactions: FileInteractionStateSnapshotSchema.prefault({}),
   workPlan: WorkPlanSnapshotSchema,
 });
-
-/**
- * Canonical shape of an `AgentWorkspaceState` snapshot. Persisted workspace
- * state has one supported format; an older record fails its resume parse.
- */
-export const AgentWorkspaceStateSnapshotSchema = z
-  .looseObject({ workPlan: z.unknown() })
-  .refine(
-    (record) => Object.hasOwn(record, 'workPlan') && record.workPlan != null,
-  )
-  .transform((record) => AgentWorkspaceSnapshotFieldsSchema.parse(record));
 
 export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
@@ -343,7 +321,7 @@ export class AgentWorkspaceState {
       new MediaAttachmentState(),
       ReasoningCacheStateSchema.parse({}),
       new FileInteractionState(),
-      ServerToolContentStateSchema.parse({}),
+      emptyServerToolContent(),
       new WorkPlanState(),
     );
   }
@@ -358,43 +336,26 @@ export class AgentWorkspaceState {
   }
 
   /**
-   * Boundary hydration: validates an untrusted persisted snapshot. Call this
-   * exactly once, where a persisted snapshot first hydrates into a session
-   * (session-init resume in `ToolUsePrepareNode`, a reflection flow's resume
-   * read in `runReflectionFlow`, or `runToolUseFlow`'s tool-use resume boundary
+   * Hydration: validates the snapshot, then rebuilds the slices. The one entry
+   * point for every caller, because there is one supported persisted format.
+   *
+   * A persisted snapshot first hydrates into a session at session-init resume
+   * in `ToolUsePrepareNode`, at a reflection flow's resume read in
+   * `runReflectionFlow`, and at `runToolUseFlow`'s tool-use resume boundary
    * normalizing the nested `stateSlices.workspaceSnapshot` it self-heals into
-   * the resumed flow record — needed because a resume whose persisted cursor is
-   * already past `ToolUsePrepareNode` never runs that node's own hydration).
-   * Everywhere else — per-round node prep re-deriving state from `toSnapshot()`
-   * output already produced this run — use `fromCanonicalSnapshot` instead.
+   * the resumed flow record — that last one is needed because a resume whose
+   * persisted cursor is already past `ToolUsePrepareNode` never runs that
+   * node's own hydration. Per-round node prep re-deriving state from
+   * `toSnapshot()` output produced this run runs the same parse.
    */
   static fromSnapshot(snapshot: unknown): AgentWorkspaceState {
     const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
-    return AgentWorkspaceState.fromParsedFields(parsed);
-  }
-
-  /**
-   * Rebuild from a snapshot already known to be canonical (e.g. round-tripped
-   * through this class's own `toSnapshot()`). Validates the canonical shape so
-   * repeated per-round calls (tool-use `ToolUseCycleNode`, reflection
-   * `ResponseCycleNode`/`MediaExtractionNode`) have the same validation path.
-   */
-  static fromCanonicalSnapshot(
-    snapshot: AgentWorkspaceSnapshot,
-  ): AgentWorkspaceState {
-    const parsed = AgentWorkspaceStateSnapshotSchema.parse(snapshot);
-    return AgentWorkspaceState.fromParsedFields(parsed);
-  }
-
-  private static fromParsedFields(
-    parsed: AgentWorkspaceSnapshot,
-  ): AgentWorkspaceState {
     return new AgentWorkspaceState(
       parsed.assembly,
       MediaAttachmentState.fromSnapshot(parsed.media),
       parsed.reasoning,
       FileInteractionState.fromSnapshot(parsed.interactions),
-      ServerToolContentStateSchema.parse({}),
+      emptyServerToolContent(),
       WorkPlanState.fromSnapshot(parsed.workPlan),
     );
   }

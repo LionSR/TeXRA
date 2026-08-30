@@ -3,10 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearStoreCache,
   deriveResumability,
-  finalizeExecution,
+  finalizeRun,
   getExecutionStore,
 } from '@agent/storage';
-import { RESUMABILITY_CAUSE } from '@agent/storage/resumability';
 import {
   FLOW_RECORD_SCHEMA_VERSION,
   flowKey,
@@ -57,8 +56,7 @@ describe('deriveResumability', () => {
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+      kind: 'checkpoint',
       outcome: RUN_OUTCOME.FAILED,
       flowRecord: BASE_FLOW_RECORD,
     });
@@ -74,20 +72,18 @@ describe('deriveResumability', () => {
     );
 
     await expect(
-      finalizeExecution({
+      finalizeRun({
         executionId,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
       }),
     ).resolves.toMatchObject({
-      status: 'failed',
-      stage: 'flow-record-delete',
+      ok: false,
       outcomePersisted: true,
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+      kind: 'checkpoint',
       outcome: RUN_OUTCOME.COMPLETED,
     });
   });
@@ -101,8 +97,8 @@ describe('deriveResumability', () => {
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+      kind: 'unreadable',
+      cause: 'checkpoint is malformed',
     });
   });
 
@@ -116,19 +112,18 @@ describe('deriveResumability', () => {
     );
 
     await expect(
-      finalizeExecution({
+      finalizeRun({
         executionId,
         outcome: RUN_OUTCOME.FAILED,
         flowRecord: 'preserve',
       }),
     ).resolves.toMatchObject({
-      status: 'failed',
-      stage: 'terminal-status',
+      ok: false,
       outcomePersisted: false,
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: true,
+      kind: 'checkpoint',
     });
   });
 
@@ -138,8 +133,7 @@ describe('deriveResumability', () => {
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.INTERRUPTED_WITH_FLOW,
+      kind: 'checkpoint',
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: BASE_FLOW_RECORD,
     });
@@ -150,8 +144,7 @@ describe('deriveResumability', () => {
     await writeMeta(executionId, { outcome: RUN_OUTCOME.CANCELLED });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      kind: 'none',
       outcome: RUN_OUTCOME.CANCELLED,
     });
   });
@@ -161,8 +154,7 @@ describe('deriveResumability', () => {
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
+      kind: 'checkpoint',
       flowRecord: BASE_FLOW_RECORD,
     });
   });
@@ -180,11 +172,8 @@ describe('deriveResumability', () => {
 
     const decision = await deriveResumability(executionId);
 
-    expect(decision).toMatchObject({
-      resumable: true,
-      cause: RESUMABILITY_CAUSE.MISSING_TERMINAL_WITH_FLOW,
-    });
-    if (!decision.resumable) return;
+    expect(decision).toMatchObject({ kind: 'checkpoint' });
+    if (decision.kind !== 'checkpoint') return;
     expect(decision.flowRecord).toEqual(legacyRecord);
     expect(Object.hasOwn(decision.flowRecord, 'schemaVersion')).toBe(false);
   });
@@ -193,8 +182,8 @@ describe('deriveResumability', () => {
     const executionId = 'missing-flow' as ExecutionId;
 
     await expect(deriveResumability(executionId)).resolves.toEqual({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.MISSING_FLOW,
+      kind: 'none',
+      outcome: undefined,
     });
   });
 
@@ -219,8 +208,8 @@ describe('deriveResumability', () => {
     await getExecutionStore(executionId).write(flowKey(executionId), record);
 
     await expect(deriveResumability(executionId)).resolves.toEqual({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.INVALID_FLOW,
+      kind: 'unreadable',
+      cause: 'checkpoint is malformed',
     });
   });
 
@@ -234,8 +223,8 @@ describe('deriveResumability', () => {
     await writeFlow(executionId);
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.INVALID_META,
+      kind: 'unreadable',
+      cause: 'execution metadata is malformed',
     });
   });
 
@@ -252,8 +241,8 @@ describe('deriveResumability', () => {
     });
 
     await expect(deriveResumability(executionId)).resolves.toMatchObject({
-      resumable: false,
-      cause: RESUMABILITY_CAUSE.UNREADABLE_FLOW,
+      kind: 'unreadable',
+      cause: 'checkpoint could not be read (disk offline)',
     });
   });
 });

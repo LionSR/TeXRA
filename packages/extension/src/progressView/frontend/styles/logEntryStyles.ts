@@ -73,6 +73,12 @@ export const logEntryStyles = css`
     contain-intrinsic-size: auto 42px;
   }
 
+  /* A declared plan label is not a call yet: dashed, quiet. */
+  .workflow-task--declared {
+    border-inline-start-style: dashed;
+    opacity: var(--opacity-subtle);
+  }
+
   .workflow-task--running {
     border-inline-start-color: var(--wa-color-focus);
     background: var(--wa-color-neutral-fill-quiet);
@@ -147,8 +153,6 @@ export const logEntryStyles = css`
   .workflow-task-status {
     align-self: center;
     padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
-    border-radius: 999px;
-    background: transparent;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     white-space: nowrap;

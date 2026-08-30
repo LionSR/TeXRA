@@ -124,6 +124,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             text: copilotQuotaExhausted ? 'Retry Copilot' : 'Retry',
             title: copilotQuotaExhausted ? 'Retry Copilot (r)' : 'Retry (r)',
             action: 'retry',
+            kind: 'primary',
             disabled,
             onClick: () => this.emitAction({ action: 'retry' }),
           })}

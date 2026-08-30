@@ -23,7 +23,6 @@ const STDIN_INPUT_TOKEN = '-';
 // LaTeX derives auxiliary filenames from the input basename; leading-dot
 // job names can be rejected by TeX's file-open policy when it writes `.aux`.
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
-const STDIN_TEMP_DIR_PATTERN = /^texra-stdin-\d+-[A-Za-z0-9]{6}$/;
 export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
 
 export function workflowInputGlobOptions(
@@ -69,7 +68,7 @@ function isStdinWorkflowInputSpec(inputSpec: string): boolean {
   return inputSpec.trim() === STDIN_INPUT_TOKEN;
 }
 
-export interface WorkflowInputExpansionOptions {
+interface WorkflowInputExpansionOptions {
   readonly allowEmpty?: boolean;
   readonly requireWorkspaceFiles?: boolean;
   readonly stdinInputFile?: () => Promise<string>;
@@ -94,17 +93,6 @@ export function hasMixedStdinWorkflowInputSpecs(
     inputSpecs.map((spec) => spec.trim()).filter(Boolean),
   );
   return distinctSpecs.has(STDIN_INPUT_TOKEN) && distinctSpecs.size > 1;
-}
-
-export function isMaterializedStdinWorkflowInputPath(
-  inputPath: string,
-): boolean {
-  const normalized = toPosixPath(inputPath);
-  const parent = path.posix.basename(path.posix.dirname(normalized));
-  return (
-    path.posix.basename(normalized) === STDIN_WORKFLOW_INPUT_BASENAME &&
-    STDIN_TEMP_DIR_PATTERN.test(parent)
-  );
 }
 
 export function createStdinWorkflowInputMaterializer(options: {
@@ -266,19 +254,6 @@ async function expandWorkflowInputSpec(
   return [normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
 }
 
-export async function expandWorkflowInputSpecs(
-  inputSpecs: readonly string[],
-  cwd: string,
-  flagLabel: string = '--input',
-  options: WorkflowInputExpansionOptions = {},
-): Promise<string[]> {
-  return finishWorkflowInputExpansion(
-    await prepareWorkflowInputExpansion(inputSpecs, cwd, flagLabel, options),
-    cwd,
-    options,
-  );
-}
-
 async function prepareWorkflowInputExpansion(
   inputSpecs: readonly string[],
   cwd: string,
@@ -302,7 +277,7 @@ async function finishWorkflowInputExpansion(
   prepared: PreparedWorkflowInputExpansion,
   cwd: string,
   options: WorkflowInputExpansionOptions,
-): Promise<string[]> {
+): Promise<{ readonly files: string[]; readonly stdinPath?: string }> {
   const expanded: string[] = [];
   const stdinPath = prepared.stdinInputFile
     ? normalizeCliInputPathForRun(
@@ -323,14 +298,16 @@ async function finishWorkflowInputExpansion(
   if (deduped.length === 0 && options.allowEmpty !== true) {
     throw new CliUsageError('At least one workflow input file is required.');
   }
-  return deduped;
+  return { files: deduped, stdinPath };
 }
 
-export interface ExpandedRunInputs {
+interface ExpandedRunInputs {
   readonly inputFiles: string[];
   readonly contextFiles: string[];
-  /** True only when this invocation expanded the literal `-` stdin token. */
-  readonly hasMaterializedStdinInput?: boolean;
+  /** Path this invocation materialized stdin to, when the literal `-` token was
+   *  expanded. Ground truth for "was this run's input read from stdin" — never
+   *  re-derive it by inspecting a path's shape. */
+  readonly stdinInputPath?: string;
 }
 
 /**
@@ -375,16 +352,20 @@ export async function expandRunInputs(
     shared,
   );
 
-  const inputFiles = await finishWorkflowInputExpansion(inputExpansion, cwd, {
+  const inputs = await finishWorkflowInputExpansion(inputExpansion, cwd, {
     ...shared,
     allowEmpty: options.allowEmptyInput,
   });
-  const contextFiles = await finishWorkflowInputExpansion(
-    contextExpansion,
-    cwd,
-    { ...shared, allowEmpty: true },
-  );
-  return { inputFiles, contextFiles };
+  const contexts = await finishWorkflowInputExpansion(contextExpansion, cwd, {
+    ...shared,
+    allowEmpty: true,
+  });
+  return {
+    inputFiles: inputs.files,
+    contextFiles: contexts.files,
+    // `-` is rejected above when it appears in both, so at most one is set.
+    stdinInputPath: inputs.stdinPath ?? contexts.stdinPath,
+  };
 }
 
 /**
@@ -414,12 +395,7 @@ export async function withExpandedRunInputs<T>(
       requireWorkspaceFiles: options.requireWorkspaceFiles,
       stdinInputFile,
     });
-    return await run({
-      ...inputs,
-      hasMaterializedStdinInput: [...inputSpecs, ...contextSpecs].some(
-        isStdinWorkflowInputSpec,
-      ),
-    });
+    return await run(inputs);
   } finally {
     await stdinInputFile.cleanup();
   }

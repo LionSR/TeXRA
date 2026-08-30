@@ -16,22 +16,19 @@ import {
   infoPane,
   openInfoPane,
   rootRunPending,
-  rootRunStartAvailable,
   rootRunStreamId,
   rootStreamId,
   removeStream,
   resetCliState,
   patchStream,
   setTransientNotice,
-  setStreamStatusInCliState,
+  streamPhaseFor,
   streams,
   transientNotice,
 } from '@cli/chat/tui/state/cliState';
 import {
-  allocateConversationBottomPanelRows,
   allocateConversationPanelRows,
   allocateMiddleRows,
-  allocateSidePanelRows,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
@@ -45,7 +42,6 @@ import {
   isChildStreamRemoved,
   parentStream,
   queuedFollowUpsFor,
-  retainedChildStreamsFor,
   sessionStateRevision,
   streamMetadataFor,
   streamStateFor,
@@ -55,23 +51,23 @@ import {
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { advanceSettledPrefixIndex } from '@cli/chat/tui/state/transcriptFold';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
-  markArtifactStreamHydrated,
+  bumpStreamArtifactRevision,
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
-import {
-  estimateTranscriptEntryRows,
-  selectTranscriptEntriesForViewport,
-} from '@cli/chat/tui/panes/transcriptViewport';
+import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
+import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   isFinalizedTranscriptRow,
-  splitTranscriptEntries,
   transcriptRowHeadline,
 } from '@cli/chat/tui/panes/transcriptEntries';
-import { transcriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
+import {
+  transcriptEntryLayout,
+  transcriptEntryLayoutRows,
+} from '@cli/chat/tui/panes/transcriptEntryLayout';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
@@ -93,7 +89,6 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
-import { projectStreamArtifacts } from '@controllers/session/StreamArtifactProjection';
 import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
@@ -108,7 +103,6 @@ import {
   type ExtendedTokenUsageStats,
   type Plan,
   type RunIdentity,
-  type StorageKey,
   type StreamPhase,
   type StreamTabId,
   type TodoItem,
@@ -116,8 +110,10 @@ import {
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import {
+  splitTranscriptEntries,
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
@@ -149,7 +145,7 @@ function activeRows(parent: StreamTabId): readonly ActiveChildInfo[] {
 }
 
 function retainedRows(parent: StreamTabId): readonly ActiveChildInfo[] {
-  return retainedChildStreamsFor(parent, childRosters.get());
+  return visibleRows(parent).filter((child) => child.finishedAt !== undefined);
 }
 
 function visibleRows(parent: StreamTabId): readonly ActiveChildInfo[] {
@@ -205,8 +201,17 @@ function runTrace(
 type TraceLogger = ReturnType<typeof runTrace>;
 
 /** Drive a stream to a phase through the production fact-application path. */
+/** The session whose status machine the CLI is currently bound to, while a
+ *  `withRunFacts` body runs against its own `SessionHandle`. */
+let boundFactSession: SessionHandle | undefined;
+
 function setStatus(streamId: StreamTabId, status: StreamPhase): void {
-  setStreamStatusInCliState({ streamId, status });
+  if (boundFactSession) {
+    setCliStreamPhase({ streamId, status, session: boundFactSession });
+    return;
+  }
+  ensureBoundSessionState();
+  setCliStreamPhase({ streamId, status });
 }
 
 /** Drive a status transition on `session`'s machine; the resulting status
@@ -361,7 +366,7 @@ function emitRunStart(
 function emitUsage(
   hub: SessionEventHub,
   streamId: StreamTabId,
-  storageKey: StorageKey,
+  storageKey: ExecutionId,
   usage: ExtendedTokenUsageStats,
 ): void {
   hub.emit({
@@ -437,15 +442,20 @@ function markToolUseAgent(hub: SessionEventHub, streamId: StreamTabId): void {
 // and write through its public API.
 let metadataState: SessionState | undefined;
 
+/** Bind a `SessionState` over the default session on first use, so the CLI's
+ *  shared reads (metadata, and the status machine `streamPhaseFor` consults)
+ *  resolve without an adapter attached. */
+function ensureBoundSessionState(): SessionState {
+  metadataState ??= new SessionState(defaultSession());
+  bindChildStreamState(metadataState);
+  return metadataState;
+}
+
 function seedStreamMetadata(
   streamId: StreamTabId,
   patch: Parameters<SessionState['updateStreamMetadata']>[1],
 ): void {
-  if (!metadataState) {
-    metadataState = new SessionState(defaultSession());
-    bindChildStreamState(metadataState);
-  }
-  metadataState.updateStreamMetadata(streamId, patch);
+  ensureBoundSessionState().updateStreamMetadata(streamId, patch);
   invalidateChildStreams();
 }
 
@@ -482,9 +492,11 @@ function withRunFacts(
     transcripts: StreamLogStore.ephemeral('TUI session signals test'),
   });
   const detach = attachSessionSignalsAdapter(session);
+  boundFactSession = session;
   try {
     body(hub, session);
   } finally {
+    boundFactSession = undefined;
     detach();
     snapshots.evictAll();
   }
@@ -674,7 +686,7 @@ describe('cliState stream, focus, and child-edge fields', () => {
       transitionStatus(session, child1, STREAM_PHASE.FAILED, 'restart-repair');
 
       expect(activeRows(root)).toEqual([]);
-      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.FAILED);
+      expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.FAILED);
       expect(visibleRows(root)).toMatchObject([
         {
           executionId: 'agent-1',
@@ -767,17 +779,17 @@ describe('cliState stream, focus, and child-edge fields', () => {
       expect(parentStream.get().get(child1)).toBe(root);
       expect(orderedSessionDescendants(root)[0]).toBe(child1);
       expect(
-        transcriptViewportKey({
+        activeTranscriptViewport({
           activeStreamId: child1,
           parentStream: parentStream.get(),
         }),
-      ).toBe(`scoped:${child1}`);
+      ).toEqual({ key: `scoped:${child1}`, scoped: true });
       expect(
-        transcriptViewportKey({
+        activeTranscriptViewport({
           activeStreamId: root,
           parentStream: parentStream.get(),
         }),
-      ).toBe('root-scrollback');
+      ).toEqual({ key: 'root-scrollback', scoped: false });
     });
   });
 });
@@ -940,54 +952,6 @@ describe('CLI TUI row allocation', () => {
     expect(layout.foregroundRows).toBe(foregroundRows);
   });
 
-  it('sizes side panels to their content within the budget', () => {
-    // Everything fits: each panel takes exactly its content (no dead rows).
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 3,
-        todosPlanContentRows: 4,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 3, todosPlanRows: 4 });
-
-    // A lone panel takes only what it needs; the rest is the conversation's.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 0,
-        todosPlanContentRows: 4,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 0, todosPlanRows: 4 });
-
-    // Over budget, a lone panel is capped at the available rows.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 0,
-        todosPlanContentRows: 20,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 0, todosPlanRows: 13 });
-
-    // Over budget with both present: keep at least one row each, split the
-    // remainder proportionally to need.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 10,
-        todosPlanContentRows: 10,
-        rows: 13,
-      }),
-    ).toEqual({ subagentRows: 7, todosPlanRows: 6 });
-
-    // A single row with both present goes to the todos/plan panel.
-    expect(
-      allocateSidePanelRows({
-        subagentContentRows: 5,
-        todosPlanContentRows: 5,
-        rows: 1,
-      }),
-    ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
-  });
-
   it.each([
     {
       transcriptRows: 1,
@@ -1016,13 +980,15 @@ describe('CLI TUI row allocation', () => {
         todosPlanRows: 0,
       },
     },
+    // The focused list takes its full content (4 sessions + separator) and
+    // never shares the panel with todos, which hide while it has focus.
     {
       transcriptRows: 8,
       expected: {
-        bottomPanelRows: 7,
-        conversationRows: 1,
-        sessionPanelRows: 4,
-        todosPlanRows: 3,
+        bottomPanelRows: 5,
+        conversationRows: 3,
+        sessionPanelRows: 5,
+        todosPlanRows: 0,
       },
     },
   ])(
@@ -1042,42 +1008,45 @@ describe('CLI TUI row allocation', () => {
 
   it('hides the child list when its gap and content cannot both fit', () => {
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 5,
-        transcriptRows: 1,
+        transcriptRows: 2,
       }),
     ).toEqual({
+      conversationRows: 2,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 1,
         childListFocused: true,
         todosPlanContentRows: 0,
-        transcriptRows: 1,
+        transcriptRows: 2,
       }),
     ).toEqual({
+      conversationRows: 2,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
 
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 3,
         childListFocused: true,
         minimumSessionPanelRows: 3,
         todosPlanContentRows: 0,
-        transcriptRows: 2,
+        transcriptRows: 3,
       }),
     ).toEqual({
+      conversationRows: 3,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
@@ -1086,28 +1055,30 @@ describe('CLI TUI row allocation', () => {
 
   it('keeps the child list collapsed until it receives focus', () => {
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 0,
-        transcriptRows: 6,
+        transcriptRows: 7,
       }),
     ).toEqual({
+      conversationRows: 7,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
 
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: true,
         todosPlanContentRows: 0,
-        transcriptRows: 6,
+        transcriptRows: 7,
       }),
     ).toEqual({
+      conversationRows: 4,
       bottomPanelRows: 3,
       sessionPanelRows: 3,
       todosPlanRows: 0,
@@ -1117,76 +1088,44 @@ describe('CLI TUI row allocation', () => {
   it('reserves a separator row above the todos panel', () => {
     // 2 todos + separator = 3 rows when the transcript allows it.
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 0,
         childListFocused: false,
         todosPlanContentRows: 2,
-        transcriptRows: 8,
+        transcriptRows: 9,
       }),
     ).toMatchObject({ bottomPanelRows: 3, todosPlanRows: 3 });
   });
 
-  it('borrows a focused child-list row so an active todo stays visible', () => {
-    // Many children plus one todo under the 10-row cap: the proportional
-    // split grants todos a single row, too small for separator plus content,
-    // so one row shifts from the ample child list instead.
-    const allocation = allocateConversationBottomPanelRows({
-      maxRows: 10,
-      sessionCount: 11,
-      childListFocused: true,
-      todosPlanContentRows: 1,
-      transcriptRows: 30,
-    });
-    expect(allocation.todosPlanRows).toBe(2);
-    expect(allocation.sessionPanelRows).toBeGreaterThanOrEqual(2);
-    expect(allocation.bottomPanelRows).toBe(
-      allocation.sessionPanelRows + allocation.todosPlanRows,
-    );
-  });
-
   it('hands a lone todos row back instead of rendering a dead separator', () => {
     // The grant would be exactly one row — too small for separator + content.
-    const allocation = allocateConversationBottomPanelRows({
+    const allocation = allocateConversationPanelRows({
       maxRows: 10,
       sessionCount: 0,
       childListFocused: false,
       todosPlanContentRows: 4,
-      transcriptRows: 2,
+      transcriptRows: 3,
     });
     expect(allocation).toEqual({
+      conversationRows: 3,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
     });
   });
 
-  it('preserves todo content when the focused child list can yield one row', () => {
-    expect(
-      allocateConversationBottomPanelRows({
-        maxRows: 10,
-        sessionCount: 11,
-        childListFocused: true,
-        todosPlanContentRows: 1,
-        transcriptRows: 20,
-      }),
-    ).toEqual({
-      bottomPanelRows: 10,
-      sessionPanelRows: 8,
-      todosPlanRows: 2,
-    });
-  });
-
   it('does not allocate session rows without transcript space', () => {
     expect(
-      allocateConversationBottomPanelRows({
+      allocateConversationPanelRows({
         maxRows: 10,
         sessionCount: 2,
         childListFocused: false,
         todosPlanContentRows: 5,
-        transcriptRows: 0,
+        transcriptRows: 1,
       }),
     ).toEqual({
+      conversationRows: 1,
       bottomPanelRows: 0,
       sessionPanelRows: 0,
       todosPlanRows: 0,
@@ -1241,12 +1180,31 @@ describe('CLI TUI row allocation', () => {
       ],
       expected: true,
     },
+    {
+      name: 'the child list focused',
+      childListFocused: true,
+      foregroundOpen: false,
+      hasPlan: true,
+      todos: [openTodo],
+      expected: false,
+    },
   ])(
     'keeps unfinished todo and plan chrome across stream phases: $name',
-    ({ foregroundOpen, hasPlan, todos, expected }) => {
-      expect(shouldShowTodosPlanPanel({ foregroundOpen, hasPlan, todos })).toBe(
-        expected,
-      );
+    ({
+      childListFocused = false,
+      foregroundOpen,
+      hasPlan,
+      todos,
+      expected,
+    }) => {
+      expect(
+        shouldShowTodosPlanPanel({
+          childListFocused,
+          foregroundOpen,
+          hasPlan,
+          todos,
+        }),
+      ).toBe(expected);
     },
   );
 
@@ -1334,7 +1292,6 @@ describe('CLI TUI row allocation', () => {
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
-    expect(rootRunStartAvailable.get()).toBe(false);
     expect(rootRunPending.get()).toBe(true);
     expect(rootRunStreamId.get()).toBeUndefined();
   });
@@ -1350,13 +1307,11 @@ describe('CLI TUI row allocation', () => {
 
     expect(rootRunStreamId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(true);
-    expect(rootRunStartAvailable.get()).toBe(false);
 
     session.markRunCompleted();
 
     expect(rootRunStreamId.get()).toBe(root);
     expect(rootRunPending.get()).toBe(false);
-    expect(rootRunStartAvailable.get()).toBe(true);
   });
 
   it('restores root run availability when clearing session run state', () => {
@@ -1371,7 +1326,6 @@ describe('CLI TUI row allocation', () => {
     session.clearRunState();
 
     expect(chatTuiCanStartRootRun(session)).toBe(true);
-    expect(rootRunStartAvailable.get()).toBe(true);
     expect(rootRunPending.get()).toBe(false);
     expect(rootRunStreamId.get()).toBeUndefined();
   });
@@ -1711,7 +1665,6 @@ describe('CLI TUI row allocation', () => {
           agentCategory: fixture.category,
           creationTimestamp: 0,
         },
-        streams: streams.get(),
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
   });
@@ -1746,7 +1699,6 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: new Map([[child1, root]]),
         metadata: { creationTimestamp: 0, ...metadata },
-        streams: streams.get(),
       }),
     ).toEqual({ kind: 'reject', streamId: child1 });
   });
@@ -1787,7 +1739,7 @@ describe('CLI TUI row allocation', () => {
       emitParentEdge(hub, child1, root);
 
       activeStreamId.set(child1);
-      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.RUNNING);
+      expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.RUNNING);
       expect(retainedRows(root)[0]?.status).toBe(STREAM_PHASE.RUNNING);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'accept',
@@ -1816,7 +1768,7 @@ describe('CLI TUI row allocation', () => {
       );
 
       activeStreamId.set(child1);
-      expect(streams.get().get(child1)?.status).toBe(STREAM_PHASE.CANCELLED);
+      expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.CANCELLED);
       expect(retainedRows(root)[0]?.status).toBe(STREAM_PHASE.CANCELLED);
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'reject',
@@ -2316,17 +2268,17 @@ describe('CLI transcript state', () => {
     expect(transcriptRowHeadline(entries[0]!)).toBe('');
   });
 
-  it('tracks hidden thinking activity without rendering thinking text', () => {
+  it('follows the thinking row for the reasoning indicator', () => {
     const logger = runTrace(root);
     const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
 
-    // Opening the stream alone marks the phase — hidden reasoning (e.g.
-    // gpt-5 without summaries) may never produce a text delta.
+    // The indicator reads the transcript's own rows. An opened stream with no
+    // text delta yet (hidden reasoning — e.g. gpt-5 without summaries) has no
+    // row, so it lights nothing up until the first delta arrives.
     syncStreamLog(defaultSession(), root);
 
     let slice = streams.get().get(root);
-    expect(slice?.thinkingActive).toBe(true);
-    // An opened stream with no delta says nothing yet, so it has no row.
+    expect(slice?.thinkingActive).toBe(false);
     expect(slice?.entries).toEqual([]);
 
     thinking.append('private reasoning summary');
@@ -2355,7 +2307,7 @@ describe('CLI transcript state', () => {
     expect(entryTexts(root)).toEqual(['Thinking', 'Visible answer.']);
   });
 
-  it('projects workflow tools and errors while excluding thinking and raw model prose', () => {
+  it('projects the same rows on a workflow-agent stream as every other host', () => {
     markWorkflow(root);
     const logger = runTrace(root);
     const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
@@ -2397,18 +2349,23 @@ describe('CLI transcript state', () => {
 
     syncStreamLog(defaultSession(), root);
 
+    // Membership is the shared projector's single allowlist: a workflow-agent
+    // stream withholds nothing the progress view would show. Which line the
+    // CLI's status chrome quotes is a separate, paint-time choice.
     const slice = streams.get().get(root);
     expect(slice?.entries.map(({ kind }) => kind)).toEqual([
+      'thinking',
+      'assistant',
       'tool',
       'error',
+      'user',
+      'assistant',
       'error',
     ]);
     expect(JSON.stringify(slice)).toContain('workflow provider failed');
     expect(JSON.stringify(slice)).toContain('synthetic workflow error');
-    expect(JSON.stringify(slice)).not.toContain('private workflow reasoning');
-    expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
-    expect(JSON.stringify(slice)).not.toContain('synthetic workflow prompt');
-    expect(JSON.stringify(slice)).not.toContain('synthetic workflow response');
+    expect(JSON.stringify(slice)).toContain('private workflow reasoning');
+    expect(JSON.stringify(slice)).toContain('raw workflow model response');
     expect(slice?.latestLine).toBe('synthetic workflow error');
   });
 
@@ -2432,14 +2389,15 @@ describe('CLI transcript state', () => {
     expect(slice?.latestLine).not.toContain('\u001b');
     expect(slice?.latestLine).not.toContain('\u0007');
     expect(slice?.entries).toMatchObject([
+      { kind: 'user', messageType: MESSAGE_TYPES.USER_MESSAGE },
       { kind: 'log', messageType: MESSAGE_TYPES.DEFAULT },
+      { kind: 'assistant', messageType: MESSAGE_TYPES.MODEL_RESPONSE },
     ]);
     expect(entryTexts(child1)).toEqual([
+      'workflow prompt',
       'Preparing proof audit API_KEY=[redacted]',
-    ]);
-    expect(JSON.stringify(slice?.entries)).not.toContain(
       'raw workflow model response',
-    );
+    ]);
 
     logToolUse(logger, {
       toolName: 'bash',
@@ -2480,21 +2438,21 @@ describe('CLI transcript state', () => {
     slice = streams.get().get(child1);
     expect(slice?.latestLine).toBe('Proof audit failed');
     expect(slice?.entries.map(({ kind }) => kind)).toEqual([
+      'user',
       'log',
+      'assistant',
       'tool',
       'tool',
       'phase',
       'error',
     ]);
-    expect(JSON.stringify(slice)).not.toContain('workflow prompt');
     // The ordinary log line survives the later rows, and it still paints
     // safely: terminal control sequences are stripped by the headline the
     // painter reads, not stored pre-stripped on the row.
-    expect(entryTexts(child1)[0]).toBe(
+    expect(entryTexts(child1)[1]).toBe(
       'Preparing proof audit API_KEY=[redacted]',
     );
     expect(JSON.stringify(slice)).not.toContain(secret);
-    expect(JSON.stringify(slice)).not.toContain('raw workflow model response');
   });
 
   it('updates dormant workflow summaries while retaining only dashboard rows', () => {
@@ -2557,7 +2515,12 @@ describe('CLI transcript state', () => {
         },
       ],
     });
-    expect(JSON.stringify(slice)).not.toContain('raw dormant workflow prose');
+    // The compact selection an unfocused workflow keeps is a residency cap on
+    // what the dashboard paints, not a membership rule: the full transcript is
+    // still folded behind it and comes back when the stream is focused.
+    expect(JSON.stringify(slice?.entries)).not.toContain(
+      'raw dormant workflow prose',
+    );
   });
 
   it('bounds dormant workflow dashboard rows while preserving source order', () => {
@@ -2933,8 +2896,8 @@ describe('CLI transcript state', () => {
     expect(streams.get().get(child1)).toMatchObject({
       latestLine: 'The second lemma is valid.',
       entries: [],
-      status: STREAM_PHASE.WAITING,
     });
+    expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.WAITING);
   });
 
   it('restores an exact dormant transcript when it is requested', () => {
@@ -3183,7 +3146,9 @@ describe('CLI transcript state', () => {
     const renderedRows = renderAnsiMarkdown(text, { width }).split('\n').length;
     const entry = textRowFixture('assistant-markdown', 'assistant', text, 0);
 
-    expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width })),
+    ).toBe(renderedRows);
   });
 
   it('does not reserve spacer rows for compact one-line tool calls', () => {
@@ -3191,7 +3156,9 @@ describe('CLI transcript state', () => {
       path: '/executions/3a780a389327/report',
     });
 
-    expect(estimateTranscriptEntryRows(entry, 80)).toBe(1);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(entry, { width: 80 })),
+    ).toBe(1);
   });
 
   it('keeps pending transcript rows within their viewport budget', () => {
@@ -3476,7 +3443,7 @@ describe('sessionSignalsAdapter run facts', () => {
           todos: previousTodos,
         },
       });
-      markArtifactStreamHydrated(streamId);
+      bumpStreamArtifactRevision();
       expect(readStreamArtifacts(streamId)?.todos).toEqual(previousTodos);
 
       // The event changes the canonical snapshot store and must clear the
@@ -3620,7 +3587,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('applies direct usage events without host emission', () => {
     withRunFacts((hub, session) => {
-      const storageKey = 'root-direct-run' as StorageKey;
+      const storageKey = 'root-direct-run' as ExecutionId;
       const usage = {
         inputTokens: 100,
         outputTokens: 20,
@@ -3633,7 +3600,6 @@ describe('sessionSignalsAdapter run facts', () => {
 
       emitUsage(hub, root, storageKey, usage);
 
-      expect(streams.get().get(root)?.usage).toEqual(usage);
       // Cumulative usage is the snapshot store's per-run accumulator summed;
       // reasoningTokens is part of the one accumulated vocabulary.
       expect(
@@ -3808,7 +3774,7 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('projects missing-output and compile facts and clears the addressed stream', () => {
+  it('projects missing-output and compile facts', () => {
     withRunFacts((hub, session) => {
       const artifacts = () => projectStreamArtifacts(session.snapshots, root);
       hub.emit({
@@ -3852,41 +3818,12 @@ describe('sessionSignalsAdapter run facts', () => {
           0: [expect.objectContaining({ displayName: 'paper.pdf' })],
         },
       });
-
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: { streamId: root },
-        },
-      });
-      expect(artifacts().missingOutputsByRound).toEqual({});
-
-      hub.emit({
-        scope: 'run',
-        streamId: root,
-        event: {
-          type: 'updateMissingOutputs',
-          streamId: root,
-          filesByRound: { 1: ['again.tex'] },
-        },
-      });
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'clearMissingOutputs',
-          payload: { streamId: root },
-        },
-      });
-
-      expect(artifacts().missingOutputsByRound).toEqual({});
-      expect(artifacts().compileFailuresByRound[0]).toHaveLength(1);
     });
   });
 
   it('applies direct usage sequences exactly once', () => {
     withRunFacts((hub, session) => {
-      const storageKey = 'root-direct-sequence-run' as StorageKey;
+      const storageKey = 'root-direct-sequence-run' as ExecutionId;
       const firstUsage = {
         inputTokens: 100,
         outputTokens: 20,
@@ -3909,7 +3846,6 @@ describe('sessionSignalsAdapter run facts', () => {
       emitUsage(hub, root, storageKey, firstUsage);
       emitUsage(hub, root, storageKey, secondUsage);
 
-      expect(streams.get().get(root)?.usage).toEqual(secondUsage);
       // Summed from the store's per-run map — the one accumulator, which
       // carries reasoningTokens — not a second running sum in the slice.
       expect(
@@ -3997,7 +3933,7 @@ describe('sessionSignalsAdapter run facts', () => {
 
   it('keeps latest usage separate from cumulative resume usage', () => {
     withRunFacts((hub, session) => {
-      const storageKey = 'root-run' as StorageKey;
+      const storageKey = 'root-run' as ExecutionId;
 
       emitUsage(hub, root, storageKey, {
         inputTokens: 100,
@@ -4013,13 +3949,6 @@ describe('sessionSignalsAdapter run facts', () => {
         cacheCreationInputTokens: 7,
       });
 
-      expect(streams.get().get(root)?.usage).toEqual({
-        inputTokens: 40,
-        outputTokens: 10,
-        cost: 2,
-        cacheReadInputTokens: 5,
-        cacheCreationInputTokens: 7,
-      });
       expect(
         projectStreamArtifacts(session.snapshots, root).cumulativeUsage,
       ).toEqual({

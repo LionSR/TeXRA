@@ -106,7 +106,6 @@ export function createProgressHostInteractions(
           payload: {
             streamId,
             suppressViewSwitch: true,
-            ensureVisible: true,
           },
         },
       });
@@ -439,7 +438,6 @@ export function createProgressHostInteractions(
     async openExternalInquiry(request) {
       revealStream(request.streamId || undefined);
       handlers().externalInquiry.show(request);
-      return { threadId: request.threadId };
     },
 
     cancel,

@@ -11,10 +11,13 @@
 // Standard library imports
 import { randomUUID } from 'node:crypto';
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports
 import { normalizeFilePath } from '@utils/core';
 
-export const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
+const REVIEW_SEVERITIES = ['critical', 'warning', 'info'] as const;
 export type ReviewSeverity = (typeof REVIEW_SEVERITIES)[number];
 
 export interface ReviewIssue {
@@ -32,16 +35,44 @@ export interface ReviewIssue {
   suggestion?: string;
 }
 
+/**
+ * Wire shape of one finding, owned here because the `report_review_issue`
+ * tool's input and the host-facing report are the same payload; the
+ * `.describe()` strings are the model-facing documentation of each field.
+ */
+export const ReportReviewIssueInputSchema = z.strictObject({
+  file: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      'Repository-relative path of the file the issue is in, exactly as it appears in the diff.',
+    ),
+  startLine: z
+    .int()
+    .min(1)
+    .describe(
+      '1-based line number in the current version of the file where the issue starts.',
+    ),
+  endLine: z
+    .int()
+    .min(1)
+    .nullish()
+    .describe('Optional 1-based inclusive end line of the issue.'),
+  severity: z
+    .enum(REVIEW_SEVERITIES)
+    .describe(
+      'critical = bug, security problem, or accidental commit; warning = likely problem worth fixing; info = minor but material.',
+    ),
+  title: z.string().trim().min(1).describe('Short one-line summary.'),
+  description: z
+    .string()
+    .describe('What is wrong and why it matters, in 1-3 sentences.'),
+  suggestion: z.string().nullish().describe('Optional concrete fix.'),
+});
+
 /** Raw finding as supplied by the reviewer agent's `report_review_issue` tool. */
-export interface ReviewIssueReport {
-  file: string;
-  startLine: number;
-  endLine?: number;
-  severity: ReviewSeverity;
-  title: string;
-  description: string;
-  suggestion?: string;
-}
+export type ReviewIssueReport = z.infer<typeof ReportReviewIssueInputSchema>;
 
 /** Strip diff-style `a/`/`b/` prefixes and normalize separators. */
 export function normalizeReviewFilePath(file: string): string {

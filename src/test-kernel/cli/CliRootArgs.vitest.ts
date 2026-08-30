@@ -31,9 +31,7 @@ import {
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
-  expandWorkflowInputSpecs,
   hasMixedStdinWorkflowInputSpecs,
-  isMaterializedStdinWorkflowInputPath,
   workflowInputGlobOptions,
 } from '@cli/runtime/workflowInputs';
 import {
@@ -67,7 +65,6 @@ function storedConfig(
     inputFiles: ['paper.tex'],
     contextFiles: [],
     outputFiles: [],
-    cliOutputFile: undefined,
     instruction: undefined,
     workingDirectory: '/tmp/project',
     agentCategory: AgentCategory.Workflow,
@@ -134,6 +131,31 @@ function trackedStdinMaterializer(
     },
   });
   return { stdinInputFile, readCount: () => reads };
+}
+
+/**
+ * Single-list expansion for one flag, over the public `expandRunInputs` entry
+ * point. `--context` expansion allows an empty `--input` list so a
+ * context-only case reaches the context stage.
+ */
+async function expandSpecs(
+  specs: readonly string[],
+  cwd: string,
+  flagLabel: '--input' | '--context' = '--input',
+  options: {
+    readonly requireWorkspaceFiles?: boolean;
+    readonly stdinInputFile?: () => Promise<string>;
+  } = {},
+): Promise<string[]> {
+  if (flagLabel === '--context') {
+    const { contextFiles } = await expandRunInputs([], specs, cwd, {
+      ...options,
+      allowEmptyInput: true,
+    });
+    return contextFiles;
+  }
+  const { inputFiles } = await expandRunInputs(specs, [], cwd, options);
+  return inputFiles;
 }
 
 describe('CLI root argument routing', () => {
@@ -519,15 +541,16 @@ describe('CLI root argument routing', () => {
       );
       await fs.writeFile(path.join(root, 'paper', 'notes.md'), 'notes');
 
-      await expect(expandWorkflowInputSpecs(['paper'], root)).resolves.toEqual([
+      await expect(expandSpecs(['paper'], root)).resolves.toEqual([
+        'paper/Draft0.tex',
+        'paper/sections/appendix.tex',
+      ]);
+      await expect(expandSpecs(['paper/**/*.tex'], root)).resolves.toEqual([
         'paper/Draft0.tex',
         'paper/sections/appendix.tex',
       ]);
       await expect(
-        expandWorkflowInputSpecs(['paper/**/*.tex'], root),
-      ).resolves.toEqual(['paper/Draft0.tex', 'paper/sections/appendix.tex']);
-      await expect(
-        expandWorkflowInputSpecs(
+        expandSpecs(
           [path.join(root, 'paper', 'sections', 'appendix.tex')],
           root,
         ),
@@ -540,7 +563,7 @@ describe('CLI root argument routing', () => {
       const missing = path.join(root, 'no-such.tex');
       // A pure path (no glob magic, not a directory) is validated here rather
       // than handed to the workflow to fail on later with a raw ENOENT.
-      await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
+      await expect(expandSpecs([missing], root)).rejects.toThrow(
         /--input: file not found/,
       );
     });
@@ -553,19 +576,14 @@ describe('CLI root argument routing', () => {
         '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n',
       );
 
-      const expanded = await expandWorkflowInputSpecs(
-        ['-', '-'],
-        root,
-        '--input',
-        {
-          stdinInputFile,
-        },
-      );
+      const expanded = await expandSpecs(['-', '-'], root, '--input', {
+        stdinInputFile,
+      });
 
       expect(expanded).toHaveLength(1);
       expect(readCount()).toBe(1);
       expect(path.basename(expanded[0])).toBe('stdin.tex');
-      expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
+      expect(path.basename(path.dirname(expanded[0]))).toMatch(/^texra-stdin-/);
       await expect(
         fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
       ).resolves.toContain('\\begin{document}Hi');
@@ -582,17 +600,12 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
       const { stdinInputFile } = trackedStdinMaterializer(root);
 
-      const expanded = await expandWorkflowInputSpecs(
-        ['-', 'paper.tex'],
-        root,
-        '--input',
-        {
-          stdinInputFile,
-        },
-      );
+      const expanded = await expandSpecs(['-', 'paper.tex'], root, '--input', {
+        stdinInputFile,
+      });
 
       expect(path.basename(expanded[0])).toBe('stdin.tex');
-      expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
+      expect(path.basename(path.dirname(expanded[0]))).toMatch(/^texra-stdin-/);
       expect(expanded[1]).toBe('paper.tex');
     });
   });
@@ -602,7 +615,7 @@ describe('CLI root argument routing', () => {
       const { stdinInputFile } = trackedStdinMaterializer(root, ' \n\t ');
 
       await expect(
-        expandWorkflowInputSpecs(['-'], root, '--input', { stdinInputFile }),
+        expandSpecs(['-'], root, '--input', { stdinInputFile }),
       ).rejects.toThrow(/stdin: no data on stdin/);
     });
   });
@@ -614,24 +627,12 @@ describe('CLI root argument routing', () => {
     expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
   });
 
-  it('does not classify ordinary stdin-named files as materialized stdin', () => {
-    expect(isMaterializedStdinWorkflowInputPath('stdin.tex')).toBe(false);
-    expect(
-      isMaterializedStdinWorkflowInputPath('texra-stdin-workflow/stdin.tex'),
-    ).toBe(false);
-    expect(
-      isMaterializedStdinWorkflowInputPath(
-        'texra-stdin-123-workflow/stdin.tex',
-      ),
-    ).toBe(false);
-  });
-
   it('does not read stdin before later --input validation errors', async () => {
     await withTempDir('texra-cli-stdin-', async (root) => {
       const { stdinInputFile, readCount } = trackedStdinMaterializer(root);
 
       await expect(
-        expandWorkflowInputSpecs(['-', 'missing.tex'], root, '--input', {
+        expandSpecs(['-', 'missing.tex'], root, '--input', {
           stdinInputFile,
         }),
       ).rejects.toThrow(/--input: file not found: missing\.tex/);
@@ -667,7 +668,9 @@ describe('CLI root argument routing', () => {
       expect(inputFiles).toEqual(['main.tex']);
       expect(contextFiles).toHaveLength(1);
       expect(path.basename(contextFiles[0])).toBe('stdin.tex');
-      expect(isMaterializedStdinWorkflowInputPath(contextFiles[0])).toBe(true);
+      expect(path.basename(path.dirname(contextFiles[0]))).toMatch(
+        /^texra-stdin-/,
+      );
       await expect(
         fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
       ).resolves.toBe('context body');
@@ -710,7 +713,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(external, 'outside');
 
       await expect(
-        expandWorkflowInputSpecs(['-'], root, '--context', {
+        expandSpecs(['-'], root, '--context', {
           requireWorkspaceFiles: true,
           stdinInputFile: async () => external,
         }),
@@ -724,21 +727,21 @@ describe('CLI root argument routing', () => {
     // the user actually passed, not always say --input.
     await withTempDir('texra-cli-flag-', async (root) => {
       const missing = path.join(root, 'no-such-context.tex');
-      await expect(
-        expandWorkflowInputSpecs([missing], root, '--context'),
-      ).rejects.toThrow(/--context: file not found/);
+      await expect(expandSpecs([missing], root, '--context')).rejects.toThrow(
+        /--context: file not found/,
+      );
     });
   });
 
   it('expands a glob --context spec the same way --input does', async () => {
-    // `texra run -c '<glob>'` routes through expandWorkflowInputSpecs, so it
+    // `texra run -c '<glob>'` routes through the same expansion helper, so it
     // has the same expansion semantics as `--input` and surfaces missing-path
     // errors as Usage (exit 2) instead of a late raw ENOENT.
     await withTempDir('texra-cli-ctx-', async (root) => {
       await fs.writeFile(path.join(root, 'a.bib'), 'a');
       await fs.writeFile(path.join(root, 'b.bib'), 'b');
       await expect(
-        expandWorkflowInputSpecs([path.join(root, '*.bib')], root, '--context'),
+        expandSpecs([path.join(root, '*.bib')], root, '--context'),
       ).resolves.toEqual(['a.bib', 'b.bib']);
     });
   });
@@ -757,7 +760,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'refs', 'a.bib'), 'glob match');
 
       await expect(
-        expandWorkflowInputSpecs([path.join('refs', '[ab].bib')], root),
+        expandSpecs([path.join('refs', '[ab].bib')], root),
       ).resolves.toEqual(['refs/[ab].bib']);
     });
   });
@@ -788,9 +791,9 @@ describe('CLI root argument routing', () => {
         const pattern = path.join(root, 'refs', '*.bib');
 
         expect(pattern).toMatch(/^[A-Za-z]:\\/);
-        await expect(
-          expandWorkflowInputSpecs([pattern], root),
-        ).resolves.toEqual(['refs/paper.bib']);
+        await expect(expandSpecs([pattern], root)).resolves.toEqual([
+          'refs/paper.bib',
+        ]);
       });
     },
   );
@@ -804,7 +807,7 @@ describe('CLI root argument routing', () => {
         await fs.writeFile(path.join(root, 'refs', 'a-one.bib'), 'class match');
 
         await expect(
-          expandWorkflowInputSpecs([String.raw`refs/\[ab]-*.bib`], root),
+          expandSpecs([String.raw`refs/\[ab]-*.bib`], root),
         ).resolves.toEqual(['refs/[ab]-one.bib']);
       });
     },
@@ -817,7 +820,7 @@ describe('CLI root argument routing', () => {
       await fs.writeFile(path.join(root, 'refs', 'alpha.bib'), 'alpha');
 
       await expect(
-        expandWorkflowInputSpecs(['refs/{alpha,beta}.bib'], root),
+        expandSpecs(['refs/{alpha,beta}.bib'], root),
       ).resolves.toEqual(['refs/alpha.bib', 'refs/beta.bib']);
     });
   });
@@ -826,11 +829,11 @@ describe('CLI root argument routing', () => {
     await withTempDir('texra-cli-unmatched-glob-', async (root) => {
       const pattern = path.join('missing refs', '*.bib');
 
+      await expect(expandSpecs([`  ${pattern}  `], root)).rejects.toThrow(
+        `--input: no files matched: ${pattern}`,
+      );
       await expect(
-        expandWorkflowInputSpecs([`  ${pattern}  `], root),
-      ).rejects.toThrow(`--input: no files matched: ${pattern}`);
-      await expect(
-        expandWorkflowInputSpecs([`  ${pattern}  `], root, '--context'),
+        expandSpecs([`  ${pattern}  `], root, '--context'),
       ).rejects.toThrow(`--context: no files matched: ${pattern}`);
     });
   });
@@ -868,7 +871,7 @@ describe('CLI root argument routing', () => {
     expect(
       resumeWorkflowOutputFile(
         storedConfig({
-          cliOutputFile: '/tmp/elsewhere/paper.polished.tex',
+          cli: { outputFile: '/tmp/elsewhere/paper.polished.tex' },
           outputFiles: ['paper.polished.tex'],
         }),
       ),
@@ -879,7 +882,7 @@ describe('CLI root argument routing', () => {
     expect(() =>
       resumeWorkflowOutputFile(
         storedConfig({
-          cliOutputFile: 'out/paper.polished.tex',
+          cli: { outputFile: 'out/paper.polished.tex' },
           outputFiles: ['paper.polished.tex'],
         }),
       ),
@@ -895,7 +898,7 @@ describe('CLI root argument routing', () => {
       resumeWorkflowOutputFile(
         storedConfig({
           workingDirectory,
-          cliOutputFile: outputFile,
+          cli: { outputFile },
         }),
       ),
     ).toBe(outputFile);
@@ -934,7 +937,7 @@ describe('CLI root argument routing', () => {
   it('rejects a non-absolute stored CLI output directory', () => {
     expect(() =>
       resumeWorkflowOutputDirectory(
-        storedConfig({ cliOutputDirectory: 'out/polished' }),
+        storedConfig({ cli: { outputDirectory: 'out/polished' } }),
       ),
     ).toThrow('Stored workflow output directory is not absolute: out/polished');
   });
@@ -1005,32 +1008,48 @@ describe('CLI root argument routing', () => {
 
 describe('CLI global color/input flags', () => {
   it('preserves whitespace in the explicit workspace argument', () => {
-    expect(pickGlobalArgs({ cwd: ' workspace ' }).cwd).toBe(' workspace ');
+    expect(
+      pickGlobalArgs({ cwd: ' workspace ' }, { skillSourcePaths: [] }).cwd,
+    ).toBe(' workspace ');
   });
 
   it('maps CLI color and no-input flags to canonical knobs', () => {
-    expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
+    expect(
+      pickGlobalArgs(
+        { color: false, 'no-input': true },
+        { skillSourcePaths: [] },
+      ),
+    ).toMatchObject({
       noColor: true,
       noInput: true,
     });
   });
 
   it('maps citty negated input output to --no-input', () => {
-    expect(pickGlobalArgs({ input: false })).toMatchObject({
+    expect(
+      pickGlobalArgs({ input: false }, { skillSourcePaths: [] }),
+    ).toMatchObject({
       noInput: true,
     });
-    expect(pickGlobalArgs({ input: 'file.tex' })).toMatchObject({
+    expect(
+      pickGlobalArgs({ input: 'file.tex' }, { skillSourcePaths: [] }),
+    ).toMatchObject({
       noInput: false,
     });
   });
 
   it('treats absent/default color and no-input flags as not negated', () => {
-    expect(pickGlobalArgs({ color: true, 'no-input': false })).toMatchObject({
+    expect(
+      pickGlobalArgs(
+        { color: true, 'no-input': false },
+        { skillSourcePaths: [] },
+      ),
+    ).toMatchObject({
       noColor: false,
       noInput: false,
     });
     // Absent flags default to "not negated" too.
-    expect(pickGlobalArgs({})).toMatchObject({
+    expect(pickGlobalArgs({}, { skillSourcePaths: [] })).toMatchObject({
       noColor: false,
       noInput: false,
     });
@@ -1039,10 +1058,7 @@ describe('CLI global color/input flags', () => {
   it('maps runtime source flags to canonical knobs', () => {
     expect(
       pickGlobalArgs(
-        {
-          'include-interop': true,
-          source: 'fallback/skills',
-        },
+        { 'include-interop': true },
         { skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'] },
       ),
     ).toMatchObject({
@@ -1050,7 +1066,7 @@ describe('CLI global color/input flags', () => {
       skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'],
     });
     expect(
-      pickGlobalArgs({ source: ['one/skills', 'two/skills'] }),
+      pickGlobalArgs({}, { skillSourcePaths: ['one/skills', 'two/skills'] }),
     ).toMatchObject({
       includeInteropSkills: false,
       skillSourcePaths: ['one/skills', 'two/skills'],
@@ -1305,7 +1321,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('/status');
     expect(stdout).toContain('/goal');
     expect(stdout).toContain(
-      'explain autonomous goal mode and approved-plan startup',
+      'configure autonomous goal mode and auto-approval scope',
     );
     expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('ChatGPT or Researcher Access');

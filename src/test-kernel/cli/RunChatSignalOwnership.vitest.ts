@@ -6,12 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const cliRequire = createRequire(
@@ -81,6 +79,7 @@ vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
   initInteractiveCliPlatform: mocks.initInteractiveCliPlatform,
   runCliPlatformShutdownSequence: mocks.runCliPlatformShutdownSequence,
+  setCliAgentResumeHandler: vi.fn(() => () => {}),
   setCliHelperModel: mocks.setCliHelperModel,
 }));
 
@@ -264,7 +263,6 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
-      agentSource: 'default',
       model: 'gpt-test',
       modelSource: 'default',
     });
@@ -303,7 +301,6 @@ describe('runChat signal ownership wiring', () => {
     mocks.tuiOutputStreamForColor.mockImplementation((stream) => stream);
     mocks.createChatSessionController.mockReturnValue({
       admitInterruptedFollowUp: vi.fn(() => ({ kind: 'not_interrupted' })),
-      canStartRootRun: vi.fn(() => true),
       clearInterruptedRecovery: vi.fn(),
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,
@@ -462,23 +459,18 @@ describe('runChat signal ownership wiring', () => {
     } as const;
     const mediaFiles = ['/tmp/diagram.png'];
     const activationPrompt = '<skill_activation>hidden</skill_activation>';
-    const streamId = 'stream-resume' as StreamTabId;
-    const resolution: ToolUseResumeData = createToolUseResumeData({
-      executionId: 'exec-resume' as ExecutionId,
-      streamId,
-      agentConfig: AgentConfigSchema.parse({
-        agent: 'orchestrator',
-        model: 'gpt-test',
-        agentCategory: 'toolUse',
-        cliMultiAgentPresetId: 'physicist',
-        delegationAgentScope,
-      }),
+    const config = AgentConfigSchema.parse({
+      agent: 'orchestrator',
+      model: 'gpt-test',
+      agentCategory: 'toolUse',
+      cli: { multiAgentPresetId: 'physicist' },
+      delegationAgentScope,
     });
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {
       initialResume: {
         id: 'exec-resume' as ExecutionId,
-        resolution,
+        config,
       },
     });
 
@@ -508,7 +500,7 @@ describe('runChat signal ownership wiring', () => {
         agentCategory: 'toolUse',
         workingDirectory: '/tmp/texra-chat',
         mediaFiles: ['/tmp/diagram.png'],
-        cliMultiAgentPresetId: 'physicist',
+        cli: { multiAgentPresetId: 'physicist' },
         delegationAgentScope,
       });
     } finally {

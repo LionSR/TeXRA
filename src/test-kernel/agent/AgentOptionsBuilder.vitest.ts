@@ -76,9 +76,7 @@ describe('agent option labels', () => {
     expect(option).toMatchObject({
       value: 'inline:embeddedHelper',
       label: 'embeddedHelper',
-      isInline: true,
-      isCustom: false,
-      isRemote: false,
+      source: 'inline',
     });
   });
 });

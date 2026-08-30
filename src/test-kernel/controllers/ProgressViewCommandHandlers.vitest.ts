@@ -106,7 +106,7 @@ function createActions(
       handleAction: vi.fn(),
     } as unknown as ProgressAgentProposalController,
     followUp: {
-      acknowledge: vi.fn(),
+      captureAdmissionReporter: vi.fn(() => vi.fn()),
       reportImageSaveError: vi.fn(),
     },
     bypass: { showInfo: vi.fn() },
@@ -196,150 +196,6 @@ function expectDispatched(
 ): void {
   expect(dispatchProgressViewInbound(message, handlers)).toBe(true);
 }
-
-function expectMessageParses(message: unknown, valid: boolean): void {
-  expect(ProgressViewInboundMessageSchema.safeParse(message).success).toBe(
-    valid,
-  );
-}
-
-describe('createProgressViewCommandHandlers', () => {
-  it('routes lifecycle commands to host actions', () => {
-    const actions = createActions();
-    const handlers = createProgressViewCommandHandlers(actions);
-
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.SWITCH_STREAM,
-        stream: 'stream-a',
-        requestId: 'request-a',
-      },
-      handlers,
-    );
-    expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM, stream: 'stream-b' },
-      handlers,
-    );
-    expectDispatched({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL }, handlers);
-    expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.STOP_STREAM, stream: 'stream-c' },
-      handlers,
-    );
-
-    expect(actions.lifecycle.setActiveStream).toHaveBeenCalledWith(
-      'stream-a',
-      'request-a',
-    );
-    expect(actions.lifecycle.deleteStream).toHaveBeenCalledWith('stream-b');
-    expect(actions.lifecycle.deleteAllStreams).toHaveBeenCalledWith();
-    expect(actions.lifecycle.stopStream).toHaveBeenCalledWith('stream-c');
-  });
-
-  it('routes file commands to host actions', () => {
-    const actions = createActions();
-    const handlers = createProgressViewCommandHandlers(actions);
-
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
-        file: 'paper.tex',
-        line: 12,
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_SPILL_ARTIFACT,
-        spillPath: 'executions/abcdef123456/toolOutput/tool.txt',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE,
-        stream: 'stream-a',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
-        file: 'edited.tex',
-        base: 'paper.tex',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,
-        file: 'edited.tex',
-        base: 'paper.tex',
-        prev: 'previous.tex',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
-        file: 'edited.tex',
-        base: 'paper.tex',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
-        file: 'edited.tex',
-        base: 'paper.tex',
-      },
-      handlers,
-    );
-    expectDispatched(
-      {
-        command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
-        file: 'edited.tex',
-        base: 'paper.tex',
-      },
-      handlers,
-    );
-    expectDispatched(
-      { command: PROGRESS_VIEW_COMMANDS.OPEN_LABEL, label: 'thm:main' },
-      handlers,
-    );
-
-    expect(actions.file.openFile).toHaveBeenCalledWith('paper.tex', 12);
-    expect(actions.file.openSpillArtifact).toHaveBeenCalledWith(
-      'executions/abcdef123456/toolOutput/tool.txt',
-    );
-    expect(actions.workflowFileActions.openTaskStorage).toHaveBeenCalledWith(
-      'stream-a',
-    );
-    expect(actions.workflowFileActions.compareOriginal).toHaveBeenCalledWith(
-      'edited.tex',
-      'paper.tex',
-    );
-    expect(actions.workflowFileActions.comparePrevious).toHaveBeenCalledWith(
-      'edited.tex',
-      'paper.tex',
-      'previous.tex',
-    );
-    expect(actions.workflowFileActions.acceptFile).toHaveBeenCalledWith(
-      'edited.tex',
-      'paper.tex',
-    );
-    expect(actions.workflowFileActions.mergeFile).toHaveBeenCalledWith(
-      'edited.tex',
-      'paper.tex',
-    );
-    expect(actions.workflowFileActions.latexdiffFile).toHaveBeenCalledWith(
-      'edited.tex',
-      'paper.tex',
-    );
-    expect(actions.workflowFileActions.openLabel).toHaveBeenCalledWith(
-      'thm:main',
-    );
-  });
-});
 
 describe('createProgressViewCommandHandlers - follow-up', () => {
   beforeEach(() => {
@@ -432,11 +288,11 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     defaultSession().interactions.cancel({ cause: 'All approvals cleared.' });
   });
 
-  it('sets tool-edit and bash together from the shield preset', async () => {
+  it('toggles file-edit and bash bypass independently', async () => {
     const stream = 'stream:edit-bypass';
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       setApprovalBypassState,
       cancel: vi.fn(),
     });
@@ -457,14 +313,34 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream, session)).toBe(true);
-    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(false);
     expect(setApprovalBypassState).toHaveBeenCalledWith({
       streamId: stream,
       kind: 'toolEdit',
       bypassActive: true,
     });
     expect(showInfo).toHaveBeenCalledWith(
-      'File edits and shell commands will be auto-approved for this run.',
+      'File edits will be auto-approved for this run.',
+    );
+
+    expectDispatched(
+      {
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS,
+        stream,
+      },
+      handlers,
+    );
+    await Promise.resolve();
+
+    expect(isApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
+    expect(setApprovalBypassState).toHaveBeenCalledWith({
+      streamId: stream,
+      kind: 'bash',
+      bypassActive: true,
+    });
+    expect(showInfo).toHaveBeenCalledWith(
+      'Shell commands will be auto-approved for this run.',
     );
 
     expectDispatched(
@@ -477,7 +353,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     await Promise.resolve();
 
     expect(isApprovalBypassedForStream(stream, session)).toBe(false);
-    expect(isBashApprovalBypassedForStream(stream, session)).toBe(false);
+    expect(isBashApprovalBypassedForStream(stream, session)).toBe(true);
     expect(setApprovalBypassState).toHaveBeenCalledWith({
       streamId: stream,
       kind: 'toolEdit',
@@ -524,19 +400,9 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     },
   );
 
-  it('rejects a bypass enable that does not name its kind', () => {
-    expectMessageParses(
-      {
-        command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
-        stream: 'stream:no-kind',
-      },
-      false,
-    );
-  });
-
   it('leaves an existing grant of its own kind untouched', async () => {
-    // Set-on, never toggle: the shield or delegated inheritance can already
-    // have granted edit bypass while this prompt was open.
+    // Set-on, never toggle: the header toggle or delegated inheritance can
+    // already have granted edit bypass while this prompt was open.
     const stream = 'stream:yolo-enable';
     const handlers = createProgressViewCommandHandlers(
       createActions({ bypass: { showInfo: vi.fn() } }),
@@ -562,7 +428,7 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     const stream = 'stream:proposal-bypass';
     const session = createTestSession();
     const setApprovalBypassState = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       setApprovalBypassState,
       cancel: vi.fn(),
     });
@@ -636,6 +502,49 @@ describe('createProgressViewCommandHandlers - bypass toggles', () => {
     );
     session.dispose();
   });
+
+  it.each([
+    {
+      label: 'AUTO-BASH',
+      command: PROGRESS_VIEW_COMMANDS.TOGGLE_BASH_APPROVAL_BYPASS,
+      expectEdit: true,
+      expectBash: false,
+    },
+    {
+      label: 'AUTO-EDIT',
+      command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+      expectEdit: false,
+      expectBash: true,
+    },
+  ])(
+    'drops AUTO-TASK without revoking the other grant when $label is turned off',
+    async ({ command, expectEdit, expectBash }) => {
+      const stream = `stream:revoke-${expectBash ? 'bash' : 'edit'}`;
+      const session = createTestSession();
+      const handlers = createProgressViewCommandHandlers(
+        createActions({
+          bypass: { session, showInfo: vi.fn() },
+        }),
+      );
+
+      expectDispatched(
+        {
+          command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+          stream,
+        },
+        handlers,
+      );
+      await Promise.resolve();
+
+      expectDispatched({ command, stream }, handlers);
+      await Promise.resolve();
+
+      expect(proposalApprovals(session).isBypassed(stream)).toBe(false);
+      expect(isApprovalBypassedForStream(stream, session)).toBe(expectEdit);
+      expect(isBashApprovalBypassedForStream(stream, session)).toBe(expectBash);
+      session.dispose();
+    },
+  );
 });
 
 describe('createProgressViewCommandHandlers - approvals', () => {
@@ -722,100 +631,6 @@ describe('createProgressViewCommandHandlers - approvals', () => {
   });
 });
 
-describe('permission action schemas', () => {
-  const tool = {
-    command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-    requestId: 'edit-1',
-  };
-  const bash = {
-    command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
-    requestId: 'bash-1',
-  };
-  const proposal = {
-    command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-    requestId: 'proposal-1',
-  };
-  const plan = {
-    command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
-    requestId: 'plan-1',
-  };
-
-  it.each([
-    ['tool approve', { ...tool, action: 'approve' }, true],
-    ['tool reject', { ...tool, action: 'reject', feedback: 'No' }, true],
-    ['tool open diff', { ...tool, action: 'openDiff' }, true],
-    ['tool show latexdiff', { ...tool, action: 'showLatexdiff' }, true],
-    ['tool preview proposed', { ...tool, action: 'previewProposed' }, true],
-    [
-      'tool approve with feedback',
-      { ...tool, action: 'approve', feedback: 'x' },
-      false,
-    ],
-    [
-      'tool inspection with feedback',
-      { ...tool, action: 'openDiff', feedback: 'x' },
-      false,
-    ],
-    ['tool unknown field', { ...tool, action: 'approve', extra: true }, false],
-    ['bash approve', { ...bash, action: 'approve' }, true],
-    ['bash reject', { ...bash, action: 'reject', feedback: 'No' }, true],
-    ['bash tool action', { ...bash, action: 'openDiff' }, false],
-    [
-      'bash approve with feedback',
-      { ...bash, action: 'approve', feedback: 'x' },
-      false,
-    ],
-    ['bash unknown field', { ...bash, action: 'reject', extra: true }, false],
-    [
-      'proposal approve',
-      { ...proposal, action: 'approve', model: 'm', agent: 'a' },
-      true,
-    ],
-    [
-      'proposal reject',
-      { ...proposal, action: 'reject', feedback: 'No' },
-      true,
-    ],
-    ['proposal setup', { ...proposal, action: 'setup' }, true],
-    [
-      'proposal approve with feedback',
-      { ...proposal, action: 'approve', feedback: 'x' },
-      false,
-    ],
-    [
-      'proposal reject with model',
-      { ...proposal, action: 'reject', model: 'm' },
-      false,
-    ],
-    [
-      'proposal setup with agent',
-      { ...proposal, action: 'setup', agent: 'a' },
-      false,
-    ],
-    [
-      'proposal unknown field',
-      { ...proposal, action: 'setup', extra: true },
-      false,
-    ],
-    ['plan approve', { ...plan, action: 'approve' }, true],
-    ['plan approve and run', { ...plan, action: 'approve_and_goal' }, true],
-    ['plan reject', { ...plan, action: 'reject', feedback: 'No' }, true],
-    [
-      'plan approve with feedback',
-      { ...plan, action: 'approve', feedback: 'x' },
-      false,
-    ],
-    [
-      'plan run with feedback',
-      { ...plan, action: 'approve_and_goal', feedback: 'x' },
-      false,
-    ],
-    ['plan unknown field', { ...plan, action: 'reject', extra: true }, false],
-  ])('%s parses as %s', (_name, message, valid) => {
-    expectMessageParses(message, valid);
-  });
-});
-
 describe('external inquiry action schema', () => {
   const command = PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION;
   const threadId = 'ei_123456789abc';
@@ -823,28 +638,6 @@ describe('external inquiry action schema', () => {
   beforeEach(() => {
     externalInquiryMocks.continueExternalInquiryAction.mockReset();
     externalInquiryMocks.persistExternalInquiryAction.mockReset();
-  });
-
-  it.each([
-    [
-      'submit with an answer',
-      { command, action: 'submit', threadId, answer: 'Confirmed' },
-      true,
-    ],
-    ['drop', { command, action: 'drop', threadId }, true],
-    [
-      'draft with a null draft',
-      { command, action: 'draft', threadId, draft: null },
-      true,
-    ],
-    [
-      'submit without an answer',
-      { command, action: 'submit', threadId },
-      false,
-    ],
-    ['draft without a draft', { command, action: 'draft', threadId }, false],
-  ])('%s parses as %s', (_name, message, valid) => {
-    expectMessageParses(message, valid);
   });
 
   it.each([
@@ -1121,71 +914,5 @@ describe('createProgressViewSecondTierHandlers', () => {
 
     expect(actions.applyPolishResult).toHaveBeenCalledWith(polishResult);
     expect(actions.onPolishError).not.toHaveBeenCalled();
-  });
-});
-
-describe('user question action schema', () => {
-  const command = PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION;
-  const requestId = 'question-1';
-
-  it.each([
-    {
-      name: 'submit with answers',
-      message: {
-        command,
-        requestId,
-        action: 'submit',
-        answers: { choice: 'A' },
-      },
-      valid: true,
-    },
-    {
-      name: 'reject with feedback',
-      message: { command, requestId, action: 'reject', feedback: 'Not now' },
-      valid: true,
-    },
-    {
-      name: 'skip without feedback',
-      message: { command, requestId, action: 'skip' },
-      valid: true,
-    },
-    {
-      name: 'submit without answers',
-      message: { command, requestId, action: 'submit' },
-      valid: false,
-    },
-    {
-      name: 'submit with rejection feedback',
-      message: {
-        command,
-        requestId,
-        action: 'submit',
-        answers: { choice: 'A' },
-        feedback: 'contradictory',
-      },
-      valid: false,
-    },
-    {
-      name: 'reject with answers',
-      message: {
-        command,
-        requestId,
-        action: 'reject',
-        answers: { choice: 'A' },
-      },
-      valid: false,
-    },
-    {
-      name: 'skip with answers',
-      message: {
-        command,
-        requestId,
-        action: 'skip',
-        answers: { choice: 'A' },
-      },
-      valid: false,
-    },
-  ])('$name is $valid', ({ message, valid }) => {
-    expectMessageParses(message, valid);
   });
 });

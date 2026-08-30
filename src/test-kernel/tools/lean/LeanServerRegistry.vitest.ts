@@ -40,10 +40,8 @@ describe('leanServerRegistry', () => {
     expect(listLeanServers().map((s) => s.id)).toEqual(['direct:/work/proj']);
     expect(listLeanServers()[0]?.status).toBe('starting');
 
-    updateLeanServer('direct:/work/proj', { status: 'running', pid: 4242 });
-    const after = listLeanServers()[0]!;
-    expect(after.status).toBe('running');
-    expect(after.pid).toBe(4242);
+    updateLeanServer('direct:/work/proj', { status: 'running' });
+    expect(listLeanServers()[0]?.status).toBe('running');
 
     unregisterLeanServer('direct:/work/proj');
     expect(listLeanServers()).toEqual([]);
@@ -93,14 +91,10 @@ describe('summarizeLeanServers', () => {
     expect(summarizeLeanServers([], NOW)).toBe('No Lean servers registered.');
   });
 
-  it('renders a running server with uptime and toolchain', () => {
-    const summary = summarizeLeanServers(
-      [makeServer({ toolchain: 'leanprover/lean4:v4.12.0' })],
-      NOW,
-    );
+  it('renders a running server with uptime', () => {
+    const summary = summarizeLeanServers([makeServer({})], NOW);
     expect(summary).toBe(
-      '1 Lean server registered:\n' +
-        '• /work/proj (direct LSP, leanprover/lean4:v4.12.0): uptime 1m 5s',
+      '1 Lean server registered:\n' + '• /work/proj (direct LSP): uptime 1m 5s',
     );
   });
 

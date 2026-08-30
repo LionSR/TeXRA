@@ -12,7 +12,6 @@ import {
   parseSlashInput,
   prefixSlashCommands,
   registerSlashCommand,
-  slashPickIntent,
   suggestSlashCommand,
   unregisterSlashCommand,
   type SlashCommand,
@@ -22,7 +21,7 @@ import {
   openCliSlashCommandForm,
   openRegisteredCliSlashForm,
 } from '@cli/chat/tui/commands/slashForms';
-import { LOGIN_FORM_ITEMS } from '@cli/chat/tui/forms/LoginForm';
+import { type AccountAccessFormValue } from '@cli/chat/tui/forms/AccountAccessForm';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   activeForm,
@@ -66,6 +65,11 @@ const CHATGPT_PREFERENCE_SELECTION: CliModelAccessSelection = {
   kind: 'subscription-preference',
   provider: 'chatgpt',
   state: 'on',
+};
+
+const CHATGPT_PREFERENCE_FORM_VALUE: AccountAccessFormValue = {
+  kind: 'access',
+  selection: CHATGPT_PREFERENCE_SELECTION,
 };
 
 afterEach(() => {
@@ -201,7 +205,7 @@ describe('slashRegistry', () => {
       [
         'login',
         {
-          description: 'Sign in to ChatGPT or Researcher Access',
+          description: 'Sign in to ChatGPT, Grok, or Researcher Access',
           ...withForm,
         },
       ],
@@ -213,13 +217,15 @@ describe('slashRegistry', () => {
     }
   });
 
-  it('keeps ChatGPT subscription first in the login picker', () => {
-    expect(LOGIN_FORM_ITEMS.map((item) => item.value)).toEqual([
-      'chatgpt',
-      'texra',
-      'chatgpt --device',
-      'texra --device',
-    ]);
+  it('shares one account & access form across /api, /login, and /logout', () => {
+    registerBuiltinSlashCommands();
+
+    const api = requireSlashCommand('api');
+    expect(api.formComponent).toBeTypeOf('function');
+    expect(api.category).toBe('account');
+    for (const name of ['login', 'logout']) {
+      expect(requireSlashCommand(name).formComponent).toBe(api.formComponent);
+    }
   });
 
   it('opens registered structured forms through the shared form opener', () => {
@@ -392,9 +398,9 @@ describe('slashRegistry', () => {
       },
     });
     const apiNode = openSlashForm<{
-      onSelect?: (value: CliModelAccessSelection) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_SELECTION);
+    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
@@ -407,9 +413,9 @@ describe('slashRegistry', () => {
       onModelAccessSelect: () => selection.promise,
     });
     const apiNode = openSlashForm<{
-      onSelect?: (value: CliModelAccessSelection) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_SELECTION);
+    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     await settleFormSelection();
 
     expect(apiNode.isClosed()).toBe(false);
@@ -458,10 +464,10 @@ describe('slashRegistry', () => {
         selected.push(value);
       },
     });
-    const loginNode = openSlashForm<{ onSelect?: (value: string) => void }>(
-      'login',
-    );
-    loginNode.props?.onSelect?.('chatgpt');
+    const loginNode = openSlashForm<{
+      onSelect?: (value: AccountAccessFormValue) => void;
+    }>('login');
+    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
     await settleFormSelection();
 
     expect(selected).toEqual(['chatgpt']);
@@ -479,9 +485,9 @@ describe('slashRegistry', () => {
     });
 
     const loginNode = openSlashForm<{
-      onSelect?: (value: string) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('login');
-    loginNode.props?.onSelect?.('chatgpt');
+    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
     await settleFormSelection();
 
     expect(loginNode.isClosed()).toBe(false);
@@ -505,9 +511,9 @@ describe('slashRegistry', () => {
     });
 
     const loginNode = openSlashForm<{
-      onSelect?: (value: string) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('login');
-    loginNode.props?.onSelect?.('chatgpt');
+    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
     await waitFor(() => formProgress.get()?.status === 'succeeded');
     expect(formProgress.get()?.archiveCopyable).toBeTypeOf('function');
 
@@ -550,9 +556,9 @@ describe('slashRegistry', () => {
     });
 
     const loginNode = openSlashForm<{
-      onSelect?: (value: string) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('login');
-    loginNode.props?.onSelect?.('chatgpt');
+    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
     formProgress.get()?.cancel();
 
     expect(loginNode.isClosed()).toBe(true);
@@ -579,9 +585,9 @@ describe('slashRegistry', () => {
     });
 
     const loginNode = openSlashForm<{
-      onSelect?: (value: string) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('login');
-    loginNode.props?.onSelect?.('chatgpt');
+    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
     await settleFormSelection();
 
     expect(errors).toEqual([
@@ -606,9 +612,9 @@ describe('slashRegistry', () => {
     });
 
     const apiNode = openSlashForm<{
-      onSelect?: (value: CliModelAccessSelection) => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_SELECTION);
+    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     resetCliState(CHAT_SESSION);
     selection.resolve();
     await settleFormSelection();
@@ -632,9 +638,9 @@ describe('slashRegistry', () => {
     });
 
     const logoutNode = openSlashForm<{
-      onSelect?: (value: 'all') => void;
+      onSelect?: (value: AccountAccessFormValue) => void;
     }>('logout');
-    logoutNode.props?.onSelect?.('all');
+    logoutNode.props?.onSelect?.({ kind: 'logout', target: 'all' });
     formProgress.get()?.cancel();
 
     expect(aborted).toBe(true);
@@ -769,14 +775,6 @@ describe('slashRegistry', () => {
     expect(findSlashCommand('age')).toBeUndefined();
   });
 
-  it('submits no-form commands on Enter and completes on Tab', () => {
-    const help = { name: 'help', description: 'show help', aliases: ['h'] };
-    registerSlashCommand(help);
-
-    expect(slashPickIntent(help, 'enter')).toBe('submit');
-    expect(slashPickIntent(help, 'tab')).toBe('complete');
-  });
-
   it('suggests the closest command for a typo within the shared threshold', () => {
     registerBuiltinSlashCommands();
 
@@ -799,17 +797,6 @@ describe('slashRegistry', () => {
     registerBuiltinSlashCommands();
 
     expect(suggestSlashCommand('frobnicate')).toBeUndefined();
-  });
-
-  it('does not directly submit structured-form commands from the palette', () => {
-    const agent = {
-      name: 'agent',
-      description: 'pick an agent',
-      formComponent: () => null,
-    };
-    registerSlashCommand(agent);
-
-    expect(slashPickIntent(agent, 'enter')).toBe('complete');
   });
 });
 

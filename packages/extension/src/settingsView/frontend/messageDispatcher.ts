@@ -9,8 +9,8 @@
  * Handlers are organized into domain-specific slices under ./slices/, one per
  * section of `SettingsApp`'s state (see `settingsState.ts`) — except
  * miscSettingsSlice.ts, which bundles the single-command/single-toggle
- * handlers that don't own a state section of their own (agent skills,
- * telemetry, goals, agent teams, tool dashboard, multi-agent coordination).
+ * handlers that don't own a state section of their own (telemetry, goals,
+ * agent teams, tool dashboard, multi-agent coordination).
  * modelSelectionSlice.ts and approvalSettingsSlice.ts are also single-command
  * but stay standalone: each owns a named, independently-surfaced state
  * section (model selection, approval/safety) rather than a one-off toggle.
@@ -27,7 +27,6 @@ import { gitHandlers } from './slices/gitSlice';
 import { latexHandlers } from './slices/latexSlice';
 import { memoryHandlers } from './slices/memorySlice';
 import {
-  agentSkillsSettingsHandlers,
   agentTeamsHandlers,
   goalHandlers,
   multiAgentHandlers,
@@ -36,6 +35,7 @@ import {
 } from './slices/miscSettingsSlice';
 import { modelSelectionHandlers } from './slices/modelSelectionSlice';
 import { profileHandlers } from './slices/profileSlice';
+import { skillsHandlers } from './slices/skillsSlice';
 import { subscriptionUsageHandlers } from './slices/subscriptionUsageSlice';
 import { tabHandlers } from './slices/tabSlice';
 
@@ -46,7 +46,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   ...profileHandlers,
   ...modelSelectionHandlers,
   ...agentSelectionHandlers,
-  ...agentSkillsSettingsHandlers,
+  ...skillsHandlers,
   ...telemetrySettingsHandlers,
   ...agentTeamsHandlers,
   ...multiAgentHandlers,

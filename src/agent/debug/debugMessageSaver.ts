@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import type { AgentTrace } from '@agent/trace';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId } from '@shared/schemas';
@@ -18,7 +16,6 @@ interface DebugContext {
 }
 
 interface DebugSaveOptions {
-  outputFile?: string;
   /** Base name for the file (e.g. 'messages', 'response'). */
   baseName?: string;
   continuationCount?: number;
@@ -32,8 +29,8 @@ type DebugObjectType = 'messages' | 'response';
  * The one current setting covers request messages, responses, and the final
  * input prompt.
  */
-export function shouldSaveModelIO(): boolean {
-  return getConfig<boolean>('texra.debug.saveModelIO', false);
+function shouldSaveModelIO(): boolean {
+  return getConfig<boolean>('texra.debug.saveModelIO');
 }
 
 interface SaveDebugParams {
@@ -57,16 +54,13 @@ export async function maybeSaveDebugObject({
   if (!shouldSaveModelIO() || context.isRemote) return;
 
   const { logger, modelName, executionId } = context;
-  const { outputFile, baseName = objectType, continuationCount } = fileOptions;
+  const { baseName = objectType, continuationCount } = fileOptions;
 
-  const fileBase = outputFile
-    ? path.basename(outputFile, path.extname(outputFile))
-    : baseName;
   const cont = continuationCount ? `_cont${continuationCount}` : '';
   const modelPart = modelName
     ? `_${sanitizePathSegment(modelName, { invalidCharPattern: /[\\/]/g, replacement: '_' })}`
     : '';
-  const debugFileName = `${fileBase}${modelPart}${cont}.json`;
+  const debugFileName = `${baseName}${modelPart}${cont}.json`;
 
   try {
     const filePath = executionId

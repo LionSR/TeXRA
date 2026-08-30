@@ -31,6 +31,7 @@ import { createLog } from '@logger/logUtils';
 import {
   InquiryThreadIdSchema,
   ToolError,
+  type ExecutionId,
   type ExternalInquiryPermission,
   type InquiryThreadSummary,
   type StreamTabId,
@@ -38,12 +39,12 @@ import {
 } from '@shared/schemas';
 import { requireInteractions } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
 import {
-  ensureExternalInquiryThreadMirror,
   getThreadSummary,
   getOpenTurnDraft,
   listThreadsByStatus,
@@ -59,7 +60,11 @@ const logger = createLog('InquiryTool');
 // Schemas
 // ============================================================================
 
-const AskSchema = z.strictObject({
+// Branches use looseObject (not strictObject): provider conversion flattens
+// the union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
+const AskSchema = z.looseObject({
   command: z
     .literal('ask')
     .describe(
@@ -100,7 +105,7 @@ const AskSchema = z.strictObject({
     ),
 });
 
-const ReadSchema = z.strictObject({
+const ReadSchema = z.looseObject({
   command: z
     .literal('read')
     .describe(
@@ -111,7 +116,7 @@ const ReadSchema = z.strictObject({
   thread_id: InquiryThreadIdSchema.describe('The thread to read.'),
 });
 
-const ListSchema = z.strictObject({
+const ListSchema = z.looseObject({
   command: z
     .literal('list')
     .describe(
@@ -119,21 +124,18 @@ const ListSchema = z.strictObject({
         'answered, or what was dropped. Useful for self-orientation after multiple wake-ups, ' +
         'before starting a new turn after a long pause, or to recover a forgotten thread_id.',
     ),
-  status: z
-    .enum(['open', 'answered', 'dropped', 'any'])
-    .prefault('open')
-    .describe(
-      '"open" → awaiting user answer (default: matches the most common need). ' +
-        '"answered" → user has submitted an answer. ' +
-        '"dropped" → user rejected the inquiry. ' +
-        '"any" → all threads regardless of status.',
-    ),
-  scope: z
-    .enum(['stream', 'all'])
-    .prefault('stream')
-    .describe(
-      '"stream" → only threads belonging to this stream; "all" → every stream\'s threads.',
-    ),
+  status: nullishWithDefault(
+    z.enum(['open', 'answered', 'dropped', 'any']),
+    'open',
+  ).describe(
+    '"open" → awaiting user answer (default: matches the most common need). ' +
+      '"answered" → user has submitted an answer. ' +
+      '"dropped" → user rejected the inquiry. ' +
+      '"any" → all threads regardless of status.',
+  ),
+  scope: nullishWithDefault(z.enum(['stream', 'all']), 'stream').describe(
+    '"stream" → only threads belonging to this stream; "all" → every stream\'s threads.',
+  ),
 });
 
 const InquiryInputSchema = z.discriminatedUnion('command', [
@@ -147,25 +149,6 @@ export type InquiryInput = z.infer<typeof InquiryInputSchema>;
 // ============================================================================
 // Read / list subcommand outputs
 // ============================================================================
-
-/**
- * Mirror a thread to the execution so the agent can read prior turns via the
- * executions tool. Best-effort: a mirroring failure must not fail the tool
- * call, but it is logged rather than swallowed.
- */
-async function mirrorThreadBestEffort(
-  executionId: string,
-  threadId: string,
-): Promise<void> {
-  try {
-    await ensureExternalInquiryThreadMirror({ executionId, threadId });
-  } catch (err) {
-    logger.warn(
-      `Failed to mirror inquiry thread ${threadId} to execution ${executionId}`,
-      { data: err },
-    );
-  }
-}
 
 function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
   const lines = [
@@ -245,12 +228,8 @@ Do not treat paper-specific claims from the external model as automatically veri
 
 export class ExternalInquiryTool extends defineTool({
   name: 'inquiry',
-  hosts: {
-    cli: {
-      available: false,
-      reason: 'Requires the long-lived graphical inquiry panel.',
-    },
-  },
+  // Requires the long-lived graphical inquiry panel.
+  unavailableHosts: ['cli'],
   requiresApproval: true,
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,
@@ -274,7 +253,7 @@ export class ExternalInquiryTool extends defineTool({
         });
       }
       case 'read':
-        return this.executeRead({ input, executionId });
+        return this.executeRead(input);
       case 'list':
         return this.executeList({ input, streamId });
     }
@@ -284,7 +263,7 @@ export class ExternalInquiryTool extends defineTool({
     input: Extract<InquiryInput, { command: 'ask' }>;
     streamId: StreamTabId | undefined;
     interactions: ReturnType<typeof requireInteractions>;
-    executionId?: string;
+    executionId?: ExecutionId;
     session?: SessionHandle;
   }): Promise<ToolResult> {
     const { input, streamId, interactions, executionId, session } = args;
@@ -294,14 +273,6 @@ export class ExternalInquiryTool extends defineTool({
       );
     }
     const ownerSession = session ?? defaultSession();
-    const parentGenerationId =
-      ownerSession.followUps.currentGenerationId(streamId);
-    if (!parentGenerationId) {
-      throw new ToolError(
-        'Inquiry dispatch requires an active parent continuation generation.',
-      );
-    }
-
     const questionContext = input.context ?? undefined;
     const suggestSearch = input.suggestSearch ?? undefined;
     const attachFiles = input.attachFiles ?? undefined;
@@ -313,7 +284,7 @@ export class ExternalInquiryTool extends defineTool({
     const persisted = await recordOpenQuestion({
       threadId: input.thread_id ?? undefined,
       parentStreamId: streamId,
-      parentGenerationId,
+      parentExecutionId: executionId ?? null,
       question: input.question,
       context: questionContext,
       suggestSearch,
@@ -323,10 +294,6 @@ export class ExternalInquiryTool extends defineTool({
     // a re-read would only reintroduce the write/read race the continuation
     // injectors already avoid via writer snapshots.
     const manifest = persisted.manifest;
-
-    if (executionId) {
-      await mirrorThreadBestEffort(executionId, persisted.threadId);
-    }
 
     // Register the asking stream without switching the active view: hosts
     // own presentation focus (the extension/desktop progress views badge the
@@ -339,12 +306,10 @@ export class ExternalInquiryTool extends defineTool({
         payload: {
           streamId,
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       },
     });
-    const isFollowUp = !!input.thread_id;
-    const basePermission = {
+    const permission: ExternalInquiryPermission = {
       requestId: persisted.threadId, // legacy field — panel addresses by threadId now
       question: input.question,
       threadId: persisted.threadId,
@@ -353,22 +318,10 @@ export class ExternalInquiryTool extends defineTool({
       attachFiles,
       allowBypass: false,
       streamId,
+      sessionLinks: collectKnownSessionLinks(manifest),
+      draft: getOpenTurnDraft(manifest),
+      transcript: manifestToTranscript(manifest),
     };
-    const permission: ExternalInquiryPermission = isFollowUp
-      ? {
-          ...basePermission,
-          mode: 'followUp',
-          sessionLinks: collectKnownSessionLinks(manifest),
-          draft: getOpenTurnDraft(manifest),
-          transcript: manifestToTranscript(manifest),
-        }
-      : {
-          ...basePermission,
-          mode: 'new',
-          sessionLinks: null,
-          draft: null,
-          transcript: null,
-        };
     const interaction =
       ownerSession.interactions.openExternalInquiry(permission);
     if (!interaction) {
@@ -401,18 +354,14 @@ export class ExternalInquiryTool extends defineTool({
     );
   }
 
-  private async executeRead(args: {
-    input: Extract<InquiryInput, { command: 'read' }>;
-    executionId?: string;
-  }): Promise<ToolResult> {
-    const manifest = await readExternalInquiryThread(args.input.thread_id);
+  private async executeRead(
+    input: Extract<InquiryInput, { command: 'read' }>,
+  ): Promise<ToolResult> {
+    const manifest = await readExternalInquiryThread(input.thread_id);
     if (!manifest) {
       throw new ToolError(
-        `External inquiry thread not found: ${args.input.thread_id}`,
+        `External inquiry thread not found: ${input.thread_id}`,
       );
-    }
-    if (args.executionId) {
-      await mirrorThreadBestEffort(args.executionId, manifest.threadId);
     }
     return buildReadOutput(manifest);
   }

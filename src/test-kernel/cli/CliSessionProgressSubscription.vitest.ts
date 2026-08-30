@@ -27,7 +27,6 @@ import {
 } from '@shared/schemas';
 import type {
   ExecutionId,
-  StorageKey,
   StreamTabId,
   UpdateStreamStatusPayload,
 } from '@shared/schemas';
@@ -41,7 +40,7 @@ const streamId = 'stream:cli-session-projection' as StreamTabId;
 const executionId = 'execution:cli-session-projection' as ExecutionId;
 const childStreamId = 'stream:cli-child' as StreamTabId;
 const childExecutionId = 'execution:cli-child' as ExecutionId;
-const storageKey = 'run-a' as StorageKey;
+const storageKey = 'run-a' as ExecutionId;
 
 type WorkflowConfig = Omit<AgentConfig, 'agentCategory'> & {
   agentCategory: typeof AgentCategory.Workflow;
@@ -167,10 +166,6 @@ const PROGRESS_PROJECTION_CASES = {
       filesByRound: { 1: [] },
     }),
     payload: { streamId, filesByRound: { 1: [] } },
-  },
-  clearMissingOutputs: {
-    source: sessionFact('clearMissingOutputs', { streamId }),
-    payload: { streamId },
   },
   setTaskState: {
     source: runEvent({

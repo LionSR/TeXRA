@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   testExecutionHandle,
@@ -27,18 +28,21 @@ describe('AgentCliSessionRegistry', () => {
       const writeError = new Error('storage unavailable');
       const persistSessionId = makePersist(writeError);
       const reportPersistenceFailure = vi.fn();
-      const registry = new AgentCliSessionRegistry('test_session_id', {
-        persistSessionId,
-        reportPersistenceFailure,
-      });
       const executions = testExecutionRegistry();
+      const registry = new AgentCliSessionRegistry(
+        'test_session_id',
+        executions,
+        {
+          persistSessionId,
+          reportPersistenceFailure,
+        },
+      );
 
       try {
         expect(
           registry.register('session-write-failure', {
             childStreamId: 'child-write-failure' as StreamTabId,
             executionId,
-            executions,
           }),
         ).toBeUndefined();
 
@@ -62,18 +66,21 @@ describe('AgentCliSessionRegistry', () => {
     const persistSessionId = vi
       .fn()
       .mockRejectedValueOnce(new Error('storage unavailable'));
-    const registry = new AgentCliSessionRegistry('test_session_id', {
-      persistSessionId,
-      reportPersistenceFailure: () => {
-        throw new Error('log sink unavailable');
-      },
-    });
     const executions = testExecutionRegistry();
+    const registry = new AgentCliSessionRegistry(
+      'test_session_id',
+      executions,
+      {
+        persistSessionId,
+        reportPersistenceFailure: () => {
+          throw new Error('log sink unavailable');
+        },
+      },
+    );
 
     registry.register('session-log-failure', {
       childStreamId: 'child-log-failure' as StreamTabId,
       executionId: 'execution-log-failure' as ExecutionId,
-      executions,
     });
 
     await vi.waitFor(() => expect(persistSessionId).toHaveBeenCalledOnce());
@@ -84,12 +91,11 @@ describe('AgentCliSessionRegistry', () => {
   });
 
   it('atomically claims a session id and wakes waiters when it becomes active', async () => {
-    const registry = new AgentCliSessionRegistry('test_session_id');
     const executions = testExecutionRegistry();
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
     const entry = {
       childStreamId: 'child-a' as StreamTabId,
       executionId: 'execution-a' as ExecutionId,
-      executions,
     };
 
     try {
@@ -124,31 +130,37 @@ describe('AgentCliSessionRegistry', () => {
   });
 
   it('releases pending waiters and permits a new claim after cleanup', async () => {
-    const registry = new AgentCliSessionRegistry('test_session_id');
+    const executions = testExecutionRegistry();
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
 
-    const releaseClaim = registry.claim('session-a');
-    expect(releaseClaim).toBeTypeOf('function');
-    const active = registry.waitForActive('session-a');
+    try {
+      const releaseClaim = registry.claim('session-a');
+      expect(releaseClaim).toBeTypeOf('function');
+      const active = registry.waitForActive('session-a');
 
-    releaseClaim?.();
+      releaseClaim?.();
 
-    await expect(active).resolves.toBeUndefined();
-    const releaseNextClaim = registry.claim('session-a');
-    expect(releaseNextClaim).toBeTypeOf('function');
+      await expect(active).resolves.toBeUndefined();
+      const releaseNextClaim = registry.claim('session-a');
+      expect(releaseNextClaim).toBeTypeOf('function');
 
-    releaseNextClaim?.();
-    await expect(registry.waitForActive('session-a')).resolves.toBeUndefined();
+      releaseNextClaim?.();
+      await expect(
+        registry.waitForActive('session-a'),
+      ).resolves.toBeUndefined();
+    } finally {
+      executions.dispose();
+    }
   });
 
   it('releases every active alias owned by one execution', () => {
-    const registry = new AgentCliSessionRegistry('test_session_id');
     const executions = testExecutionRegistry();
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
     const executionA = 'execution-a' as ExecutionId;
     const executionB = 'execution-b' as ExecutionId;
     const entry = (executionId: ExecutionId, childStreamId: StreamTabId) => ({
       childStreamId,
       executionId,
-      executions,
     });
     const releasePending = registry.claim('pending-session');
 
@@ -180,17 +192,16 @@ describe('AgentCliSessionRegistry', () => {
   });
 
   it('interrupts an in-flight loop without promoting its reserved resume id', () => {
-    const registry = new AgentCliSessionRegistry('test_session_id');
     const executionId = 'execution-in-flight' as ExecutionId;
     const interrupt = vi.fn();
+    const registry = new AgentCliSessionRegistry('test_session_id', {
+      getAgentHandleByStream: () => ({ interrupt }),
+    } as unknown as ExecutionRegistry);
     const releaseClaim = registry.claim('reserved-session');
 
     registry.trackInFlight({
       childStreamId: 'child-in-flight' as StreamTabId,
       executionId,
-      executions: {
-        getAgentHandleByStream: () => ({ interrupt }),
-      } as any,
     });
 
     expect(registry.lookup('reserved-session')).toBeUndefined();
@@ -203,10 +214,9 @@ describe('AgentCliSessionRegistry', () => {
     releaseClaim?.();
   });
 
-  it('interrupts each child through the execution registry that owns the session', () => {
-    const registry = new AgentCliSessionRegistry('test_session_id');
-    const ownerA = testExecutionRegistry();
-    const ownerB = testExecutionRegistry();
+  it('interrupts each child through the session execution registry', () => {
+    const executions = testExecutionRegistry();
+    const registry = new AgentCliSessionRegistry('test_session_id', executions);
     const interruptA = vi.fn();
     const interruptB = vi.fn();
 
@@ -217,7 +227,7 @@ describe('AgentCliSessionRegistry', () => {
       agent: 'codex',
     });
     handleA.attachInterruptHandler({ interrupt: interruptA });
-    ownerA.track(handleA);
+    executions.track(handleA);
     const handleB = testExecutionHandle({
       executionId: 'execution-b',
       parentStreamId: 'parent-b' as StreamTabId,
@@ -225,19 +235,17 @@ describe('AgentCliSessionRegistry', () => {
       agent: 'claude',
     });
     handleB.attachInterruptHandler({ interrupt: interruptB });
-    ownerB.track(handleB);
+    executions.track(handleB);
 
     try {
       registry.claim('pending-session');
       registry.register('session-a', {
         childStreamId: 'child-a' as StreamTabId,
         executionId: 'execution-a' as ExecutionId,
-        executions: ownerA,
       });
       registry.register('session-b', {
         childStreamId: 'child-b' as StreamTabId,
         executionId: 'execution-b' as ExecutionId,
-        executions: ownerB,
       });
 
       registry.interruptAll();
@@ -246,8 +254,7 @@ describe('AgentCliSessionRegistry', () => {
       expect(interruptB).toHaveBeenCalledOnce();
     } finally {
       registry.release('pending-session');
-      ownerA.dispose();
-      ownerB.dispose();
+      executions.dispose();
     }
   });
 });

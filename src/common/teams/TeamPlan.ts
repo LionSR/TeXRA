@@ -207,14 +207,14 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
 ): {
   agent: string;
   delegationAgentScope: AgentDelegationScope;
-  cliMultiAgentPresetId: string;
+  cli: { multiAgentPresetId: string };
 } {
   return {
     agent: agentKeyOf(plan.rootAgent),
     delegationAgentScope: byCategory((category) => [
       ...plan.agentKeys[category],
     ]),
-    cliMultiAgentPresetId: plan.preset.id,
+    cli: { multiAgentPresetId: plan.preset.id },
   };
 }
 
@@ -393,10 +393,32 @@ export async function refreshRemoteCatalogForGaps<T>(
 // (VS Code vs Electron native); keeping the literals here stops them drifting.
 // ---------------------------------------------------------------------------
 
-/** Button labels for the unavailable-members choice, in display order. */
-export const TEAM_LAUNCH_SIGN_IN_LABEL = 'Sign In to TeXRA';
-export const TEAM_LAUNCH_CONTINUE_LABEL = 'Continue with Available Members';
-export const TEAM_LAUNCH_CANCEL_LABEL = 'Cancel';
+/** Host-neutral unavailable-members prompt, including action order. */
+export interface TeamAvailabilityPrompt {
+  readonly severity: 'warning';
+  readonly message: string;
+  readonly actions: readonly [
+    { readonly choice: 'sign-in'; readonly label: string },
+    { readonly choice: 'continue'; readonly label: string },
+    { readonly choice: 'cancel'; readonly label: string },
+  ];
+}
+
+/** Build the unavailable-member prompt shared by launch and settings flows. */
+export function teamAvailabilityPrompt(
+  unavailableNames: readonly string[],
+  teamId?: string,
+): TeamAvailabilityPrompt {
+  return {
+    severity: 'warning',
+    message: formatUnavailableTeamMembersMessage(unavailableNames, teamId),
+    actions: [
+      { choice: 'sign-in', label: 'Sign In to TeXRA' },
+      { choice: 'continue', label: 'Continue with Available Members' },
+      { choice: 'cancel', label: 'Cancel' },
+    ],
+  };
+}
 
 export const TEAM_SELECTION_REQUIRED_MESSAGE = 'Team selection required.';
 
@@ -425,7 +447,7 @@ export function formatTeamUnavailableMessage(
  * context: the main-view launch path already displays the team being launched,
  * while the settings path names it inline.
  */
-export function formatUnavailableTeamMembersMessage(
+function formatUnavailableTeamMembersMessage(
   unavailableNames: readonly string[],
   teamId?: string,
 ): string {

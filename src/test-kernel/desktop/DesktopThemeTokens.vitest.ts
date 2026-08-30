@@ -94,32 +94,11 @@ describe('desktop theme tokens', () => {
 
   it('keeps light and dark palettes in one semantic token layer', () => {
     const css = readThemeTokens();
-    const darkBlock = css.match(
-      /body\.vscode-dark,\s*body\.texra-dark\s*{(?<body>[^}]*)}/,
-    )?.groups?.body;
+    const darkBlock = css.match(/body\.vscode-dark\s*{(?<body>[^}]*)}/)?.groups
+      ?.body;
 
     expect(css).toContain('light-dark(');
     expect(darkBlock).toContain('color-scheme: dark;');
-    expect(darkBlock).not.toContain('--texra-input-background');
-    expect(darkBlock).not.toContain('--vscode-textArea-background');
-  });
-
-  it('uses neutral surfaces and achromatic primary actions', () => {
-    const css = readThemeTokens();
-    const compact = (name: string): string =>
-      tokenValue(name).replaceAll(/\s+/g, ' ');
-
-    expect(compact(paletteToken('background'))).toBe(
-      'light-dark(#ffffff,#212121)',
-    );
-    expect(compact(paletteToken('accent'))).toBe('light-dark(#0d0d0d,#f4f4f4)');
-    expect(compact('--wa-color-brand-on-loud')).toBe(
-      'light-dark(#ffffff,#0d0d0d)',
-    );
-    expect(css).not.toContain('radial-gradient(');
-    expect(compact(paletteToken('info'))).not.toBe(
-      compact(paletteToken('accent')),
-    );
   });
 
   it('defines one focus and reduced-motion contract', () => {

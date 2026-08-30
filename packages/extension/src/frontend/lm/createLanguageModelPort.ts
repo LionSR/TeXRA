@@ -271,8 +271,15 @@ export function createLanguageModelPort(
       }
     },
 
-    onDidChangeModels(listener) {
-      return lmApi.onDidChangeChatModels(listener);
+    onDidChange(listener) {
+      const models = lmApi.onDidChangeChatModels(listener);
+      const access = accessInformation.onDidChange(listener);
+      return {
+        dispose() {
+          models.dispose();
+          access.dispose();
+        },
+      };
     },
 
     sendRequest(model, messages, options, signal) {
@@ -295,10 +302,6 @@ export function createLanguageModelPort(
       } finally {
         cancellation.dispose();
       }
-    },
-
-    onDidChangeAccess(listener) {
-      return accessInformation.onDidChange(listener);
     },
   };
 }

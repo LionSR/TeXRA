@@ -15,7 +15,7 @@ import {
   formatRoundStageLabel,
   formatStageLabel,
   formatStreamStatusLabel,
-  streamStatusDisplayKey,
+  progressHeaderStatus,
   streamStatusIndicatorClass,
   type StreamStatusLabelStyle,
 } from '@shared/streams/streamStatusDisplay';
@@ -197,9 +197,6 @@ describe('stream status display labels', () => {
       }),
     ).toBe('resuming');
     expect(
-      streamStatusDisplayKey(STREAM_PHASE.RUNNING, STREAM_SUBSTATE.STARTING),
-    ).toBe(STREAM_SUBSTATE.STARTING);
-    expect(
       streamStatusIndicatorClass(
         STREAM_PHASE.RUNNING,
         STREAM_SUBSTATE.RESUMING,
@@ -217,7 +214,7 @@ describe('stream status display labels', () => {
   ] as const)(
     'maps lifecycle status %s to display key %s and class %s',
     (status, key, className) => {
-      expect(streamStatusDisplayKey(status)).toBe(key);
+      expect(progressHeaderStatus(status).displayKey).toBe(key);
       expect(streamStatusIndicatorClass(status)).toBe(className);
     },
   );

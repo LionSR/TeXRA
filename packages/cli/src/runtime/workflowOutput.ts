@@ -26,10 +26,7 @@ import {
 
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult, type ExecuteAgentResult } from './terminalStatus';
-import {
-  isMaterializedStdinWorkflowInputPath,
-  STDIN_WORKFLOW_INPUT_BASENAME,
-} from './workflowInputs';
+import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { Stats } from 'node:fs';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
@@ -216,6 +213,7 @@ function commonDirectory(paths: readonly string[]): string {
 
 function expectedInputOutputFiles(
   inputFiles: readonly string[],
+  stdinInputPath: string | undefined,
 ): readonly string[] {
   const absoluteInputs = inputFiles
     .filter((input) => path.isAbsolute(input))
@@ -223,7 +221,7 @@ function expectedInputOutputFiles(
   const absoluteRoot = commonDirectory(absoluteInputs.map(path.dirname));
 
   return inputFiles.map((input) => {
-    if (isMaterializedStdinWorkflowInputPath(input)) {
+    if (stdinInputPath !== undefined && input === stdinInputPath) {
       return STDIN_WORKFLOW_INPUT_BASENAME;
     }
     if (!path.isAbsolute(input)) return getSafeDocumentRelativePath(input);
@@ -234,11 +232,13 @@ function expectedInputOutputFiles(
 export function expectedOutputFilesForOutputDir(
   agent: AgentEntry | undefined,
   inputFiles: readonly string[],
+  /** The path this run materialized stdin to, when it read stdin. */
+  stdinInputPath?: string,
 ): readonly string[] {
   const defaultOutputFiles = (agent?.defaultOutputFiles ?? []).filter(Boolean);
   return defaultOutputFiles.length > 0
     ? defaultOutputFiles
-    : expectedInputOutputFiles(inputFiles);
+    : expectedInputOutputFiles(inputFiles, stdinInputPath);
 }
 
 export async function resolveWorkflowOutput(
@@ -354,7 +354,7 @@ export function resumeWorkflowOutputFile(
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
-  const cliOutputFile = config.cliOutputFile;
+  const cliOutputFile = config.cli?.outputFile;
   if (isNonEmptyString(cliOutputFile)) {
     if (!path.isAbsolute(cliOutputFile)) {
       throw new CliUsageError(
@@ -381,7 +381,7 @@ export function resumeWorkflowOutputDirectory(
 ): string | undefined {
   if (config.agentCategory !== AgentCategory.Workflow) return undefined;
 
-  const outputDirectory = config.cliOutputDirectory;
+  const outputDirectory = config.cli?.outputDirectory;
   if (!isNonEmptyString(outputDirectory)) return undefined;
   if (!path.isAbsolute(outputDirectory)) {
     throw new CliUsageError(

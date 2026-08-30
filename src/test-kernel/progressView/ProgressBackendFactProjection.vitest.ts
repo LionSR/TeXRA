@@ -26,7 +26,6 @@ import {
   type OutputFileInfo,
   type Plan,
   type ProgressViewOutboundMessage,
-  type StorageKey,
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
@@ -178,7 +177,6 @@ describe('ProgressBackend', () => {
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
-        activeStream: undefined,
         streamInfo: expect.objectContaining({ name: 'hidden-approval' }),
       }),
     );
@@ -332,35 +330,6 @@ describe('ProgressBackend', () => {
       patch.streamInfo,
     );
     expect(fullSync.streamStates?.child).toEqual(patch.streamState);
-  });
-
-  it('scopes direct session events to each backend session', async () => {
-    const first = createListeningBackend();
-    const second = createListeningBackend();
-    const firstStream = 'session:first' as StreamTabId;
-    const secondStream = 'session:second' as StreamTabId;
-
-    emitActiveStream(first, {
-      streamId: firstStream,
-      agentCategory: AgentCategory.Workflow,
-    });
-
-    await vi.waitFor(() =>
-      expect(first.backend.presentation.activeStream).toBe(firstStream),
-    );
-    expect(second.backend.presentation.activeStream).not.toBe(firstStream);
-    expect(JSON.stringify(second.messages)).not.toContain(firstStream);
-
-    emitActiveStream(second, {
-      streamId: secondStream,
-      agentCategory: AgentCategory.ToolUse,
-    });
-
-    await vi.waitFor(() =>
-      expect(second.backend.presentation.activeStream).toBe(secondStream),
-    );
-    expect(first.backend.presentation.activeStream).toBe(firstStream);
-    expect(JSON.stringify(first.messages)).not.toContain(secondStream);
   });
 
   it('isolates same-stream run facts across simultaneous backend sessions', async () => {
@@ -546,7 +515,7 @@ describe('ProgressBackend', () => {
     const target = createListeningBackend();
     const { backend, messages } = target;
     const streamId = 'session:output-files' as StreamTabId;
-    const storageKey = 'run:session-usage' as StorageKey;
+    const storageKey = 'run:session-usage' as ExecutionId;
     const outputFile = paperOutputFile();
     const compileFailure: CompileFailure = {
       round: 1,
@@ -641,6 +610,7 @@ describe('ProgressBackend', () => {
         command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
         stream: streamId,
         rounds: { 1: [outputFile] },
+        reset: true,
       },
     ]);
     expect(messages).toContainEqual({
@@ -776,7 +746,6 @@ describe('ProgressBackend', () => {
       lastQuestionPreview: 'Can you check this estimate?',
       lastActivityIso: '2026-07-06T12:00:00.000Z',
       turnCount: 1,
-      resumeOutcome: null,
     } satisfies InquiryThreadUpdatedEvent;
 
     await backend.state.snapshots.load([]);
@@ -848,14 +817,6 @@ describe('ProgressBackend', () => {
     target.session.events.emit({
       scope: 'session',
       event: {
-        type: 'clearMissingOutputs',
-        payload: { streamId: parentStreamId },
-      },
-    });
-
-    target.session.events.emit({
-      scope: 'session',
-      event: {
         type: 'inquiryThreadUpdated',
         payload: inquiryThread,
       },
@@ -865,9 +826,6 @@ describe('ProgressBackend', () => {
       stage: { kind: 'round', index: 2, total: 4 },
       subagents: [child],
     });
-    expect(backend.state.snapshots.getMissingOutputs(parentStreamId)).toEqual(
-      {},
-    );
     expect(
       messages.some(
         (message) =>
@@ -895,7 +853,6 @@ describe('ProgressBackend', () => {
     );
     expect(backend.presentation.activeStream).toBe('tool-stream');
     expect(patch).toMatchObject({
-      activeStream: undefined,
       streamInfo: {
         name: 'unknown-stream',
         // Identity has not resolved, so no category is fabricated.
@@ -1337,7 +1294,7 @@ describe('ProgressBackend', () => {
       subagents: [child],
     }));
     backend.state.beginStreamRemoval(removing);
-    backend.renderer.syncStreamContent(parent, { includeActiveState: true });
+    backend.renderer.syncStreamContent(parent);
 
     // The durable transcript and canonical parent roster stay resident until
     // guarded deletion commits, but the removal barrier is already the live

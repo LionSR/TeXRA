@@ -1,18 +1,18 @@
 import { join } from 'node:path';
 
-import { byString, byStringProp, normalizeFilePath } from '@utils/core';
+import { byString, normalizeFilePath } from '@utils/core';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 import {
   passesFileFilters,
   prepareFileFilters,
   shouldVisitDirectory,
-  type FileListConfig,
+  type FileFilterConfig,
 } from './fileListingRules';
 
 export interface WorkspaceFileListingOptions {
   root: string;
-  config: FileListConfig;
+  config: FileFilterConfig;
   readDirectory(path: string): Promise<[string, number][]>;
 }
 
@@ -27,7 +27,6 @@ export async function listWorkspaceFiles(
     relativeDirectory: string,
   ): Promise<void> {
     const entries = await options.readDirectory(directory);
-    entries.sort(byStringProp(([name]) => name));
 
     for (const [name, type] of entries) {
       const relativePath = normalizeFilePath(

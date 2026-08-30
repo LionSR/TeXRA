@@ -105,7 +105,7 @@ export function groupBy<T, K, V = T>(
  * @example mapToRecord(new Map([['a', 1]])) // { a: 1 }
  */
 export function mapToRecord<K extends string | number, V>(
-  map: Map<K, V>,
+  map: ReadonlyMap<K, V>,
 ): Record<string, V> {
   return Object.fromEntries(
     [...map].map(([key, value]) => [String(key), value]),

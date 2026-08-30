@@ -9,20 +9,20 @@ import {
 } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { getOriginalSnapshotPath, getRunDir } from '@utils/files/runStorageFs';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 /**
  * Creates a temp workspace + storage pair backed by the real node filesystem
@@ -60,10 +60,6 @@ async function expectSymlinkTargeting(
 }
 
 describe('round-dir ownership and editable .tex inheritance', () => {
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
-
   it('snapshots editable .tex on mirror, points r<N>/ symlinks at the snapshot, and the round-output write replaces the symlink with a real file leaving snapshot and workspace untouched', async () => {
     const workspaceDir = await installTempWorkspace('texra-round-ownership-');
     const draftDir = path.join(workspaceDir, 'Draft');

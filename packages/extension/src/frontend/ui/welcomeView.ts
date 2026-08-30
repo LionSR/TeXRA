@@ -1,10 +1,13 @@
-import { nanoid } from 'nanoid';
 import * as vscode from 'vscode';
 
+import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { CHATGPT_AUTH } from '@shared/copy/accountAuth';
 import {
+  ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_NARRATIVE,
+  RESEARCHER_ACCESS,
 } from '@shared/copy/onboarding';
 
 /**
@@ -29,9 +32,10 @@ function renderWelcomeHtml(): string {
   const cloneRepo = 'command:git.clone';
   const createSample = `command:${EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT}`;
   const openWalkthrough = `command:${EXTENSION_COMMANDS.OPEN_GETTING_STARTED}`;
+  const signInChatGpt = 'command:texra.auth.chatgpt.signIn';
+  const setApiKey = `command:${EXTENSION_COMMANDS.SET_API_KEY}`;
+  const signInTexra = `command:${AUTH_COMMANDS.SIGN_IN}`;
   const docs = 'https://texra.ai';
-  // CSP nonces must be unpredictable — nanoid is crypto-random.
-  const nonce = nanoid();
 
   return /* html */ `
 <!DOCTYPE html>
@@ -40,7 +44,7 @@ function renderWelcomeHtml(): string {
   <meta charset="UTF-8" />
   <meta
     http-equiv="Content-Security-Policy"
-    content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';"
+    content="default-src 'none'; style-src 'unsafe-inline';"
   />
   <style>
     body {
@@ -64,7 +68,15 @@ function renderWelcomeHtml(): string {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
       gap: 8px;
-      margin: 16px 0;
+      margin: 8px 0 16px;
+    }
+    .section-label {
+      margin: 14px 0 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.85em;
+      letter-spacing: 0.04em;
+      color: color-mix(in srgb, var(--vscode-foreground) 80%, transparent);
     }
     a {
       color: var(--vscode-textLink-foreground);
@@ -113,10 +125,21 @@ function renderWelcomeHtml(): string {
   </p>
   <p>${ONBOARDING_NARRATIVE}</p>
   <ol>
+    <li>Connect a credential: ${ONBOARDING_CHOICE_CHATGPT.label} or a provider API key. You can do that right here.</li>
     <li>Open a single-folder workspace containing your LaTeX project, or start with the sample project.</li>
-    <li>The main view will show the credential picker: ${ONBOARDING_CHOICE_CHATGPT.label} or a provider API key.</li>
     <li>Run setup once to check LaTeX, apply the right team, and launch the first review.</li>
   </ol>
+  <p class="section-label">Connect</p>
+  <div class="actions">
+    <a class="button secondary" href="${signInChatGpt}">${CHATGPT_AUTH.signInLabel}</a>
+    <a class="button secondary" href="${setApiKey}">Set API key &mdash; ${ONBOARDING_CHOICE_API_KEY.description}</a>
+  </div>
+  <p class="muted">
+    Signing in to TeXRA (${RESEARCHER_ACCESS.label}) separately unlocks the
+    hosted research-agent catalog, including the orchestrator.
+    <a href="${signInTexra}">Sign In</a>
+  </p>
+  <p class="section-label">Open your project</p>
   <div class="actions">
     <a class="button" href="${openFolder}">Open Folder</a>
     <a class="button secondary" href="${createSample}">Try the Sample Project</a>

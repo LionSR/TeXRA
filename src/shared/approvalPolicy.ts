@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-// Local imports
-import { warn } from '@logger/logUtils';
-
 export const TEXRA_APPROVAL_POLICIES = ['never', 'ask', 'yolo'] as const;
 export const TexraApprovalPolicySchema = z.enum(TEXRA_APPROVAL_POLICIES);
 export type TexraApprovalPolicy = z.infer<typeof TexraApprovalPolicySchema>;
@@ -19,9 +16,8 @@ export const TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT: TexraApprovalPolicy =
   'never';
 /** Canonical persisted spelling in `.texra/config.json` for every host. */
 export const TEXRA_APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
-export const TEXRA_APPROVAL_POLICY_DENIED_MESSAGE =
-  'Denied by TeXRA approval policy.';
-export const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
+const TEXRA_APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by TeXRA approval policy.';
+const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';
 
 const TEXRA_APPROVAL_POLICY_COPY = {
@@ -46,7 +42,7 @@ const TEXRA_APPROVAL_POLICY_COPY = {
 >;
 
 /** Display order for selectors; must stay a permutation of `TEXRA_APPROVAL_POLICIES`. */
-export const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = [
+const TEXRA_APPROVAL_POLICY_DISPLAY_ORDER = [
   'ask',
   'never',
   'yolo',
@@ -72,32 +68,6 @@ export function parseTexraApprovalPolicy(
     input.trim().toLowerCase(),
   );
   return parsed.success ? parsed.data : undefined;
-}
-
-/** Read the persisted TeXRA policy from a config getter (host-neutral). */
-export function readPersistedTexraApprovalPolicy(
-  get: <T>(key: string, defaultValue: T) => T,
-): TexraApprovalPolicy {
-  const raw = get<string>(
-    TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-    TEXRA_APPROVAL_POLICY_DEFAULT,
-  );
-  if (typeof raw !== 'string') {
-    if (raw != null) {
-      warn(
-        'approval-policy',
-        `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} value ${JSON.stringify(raw)}; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
-      );
-    }
-    return TEXRA_APPROVAL_POLICY_DEFAULT;
-  }
-  const parsed = parseTexraApprovalPolicy(raw);
-  if (parsed) return parsed;
-  warn(
-    'approval-policy',
-    `Ignoring invalid ${TEXRA_APPROVAL_POLICY_CONFIG_KEY} "${raw}"; using "${TEXRA_APPROVAL_POLICY_DEFAULT}".`,
-  );
-  return TEXRA_APPROVAL_POLICY_DEFAULT;
 }
 
 export type TexraApprovalPolicyDecision =
@@ -131,11 +101,11 @@ export function decideTexraApproval(input: {
   return input.canPresent ? 'present' : 'deny-unpresentable';
 }
 
-export const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =
+const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';
 const TEXRA_APPROVAL_CREDENTIAL_RETRY_MESSAGE =
   'Retry skipped: credential exhausted or unauthorized.';
-export const TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE =
+const TEXRA_APPROVAL_YOLO_NO_HUMAN_MESSAGE =
   'User question requires human input; yolo mode cannot synthesize an answer.';
 
 export type TexraRetryApprovalDecision =

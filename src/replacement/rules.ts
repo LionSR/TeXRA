@@ -104,6 +104,8 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
 
     // Greek letter notation fixes
     // Examples: \a_ -> a_, \a^ -> a^
+    // 'x' is deliberately absent: '\x' is a defined shortcut macro
+    // (katexMacros), so '\x_' -> 'x_' would strip it.
     const letters = [...'abcdefghijklmnopqrstuvwyz'];
     const letterNotationFixes = createPatterns(letters, (letter) => [
       [`\\${letter}_`, `${letter}_`],
@@ -677,9 +679,8 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
     '\n    +': ' +',
     '\n    \n&=': '\n    &=',
     '\n    ,\n': ',\n',
-    '\!\n    ': '\n    ',
+    '\\!\n    ': '\n    ',
     '\n    =\n': ' =',
-    '\n    \propto\n': ' =',
     '\n     &\n    -': '\n    & -',
     '(\n    ': '(',
     '\n    )': ')',
@@ -699,20 +700,20 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
     '{-\\,0}': '{0}',
     '{-\\,1}': '{1}',
 
+    // Math operator spacing
+    '\\!\\left\\!': ' \\left ',
+    '\\!\\cdot\\!': ' \\cdot ',
+    '\\!\\ldots\\!': ' \\ldots ',
+    '\\!\\cdots\\!': ' \\cdots ',
+    '\\!\\vdots\\!': ' \\vdots ',
+    '\\!\\ddots\\!': ' \\ddots ',
+
     // ===== Symbol separator handling =====
     // Vertical bars and other delimiters
-    ')\!\|': ') \|',
-    '}\!\|': '} \|',
-    ')\!\\': ') \\',
-    '}\!\\': '} \\',
-
-    // Math operator spacing
-    '\!\\left\!': ' \\left ',
-    '\!\\cdot\!': ' \\cdot ',
-    '\!\\ldots\!': ' \\ldots ',
-    '\!\\cdots\!': ' \\cdots ',
-    '\!\\vdots\!': ' \\vdots ',
-    '\!\\ddots\!': ' \\ddots ',
+    ')\\!\\|': ') \\|',
+    '}\\!\\|': '} \\|',
+    ')\\!\\': ') \\',
+    '}\\!\\': '} \\',
 
     // ===== Vertical spacing commands =====
     // Remove unnecessary skip commands

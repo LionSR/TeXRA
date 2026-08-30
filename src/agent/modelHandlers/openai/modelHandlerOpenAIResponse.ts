@@ -43,7 +43,7 @@ import {
   getSdkErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
+import { isGpt5ModelName } from '@model/modelNames';
 import type {
   OpenAIResponseProviderCapabilities,
   ProviderCapabilityProfile,
@@ -53,7 +53,6 @@ import {
   type MediaAttachmentKind,
   type ToolFileAttachment,
   type ToolResult,
-  DEFAULT_CORE_SETTINGS,
 } from '@shared/schemas';
 import { clamp, filterNotNullish } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
@@ -106,7 +105,6 @@ import {
   contentToText,
   createInputText,
   hasResponseOutputText,
-  isAssistantTextMessage,
   isMessageItem,
 } from './openAIResponseContent';
 import {
@@ -414,7 +412,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   private isBackgroundModeToggleEnabled(): boolean {
-    return getConfig<boolean>('texra.model.useBackgroundResponses', true);
+    return getConfig<boolean>('texra.model.useBackgroundResponses');
   }
 
   protected override backgroundModeSupported = true;
@@ -441,7 +439,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * on per-step streaming.
    */
   private isBackgroundModeEligible(): boolean {
-    return isGptFamilyModelName(this.config.name) && this.isWorkflowMode();
+    return (
+      this.config.name.toLowerCase().startsWith('gpt') && this.isWorkflowMode()
+    );
   }
 
   /** The `previous_response_id` chain anchor + conversation bookkeeping. See
@@ -602,16 +602,21 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (response.usage?.input_tokens) {
       this.chainState.setCumulativeInputTokens(response.usage.input_tokens);
     } else {
-      // Not silent degradation: the chain anchor was already refused above
-      // (hasInputTokens gates safeToChain), this records that the context
-      // baseline could not be advanced for this turn.
+      // Reached when usage is absent OR input_tokens is 0 — deliberately a
+      // truthiness check, not the `hasInputTokens` typeof check above: a zero
+      // is a baseline that cannot be advanced, not a chain anchor to refuse.
+      // The previous cumulativeInputTokens is carried forward on purpose (see
+      // the invalidateChain rationale above), so a proxy that zeroes usage
+      // can't disable compaction — canCompactRoute() requires it to be > 0.
+      // Not silent degradation: the fact is recorded here with the raw value.
       this.logger.debug(
-        'Response usage missing input_tokens; context usage not tracked',
+        'Response usage missing or zero input_tokens; compaction baseline carried forward',
         {
           data: {
             responseId: response.id,
             responseStatus: response.status,
             hasUsage: !!response.usage,
+            inputTokens: response.usage?.input_tokens,
           },
         },
       );
@@ -1057,9 +1062,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       // compacted items' input tokens. `applyTokenCountFailureFallback()`
       // prefers this value over the chain's cumulative count, and on the Codex
       // profile it is load-bearing: token counting
-      // is unavailable and `failWhenFallbackOutputBudgetIsReduced` fails the
-      // request locally when the estimate + budget overflow the context window,
-      // so an output-token underestimate could let through a request the backend
+      // is unavailable and the route-input-limit guard fails the request
+      // locally when the estimate + safety buffer overflow that limit, so an
+      // output-token underestimate could let through a request the backend
       // then rejects.
       tokensAfter: this.estimateResentInputTokens(compactedMessages),
       sourceMessages: messages,
@@ -1168,8 +1173,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       ? 'system'
       : 'user';
 
-    if (requestRole === 'user' && messages.length > 0) {
-      this.appendInputText(messages.at(-1)!, userRequest);
+    if (requestRole === 'user') {
+      userContent.push(createInputText(userRequest));
     } else {
       const requestMessage: ResponseInputItem.Message = {
         type: 'message',
@@ -1215,7 +1220,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /** Formats image/audio content for the Responses API. */
-  createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
+  override createMediaContent(
+    mediaMessage: MediaEntry[],
+  ): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
       const mediaType = media.media_type ?? '';
       const classification = classifyMediaEntry(media);
@@ -1276,28 +1283,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       this.getOpenAIResponseCapabilities()?.supportsTokenCounting ??
       !this.isOpenRouterRoutingEnabled()
     );
-  }
-
-  /**
-   * Some Responses-compatible routes deliberately omit `max_output_tokens` from
-   * the wire request. When token counting is unavailable, a fallback estimate
-   * can detect that the requested output budget would exceed the context window,
-   * but such routes cannot enforce a reduced budget. They should fail locally
-   * instead of sending a request that the backend will reject opaquely.
-   */
-  protected shouldFailWhenFallbackOutputBudgetIsReduced(
-    inputEstimate: number,
-    _maxOutputTokens: number,
-    contextWindow: number,
-    buffer: number,
-  ): boolean {
-    if (
-      !this.getOpenAIResponseCapabilities()
-        ?.failWhenFallbackOutputBudgetIsReduced
-    ) {
-      return false;
-    }
-    return inputEstimate + buffer >= contextWindow;
   }
 
   /**
@@ -1378,24 +1363,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       maxOutputTokens,
     );
     if (capped === maxOutputTokens) return maxOutputTokens;
-
-    if (
-      this.shouldFailWhenFallbackOutputBudgetIsReduced(
-        inputEstimate,
-        maxOutputTokens,
-        contextWindow,
-        buffer,
-      )
-    ) {
-      const error = new Error(
-        `Token estimate (${inputEstimate}) + output budget (${maxOutputTokens}) + safety buffer (${buffer}) exceeds context window (${contextWindow}), and this route cannot enforce a reduced output budget locally.`,
-      );
-      // Tag with a typed marker so isContextWindowError() recognizes this
-      // internal case without depending on the message wording above, which
-      // this method (not a third-party provider) owns and may reword freely.
-      attachContextWindowError(error);
-      throw error;
-    }
 
     this.logger.debug('Fallback: adjusting max_output_tokens', {
       data: { before: maxOutputTokens, after: capped, inputEstimate },
@@ -1676,7 +1643,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     // Phase 4: EXECUTE - Build final params and make the API call
     const parallelToolCalls = getConfig<boolean>(
       'texra.model.openaiParallelToolCalls',
-      DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
     );
     const params: ResponseCreateParamsBase = {
       ...baseParams,
@@ -1735,8 +1701,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = isGpt5ModelName(this.config.name);
       const includeSummary =
-        !isGpt5 ||
-        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
+        !isGpt5 || getConfig<boolean>('texra.model.gpt5ReasoningSummary');
       if (includeSummary) {
         params.reasoning = {
           ...(params.reasoning as Reasoning),
@@ -2442,21 +2407,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     return { text: newResponse, usage, stopReason };
   }
 
-  /** Price computation adapted for Responses API token fields. */
-  computePrice(responseUsage: ResponseUsage): number {
-    const providerCapabilities = this.getUsageProviderCapabilities();
-    return computeOpenAIResponsePrice(
-      responseUsage,
-      providerCapabilities
-        ? {
-            inputPrice: providerCapabilities.inputPrice,
-            outputPrice: providerCapabilities.outputPrice,
-            cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
-          }
-        : this.standardPricingConfig(),
-    );
-  }
-
   /**
    * Provider identifier for usage tracking. `openai-response` distinguishes
    * OpenAI's Responses surface from its Chat Completions surface; compatible
@@ -2473,13 +2423,21 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     rawUsage: ResponseUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
+    const providerCapabilities = this.getUsageProviderCapabilities();
+    const pricing = providerCapabilities
+      ? {
+          inputPrice: providerCapabilities.inputPrice,
+          outputPrice: providerCapabilities.outputPrice,
+          cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
+        }
+      : this.standardPricingConfig();
     const usage = normalizeOpenAIResponseUsage(
       rawUsage,
       responseTimeMs,
       this.usageProvider,
-      (usage) => this.computePrice(usage),
+      (responseUsage) => computeOpenAIResponsePrice(responseUsage, pricing),
     );
-    const usageRoute = this.getUsageProviderCapabilities()?.usageRoute;
+    const usageRoute = providerCapabilities?.usageRoute;
     return usageRoute == null ? usage : { ...usage, usageRoute };
   }
 
@@ -2844,40 +2802,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       role: 'assistant',
       content: text,
     } satisfies EasyInputMessage;
-  }
-
-  override extractAssistantText(
-    message: ResponseInputItem,
-  ): string | undefined {
-    if (!isAssistantTextMessage(message)) {
-      return undefined;
-    }
-
-    // String content (from createAssistantMessage) or array content
-    // (input_text history or output_text response parts); empty flattens to
-    // undefined.
-    const text = contentToText(message.content, '');
-    return text.length > 0 ? text : undefined;
-  }
-
-  private appendInputText(message: ResponseInputItem, text: string): void {
-    if (!isMessageItem(message)) {
-      return;
-    }
-
-    const content = message.content;
-
-    if (Array.isArray(content)) {
-      content.push(createInputText(text));
-      return;
-    }
-
-    if (typeof content === 'string') {
-      message.content = [createInputText(content), createInputText(text)];
-      return;
-    }
-
-    message.content = [createInputText(text)];
   }
 
   private appendAssistantText(

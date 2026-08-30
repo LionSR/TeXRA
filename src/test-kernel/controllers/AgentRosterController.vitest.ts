@@ -5,8 +5,13 @@ import {
   type AgentRosterControllerDeps,
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
+import * as logger from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
-import type { AgentCategory, AgentModePreset } from '@shared/schemas';
+import {
+  agentMatchesIdentifier,
+  type AgentCategory,
+  type AgentModePreset,
+} from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -36,11 +41,17 @@ function controller(
   workspaceState: StateStore,
   overrides: Partial<AgentRosterControllerDeps> = {},
 ): AgentRosterController {
+  const getAgents =
+    overrides.getAgents ?? ((category: AgentCategory) => agents[category]);
   return new AgentRosterController({
     workspaceState,
     globalState: new FakeStateStore(),
-    getAgents: (category) => agents[category],
+    getAgents,
     getPresets: () => [preset],
+    resolveAgent: (category, identifier) =>
+      getAgents(category).find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      ),
     ...overrides,
   });
 }
@@ -50,13 +61,14 @@ describe('AgentRosterController', () => {
     vi.restoreAllMocks();
   });
 
-  /** Silence console.warn and return the spy for warning assertions. */
+  /** Silence the roster log channel and return the spy for assertions. */
   function stubWarn(): ReturnType<typeof vi.spyOn> {
-    return vi.spyOn(console, 'warn').mockImplementation(() => {});
+    return vi.spyOn(logger, 'warn').mockImplementation(() => {});
   }
 
   function expectMalformedWarning(warn: ReturnType<typeof vi.spyOn>): void {
     expect(warn).toHaveBeenCalledWith(
+      'AgentRosterController',
       expect.stringContaining('malformed roster selection'),
     );
   }
@@ -69,7 +81,7 @@ describe('AgentRosterController', () => {
       }),
     );
 
-    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
     expectMalformedWarning(warn);
   });
 
@@ -88,25 +100,27 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
     expectMalformedWarning(warn);
 
     await roster.setTeam('test-team');
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toEqual({ kind: 'team', teamId: 'test-team' });
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
   });
 
-  it('repairs the hybrid pair-shaped roster that carries a stray kind field in place', () => {
+  it('normalizes the hybrid pair-shaped roster on read without writing', async () => {
     // An intermediate version wrote `{kind: 'custom', workflowAgentKeys,
     // toolUseAgentKeys}` under AGENT_ROSTER_SELECTION. Neither the canonical
     // schema (missing `agentKeys`) nor the strict legacy schema (rejects
     // `kind`) accepts it, so it must be normalized to the canonical custom
-    // selection without warning.
+    // selection without warning. The read must not persist that
+    // normalization: the mutations read the selection while holding the write
+    // mutex, so a write from here would overwrite what they just committed.
     const warn = stubWarn();
     const hybrid = {
       kind: 'custom',
@@ -118,7 +132,7 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write'],
@@ -126,15 +140,15 @@ describe('AgentRosterController', () => {
       },
     });
     expect(warn).not.toHaveBeenCalled();
+    expect(workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION)).toBe(
+      hybrid,
+    );
+
+    // The next mutation is what normalizes the stored value.
+    await roster.setTeam('test-team');
     expect(
       workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-    ).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:lead'],
-      },
-    });
+    ).toEqual({ kind: 'team', teamId: 'test-team' });
   });
 
   it('uses the user default only for inherited workspaces', () => {
@@ -145,8 +159,8 @@ describe('AgentRosterController', () => {
       }),
     });
 
-    expect(roster.getSelection()).toEqual({ kind: 'inherit' });
-    expect(roster.getEffectiveSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
+    expect(roster.snapshot().effectiveSelection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
@@ -181,7 +195,7 @@ describe('AgentRosterController', () => {
       enabled: false,
     });
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: 'all',
@@ -203,7 +217,7 @@ describe('AgentRosterController', () => {
       name: 'write',
       enabled: true,
     });
-    expect(inherited.getSelection()).toEqual({ kind: 'inherit' });
+    expect(inherited.snapshot().selection).toEqual({ kind: 'inherit' });
     expect(
       inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
     ).toBeUndefined();
@@ -216,7 +230,7 @@ describe('AgentRosterController', () => {
       name: 'lead',
       enabled: true,
     });
-    expect(team.getSelection()).toEqual({
+    expect(team.snapshot().selection).toEqual({
       kind: 'team',
       teamId: 'test-team',
     });
@@ -229,7 +243,7 @@ describe('AgentRosterController', () => {
       name: 'search',
       enabled: true,
     });
-    expect(all.getSelection()).toEqual({ kind: 'all' });
+    expect(all.snapshot().selection).toEqual({ kind: 'all' });
   });
 
   it('preserves unresolved team members when another category changes', async () => {
@@ -256,7 +270,7 @@ describe('AgentRosterController', () => {
       enabled: true,
     });
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write', 'future-reviewer'],
@@ -274,7 +288,7 @@ describe('AgentRosterController', () => {
     });
     const roster = controller(workspaceState);
 
-    expect(roster.getEffectiveSelection()).toEqual({ kind: 'all' });
+    expect(roster.snapshot().effectiveSelection).toEqual({ kind: 'all' });
     expect(roster.getVisibleAgents('toolUse')).toEqual(agents.toolUse);
     expect(roster.snapshot().missingTeamId).toBe('deleted-team');
   });
@@ -289,7 +303,7 @@ describe('AgentRosterController', () => {
       presets = [];
     });
 
-    expect(roster.getSelection()).toEqual({
+    expect(roster.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write'],
@@ -376,7 +390,7 @@ describe('AgentRosterController', () => {
       }),
     ]);
 
-    expect(first.getSelection()).toEqual({
+    expect(first.snapshot().selection).toEqual({
       kind: 'custom',
       agentKeys: {
         workflow: ['builtInWorkflow:write'],

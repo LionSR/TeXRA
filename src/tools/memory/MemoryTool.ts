@@ -56,14 +56,10 @@ import {
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
-// Branches use looseObject (not strictObject): after flattenTopLevelUnion()
-// merges every branch's properties into one JSON schema for OpenAI/Gemini/
-// Anthropic tool-calling, some OpenAI-compatible providers (DeepSeek, Kimi,
-// ...) fill every advertised property — including ones only relevant to a
-// different command — with null rather than omitting them. A strictObject
-// branch rejects that as an unrecognized key regardless of nullability;
-// looseObject tolerates the cross-branch leakage while still enforcing each
-// branch's own required fields. See AGENTS.md "Tool input schemas".
+// Branches use looseObject (not strictObject): provider conversion flattens
+// the union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
 const MemoryToolInputSchema = z.discriminatedUnion('command', [
   z.looseObject({
     command: z.literal('view'),

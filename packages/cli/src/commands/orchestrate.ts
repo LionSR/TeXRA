@@ -1,4 +1,4 @@
-import { defineCommand, showUsage } from 'citty';
+import { defineCommand } from 'citty';
 
 import { getVisibleAgents } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -12,6 +12,8 @@ import { createLog } from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import { AgentCategory, byCategory } from '@shared/schemas';
+import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -42,7 +44,7 @@ import {
   writeMissingPresetAgents,
 } from '../runtime/multiAgentRunPlan';
 import {
-  buildCliAccountItems,
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
@@ -57,6 +59,7 @@ import { loadCliApiStatus } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 import {
+  mergeCliTexraAccountStatus,
   readCliModelAccessStatus,
   updateCliModelAccess,
 } from '../runtime/modelAccessSelection';
@@ -67,7 +70,7 @@ import {
 import { getCliAuthProfile, signOutCliSupabase } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
-import { withUsageSections } from './_helpers/dispatch';
+import { showUsage, withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
 import { loginInitFromArgs, runLoginCommand } from './auth';
 import {
@@ -89,6 +92,7 @@ async function canLaunchWithDefaultModel(
     cwd: context.cwd,
     envAgent: context.envAgent,
     envModel: context.envModel,
+    quiet: context.quietLogs,
   });
   try {
     await selectCliRunnableModel(defaults.model, {
@@ -161,6 +165,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
     return result.exitCode;
   }
 
+  // The TUI intercepts every navigation action (`browse-*`) internally, so
+  // `runOrchestrationTui` only ever resolves with an action this switch
+  // handles. An unhandled kind falls out of the switch and re-runs the
+  // launcher, which is the same outcome the navigation kinds used to spell
+  // out.
   launcher: while (true) {
     const history = await listCliHistoryEntries();
     const presets = readCliMultiAgentPresets();
@@ -172,24 +181,18 @@ async function runOrchestration(context: CliContext): Promise<number> {
       getCliAuthProfile(),
     ]);
     const toolUseAgents = getVisibleAgents(AgentCategory.ToolUse);
-    const accountStatus = {
-      texraSignedIn: authProfile.authenticated,
-      texraAccountLabel: authProfile.accountLabel,
-      chatGptSignedIn: modelAccess.chatGptSignedIn,
-      chatGptAccountLabel: modelAccess.chatGptAccountLabel,
-      grokSignedIn: modelAccess.grokSignedIn,
-      grokAccountLabel: modelAccess.grokAccountLabel,
-    };
-    const launcherModelAccess = {
-      ...modelAccess,
-      texraSignedIn: authProfile.authenticated,
-    };
+    // One shape for one fact: the launcher's "Account & access" row and its
+    // step are built from the same record, so they cannot disagree about who
+    // is signed in.
+    const launcherModelAccess = mergeCliTexraAccountStatus(
+      modelAccess,
+      authProfile,
+    );
     const items = buildCliOrchestrationItems({
       presetPlans: presetPlanSet.plans,
       history,
       toolUseAgents,
-      modelAccess: launcherModelAccess,
-      account: accountStatus,
+      accountAccess: launcherModelAccess,
       presetLaunchBlockReason,
     });
     // Load the model registry up front so the launcher can offer a model pick
@@ -197,7 +200,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // launches with the default model instead of blocking the launcher.
     const [models, statusLines] = await Promise.all([
       getCliModelAccessList().catch((): readonly CliModelAccess[] => []),
-      loadCliApiStatus(),
+      loadCliApiStatus(authProfile),
     ]);
     const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
       context,
@@ -214,8 +217,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         remoteAgentCatalogAvailable: await SupabaseClient.isAuthenticated(),
         launchBlockReason: presetLaunchBlockReason,
       }),
-      accountItems: buildCliAccountItems(accountStatus),
-      modelAccess: launcherModelAccess,
+      accountAccessItems: buildCliAccountAccessItems(launcherModelAccess),
       version: context.version,
       statusLines,
       allowDefaultModelLaunch,
@@ -258,7 +260,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             );
             const answer = (
               await askCliQuestion(
-                'Choose: [s] Sign in to TeXRA, [c] Continue with available members, [q] Cancel: ',
+                `Choose: [s] Sign in to ${RESEARCHER_ACCESS.label}, [c] Continue with available members, [q] Cancel: `,
               )
             )
               .trim()
@@ -314,12 +316,6 @@ async function runOrchestration(context: CliContext): Promise<number> {
       }
       case 'resume':
         return runResumeExecution(context, action.id);
-      case 'browse-resumes':
-      case 'configure-model-access':
-      case 'browse-agents':
-      case 'browse-teams':
-      case 'browse-accounts':
-        continue launcher;
       case 'configure-settings': {
         const { runConfigTui } = await import('../config/runConfigTui');
         await runConfigTui({
@@ -352,7 +348,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
             }
           } else if (action.operation === 'sign-out') {
             await signOutCliSupabase();
-            writeTextStdout('Signed out of TeXRA.');
+            writeTextStdout(ACCOUNT_OUTCOME.signedOut(RESEARCHER_ACCESS.label));
           } else {
             await runLoginCommand(context, loginInitFromArgs({}));
           }

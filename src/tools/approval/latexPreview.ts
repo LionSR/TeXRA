@@ -8,9 +8,10 @@ import path from 'node:path';
 import { sync as globSync } from 'glob';
 import { z } from 'zod';
 
+import { isFileNotFoundError } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
-import { debug } from '@logger/logUtils';
+import { debug, warn } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
@@ -121,7 +122,12 @@ async function withLatexOperation(
   }
 }
 
-/** Read file content with fallback to provided default */
+/** Read file content with fallback to provided default. The disk read exists
+ *  to pick up the user's saved hand edits to the approval temp file; a
+ *  missing file (entry settled/cleaned up racing the preview) is genuinely
+ *  benign, so only that case falls back silently. Any other failure still
+ *  falls back — the held in-memory content keeps the preview usable — but
+ *  warns, because the preview would silently drop the user's saved edits. */
 async function readFileWithFallback(
   uri: { fsPath: string },
   fallback: string,
@@ -129,7 +135,16 @@ async function readFileWithFallback(
   return platform()
     .fs.readFile(uri.fsPath)
     .then((bytes) => Buffer.from(bytes).toString('utf8'))
-    .catch(() => fallback);
+    .catch((error) => {
+      if (!isFileNotFoundError(error)) {
+        warn(
+          'latexPreview',
+          `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
+          { data: error },
+        );
+      }
+      return fallback;
+    });
 }
 
 /**

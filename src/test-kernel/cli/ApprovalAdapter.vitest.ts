@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn());
+const handleExternalInquiryActionMock = vi.hoisted(() => vi.fn(async () => {}));
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
 
@@ -36,7 +36,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   askApproval,
-  classifyCliRetryAction,
+  cliRetryQuotaRoute,
   cliRetryApiSwitchDecision,
   isCliApiSwitchableRetry,
   type CliApprovalPromptHooks,
@@ -49,7 +49,7 @@ import {
 } from '@cli/runtime/approval/approvalSummaries';
 import {
   decideRetryApproval,
-  TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+  texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import {
   AgentCategory,
@@ -84,7 +84,7 @@ function useCliHostInteractions(
 ): void {
   detachHostInteractions();
   defaultSession().setApprovalPolicy(cliContext.approvalPolicy);
-  detachHostInteractions = defaultSession().useHostInteractions(
+  detachHostInteractions = defaultSession().interactions.use(
     createHeadlessCliHostInteractions(cliContext, hooks),
   );
 }
@@ -212,7 +212,7 @@ describe('human input approval policy', () => {
     expect(handleExternalInquiryActionMock).toHaveBeenCalledWith({
       action: 'drop',
       threadId: 'ei_test',
-      reason: TEXRA_APPROVAL_POLICY_DENIED_MESSAGE,
+      reason: texraApprovalDenialMessage('deny-policy'),
     });
   });
 
@@ -314,7 +314,6 @@ describe('approval prompt hooks', () => {
       tracker.hooks,
     ).openExternalInquiry?.({
       requestId: 'ei_aabbccdd0011',
-      mode: 'followUp' as const,
       threadId: 'ei_aabbccdd0011',
       question: 'May I ask an external model to verify this proof?',
       allowBypass: false,
@@ -826,7 +825,9 @@ describe('buildAgentProposalApprovalContent', () => {
     expect(summary).toContain(
       'Agent proposal requested: review (tool-use agent)',
     );
-    expect(summary).toContain('Model: deepseekT');
+    // The summary names the model the way the transcript does, by its
+    // registry label rather than its persisted id.
+    expect(summary).toContain('Model: DeepSeek V4 Flash (Thinking)');
     expect(summary).toContain('Instruction:');
     expect(summary).toContain('  Please verify the proof carefully.');
     expect(summary).not.toContain('requestId');
@@ -906,7 +907,7 @@ describe('formatRetryRequestMessage', () => {
       'Kimi Code subscription',
     );
     expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
-    expect(classifyCliRetryAction(retry)).toBe('disable-quota-route:kimiCode');
+    expect(cliRetryQuotaRoute(retry)?.id).toBe('kimiCode');
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
       disableQuotaRoute: 'kimiCode',
@@ -922,9 +923,7 @@ describe('formatRetryRequestMessage', () => {
       },
     };
 
-    expect(classifyCliRetryAction(retry)).toBe(
-      'disable-quota-route:glmCodingPlan',
-    );
+    expect(cliRetryQuotaRoute(retry)?.id).toBe('glmCodingPlan');
     expect(cliRetryApiSwitchDecision(retry)).toEqual({
       accepted: true,
       disableQuotaRoute: 'glmCodingPlan',

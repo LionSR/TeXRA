@@ -4,69 +4,69 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  resolveAndResumeStream: vi.fn(
-    async (_streamId: string, _ports: unknown, _recovery?: unknown) => true,
-  ),
+  resumeStream: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/resolveAndResumeStream', async (importActual) => ({
-  ...(await importActual<
-    typeof import('@agent/runtime/resolveAndResumeStream')
-  >()),
-  resolveAndResumeStream: mocks.resolveAndResumeStream,
+vi.mock('@agent/runtime/resumeRun', () => ({
+  resumeStream: mocks.resumeStream,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
 }));
 
-import type { ResumeStreamPorts } from '@agent/runtime/resolveAndResumeStream';
+import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 const STREAM = 'stream:ext-resume-ports' as StreamTabId;
+const EXECUTION = 'exec:ext-resume' as ExecutionId;
 
-async function capturePorts(): Promise<ResumeStreamPorts> {
+async function captureOptions(): Promise<ResumeRunOptions> {
   await tryResumeFromResumeData(STREAM);
-  const ports = mocks.resolveAndResumeStream.mock.calls[0]?.[1];
-  expect(ports).toBeDefined();
-  return ports as ResumeStreamPorts;
+  const options = mocks.resumeStream.mock.calls[0]?.[1];
+  expect(options).toBeDefined();
+  return options as ResumeRunOptions;
 }
 
-describe('tryResumeFromResumeData ports', () => {
+describe('tryResumeFromResumeData', () => {
   beforeEach(() => {
-    mocks.resolveAndResumeStream.mockClear();
+    mocks.resumeStream
+      .mockReset()
+      .mockResolvedValue({ started: true, delivered: true });
   });
 
   it('reports cancellation once the stream transcript is gone', async () => {
-    const ports = await capturePorts();
+    const options = await captureOptions();
 
-    expect(ports.isCancellationRequested?.()).toBe(true);
+    expect(options.isCancellationRequested?.()).toBe(true);
   });
 
   it('keeps resuming while the stream transcript is present', async () => {
     const session = defaultSession();
     const has = vi.spyOn(session.transcripts, 'has').mockReturnValue(true);
 
-    const ports = await capturePorts();
+    const options = await captureOptions();
 
-    expect(ports.isCancellationRequested?.()).toBe(false);
+    expect(options.isCancellationRequested?.()).toBe(false);
     has.mockRestore();
   });
 
-  it('tells the user when there is no resumable session state', async () => {
+  it('words a refusal with the shared follow-up failure vocabulary', async () => {
     const session = defaultSession();
+    const has = vi.spyOn(session.transcripts, 'has').mockReturnValue(true);
     const showInfoMessage = vi
       .spyOn(session.interactions, 'showInfoMessage')
       .mockReturnValue(undefined);
+    mocks.resumeStream.mockResolvedValueOnce({ failed: 'finished' });
 
-    const ports = await capturePorts();
-    await ports.reportNoResumableSession?.(STREAM);
+    await expect(tryResumeFromResumeData(STREAM)).resolves.toBe(false);
 
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'This run cannot be resumed. Start a new run instead.',
+      'This run has finished. Start a new agent task to continue.',
       { replayWhenAttached: true },
     );
     showInfoMessage.mockRestore();
+    has.mockRestore();
   });
 });

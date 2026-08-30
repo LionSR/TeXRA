@@ -40,7 +40,6 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
-import { DEFAULT_CORE_SETTINGS } from '@shared/schemas';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
@@ -198,10 +197,7 @@ export function shouldUseResponsesAPI(
       capabilities.supportsFunctionCalling !== false) ||
     config.fullName.startsWith('gpt-oss') ||
     (capabilities.supportsFunctionCalling !== false &&
-      getConfig<boolean>(
-        'texra.model.useOpenAIResponsesAPI',
-        DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
-      ))
+      getConfig<boolean>('texra.model.useOpenAIResponsesAPI'))
   );
 }
 
@@ -234,7 +230,6 @@ function applyShortModelNamePreference(
 export function resolveModelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
   useOpenRouter = getUseOpenRouter(),
-  preferShortModelNames = getPreferShortModelNames(),
   copilotRouteOverride?: CopilotRouteOverride,
 ): ModelHandlerCompatibilityKey | undefined {
   if (shouldUseInternalValidationModelHandler()) {
@@ -261,9 +256,11 @@ export function resolveModelHandlerCompatibilityKey(
     return 'ModelHandlerVscodeLm';
   }
 
+  // Re-application is identity on an already-shortened config, so the live
+  // `createModelHandler` path can hand this its own resolved config.
   const config = applyShortModelNamePreference(
     originalConfig,
-    preferShortModelNames,
+    getPreferShortModelNames(),
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'ModelHandlerOpenAIResponse';
@@ -397,10 +394,6 @@ export async function createModelHandler(
   const compatibilityKey = resolveModelHandlerCompatibilityKey(
     config,
     useOpenRouter,
-    // Short-name preference was already applied by withShortModelName above;
-    // pass false so the key predicate routes on the same resolved config
-    // instead of re-resolving it.
-    false,
     copilotRouteOverride,
   );
   return createModelHandlerForResolvedCompatibilityKey(

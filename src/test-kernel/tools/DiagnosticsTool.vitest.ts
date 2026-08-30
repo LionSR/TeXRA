@@ -72,7 +72,7 @@ describe('DiagnosticsTool', () => {
       const readDiagnostics = vi.fn(async (_path: string) => {
         return [] as GenericDiagnostic[];
       });
-      session.useHostInteractions({ readDiagnostics, cancel: vi.fn() });
+      session.interactions.use({ readDiagnostics, cancel: vi.fn() });
 
       const result = await withRunContext(worktreeContext(session), () =>
         new DiagnosticsTool().call({ command: 'list', path: 'paper.tex' }),
@@ -104,7 +104,7 @@ describe('DiagnosticsTool', () => {
 
   it('reports when the criticism sink does not accept (feature disabled)', async () => {
     await withSession(async (session) => {
-      session.useHostInteractions({
+      session.interactions.use({
         addCriticism: () => ({ accepted: false, resolvedPath: '' }),
         cancel: vi.fn(),
       });
@@ -120,7 +120,7 @@ describe('DiagnosticsTool', () => {
   it('resolves the path and summarizes an accepted criticism', async () => {
     await withSession(async (session) => {
       const entries: unknown[] = [];
-      session.useHostInteractions({
+      session.interactions.use({
         addCriticism: (entry) => {
           entries.push(entry);
           return { accepted: true, resolvedPath: entry.absolutePath };

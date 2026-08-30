@@ -88,7 +88,6 @@ describe('ProgressWorkflowActionsController', () => {
       {
         operation: 'pack',
         request: {
-          streamId: 'stream-a',
           agent: 'correct',
           model: 'gemini31p',
           inputFile: 'extra-input.tex',
@@ -98,7 +97,6 @@ describe('ProgressWorkflowActionsController', () => {
             'extra.tex',
           ],
           executionId: 'exec-123',
-          skipProgressViewClear: true,
         },
       },
     ]);
@@ -121,12 +119,10 @@ describe('ProgressWorkflowActionsController', () => {
       {
         operation: 'clean',
         request: {
-          streamId: 'stream-a',
           agent: 'correct',
           model: 'gemini31p',
           inputFile: 'input.tex',
           outputFiles: ['declared.tex', 'generated.tex'],
-          skipProgressViewClear: true,
         },
       },
     ]);

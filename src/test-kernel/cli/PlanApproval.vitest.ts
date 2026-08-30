@@ -98,6 +98,12 @@ describe('CLI plan approval layout', () => {
     expect(PLAN_GOAL_COPY.cliNotice.length).toBeLessThanOrEqual(40);
   });
 
+  it('explains the broader goal approval scope without claiming every prompt', () => {
+    expect(PLAN_GOAL_COPY.cliAutoApproveAllNotice).toContain('commands');
+    expect(PLAN_GOAL_COPY.cliAutoApproveAllNotice).toContain('edits');
+    expect(PLAN_GOAL_COPY.cliAutoApproveAllNotice).toContain('agent work');
+  });
+
   it('keeps the goal explanation to one display row on narrow cards', () => {
     const notice = planApprovalGoalNoticeLine(40);
 

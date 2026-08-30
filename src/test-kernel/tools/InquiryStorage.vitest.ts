@@ -24,7 +24,6 @@ import {
 
 const STREAM_A = 'stream:a' as StreamTabId;
 const STREAM_B = 'stream:b' as StreamTabId;
-const GENERATION_A = 'f9de9269-9198-4103-a248-6a3bd78bd4eb';
 
 /**
  * Capture per-channel log lines. The storage module logs through `createLog`,
@@ -119,10 +118,9 @@ describe('InquiryStorage', () => {
   });
 
   it('opens, answers, and resolves a thread end-to-end', async () => {
-    const atomicWriteSpy = vi.spyOn(platform().fs, 'writeFileAtomic');
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'What is the Sobolev constant?',
       context: 'Use the sharp Euclidean inequality.',
       suggestSearch: false,
@@ -131,7 +129,6 @@ describe('InquiryStorage', () => {
     expect(opened.manifest.status).toBe('open');
     expect(opened.manifest.parentStreamId).toBe(STREAM_A);
     expect(opened.manifest.turns).toHaveLength(1);
-    expect(opened.turn.parentGenerationId).toBe(GENERATION_A);
     expect(opened.turn.suggestSearch).toBe(false);
 
     const open = await listThreadsByStatus({ status: 'open', scope: 'all' });
@@ -144,17 +141,7 @@ describe('InquiryStorage', () => {
     });
     expect(answered).not.toBeNull();
     expect(answered!.manifest.status).toBe('answered');
-    expect(answered!.turn.parentGenerationId).toBe(GENERATION_A);
     expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
-
-    const turnDir = path.join(threadDirFor(opened.threadId), 't1');
-    expect(atomicWriteSpy.mock.calls.map(([target]) => target)).toEqual(
-      expect.arrayContaining([
-        path.join(turnDir, 'question.txt'),
-        path.join(turnDir, 'context.txt'),
-        path.join(turnDir, 'answer.txt'),
-      ]),
-    );
 
     const stillOpen = await listThreadsByStatus({
       status: 'open',
@@ -177,7 +164,7 @@ describe('InquiryStorage', () => {
   ])('$name', async ({ retire }) => {
     const opened = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
     await retire(opened.threadId);
@@ -186,7 +173,7 @@ describe('InquiryStorage', () => {
       recordOpenQuestion({
         threadId: opened.threadId,
         parentStreamId: STREAM_A,
-        parentGenerationId: GENERATION_A,
+        parentExecutionId: null,
         question: 'Q2',
       }),
     ).rejects.toBeInstanceOf(ToolError);
@@ -195,7 +182,7 @@ describe('InquiryStorage', () => {
   it('allows ask follow-up on an answered thread; status flips back to open', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
@@ -203,7 +190,7 @@ describe('InquiryStorage', () => {
     const followUp = await recordOpenQuestion({
       threadId: t.threadId,
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q2 (follow-up)',
     });
 
@@ -215,7 +202,7 @@ describe('InquiryStorage', () => {
   it('keeps first-turn draft context valid for hydrated new inquiries', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
     const draft = {
@@ -236,14 +223,12 @@ describe('InquiryStorage', () => {
       question: 'Q1',
       allowBypass: false,
       streamId: STREAM_A,
-      mode: 'new',
       sessionLinks: undefined,
       draft: getOpenTurnDraft(manifest!),
       transcript: manifestToTranscript(manifest!),
     });
 
     expect(permission).toMatchObject({
-      mode: 'new',
       draft,
       transcript: [{ turnIndex: 1, question: 'Q1', answer: undefined }],
     });
@@ -252,14 +237,14 @@ describe('InquiryStorage', () => {
   it('persists open-turn drafts and exposes transcript turns', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
     await recordOpenQuestion({
       threadId: t.threadId,
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q2',
     });
 
@@ -286,7 +271,7 @@ describe('InquiryStorage', () => {
   it('updates parentStreamId on cross-stream follow-up', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t.threadId, answer: 'A1' });
@@ -294,7 +279,7 @@ describe('InquiryStorage', () => {
     const fromB = await recordOpenQuestion({
       threadId: t.threadId,
       parentStreamId: STREAM_B,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q2 from B',
     });
     expect(fromB.manifest.parentStreamId).toBe(STREAM_B);
@@ -316,20 +301,20 @@ describe('InquiryStorage', () => {
   it('listThreadsByStatus filters by status and scope', async () => {
     const t1 = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
     await recordAnswerForOpenTurn({ threadId: t1.threadId, answer: 'A1' });
 
     const t2 = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q2',
     });
 
     const t3 = await recordOpenQuestion({
       parentStreamId: STREAM_B,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q3',
     });
     await markDropped({ threadId: t3.threadId });
@@ -357,7 +342,7 @@ describe('InquiryStorage', () => {
   it('stamps schemaVersion on newly written manifests', async () => {
     const t = await recordOpenQuestion({
       parentStreamId: STREAM_A,
-      parentGenerationId: GENERATION_A,
+      parentExecutionId: null,
       question: 'Q1',
     });
 
@@ -381,7 +366,7 @@ describe('InquiryStorage', () => {
       recordOpenQuestion({
         threadId: 'ei_aabbccdd0033' as InquiryThreadId,
         parentStreamId: STREAM_A,
-        parentGenerationId: GENERATION_A,
+        parentExecutionId: null,
         question: 'Q?',
       }),
     ).rejects.toBeInstanceOf(ToolError);
@@ -410,8 +395,6 @@ describe('InquiryStorage', () => {
           turnIndex: 1,
           timestamp: '2025-01-01T00:00:00.000Z',
           question: 'Future Q',
-          questionRelativePath: 't1/question.txt',
-          answerRelativePath: 't1/answer.txt',
         },
       ],
     });
@@ -430,6 +413,7 @@ describe('InquiryStorage', () => {
     const unversionedManifest = JSON.stringify({
       threadId: 'ei_aabbccdd0066',
       parentStreamId: STREAM_A,
+      parentExecutionId: null,
       status: 'open',
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-02T00:00:00.000Z',
@@ -457,38 +441,6 @@ describe('InquiryStorage', () => {
         turns: [],
       }),
       'Failed to parse external-inquiry manifest for ei_aabbccdd0077',
-    );
-  });
-
-  it.each([
-    { label: 'null', value: null },
-    { label: 'a non-UUID string', value: 'generation-a' },
-    // JSON.stringify drops the undefined entry, reproducing a pre-2026-08-13
-    // manifest written before the parent-generation fence existed. That
-    // legacy tolerance is retired: such manifests read as missing, loudly.
-    { label: 'an absent', value: undefined },
-  ])('rejects $label inquiry generation as corrupt', async ({ value }) => {
-    await expectUnreadableManifest(
-      'ei_aabbccdd0088',
-      JSON.stringify({
-        schemaVersion: 1,
-        threadId: 'ei_aabbccdd0088',
-        parentStreamId: STREAM_A,
-        status: 'open',
-        createdAt: '2026-08-13T12:00:00.000Z',
-        updatedAt: '2026-08-13T12:00:00.000Z',
-        turns: [
-          {
-            kind: 'open',
-            turnIndex: 1,
-            timestamp: '2026-08-13T12:00:00.000Z',
-            parentGenerationId: value,
-            question: 'Is the estimate uniform?',
-            questionRelativePath: 't1/question.txt',
-          },
-        ],
-      }),
-      'Failed to parse external-inquiry manifest for ei_aabbccdd0088',
     );
   });
 });

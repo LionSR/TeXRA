@@ -163,39 +163,6 @@ describe('xaiLongContextTierGap', () => {
   });
 });
 
-describe('ModelHandlerXAI long-context pricing', () => {
-  it('bills flat rates below the threshold and tier rates once reached', () => {
-    const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
-
-    expect(
-      handler.computePrice({
-        prompt_tokens: 199_999,
-        completion_tokens: 1_000,
-        total_tokens: 200_999,
-      }),
-    ).toBeCloseTo((199_999 * 2 + 1_000 * 6) / 1e6, 12);
-    expect(
-      handler.computePrice({
-        prompt_tokens: 200_000,
-        completion_tokens: 1_000,
-        total_tokens: 201_000,
-      }),
-    ).toBeCloseTo((200_000 * 4 + 1_000 * 12) / 1e6, 12);
-  });
-
-  it('keeps flat rates for xAI models without a documented tier', () => {
-    const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4-0709'));
-
-    expect(
-      handler.computePrice({
-        prompt_tokens: 500_000,
-        completion_tokens: 1_000,
-        total_tokens: 501_000,
-      }),
-    ).toBeCloseTo((500_000 * 3 + 1_000 * 15) / 1e6, 12);
-  });
-});
-
 describe('ModelHandlerXAI cache rebate wiring', () => {
   it.each([
     ['grok-4.3', 1.25, 2.5, 0.16],
@@ -207,12 +174,15 @@ describe('ModelHandlerXAI cache rebate wiring', () => {
       const handler = new ModelHandlerXAI(catalogXaiConfig(fullName));
 
       expect(
-        handler.computePrice({
-          prompt_tokens: 100_000,
-          completion_tokens: 1_000,
-          total_tokens: 101_000,
-          prompt_tokens_details: { cached_tokens: 40_000 },
-        }),
+        handler.normalizeUsage(
+          {
+            prompt_tokens: 100_000,
+            completion_tokens: 1_000,
+            total_tokens: 101_000,
+            prompt_tokens_details: { cached_tokens: 40_000 },
+          },
+          0,
+        ).cost,
       ).toBeCloseTo(
         (100_000 * inputPrice +
           1_000 * outputPrice -
@@ -227,12 +197,15 @@ describe('ModelHandlerXAI cache rebate wiring', () => {
     const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
 
     expect(
-      handler.computePrice({
-        prompt_tokens: 250_000,
-        completion_tokens: 1_000,
-        total_tokens: 251_000,
-        prompt_tokens_details: { cached_tokens: 40_000 },
-      }),
+      handler.normalizeUsage(
+        {
+          prompt_tokens: 250_000,
+          completion_tokens: 1_000,
+          total_tokens: 251_000,
+          prompt_tokens_details: { cached_tokens: 40_000 },
+        },
+        0,
+      ).cost,
     ).toBeCloseTo((250_000 * 4 + 1_000 * 12 - 40_000 * 4 * 0.75) / 1e6, 12);
   });
 });
@@ -254,8 +227,8 @@ describe('ModelHandlerXAI tier-gap warning', () => {
       total_tokens: 110,
     };
 
-    handler.computePrice(usage);
-    handler.computePrice(usage);
+    handler.normalizeUsage(usage, 0);
+    handler.normalizeUsage(usage, 0);
 
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0]?.[0]).toContain('grok-9');
@@ -269,11 +242,14 @@ describe('ModelHandlerXAI tier-gap warning', () => {
     const handler = new ModelHandlerXAI(catalogXaiConfig('grok-4.6'));
     handler.setLogger({ warn } as unknown as AgentTrace);
 
-    handler.computePrice({
-      prompt_tokens: 100,
-      completion_tokens: 10,
-      total_tokens: 110,
-    });
+    handler.normalizeUsage(
+      {
+        prompt_tokens: 100,
+        completion_tokens: 10,
+        total_tokens: 110,
+      },
+      0,
+    );
 
     expect(warn).not.toHaveBeenCalled();
   });

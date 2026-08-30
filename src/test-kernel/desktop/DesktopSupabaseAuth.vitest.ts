@@ -38,14 +38,6 @@ function createCoordinator() {
     ensureFreshToken: vi.fn(
       async () => storedSession.current?.accessToken ?? null,
     ),
-    getSessionTokens: vi.fn(async () =>
-      storedSession.current
-        ? {
-            accessToken: storedSession.current.accessToken,
-            refreshToken: storedSession.current.refreshToken,
-          }
-        : null,
-    ),
   };
 }
 
@@ -195,10 +187,6 @@ function routeMatchingCallback(
 
 function installAuthenticatedSupabaseProvider() {
   const ensureFreshToken = vi.fn(async () => 'fresh-access-token');
-  const getSessionTokens = vi.fn(async () => ({
-    accessToken: 'fresh-access-token',
-    refreshToken: 'refresh-token',
-  }));
   const getStoredSessionState = vi.fn(async () => 'authenticated' as const);
   SupabaseClient.initialize(
     'https://example.supabase.co',
@@ -208,7 +196,6 @@ function installAuthenticatedSupabaseProvider() {
   SupabaseClient.setAuthProvider({
     whenReady: vi.fn(async () => {}),
     ensureFreshToken,
-    getSessionTokens,
     getStoredSessionState,
     getStoredAccountLabel: vi.fn(async () => null),
     getLastRefreshFailure: vi.fn(() => null),
@@ -217,7 +204,7 @@ function installAuthenticatedSupabaseProvider() {
     id: 'user-1',
     email: 'user@example.com',
   } as never);
-  return { ensureFreshToken, getSessionTokens, getStoredSessionState };
+  return { ensureFreshToken, getStoredSessionState };
 }
 
 describe('desktop Supabase auth', () => {
@@ -867,7 +854,7 @@ describe('desktop Supabase auth', () => {
   });
 
   it('refreshes desktop session state for profile data without a token fetch', async () => {
-    const { ensureFreshToken, getSessionTokens, getStoredSessionState } =
+    const { ensureFreshToken, getStoredSessionState } =
       installAuthenticatedSupabaseProvider();
 
     const controller = new SettingsProfileController({
@@ -879,7 +866,6 @@ describe('desktop Supabase auth', () => {
     const message = await controller.buildProfileMessage();
 
     expect(getStoredSessionState).toHaveBeenCalledOnce();
-    expect(getSessionTokens).not.toHaveBeenCalled();
     expect(ensureFreshToken).not.toHaveBeenCalled();
     expect(message).toMatchObject({
       authenticated: true,

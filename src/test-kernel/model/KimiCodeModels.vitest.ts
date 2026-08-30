@@ -3,7 +3,6 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 import { resolveModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
 
-import { kimiCodeWireModelId } from '@model/kimiCodeSubscriptionRouting';
 import {
   resolveModelApiKeyProvider,
   resolveModelSource,
@@ -33,8 +32,6 @@ describe('Kimi Code model registry', () => {
       expect(config.baseUrl).toBe('https://api.kimi.com/coding/v1');
       expect(isKimiCodeExclusiveModel(config)).toBe(true);
       expect(resolveModelSource(config)).toBe('kimiCode');
-      // Plan aliases already use the wire id as fullName — no rename.
-      expect(kimiCodeWireModelId(config)).toBe(fullName);
     },
   );
 
@@ -45,8 +42,6 @@ describe('Kimi Code model registry', () => {
     // The open platform stays its home: source and key owner are moonshot.
     expect(resolveModelSource(config)).toBe(ModelProvider.MOONSHOT);
     expect(resolveModelApiKeyProvider(config, false)).toBe('moonshot');
-    // On the coding endpoint the wire id is `k3`.
-    expect(kimiCodeWireModelId(config)).toBe('k3');
   });
 
   it('resolves plan aliases through the runtime registry like any model', () => {
@@ -100,11 +95,7 @@ describe('Kimi Code routing', () => {
 
   it('uses the shared Kimi handler', () => {
     expect(
-      resolveModelHandlerCompatibilityKey(
-        MODEL_CONFIGS.kimiCoding,
-        false,
-        false,
-      ),
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimiCoding, false),
     ).toBe('ModelHandlerKimi');
   });
 
@@ -116,11 +107,11 @@ describe('Kimi Code routing', () => {
     // direct (non-OpenRouter) session, which is why the resume path's
     // useOpenRouter=false is correct.
     expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false, false),
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false),
     ).toBe('ModelHandlerKimi');
-    expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true, false),
-    ).toBe('ModelHandlerOpenRouterNative');
+    expect(resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
   });
 
   it('does not divert other moonshot models off their normal routes', () => {

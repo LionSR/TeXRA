@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  abandonOwnedExecutionLease: vi.fn(),
   buildAgentLaunchContext: vi.fn(),
   clearTerminalExecutionState: vi.fn(),
   getPersistedUserFollowUpSupport: vi.fn(),
@@ -18,14 +17,13 @@ const mocks = vi.hoisted(() => ({
       operation(),
   ),
   releaseOwnedExecutionLeaseAfterFailure: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(),
+  releaseOwnedExecutionLease: vi.fn(),
 }));
 
 vi.mock('@agent/storage/executionLease', () => ({
-  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
   acquireResumedExecutionLease: mocks.acquireResumedExecutionLease,
   assertOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: mocks.completeOwnedExecutionLease,
+  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
   validateOwnedExecutionLease: mocks.validateOwnedExecutionLease,
   runWithExecutionLeaseWriteFence: mocks.runWithExecutionLeaseWriteFence,
   releaseOwnedExecutionLeaseAfterFailure:
@@ -89,7 +87,6 @@ interface InterruptibleFlowInput {
 }
 
 interface TestFlowContext {
-  readonly session: { appendFollowUp(item: unknown): void };
   interrupt(): void;
 }
 
@@ -131,17 +128,14 @@ function buildResumeContext(
         transcripts: { ensureLoaded: vi.fn(async () => {}) },
         flushArtifacts: vi.fn(async () => {}),
         // The real exit choreography over the fake's flushArtifacts and the
-        // mocked lease verbs, so the completeOwnedExecutionLease assertion
+        // mocked lease verbs, so the releaseOwnedExecutionLease assertion
         // keeps observing the drain through its one owner.
         releaseExecutionLease: SessionHandle.prototype.releaseExecutionLease,
       },
       signal: abortController.signal,
     },
     config: { agent: 'test-agent', model: 'test-model' },
-    userVarChannels: {
-      input: Object.freeze({ MODEL: 'test-model' }),
-      transient: { MODEL: 'test-model' },
-    },
+    userVarChannels: { MODEL: 'test-model' },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn() },
     interrupt: () => abortController.abort(),
@@ -171,7 +165,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     mocks.releaseOwnedExecutionLeaseAfterFailure.mockImplementation(
       async (_executionId: ExecutionId, error: unknown) => error,
     );
-    mocks.completeOwnedExecutionLease.mockResolvedValue({ status: 'released' });
+    mocks.releaseOwnedExecutionLease.mockResolvedValue(undefined);
     // Default: the lifecycle wrapper just runs the flow against a no-op
     // handle. Tests that need a real handle override with
     // mockImplementationOnce, which takes precedence for their single call.
@@ -184,7 +178,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
   });
 
   // The predecessor run's terminal outcome is projected onto every result
-  // envelope read back (`applyExecutionOutcome`), so it has to be gone before
+  // envelope read back (`readResultMeta`), so it has to be gone before
   // the resumed run can write a turn of its own.
   it('clears the previous run terminal facts before the resumed run starts', async () => {
     const executionId = 'e9503-boundary' as ExecutionId;
@@ -366,7 +360,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       ) => {
         expect(input.tools).toBe(tools);
         const flowContext: TestFlowContext = {
-          session: { appendFollowUp: vi.fn() },
           interrupt: () => {
             order.push('interrupt');
             input.interrupt();
@@ -404,7 +397,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     });
 
     expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
-    expect(mocks.completeOwnedExecutionLease).toHaveBeenCalledWith(executionId);
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(executionId);
     expect(mocks.invokeModelOrTool).not.toHaveBeenCalled();
     expect(order).toEqual([
       'attach',
@@ -437,7 +430,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     // variable read it directly, so the only remaining mirror is the
     // persisted AgentConfig schema field; the seeded transient stays as-is.
     expect(ctx.config.model).toBe('next-model');
-    expect(ctx.userVarChannels.transient.MODEL).toBe('test-model');
+    expect(ctx.userVarChannels.MODEL).toBe('test-model');
   });
 
   it('carries a failed resumed flow result, error included, to the lifecycle', async () => {

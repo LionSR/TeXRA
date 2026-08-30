@@ -13,6 +13,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   STREAM_PHASE,
+  USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -20,7 +21,7 @@ import {
 const mocks = vi.hoisted(() => ({
   deliverChildRunFollowUp: vi.fn(),
   executeAgent: vi.fn(),
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   readConfig: vi.fn(),
@@ -56,7 +57,7 @@ vi.mock('@tools/delegation/subagentResults', async (importOriginal) => {
 });
 
 vi.mock('@agent/storage', () => ({
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
   getExecutionStore: vi.fn(() => ({
     readConfig: mocks.readConfig,
     writeTurnState: mocks.writeTurnState,
@@ -67,10 +68,6 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   assertOwnedExecutionLease: vi.fn(),
   validateOwnedExecutionLease: vi.fn(async () => {}),
-  abandonOwnedExecutionLease: vi.fn(),
-  completeOwnedExecutionLease: vi.fn(async () => ({
-    status: 'released' as const,
-  })),
 }));
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -152,6 +149,7 @@ function baseParams(
     session: parentSession,
     startedAt: Date.now(),
     onStreamResolved: vi.fn(),
+    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
   };
 }
 
@@ -192,11 +190,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
     mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
     mocks.writeTurnState.mockResolvedValue(undefined);
-    mocks.finalizeExecution.mockResolvedValue({
-      status: 'durable',
-      terminalStatusPersisted: true,
-      flowRecord: 'deleted',
-    });
+    mocks.finalizeRun.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -269,7 +263,7 @@ describe('NativeSubagentStrategy', () => {
       params.config,
       params.executionId,
       expect.objectContaining({
-        allowWaitingResult: true,
+        isSubagent: true,
         enforceCategory: true,
         parentStreamId: params.parentStreamId,
         stopAfterCycle: true,
@@ -396,8 +390,12 @@ describe('NativeSubagentStrategy', () => {
     expect(interrupt).not.toHaveBeenCalled();
   });
 
-  it('binds resumed-turn cancellation to the replacement run handle', async () => {
-    const params = baseParams();
+  it('binds resumed-turn cancellation and policy options to the replacement run', async () => {
+    const params = {
+      ...baseParams(),
+      approvalPromptsUnavailable: true,
+      runtimeUnavailableTools: ['bash'],
+    };
     const childStreamId = CHILD_STREAM_ID;
     const initialHandle = {
       childStreamId,
@@ -438,6 +436,13 @@ describe('NativeSubagentStrategy', () => {
 
     const resumed = strategy.runTurn!([], fakePorts(), turn);
     await ready;
+    expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        approvalPromptsUnavailable: true,
+        runtimeUnavailableTools: ['bash'],
+      }),
+    );
     turn.abort();
     await resumed;
 
@@ -469,13 +474,15 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(params);
     const turn = toolUseTurnResult('completed', params.executionId) as never;
 
-    const built = await strategy.buildResult(turn);
+    const built = await strategy.buildResultMeta?.(turn, false, 1000);
     mocks.throwDeliveryFormatting = true;
 
     await expect(strategy.formatDelivery(turn, 1000)).rejects.toThrow(
       'delivery formatting failed',
     );
-    await expect(strategy.buildResult(turn)).resolves.toBe(built);
+    await expect(strategy.buildResultMeta?.(turn, false, 1000)).resolves.toBe(
+      built,
+    );
   });
 
   it('does not format prose for a typed-result-only child', async () => {
@@ -485,7 +492,9 @@ describe('NativeSubagentStrategy', () => {
     mocks.throwDeliveryFormatting = true;
 
     await expect(strategy.formatDelivery(turn, 1000)).resolves.toBe('');
-    await expect(strategy.buildResult(turn)).resolves.toBeDefined();
+    await expect(
+      strategy.buildResultMeta?.(turn, false, 1000),
+    ).resolves.toBeDefined();
   });
 
   it('reports a non-throwing subagent failure via isTurnError, captured from onRunError', async () => {
@@ -547,59 +556,6 @@ describe('NativeSubagentStrategy', () => {
         10,
       ),
     ).resolves.toMatchObject({ parentExecutionId: 'parent-exec' });
-  });
-
-  it('runTurn hands its consumed batch directly to the persisted flow cursor', async () => {
-    const params = {
-      ...baseParams(),
-      approvalPromptsUnavailable: true,
-      runtimeUnavailableTools: ['ask_user'],
-    };
-    const strategy = createNativeSubagentStrategy(params);
-    const childStreamId = CHILD_STREAM_ID;
-
-    await launchWaitingTurn(params, strategy);
-
-    const config = { agentCategory: 'toolUse' };
-    const snapshot = createToolUseResumeData({
-      executionId: params.executionId,
-      streamId: childStreamId,
-    });
-    mocks.readConfig.mockResolvedValue(config);
-    mocks.retrieveSessionResumeData.mockResolvedValue(snapshot);
-    mocks.resumeToolUseTurn.mockResolvedValueOnce(
-      toolUseTurnResult('completed', params.executionId, { response: 'done' }),
-    );
-
-    const turn = await strategy.runTurn!(
-      [{ text: 'keep going', origin: 'user' }],
-      fakePorts(),
-      new AbortController(),
-    );
-
-    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
-      childStreamId,
-      params.executionId,
-      config,
-    );
-    expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
-      snapshot,
-      expect.objectContaining({
-        approvalPromptsUnavailable: true,
-        parentStreamId: params.parentStreamId,
-        drainedFollowUps: [
-          {
-            text: 'keep going',
-            displayText: undefined,
-            mediaFiles: undefined,
-            origin: 'user',
-          },
-        ],
-        runtimeUnavailableTools: ['ask_user'],
-        session: params.session,
-      }),
-    );
-    expect(strategy.isTerminal(turn)).toBe(true);
   });
 
   it('preserves #7491: a failed direct resume throws for child-loop error delivery', async () => {
@@ -705,7 +661,7 @@ describe('NativeSubagentStrategy', () => {
           },
           'live_owner',
         ),
-      ).toEqual({ kind: 'live' });
+      ).toEqual({ kind: 'queued' });
 
       await vi.waitFor(() =>
         expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(1),
@@ -723,7 +679,7 @@ describe('NativeSubagentStrategy', () => {
           },
           'live_owner',
         ),
-      ).toEqual({ kind: 'live' });
+      ).toEqual({ kind: 'queued' });
 
       await vi.waitFor(() =>
         expect(mocks.resumeToolUseTurn).toHaveBeenCalledTimes(2),

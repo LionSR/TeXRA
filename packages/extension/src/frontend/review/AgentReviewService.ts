@@ -396,7 +396,7 @@ class AgentReviewServiceImpl {
       return {
         accepted: false,
         reason:
-          'No agent review session is collecting issues. Findings can only be reported from a review started via "Run Agent Review".',
+          'No agent review session is collecting issues. Findings can only be reported from a review started via "Find Issues (Agent Review)".',
       };
     }
     if (this.issues.length >= MAX_ISSUES_PER_REVIEW) {
@@ -418,22 +418,15 @@ class AgentReviewServiceImpl {
         reason: `${issue.file} is not part of the reviewed change set; attribute the issue to one of the changed files.`,
       };
     }
-    if (this.dismissed.has(fingerprint(issue))) {
+    const key = fingerprint(issue);
+    if (this.dismissed.has(key)) {
       return {
         accepted: false,
         reason:
           'The user previously dismissed this issue; do not re-report it.',
       };
     }
-    if (
-      this.issues.some(
-        (existing) =>
-          existing.file === issue.file &&
-          existing.startLine === issue.startLine &&
-          existing.endLine === issue.endLine &&
-          existing.title.toLowerCase() === issue.title.toLowerCase(),
-      )
-    ) {
+    if (this.issues.some((existing) => fingerprint(existing) === key)) {
       return { accepted: false, reason: 'This issue was already reported.' };
     }
 

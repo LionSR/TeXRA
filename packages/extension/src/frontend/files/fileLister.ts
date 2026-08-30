@@ -5,7 +5,7 @@ import {
   getFileListConfig,
   loadFileListSettings,
   matchesEditedFile,
-  type FileListConfig,
+  type FileFilterConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { createLog } from '@logger/logUtils';
@@ -34,11 +34,7 @@ export class FileLister {
   }
 
   public async list(fileType: ListableFileType): Promise<string[]> {
-    const config = getFileListConfig(fileType, this.settings);
-    if (!config) {
-      return [];
-    }
-    return this.listFiles(config);
+    return this.listFiles(getFileListConfig(fileType, this.settings));
   }
 
   public async listEditedFiles(baseFileName: string): Promise<string[]> {
@@ -46,7 +42,7 @@ export class FileLister {
     return files.filter((file) => matchesEditedFile(file, baseFileName));
   }
 
-  private async listFiles(config: FileListConfig): Promise<string[]> {
+  private async listFiles(config: FileFilterConfig): Promise<string[]> {
     if (!this.workspacePath) {
       log.warn('No workspace folder found');
       return [];

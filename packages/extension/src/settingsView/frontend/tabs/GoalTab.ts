@@ -1,11 +1,11 @@
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { formatGoalTime, isGoalInFlight, goalElapsedMs } from '@shared/schemas';
+import { formatGoalTime, goalElapsedMs } from '@shared/schemas';
 import type { Goal } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
@@ -116,7 +116,6 @@ export class GoalTab extends LitElement {
   }
 
   private renderRow(item: Goal): TemplateResult {
-    const inFlight = isGoalInFlight(item);
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
       html`<span title="Wall-clock duration since this Goal started"
@@ -125,15 +124,11 @@ export class GoalTab extends LitElement {
     ];
     return html`
       <div
-        class=${`goal-row${inFlight ? ' is-clickable' : ''}`}
-        @click=${inFlight ? () => this.handleReveal(item.streamId) : null}
-        @keydown=${
-          inFlight
-            ? (e: KeyboardEvent) => this.handleRowKey(e, item.streamId)
-            : null
-        }
-        role=${inFlight ? 'button' : 'group'}
-        tabindex=${inFlight ? 0 : -1}
+        class="goal-row is-clickable"
+        @click=${() => this.handleReveal(item.streamId)}
+        @keydown=${(e: KeyboardEvent) => this.handleRowKey(e, item.streamId)}
+        role="button"
+        tabindex="0"
       >
         <wa-badge
           class="status-chip"
@@ -147,7 +142,7 @@ export class GoalTab extends LitElement {
             ${renderDotMeta(metaParts)}
           </div>
         </div>
-        ${inFlight ? waIcon('chevron-right') : nothing}
+        ${waIcon('chevron-right')}
       </div>
     `;
   }

@@ -28,14 +28,18 @@ const DiagnosticsPathSchema = z
   .min(1)
   .describe('Workspace-relative or absolute file path.');
 
-const DiagnosticsListSchema = z.strictObject({
+// Branches use looseObject (not strictObject): provider conversion flattens
+// the union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
+const DiagnosticsListSchema = z.looseObject({
   command: z
     .literal('list')
     .describe('Retrieve full linter diagnostics for a file.'),
   path: DiagnosticsPathSchema,
 });
 
-const DiagnosticsCountSchema = z.strictObject({
+const DiagnosticsCountSchema = z.looseObject({
   command: z
     .literal('count')
     .describe(
@@ -44,7 +48,7 @@ const DiagnosticsCountSchema = z.strictObject({
   path: DiagnosticsPathSchema,
 });
 
-const DiagnosticsAddSchema = z.strictObject({
+const DiagnosticsAddSchema = z.looseObject({
   command: z
     .literal('add')
     .describe(
@@ -79,13 +83,8 @@ export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;
 
 export class DiagnosticsTool extends defineTool({
   name: 'diagnostics',
-  hosts: {
-    cli: { available: false, reason: 'No diagnostics provider is installed.' },
-    desktop: {
-      available: false,
-      reason: 'No diagnostics provider is installed.',
-    },
-  },
+  // No diagnostics provider is installed on either host.
+  unavailableHosts: ['cli', 'desktop'],
   description:
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,

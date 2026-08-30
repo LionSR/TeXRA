@@ -28,7 +28,12 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { warn as logWarning } from '@logger/logUtils';
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import {
+  API_PROVIDERS,
+  apiKeyEnvName,
+  apiKeySecretName,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { platform } from '@platform/platform';
 import {
@@ -55,9 +60,16 @@ import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
-import { formatSavedKeySummary } from './onboardingState';
+/**
+ * Human-facing "we stored your key here" line. Naming the exact secret entry
+ * (and the env-var alternative) fixes the opacity other CLIs have about where a
+ * pasted key actually went. Never includes the key itself.
+ */
+function formatSavedKeySummary(provider: ApiProvider): string {
+  return `Saved your ${providerDisplayName(provider)} API key. Stored in TeXRA secrets as \`${apiKeySecretName(provider)}\` (or set ${apiKeyEnvName(provider)} in your environment).`;
+}
 
-export interface CliOnboardingResult {
+interface CliOnboardingResult {
   /**
    * True only when the picker configured a credential in this process —
    * the signal for the post-picker setup-agent continuation. A launch that

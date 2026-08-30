@@ -62,15 +62,8 @@ export type UserVars = {
   LIST_OF_ALL_EDITEDS: string;
   /** First attached media file; content is never inlined (display-only). */
   MEDIA_FILE: string | null;
-  MEDIA_CONTENT: null;
   /** Resolved output file list; absent when no usable outputs are configured. */
   OUTPUT_FILES?: string[];
-  /** Tool toggles projected for template conditionals. */
-  AUTO_EXTRACT_FIGURE: boolean;
-  AUTO_EXTRACT_TIKZ_FIGURE: boolean;
-  INCLUDE_TEX_COUNT: boolean;
-  PRINT_INPUT_PROMPT: boolean;
-  AUTO_COMPILE_INPUT_PDF: boolean;
   /** When-to-choose guidance, '' when the tool is not on the roster. */
   CODEX_GUIDANCE: string;
   CLAUDE_CODE_GUIDANCE: string;
@@ -105,8 +98,10 @@ export type TemplateVars = Partial<UserVars> & Record<string, unknown>;
 export type BuiltUserVars = UserVars & Record<string, unknown>;
 
 /**
- * Runtime validators for the fixed {@link UserVars} keys. Known keys are
- * optional here because persisted checkpoints may have dropped variables; the
+ * Runtime validators for the fixed {@link UserVars} keys, and the runtime
+ * view of the vocabulary itself: `@agent/prompt/userVars` derives its
+ * passthrough token list from these keys. Known keys are optional in the
+ * persisted record because checkpoints may have dropped variables; the
  * `satisfies` clause keeps this map in lockstep with the vocabulary. Custom
  * `requiredFilesInternal` keys are not in this map and pass through as
  * unknown values via the loose record below.
@@ -141,13 +136,7 @@ const UserVariableValueSchemas = {
   LIST_OF_ALL_CONTEXTS: z.string(),
   LIST_OF_ALL_EDITEDS: z.string(),
   MEDIA_FILE: z.string().nullable(),
-  MEDIA_CONTENT: z.null(),
   OUTPUT_FILES: z.array(z.string()),
-  AUTO_EXTRACT_FIGURE: z.boolean(),
-  AUTO_EXTRACT_TIKZ_FIGURE: z.boolean(),
-  INCLUDE_TEX_COUNT: z.boolean(),
-  PRINT_INPUT_PROMPT: z.boolean(),
-  AUTO_COMPILE_INPUT_PDF: z.boolean(),
   CODEX_GUIDANCE: z.string(),
   CLAUDE_CODE_GUIDANCE: z.string(),
   ROUNDS: z.number(),
@@ -159,13 +148,15 @@ const UserVariableValueSchemas = {
   [K in keyof Required<UserVars>]-?: z.ZodType<Required<UserVars>[K]>;
 };
 
-function optionalizeUserVariableSchemas<T extends Record<string, z.ZodTypeAny>>(
-  schemas: T,
-): { [K in keyof T]: z.ZodOptional<T[K]> } {
-  return Object.fromEntries(
-    Object.entries(schemas).map(([key, schema]) => [key, schema.optional()]),
-  ) as { [K in keyof T]: z.ZodOptional<T[K]> };
-}
+/**
+ * The fixed vocabulary as a frozen runtime list, derived from its single owner
+ * so a new fixed variable only has to be declared once. The schema map itself
+ * stays file-local: it backs checkpoint validation process-wide, so handing it
+ * out would let a consumer replace or drop validators. Order is irrelevant,
+ * both consumers build a map or a set from it.
+ */
+export const USER_VAR_RUNTIME_TOKENS: ReadonlyArray<keyof UserVars> =
+  Object.freeze(Object.keys(UserVariableValueSchemas) as (keyof UserVars)[]);
 
 /**
  * The persisted channel shape stays a loose record — checkpoints written by
@@ -173,21 +164,67 @@ function optionalizeUserVariableSchemas<T extends Record<string, z.ZodTypeAny>>(
  * — but each known fixed key is validated with its per-key type when present.
  * Custom `requiredFilesInternal` keys pass through untouched.
  */
-const UserVariableChannelRecordSchema = z.looseObject(
-  optionalizeUserVariableSchemas(UserVariableValueSchemas),
-);
+const UserVariableChannelRecordSchema = z
+  .looseObject(UserVariableValueSchemas)
+  .partial();
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 /**
- * User variable channels for template rendering.
+ * User variables for template rendering: one mutable record.
  *
- * Two-channel design:
- * - input: Frozen base variables (readonly, set at initialization)
- * - transient: Runtime modifications (mutable copy of base)
+ * It used to be two channels — a frozen `input` copy plus a mutable
+ * `transient` one — but every write to `transient` was an overwrite (never a
+ * delete or a key-dropping replacement), so `transient` always superseded
+ * `input` and no reader ever took a value from `input` that `transient` did
+ * not already carry. The pair only cost every tool-use checkpoint a second
+ * full copy of the record, `ALL_INPUTS`/`INPUT_CONTENT` file bodies included.
+ *
+ * Checkpoints written before the collapse are normalized here, at the one
+ * parse boundary, by merging the legacy pair the way the reflection flow
+ * already merged it at read time. Shape-detected rather than tried as a union
+ * member: the canonical record is loose, so a legacy record with one malformed
+ * variable would otherwise fall through and parse as a flat record carrying
+ * two junk keys instead of failing. The legacy shape always carried both
+ * keys, so only a record with both is treated as an envelope (a lone
+ * `input`/`transient` key stays an ordinary custom variable), and each
+ * channel is validated on its own before merging so a malformed value one
+ * channel would override still fails as the old two-channel schema did.
+ *
+ * Legacy reader introduced 2026-08-29 with the collapse (#11568); remove
+ * after 2026-11-29 once pre-collapse checkpoints have aged out.
  */
-export const UserVariableChannelsSchema = z.object({
-  input: UserVariableChannelRecordSchema.readonly(),
-  transient: UserVariableChannelRecordSchema,
-});
+export const UserVariableChannelsSchema = z.preprocess((value, ctx) => {
+  if (!isPlainRecord(value)) return value;
+  if (!('input' in value) || !('transient' in value)) return value;
+  const { input, transient } = value;
+  if (!isPlainRecord(input) || !isPlainRecord(transient)) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'Malformed legacy user-variable envelope: `input`/`transient` present but not both records',
+    });
+    return z.NEVER;
+  }
+  for (const [channel, record] of [
+    ['input', input],
+    ['transient', transient],
+  ] as const) {
+    const parsed = UserVariableChannelRecordSchema.safeParse(record);
+    if (!parsed.success) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `Malformed legacy user-variable \`${channel}\` channel: ${
+          parsed.error.issues[0]?.message ?? 'invalid record'
+        }`,
+      });
+      return z.NEVER;
+    }
+  }
+  return { ...input, ...transient };
+}, UserVariableChannelRecordSchema);
 
 /** Derived from UserVariableChannelsSchema - single source of truth. */
 export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;

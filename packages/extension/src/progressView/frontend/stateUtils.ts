@@ -1,6 +1,4 @@
 // Shared imports
-import { create } from 'mutative';
-
 import {
   isToolUseState,
   isWorkflowState,

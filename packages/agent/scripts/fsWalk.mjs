@@ -11,13 +11,13 @@ export async function isFile(filePath) {
 }
 
 export async function walkFiles(directory, predicate) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(
-    entries.map((entry) => {
-      const target = path.join(directory, entry.name);
-      if (entry.isDirectory()) return walkFiles(target, predicate);
-      return !predicate || predicate(entry.name) ? [target] : [];
-    }),
-  );
-  return nested.flat();
+  const entries = await readdir(directory, {
+    recursive: true,
+    withFileTypes: true,
+  });
+  return entries
+    .filter(
+      (entry) => !entry.isDirectory() && (!predicate || predicate(entry.name)),
+    )
+    .map((entry) => path.join(entry.parentPath, entry.name));
 }

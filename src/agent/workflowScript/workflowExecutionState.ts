@@ -6,31 +6,25 @@ import {
   type WorkflowExecutionCall,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
-import {
-  WORKFLOW_CALL_NOT_REACHED_NOTE,
-  WORKFLOW_CALL_UNFINISHED_NOTE,
-} from '@shared/copy/workflowCall';
+import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@shared/copy/workflowCall';
 
-import type {
-  WorkflowAttemptFacts,
-  WorkflowExecutionTransition,
-} from './types';
+import type { WorkflowAttemptFacts } from './types';
 
 interface WorkflowCallDefinition {
   readonly id: string;
   readonly label: string;
   readonly phase?: string;
+  readonly kind: WorkflowExecutionCall['kind'];
   readonly agent?: string;
+  /** Model the script declared for this call; the host may still substitute. */
+  readonly model?: string;
   readonly files: WorkflowExecutionCall['files'];
 }
 
 /** Owns canonical workflow stage/call transitions and interrupted-run hydration. */
 export class WorkflowExecutionState {
   readonly #snapshot: WorkflowExecutionSnapshot;
-  readonly #publish: (
-    snapshot: WorkflowExecutionSnapshot,
-    transition?: WorkflowExecutionTransition,
-  ) => void;
+  readonly #publish: (snapshot: WorkflowExecutionSnapshot) => void;
   readonly #hasDeclaredStages: boolean;
   readonly #issuedCallIds = new Set<string>();
   #sealed = false;
@@ -44,10 +38,7 @@ export class WorkflowExecutionState {
      * that retain it or persist asynchronously must clone it first (the
      * runner's snapshot writer clones at drain time).
      */
-    readonly publish: (
-      snapshot: WorkflowExecutionSnapshot,
-      transition?: WorkflowExecutionTransition,
-    ) => void;
+    readonly publish: (snapshot: WorkflowExecutionSnapshot) => void;
   }) {
     this.#publish = options.publish;
     this.#hasDeclaredStages = options.phases.length > 0;
@@ -77,9 +68,6 @@ export class WorkflowExecutionState {
             task.phase === undefined
               ? WORKFLOW_CALL_STATUS.PLANNED
               : WORKFLOW_CALL_STATUS.STAGE_BLOCKED,
-          ...(task.phase !== undefined && {
-            blockedReason: `Waiting for stage ${task.phase}`,
-          }),
           timestamps: { createdAt: timestamp, updatedAt: timestamp },
         };
       }),
@@ -152,7 +140,6 @@ export class WorkflowExecutionState {
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
         call.status = WORKFLOW_CALL_STATUS.PLANNED;
-        call.blockedReason = undefined;
         call.timestamps.updatedAt = transitionAt;
       }
     }
@@ -198,8 +185,11 @@ export class WorkflowExecutionState {
     const canonical = {
       label: definition.label,
       stageId: stageIndex < 0 ? undefined : stageIdFor(stageIndex),
+      issued: true as const,
+      kind: definition.kind,
       files: definition.files,
       ...(definition.agent !== undefined && { agent: definition.agent }),
+      ...(definition.model !== undefined && { model: definition.model }),
     };
     if (!call) {
       call = {
@@ -211,10 +201,21 @@ export class WorkflowExecutionState {
       };
       this.#snapshot.calls.push(call);
     } else {
-      Object.assign(call, canonical);
+      // A hydrated completed/cached result belongs to the prior attempt until
+      // the script re-issues the call; from here it is this attempt's call —
+      // replayed from the journal as cached, or re-run in a fresh execution
+      // window — so every attempt projects it the same way.
+      Object.assign(
+        call,
+        canonical,
+        isReusableStatus(call.status) && {
+          status: WORKFLOW_CALL_STATUS.PLANNED,
+          timestamps: { createdAt: call.timestamps.createdAt },
+        },
+      );
       call.timestamps.updatedAt = timestamp;
     }
-    this.#emit({ type: 'call-issued', callId: definition.id });
+    this.#emit();
   }
 
   #call(id: string): WorkflowExecutionCall {
@@ -230,7 +231,6 @@ export class WorkflowExecutionState {
     call.timestamps.updatedAt = now();
     if (
       patch.status === WORKFLOW_CALL_STATUS.QUEUED ||
-      patch.status === WORKFLOW_CALL_STATUS.STARTING ||
       patch.status === WORKFLOW_CALL_STATUS.RUNNING
     ) {
       this.#snapshot.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.ACTIVE;
@@ -256,9 +256,15 @@ export class WorkflowExecutionState {
     });
   }
 
-  queueCall(id: string): void {
+  /**
+   * Queue a call for a concurrency slot. Live-attempt facts of a prior attempt
+   * are dropped — a stale resolved model must not describe the attempt about
+   * to start — while the model the script itself declared stays visible
+   * until the host reports what it resolved.
+   */
+  queueCall(id: string, declared: { readonly model?: string } = {}): void {
     const call = this.#call(id);
-    const queuedAt = now();
+    const timestamp = now();
     // Interactive retry re-queues a still-live call: keep the logical start so
     // duration covers every physical attempt. A terminal call re-queued after
     // identity change / resume must start a fresh execution window instead.
@@ -269,15 +275,13 @@ export class WorkflowExecutionState {
       status: WORKFLOW_CALL_STATUS.QUEUED,
       childExecutionId: undefined,
       childStreamId: undefined,
-      model: undefined,
+      model: declared.model,
       settledBySweep: undefined,
-      blockedReason: undefined,
       error: undefined,
       timestamps: {
         createdAt: call.timestamps.createdAt,
         ...(preserveStartedAt && { startedAt: call.timestamps.startedAt }),
-        queuedAt,
-        updatedAt: queuedAt,
+        updatedAt: timestamp,
       },
     });
   }
@@ -287,7 +291,7 @@ export class WorkflowExecutionState {
     const call = this.#call(id);
     const startedAt = now();
     call.attempts.push({ number: call.attempts.length + 1, startedAt });
-    call.status = WORKFLOW_CALL_STATUS.STARTING;
+    call.status = WORKFLOW_CALL_STATUS.RUNNING;
     call.timestamps.startedAt ??= startedAt;
     call.timestamps.updatedAt = startedAt;
     this.#snapshot.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.ACTIVE;
@@ -349,6 +353,7 @@ export class WorkflowExecutionState {
     this.#snapshot.currentStageId = undefined;
     this.#snapshot.timestamps.completedAt = completedAt;
     if (error) this.#snapshot.error = error;
+    const sweepSettledStageIds = new Set<string>();
     for (const call of this.#snapshot.calls) {
       const latestAttempt = call.attempts.at(-1);
       if (latestAttempt && latestAttempt.completedAt === undefined) {
@@ -360,12 +365,11 @@ export class WorkflowExecutionState {
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
         call.settledBySweep = true;
-        call.blockedReason = WORKFLOW_CALL_NOT_REACHED_NOTE;
+        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
       } else if (
         call.status === WORKFLOW_CALL_STATUS.QUEUED ||
-        call.status === WORKFLOW_CALL_STATUS.STARTING ||
         call.status === WORKFLOW_CALL_STATUS.RUNNING
       ) {
         call.status =
@@ -373,6 +377,7 @@ export class WorkflowExecutionState {
             ? WORKFLOW_CALL_STATUS.CANCELLED
             : WORKFLOW_CALL_STATUS.FAILED;
         call.settledBySweep = true;
+        if (call.stageId) sweepSettledStageIds.add(call.stageId);
         call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
         call.timestamps.completedAt = completedAt;
         call.timestamps.updatedAt = completedAt;
@@ -383,7 +388,15 @@ export class WorkflowExecutionState {
         stage.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.SKIPPED;
         stage.completedAt = completedAt;
       } else {
-        this.#settleStage(stage.id, completedAt);
+        // Re-derive the lifecycle after the call sweep above. A stage whose
+        // call the sweep just terminalized ends now; genuinely settled stages
+        // keep their own end instant rather than taking the run's terminal one.
+        this.#settleStage(
+          stage.id,
+          sweepSettledStageIds.has(stage.id)
+            ? completedAt
+            : (stage.completedAt ?? completedAt),
+        );
       }
     }
     // Call-derived settlement alone can mark the active stage completed or
@@ -449,11 +462,11 @@ export class WorkflowExecutionState {
     stage.completedAt = completedAt;
   }
 
-  #emit(transition?: WorkflowExecutionTransition): void {
+  #emit(): void {
     this.#snapshot.timestamps.updatedAt = now();
     // Live reference by contract (see the publish option): coalesced-away
     // publications then never pay a full structuredClone of the snapshot.
-    this.#publish(this.#snapshot, transition);
+    this.#publish(this.#snapshot);
   }
 }
 
@@ -501,14 +514,17 @@ function resetRecoveredLiveFields(
   prior: WorkflowExecutionCall,
   reusable: boolean,
   recoveryAt: string,
-  blockedReason: string | undefined,
 ) {
   return (
     !reusable && {
+      // Not yet issued by this attempt: the script re-issues (and re-stamps)
+      // every invocation fact of each call it reaches.
+      issued: undefined,
+      kind: undefined,
+      agent: undefined,
       childExecutionId: undefined,
       childStreamId: undefined,
       model: undefined,
-      blockedReason,
       error: undefined,
       timestamps: {
         createdAt: prior.timestamps.createdAt,
@@ -546,12 +562,7 @@ function hydrate(
       attempts,
       costUsd: totalAttemptCost(attempts),
       status: reusable ? prior.status : call.status,
-      ...resetRecoveredLiveFields(
-        prior,
-        reusable,
-        recoveryAt,
-        call.blockedReason,
-      ),
+      ...resetRecoveredLiveFields(prior, reusable, recoveryAt),
     };
   });
   for (const prior of persisted.calls) {
@@ -564,7 +575,7 @@ function hydrate(
         attempts,
         costUsd: totalAttemptCost(attempts),
         status: reusable ? prior.status : WORKFLOW_CALL_STATUS.PLANNED,
-        ...resetRecoveredLiveFields(prior, reusable, recoveryAt, undefined),
+        ...resetRecoveredLiveFields(prior, reusable, recoveryAt),
       });
     }
   }

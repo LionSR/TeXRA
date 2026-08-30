@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import dotenv from 'dotenv';
 import PQueue from 'p-queue';
 
 // Local imports
@@ -15,22 +14,19 @@ import {
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
-  settleLiveSessionExecutions,
   teardownDefaultSession,
 } from '@agent/runtime';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
-import {
-  getAuthCallbackUri,
-  isSupabaseConfigured,
-  setExternalAuthCallbackResolver,
-  setRuntimeExtensionId,
-} from '@auth/config';
+import { setRuntimeExtensionId } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
+import { signIn as authSignIn } from '@commands/auth/authCommands';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
+import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { appSignals } from '@eventBus/AppSignals';
@@ -48,6 +44,7 @@ import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { SupabaseAuthProvider } from '@frontend/auth/SupabaseAuthProvider';
+import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
@@ -69,10 +66,10 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { createLog, setOutputChannelFactory } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
-import { initPlatform, platform } from '@platform/platform';
+import { initPlatform } from '@platform/platform';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
@@ -85,13 +82,15 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import {
   formatTexraApprovalPolicy,
-  readPersistedTexraApprovalPolicy,
+  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TEXRA_APPROVAL_POLICY_OPTIONS,
+  type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { CommandId } from '@shared/commands/catalog';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { backfillFirstRunDone } from '@shared/state/onboardingState';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { setSetupPlatform } from '@tools/setup';
 import {
   refreshToolAvailability,
@@ -102,6 +101,7 @@ import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { StorageFS } from '@utils/files/storageFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -194,6 +194,115 @@ async function refreshApiKeyStatus() {
   }
 }
 
+/**
+ * Workspace-bound commands the getting-started walkthrough exposes as buttons.
+ * Their links invoke one bridge command so a no-workspace click can explain
+ * the prerequisite without firing the real command's `onCommand` completion
+ * event.
+ */
+const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
+  EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
+  'texra.showMultiAgent',
+  'texra.showMainView',
+  'texra.extractTikzFigures',
+  'texra.execute',
+  'texra.showProgressView',
+  'texra.cleanOutput',
+  'texra.cleanBuild',
+] as const satisfies readonly CommandId[];
+
+/** Internal command URI used by workspace-bound walkthrough links. */
+const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
+
+async function explainWorkspaceRequired(extensionPath: string): Promise<void> {
+  const openFolder = 'Open Folder';
+  const createSample = 'Create Sample Project';
+  const choice = await vscode.window.showInformationMessage(
+    'TeXRA agents run inside a single-folder workspace. Open your LaTeX project folder or create the sample project first.',
+    openFolder,
+    createSample,
+  );
+  if (choice === openFolder) {
+    await vscode.commands.executeCommand('workbench.action.files.openFolder');
+  } else if (choice === createSample) {
+    await createSampleProjectWithoutWorkspace(extensionPath);
+  }
+}
+
+function registerWalkthroughWorkspaceAction(
+  context: vscode.ExtensionContext,
+  hasSingleWorkspace: boolean,
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      WALKTHROUGH_WORKSPACE_ACTION_COMMAND,
+      async (
+        command: (typeof WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE)[number],
+      ) => {
+        if (hasSingleWorkspace) {
+          await vscode.commands.executeCommand(command);
+          return;
+        }
+        await explainWorkspaceRequired(context.extensionPath);
+      },
+    ),
+  );
+}
+
+/**
+ * Register the TeXRA account (Supabase) authentication provider and its OAuth
+ * URI handler. Both activation paths run this: signing in stores the session
+ * in SecretStorage, which needs no workspace, so the welcome (no-folder) path
+ * offers the same sign-in the full path does.
+ */
+function registerSupabaseAuth(context: vscode.ExtensionContext): void {
+  try {
+    setRuntimeExtensionId(context.extension.id);
+    const authProvider = new SupabaseAuthProvider({
+      showError: (msg) => void vscode.window.showErrorMessage(msg),
+      showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+      showSignInPrompt: async (reason) => {
+        const message =
+          reason === 'expired'
+            ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+            : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
+        const action = await vscode.window.showWarningMessage(
+          message,
+          'Sign In',
+        );
+        if (action === 'Sign In') {
+          await vscode.commands
+            .executeCommand('texra.auth.signIn')
+            .then(undefined, (err: unknown) =>
+              authLog.error(
+                `Failed to trigger sign-in: ${toErrorMessage(err)}`,
+              ),
+            );
+        }
+      },
+    });
+    context.subscriptions.push(
+      vscode.authentication.registerAuthenticationProvider(
+        AUTH_PROVIDER_ID,
+        'TeXRA Account',
+        authProvider,
+        { supportsMultipleAccounts: false },
+      ),
+    );
+
+    const uriHandler = new SupabaseUriHandler();
+    context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+    authProvider.setUriHandler(uriHandler);
+
+    log.info('Supabase authentication provider registered');
+  } catch (error) {
+    SupabaseClient.setInitError(ensureError(error));
+    log.error(
+      `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
+    );
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   try {
     await activateExtension(context);
@@ -214,9 +323,39 @@ export async function activate(context: vscode.ExtensionContext) {
 async function activateExtension(context: vscode.ExtensionContext) {
   installUnhandledRejectionSurface(context.subscriptions);
   const workspaceFolders = vscode.workspace.workspaceFolders;
+  const hasSingleWorkspace = workspaceFolders?.length === 1;
 
-  if (!workspaceFolders || workspaceFolders.length !== 1) {
+  if (!hasSingleWorkspace) {
     registerWelcomeView(context);
+    // Credential-only platform. Every sign-in path stores into SecretStorage
+    // (`platform().secrets`) and the global `~/.texra` config — none of it
+    // needs a folder — so the walkthrough's credential buttons work before
+    // one is open. Agents still require the workspace-backed platform below;
+    // opening a folder reloads the window into that path (welcomeView.ts).
+    const lifecycle = createLifecycleHost({
+      onError: (phase, error) =>
+        log.error(`Lifecycle ${phase} handler failed`, { data: error }),
+    });
+    lifecycleHost = lifecycle;
+    agentDirectories.initialize();
+    const storage = createNodeStorageProvider();
+    const config = await createExtensionTexraConfig(storage, undefined);
+    initPlatform(
+      createNodePlatform({
+        config,
+        globalState: context.globalState,
+        workspaceState: context.workspaceState,
+        getWorkspacePath: () => undefined,
+        storage,
+        secrets: new VscodeSecrets(context),
+        lifecycle,
+        agentDirectories,
+        agentResume: {
+          tryResumeStream: tryResumeFromResumeData,
+        },
+      }),
+    );
+    registerSupabaseAuth(context);
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -231,7 +370,19 @@ async function activateExtension(context: vscode.ExtensionContext) {
         EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
         () => openGettingStarted(context.extension.id),
       ),
+      vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, () =>
+        authSignIn(),
+      ),
+      vscode.commands.registerCommand('texra.auth.chatgpt.signIn', () =>
+        signInWithSubscription('welcomeView', 'chatgpt'),
+      ),
+      // No settings view exists before a folder is open, so there is no
+      // credential surface to refresh after the key write.
+      vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
+        apiSetApiKey(async () => {}),
+      ),
     );
+    registerWalkthroughWorkspaceAction(context, false);
     return;
   }
   const rawWorkspacePath = () =>
@@ -240,13 +391,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const workspaceRoot = workspace.getWorkspacePath();
   if (!workspaceRoot) return;
 
-  dotenv.config({
-    path: path.join(workspaceRoot, '.env'),
-  });
+  try {
+    process.loadEnvFile(path.join(workspaceRoot, '.env'));
+  } catch (error) {
+    // A workspace without a .env is the normal case; any other failure
+    // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping it.
+    if (!isFileNotFoundError(error)) throw error;
+  }
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
   const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
-  agentDirectories.initialize(context);
+  agentDirectories.initialize();
   setOutputChannelFactory((name) => vscode.window.createOutputChannel(name));
   initializeBundledPrompts(path.join(context.extensionPath, 'resources'));
   const workspaceState = gitRepoRoot
@@ -268,7 +423,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
   const storage = createNodeStorageProvider({
-    workspacePath: () => workspace.getWorkspacePath(),
+    workspacePath: workspace.getWorkspacePath(),
   });
   const config = await createExtensionTexraConfig(
     storage,
@@ -316,8 +471,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     appSignals.emit('languageModelsChanged', undefined);
   };
   context.subscriptions.push(
-    languageModel.onDidChangeModels(invalidateLanguageModels),
-    languageModel.onDidChangeAccess(invalidateLanguageModels),
+    languageModel.onDidChange(invalidateLanguageModels),
   );
   // A broken transcript directory must not abort activation: degrade to an
   // in-memory store and say so, exactly as the CLI TUI does. The degraded
@@ -338,17 +492,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
   // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
-  registerAgentShutdownHandlers(lifecycle);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    runtimeSession.flushArtifacts(),
-  );
+  registerRuntimeShutdownHandlers(lifecycle, {
+    afterAgentShutdown: [
+      () => killActiveRecording(),
+      () => UsageLogService.dispose(),
+    ],
+    flushArtifacts: () => runtimeSession.flushArtifacts(),
+    afterExecutionSettlement: [
+      () => clearStoreCache(),
+      () => disposeDiffRefresh(),
+    ],
+  });
   await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(
-    readPersistedTexraApprovalPolicy((key, fallback) =>
-      platform().config.get(key, fallback),
-    ),
+    readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );
   registerAgentFeatures();
   // The same Node-host skill wiring the CLI and desktop use, so
@@ -358,18 +515,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // (`initNodeAgentRuntime`, which registers the direct Lean adapter, stays
   // out: VS Code drives Lean through its own integration.)
   initializeNodeRuntimeSkills({
+    host: 'vscode',
     cwd: workspaceRoot,
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
-  // First settling ON handler: every BEFORE handler above has had its turn at
-  // the runs it owns, so this settles what closing the window left mid-run: a
-  // durable CANCELLED outcome and a released lease instead of a record the next
-  // activation has to repair.
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-    settleLiveSessionExecutions(signal),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearStoreCache());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
   FileLister.initialize(context);
 
@@ -379,8 +528,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   // Onboarding-funnel backfill (PRD: agent-native onboarding): upgraders who
   // already have a credential or run history must never see the welcome card
-  // or the setup auto-start, so firstRunDone is backfilled once when the flag
-  // first appears. Awaited: the main view's funnel derivation reads this flag
+  // or the preselected setup agent, so firstRunDone is backfilled once when
+  // the flag first appears. Awaited: the main view's funnel derivation reads this flag
   // at webview-ready, and awaiting here closes the only read-before-backfill
   // window. One-shot in practice — once the key exists the probes are skipped.
   if (
@@ -391,14 +540,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
       const hasPriorInstall =
         context.globalState.get<string>(GlobalStateKey.LAST_KNOWN_VERSION) !==
         undefined;
+      // Neither probe is masked: a failed probe must not be recorded as
+      // "false" in a one-shot key. A rejection lands in the catch below,
+      // which logs the cause and leaves the key unset so the next
+      // activation re-evaluates.
       const [hasCredential, hasRunHistory] = await Promise.all([
         // Same non-blank provider-key/server-side-key check used by the
         // funnel and setup launch preflight.
-        hasAnyUsableSetupCredential().catch(() => false),
-        listExecutions().then(
-          (entries) => entries.length > 0,
-          () => false,
-        ),
+        hasAnyUsableSetupCredential(),
+        listExecutions().then((entries) => entries.length > 0),
       ]);
       await backfillFirstRunDone(context.globalState, {
         hasCredential,
@@ -438,15 +588,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
     })(),
     (async () => {
       try {
-        const {
-          added,
-          currentVersion,
-          previousVersion,
-          removed,
-          reordered,
-          routePreferencesCleared,
-          skipped,
-        } = await refreshModelListStateIfNeeded(context.globalState);
+        const { currentVersion, previousVersion, skipped, messages } =
+          await refreshModelListAndLog(context.globalState);
         if (!skipped) {
           if (previousVersion !== currentVersion) {
             log.info(
@@ -454,116 +597,35 @@ async function activateExtension(context: vscode.ExtensionContext) {
             );
           }
           log.info('Model list refresh completed successfully');
-          if (
-            added.length > 0 ||
-            removed.length > 0 ||
-            reordered ||
-            routePreferencesCleared.length > 0
-          ) {
-            invalidateModelOptionsCache();
-            if (added.length > 0 || removed.length > 0 || reordered) {
-              log.info(
-                `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-              );
-            }
-            if (routePreferencesCleared.length > 0) {
-              log.info(
-                `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-              );
-            }
-          }
         }
+        for (const message of messages) log.info(message);
       } catch (err) {
         log.error(`Failed to refresh model list: ${toErrorMessage(err)}`);
       }
     })(),
   ]);
 
+  registerSupabaseAuth(context);
+
+  // Usage logging is a runtime service, not an authentication-provider
+  // capability. Initialize it even when Supabase sign-in is not configured,
+  // matching desktop and CLI; the service itself decides which records can be
+  // sent and preserves plan-accounting records for hosted routes.
+  const extensionVersion =
+    typeof context.extension.packageJSON?.version === 'string'
+      ? context.extension.packageJSON.version
+      : undefined;
   try {
-    setRuntimeExtensionId(context.extension.id);
-    setExternalAuthCallbackResolver(async () => {
-      const baseCallbackUri = vscode.Uri.parse(
-        getAuthCallbackUri(vscode.env.uriScheme),
-      );
-      const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-
-      // asExternalUri adds a ?state= routing token in Codespaces; carrying it on
-      // fullUrl (used as redirectTo) is what routes the callback back into the
-      // editor. skipEncoding (toString(true)) so auth-js's encodeURIComponent
-      // over redirectTo does not double-encode the already percent-encoded
-      // token; double-encoding corrupts it and the callback never returns
-      // (silent timeout).
-      return { fullUrl: externalUri.toString(true) };
-    });
-
-    if (!isSupabaseConfigured()) {
-      log.warn(
-        'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
-      );
-    } else {
-      const authProvider = new SupabaseAuthProvider({
-        showError: (msg) => void vscode.window.showErrorMessage(msg),
-        showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-        showSignInPrompt: async (reason) => {
-          const message =
-            reason === 'expired'
-              ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-              : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-          const action = await vscode.window.showWarningMessage(
-            message,
-            'Sign In',
-          );
-          if (action === 'Sign In') {
-            await vscode.commands
-              .executeCommand('texra.auth.signIn')
-              .then(undefined, (err: unknown) =>
-                authLog.error(
-                  `Failed to trigger sign-in: ${toErrorMessage(err)}`,
-                ),
-              );
-          }
-        },
-      });
-      context.subscriptions.push(
-        vscode.authentication.registerAuthenticationProvider(
-          AUTH_PROVIDER_ID,
-          'TeXRA Account',
-          authProvider,
-          { supportsMultipleAccounts: false },
-        ),
-      );
-
-      const uriHandler = new SupabaseUriHandler();
-      context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
-      authProvider.setUriHandler(uriHandler);
-
-      log.info('Supabase authentication provider registered');
-
-      try {
-        const extensionVersion =
-          typeof context.extension.packageJSON?.version === 'string'
-            ? context.extension.packageJSON.version
-            : undefined;
-        const editorType = vscode.env.appName || undefined;
-        UsageLogService.initialize({}, extensionVersion, editorType);
-      } catch (usageError) {
-        log.warn(
-          `Usage logging service failed to initialize: ${toErrorMessage(usageError)}`,
-        );
-      }
-    }
-  } catch (error) {
-    SupabaseClient.setInitError(ensureError(error));
-    log.error(
-      `Failed to initialize Supabase authentication: ${toErrorMessage(error)}`,
+    UsageLogService.initialize(
+      {},
+      extensionVersion,
+      vscode.env.appName || undefined,
     );
+  } catch (error) {
+    log.warn(`Failed to initialize usage logging: ${toErrorMessage(error)}`);
   }
 
-  const progressViewProvider = new ProgressViewProvider(
-    context,
-    config,
-    workspace,
-  );
+  const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
 
   log.info('TeXRA extension activated');
@@ -574,6 +636,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
   const mainViewProvider = registerCommands(context);
+  registerWalkthroughWorkspaceAction(context, true);
   // Wire the two sidebar surfaces to each other before anything can invoke a
   // placement command: `texra.showProgressView` is registered above and is
   // also the status bar item's command, and a progress view without its main
@@ -762,9 +825,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
   updateStatusBarTooltip();
-  // Workspace transitions and approval-policy setting updates emit on this
-  // signal; the subscription here is what makes the refresh reachable, so a
-  // missed subscribe is a missing behavior rather than a silent no-op.
+  // Approval-policy setting updates emit on this signal; the subscription
+  // here is what makes the refresh reachable, so a missed subscribe is a
+  // missing behavior rather than a silent no-op.
   const disposeApprovalPolicyTooltipRefresh = appSignals.on(
     'approvalPolicyChanged',
     updateStatusBarTooltip,

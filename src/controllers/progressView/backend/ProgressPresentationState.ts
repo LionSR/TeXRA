@@ -60,10 +60,6 @@ export class ProgressPresentationState {
       : (availableStreams[0] ?? '');
   }
 
-  reload(): void {
-    this.prefs.reload();
-  }
-
   reset(): void {
     this.prefs.reset();
   }

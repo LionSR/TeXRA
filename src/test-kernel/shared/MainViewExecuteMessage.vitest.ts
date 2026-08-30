@@ -19,7 +19,6 @@ function formState(
     agent: { workflow: 'correct', toolUse: 'orchestrator' },
     model: 'gpt-5.4',
     instruction: 'Solve a small enumeration problem.',
-    singleFiles: { baseFile: '', editedFile: '' },
     multiFiles: {
       inputFiles: [],
       contextFiles: [],
@@ -41,7 +40,6 @@ describe('MainView execute message builder', () => {
     expect(
       buildMainViewExecuteMessage(
         formState({
-          singleFiles: { baseFile: 'old.tex', editedFile: 'new.tex' },
           multiFiles: {
             inputFiles: ['main.tex'],
             contextFiles: ['refs.bib'],
@@ -62,8 +60,6 @@ describe('MainView execute message builder', () => {
       instruction: 'Solve a small enumeration problem.',
       agentCategory: AgentCategory.ToolUse,
       files: {
-        baseFile: 'old.tex',
-        editedFile: 'new.tex',
         inputFiles: ['main.tex'],
         contextFiles: ['refs.bib'],
         mediaFiles: ['figure.png'],

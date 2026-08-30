@@ -308,11 +308,6 @@ export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   );
 }
 
-/** Get agents by source. */
-export function getAgentsBySource(source: AgentSource): AgentEntry[] {
-  return [...cache.values()].filter((e) => e.source === source);
-}
-
 /**
  * Custom-directory YAML files the last published load skipped, with the
  * reason. Empty until a load publishes a catalog.
@@ -558,9 +553,7 @@ export function entriesToOptionData(
     label: entry.name,
     isToolUse: entry.category === AgentCategory.ToolUse,
     isOrchestrator: hasDelegationTool(entry.tools),
-    isRemote: entry.source === 'remote',
-    isCustom: entry.source === 'custom',
-    isInline: entry.source === 'inline',
+    source: entry.source,
   }));
 }
 

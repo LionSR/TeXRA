@@ -26,7 +26,7 @@ function compactWorkflowText(value: string | undefined): string | undefined {
   return value?.slice(0, WORKFLOW_SUMMARY_TEXT_LENGTH);
 }
 
-function workflowStageView(
+function workflowPhaseView(
   stage: WorkflowExecutionSnapshot['stages'][number],
 ): unknown {
   return {
@@ -78,7 +78,7 @@ export function workflowExecutionView(
         Number(right.stageId !== snapshot.currentStageId) ||
       right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
   );
-  const stages = snapshot.stages
+  const phases = snapshot.stages
     .toSorted((left, right) => {
       const priority = (stage: (typeof snapshot.stages)[number]): number => {
         if (stage.id === snapshot.currentStageId) return 0;
@@ -90,7 +90,7 @@ export function workflowExecutionView(
       return priority(left) - priority(right) || right.order - left.order;
     })
     .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
-    .map(workflowStageView);
+    .map(workflowPhaseView);
   const calls = byPriority
     .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
     .map((call) => {
@@ -105,8 +105,9 @@ export function workflowExecutionView(
       return {
         id: compactWorkflowText(call.id),
         label: compactWorkflowText(call.label),
-        stageId: compactWorkflowText(call.stageId),
-        stageTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
+        phaseId: compactWorkflowText(call.stageId),
+        phaseTitle: compactWorkflowText(stageTitleFor(snapshot, call)),
+        ...(call.issued && { issued: true, kind: call.kind }),
         agent: compactWorkflowText(call.agent),
         model: compactWorkflowText(call.model),
         files: {
@@ -123,13 +124,13 @@ export function workflowExecutionView(
           omittedAttempts: call.attempts.length - WORKFLOW_SUMMARY_MAX_ATTEMPTS,
         }),
         status: call.status,
-        blockedReason: compactWorkflowText(call.blockedReason),
+        ...(call.settledBySweep && { settledBySweep: true }),
         error: compactWorkflowText(call.error),
         costUsd: call.costUsd,
         timestamps: call.timestamps,
       };
     });
-  const currentStage = snapshot.stages.find(
+  const currentPhase = snapshot.stages.find(
     (stage) => stage.id === snapshot.currentStageId,
   );
   return {
@@ -139,17 +140,17 @@ export function workflowExecutionView(
       counts: deriveWorkflowCounts(snapshot.calls),
       timestamps: snapshot.timestamps,
       responseBounds: {
-        maxStages: WORKFLOW_SUMMARY_MAX_ENTRIES,
+        maxPhases: WORKFLOW_SUMMARY_MAX_ENTRIES,
         maxCalls: WORKFLOW_SUMMARY_MAX_ENTRIES,
         maxAttemptsPerCall: WORKFLOW_SUMMARY_MAX_ATTEMPTS,
         maxFilesPerKind: WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
       },
     },
-    currentStage: currentStage ? workflowStageView(currentStage) : null,
-    stages,
+    currentPhase: currentPhase ? workflowPhaseView(currentPhase) : null,
+    phases,
     calls,
-    ...(snapshot.stages.length > stages.length && {
-      omittedStages: snapshot.stages.length - stages.length,
+    ...(snapshot.stages.length > phases.length && {
+      omittedPhases: snapshot.stages.length - phases.length,
     }),
     ...(snapshot.calls.length > calls.length && {
       omittedCalls: snapshot.calls.length - calls.length,

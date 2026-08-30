@@ -9,12 +9,12 @@ import type {
   Plan,
   RoundIndexed,
   RunIdentity,
-  StorageKey,
   StreamLogEntry,
   StreamTabId,
   TodoItem,
 } from '@shared/schemas';
-import type { StreamSnapshotStore, StreamLogAppendInput } from '@transcript';
+import type { StreamSnapshotStore } from '@transcript';
+import type { StreamLogAppendInput } from '@transcript/StreamLog';
 import type {
   StreamLogStore,
   TranscriptWriter,
@@ -107,10 +107,9 @@ export interface SnapshotProjection {
   ): void;
   addUsage(
     stream: StreamTabId,
-    storageKey: StorageKey,
+    storageKey: ExecutionId,
     usage: ExtendedTokenUsageStats,
   ): void;
-  clearMissingOutputs(stream: StreamTabId): void;
   setDescription(stream: StreamTabId, description: string): void;
   setParentStream(child: StreamTabId, parent: StreamTabId | null): void;
 }
@@ -156,12 +155,6 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
       emitRun(streamId, {
         type: 'usage',
         payload: { streamId, storageKey, usage },
-      });
-    },
-    clearMissingOutputs: (streamId) => {
-      events.emit({
-        scope: 'session',
-        event: { type: 'clearMissingOutputs', payload: { streamId } },
       });
     },
     setDescription: (streamId, description) => {

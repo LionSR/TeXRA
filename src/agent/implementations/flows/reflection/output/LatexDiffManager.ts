@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import type { AgentTrace } from '@agent/trace';
-import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { platform } from '@platform/platform';
@@ -48,9 +47,8 @@ export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
   constructor(
-    private readonly agentSetting: AgentWorkflowSetting,
+    private readonly isRewrite: boolean,
     private readonly getOutputFiles: () => RoundIndexed<OutputFileInfo>,
-    private readonly baseFiles: FileLocation[],
     private readonly logger: AgentTrace,
     private readonly streamId: string,
     private readonly fileService: TaskRunFileService,
@@ -76,7 +74,7 @@ export class LatexDiffManager {
       return;
     }
 
-    if (result.message?.includes('document environment')) {
+    if (result.message.includes('document environment')) {
       this.logger.debug(`Skipping ${operation}`, {
         data: result.message,
         messageType: MESSAGE_TYPES.INTERNAL,
@@ -145,9 +143,6 @@ export class LatexDiffManager {
         outputFiles.map((f) => [fileLocationDisplayPath(f.location), f]),
       );
 
-      this.logger.debug('Base files', {
-        data: this.baseFiles.map((f) => f.absolutePath),
-      });
       this.logger.debug(`r${currRound} output files`, {
         data: outputFiles.map((f) => f.location.absolutePath),
       });
@@ -170,8 +165,25 @@ export class LatexDiffManager {
         return pairs;
       };
 
-      if (this.agentSetting.isRewrite) {
-        const basePairs = collectPairs((entry) => entry.base);
+      if (this.isRewrite) {
+        // A base file the mapping named but the workspace never held (an
+        // agent whose declared output files are created by the run) has
+        // nothing to diff against. Skip those pairs rather than gating the
+        // whole call, so the between-round branch below still runs.
+        const candidatePairs = collectPairs((entry) => entry.base);
+        const baseExists = await Promise.all(
+          candidatePairs.map(([, base]) =>
+            AbsoluteFS.exists(base.absolutePath),
+          ),
+        );
+        const basePairs = candidatePairs.filter(
+          (_, index) => baseExists[index],
+        );
+        if (basePairs.length < candidatePairs.length) {
+          this.logger.debug(
+            `Skipping ${candidatePairs.length - basePairs.length} latexdiff base pair(s): base file not present`,
+          );
+        }
         this.logPairMatches(basePairs, 'base files to output files');
 
         for (const [outputPath, baseLocation] of basePairs) {
@@ -267,9 +279,7 @@ export class LatexDiffManager {
     description: string,
   ): void {
     if (pairs.length === 0) {
-      if (this.baseFiles.length > 0) {
-        this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
-      }
+      this.logger.debug(`No ${description.split(' to ')[0]} mappings found`);
       return;
     }
 
@@ -336,7 +346,6 @@ export class LatexDiffManager {
       lineage: {
         original: originalLocation,
         diffBase: baseLocation,
-        diffFile: diffLocation,
       },
     };
 
@@ -364,7 +373,7 @@ export class LatexDiffManager {
     diffLocation: FileLocation;
     artifact: CompiledPdfArtifact | null;
   } | null> {
-    if (!result.success || !result.diffPath) {
+    if (!result.success) {
       return null;
     }
 

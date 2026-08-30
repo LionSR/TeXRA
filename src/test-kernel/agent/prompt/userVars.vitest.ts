@@ -28,12 +28,13 @@ import {
   getToolFlags,
   resolveOutputFiles,
 } from '@agent/prompt/userVars';
+import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { writeSkill } from '@test/support/skillFixtures';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   createFakePlatform,
   FakeConfigProvider,
@@ -42,6 +43,15 @@ import {
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
 const fakeConfig = new FakeConfigProvider();
+
+const callerDefaultConfig: ConfigProvider = {
+  get<T>(_key: string, defaultValue?: T): T {
+    return defaultValue as T;
+  },
+  async update<T>(_key: string, _value: T): Promise<void> {},
+  inspect: () => undefined,
+  isExplicitlySet: () => false,
+};
 
 setupPlatform({}, { config: fakeConfig });
 
@@ -66,31 +76,9 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
   agent: 'agent',
   instruction: '',
   inputFile: 'input.tex',
-  toolConfig: {
-    autoExtractFigure: false,
-    autoExtractTikzFigure: false,
-    attachTeXCount: false,
-    autoCompileInputPdf: false,
-  },
 });
 
 describe('getToolFlags', () => {
-  it('uses texra.debug.saveModelIO setting for PRINT_INPUT_PROMPT', async () => {
-    try {
-      fakeConfig.set('texra.debug.saveModelIO', true);
-      expect(
-        getToolFlags(baseConfig, baseSetting, basePrompt).PRINT_INPUT_PROMPT,
-      ).toBe(true);
-
-      fakeConfig.set('texra.debug.saveModelIO', false);
-      expect(
-        getToolFlags(baseConfig, baseSetting, basePrompt).PRINT_INPUT_PROMPT,
-      ).toBe(false);
-    } finally {
-      await fakeConfig.update('texra.debug.saveModelIO', undefined);
-    }
-  });
-
   it('derives round count from additional userRequest entries', () => {
     const prompt: AgentPrompt = {
       ...basePrompt,
@@ -98,14 +86,14 @@ describe('getToolFlags', () => {
     };
     const setting: AgentSetting = { ...baseSetting, rounds: 1 };
 
-    const flags = getToolFlags(baseConfig, setting, prompt);
+    const flags = getToolFlags(setting, prompt);
     expect(flags.ROUNDS).toBe(3);
   });
 });
 
 describe('buildUserVars runtime skill diagnostics', () => {
   const missingSource = '/missing/runtime-skill-source';
-  const tempRoots: string[] = [];
+  const tempRoots = useTempDirs();
 
   beforeEach(() => {
     fakeConfig.set('texra.skills.enabled', true);
@@ -122,7 +110,29 @@ describe('buildUserVars runtime skill diagnostics', () => {
   afterEach(async () => {
     setRuntimeSkillSources([]);
     await fakeConfig.update('texra.skills.enabled', undefined);
-    await cleanupTempDirs(tempRoots);
+  });
+
+  it('keeps skills off until the master switch is enabled', async () => {
+    await fakeConfig.update('texra.skills.enabled', undefined);
+    const warn = vi.fn();
+    const emit = vi.fn();
+
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      spiedTrace({ warn, emit }),
+      { workspacePath: '/workspace' },
+    );
+
+    expect(vars.AVAILABLE_SKILLS).toBe('');
+    expect(warn).not.toHaveBeenCalled();
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      type: 'skills.snapshot',
+      skills: [],
+    });
   });
 
   it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {
@@ -146,6 +156,22 @@ describe('buildUserVars runtime skill diagnostics', () => {
       type: 'skills.snapshot',
       skills: [],
     });
+  });
+
+  it('uses caller defaults with an SDK-provided config provider', async () => {
+    await installPlatform({}, { config: callerDefaultConfig });
+    const vars = await buildUserVars(
+      baseConfig,
+      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
+      basePrompt,
+      '/agents/generic',
+      { isOpenai: false, isAnthropic: false, isGoogle: false },
+      noopTrace,
+      { workspacePath: '/workspace' },
+    );
+
+    expect(vars.DEFAULT_BIB_PATH).toBe('');
+    expect(vars.AVAILABLE_SKILLS).toBe('');
   });
 
   it('emits the raw accepted catalog without changing prompt membership', async () => {
@@ -200,7 +226,8 @@ describe('buildUserVars runtime skill diagnostics', () => {
   });
 });
 
-// Pure function: resolveOutputFiles takes plain data in, plain data out.
+// resolveOutputFiles is pure: it returns the normalized list and the prompt
+// variable, and leaves writing the list back onto the config to buildUserVars.
 describe('output file prompt variables', () => {
   it.each([
     {
@@ -236,13 +263,13 @@ describe('output file prompt variables', () => {
     },
   ])('$name', ({ config, setting, expectedVars, expectedOutputFiles }) => {
     const agentConfig = config as unknown as AgentConfig;
-    const vars = resolveOutputFiles(
+    const resolved = resolveOutputFiles(
       agentConfig,
       setting as unknown as AgentSetting,
     );
 
-    expect(vars).toEqual(expectedVars);
-    expect(agentConfig.outputFiles).toEqual(expectedOutputFiles);
+    expect(resolved.vars).toEqual(expectedVars);
+    expect(resolved.outputFiles).toEqual(expectedOutputFiles);
   });
 });
 
@@ -254,7 +281,6 @@ describe('buildUserVars declared type', () => {
 
     expectTypeOf<BuiltResult>().toEqualTypeOf<BuiltUserVars>();
     // Fixed keys keep their precise types.
-    expectTypeOf<BuiltUserVars['MEDIA_CONTENT']>().toEqualTypeOf<null>();
     expectTypeOf<BuiltUserVars['IS_OPENAI_MODEL']>().toEqualTypeOf<boolean>();
     expectTypeOf<BuiltUserVars['INPUT_FILES']>().toEqualTypeOf<string[]>();
     // Custom required-file keys are admitted beside the fixed vocabulary.
@@ -353,7 +379,6 @@ describe('buildUserVars with missing configured files', () => {
       LIST_OF_ALL_CONTEXTS: '',
       LIST_OF_ALL_EDITEDS: '',
       MEDIA_FILE: null,
-      MEDIA_CONTENT: null,
     });
   });
 
@@ -388,10 +413,8 @@ describe('requiredFilesInternal custom variables', () => {
   });
 
   // A required file named after a file category generates the fixed X_FILE /
-  // X_CONTENT variables and would silently override them — and, for
-  // validators like MEDIA_CONTENT's z.null(), produce checkpoints the
-  // persisted channel schema rejects, making the session impossible to
-  // resume. The guard fails loudly at variable-build time instead.
+  // X_CONTENT variables and would silently override them. The guard fails
+  // loudly at variable-build time instead.
   it.each(['INPUT', 'CONTEXT', 'EDITED', 'MEDIA'])(
     'rejects a required file named %s whose generated variables collide with the fixed vocabulary',
     async (varName) => {
@@ -424,7 +447,7 @@ describe('requiredFilesInternal custom variables', () => {
     expect(vars['BRIEF_FILE']).toBe('/agents/generic/brief.txt');
     expect(vars['BRIEF_CONTENT']).toBe('briefing notes');
     // The fixed slots the collision guard protects keep their built values.
-    expect(vars.MEDIA_CONTENT).toBeNull();
+    expect(vars.MEDIA_FILE).toBeNull();
     expect(vars.MODEL).toBe('test-model');
   });
 });

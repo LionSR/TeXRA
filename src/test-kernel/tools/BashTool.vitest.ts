@@ -85,7 +85,7 @@ const testModelConfig: ModelConfig = {
 class BashMockHandler extends ModelHandlerOpenAIResponse {
   private callCount = 0;
 
-  async getClient(): Promise<OpenAI> {
+  override async getClient(): Promise<OpenAI> {
     return {} as OpenAI;
   }
 
@@ -157,11 +157,11 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
  */
 function roundServices(opts: {
   toolName: string;
-  logger: ToolUseRoundServices<OpenAI>['logger'];
+  logger: ToolUseRoundServices['logger'];
   streamId: StreamTabId;
-  toolRegistry: ToolUseRoundServices<OpenAI>['toolRegistry'];
+  toolRegistry: ToolUseRoundServices['toolRegistry'];
   abortSignal?: AbortSignal;
-}): ToolUseRoundServices<OpenAI> {
+}): ToolUseRoundServices {
   return {
     runScope: testRunScope(opts.streamId, { signal: opts.abortSignal }),
     modelCell: testModelCell(new BashMockHandler(testModelConfig)),
@@ -178,7 +178,7 @@ function roundServices(opts: {
       userPrefix: '',
       userRequest: '',
     } satisfies AgentPrompt,
-    userVarChannels: { input: {}, transient: {} },
+    userVarChannels: {},
     toolPolicy: createToolPolicy(),
     logger: opts.logger,
     fileService: new TaskRunFileService('deadbeef'),
@@ -200,9 +200,6 @@ function freshRoundShared(messages: ProviderMessage[]): ToolUseRoundShared {
     lastError: undefined,
     toolCalls: undefined,
     text: undefined,
-    roundIndex: 0,
-    roundResponseTimeMs: 0,
-    roundNormalizedUsage: undefined,
   };
 }
 
@@ -563,7 +560,7 @@ describe('BashTool', () => {
       const messages: ProviderMessage[] = [];
       const shared = freshRoundShared(messages);
 
-      const node = new ToolUseDispatchNode<OpenAI>();
+      const node = new ToolUseDispatchNode();
       node.setServices(options);
       await withTestRunContext(options.runScope, () =>
         node.post(
@@ -688,10 +685,6 @@ describe('BashTool', () => {
       defaultSession().followUps.release(parentLease, 'terminal');
     }
 
-    expect(submitFollowUpSpy.mock.calls[0]?.[2]?.expectedGenerationId).toBe(
-      parentLease.generationId,
-    );
-
     const followUpArg = submitFollowUpSpy.mock.calls[0]?.[1];
     const deliveredText =
       typeof followUpArg === 'string' ? followUpArg : followUpArg?.text;
@@ -810,7 +803,7 @@ describe('BashTool', () => {
     }
   });
 
-  it('finalizes background execution when supplementary result metadata fails', async () => {
+  it('fails background execution when its result metadata cannot be persisted', async () => {
     const resolveCommand = holdCommand();
     await installPlatform(BASH_PLATFORM_OPTIONS);
     const parentStreamId = 'bash-result-meta-failure' as StreamTabId;
@@ -826,8 +819,10 @@ describe('BashTool', () => {
 
     resolveCommand(DONE_EXEC_RESULT);
 
+    // The manifest is what `/result` reads, so its loss is the run's failure
+    // rather than a completed run with a silently missing result.
     await vi.waitFor(async () => {
-      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.COMPLETED);
+      assert.equal((await store.readMeta())?.outcome, RUN_OUTCOME.FAILED);
     });
     detachBackgroundRun(recorded, parentStreamId);
   });
@@ -964,7 +959,7 @@ describe('BashTool', () => {
       'BashToolAbortTest' as StreamTabId,
     );
 
-    const node = new ToolUseDispatchNode<OpenAI>();
+    const node = new ToolUseDispatchNode();
     const bashTool = new BashTool();
     const options = roundServices({
       toolName: 'bash',

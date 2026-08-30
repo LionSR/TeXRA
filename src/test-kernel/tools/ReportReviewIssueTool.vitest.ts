@@ -5,9 +5,12 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
-import type { ReportReviewIssueSink } from '@agent/runtime/HostInteractions';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { ReportReviewIssueTool } from '@tools/ReportReviewIssueTool';
+
+/** The review sink a host attaches, derived from the port. */
+type ReportReviewIssueSink = NonNullable<HostInteractions['reportReviewIssue']>;
 
 const REPORT = {
   file: 'src/x.ts',
@@ -22,7 +25,7 @@ let detachHostInteractions = (): void => {};
 /** Attach a review sink the way a host does: as a session capability. */
 function useReviewSink(sink: ReportReviewIssueSink): void {
   detachHostInteractions();
-  detachHostInteractions = defaultSession().useHostInteractions({
+  detachHostInteractions = defaultSession().interactions.use({
     reportReviewIssue: sink,
     cancel: () => undefined,
   });
@@ -92,16 +95,6 @@ describe('ReportReviewIssueTool', () => {
       endLine: undefined,
       suggestion: undefined,
     });
-  });
-
-  it('normalizes null optional fields to undefined for the sink', async () => {
-    const { sink, tool } = useAcceptingSink();
-
-    await tool.call({ ...REPORT, endLine: null, suggestion: null });
-
-    expect(sink).toHaveBeenCalledWith(
-      expect.objectContaining({ endLine: undefined, suggestion: undefined }),
-    );
   });
 
   it('reports that agent review is unavailable when no host serves it', async () => {

@@ -3,16 +3,16 @@
  * walking, flag reordering, unknown-command/-flag suggestions, and usage
  * rendering.
  */
-import {
-  type ArgDef,
-  type ArgsDef,
-  type CommandDef,
-  type CommandMeta,
-  renderUsage,
-} from 'citty';
+import { type ArgDef, renderUsage } from 'citty';
 import stripAnsi from 'strip-ansi';
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
+import {
+  commandArgs,
+  commandMeta,
+  commandSubcommands,
+  type AnyCommand,
+} from '@cli/runtime/completionCommandTree';
 import { ensureArray } from '@utils/core';
 import {
   editDistance,
@@ -49,6 +49,12 @@ interface LeadingGlobalFlags {
   readonly stoppedOnUnknownFlag: boolean;
 }
 
+/** Strip a trailing `=value` from a flag token, leaving the bare flag. */
+function inlineFlagBase(token: string): string {
+  const equalsIndex = token.indexOf('=');
+  return equalsIndex === -1 ? token : token.slice(0, equalsIndex);
+}
+
 /**
  * How many tokens the known global flag at `index` consumes, or `undefined`
  * when the token is not a recognized global flag. Value flags consume two
@@ -64,7 +70,7 @@ function knownGlobalFlagTokenCount(
   }
 
   const inline = arg.includes('=');
-  const baseFlag = inline ? arg.slice(0, arg.indexOf('=')) : arg;
+  const baseFlag = inlineFlagBase(arg);
   if (GLOBAL_BOOL_FLAGS.has(baseFlag)) {
     return 1;
   }
@@ -112,43 +118,12 @@ function firstPositionalIndex(rawArgs: readonly string[]): number | undefined {
 // commandTree
 // ---------------------------------------------------------------------------
 
-// Citty's `CommandDef<T>` is invariant in `T` (T appears in both `run` and
-// `setup` parameters), so a narrower const-inferred command isn't assignable
-// to the parent type. We treat the subcommand tree as `CommandDef<any>` while
-// walking it; this matches citty's own `subCommands` shape and lets
-// `showUsage` accept either width via cast at the call site.
-export type AnyCommand = CommandDef<any>;
-
-export interface ResolvedCliCommand {
+interface ResolvedCliCommand {
   readonly command: AnyCommand;
   readonly parent?: AnyCommand;
   readonly commandPath: readonly string[];
   readonly parentPath: readonly string[];
   readonly rootCommand: AnyCommand;
-}
-
-async function resolveCommandMeta(cmd: AnyCommand): Promise<CommandMeta> {
-  const meta = cmd.meta;
-  if (meta == null) return {};
-  return typeof meta === 'function' ? await meta() : await meta;
-}
-
-async function commandSubCommands(
-  cmd: AnyCommand,
-): Promise<Record<string, AnyCommand> | undefined> {
-  const rawSubs = cmd.subCommands;
-  if (!rawSubs) return undefined;
-  return typeof rawSubs === 'function'
-    ? await (rawSubs as () => Promise<Record<string, AnyCommand>>)()
-    : ((await rawSubs) as Record<string, AnyCommand>);
-}
-
-async function commandArgs(cmd: AnyCommand): Promise<ArgsDef> {
-  const rawArgs = cmd.args;
-  if (!rawArgs) return {};
-  return typeof rawArgs === 'function'
-    ? await (rawArgs as () => Promise<ArgsDef> | ArgsDef)()
-    : ((await rawArgs) as ArgsDef);
 }
 
 /**
@@ -191,10 +166,7 @@ async function resolveDeepestSubCommandPath({
   parentPath,
   rootCommand,
 }: ResolveDeepestSubCommandPathInput): Promise<ResolvedCliCommand> {
-  const subCommands = await commandSubCommands(cmd);
-  if (!subCommands) {
-    return { command: cmd, parent, commandPath, parentPath, rootCommand };
-  }
+  const subCommands = await commandSubcommands(cmd);
   for (let i = 0; i < rawArgs.length; i++) {
     const token = rawArgs[i];
     if (token === undefined) break;
@@ -243,26 +215,29 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   return [...rawArgs.slice(restIndex), ...leadingGlobals];
 }
 
-export interface NestedGlobalFlagGroup {
-  readonly command: string;
-  readonly subCommands: readonly string[];
-}
-
 /**
  * Citty repeats the same routing behavior at nested command groups: parent
  * args before an explicit child help find the child but are not forwarded to
  * the child parser. Move known global flags from `texra auth --output-format
  * json status`-style positions to `texra auth status --output-format json`,
  * while leaving default subcommands untouched.
+ *
+ * The groups are read off the command tree rather than registered by hand: any
+ * group that declares a `default` subcommand accepts globals at the parent, so
+ * a new one needs no second registration here.
  */
-export function reorderNestedGlobalFlags(
+export async function reorderNestedGlobalFlags(
+  rootCommand: AnyCommand,
   rawArgs: readonly string[],
-  group: NestedGlobalFlagGroup,
-): string[] {
+): Promise<string[]> {
   const commandIndex = firstPositionalIndex(rawArgs);
-  if (commandIndex === undefined || rawArgs[commandIndex] !== group.command) {
+  const commandName =
+    commandIndex === undefined ? undefined : rawArgs[commandIndex];
+  if (commandIndex === undefined || commandName === undefined) {
     return [...rawArgs];
   }
+  const group = (await commandSubcommands(rootCommand))[commandName];
+  if (!group || !('default' in group)) return [...rawArgs];
 
   const afterCommand = rawArgs.slice(commandIndex + 1);
   const { leadingGlobals, restIndex, stoppedOnUnknownFlag } =
@@ -278,7 +253,7 @@ export function reorderNestedGlobalFlags(
   const explicitSubCommand = afterCommand[restIndex];
   if (
     explicitSubCommand === undefined ||
-    !group.subCommands.includes(explicitSubCommand)
+    !(explicitSubCommand in (await commandSubcommands(group)))
   ) {
     return [...rawArgs];
   }
@@ -317,7 +292,7 @@ export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
 // unknownCommand
 // ---------------------------------------------------------------------------
 
-export interface UnknownCliCommand {
+interface UnknownCliCommand {
   readonly typedCommand: string;
   readonly helpCommand: string;
   readonly suggestedCommand?: string;
@@ -372,9 +347,7 @@ export async function detectUnknownCliCommand(
       continue;
     }
 
-    const subCommands = await commandSubCommands(cmd);
-    if (!subCommands) return undefined;
-
+    const subCommands = await commandSubcommands(cmd);
     const next = subCommands[token];
     if (next) {
       cmd = next;
@@ -413,7 +386,7 @@ export function formatUnknownCliCommand(command: UnknownCliCommand): string {
 // unknownFlag
 // ---------------------------------------------------------------------------
 
-export interface UnknownCliFlag {
+interface UnknownCliFlag {
   readonly flag: string;
   readonly helpCommand: string;
 }
@@ -497,11 +470,6 @@ async function commandFlagSpecs(
   return specs;
 }
 
-function inlineFlagBase(token: string): string {
-  const equalsIndex = token.indexOf('=');
-  return equalsIndex === -1 ? token : token.slice(0, equalsIndex);
-}
-
 interface FlagValidation {
   readonly unknownFlag?: string;
   readonly skipNext: boolean;
@@ -574,7 +542,7 @@ export function formatUnknownCliFlag(flag: UnknownCliFlag): string {
 // usage
 // ---------------------------------------------------------------------------
 
-export interface UsageSection {
+interface UsageSection {
   readonly title: string;
   readonly rows: readonly (readonly [label: string, description: string])[];
 }
@@ -643,8 +611,8 @@ async function usageParentWithFullPath(
   }
 
   const [parentMeta, rootMeta] = await Promise.all([
-    resolveCommandMeta(parent),
-    context.rootCommand ? resolveCommandMeta(context.rootCommand) : undefined,
+    commandMeta(parent),
+    context.rootCommand ? commandMeta(context.rootCommand) : undefined,
   ]);
   return {
     ...parent,

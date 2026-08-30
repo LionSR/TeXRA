@@ -67,7 +67,7 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
  * malformed JSON) fall back to the internal workspace store so settings stay
  * readable and writable — degraded, never fatal.
  */
-export async function openTexraWorkspaceConfigStore(
+async function openTexraWorkspaceConfigStore(
   storage: StorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
@@ -77,11 +77,14 @@ export async function openTexraWorkspaceConfigStore(
     try {
       const projectStore = await JsonStore.open(projectConfigPath);
       if (
-        Object.keys(projectStore.snapshot()).length > 0 ||
+        projectStore.keys().length > 0 ||
         (await canCreateOrWrite(projectConfigPath))
       ) {
         return projectStore;
       }
+      warn(
+        `Project .texra/config.json is not writable (${projectConfigPath}); using the internal workspace config store.`,
+      );
     } catch (error) {
       warn(
         `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,

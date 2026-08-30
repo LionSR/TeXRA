@@ -101,7 +101,6 @@ import {
   emptyFiles,
   getCurrentFile,
   refreshEditedFiles,
-  refreshInstructionPlaceholder,
   removeFile,
   runAgentConfigAction,
   runApiKeyBannerAction,
@@ -230,7 +229,6 @@ export class MainApp extends MainAppBase {
 
   protected override firstUpdated(): void {
     this.requestInitialData();
-    refreshInstructionPlaceholder();
     // The host swaps webview.html wholesale on a view switch, so keyboard
     // focus is destroyed on every navigation; land it on the launcher tab
     // (the view tabs use activation="manual", so arrows are safe from here).
@@ -311,7 +309,7 @@ export class MainApp extends MainAppBase {
     });
   }
 
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const onboardingState = onboardingFunnelState$.get();
     const desktopHost = this.isDesktopHost;
     if (onboardingState === 'pending') {
@@ -609,7 +607,7 @@ export class MainApp extends MainAppBase {
           .editedFile=${sf.editedFile}
           .editedFileOptions=${fo.editedFile ?? []}
           .commit=${commit$.get()}
-          .commitOptions=${fo.commit ?? []}
+          .commitOptions=${fo.commit}
           .isGitRepo=${isGitRepo$.get()}
           @latexdiffs-toggle=${this.onLatexDiffsToggle}
           @latexdiffs-action=${({

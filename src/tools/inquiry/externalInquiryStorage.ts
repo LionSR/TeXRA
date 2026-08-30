@@ -5,12 +5,13 @@ import { z } from 'zod';
 import { isFileNotFoundError } from '@common/errors';
 import { EXTERNAL_INQUIRY_THREADS_DIR } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
+  ExecutionIdSchema,
   InquiryDraftSchema,
   InquirySessionLinksSchema,
   InquiryThreadIdSchema,
+  InquiryThreadStatusSchema,
   StreamTabIdSchema,
   ToolError,
   type InquiryDraft,
@@ -25,13 +26,11 @@ import {
   toNewestFirstByTimestamp,
   unique,
   hexId12,
-  normalizeFilePath,
 } from '@utils/core';
-import { GlobalStorageFS, StorageFS } from '@utils/files/storageFS';
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
+import { GlobalStorageFS } from '@utils/files/storageFS';
+import { isDirectory } from '@utils/files/fsEntryType';
 
 const THREADS_DIR = EXTERNAL_INQUIRY_THREADS_DIR;
-const EXEC_DIR = 'ei';
 const QUESTION_PREVIEW_CHARS = 200;
 const logger = createLog('ExternalInquiryStorage');
 
@@ -48,12 +47,8 @@ const logger = createLog('ExternalInquiryStorage');
 const InquiryTurnBaseShape = {
   turnIndex: z.int().positive(),
   timestamp: z.string().min(1),
-  /** Fences a delayed answer to the continuation that dispatched this turn. */
-  parentGenerationId: z.uuid(),
   question: z.string(),
   context: z.string().nullish(),
-  questionRelativePath: z.string().min(1),
-  contextRelativePath: z.string().nullish(),
   suggestSearch: z.boolean().nullish(),
   attachFiles: z.array(z.string()).nullish(),
 };
@@ -72,7 +67,6 @@ const AnsweredInquiryTurnSchema = z.object({
   kind: z.literal('answered'),
   answer: z.string(),
   answeredAt: z.string().min(1),
-  answerRelativePath: z.string().min(1),
   sessionLinks: InquirySessionLinksSchema.nullish(),
 });
 type AnsweredInquiryTurn = z.infer<typeof AnsweredInquiryTurnSchema>;
@@ -91,14 +85,22 @@ const ManifestBaseShape = {
   schemaVersion: z.literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
   threadId: InquiryThreadIdSchema,
   parentStreamId: StreamTabIdSchema.nullable(),
-  status: z.enum(['open', 'answered', 'dropped']),
+  /**
+   * The execution the last question was asked under. A continuation is
+   * addressed to it: a stream re-run under a new execution never receives
+   * an answer meant for the old one. Absent on manifests written before the
+   * field existed, which are delivered by stream alone.
+   */
+  parentExecutionId: ExecutionIdSchema.nullable().default(null),
+  status: InquiryThreadStatusSchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   turns: z.array(ExternalInquiryTurnRecordSchema),
 };
 
 /**
- * New canonical manifest form: explicit `status` + `parentStreamId`.
+ * New canonical manifest form: explicit `status` + `parentStreamId` +
+ * `parentExecutionId`.
  */
 const ExternalInquiryThreadManifestSchema = z.looseObject(ManifestBaseShape);
 export type ExternalInquiryThreadManifest = z.infer<
@@ -127,20 +129,12 @@ const threadMutex = new KeyedMutex<string>();
 // Path helpers
 // ============================================================================
 
-function turnDir(turnIndex: number): string {
-  return `t${turnIndex}`;
-}
-
 function threadDir(threadId: InquiryThreadId): string {
   return path.join(THREADS_DIR, threadId);
 }
 
 function threadManifestPath(threadId: InquiryThreadId): string {
   return path.join(threadDir(threadId), 'manifest.json');
-}
-
-function threadTurnDir(threadId: InquiryThreadId, turnIndex: number): string {
-  return path.join(threadDir(threadId), turnDir(turnIndex));
 }
 
 /**
@@ -205,43 +199,6 @@ async function writeThreadManifest(
   );
 }
 
-// ============================================================================
-// Execution mirroring
-// ============================================================================
-
-async function copyGlobalDirectoryToExecution(
-  sourceDir: string,
-  targetDir: string,
-): Promise<void> {
-  await StorageFS.ensureDir(targetDir);
-  const entries = await GlobalStorageFS.readDir(sourceDir);
-
-  for (const [name, type] of entries) {
-    const sourcePath = path.join(sourceDir, name);
-    const targetPath = path.join(targetDir, name);
-
-    if (isDirectory(type)) {
-      await copyGlobalDirectoryToExecution(sourcePath, targetPath);
-      continue;
-    }
-
-    if (isFile(type)) {
-      const bytes = await GlobalStorageFS.readBytes(sourcePath);
-      await StorageFS.write(targetPath, bytes);
-    }
-  }
-}
-
-export async function ensureExternalInquiryThreadMirror(params: {
-  executionId: ExecutionId;
-  threadId: InquiryThreadId;
-}): Promise<void> {
-  await copyGlobalDirectoryToExecution(
-    threadDir(params.threadId),
-    `${RUNS_STORAGE_DIR}/${params.executionId}/${EXEC_DIR}/${params.threadId}`,
-  );
-}
-
 function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
   if (!links?.length) return undefined;
 
@@ -297,8 +254,8 @@ async function withOpenTurnUpdate<T>(
 /**
  * Append a new open question to a thread. Creates the thread when no
  * thread_id is passed (or the existing thread is unknown). Updates the
- * thread's `parentStreamId` to the caller — continuations always flow
- * back to the most-recent asker.
+ * thread's `parentStreamId` and `parentExecutionId` to the caller —
+ * continuations always flow back to the most-recent asker.
  *
  * Behavior depends on the current status of the addressed thread:
  *   - new thread        → create with status='open'
@@ -309,7 +266,7 @@ async function withOpenTurnUpdate<T>(
 export async function recordOpenQuestion(params: {
   threadId?: InquiryThreadId;
   parentStreamId: StreamTabId;
-  parentGenerationId: string;
+  parentExecutionId: ExecutionId | null;
   question: string;
   context?: string;
   suggestSearch?: boolean;
@@ -344,6 +301,7 @@ export async function recordOpenQuestion(params: {
       schemaVersion: EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION,
       threadId,
       parentStreamId: params.parentStreamId,
+      parentExecutionId: params.parentExecutionId,
       status: 'open',
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -351,43 +309,13 @@ export async function recordOpenQuestion(params: {
     };
 
     const turnIndex = baseManifest.turns.length + 1;
-    const turnPath = threadTurnDir(threadId, turnIndex);
     const trimmedContext = params.context?.trim() || undefined;
-
-    await GlobalStorageFS.ensureDir(turnPath);
-
-    const td = turnDir(turnIndex);
-    const questionRelativePath = normalizeFilePath(
-      path.join(td, 'question.txt'),
-    );
-    const contextRelativePath = trimmedContext
-      ? normalizeFilePath(path.join(td, 'context.txt'))
-      : undefined;
-
-    const writeOps: Promise<void>[] = [
-      GlobalStorageFS.writeAtomic(
-        path.join(turnPath, 'question.txt'),
-        params.question,
-      ),
-    ];
-    if (trimmedContext) {
-      writeOps.push(
-        GlobalStorageFS.writeAtomic(
-          path.join(turnPath, 'context.txt'),
-          trimmedContext,
-        ),
-      );
-    }
-    await Promise.all(writeOps);
 
     const turn: OpenInquiryTurn = {
       turnIndex,
       timestamp,
-      parentGenerationId: params.parentGenerationId,
       question: params.question,
       context: trimmedContext,
-      questionRelativePath,
-      contextRelativePath,
       kind: 'open',
       suggestSearch: params.suggestSearch ?? undefined,
       attachFiles: params.attachFiles?.length ? params.attachFiles : undefined,
@@ -396,6 +324,7 @@ export async function recordOpenQuestion(params: {
     const nextManifest: ExternalInquiryThreadManifest = {
       ...baseManifest,
       parentStreamId: params.parentStreamId,
+      parentExecutionId: params.parentExecutionId,
       status: 'open',
       updatedAt: timestamp,
       turns: [...baseManifest.turns, turn],
@@ -421,16 +350,8 @@ export async function recordAnswerForOpenTurn(params: {
 }): Promise<PersistedAnsweredTurn | null> {
   const outcome = await withOpenTurnUpdate(
     params.threadId,
-    async (existing, lastTurn, timestamp) => {
-      const turnPath = threadTurnDir(params.threadId, lastTurn.turnIndex);
-      const td = turnDir(lastTurn.turnIndex);
-      const answerRelativePath = normalizeFilePath(path.join(td, 'answer.txt'));
+    (existing, lastTurn, timestamp) => {
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
-
-      await GlobalStorageFS.writeAtomic(
-        path.join(turnPath, 'answer.txt'),
-        params.answer,
-      );
 
       // `draft` is open-turn-only state and must not survive the transition.
       const { draft: _draft, ...openFields } = lastTurn;
@@ -439,7 +360,6 @@ export async function recordAnswerForOpenTurn(params: {
         kind: 'answered',
         answer: params.answer,
         answeredAt: timestamp,
-        answerRelativePath,
         sessionLinks,
       };
 
@@ -511,9 +431,8 @@ export async function persistOpenTurnDraft(params: {
 
     // Deliberately does not bump updatedAt: a draft autosave is not a state
     // transition (unlike open/answer/drop), and updatedAt drives listing
-    // sort order, the `since` freshness filter, and the "Updated: ..." text
-    // shown to the model — none of which should react to the user still
-    // typing an unsent answer.
+    // sort order and the "Updated: ..." text shown to the model — neither of
+    // which should react to the user still typing an unsent answer.
     const nextManifest: ExternalInquiryThreadManifest = {
       ...existing,
       turns: [...existing.turns.slice(0, -1), nextTurn],
@@ -612,10 +531,8 @@ export async function listThreadsByStatus(params: {
   scope: 'stream' | 'all';
   streamId?: StreamTabId;
   limit?: number;
-  since?: string;
 }): Promise<InquiryThreadSummary[]> {
   const all = await listAllManifests();
-  const cutoff = params.since ? Date.parse(params.since) : null;
 
   const filtered = all.filter((m) => {
     if (params.status !== 'any' && m.status !== params.status) return false;
@@ -623,7 +540,6 @@ export async function listThreadsByStatus(params: {
       if (!params.streamId) return false;
       if (m.parentStreamId !== params.streamId) return false;
     }
-    if (cutoff != null && Date.parse(m.updatedAt) < cutoff) return false;
     return true;
   });
 

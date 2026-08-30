@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { AgentCategory, AGENT_SOURCE } from '@shared/schemas';
 import type { AgentSelectionItem } from '@shared/schemas';
-import { buildAuthStatusMessage } from '@shared/settingsView/handlers/authStatusMessage';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
@@ -85,36 +84,18 @@ describe('settingsView notification message builders', () => {
     });
   });
 
-  it('buildAgentModePresetsMessage wraps presets and orchestrator names', () => {
+  it('buildAgentModePresetsMessage wraps presets, orchestrators and the active team', () => {
     const message = buildAgentModePresetsMessage({
       getCustomPresets: () => [],
       getOrchestratorAgentNames: () => ['orchestrator-agent'],
+      getActiveTeamId: () => 'research',
     });
 
     expect(message).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: [],
       orchestratorAgents: ['orchestrator-agent'],
-    });
-  });
-
-  it('buildAuthStatusMessage wraps the resolved status', async () => {
-    const status = {
-      signedIn: true,
-      email: 'user@example.com',
-      accountId: 'acct-1',
-      preferSubscription: true,
-    };
-    const getStatus = vi.fn().mockResolvedValue(status);
-
-    const message = await buildAuthStatusMessage(
-      SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      getStatus,
-    );
-
-    expect(message).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_CHATGPT_AUTH_STATUS,
-      status,
+      activePresetId: 'research',
     });
   });
 });

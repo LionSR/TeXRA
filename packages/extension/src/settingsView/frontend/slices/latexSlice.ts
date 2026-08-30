@@ -16,7 +16,6 @@ import { LATEX_CONFIG_FIELD_TO_KEY } from '@shared/constants/latexConfig';
 import {
   inlineCriticismEnabled,
   latexConfigValues,
-  latexConfigValuesLoaded,
   latexSettingsLoaded,
   latexSettingsStatus,
 } from '../settingsState';
@@ -36,7 +35,6 @@ export const latexHandlers = {
         ]),
       ) as LatexConfigValues,
     );
-    latexConfigValuesLoaded.set(true);
   },
 
   [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {

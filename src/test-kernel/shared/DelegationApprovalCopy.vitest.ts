@@ -27,13 +27,15 @@ describe('delegated-work approval copy', () => {
 });
 
 describe('plan goal copy', () => {
-  it('freezes the Bash-only auto-approval wording both hosts state', () => {
+  it('freezes the default and broader auto-approval wording', () => {
     expect(Object.isFrozen(PLAN_GOAL_COPY)).toBe(true);
     expect(PLAN_GOAL_COPY).toEqual({
       action: 'Run as Goal',
       progressViewExplanation:
         'keeps the agent working across turns until it completes the plan, needs your input, or you stop it. Only Bash commands are auto-approved; edits and other actions still ask.',
       cliNotice: 'Runs until done; only Bash is automatic.',
+      cliAutoApproveAllNotice:
+        'Runs until done; commands, edits, and agent work are automatic.',
     });
   });
 });

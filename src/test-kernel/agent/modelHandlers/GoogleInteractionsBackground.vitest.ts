@@ -206,7 +206,7 @@ function mockConfig(
           typeof serverState === 'function' ? serverState() : serverState
         ) as T;
       }
-      if (key === 'texra.model.useBackgroundResponses') {
+      if (key === 'texra.model.useGoogleBackgroundResponses') {
         return (
           typeof background === 'function' ? background() : background
         ) as T;

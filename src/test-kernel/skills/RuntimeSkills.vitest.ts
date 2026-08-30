@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
+import { platform } from '@platform/platform';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   MESSAGE_TYPES,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,
@@ -17,11 +19,11 @@ import {
 } from '@skills/runtimeSkills';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { writeSkill } from '@test/support/skillFixtures';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { attachTranscriptRecorder } from '@transcript/TexraTranscriptRecorder';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
-const tempRoots: string[] = [];
+const tempRoots = useTempDirs();
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
@@ -35,7 +37,14 @@ setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
   setRuntimeSkillSources([]);
-  await cleanupTempDirs(tempRoots);
+  await platform().workspaceState.update(
+    WorkspaceStateKey.DISABLED_SKILLS,
+    undefined,
+  );
+  await platform().workspaceState.update(
+    WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    undefined,
+  );
 });
 
 describe('runtime skills', () => {
@@ -119,6 +128,44 @@ describe('runtime skills', () => {
       },
     ]);
   });
+
+  it.each([
+    {
+      label: 'name',
+      key: WorkspaceStateKey.DISABLED_SKILLS,
+      value: ['project-skill'],
+      expected: ['user-skill'],
+    },
+    {
+      label: 'source',
+      key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      value: ['user'],
+      expected: ['project-skill'],
+    },
+  ])(
+    'filters runtime skills disabled by $label',
+    async ({ key, value, expected }) => {
+      const projectRoot = await createTempRoot();
+      const userRoot = await createTempRoot();
+      await writeSkill(projectRoot, 'project-skill', {
+        name: 'project-skill',
+        description: 'Project skill.',
+      });
+      await writeSkill(userRoot, 'user-skill', {
+        name: 'user-skill',
+        description: 'User skill.',
+      });
+      setRuntimeSkillSources([
+        { scope: 'project', path: projectRoot },
+        { scope: 'user', path: userRoot },
+      ]);
+      await platform().workspaceState.update(key, value);
+
+      const result = await loadRuntimeSkillCatalog();
+
+      expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
+    },
+  );
 
   it('keeps ANSI-only and controls-only skills in the raw accepted projection', async () => {
     const root = await createTempRoot();

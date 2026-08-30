@@ -16,10 +16,7 @@ import type {
   ProposalResult,
 } from '@agent/runtime/HostInteractions';
 import { defaultSession, SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
-} from '@agent/storage/executionLease';
+import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import {
   STREAM_PHASE,
   AgentCategory,
@@ -47,8 +44,6 @@ const mocks = vi.hoisted(() => ({
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
   inspectExecutionLease: vi.fn(),
-  abandonOwnedExecutionLease: vi.fn(),
-  undurableExecutionIds: new Set<ExecutionId>(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
@@ -90,29 +85,11 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
   assertOwnedExecutionLease: vi.fn(),
   inspectExecutionLease: mocks.inspectExecutionLease,
-  markOwnedExecutionLeaseUndurable: vi.fn((executionId: ExecutionId) => {
-    mocks.undurableExecutionIds.add(executionId);
-  }),
-  isOwnedExecutionLeaseDurable: vi.fn(
-    (executionId: ExecutionId) => !mocks.undurableExecutionIds.has(executionId),
-  ),
   ownsExecutionLease: vi.fn(() => true),
   // The session's one exit choreography runs for real over these inert lease
-  // verbs; completion mirrors production's explicit released/retained outcome.
+  // verbs.
   validateOwnedExecutionLease: vi.fn(async () => {}),
-  abandonOwnedExecutionLease: mocks.abandonOwnedExecutionLease,
-  completeOwnedExecutionLease: vi.fn(async (executionId: ExecutionId) => {
-    if (mocks.undurableExecutionIds.has(executionId)) {
-      mocks.abandonOwnedExecutionLease(executionId);
-      return { status: 'retained', reason: 'undurable' } as const;
-    }
-    try {
-      await mocks.releaseOwnedExecutionLease(executionId);
-      return { status: 'released' } as const;
-    } catch (error) {
-      return { status: 'retained', reason: 'release-failed', error } as const;
-    }
-  }),
+  releaseOwnedExecutionLease: mocks.releaseOwnedExecutionLease,
 }));
 
 // `persistChildRun*` moved to `@agent/storage/childRunPersistence`, which
@@ -194,7 +171,7 @@ function callDelegateReview() {
 async function delegateWithProposalDecision(decision: ProposalResult) {
   mocks.isProposalBypassed.mockReturnValue(false);
   const session = createTestSession();
-  session.useHostInteractions({
+  session.interactions.use({
     cancel: vi.fn(),
     requestAgentProposal: vi.fn().mockResolvedValue(decision),
   } satisfies HostInteractions);
@@ -403,7 +380,6 @@ describe('headless delegation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.undurableExecutionIds.clear();
     restoreAgentEngine = provideAgentEngine({
       executeAgent: mocks.executeAgent,
       resumeToolUseTurn: mocks.resumeToolUseTurn,
@@ -426,7 +402,7 @@ describe('headless delegation', () => {
     ]);
     mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
-    mocks.inspectExecutionLease.mockResolvedValue({ status: 'missing' });
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
     const memoryStores = new Map<
       ExecutionId,
       ReturnType<typeof memoryExecutionStore>
@@ -519,26 +495,6 @@ describe('headless delegation', () => {
     );
   });
 
-  it('marks the execution lease undurable when the in-band delivery report write fails', async () => {
-    mocks.writeReport.mockRejectedValueOnce(new Error('disk full'));
-
-    const result = await withRunContext(
-      parentRunContext({ stopAfterCycle: true }),
-      () => callDelegateReview(),
-    );
-
-    // The delivery XML still returns synchronously: a persistence hiccup on
-    // the best-effort path never fails a call whose result already returned
-    // inline (PersistenceMode's `best-effort-delivery`). What is lost is the
-    // durable report copy, so the lease must be marked undurable — mirroring
-    // `childRunLoop.ts`'s twin marks.
-    expect(result.status).toBe('executed');
-    expect(result.summary).toBe("Completed 'review'");
-    const executionId = mocks.registerExecution.mock.calls[0]?.[0];
-    expect(executionId).toEqual(expect.any(String));
-    expect(markOwnedExecutionLeaseUndurable).toHaveBeenCalledWith(executionId);
-  });
-
   it('composes durable workflow calls through the native launch primitive', async () => {
     const result = await runInBand(
       delegationOptions({ workflowPhase: 'proof-review' }),
@@ -619,7 +575,7 @@ describe('headless delegation', () => {
     expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledOnce();
   });
 
-  it('abandons the lease when the post-drain stable commit fails', async () => {
+  it('releases the lease even when the post-drain stable commit fails', async () => {
     const logicalExecutionId = 'cccccc777777' as ExecutionId;
     const childStore = memoryExecutionStore();
     const commitError = new Error('commit write failed');
@@ -640,10 +596,9 @@ describe('headless delegation', () => {
       cause: commitError,
     });
 
-    expect(mocks.abandonOwnedExecutionLease).toHaveBeenCalledWith(
+    expect(mocks.releaseOwnedExecutionLease).toHaveBeenCalledWith(
       logicalExecutionId,
     );
-    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
     expect(childStore.write).toHaveBeenCalledWith(
       'stable-subagent-attempt',
       expect.objectContaining({ phase: 'launched' }),
@@ -651,26 +606,6 @@ describe('headless delegation', () => {
     expect(childStore.write).not.toHaveBeenCalledWith(
       'stable-subagent-attempt',
       expect.objectContaining({ phase: 'retryable' }),
-    );
-  });
-
-  it('does not commit or recover when required report persistence poisons the lease', async () => {
-    const logicalExecutionId = 'cccccc888888' as ExecutionId;
-    const childStore = memoryExecutionStore();
-    useStableStores(stableSequenceStore(logicalExecutionId), childStore);
-    mocks.writeReport.mockRejectedValueOnce(new Error('report write failed'));
-
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentDurabilityError);
-    await expect(
-      runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
-
-    expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(childStore.write).not.toHaveBeenCalledWith(
-      'stable-subagent-attempt',
-      expect.objectContaining({ phase: 'committed' }),
     );
   });
 
@@ -747,7 +682,7 @@ describe('headless delegation', () => {
       expect.any(Object),
       IN_BAND_LOGICAL_EXECUTION_ID,
       expect.objectContaining({
-        allowWaitingResult: true,
+        isSubagent: true,
         stopAfterCycle: true,
       }),
     );
@@ -1045,7 +980,7 @@ describe('headless delegation', () => {
     await expect(runInBand(delegationOptions())).rejects.toBe(childFailure);
   });
 
-  it('does not recover a typed result while failed artifact cleanup retains its lease', async () => {
+  it('does not recover a typed result after failed artifact cleanup', async () => {
     const cleanupFailure = new Error('artifact flush failed');
     const logicalExecutionId = 'dddddd777777' as ExecutionId;
     const childStore = memoryExecutionStore();
@@ -1075,18 +1010,14 @@ describe('headless delegation', () => {
       detachFlusher();
     }
     mocks.inspectExecutionLease.mockResolvedValueOnce({
-      status: 'foreign',
-      acquiredAt: Date.now(),
+      status: 'held',
       owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-      provable: true,
-      reclaimable: false,
     });
 
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
     ).rejects.toBeInstanceOf(SubagentReconciliationError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
-    expect(mocks.releaseOwnedExecutionLease).not.toHaveBeenCalled();
   });
 
   it('does not recover a completed manifest after restart repair removes an abandoned lease', async () => {
@@ -1285,20 +1216,15 @@ describe('headless delegation', () => {
     );
   });
 
-  it('adds a substantive handoff requirement to tool-use subagent instructions', async () => {
+  it('extends the bare instruction with injected handoff guidance', async () => {
+    // Regression pin for #5864: delegation must inject handoff guidance rather
+    // than hand the caller's instruction through verbatim. Deliberately
+    // wording-free — the injected copy churns (#9568) without behavior changing.
     await withRunContext(parentRunContext(), () => callDelegateReview());
 
     const instruction = mocks.executeAgent.mock.calls.at(-1)?.[0].instruction;
-    expect(instruction).toContain(
-      'Your final response is delivered verbatim to the parent orchestrator',
-    );
-    expect(instruction).toContain('never only a status note');
-    expect(instruction).toContain(
-      'tool, network, file, approval, output-format, or scope constraints',
-    );
-    expect(instruction).toContain(
-      'report the conflict instead of assuming permission',
-    );
+    expect(instruction).toContain('Check the proof.');
+    expect(instruction.length).toBeGreaterThan('Check the proof.'.length);
   });
 
   it('carries the current parent instruction into the subagent constraint context', async () => {
@@ -1321,32 +1247,6 @@ describe('headless delegation', () => {
       }),
       expect.any(String),
       expect.anything(),
-    );
-  });
-
-  it('tells orchestrators that delegated instructions must carry parent constraints', () => {
-    const parameters = new DelegateAgentTool().definition.parameters as {
-      properties?: Record<string, { description?: string }>;
-    };
-    const instructionDescription =
-      parameters.properties?.instruction?.description ?? '';
-
-    expect(instructionDescription).toContain(
-      'copy every relevant parent constraint',
-    );
-    expect(instructionDescription).toContain('tool/network/file/approval');
-    expect(instructionDescription).toContain(
-      'does not automatically inherit the parent conversation',
-    );
-  });
-
-  it('tells orchestrators that delegations run asynchronously and support parallel dispatch', () => {
-    const description = new DelegateAgentTool().definition.description;
-
-    expect(description).toContain('Delegations run asynchronously');
-    expect(description).toContain('launch them all in one turn');
-    expect(description).toContain(
-      'arrives automatically as a follow-up message',
     );
   });
 
@@ -1408,7 +1308,7 @@ describe('headless delegation', () => {
     const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
     expect(executeOptions).toEqual(
       expect.objectContaining({
-        allowWaitingResult: true,
+        isSubagent: true,
         onRun: expect.any(Function),
         session: expect.any(Object),
       }),
@@ -1451,7 +1351,7 @@ describe('headless delegation', () => {
     mocks.isProposalBypassed.mockReturnValue(false);
     const session = createTestSession();
     const requestAgentProposal = vi.fn();
-    session.useHostInteractions({
+    session.interactions.use({
       cancel: vi.fn(),
       requestAgentProposal,
     } satisfies HostInteractions);

@@ -3,7 +3,10 @@ import { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 import { FILE_HANDLING_RULES } from './fileHandlingRules';
 import { getIncludedExtensions, type ExtensionCategory } from './fileTypeUtils';
 
-export type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
+// Edited files have their own entry point (getEditedFileListConfig), so they
+// are not listable through getFileListConfig. The surviving vocabulary matches
+// DocumentFileTypeSchema ('input' | 'context' | 'media').
+export type ListableFileType = Exclude<ExtensionCategory, 'audio' | 'edited'>;
 
 export interface FileListSettings {
   ignoredFileExtensions: string[];
@@ -14,20 +17,26 @@ export interface FileListSettings {
   ignoredMediaDirs: string[];
 }
 
-export interface FileListConfig {
-  extensions: string[];
-  ignoredExtensions: string[];
-  ignoredDirs: string[];
-  ignoredKeywords: string[];
-  ignoredFiles: string[];
+/**
+ * One include/exclude file-filter shape, shared verbatim from category
+ * selection through to normalization — `prepareFileFilters` fills these same
+ * fields in place rather than renaming them, so `PreparedFileFilters` only
+ * adds `sanitizedDirs` on top.
+ */
+export interface FileFilterConfig {
+  include: string[];
+  excludeExtensions: string[];
+  excludeDirs: string[];
+  excludeKeywords: string[];
+  excludeFiles: string[];
 }
 
-export interface PreparedFileFilters {
-  includeExt: string[];
-  excludeExt: string[];
-  excludeKeywords: string[];
-  excludeDirs: string[];
-  excludeFiles: string[];
+export interface PreparedFileFilters extends FileFilterConfig {
+  /**
+   * `excludeDirs` before case-folding. Matching (`containsExcludedDirectory`)
+   * lowercases both sides, but the VS Code glob exclude pattern built in
+   * `listing.ts` runs against on-disk paths and needs the original case.
+   */
   sanitizedDirs: string[];
 }
 
@@ -56,50 +65,48 @@ export function loadFileListSettings(): FileListSettings {
 function buildInputLikeConfig(
   category: 'input' | 'edited',
   settings: FileListSettings,
-): FileListConfig {
+): FileFilterConfig {
   return {
-    extensions: getIncludedExtensions(category),
-    ignoredExtensions: settings.ignoredFileExtensions,
-    ignoredDirs: [
+    include: getIncludedExtensions(category),
+    excludeExtensions: settings.ignoredFileExtensions,
+    excludeDirs: [
       ...settings.ignoredDirectories,
       ...settings.ignoredInputDirectories,
     ],
-    ignoredKeywords: settings.ignoredKeywords,
-    ignoredFiles: settings.ignoredInputFiles,
+    excludeKeywords: settings.ignoredKeywords,
+    excludeFiles: settings.ignoredInputFiles,
   };
 }
 
 export function getFileListConfig(
   fileType: ListableFileType,
   settings: FileListSettings,
-): FileListConfig | null {
+): FileFilterConfig {
   switch (fileType) {
     case 'input':
       return buildInputLikeConfig('input', settings);
     case 'context':
       return {
-        extensions: getIncludedExtensions('context'),
-        ignoredExtensions: settings.ignoredFileExtensions,
-        ignoredDirs: settings.ignoredDirectories,
-        ignoredKeywords: settings.ignoredKeywords,
-        ignoredFiles: settings.ignoredInputFiles,
+        include: getIncludedExtensions('context'),
+        excludeExtensions: settings.ignoredFileExtensions,
+        excludeDirs: settings.ignoredDirectories,
+        excludeKeywords: settings.ignoredKeywords,
+        excludeFiles: settings.ignoredInputFiles,
       };
     case 'media':
       return {
-        extensions: getIncludedExtensions('media'),
-        ignoredExtensions: [],
-        ignoredDirs: settings.ignoredMediaDirs,
-        ignoredKeywords: settings.ignoredKeywords,
-        ignoredFiles: [],
+        include: getIncludedExtensions('media'),
+        excludeExtensions: [],
+        excludeDirs: settings.ignoredMediaDirs,
+        excludeKeywords: settings.ignoredKeywords,
+        excludeFiles: [],
       };
-    case 'edited':
-      return null;
   }
 }
 
 export function getEditedFileListConfig(
   settings: FileListSettings,
-): FileListConfig {
+): FileFilterConfig {
   return buildInputLikeConfig('edited', settings);
 }
 
@@ -110,15 +117,15 @@ function sanitizeDirectories(directories: readonly string[]): string[] {
 }
 
 export function prepareFileFilters(
-  config: FileListConfig,
+  config: FileFilterConfig,
 ): PreparedFileFilters {
-  const sanitizedDirs = sanitizeDirectories(config.ignoredDirs);
+  const sanitizedDirs = sanitizeDirectories(config.excludeDirs);
   return {
-    includeExt: normalizeList(config.extensions),
-    excludeExt: normalizeList(config.ignoredExtensions),
-    excludeKeywords: normalizeList(config.ignoredKeywords),
+    include: normalizeList(config.include),
+    excludeExtensions: normalizeList(config.excludeExtensions),
+    excludeKeywords: normalizeList(config.excludeKeywords),
     excludeDirs: sanitizedDirs.map((dir) => dir.toLowerCase()),
-    excludeFiles: normalizeList(config.ignoredFiles),
+    excludeFiles: normalizeList(config.excludeFiles),
     sanitizedDirs,
   };
 }
@@ -156,12 +163,13 @@ export function passesFileFilters(
   const fileNameLower = getBasename(lowerPath);
   if (filters.excludeFiles.includes(fileNameLower)) return false;
   if (
-    filters.includeExt.length > 0 &&
-    !filters.includeExt.some((ext) => lowerPath.endsWith(ext))
+    filters.include.length > 0 &&
+    !filters.include.some((ext) => lowerPath.endsWith(ext))
   ) {
     return false;
   }
-  if (filters.excludeExt.some((ext) => lowerPath.endsWith(ext))) return false;
+  if (filters.excludeExtensions.some((ext) => lowerPath.endsWith(ext)))
+    return false;
   if (filters.excludeKeywords.some((kw) => fileNameLower.includes(kw))) {
     return false;
   }

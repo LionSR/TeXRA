@@ -11,7 +11,7 @@ import {
 import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { isImplicitDefaultEligible } from '@shared/constants/agents';
-import { toNewestFirstByTimestamp } from '@utils/core';
+import { isObject, toNewestFirstByTimestamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
@@ -37,15 +37,11 @@ function usableConfiguredAgent(value: string | undefined): string | undefined {
   return trimmed && isImplicitDefaultEligible(trimmed) ? trimmed : undefined;
 }
 
-export interface ChatDefaults {
+interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
-  readonly source: ChatDefaultSource;
-  readonly agentSource: ChatDefaultValueSource;
   readonly modelSource: ChatDefaultValueSource;
 }
-
-type ChatDefaultSource = 'workspace' | 'user' | 'history' | 'builtin' | 'mixed';
 
 /** Chat default value sources are the shared run-model decision reasons. */
 type ChatDefaultValueSource = Extract<
@@ -70,24 +66,77 @@ function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
   };
 }
 
-async function loadUserDefaults(): Promise<PartialDefaults> {
+/** Labels `loadUserDefaults`' warnings distinctly from the workspace file's
+ *  (both are literally named `config.json`, just in different directories),
+ *  matching the wording the read-failure branch already used. */
+const USER_CONFIG_LABEL = `user config (${TEXRA_CONFIG_FILE_NAME})`;
+
+/** `orchestrate`'s `launcher: while (true)` loop re-resolves chat defaults
+ *  on every return to the launcher, so an in-scope invalid field (a typo'd
+ *  texra.agent/texra.model/texra.chat.*) would otherwise reprint its warning
+ *  once per loop pass for as long as the session stays open. Deduped against
+ *  only the *previous* call's warnings (not every warning ever seen this
+ *  process): the message text carries just the field name, not the invalid
+ *  value, so a field a user fixes and later breaks again the same way would
+ *  otherwise never warn again if this stayed a monotonically-growing set. */
+let previousUserConfigWarnings = new Set<string>();
+
+/** Test-only: this module-level dedup state otherwise leaks across `it()`
+ *  blocks in the same file (Vitest doesn't reset module state between tests
+ *  by default), which would make one test's warnings spuriously suppress
+ *  another's. Call from a `beforeEach` in any suite that asserts on
+ *  `loadUserDefaults`/`resolveChatDefaults` warnings. */
+export function __resetUserConfigWarningDedupeForTests(): void {
+  previousUserConfigWarnings = new Set();
+}
+
+async function loadUserDefaults(quiet: boolean): Promise<PartialDefaults> {
   // A missing user config means no user defaults (parseCliConfigValues maps
-  // the undefined fallback to {}). Anything else — corrupt JSON, a permission
-  // error — is surfaced as a warning instead of silently dropping the user's
-  // chat defaults, mirroring loadWorkspaceCliConfig's handling of the same
-  // class of failure for the workspace config.
+  // the undefined fallback to {}). A read failure — corrupt JSON, a
+  // permission error — a top-level shape that isn't an object, and an
+  // invalid individual field still drop the affected default(s), but now
+  // with a warning instead of silence, mirroring loadWorkspaceCliConfig's
+  // handling of the same failure classes for the workspace config. Unknown-
+  // key warnings are suppressed: this file is
+  // shared by all three hosts and holds rows the CLI does not honor (same
+  // reasoning as loadUserApprovalPolicy). `quiet` mirrors --quiet: every
+  // other config warning is gated by contextFromArgs on context.quietLogs
+  // before this function ever runs, so these warnings honor the same flag
+  // instead of always printing.
+  const thisCallsWarnings = new Set<string>();
+  const warn = (message: string): void => {
+    thisCallsWarnings.add(message);
+    if (quiet) return;
+    if (previousUserConfigWarnings.has(message)) return;
+    writeTextStderr(`WARN ${message}`);
+  };
   let raw: unknown;
   try {
     raw = await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME);
   } catch (error: unknown) {
     if (!isFileNotFoundError(error)) {
-      writeTextStderr(
-        `WARN Could not read user config (${TEXRA_CONFIG_FILE_NAME}): ${toErrorMessage(error)}`,
-      );
+      warn(`Could not read ${USER_CONFIG_LABEL}: ${toErrorMessage(error)}`);
     }
     raw = undefined;
   }
-  return defaultsFromConfigValues(parseCliConfigValues(raw));
+  if (raw !== undefined && !isObject(raw)) {
+    warn(`Ignoring ${USER_CONFIG_LABEL}; expected a JSON object.`);
+    raw = undefined;
+  }
+  const { values, warnings } = parseCliConfigValues(raw, USER_CONFIG_LABEL, {
+    reportUnknownKeys: false,
+    // defaultsFromConfigValues only reads agent/model (top-level and
+    // chat.*) — scoping to just those fields avoids re-validating
+    // approvalPolicy (already warned about by loadUserApprovalPolicy) and
+    // outputFormat/run.* (unused here). Scoping alone doesn't stop an
+    // in-scope invalid field from reprinting every launcher-loop pass —
+    // that's what `previousUserConfigWarnings` is for, above.
+    topLevelFields: new Set(['agent', 'model']),
+    sections: new Set(['chat']),
+  });
+  for (const warning of warnings) warn(warning);
+  previousUserConfigWarnings = thisCallsWarnings;
+  return defaultsFromConfigValues(values);
 }
 
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
@@ -101,7 +150,7 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
         entry.record.agentCategory === AgentCategory.ToolUse &&
         // A multi-agent team run's root is an orchestrator agent, not a
         // sensible default for a plain single-agent chat session.
-        !entry.record.cliMultiAgentPresetId,
+        !entry.record.cli?.multiAgentPresetId,
     ),
     (item) => item.timestamp,
   );
@@ -110,65 +159,31 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   return { model: resolveKnownCliModelId(mostRecent.record.model) };
 }
 
-function deriveSource(sources: {
-  readonly agent: ChatDefaultValueSource;
-  readonly model: ChatDefaultValueSource;
-}): ChatDefaultSource {
-  const agentSource = chatDefaultSource(sources.agent);
-  const modelSource = chatDefaultSource(sources.model);
-  return agentSource === modelSource ? agentSource : 'mixed';
-}
-
-function chatDefaultSource(source: ChatDefaultValueSource): ChatDefaultSource {
-  switch (source) {
-    case 'workspace-config':
-      return 'workspace';
-    case 'user-config':
-      return 'user';
-    case 'history':
-      return 'history';
-    case 'builtin-default':
-      return 'builtin';
-    case 'explicit-override':
-    case 'environment':
-      return 'mixed';
-  }
-}
-
-function sourceForOverride(
-  override: string | undefined,
-  env: string | undefined,
-): ChatDefaultValueSource | undefined {
-  if (override) return 'explicit-override';
-  if (env) return 'environment';
-  return undefined;
-}
-
 function buildChatDefaults(init: {
   readonly agent: string | undefined;
   readonly model: string | undefined;
-  readonly agentSource: ChatDefaultValueSource | undefined;
   readonly modelSource: ChatDefaultValueSource | undefined;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }): ChatDefaults {
-  const agentSource = init.agentSource ?? 'builtin-default';
-  const modelSource = init.modelSource ?? 'builtin-default';
   return {
     agent: init.agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: init.model ?? CLI_BUILTIN_DEFAULT_MODEL,
-    source: deriveSource({ agent: agentSource, model: modelSource }),
-    agentSource,
-    modelSource,
+    modelSource: init.modelSource ?? 'builtin-default',
   };
 }
 
-export interface ResolveChatDefaultsInit {
+interface ResolveChatDefaultsInit {
   readonly cwd: string;
   readonly agentOverride?: string;
   readonly modelOverride?: string;
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
+  /** Suppresses the user-config warnings `loadUserDefaults` would otherwise
+   *  print directly — pass `context.quietLogs` so this tier's warnings
+   *  respect `--quiet` the same way `contextFromArgs` gates every other
+   *  config warning. */
+  readonly quiet?: boolean;
 }
 
 /**
@@ -186,7 +201,6 @@ export async function resolveChatDefaults(
   const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
-  let agentSource = sourceForOverride(overrideAgent, envAgent);
   const directModel = overrideModel || envModel;
   const skipDefaultTierIo = Boolean(agent && directModel);
 
@@ -202,22 +216,13 @@ export async function resolveChatDefaults(
       loadWorkspaceCliConfig(init.cwd).then((loaded) =>
         defaultsFromConfigValues(loaded.values),
       ),
-      loadUserDefaults(),
+      loadUserDefaults(init.quiet ?? false),
       loadHistoryDefaults(),
     ]);
-    const tiers: ReadonlyArray<
-      readonly [ChatDefaultValueSource, PartialDefaults]
-    > = [
-      ['workspace-config', workspace],
-      ['user-config', user],
-      ['history', history],
-    ];
-
-    for (const [source, defaults] of tiers) {
-      if (!agent && defaults.agent) {
-        agent = defaults.agent;
-        agentSource = source;
-      }
+    // History never changes the chat agent, so only the two config tiers can
+    // supply one; the order below is the per-field fallthrough.
+    for (const defaults of [workspace, user, history]) {
+      if (!agent && defaults.agent) agent = defaults.agent;
     }
   }
 
@@ -233,7 +238,6 @@ export async function resolveChatDefaults(
   return buildChatDefaults({
     agent,
     model: modelDecision?.model,
-    agentSource,
     // The candidate list above only uses reasons in ChatDefaultValueSource.
     modelSource: modelDecision?.reason as ChatDefaultValueSource | undefined,
     visibleToolUseAgents: init.visibleToolUseAgents,

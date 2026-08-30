@@ -28,7 +28,6 @@ import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState
 // Local imports - main view
 import {
   SESSION_TYPES,
-  parseSessionType,
   type DocumentFileType,
   type MultipleDocumentFileType,
   type SessionType,
@@ -38,14 +37,12 @@ import {
   apiKeyBanner$,
   checkboxValues$,
   commit$,
-  getModelOptionsForSession,
   instruction$,
-  instructionPlaceholder$,
   isPolishing$,
   isRecording$,
-  isSelectedAgentOrchestrator$,
   launchTarget$,
   model$,
+  modelOptions$,
   multiFiles$,
   primaryInputFile,
   selectedTeamId$,
@@ -57,11 +54,7 @@ import {
   instructionDrafts$,
   workingDirectory$,
 } from './mainViewState';
-import {
-  MULTI_FILE_LIST_BY_KEY,
-  MULTI_FILE_LISTS,
-  ONBOARDING_PLACEHOLDERS,
-} from './store';
+import { MULTI_FILE_LIST_BY_KEY, MULTI_FILE_LISTS } from './store';
 
 export function showInformation(text: string): void {
   postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
@@ -78,21 +71,6 @@ export function setInstruction(value: string): void {
     ...instructionDrafts$.get(),
     [sessionType$.get()]: value,
   });
-}
-
-export function refreshInstructionPlaceholder(): void {
-  // Team runs share the orchestrator placeholder set: the team lead plans
-  // and delegates, so the steering examples are the same shape.
-  const placeholderKey: keyof typeof ONBOARDING_PLACEHOLDERS =
-    launchTarget$.get() === 'team' || isSelectedAgentOrchestrator$.get()
-      ? 'orchestrator'
-      : sessionType$.get();
-  const placeholders = ONBOARDING_PLACEHOLDERS[placeholderKey];
-  const current = instructionPlaceholder$.get();
-  const currentIndex = placeholders.indexOf(current);
-  if (!current || currentIndex === -1) {
-    instructionPlaceholder$.set(placeholders[0]);
-  }
 }
 
 /**
@@ -132,7 +110,7 @@ function validateSelection<T extends { value: string; disabled?: boolean }>(
 }
 
 export function refreshModelSelectionForActiveSession(): void {
-  const options = getModelOptionsForSession(sessionType$.get());
+  const options = modelOptions$.get();
   model$.set(validateSelection(options, model$.get()));
 }
 
@@ -142,7 +120,6 @@ export function enterToolUseSession(): void {
     updateMultiFiles('outputFiles', []);
     refreshModelSelectionForActiveSession();
   }
-  refreshInstructionPlaceholder();
 }
 
 // ---------------------------------------------------------------------------
@@ -230,8 +207,7 @@ export function setBaseFile(value: string): void {
 // Session / agent / model changes (user-driven)
 // ---------------------------------------------------------------------------
 
-export function changeSessionType(value: string): void {
-  const parsed = parseSessionType(value) ?? SESSION_TYPES.WORKFLOW;
+export function changeSessionType(parsed: SessionType): void {
   const prev = sessionType$.get();
 
   // Workflows run a single workflow agent, so a team launch target cannot
@@ -243,16 +219,10 @@ export function changeSessionType(value: string): void {
     launchTarget$.set('agent');
     announce('Workflow uses a single workflow agent.');
   }
-  if (parsed === prev) {
-    if (resetTeamLauncher) {
-      refreshInstructionPlaceholder();
-    }
-    return;
-  }
+  if (parsed === prev) return;
 
   sessionType$.set(parsed);
   refreshModelSelectionForActiveSession();
-  refreshInstructionPlaceholder();
   if (parsed === SESSION_TYPES.TOOL_USE) {
     updateMultiFiles('outputFiles', []);
   }
@@ -277,7 +247,6 @@ export function changeLaunchTarget(value: LaunchTarget): void {
     announce('Team launcher selected. Interactive mode.');
   } else {
     launchTarget$.set('agent');
-    refreshInstructionPlaceholder();
     announce('Agent launcher selected.');
   }
 }
@@ -327,14 +296,12 @@ export function validateTeamSelection(): void {
     launchTarget$.set('agent');
     announce('No runnable teams available. Agent launcher selected.');
   }
-  refreshInstructionPlaceholder();
 }
 
 export function changeAgent(sessionType: SessionType, value: string): void {
   agent$.set({ ...agent$.get(), [sessionType]: value });
   sessionType$.set(sessionType);
   refreshModelSelectionForActiveSession();
-  refreshInstructionPlaceholder();
   postMessage(MAIN_VIEW_COMMANDS.SET_BANNER, {
     banner: 'agentConfig',
     visible: false,
@@ -357,7 +324,6 @@ function buildExecuteMessage(): MainViewExecuteMessage {
     agent: agent$.get(),
     model: model$.get(),
     instruction: instruction$.get(),
-    singleFiles: singleFiles$.get(),
     multiFiles: multiFiles$.get(),
     checkboxValues: checkboxValues$.get(),
     session: {

@@ -5,7 +5,7 @@
 
 // Local imports - shared schemas
 import { buildStreamTabInfo } from '@controllers/session/streamTabInfo';
-import type { StreamTabId, StreamTabInfo } from '@shared/schemas';
+import type { RunIdentity, StreamTabId, StreamTabInfo } from '@shared/schemas';
 
 // Local imports - CLI state
 import {
@@ -26,12 +26,11 @@ export interface StreamView {
   readonly info?: StreamTabInfo;
   readonly label: string;
   readonly parentId?: StreamTabId;
-  readonly parentLabel?: string;
   readonly slice: StreamSlice | undefined;
   readonly active: boolean;
 }
 
-export type ActiveStreamScope =
+type ActiveStreamScope =
   | { readonly kind: 'none' }
   | { readonly kind: 'root'; readonly streamId: StreamTabId }
   | {
@@ -40,12 +39,12 @@ export type ActiveStreamScope =
       readonly streamId: StreamTabId;
     };
 
-export interface ActiveStreamAncestor<T> {
+interface ActiveStreamAncestor<T> {
   readonly streamId: StreamTabId;
   readonly value: T;
 }
 
-export interface ActiveStreamTreeEntry {
+interface ActiveStreamTreeEntry {
   readonly id: StreamTabId;
   readonly shortcutIndex?: number;
 }
@@ -103,33 +102,50 @@ export function nearestActiveStreamAncestor<T>(init: {
 }
 
 /**
- * The shared tab projection for one stream. Its own metadata is the identity
- * authority; the parent's roster row is the fallback for a child whose
- * `run.start` has not landed yet (`child.activity` can arrive first — the
- * `roster-first` child-event order).
+ * A stream's identity: its own metadata, else the roster row a parent
+ * rendered it from. The roster row (`child.activity`) and the parent edge
+ * (`setParentStream`) are separate facts, and the roster can land before
+ * both the edge and the child's `run.start` — the `roster-first`
+ * child-event order — so every roster is scanned rather than the edge's
+ * parent alone.
  */
+export function streamIdentityFor(init: {
+  readonly childRosters: ChildRosters;
+  readonly streamId: StreamTabId;
+}): RunIdentity | undefined {
+  const own = streamMetadataFor(init.streamId)?.identity;
+  if (own) return own;
+  for (const rows of init.childRosters.values()) {
+    const row = rows.find((child) => child.childStreamId === init.streamId);
+    if (row) return row.identity;
+  }
+  return undefined;
+}
+
+/** The shared tab projection for one stream, under `streamIdentityFor`'s
+ *  identity. */
 function streamTabInfoFor(init: {
   readonly childRosters: ChildRosters;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
 }): StreamTabInfo | undefined {
   const metadata = streamMetadataFor(init.streamId);
   if (!metadata) return undefined;
-  const parentStreamId = init.parentStream.get(init.streamId);
-  const identity =
-    metadata.identity ??
-    (parentStreamId
-      ? visibleSubagentRows(parentStreamId, init.childRosters).find(
-          (child) => child.childStreamId === init.streamId,
-        )?.identity
-      : undefined);
+  const identity = streamIdentityFor(init);
   return buildStreamTabInfo({
     streamId: init.streamId,
     metadata: identity ? { ...metadata, identity } : metadata,
   });
 }
 
-export function streamDisplayLabel(init: {
+/**
+ * Resolves a stream id against the CLI's parent-edge state: a parentless
+ * stream is the session itself (`ROOT_STREAM_LABEL`), otherwise the shared
+ * `buildStreamTabInfo` label, with the raw stream id as the last resort.
+ * Distinct from the extension/desktop `streamDisplayLabel`
+ * (`progressView/frontend/utils.ts`), which is a plain `StreamTabInfo.label`
+ * field read and takes the info object, not an id.
+ */
+export function streamLabelForId(init: {
   readonly childRosters: ChildRosters;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
@@ -151,15 +167,8 @@ export function streamViewForId(init: {
   return {
     id: init.streamId,
     info: streamTabInfoFor(init),
-    label: streamDisplayLabel(init),
+    label: streamLabelForId(init),
     parentId,
-    parentLabel: parentId
-      ? streamDisplayLabel({
-          childRosters: init.childRosters,
-          parentStream: init.parentStream,
-          streamId: parentId,
-        })
-      : undefined,
     slice: init.streams.get(init.streamId),
     active: init.streamId === init.activeStreamId,
   };

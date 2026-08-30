@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
 
 // Local imports
@@ -16,14 +16,14 @@ import {
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 interface GoalPromptsYaml {
   continuation: { template: string };
 }
 
 // The shipped bundle every host resolves at startup. Loading through it (rather
-// than through a per-prompt path) is what pins each table row's `relPath` to
+// than through a per-prompt path) is what pins each loader's relative path to
 // the real resource layout.
 const RESOURCES_PATH = resolve(REPO_ROOT, 'packages/extension/resources');
 const GOAL_YAML_PATH = join(RESOURCES_PATH, 'goal', 'goal.yaml');
@@ -35,11 +35,7 @@ const goalYaml = yaml.parse(
 describe('bundled prompt loader', () => {
   setupPlatform({}, { fs: nodeFilesystem });
 
-  const tempDirs: string[] = [];
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
+  const tempDirs = useTempDirs();
 
   /** A resources root whose two prompt files are both unparseable YAML. */
   async function makeBrokenResources(): Promise<string> {

@@ -2,7 +2,7 @@ import type { SubscriptionUsageWindow } from '@shared/schemas';
 
 import {
   asObject,
-  assertSubscriptionUsageResponse,
+  fetchSubscriptionUsage,
   numberField,
   ratioWindow,
   stringField,
@@ -84,14 +84,14 @@ export async function fetchKimiCodeUsage(
   apiKey: string,
   signal: AbortSignal,
 ): Promise<ParsedSubscriptionUsage> {
-  const response = await http(KIMI_CODE_USAGE_URL, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    signal,
-  });
-  assertSubscriptionUsageResponse(response);
-  return parseKimiCodeUsage(await response.json());
+  return parseKimiCodeUsage(
+    await fetchSubscriptionUsage(http, {
+      url: KIMI_CODE_USAGE_URL,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal,
+    }),
+  );
 }

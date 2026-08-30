@@ -20,11 +20,7 @@
 // `./transcriptFold` remains only to cover rows persisted before that
 // landed; it is idempotent on already-redacted text.
 
-import {
-  AgentCategory,
-  MESSAGE_TYPES,
-  type StreamTabId,
-} from '@shared/schemas';
+import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { subscribeToSignalChanges } from '@shared/signals';
 import {
@@ -32,19 +28,22 @@ import {
   isTranscriptSettlementPhase,
 } from '@shared/streams/streamStatus';
 import { StreamLogDeltaBuffer, type StreamLogStore } from '@transcript';
+import type { TranscriptPresentationLease } from '@transcript/StreamLogStore';
 import { createFlushableDebounce } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { transcriptRowHeadline } from '../panes/transcriptEntries';
 import {
   activeStreamId,
   focusStream,
+  foregroundReader,
   getCliStateGeneration,
   isCliStreamRetired,
   patchStream,
   registerCliStateResetHook,
   setTransientNotice,
+  streamPhaseFor,
   streams,
 } from './cliState';
+import { isWorkflowScriptStream } from './childControls';
 import { isChildStreamRemoved, streamMetadataFor } from './childExecutions';
 import {
   advanceSettledPrefixIndex,
@@ -52,7 +51,7 @@ import {
   compactWorkflowEntries,
   createTranscriptFoldState,
   isFullLogChildStream,
-  logEntryStreamIsRunning,
+  latestConversationLine,
   newFoldChangeFlags,
   resetTranscriptFoldState,
   workflowOperationalLatestLine,
@@ -65,6 +64,18 @@ import {
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
 
+/** A workflow popup and its Ctrl-T reader are two views of the same full
+ * transcript projection. Workflows never become the active viewport, so the
+ * foreground reader is their presentation-residency owner. */
+function foregroundWorkflowReaderStreamId(): StreamTabId | undefined {
+  const reader = foregroundReader.get();
+  if (!reader) return undefined;
+  if (reader.kind === 'workflow') return reader.streamId;
+  return reader.kind === 'transcript' && isWorkflowScriptStream(reader.streamId)
+    ? reader.streamId
+    : undefined;
+}
+
 interface StreamLogSession {
   readonly transcripts: StreamLogStore;
   flushPendingTraces(): void;
@@ -76,12 +87,7 @@ interface StreamLogSession {
  * out-of-band sync (status transition, focus switch, tests) folds the same
  * buffered changes instead of rescanning the log.
  */
-interface PendingStreamDeltas {
-  readonly buffer: StreamLogDeltaBuffer;
-  generation: number;
-}
-
-const PENDING_DELTAS = new Map<StreamTabId, PendingStreamDeltas>();
+const PENDING_DELTAS = new Map<StreamTabId, StreamLogDeltaBuffer>();
 
 registerCliStateResetHook(() => {
   PENDING_DELTAS.clear();
@@ -100,31 +106,6 @@ export function transcriptFoldCountersForTest(): {
     folds: foldApplicationsForTest,
     rebuilds: rebuildApplicationsForTest,
   };
-}
-
-/** Test-only: drop a stream's fold state so the next sync rebuilds from
- *  scratch — the production resync path, used as the equivalence oracle. */
-export function invalidateTranscriptFoldForTest(streamId: StreamTabId): void {
-  const fold = streams.get().get(streamId)?.transcriptFold;
-  if (fold) resetTranscriptFoldState(fold);
-}
-
-/** Test-only: per-stream projection-state occupancy, for eviction-path regression coverage. */
-export function streamRenderCacheSizesForTest(): {
-  readonly taskGroups: number;
-  readonly compaction: number;
-  readonly render: number;
-} {
-  let taskGroups = 0;
-  let compaction = 0;
-  let render = 0;
-  for (const slice of streams.get().values()) {
-    const fold = slice.transcriptFold;
-    if (fold?.taskGroupProjection) taskGroups += 1;
-    if (fold?.compactionProjection) compaction += 1;
-    if (fold?.hydrated) render += 1;
-  }
-  return { taskGroups, compaction, render };
 }
 
 // ---------------------------------------------------------------------------
@@ -148,6 +129,9 @@ function trySyncStreamLog(
 export function subscribeStreamLog(session: StreamLogSession): () => void {
   const store = session.transcripts;
   let previousActiveStreamId = activeStreamId.get();
+  let workflowReaderStreamId: StreamTabId | undefined;
+  let workflowReaderLease: TranscriptPresentationLease | undefined;
+  let workflowReaderRevision = 0;
 
   // One trailing timer shared by every stream: during a multi-subagent burst
   // the root and each child emit within the same window, and per-stream
@@ -155,11 +139,7 @@ export function subscribeStreamLog(session: StreamLogSession): () => void {
   // batch window coalesces them into a single pass; each stream's buffered
   // delta is folded when it fires, so batching loses nothing.
   const syncDebounce = createFlushableDebounce(() => {
-    for (const [streamId, pending] of [...PENDING_DELTAS]) {
-      if (pending.generation !== getCliStateGeneration()) {
-        PENDING_DELTAS.delete(streamId);
-        continue;
-      }
+    for (const streamId of [...PENDING_DELTAS.keys()]) {
       trySyncStreamLog(session, streamId);
     }
   }, STREAM_SYNC_THROTTLE_MS);
@@ -168,15 +148,11 @@ export function subscribeStreamLog(session: StreamLogSession): () => void {
     if (isCliStreamRetired(streamId)) return;
     const pending = PENDING_DELTAS.get(streamId);
     if (pending) {
-      pending.buffer.push(delta);
-      pending.generation = getCliStateGeneration();
+      pending.push(delta);
     } else {
       const buffer = new StreamLogDeltaBuffer(delta.emissionSeq - 1);
       buffer.push(delta);
-      PENDING_DELTAS.set(streamId, {
-        buffer,
-        generation: getCliStateGeneration(),
-      });
+      PENDING_DELTAS.set(streamId, buffer);
     }
     // Only start the window on its first tick — later ticks in the same
     // window join the batch without resetting the countdown (`pending`
@@ -215,9 +191,59 @@ export function subscribeStreamLog(session: StreamLogSession): () => void {
       });
   });
 
+  const syncWorkflowReader = (): void => {
+    const nextStreamId = foregroundWorkflowReaderStreamId();
+    if (nextStreamId === workflowReaderStreamId) return;
+
+    const previousStreamId = workflowReaderStreamId;
+    workflowReaderStreamId = nextStreamId;
+    const revision = ++workflowReaderRevision;
+
+    if (previousStreamId !== undefined) {
+      // The signal already names the next surface, so this projects the old
+      // workflow back to its bounded background dashboard before releasing it.
+      trySyncStreamLog(session, previousStreamId);
+      workflowReaderLease?.close();
+      workflowReaderLease = undefined;
+      releaseInactiveStreamTranscript(store, previousStreamId);
+    }
+    if (nextStreamId === undefined) return;
+
+    void store
+      .ensureLoaded(nextStreamId, { retainForPresentation: true })
+      .then((lease) => {
+        if (
+          revision !== workflowReaderRevision ||
+          foregroundWorkflowReaderStreamId() !== nextStreamId
+        ) {
+          lease.close();
+          return;
+        }
+        workflowReaderLease = lease;
+        trySyncStreamLog(session, nextStreamId);
+      })
+      .catch((error: unknown) => {
+        if (foregroundWorkflowReaderStreamId() === nextStreamId) {
+          setTransientNotice(
+            `Could not load transcript: ${toErrorMessage(error)}`,
+            { ttlMs: Number.POSITIVE_INFINITY },
+          );
+        }
+      });
+  };
+  const disposeWorkflowReader = subscribeToSignalChanges(
+    [foregroundReader],
+    syncWorkflowReader,
+  );
+  syncWorkflowReader();
+
   return () => {
     dispose();
     disposeFocus();
+    disposeWorkflowReader();
+    workflowReaderRevision += 1;
+    workflowReaderLease?.close();
+    workflowReaderLease = undefined;
     // Cancel, not flush: the caller is tearing down (process exit or
     // unmount), so a final render of whatever was still pending isn't
     // needed and would race an already-torn-down UI.
@@ -250,7 +276,7 @@ export function syncStreamLog(
   session.flushPendingTraces();
   const store = session.transcripts;
   const log = store.get(streamId);
-  const pending = PENDING_DELTAS.get(streamId);
+  const buffer = PENDING_DELTAS.get(streamId);
   PENDING_DELTAS.delete(streamId);
   if (!log) {
     // No resident log (never created, or evicted): nothing to fold, but a
@@ -274,29 +300,33 @@ export function syncStreamLog(
     }
     return;
   }
-  const buffer = pending?.buffer;
-
   const currentActiveStreamId = activeStreamId.get();
   const projectFullTranscript =
-    currentActiveStreamId === undefined || currentActiveStreamId === streamId;
+    currentActiveStreamId === undefined ||
+    currentActiveStreamId === streamId ||
+    foregroundWorkflowReaderStreamId() === streamId;
 
   const metadata = streamMetadataFor(streamId);
-  patchStream(streamId, (slice, lifecycle) => {
+  const streamSettled = isTranscriptSettlementPhase(
+    streamPhaseFor(streamId)?.phase,
+  );
+  patchStream(streamId, (slice) => {
     const workflowStream = metadata?.agentCategory === AgentCategory.Workflow;
     const fullLogChild = isFullLogChildStream(metadata?.identity);
-    const workflowOperationalOnly = workflowStream && !fullLogChild;
+    // Which line a workflow-agent stream reports as its live status is CLI
+    // chrome, not transcript membership: the rows themselves are the same set
+    // every host renders.
+    const workflowStatusFeed = workflowStream && !fullLogChild;
     // Run/round/session headings go to the task-group surface wherever this
     // host paints one. The single exception is a full-log child that is not a
     // workflow run — a detached process or an external-CLI session, which has
     // no task-group renderer and whose verbatim log is the point of opening
     // it, so its headings stay transcript rows.
     const lifecycleToTaskGroups = workflowStream || !fullLogChild;
-    const streamSettled = isTranscriptSettlementPhase(lifecycle.status);
     const streamFinal = options.forceFinal === true || streamSettled;
     const state = slice.transcriptFold ?? createTranscriptFoldState();
     const flags = newFoldChangeFlags();
     const modeCurrent =
-      state.workflowOperationalOnly === workflowOperationalOnly &&
       state.projectLifecycleToTaskGroups === lifecycleToTaskGroups;
     // Fold continuity: same log instance, and either the buffered burst picks
     // up exactly where the state left off and reaches the log's emission
@@ -376,7 +406,6 @@ export function syncStreamLog(
         if (index < promotedCount) promotedIds.add(row.id);
       }
       resetTranscriptFoldState(state);
-      state.workflowOperationalOnly = workflowOperationalOnly;
       state.projectLifecycleToTaskGroups = lifecycleToTaskGroups;
       state.logInstanceId = log.instanceId;
       state.emissionSeq = log.emissionHead;
@@ -391,30 +420,26 @@ export function syncStreamLog(
       });
     }
 
-    const { taskGroups, compaction } = projections;
+    const { taskGroups, workflowPlan, compaction } = projections;
     const compactingActive = compaction.blocks.some(
       (block) => block.status === 'running',
     );
-    const live = state.liveActivityEntry;
+    // The indicator reads the rows the transcript already holds — the newest
+    // thinking row, still streaming — rather than a second tracker over raw
+    // log entries. A thinking block the producer opened but never wrote text
+    // into projects no row, and so lights nothing up.
+    const lastThinkingRow = state.items.findLast(
+      (item) => item.rendered.kind === 'thinking',
+    )?.rendered;
     const thinkingActive =
-      live !== undefined &&
-      live.messageType === MESSAGE_TYPES.THINKING &&
-      logEntryStreamIsRunning(live);
+      lastThinkingRow?.kind === 'thinking' && lastThinkingRow.streaming;
 
     // Transcript-derived live status only. The shared metadata `description`
     // is the runtime's own one-liner and is never written from here.
-    const latestUserPos = state.latestUserPos;
-    const latestInstruction =
-      latestUserPos >= 0
-        ? transcriptRowHeadline(state.items[latestUserPos].rendered)
-        : undefined;
-    const latestLine = workflowOperationalOnly
-      ? (workflowOperationalLatestLine(state.items) ?? slice.latestLine)
-      : ((state.latestResponsePos > latestUserPos
-          ? transcriptRowHeadline(state.items[state.latestResponsePos].rendered)
-          : undefined) ??
-        latestInstruction ??
-        slice.latestLine);
+    const latestLine =
+      (workflowStatusFeed
+        ? workflowOperationalLatestLine(state.items)
+        : latestConversationLine(state)) ?? slice.latestLine;
 
     // A compact workflow keeps only its bounded canonical dashboard rows plus
     // synthetic operational rows; ordinary inactive streams keep synthetic
@@ -458,10 +483,8 @@ export function syncStreamLog(
       slice.latestLine === latestLine &&
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
-      slice.workflowAttemptId === state.workflowAttemptId &&
-      slice.workflowAttemptBoundaryDeclared ===
-        state.workflowAttemptBoundaryDeclared &&
-      slice.taskGroups === taskGroups
+      slice.taskGroups === taskGroups &&
+      slice.workflowPlan === workflowPlan
     ) {
       return slice;
     }
@@ -473,9 +496,8 @@ export function syncStreamLog(
       finalizedFrontier,
       thinkingActive,
       compactingActive,
-      workflowAttemptId: state.workflowAttemptId,
-      workflowAttemptBoundaryDeclared: state.workflowAttemptBoundaryDeclared,
       taskGroups,
+      workflowPlan,
     };
   });
 
@@ -486,10 +508,11 @@ export function syncStreamLog(
 
 /**
  * Release a background stream's transcript residency at a lifecycle
- * boundary. Two owners call this — the status subscriber when a stream
- * leaves its active phase, and the focus subscriber when focus moves off a
- * stream — never the render/sync path, so a terminal stream always
- * releases rather than only when a sync happens to run for it. A no-op for
+ * boundary. Three owners call this — the status subscriber when a stream
+ * leaves its active phase, the focus subscriber when focus moves off a
+ * stream, and the foreground workflow reader when it closes or changes —
+ * never the render/sync path, so a terminal stream always releases rather
+ * than only when a sync happens to run for it. A no-op for
  * the active stream, for a stream whose status is unknown or active, and
  * while no stream is focused (every stream then projects the full
  * transcript, exactly the states the old in-sync release also skipped).
@@ -508,17 +531,21 @@ export function releaseInactiveStreamTranscript(
   const currentActiveStreamId = activeStreamId.get();
   if (
     currentActiveStreamId === undefined ||
-    currentActiveStreamId === streamId
+    currentActiveStreamId === streamId ||
+    foregroundWorkflowReaderStreamId() === streamId
   ) {
     return;
   }
   const slice = streams.get().get(streamId);
-  if (slice?.status === undefined || isActivePhase(slice.status)) return;
+  if (!slice) return;
+  const phase = streamPhaseFor(streamId)?.phase;
+  if (phase === undefined || isActivePhase(phase)) return;
   store.requestEviction(streamId);
   const fold = slice.transcriptFold;
   if (fold) {
     resetTranscriptFoldState(fold);
     fold.taskGroupProjection = undefined;
     fold.compactionProjection = undefined;
+    fold.workflowPlan = undefined;
   }
 }

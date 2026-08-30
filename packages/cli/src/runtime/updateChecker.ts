@@ -4,7 +4,6 @@ import { execa } from 'execa';
 import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
-import type { StateStore } from '@platform/interfaces';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
@@ -44,10 +43,19 @@ const HOMEBREW_COMMAND_TIMEOUT_MS = 10000;
 export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
 
 /**
- * Guess the package manager from the path the binary runs out of. Homebrew and
- * global pnpm/yarn/bun installs each leave a recognizable segment in the path;
- * npm's global layout has none, so it is the fallback.
+ * Guess the package manager from the path the binary runs out of, or
+ * `undefined` when the binary was not installed by one at all.
  *
+ * Two layouts mark a managed install: a `node_modules` segment (npm/pnpm/yarn/
+ * bun globals install the package under `node_modules/@texra-ai/cli`) and a
+ * `cellar` segment (Homebrew's tap formula installs the bundled binary under
+ * `Cellar/texra/<version>/…`, which need not contain `node_modules`). A source
+ * checkout or `npm link` build runs straight from `packages/cli/dist` and
+ * matches neither, so an "update with `npm install -g …`" prompt would be
+ * misleading — {@link notifyCliUpdate} skips the check for those.
+ *
+ * Within a managed install, Homebrew and global pnpm/yarn/bun each leave a
+ * recognizable segment; npm's global layout has none, so it is the fallback.
  * Homebrew's Tier-1 formula installs the npm package into the Cellar, so a brew
  * install must NOT be treated as a plain npm global — `npm install -g` would
  * shadow or clash with the brew-managed copy. Only the `Cellar` segment marks a
@@ -56,9 +64,10 @@ export type InstallMethod = 'npm' | 'pnpm' | 'yarn' | 'bun' | 'brew';
  */
 export function detectInstallMethod(
   modulePath: string = currentModulePath(),
-): InstallMethod {
+): InstallMethod | undefined {
   const segments = modulePath.toLowerCase().split(/[\\/]+/);
   if (segments.includes('cellar')) return 'brew';
+  if (!segments.includes('node_modules')) return undefined;
   if (segments.some((part) => part === 'bun' || part === '.bun')) return 'bun';
   if (segments.some((part) => part === 'pnpm' || part === '.pnpm'))
     return 'pnpm';
@@ -77,27 +86,6 @@ function currentModulePath(): string {
   }
 }
 
-/**
- * True when the running binary was installed by a package manager. Two layouts
- * mark a managed install:
- * - a `node_modules` segment — npm/pnpm/yarn/bun globals install the package
- *   under `node_modules/@texra-ai/cli`;
- * - a `cellar` segment — Homebrew's tap formula installs the bundled binary
- *   under `Cellar/texra/<version>/…`, which need not contain a `node_modules`
- *   segment (this mirrors how {@link detectInstallMethod} recognizes brew).
- *
- * A source checkout or `npm link` build runs straight from `packages/cli/dist`
- * and matches neither, so an "update with `npm install -g …`" prompt would be
- * misleading (it cannot update the checkout) — {@link notifyCliUpdate} skips
- * the check for those.
- */
-export function isPackageManagerInstall(
-  modulePath: string = currentModulePath(),
-): boolean {
-  const segments = modulePath.toLowerCase().split(/[\\/]+/);
-  return segments.includes('node_modules') || segments.includes('cellar');
-}
-
 export function buildUpdateCommand(method: InstallMethod): {
   command: string;
   args: readonly string[];
@@ -112,8 +100,8 @@ export function buildUpdateCommand(method: InstallMethod): {
     case 'brew':
       // Brew prompts are gated on the locally-known formula version, then the
       // tap is refreshed immediately before upgrade. Run via the shell chain
-      // (`runCliUpdate` and `formatUpdateCommand` both treat the result as a
-      // shell command).
+      // (both `runCliUpdate` and the printed hint treat the result as a shell
+      // command).
       return {
         command: 'brew',
         args: ['update', '&&', 'brew', 'upgrade', CLI_HOMEBREW_FORMULA],
@@ -121,11 +109,6 @@ export function buildUpdateCommand(method: InstallMethod): {
     case 'npm':
       return { command: 'npm', args: ['install', '-g', target] };
   }
-}
-
-export function formatUpdateCommand(method: InstallMethod): string {
-  const { command, args } = buildUpdateCommand(method);
-  return [command, ...args].join(' ');
 }
 
 /** Fetch the `latest` dist-tag version from the npm registry, or undefined. */
@@ -247,52 +230,6 @@ async function runCliUpdate(method: InstallMethod): Promise<boolean> {
   return !result.failed;
 }
 
-export interface CheckCliUpdateAvailableOptions {
-  currentVersion: string;
-  globalState: StateStore;
-  /** Fetch the latest published version plus whether the source was live. */
-  fetchLatest: () => Promise<UpdateCheckFetchResult>;
-  /**
-   * Present a newer version to the user (notice + prompt). Called only when a
-   * strictly newer version was fetched, and always before the daily stamp is
-   * persisted — a throw (e.g. stdin closing mid-prompt) aborts the attempt
-   * un-stamped so the next launch re-checks instead of going silent for the
-   * full throttle window.
-   */
-  notify: (latest: string) => Promise<void>;
-  now?: () => number;
-}
-
-/**
- * At most once per day (persisted in global state), fetch the latest
- * published version and report it when newer than `currentVersion`. The shared
- * daily-check state machine writes the stamp only after the source was
- * genuinely consulted (`refreshed`, not a stale brew cache behind a failed tap
- * refresh) and, when an update was available, `notify` resolved. Any other
- * outcome (offline, registry hiccup, failed tap refresh, killed prompt) leaves
- * the stamp unwritten so the next launch retries. CLI stamp persistence is
- * best-effort: a failed write means an early re-check, not a failed update.
- */
-export async function checkCliUpdateAvailable({
-  currentVersion,
-  globalState,
-  fetchLatest,
-  notify,
-  now = Date.now,
-}: CheckCliUpdateAvailableOptions): Promise<string | undefined> {
-  return runDailyUpdateCheck({
-    currentVersion,
-    state: globalState,
-    lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
-    fetchLatest,
-    notify,
-    now,
-    // A readable-but-unwritable global state file must not cancel an update
-    // the user already accepted; the next launch merely checks again early.
-    stampFailure: 'ignore',
-  });
-}
-
 /** Once-per-process latch for {@link notifyCliUpdate}. */
 let updateNotifyStarted = false;
 
@@ -304,11 +241,11 @@ export function resetCliUpdateNotifyLatchForTests(): void {
 
 /**
  * Once per process: check the package source for a newer release (at most
- * once per day — see {@link checkCliUpdateAvailable}) and, in an interactive
- * terminal, offer to run the matching global install. npm-like installs read
- * the npm registry; Homebrew installs refresh local tap metadata before
- * reading the formula version. Failures are silent so a flaky network never
- * gets between the user and their session.
+ * once per day, throttled through a stamp persisted in global state) and, in
+ * an interactive terminal, offer to run the matching global install. npm-like
+ * installs read the npm registry; Homebrew installs refresh local tap metadata
+ * before reading the formula version. Failures are silent so a flaky network
+ * never gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
  */
@@ -328,10 +265,11 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   if (context.outputFormat === 'ndjson' || context.quietLogs === true) return;
   // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
   // node_modules tree; an `npm install -g` prompt can't update it, so skip.
-  if (!isPackageManagerInstall()) return;
-
   const method = detectInstallMethod();
-  const updateCmd = formatUpdateCommand(method);
+  if (!method) return;
+
+  const { command, args } = buildUpdateCommand(method);
+  const updateCmd = [command, ...args].join(' ');
   const style = createCliStyle(context.stderrColorEnabled);
   // Runs before `initInteractiveCliPlatform`, so `platform()` isn't up yet —
   // open the same global `state.json` that `createCliStateStores` opens later
@@ -345,9 +283,10 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     const globalState = await openCliGlobalStateStore(
       createNodeStorageProvider(),
     );
-    latest = await checkCliUpdateAvailable({
+    latest = await runDailyUpdateCheck({
       currentVersion: context.version,
-      globalState,
+      state: globalState,
+      lastCheckedAtKey: GlobalStateKey.CLI_UPDATE_CHECK_LAST_CHECKED_AT,
       fetchLatest: async () => {
         if (method === 'brew') {
           return fetchLatestHomebrewFormulaVersion({ cwd: context.cwd });
@@ -366,6 +305,9 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
         confirmed =
           normalized === '' || normalized === 'y' || normalized === 'yes';
       },
+      // A readable-but-unwritable global state file must not cancel an update
+      // the user already accepted; the next launch merely checks again early.
+      stampFailure: 'ignore',
     });
   } catch {
     return;

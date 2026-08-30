@@ -17,7 +17,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import type { ExecutionId, StorageKey, StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { AgentCategory } from '@shared/schemas';
 import { testModelCell } from '../modelCellTestUtils';
@@ -71,7 +71,6 @@ export function createTestLaunchContext({
     agentCategory: category,
   });
   const setting = AgentSettingSchema.parse({ agentCategory: category });
-  const storageKey = executionId as StorageKey;
   const modelCell = testModelCell(
     { ...testModelInfo, dispose: vi.fn() },
     config.model,
@@ -90,13 +89,12 @@ export function createTestLaunchContext({
     }),
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
-    storageKey,
-    userVarChannels: { input: Object.freeze({}), transient: {} },
+    userVarChannels: {},
     toolPolicy: createToolPolicy(),
     attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
       modelCell,
-      { logger, storageKey, streamId },
+      { logger, executionId, runStageId: undefined, streamId },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     modelCell,

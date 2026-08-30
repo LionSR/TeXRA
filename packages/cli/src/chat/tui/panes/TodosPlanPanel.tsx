@@ -13,7 +13,6 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
-import { assertNever } from '@utils/core';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
@@ -46,29 +45,33 @@ function TodoRow({ todo }: { readonly todo: TodoItem }): React.JSX.Element {
 
 export type CompactTodosPlanRow =
   | { kind: 'todo'; sourceIndex: number; todo: TodoItem }
+  | { kind: 'completedSummary'; sourceIndex: number; count: number }
   | { kind: 'planSummary'; sourceIndex: number; summary: string };
 
-// Sort priority by (row kind, status). Statuses absent for the todo kind use
-// DEFAULT_TODO_ROW_PRIORITY; planSummary has a single fixed priority.
-const COMPACT_TODO_ROW_PRIORITY: Partial<Record<TodoStatus, number>> = {
+// Sort priority by (row kind, status). The map is total, so a new status
+// compile-fails here instead of silently sorting at a default; planSummary has
+// a single fixed priority.
+const COMPACT_TODO_ROW_PRIORITY: Record<TodoStatus, number> = {
   [TODO_STATUS.IN_PROGRESS]: 0,
   [TODO_STATUS.PENDING]: 1,
   [TODO_STATUS.COMPLETED]: 4,
 };
-const DEFAULT_TODO_ROW_PRIORITY = 3;
+const COMPLETED_SUMMARY_PRIORITY = 2;
 const PLAN_SUMMARY_PRIORITY = 5;
 
 function compactRowPriority(row: CompactTodosPlanRow): number {
   switch (row.kind) {
     case 'todo':
-      return (
-        COMPACT_TODO_ROW_PRIORITY[row.todo.status] ?? DEFAULT_TODO_ROW_PRIORITY
-      );
+      return COMPACT_TODO_ROW_PRIORITY[row.todo.status];
+    case 'completedSummary':
+      return COMPLETED_SUMMARY_PRIORITY;
     case 'planSummary':
       return PLAN_SUMMARY_PRIORITY;
-    default:
-      return assertNever(row, 'Unknown compact todos/plan row kind');
   }
+}
+
+function representedSourceRows(row: CompactTodosPlanRow): number {
+  return row.kind === 'completedSummary' ? row.count : 1;
 }
 
 export function compactTodosPlanRows({
@@ -104,10 +107,30 @@ export function compactTodosPlanRows({
     return { hiddenCount: allRows.length, rows: [] };
   }
 
+  // Once the full checklist no longer fits, completed history becomes one
+  // quiet count. Keep the current and remaining work as individual rows.
+  const completedRows = allRows.filter(
+    (row) => row.kind === 'todo' && row.todo.status === TODO_STATUS.COMPLETED,
+  );
+  const compactRows = allRows.filter(
+    (row) => row.kind !== 'todo' || row.todo.status !== TODO_STATUS.COMPLETED,
+  );
+  if (completedRows.length > 0) {
+    compactRows.push({
+      kind: 'completedSummary',
+      sourceIndex: completedRows.at(-1)?.sourceIndex ?? 0,
+      count: completedRows.length,
+    });
+    compactRows.sort((left, right) => left.sourceIndex - right.sourceIndex);
+  }
+  if (compactRows.length <= rowBudget) {
+    return { hiddenCount: 0, rows: compactRows };
+  }
+
   // At one row, show the highest-signal item instead of spending the only row
   // on the hidden-count marker.
   const visibleCount = rowBudget === 1 ? 1 : rowBudget - 1;
-  const rows = [...allRows]
+  const rows = [...compactRows]
     .sort(
       (left, right) =>
         compactRowPriority(left) - compactRowPriority(right) ||
@@ -117,7 +140,9 @@ export function compactTodosPlanRows({
     .sort((left, right) => left.sourceIndex - right.sourceIndex);
 
   return {
-    hiddenCount: allRows.length - rows.length,
+    hiddenCount: compactRows
+      .filter((row) => !rows.includes(row))
+      .reduce((count, row) => count + representedSourceRows(row), 0),
     rows,
   };
 }
@@ -138,6 +163,14 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   switch (row.kind) {
     case 'todo':
       return <TodoRow todo={row.todo} />;
+    case 'completedSummary':
+      return (
+        <Box height={1} minWidth={0} overflowY="hidden">
+          <Text color={COLOR_SUCCESS} dimColor wrap="truncate-end">
+            {TODO_DONE} {row.count} completed
+          </Text>
+        </Box>
+      );
     case 'planSummary':
       return (
         <Box height={1} minWidth={0} overflowY="hidden">
@@ -149,7 +182,7 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   }
 }
 
-export interface TodosPlanPanelProps {
+interface TodosPlanPanelProps {
   readonly maxRows: number;
   readonly plan: Plan | null;
   readonly todos: readonly TodoItem[];

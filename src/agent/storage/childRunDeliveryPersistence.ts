@@ -1,25 +1,28 @@
 /**
- * Best-effort persistence of the artifacts delivered by a child run. A lost
- * execution lease is not a best-effort failure: the run has been displaced
- * and must stop, so that one error propagates.
+ * Persistence of the artifacts delivered by a child run. Both writes are
+ * load-bearing: the post-drain commit marker attests that the child's report
+ * and result reached disk, so a failed write fails the delivery (and with it
+ * the artifact flush) instead of letting that marker be written over a
+ * missing report. A lost execution lease propagates as itself: the run has
+ * been displaced and must stop.
  */
+import { createLog } from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   persistChildRunReport,
   persistChildRunResultMeta,
 } from './childRunPersistence';
-import {
-  ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
-} from './executionLease';
+import { ExecutionLeaseLostError } from './executionLease';
 import type { ResultMeta } from './resultMeta';
 
-export async function persistChildRunDeliveryBestEffort(
+const log = createLog('ChildRunDeliveryPersistence');
+
+export async function persistChildRunDelivery(
   executionId: ExecutionId,
   message: string,
   resultMeta: ResultMeta | undefined,
-  onFailure: (kind: 'report' | 'result manifest', error: unknown) => void,
 ): Promise<void> {
   const [report, manifest] = await Promise.all([
     persistChildRunReport(executionId, message),
@@ -33,7 +36,12 @@ export async function persistChildRunDeliveryBestEffort(
   ] as const) {
     if (result.kind !== 'failed') continue;
     if (result.err instanceof ExecutionLeaseLostError) throw result.err;
-    markOwnedExecutionLeaseUndurable(executionId);
-    onFailure(kind, result.err);
+    log.warn(`Failed to persist ${kind} for ${executionId}`, {
+      data: result.err,
+    });
+    throw new Error(
+      `Failed to persist ${kind} for ${executionId}: ${toErrorMessage(result.err)}`,
+      { cause: result.err },
+    );
   }
 }

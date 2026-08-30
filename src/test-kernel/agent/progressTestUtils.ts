@@ -1,9 +1,6 @@
 // Local imports
 import type { AgentEvent } from '@agent/trace';
-import {
-  AgentRunStateSnapshotSchema,
-  ConversationRoundStateSnapshotSchema,
-} from '@agent/core/state/AgentState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
@@ -117,7 +114,6 @@ export function toolUseRunShared(
 /**
  * The `ReflectionFlowShared` baseline reflection-node tests start from: round
  * zero of a two-round run, an empty workspace and no resolved output location.
- * The round context tracks `currentRound` unless an override replaces it.
  */
 export function reflectionFlowShared(
   overrides: Partial<ReflectionFlowShared> = {},
@@ -127,14 +123,8 @@ export function reflectionFlowShared(
     currentRound,
     totalRounds: 2,
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    context: {
-      messages: [],
-      stateRoundSnapshot: ConversationRoundStateSnapshotSchema.parse({
-        roundIndex: currentRound,
-      }),
-    },
+    context: [],
     outputLocation: null,
-    conversation: [],
     runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
     roundOutputs: [],
     continueRounds: true,
@@ -195,7 +185,6 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
         payload: {
           streamId,
           suppressViewSwitch: true,
-          ensureVisible: true,
         },
       });
     }
@@ -413,7 +402,7 @@ export function sessionWithInteractions(
     | SessionHostInteractions
     | Pick<SessionHostInteractions, 'emit'>
     | undefined,
-  status = new StreamStatusMachine(new SessionEventHub()),
+  eventHub?: SessionEventHub,
 ): SessionHandle {
   const owner =
     interactions instanceof SessionHostInteractions
@@ -426,12 +415,20 @@ export function sessionWithInteractions(
         : { ...interactions, cancel: () => {} },
     );
   }
+  // Like production SessionHandle, the stub carries a real event hub and
+  // co-constructs the status machine on that same hub — emit sites resolve
+  // `session.events` directly, and status facts publish on the hub the
+  // session's listeners read (SessionHandleInit documents why an injected
+  // machine is forbidden). Tests that record status facts pass the hub in.
+  const events = eventHub ?? new SessionEventHub();
   return {
     interactions: owner,
+    events,
     approvals: createSessionApprovals(owner),
     modelRetries: new ModelRetryGate(),
-    status,
+    status: new StreamStatusMachine(events),
     transcripts: { ensureLoaded: async () => {} },
+    followUps: { terminalize: () => false },
   } as unknown as SessionHandle;
 }
 

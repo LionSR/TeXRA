@@ -2,7 +2,7 @@
  * State management for output processing.
  *
  * Manages mutable state for output files across rounds, including
- * round data, storage keys, and workspace preparation.
+ * round data and workspace preparation.
  *
  * `OutputState.rounds` is the canonical live collection, keyed by round
  * index (`Map<number, RoundOutput>`). The reflection flow hydrates it from
@@ -16,21 +16,17 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { RunScope } from '@agent/runtime/RunScope';
 import {
-  fileLocationDisplayPath,
   type CompileFailure,
   type FileLocation,
   type OutputFileInfo,
   type RoundIndexed,
   type RoundOutput,
-  type StorageKey,
 } from '@shared/schemas';
-import { pathToLocation } from '@utils/files/fileLocation';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 export interface OutputState {
   rounds: Map<number, RoundOutput>;
   openedOutputs: Set<string>;
-  storageKey: StorageKey | null;
   runPreparation: Promise<void> | null;
 }
 
@@ -54,7 +50,6 @@ export function createOutputState(
   return {
     rounds,
     openedOutputs: new Set(),
-    storageKey: null,
     runPreparation: null,
   };
 }
@@ -98,15 +93,6 @@ export async function withOutputStage<T>(
   return stage.run(() => fn(stage));
 }
 
-export function getStorageKey(state: OutputState): StorageKey {
-  if (state.storageKey == null) {
-    throw new Error(
-      'OutputState.storageKey is unset: setActiveRun() must run before output processing reads the storage key',
-    );
-  }
-  return state.storageKey;
-}
-
 export function ensureRoundData(
   state: OutputState,
   round: number,
@@ -145,41 +131,4 @@ export function setCompileFailures(
   failures: CompileFailure[],
 ): void {
   ensureRoundData(state, round).compileFailures = failures;
-}
-
-function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
-  const allPaths = [
-    ...agentConfig.contextFiles,
-    ...agentConfig.mediaFiles,
-    ...agentConfig.inputFiles,
-  ];
-
-  const extras = new Map<string, FileLocation>();
-  for (const value of allPaths) {
-    if (!value) continue;
-    const location = pathToLocation(value);
-    extras.set(fileLocationDisplayPath(location), location);
-  }
-
-  return [...extras.values()];
-}
-
-export function setActiveRun(
-  state: OutputState,
-  deps: OutputDependencies,
-  storageKey: StorageKey,
-): void {
-  if (storageKey === state.storageKey) return;
-
-  // Clear reference to old preparation - allows GC even if it's still running
-  // The old operation will complete but its result is discarded
-  state.runPreparation = null;
-
-  state.storageKey = storageKey;
-  state.openedOutputs.clear();
-
-  const supportFiles = collectRunSupportFiles(deps.config);
-  state.runPreparation = deps.fileService.prepareRunWorkspace(deps.baseFiles, {
-    linkFiles: supportFiles,
-  });
 }

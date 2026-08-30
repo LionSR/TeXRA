@@ -39,12 +39,11 @@ import {
 } from '@common/errors/sdkError/providerErrorFormat';
 import type { ResolvedModelConfig } from '@model/openRouterRouting';
 import {
-  DEFAULT_CORE_SETTINGS,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelRetryMaxAttemptsSchema,
   STREAM_PHASE,
   toRetryErrorInfo,
   type RetryErrorInfo,
-  type ToolDefinition,
 } from '@shared/schemas';
 import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 import { generateShortId } from '@utils/core';
@@ -76,7 +75,7 @@ function getNodeMaxRetries(): number {
     getValidatedConfig(
       'texra.model.retry.maxAttempts',
       ModelRetryMaxAttemptsSchema,
-      DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     )
   );
 }
@@ -138,7 +137,6 @@ export interface ModelInvocationConfig<TShared, TServices> {
     services: TServices,
   ) => string | undefined;
   getEndTag?: (services: TServices) => string | undefined;
-  getTools?: (services: TServices) => ToolDefinition[] | undefined;
   getFinalTool?: (
     shared: TShared,
     services: TServices,
@@ -194,7 +192,7 @@ export class ModelInvocationNode<
     this._config = config;
   }
 
-  clone(): this {
+  override clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
     cloned._retryLifecycle = undefined;
@@ -202,13 +200,10 @@ export class ModelInvocationNode<
   }
 
   /** Rebuilds the run's client for the configured credential, logging failure. */
-  private async rebindClient(
-    context: string,
-    signal?: AbortSignal,
-  ): Promise<void> {
+  private async rebindClient(context: string): Promise<void> {
     const { logger, modelCell } = this.services;
     try {
-      await modelCell.rebind(undefined, signal);
+      await modelCell.rebind();
       logger.debug(`Refreshed model client ${context}`);
     } catch (rebindError) {
       logger.warn(`Failed to refresh model client ${context}`, {
@@ -302,7 +297,6 @@ export class ModelInvocationNode<
   private recordResolvedAttempt(
     result: InvocationSuccess,
     attemptSource: RetryAttemptSource,
-    details: Record<string, unknown> = {},
   ): InvocationSuccess {
     // An empty response resolves the provider call but carries nothing the
     // cycle can use, so the lifecycle records it as a failed attempt.
@@ -310,7 +304,6 @@ export class ModelInvocationNode<
     this.logRetryLifecycle(succeeded ? 'attempt_succeeded' : 'attempt_failed', {
       decisionSource: attemptSource,
       ...(succeeded ? {} : { failureKind: 'invalid_result' }),
-      ...details,
     });
     return result;
   }
@@ -367,7 +360,7 @@ export class ModelInvocationNode<
     return isProviderErrorAutoRetryable(error);
   }
 
-  async _exec(prepRes: unknown): Promise<unknown> {
+  override async _exec(prepRes: unknown): Promise<unknown> {
     this._userCancelled = false;
     let maxRetries = getNodeMaxRetries();
 
@@ -561,7 +554,7 @@ export class ModelInvocationNode<
     const kimiCodeRoutedOnFailure = isKimiCodeExclusiveModel(
       failedModel.config,
     );
-    const interaction = session.interactions.requestRetry(
+    const result = await session.interactions.requestRetry(
       {
         requestId: `retry-${generateShortId()}`,
         streamId,
@@ -582,10 +575,6 @@ export class ModelInvocationNode<
         },
       },
     );
-    if (!interaction) {
-      throw new Error('HostInteractions.requestRetry is required');
-    }
-    const result = await interaction;
     const retrySource =
       result.action === 'retry'
         ? (result.decisionSource ?? 'human')
@@ -659,7 +648,7 @@ export class ModelInvocationNode<
     };
   }
 
-  async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
+  override async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
@@ -668,7 +657,9 @@ export class ModelInvocationNode<
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<InvocationResult> {
+  override async exec(
+    prepRes: BaseInvocationPrepResult,
+  ): Promise<InvocationResult> {
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
@@ -702,11 +693,7 @@ export class ModelInvocationNode<
           systemPrompt: prepRes.systemPrompt,
           endTag: this._config.getEndTag?.(services),
           signal,
-          // `?? services.setting.tools` would be wrong here: a configured
-          // getTools that returns undefined is an explicit "no tools".
-          tools: this._config.getTools
-            ? this._config.getTools(services)
-            : services.setting.tools,
+          tools: services.setting.tools,
           finalTool: prepRes.finalTool,
         });
 
@@ -718,33 +705,35 @@ export class ModelInvocationNode<
         };
       };
 
+      // One wire route owns transport and server-failure cooling. The
+      // narrower model scope is acquired first, so model-specific limits do
+      // not block healthy sibling models on the same credential and endpoint.
       return gate.run(
-        wireRoute,
+        [
+          {
+            key: modelRetryRoute,
+            classifyFailure: (error) => {
+              const verdict = verdictFor(error);
+              return verdict.rateLimitScope === 'model'
+                ? { retryAfterMs: verdict.retryAfterMs }
+                : undefined;
+            },
+          },
+          {
+            key: wireRoute,
+            classifyFailure: (error) => {
+              const verdict = verdictFor(error);
+              return verdict.wireRouteFailure
+                ? { retryAfterMs: verdict.retryAfterMs }
+                : undefined;
+            },
+            isReachableFailure: (error) =>
+              verdictFor(error).rateLimitScope === 'model',
+          },
+        ],
         {
           signal,
           baseBackoffMs: RETRY_BACKOFF_MS,
-          // One wire route owns transport and server-failure cooling. A second
-          // ordered scope keeps model-specific limits from blocking healthy
-          // sibling models on the same credential and endpoint.
-          classifyFailure: (error) => {
-            const verdict = verdictFor(error);
-            return verdict.wireRouteFailure
-              ? { retryAfterMs: verdict.retryAfterMs }
-              : undefined;
-          },
-          isReachableFailure: (error) =>
-            verdictFor(error).rateLimitScope === 'model',
-          additionalRoutes: [
-            {
-              key: modelRetryRoute,
-              classifyFailure: (error) => {
-                const verdict = verdictFor(error);
-                return verdict.rateLimitScope === 'model'
-                  ? { retryAfterMs: verdict.retryAfterMs }
-                  : undefined;
-              },
-            },
-          ],
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,
@@ -755,14 +744,14 @@ export class ModelInvocationNode<
     });
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: BaseInvocationPrepResult,
     error: Error,
   ): Promise<InvocationResult> {
     return this.getFallbackResult(error);
   }
 
-  async post(
+  override async post(
     shared: TShared,
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult,

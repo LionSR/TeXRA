@@ -165,28 +165,6 @@ describe('compiled PDF artifacts', () => {
     );
   });
 
-  it('allows callers to publish diff PDFs with canonical names', async () => {
-    const runDirectory = await makeTempDir();
-    const buildDir = path.join(runDirectory, 'diff', 'r1', 'build');
-    const compiledPdfPath = path.join(buildDir, 'output-diff.pdf');
-    await writePdf(compiledPdfPath, 'diff pdf');
-
-    const artifact = await publishCompiledPdfArtifact({
-      runDirectory,
-      executionId: 'def456',
-      round: 1,
-      displayName: 'chapter-diff.pdf',
-      source: externalSource(runDirectory, 'diff.tex'),
-      compiledPdfPath,
-      outputPdfName: 'chapter-diff.pdf',
-    });
-
-    expect(artifact?.pdf.relativePath).toBe('output/r1/chapter-diff.pdf');
-    expect(artifact?.latestPdf.relativePath).toBe(
-      'output/latest/chapter-diff.pdf',
-    );
-  });
-
   it('derives diff PDF names from the same source path rule', async () => {
     const runDirectory = await makeTempDir();
     const buildDir = path.join(runDirectory, 'diff', 'r4', 'build');

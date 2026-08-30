@@ -12,7 +12,6 @@
 
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  readPersistedTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
@@ -22,6 +21,7 @@ import {
   type SettingsViewStateSettingEntry,
 } from '@shared/schemas';
 import {
+  readSetting,
   resetSetting,
   writeSetting,
   type SettingsStores,
@@ -137,9 +137,13 @@ export async function applyStateSettingUpdate(
     if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
       ports.onApprovalPolicyChanged?.(
         write.kind === 'reset'
-          ? readPersistedTexraApprovalPolicy((k, fallback) =>
-              ports.stores.config.get(k, fallback),
-            )
+          ? // A reset clears only the workspace layer, so a surviving global
+            // value is what the session must run (issue #9749).
+            (readSetting(
+              write.entry,
+              ports.stores,
+              ports.host,
+            ) as TexraApprovalPolicy)
           : (write.value as TexraApprovalPolicy),
       );
     }

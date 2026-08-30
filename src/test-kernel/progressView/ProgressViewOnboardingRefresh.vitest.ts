@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
+import type { ProgressFollowUpSubmitArgs } from '@controllers/progressView/progressFollowUpSubmit';
 import * as logger from '@logger/logUtils';
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -22,10 +23,20 @@ import type * as vscode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),
+  savePastedImageBase64: vi.fn(),
+  submitProgressFollowUp: vi.fn(),
 }));
 
 vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,
+}));
+
+vi.mock('@controllers/progressView/progressFollowUpSubmit', () => ({
+  submitProgressFollowUp: mocks.submitProgressFollowUp,
+}));
+
+vi.mock('@utils/files/pastedImageUtils', () => ({
+  savePastedImageBase64: mocks.savePastedImageBase64,
 }));
 
 function createWebviewView(): vscode.WebviewView {
@@ -132,6 +143,8 @@ describe('progress-view onboarding refresh wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.safeExecuteCommand.mockResolvedValue(undefined);
+    mocks.savePastedImageBase64.mockResolvedValue('/tmp/pasted.png');
+    mocks.submitProgressFollowUp.mockResolvedValue(true);
   });
 
   it('refreshes the onboarding funnel after progress setup actions', async () => {
@@ -160,6 +173,71 @@ describe('progress-view onboarding refresh wiring', () => {
         provider.refreshOnboardingFunnel.mock.invocationCallOrder[0]!,
       );
     });
+  });
+
+  it('returns follow-up admission to the originating surface', async () => {
+    let finishImageSave: () => void = () => undefined;
+    mocks.savePastedImageBase64.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          finishImageSave = () => resolve('/tmp/pasted.png');
+        }),
+    );
+    let finishSubmission: () => void = () => undefined;
+    mocks.submitProgressFollowUp.mockImplementation(
+      (args: ProgressFollowUpSubmitArgs) =>
+        new Promise<boolean>((resolve) => {
+          finishSubmission = () => {
+            args.acknowledge(true);
+            resolve(true);
+          };
+        }),
+    );
+    const provider = createProgressViewProvider();
+    const handler = createMessageHandler(provider);
+    const sidebar = createWebviewView();
+    const panel = createWebviewView();
+
+    const sending = handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+        stream: 'originating-surface',
+        text: 'continue',
+        images: [
+          {
+            base64: 'aGVsbG8=',
+            mediaType: 'image/png',
+            fileName: 'pasted_origin.png',
+          },
+        ],
+      },
+      sidebar,
+    );
+    await vi.waitFor(() => {
+      expect(mocks.savePastedImageBase64).toHaveBeenCalledOnce();
+    });
+
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
+      panel,
+    );
+    finishImageSave();
+    await vi.waitFor(() => {
+      expect(mocks.submitProgressFollowUp).toHaveBeenCalledOnce();
+    });
+    finishSubmission();
+    await sending;
+
+    expect(sidebar.webview.postMessage).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+      stream: 'originating-surface',
+      accepted: true,
+    });
+    expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+      }),
+    );
   });
 
   it('acknowledges a replacement run when the runtime publishes its handle', async () => {
@@ -428,13 +506,11 @@ describe('progress-view onboarding refresh wiring', () => {
       'ProgressView',
     );
     const fileOperationRequest = {
-      streamId: 'stream-a',
       agent: 'correct',
       model: 'gemini31p',
       inputFile: 'input.tex',
       outputFiles: ['declared.tex', '/workspace/generated.tex', 'extra.tex'],
       executionId: 'exec-123',
-      skipProgressViewClear: true,
     };
     expect(mocks.safeExecuteCommand).toHaveBeenNthCalledWith(
       2,

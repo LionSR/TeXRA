@@ -1,12 +1,11 @@
 // Single source of truth for the child-run delivery-envelope XML root tags
 // (`<subagent-result>`, `<codex-error>`, `<execution-activity>`, …) that
-// producers (src/tools/*, src/agent/runtime/ExecutionSubscriptionBinder.ts)
-// mint and render surfaces (progressView UserMessage, the CLI transcript)
-// must recognize. Previously each render surface hand-listed the tag
-// vocabulary separately from the producers, so a new child-run kind (e.g.
-// `claude-agent-result`) could ship without ever being added to a render
-// list and would render as raw XML. Adding a new child-run kind is now one
-// entry here.
+// producers (src/tools/*) mint and render surfaces (progressView
+// UserMessage, the CLI transcript) must recognize. Previously each render
+// surface hand-listed the tag vocabulary separately from the producers, so
+// a new child-run kind (e.g. `claude-agent-result`) could ship without ever
+// being added to a render list and would render as raw XML. Adding a new
+// child-run kind is now one entry here.
 //
 // Intentionally has NO host imports (no vscode, no Ink/React) so both
 // @shared (webview) and the CLI can consume it, matching subagentFollowup.ts.
@@ -38,9 +37,10 @@ export interface DeliveryTagEntry {
    * the producer) and needs `decodeXmlEntities()` before display.
    * `subagent-progress` is included because its "todos" variant runs todo
    * text through `escapeText()`, producing `&amp;`/`&lt;` entities in the
-   * body. `github-webhook-activity` / `execution-activity` use
-   * `wrapAndSanitizeTag()` instead, which neutralizes embedded tag names
-   * rather than XML-entity-escaping, so they are not in the escaped subset.
+   * body. `github-webhook-activity` / `execution-activity` neutralize
+   * embedded tag names instead (see `wrapWebhookEvent()` in
+   * `src/tools/github/formatUtils.ts`) rather than XML-entity-escaping, so
+   * they are not in the escaped subset.
    */
   readonly escaped: boolean;
 }
@@ -48,6 +48,12 @@ export interface DeliveryTagEntry {
 /** The tags whose bodies are neutralized rather than XML-entity-escaped. */
 const UNESCAPED_DELIVERY_TAGS = new Set<DeliveryTagName>([
   DELIVERY_TAG.githubWebhookActivity,
+  // `execution-activity` has no live producer since the model-facing
+  // `executions subscribe` action was removed, but transcripts recorded
+  // before then still carry the envelope and must keep rendering as a block
+  // instead of raw XML. Persisted-data read shim: retire after 2026-11-24
+  // (#6981 ledger, row on #9627), deleting this entry and its
+  // `DELIVERY_TAG.executionActivity` member together.
   DELIVERY_TAG.executionActivity,
 ]);
 

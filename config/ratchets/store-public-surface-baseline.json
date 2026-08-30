@@ -24,12 +24,10 @@
       "openReadOnlyForStream",
       "readEntries",
       "recordSummaryMeta",
-      "reload",
       "requestEviction"
     ],
     "StreamSnapshotStore": [
       "attachSessionEvents",
-      "deleteAll",
       "deleteStream",
       "evictAll",
       "flush",
@@ -42,14 +40,12 @@
       "getRunMetadata",
       "getRunUsage",
       "getWorkPlan",
-      "hasPersistedWorkPlan",
+      "hasProvenance",
       "listPersistedStreams",
       "listStagedDeletions",
       "load",
       "preload",
       "read",
-      "readOutputFiles",
-      "readPersistedExecutionId",
       "reconcileStagedDeletions",
       "stageDeleteStream"
     ]

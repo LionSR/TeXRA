@@ -78,8 +78,9 @@ vi.mock('@frontend/auth/agentCatalogRefreshScope', () => ({
 vi.mock('@frontend/events/onTexraAuthSessionsChanged', () => ({
   onTexraAuthSessionsChanged: vi.fn(),
 }));
-vi.mock('@frontend/agents/optionsLoader', () => ({
-  loadMainViewModelOptions: vi.fn(),
+vi.mock('@model/computeModelOptions', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  computeModelOptionsData: vi.fn(),
 }));
 vi.mock('@frontend/agents/teamOptionsLoader', () => ({
   loadMainViewTeamOptions: vi.fn(),
@@ -106,8 +107,7 @@ describe('sidebar surface ownership', () => {
   let provider: InstanceType<typeof MainViewProvider>;
   let view: ReturnType<typeof createWebviewView>;
   let progressViewProvider: {
-    getContentProvider: () => { getHtmlContent: () => string };
-    handleSidebarMessage: ReturnType<typeof vi.fn>;
+    setupWebviewContent: ReturnType<typeof vi.fn>;
     resetSidebarReady: ReturnType<typeof vi.fn>;
   };
 
@@ -120,8 +120,10 @@ describe('sidebar surface ownership', () => {
       globalState: { get: () => undefined, update: async () => {} },
     } as unknown as vscode.ExtensionContext);
     progressViewProvider = {
-      getContentProvider: () => ({ getHtmlContent: () => PROGRESS_HTML }),
-      handleSidebarMessage: vi.fn(),
+      setupWebviewContent: vi.fn((target: vscode.WebviewView) => {
+        (target.webview as { html: string }).html = PROGRESS_HTML;
+        return { dispose: vi.fn() };
+      }),
       resetSidebarReady: vi.fn(),
     };
     provider.setProgressViewProvider(

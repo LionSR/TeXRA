@@ -4,11 +4,13 @@ import { logWebFetch, logWebSearch } from '@agent/trace';
 import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import { extractModelResponse } from '@agent/core/flows/CommonCycleTypes';
 import { appendFollowUpAsUserMessage } from '@agent/followUp/followUpMessages';
+import { isFunctionCallOutputItem } from '@agent/modelHandlers/openai/responsesShapeGuards';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import type { ProviderStopReason } from '@agent/types/StopReasonTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { classifyProviderMessageBlockType } from '@agent/types/ConversationBlockTypes';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ToolUseRoundServices } from '@agent/core/flows/CycleServices';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -28,7 +30,11 @@ function hasToolResultContent(value: unknown): boolean {
     value.some((item) => {
       if (!isObject(item)) return false;
       return (
-        item.type === 'tool_result' ||
+        // Anthropic/Google Content `type: 'tool_result'` blocks share the
+        // canonical classifier with the export/storage formatters; VS Code
+        // LM's `kind` discriminant and Google's legacy `functionResponse`
+        // shape have no SSOT classifier to delegate to yet.
+        classifyProviderMessageBlockType(item.type) === 'tool-result' ||
         item.kind === 'toolResult' ||
         isObject(item.functionResponse)
       );
@@ -41,20 +47,13 @@ function isToolResultMessage(message: ProviderMessage | undefined): boolean {
   const record: Record<string, unknown> = message;
 
   return (
-    record['type'] === 'function_call_output' ||
+    isFunctionCallOutputItem(record) ||
     record['type'] === 'function_result' ||
     record['role'] === 'tool' ||
     (record['role'] === 'user' &&
       (hasToolResultContent(record['content']) ||
         hasToolResultContent(record['parts'])))
   );
-}
-
-/** Advance to the next round, resetting the per-round accumulators. */
-function advanceRound(shared: ToolUseRoundShared): void {
-  shared.roundIndex += 1;
-  shared.roundResponseTimeMs = 0;
-  shared.roundNormalizedUsage = undefined;
 }
 
 /** Result of exec() containing extracted data needed for post() side effects. */
@@ -80,11 +79,13 @@ interface ToolUseProcessPrepResult {
 }
 
 /** Processes the model response to extract tool calls and usage data. */
-export class ToolUseProcessNode<C> extends BaseNode<
+export class ToolUseProcessNode extends BaseNode<
   ToolUseRoundShared,
-  ToolUseRoundServices<C>
+  ToolUseRoundServices
 > {
-  async prep(shared: ToolUseRoundShared): Promise<ToolUseProcessPrepResult> {
+  override async prep(
+    shared: ToolUseRoundShared,
+  ): Promise<ToolUseProcessPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -92,7 +93,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  async exec(
+  override async exec(
     prepRes: ToolUseProcessPrepResult,
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
@@ -166,7 +167,7 @@ export class ToolUseProcessNode<C> extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRoundShared,
     prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,
@@ -191,19 +192,15 @@ export class ToolUseProcessNode<C> extends BaseNode<
     workspace.serverToolContent.lastAssistantContent =
       execRes.lastAssistantContent ?? [];
 
-    if (shared.responseTimeMs != null) {
-      shared.roundResponseTimeMs += shared.responseTimeMs;
-    }
-    if (execRes.normalizedUsage) {
-      shared.roundNormalizedUsage = execRes.normalizedUsage;
-    }
-
     recordCycleMetrics(
       run,
-      shared.roundResponseTimeMs,
-      shared.roundNormalizedUsage ?? null,
+      shared.responseTimeMs ?? 0,
+      execRes.normalizedUsage ?? null,
     );
     await onRoundFinalized(run);
+    // The only increment site for this counter, and it must stay after both
+    // debug-file reads (ToolUseRoundFlow, ToolUseRoundPrepNode) — they name
+    // this round's files by it.
     run.totalRounds += 1;
 
     shared.stopReason = execRes.stopReason;
@@ -228,7 +225,6 @@ export class ToolUseProcessNode<C> extends BaseNode<
         shared.blankToolResultContinuationMessageIndex = lastMessageIndex;
         workspace.resetServerToolContent();
         workspace.resetReasoning();
-        advanceRound(shared);
         return FlowTransition.CONTINUE;
       }
 
@@ -265,7 +261,6 @@ export class ToolUseProcessNode<C> extends BaseNode<
         }
         shared.finalToolAttempted = true;
         shared.toolCalls = undefined;
-        advanceRound(shared);
         return FlowTransition.CONTINUE;
       }
 
@@ -277,7 +272,6 @@ export class ToolUseProcessNode<C> extends BaseNode<
 
     shared.toolCalls = execRes.toolCalls;
     shared.text = execRes.text;
-    advanceRound(shared);
     return FlowTransition.DEFAULT;
   }
 }

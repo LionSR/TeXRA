@@ -3,30 +3,24 @@ import type { ModelCapabilities } from 'llm-zoo';
 
 type MediaVisionWarningKind = 'attached' | 'pasted';
 
-export function countMediaFilesNeedingVision(
-  mediaFiles: readonly string[] | undefined,
-): number {
-  return (
-    mediaFiles?.filter(
-      (filePath) => !getMimeType(filePath)?.startsWith('audio/'),
-    ).length ?? 0
-  );
-}
-
-export function shouldWarnMediaNeedsVision(
+/**
+ * The warning to log when media files will be dropped because the chosen model
+ * lacks vision, or `undefined` when nothing is dropped (vision is supported, or
+ * every media file is audio the model can take natively).
+ */
+export function mediaNeedsVisionWarning(
   mediaFiles: readonly string[] | undefined,
   capabilities: Pick<ModelCapabilities, 'supportsVision'>,
-): boolean {
-  return (
-    countMediaFilesNeedingVision(mediaFiles) > 0 && !capabilities.supportsVision
-  );
-}
-
-export function formatMediaNeedsVisionWarning(
-  count: number,
   kind: MediaVisionWarningKind,
   modelName?: string,
-): string {
+): string | undefined {
+  if (capabilities.supportsVision) return undefined;
+  const count =
+    mediaFiles?.filter(
+      (filePath) => !getMimeType(filePath)?.startsWith('audio/'),
+    ).length ?? 0;
+  if (count === 0) return undefined;
+
   const subject = modelName ? `Model "${modelName}"` : 'Model';
   return (
     `${subject} has no vision support: ${count} ${kind} ` +

@@ -18,8 +18,10 @@ import type {
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
+import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
@@ -68,6 +70,10 @@ export interface StreamLogContextValue {
   /** Current log generation. */
   rowGeneration: number;
   taskGroups: TaskGroup[];
+  /** The newest attempt's declared workflow plan, for the run model. */
+  workflowPlan: WorkflowPlanMarker | undefined;
+  /** Live progress of the stream's children, by child stream. */
+  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   isToolUse: boolean;
   hasStreams: boolean;
   /** Stream name for switch detection in LogList */
@@ -85,6 +91,8 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   updatedRowBaseGeneration: 0,
   rowGeneration: 0,
   taskGroups: [],
+  workflowPlan: undefined,
+  childProgress: new Map(),
   isToolUse: false,
   hasStreams: false,
   streamName: null,

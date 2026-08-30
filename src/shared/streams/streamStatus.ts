@@ -1,4 +1,16 @@
 /**
+ * Whether a workflow-script run has ended, as the shared workflow run model
+ * reads it (`runSettled`): a known status that is neither running nor
+ * waiting. An unknown status is not "ended" — a plan-only phase must not
+ * vanish before the stream's first status has arrived. Both hosts call this,
+ * so neither can drift.
+ */
+export function workflowRunSettled(
+  phase: StreamLifecycleStatus | undefined,
+): boolean {
+  return phase !== undefined && !isInFlightPhase(phase);
+}
+/**
  * Stream status constants shared across agent runtime and UI layers.
  */
 // Local imports - shared schemas
@@ -35,52 +47,27 @@ export function deriveRunOutcome(facts: {
   return RUN_OUTCOME.COMPLETED;
 }
 
-export interface RunOutcomeProjection {
-  /** Export-boundary projection (trace document `terminalStatus`). */
-  readonly executionStatus: ExecutionStatus;
-}
-
 /**
- * Projection table: one row per outcome for persisted execution status.
- *
- * `executionStatus` keeps all three outcomes distinct at the frozen public
- * boundaries (trace document `terminalStatus`, CLI NDJSON history status).
- * Retired transcript and stream vocabularies are not projected here:
- * permanent parse-side readers accept those legacy values and normalize them
- * to canonical current values.
- *
- * The `Record` key type keeps the table compile-time exhaustive; read it
- * through {@link projectRunOutcome} so an out-of-vocabulary value (stale
- * fixture, unparsed legacy data) fails with a named error instead of an
- * undefined-property crash downstream.
+ * Project the canonical outcome onto the frozen public execution-status
+ * vocabulary (CLI NDJSON history status, CLI display prose).
+ * The only production mapping — flows and hosts must not hand-roll their
+ * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
+ * fails with a named error instead of an undefined-property crash
+ * downstream.
  */
-export const RUN_OUTCOME_PROJECTION: Readonly<
-  Record<RunOutcome, RunOutcomeProjection>
-> = {
-  [RUN_OUTCOME.COMPLETED]: {
-    executionStatus: EXECUTION_STATUS.COMPLETED,
-  },
-  [RUN_OUTCOME.CANCELLED]: {
-    executionStatus: EXECUTION_STATUS.INTERRUPTED,
-  },
-  [RUN_OUTCOME.FAILED]: {
-    executionStatus: EXECUTION_STATUS.ERROR,
-  },
-};
-
-/** Guarded table read — loud, named failure on an unhandled outcome. */
-export function projectRunOutcome(outcome: RunOutcome): RunOutcomeProjection {
-  const projection = RUN_OUTCOME_PROJECTION[outcome];
-  if (!projection) {
-    throw new Error(`Unhandled run outcome: ${String(outcome)}`);
-  }
-  return projection;
-}
-
 export function runOutcomeToExecutionStatus(
   outcome: RunOutcome,
 ): ExecutionStatus {
-  return projectRunOutcome(outcome).executionStatus;
+  switch (outcome) {
+    case RUN_OUTCOME.COMPLETED:
+      return EXECUTION_STATUS.COMPLETED;
+    case RUN_OUTCOME.CANCELLED:
+      return EXECUTION_STATUS.INTERRUPTED;
+    case RUN_OUTCOME.FAILED:
+      return EXECUTION_STATUS.ERROR;
+    default:
+      throw new Error(`Unhandled run outcome: ${String(outcome)}`);
+  }
 }
 
 // ============================================================================
@@ -94,8 +81,6 @@ export const STREAM_TRANSITION_CAUSE = {
   RESUME: 'resume',
   USER_STOP: 'user-stop',
   RESTART_REPAIR: 'restart-repair',
-  /** Restores a snapshot of this machine's own phases after a failed storage-root replacement. */
-  ROLLBACK: 'rollback',
 } as const;
 
 export type StreamTransitionCause =
@@ -182,10 +167,5 @@ export function canTransitionStreamPhase(
       if (from === undefined) return isTerminalOutcomePhase(to);
       if (from === to) return true;
       return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.CANCELLED;
-    case STREAM_TRANSITION_CAUSE.ROLLBACK:
-      // A rollback restores phases this process observed before the failed
-      // replacement, in one step: no synthetic RUNNING fact, which the
-      // applier would treat as a run start.
-      return from === undefined;
   }
 }

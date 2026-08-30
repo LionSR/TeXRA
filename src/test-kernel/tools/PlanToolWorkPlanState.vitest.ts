@@ -18,10 +18,10 @@ import { installPlatform as installFakePlatform } from '@test/support/setupPlatf
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { GoalStore } from '@tools/goal';
 import {
-  cleanupApprovalsForStream,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
   proposalApprovals,
+  releaseStreamResources,
 } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 
@@ -151,7 +151,7 @@ describe('PlanTool — update (plan approval)', () => {
         summary: 'Plan approved: proceed with implementation',
       });
     } finally {
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
     }
   });
 
@@ -228,9 +228,70 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal!.objective).toBe(plan.objective);
       expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
       expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
+      expect(
+        events.filter((entry) => entry.event === 'setApprovalBypassState'),
+      ).toEqual([
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'toolEdit', bypassActive: false },
+        },
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'superYolo', bypassActive: false },
+        },
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'bash', bypassActive: true },
+        },
+      ]);
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
+    }
+  });
+
+  it('approve_and_goal applies the explicitly broadened approval scope', async () => {
+    const streamId = 'stream:plan-goal-all' as StreamTabId;
+    await installPlatform(true);
+
+    const { decisions, resultPromise, events, session } = startPlanUpdate(
+      streamId,
+      plan.objective,
+    );
+    try {
+      const approval = findPlanApproval(events);
+      expect(
+        submitPlanDecision(decisions, approval, {
+          action: 'approve_and_goal',
+          autoApproveAll: true,
+        }),
+      ).toBe(true);
+
+      await expect(resultPromise).resolves.toMatchObject({
+        status: 'executed',
+      });
+      expect(isBashApprovalBypassedForStream(streamId, session)).toBe(true);
+      expect(isApprovalBypassedForStream(streamId, session)).toBe(true);
+      expect(session.approvals.proposal.isBypassed(streamId)).toBe(true);
+      expect(
+        events.filter((entry) => entry.event === 'setApprovalBypassState'),
+      ).toEqual([
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'superYolo', bypassActive: true },
+        },
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'toolEdit', bypassActive: true },
+        },
+        {
+          event: 'setApprovalBypassState',
+          payload: { streamId, kind: 'bash', bypassActive: true },
+        },
+      ]);
+    } finally {
+      await GoalStore.forget(streamId);
+      releaseStreamResources(streamId, session);
     }
   });
 
@@ -265,7 +326,7 @@ describe('PlanTool — update (plan approval)', () => {
       expect(isApprovalBypassedForStream(streamId, session)).toBe(false);
     } finally {
       await GoalStore.forget(streamId);
-      cleanupApprovalsForStream(streamId, session);
+      releaseStreamResources(streamId, session);
     }
   });
 

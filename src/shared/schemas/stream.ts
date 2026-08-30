@@ -40,8 +40,8 @@ export const EXECUTION_STATUS = {
   ERROR: 'error',
 } as const;
 
-export const ExecutionStatusSchema = z.enum(EXECUTION_STATUS);
-export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
+export type ExecutionStatus =
+  (typeof EXECUTION_STATUS)[keyof typeof EXECUTION_STATUS];
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
@@ -159,42 +159,19 @@ export const STREAM_SUBSTATE = {
 export const StreamSubstateSchema = z.enum(STREAM_SUBSTATE);
 export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
 
-export function executionStatusToRunOutcome(
-  status: ExecutionStatus | undefined,
-): RunOutcome | undefined {
-  switch (status) {
-    case EXECUTION_STATUS.COMPLETED:
-      return RUN_OUTCOME.COMPLETED;
-    case EXECUTION_STATUS.INTERRUPTED:
-      return RUN_OUTCOME.CANCELLED;
-    case EXECUTION_STATUS.ERROR:
-      return RUN_OUTCOME.FAILED;
-    case undefined:
-      return undefined;
-  }
-}
-
 /**
- * Wire-level lifecycle status of a stream whose execution lease is held by
- * another TeXRA process. Not a `StreamPhase`: phases are facts about runs
- * live in this process, and a held stream has none. Renderers show it
- * read-only; no run control applies to it.
+ * Wire-level lifecycle status of a stream that has no phase in this process:
+ * its execution lease is held by another TeXRA process, or its run state
+ * could not be read at startup. Not a `StreamPhase`: phases are facts about
+ * runs live here. `StreamMetadata.statusDetail` carries the reason; renderers
+ * show it read-only and Delete is the only run control that applies.
  */
-export const STREAM_LIFECYCLE_HELD = 'held';
-
-/**
- * Wire-level lifecycle status of a stream whose run state could not be read
- * at startup (lease, metadata, or flow record unreadable). Nothing was
- * mutated and nothing is known; `StreamMetadata.statusDetail` carries the
- * cause. Resume re-reads and re-acquires, so it stays enabled as the retry.
- */
-export const STREAM_LIFECYCLE_UNCLASSIFIED = 'unclassified';
+export const STREAM_LIFECYCLE_UNAVAILABLE = 'unavailable';
 
 export type StreamLifecycleStatus =
   | StreamPhase
   | typeof STREAM_STATUS.READY
-  | typeof STREAM_LIFECYCLE_HELD
-  | typeof STREAM_LIFECYCLE_UNCLASSIFIED;
+  | typeof STREAM_LIFECYCLE_UNAVAILABLE;
 
 export function streamStatusToLifecycleStatus(
   status: StreamStatus,
@@ -218,40 +195,9 @@ export function streamStatusToLifecycleStatus(
 export const StreamLifecycleStatusSchema = z.union([
   StreamPhaseSchema,
   z.literal(STREAM_STATUS.READY),
-  z.literal(STREAM_LIFECYCLE_HELD),
-  z.literal(STREAM_LIFECYCLE_UNCLASSIFIED),
+  z.literal(STREAM_LIFECYCLE_UNAVAILABLE),
   StreamStatusSchema.transform(streamStatusToLifecycleStatus),
 ]);
-
-export const WORKTREE_PR_STATE = {
-  OPEN: 'open',
-  MERGED: 'merged',
-  CLOSED: 'closed',
-  DRAFT: 'draft',
-} as const;
-
-const WorktreePRStateSchema = z.enum(WORKTREE_PR_STATE);
-export type WorktreePRState = z.infer<typeof WorktreePRStateSchema>;
-
-export const WORKTREE_CI_STATE = {
-  PENDING: 'pending',
-  RUNNING: 'running',
-  SUCCESS: 'success',
-  FAILURE: 'failure',
-  UNKNOWN: 'unknown',
-} as const;
-
-const WorktreeCIStateSchema = z.enum(WORKTREE_CI_STATE);
-export type WorktreeCIState = z.infer<typeof WorktreeCIStateSchema>;
-
-const WorktreePRInfoSchema = z.object({
-  number: z.number(),
-  state: WorktreePRStateSchema,
-  title: z.string().optional(),
-  additions: z.number().optional(),
-  deletions: z.number().optional(),
-  ciState: WorktreeCIStateSchema.optional(),
-});
 
 const WorktreeInfoSchema = z.object({
   /** Absolute path of the worktree the agent is operating in. */
@@ -260,8 +206,6 @@ const WorktreeInfoSchema = z.object({
   branch: z.string().optional(),
   /** True if the working tree has uncommitted changes. */
   dirty: z.boolean().optional(),
-  /** Associated GitHub pull request, if one is known to exist. */
-  pr: WorktreePRInfoSchema.optional(),
 });
 export type WorktreeInfo = z.infer<typeof WorktreeInfoSchema>;
 

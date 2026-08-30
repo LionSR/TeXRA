@@ -263,7 +263,6 @@ describe('stream meta frontend state', () => {
         stage: { kind: 'round', index: 1 },
         subagents: [],
       },
-      activeStream: siblingId,
     });
 
     expect(getState().streamById.get(streamId)?.label).toBe('stream-a');
@@ -281,7 +280,6 @@ describe('stream meta frontend state', () => {
       stage: { kind: 'round', index: 1 },
       subagents: [],
     });
-    expect(getState().activeStreamId).toBe(siblingId);
     expect([...getState().streamById.keys()]).toEqual([siblingId, streamId]);
   });
 

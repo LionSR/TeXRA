@@ -12,7 +12,6 @@
 import { reportMissingOutputs } from '@agent/runtime/runFactEvents';
 import {
   fileLocationDisplayPath,
-  MESSAGE_TYPES,
   OUTPUT_DOCUMENTS_TAG,
   type FileLocation,
 } from '@shared/schemas';
@@ -28,25 +27,6 @@ import {
   type OutputDependencies,
 } from './outputState';
 import type { XmlOutputManager } from './XmlOutputManager';
-
-/** Waits for run workspace preparation to complete, clearing the promise once settled. */
-async function prepareRunWorkspaceIfNeeded(
-  state: OutputState,
-  deps: OutputDependencies,
-): Promise<void> {
-  if (!state.runPreparation) return;
-
-  try {
-    await state.runPreparation;
-  } catch (error) {
-    deps.logger.debug('Failed to prepare run workspace', {
-      data: error,
-      messageType: MESSAGE_TYPES.INTERNAL,
-    });
-  } finally {
-    state.runPreparation = null;
-  }
-}
 
 /**
  * Base files for the unlabeled-fence similarity fallback. Rounds after the
@@ -129,8 +109,12 @@ async function handleNoOutputs(
   ensureRoundData(state, currRound).outputs = [];
 }
 
-/** Unpacks the round's <documents> container into per-document output files. */
-export async function processMultipleOutputs(
+/**
+ * Extracts files from XML output for a round: the unified protocol emits
+ * <documents><document name="..."> containers (N >= 1), so every agent
+ * unpacks that container into per-document output files.
+ */
+export async function extractFilesFromXml(
   state: OutputState,
   deps: OutputDependencies,
   xmlManager: XmlOutputManager,
@@ -139,68 +123,54 @@ export async function processMultipleOutputs(
 ): Promise<void> {
   const { logger } = deps;
 
-  logger.debug(
-    `Processing multiple outputs for ${outputLocation.absolutePath}`,
-  );
-
-  await tryOperation(
-    async () => {
-      const processedPairs = await xmlManager.splitScratchpadMultipleOutputXml(
-        outputLocation,
-        currRound,
-        'scratchpad',
-        similarityBaseFiles(state, deps, currRound),
-      );
-
-      if (processedPairs.length === 0) {
-        logger.debug(
-          `No processed files were generated from ${outputLocation.absolutePath}`,
-        );
-        await handleNoOutputs(state, deps, currRound, outputLocation);
-        return;
-      }
-
-      const locations = processedPairs.map((p) => p.location);
-      if (deps.baseFiles.length > 0) {
-        await replaceInputCommands(deps.baseFiles, locations, logger);
-      }
-      ensureRoundData(state, currRound).outputs = processedPairs;
-    },
-    {
-      logger,
-      level: 'debug',
-      label: 'Error processing output file',
-      recover: () => handleNoOutputs(state, deps, currRound, outputLocation),
-    },
-  );
-}
-
-/** Extracts files from XML output for a round. */
-export async function extractFilesFromXml(
-  state: OutputState,
-  deps: OutputDependencies,
-  xmlManager: XmlOutputManager,
-  outputLocation: FileLocation,
-  currRound: number,
-): Promise<void> {
   await withOutputStage(
     deps,
     `Process files r${currRound}`,
     undefined,
     async () => {
-      await prepareRunWorkspaceIfNeeded(state, deps);
+      // Wait for run workspace preparation, clearing the promise once settled.
+      if (state.runPreparation) {
+        await state.runPreparation;
+        state.runPreparation = null;
+      }
 
       const data = ensureRoundData(state, currRound);
       data.rawOutput ??= outputLocation;
 
-      // The unified protocol emits <documents><document name="..."> containers
-      // (N >= 1), so all agents route through the multi-document path.
-      await processMultipleOutputs(
-        state,
-        deps,
-        xmlManager,
-        outputLocation,
-        currRound,
+      logger.debug(
+        `Processing multiple outputs for ${outputLocation.absolutePath}`,
+      );
+
+      await tryOperation(
+        async () => {
+          const processedPairs =
+            await xmlManager.splitScratchpadMultipleOutputXml(
+              outputLocation,
+              currRound,
+              similarityBaseFiles(state, deps, currRound),
+            );
+
+          if (processedPairs.length === 0) {
+            logger.debug(
+              `No processed files were generated from ${outputLocation.absolutePath}`,
+            );
+            await handleNoOutputs(state, deps, currRound, outputLocation);
+            return;
+          }
+
+          const locations = processedPairs.map((p) => p.location);
+          if (deps.baseFiles.length > 0) {
+            await replaceInputCommands(deps.baseFiles, locations, logger);
+          }
+          ensureRoundData(state, currRound).outputs = processedPairs;
+        },
+        {
+          logger,
+          level: 'debug',
+          label: 'Error processing output file',
+          recover: () =>
+            handleNoOutputs(state, deps, currRound, outputLocation),
+        },
       );
     },
   );

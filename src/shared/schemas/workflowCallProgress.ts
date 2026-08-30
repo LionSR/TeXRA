@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from './identifiers';
+import {
+  WORKFLOW_CALL_KIND,
+  WorkflowCallFilesSchema,
+} from './workflowExecutionSnapshot';
 
 export const WorkflowCallIdentitySchema = z.strictObject({
   id: z
@@ -22,19 +26,54 @@ export const WorkflowCallIdentitySchema = z.strictObject({
 });
 export type WorkflowCallIdentity = z.infer<typeof WorkflowCallIdentitySchema>;
 
-/** Durable boundary emitted by the controlled workflow transcript writer. */
-export type WorkflowAttemptMarker = {
-  readonly kind: 'workflowAttempt';
-  readonly attemptId: string;
-};
+/**
+ * The declared shape of a workflow script — `meta.phases` in order and
+ * `meta.tasks` — as both the approval proposal and the plan marker carry it.
+ * A phase's position is its index in the array.
+ */
+export const WorkflowDeclaredPlanSchema = z.strictObject({
+  phases: z.array(z.strictObject({ title: z.string().min(1) })),
+  tasks: z.array(WorkflowCallIdentitySchema),
+});
+export type WorkflowDeclaredPlan = z.infer<typeof WorkflowDeclaredPlanSchema>;
+
+/**
+ * The declared plan of one workflow-script attempt — every `meta.phases`
+ * entry and every `meta.tasks` entry, in script order — recorded once on the
+ * transcript when the attempt's execution state is constructed. Phases and
+ * calls the run has reached are projected as stages and cards; this marker is
+ * what lets a host list the ones it has not reached yet without opening their
+ * stage (a `stage.start` prints the phase divider into scrollback).
+ */
+export const WorkflowPlanMarkerSchema = WorkflowDeclaredPlanSchema.extend({
+  kind: z.literal('workflowPlan'),
+  attemptId: z.string().min(1),
+});
+export type WorkflowPlanMarker = z.infer<typeof WorkflowPlanMarkerSchema>;
 
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
-  model: z.string().min(1).optional(),
   durationMs: z.number().nonnegative().optional(),
   totalCostUsd: z.number().nonnegative().optional(),
 });
 
 const WorkflowCallProgressBaseSchema = WorkflowCallIdentitySchema.extend({
+  /**
+   * Facts of the actual `agent()` invocation, present once the script issues
+   * the call: its result contract, the agent and model it runs (declared by
+   * the script, then host-resolved), and the file basenames it was handed.
+   * A declared plan label carries none of them.
+   */
+  kind: z.enum(WORKFLOW_CALL_KIND).optional(),
+  agent: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  files: WorkflowCallFilesSchema.optional(),
+  /**
+   * Physical attempt number of this call across interactive retries and
+   * durable resumes (hydration keeps prior attempts), present from the second
+   * attempt on. Distinct from `attemptId`, the whole-script projection
+   * attempt. The label is never rewritten to say "retry".
+   */
+  attemptNumber: z.int().min(2).optional(),
   /**
    * Physical workflow-script projection attempt. All progress records from one
    * run share this id; older persisted transcripts may omit it. A malformed
@@ -67,8 +106,17 @@ const WorkflowCallSkippedProgressSchema = z.discriminatedUnion('reason', [
 ]);
 
 export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
+  /** A `meta.tasks` plan label the script has not issued as a call. */
+  WorkflowCallProgressBaseSchema.extend({
+    status: z.literal('declared'),
+  }),
+  /** Issued by the script; not yet queued for a concurrency slot. */
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('planned'),
+  }),
+  /** Issued and waiting for one of the run's concurrency slots. */
+  WorkflowCallProgressBaseSchema.extend({
+    status: z.literal('queued'),
   }),
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('running'),
@@ -96,17 +144,20 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
 ]);
 
 export type WorkflowCallProgress = z.infer<typeof WorkflowCallProgressSchema>;
+type WorkflowCallLiveStatus = 'declared' | 'planned' | 'queued' | 'running';
 export type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
-  { readonly status: 'planned' | 'running' }
+  { readonly status: WorkflowCallLiveStatus }
 >;
 
 /** One lifecycle predicate shared by persistence and transcript projections. */
-export function isTerminalWorkflowCallProgress(
-  call: WorkflowCallProgress,
-): call is WorkflowCallTerminalProgress {
-  switch (call.status) {
+export function isTerminalWorkflowCallStatus(
+  status: WorkflowCallProgress['status'],
+): status is WorkflowCallTerminalProgress['status'] {
+  switch (status) {
+    case 'declared':
     case 'planned':
+    case 'queued':
     case 'running':
       return false;
     case 'completed':
@@ -118,8 +169,16 @@ export function isTerminalWorkflowCallProgress(
   }
 }
 
+export function isTerminalWorkflowCallProgress(
+  call: WorkflowCallProgress,
+): call is WorkflowCallTerminalProgress {
+  return isTerminalWorkflowCallStatus(call.status);
+}
+
 export const WORKFLOW_TASK_STATUS_LABEL = {
+  declared: 'Declared',
   planned: 'Planned',
+  queued: 'Queued',
   running: 'Running',
   completed: 'Finished',
   cached: 'Saved result',

@@ -39,11 +39,11 @@ export function proposalApprovals(
  * should do the same — and should keep following the parent when either
  * bypass is toggled *after* the child stream already started, since this
  * registers live ancestry links rather than copying the parent's values once
- * at child creation (see `registerStreamParent`). Ancestry is tracked per
- * bypass kind, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
+ * at child creation (see `registerStreamParent`). Each bypass kind keeps its
+ * own value, so the CLI's distinct AUTO-BASH / AUTO-APPROVE grants are
  * respected: a parent with AUTO-BASH but edits still gated propagates only
  * bash, and fresh streams default to gated either way. Delegation-proposal
- * bypass is linked as well, so complete delegated-task approval remains
+ * bypass is inherited as well, so complete delegated-task approval remains
  * effective when an orchestrator delegates to another orchestrator. A child
  * may still override any inherited approval explicitly.
  */
@@ -65,21 +65,18 @@ export function configureDelegatedChildApprovals(
 
 /**
  * Clean up all approval state for a deleted stream in the owning session.
- * Cancels pending host interactions and clears stream-scoped bypass state.
+ * Cancels pending host interactions; `forgetStreamAncestry` clears the
+ * stream's ancestry edges and its explicit bypass values.
  */
-export function cleanupApprovalsForStream(
+function cleanupApprovalsForStream(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {
-  const { toolEdit, bash, proposal } = session.approvals;
   session.interactions.cancel({
     streamId,
     cause: 'Stream resources released.',
   });
   session.approvals.forgetStreamAncestry(streamId);
-  toolEdit.bypass.clearForStream(streamId);
-  bash.bypass.clearForStream(streamId);
-  proposal.clearForStream(streamId);
 }
 
 /**
@@ -133,6 +130,4 @@ export {
   // Tool edit approval
   setToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
 } from './toolEditApproval';

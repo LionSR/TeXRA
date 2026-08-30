@@ -1,7 +1,8 @@
 // Scrollable, read-only view of one stream's canonical plan and todos.
 
-import { useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 
+import { tryDefaultSession } from '@agent/runtime';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
@@ -21,13 +22,11 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
+import type { StreamArtifactAuthority } from '@transcript';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
-import {
-  readStreamArtifacts,
-  streamArtifactRevision,
-} from '../state/subscribeStreamArtifacts';
+import { streamArtifactRevision } from '../state/subscribeStreamArtifacts';
 import { useSignal } from '../state/useSignal';
 
 const TODO_STATUS_LABELS: Record<TodoStatus, string> = {
@@ -47,6 +46,7 @@ function wrappedRows(text: string, width: number): number {
   return wrapAnsiToWidth(text, Math.max(1, width)).split('\n').length;
 }
 
+/** Compute a frame that fits the terminal. `bodyRows` may be zero. */
 export function workPlanReaderLayout({
   availableRows,
   contentWidth,
@@ -59,11 +59,20 @@ export function workPlanReaderLayout({
   readonly title: string;
 }): {
   readonly bodyRows: number;
+  readonly showBorder: boolean;
   readonly showFooter: boolean;
   readonly showTitle: boolean;
 } {
   const rows = Math.max(1, Math.floor(availableRows));
   const width = Math.max(1, Math.floor(contentWidth));
+  if (rows < 4) {
+    return {
+      bodyRows: rows - 1,
+      showBorder: false,
+      showFooter: false,
+      showTitle: true,
+    };
+  }
   const footerRows = wrappedRows(
     hints.map(keyHintText).join(KEY_HINT_SEPARATOR),
     width,
@@ -77,6 +86,7 @@ export function workPlanReaderLayout({
       1,
       rows - BORDER_ROWS - footerFixedRows - (showTitle ? titleRows : 0),
     ),
+    showBorder: true,
     showFooter,
     showTitle,
   };
@@ -89,25 +99,36 @@ export function workPlanReaderTitle(label: string | undefined): string {
 export function formatWorkPlanReaderText(
   plan: Plan | null,
   todos: readonly TodoItem[],
+  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
 ): string {
-  const objective = plan?.objective ?? '(no objective)';
-  const todoLines = todos.length
-    ? todos.map(
-        (todo, index) =>
-          `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
-      )
-    : ['(no todos)'];
+  const objective =
+    authority?.plan === false
+      ? '(objective unavailable)'
+      : (plan?.objective ?? '(no objective)');
+  let todoLines: string[];
+  if (authority?.todos === false) {
+    todoLines = ['(todos unavailable)'];
+  } else if (todos.length === 0) {
+    todoLines = ['(no todos)'];
+  } else {
+    todoLines = todos.map(
+      (todo, index) =>
+        `${index + 1}. [${TODO_STATUS_LABELS[todo.status]}] ${todo.content}`,
+    );
+  }
   return ['Objective', objective, '', 'Todos', ...todoLines].join('\n');
 }
 
 export function WorkPlanReader({
   availableRows,
+  authority,
   loading = false,
   onClose,
   streamId,
   title,
 }: {
   readonly availableRows: number;
+  readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
   readonly loading?: boolean;
   readonly onClose: () => void;
   readonly streamId: StreamTabId;
@@ -115,7 +136,9 @@ export function WorkPlanReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   useSignal(streamArtifactRevision);
-  const artifacts = readStreamArtifacts(streamId);
+  const workPlan = loading
+    ? undefined
+    : tryDefaultSession()?.snapshots.getWorkPlan(streamId);
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
@@ -127,11 +150,45 @@ export function WorkPlanReader({
   });
   const text = loading
     ? WORK_PLAN_LOADING_TEXT
-    : formatWorkPlanReaderText(artifacts?.plan ?? null, artifacts?.todos ?? []);
+    : formatWorkPlanReaderText(
+        workPlan?.plan ?? null,
+        workPlan?.todos ?? [],
+        authority,
+      );
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();
   });
+
+  const body =
+    layout.bodyRows > 0 ? (
+      <ScrollableModalText
+        hiddenNoun="work plan rows"
+        marginWhenSpacious={false}
+        maxRows={layout.bodyRows}
+        minContentWidth={1}
+        resetKey={streamId}
+        scrollHint="scroll work plan"
+        showScrollHints={false}
+        text={text}
+        width={layout.showBorder ? width : frameWidth}
+      />
+    ) : null;
+
+  if (!layout.showBorder) {
+    return (
+      <Box
+        flexDirection="column"
+        height={Math.max(1, Math.floor(availableRows))}
+        width={frameWidth}
+      >
+        <Text bold color={COLOR_HINT} wrap="truncate-end">
+          {title}
+        </Text>
+        {body}
+      </Box>
+    );
+  }
 
   return (
     <BorderedPanel
@@ -144,17 +201,7 @@ export function WorkPlanReader({
         ) : undefined
       }
     >
-      <ScrollableModalText
-        hiddenNoun="work plan rows"
-        marginWhenSpacious={false}
-        maxRows={layout.bodyRows}
-        minContentWidth={1}
-        resetKey={streamId}
-        scrollHint="scroll work plan"
-        showScrollHints={false}
-        text={text}
-        width={width}
-      />
+      {body}
     </BorderedPanel>
   );
 }

@@ -50,8 +50,6 @@ function buildRound(supportsForcedToolChoice: boolean) {
     messages: [{ role: 'user', content: 'Research this' }],
     shouldStop: false,
     endTurn: false,
-    roundIndex: 0,
-    roundResponseTimeMs: 0,
   };
 
   return { requests, services, shared };

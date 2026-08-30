@@ -35,14 +35,14 @@ vi.mock('node:timers/promises', async (importOriginal) => {
   return {
     ...original,
     setTimeout: vi.fn(
-      (_delay: number, _value?: unknown, options?: { signal?: AbortSignal }) =>
-        new Promise<void>((resolve, reject) => {
+      (delay: number, value?: unknown, options?: { signal?: AbortSignal }) =>
+        new Promise<unknown>((resolve, reject) => {
           const signal = options?.signal;
           if (signal?.aborted) {
             reject(signal.reason ?? new Error('Aborted'));
             return;
           }
-          const timer = setTimeout(() => resolve(), _delay);
+          const timer = setTimeout(() => resolve(value), delay);
           signal?.addEventListener(
             'abort',
             () => {
@@ -235,22 +235,6 @@ describe('createDesktopDiffHost', () => {
     expectOpenedPatchFile(openedPaths);
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
-  });
-
-  it('honors forceExternal even when postToRenderer is wired', async () => {
-    const posted: unknown[] = [];
-    const { host, openedPaths } = createHost({
-      postToRenderer: (message) => {
-        posted.push(message);
-        return true;
-      },
-      forceExternal: true,
-    });
-
-    await openDiffPair(host, 'Compare', ['a.txt', 'b.txt']);
-
-    expect(posted).toHaveLength(0);
-    expectOpenedPatchFile(openedPaths);
   });
 
   it('removes external-editor patch directories when the host is disposed', async () => {

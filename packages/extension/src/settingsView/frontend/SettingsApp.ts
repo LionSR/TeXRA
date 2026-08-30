@@ -46,6 +46,7 @@ import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
+import './tabs/SkillsTab';
 import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
@@ -55,6 +56,7 @@ import './components/profile/ProviderKeyModal';
 // Local imports - module-scope settings state + composed message handlers
 import { settingsViewHandlers } from './messageDispatcher';
 import {
+  activePresetId,
   agentSubTab,
   agentSkillsEnabled,
   allowOrchestratorKill,
@@ -62,6 +64,7 @@ import {
   approvalPolicy,
   bashApprovalEnabled,
   chatgptAuth,
+  chatgptCodexContextWindow,
   grokAuth,
   childRunConcurrencyBudget,
   claudeAgentEffort,
@@ -77,6 +80,8 @@ import {
   customAgentScanIssues,
   customPresets,
   detachSubagentsOnStop,
+  disabledSkills,
+  disabledSkillSources,
   multiAgentSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
@@ -90,12 +95,10 @@ import {
   helperModel,
   inlineCriticismEnabled,
   latexConfigValues,
-  latexConfigValuesLoaded,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryEnabled,
   memoryItems,
-  memoryToggleDisabled,
   modelRetryMaxAttempts,
   modelSelectionItems,
   orchestratorAgents,
@@ -106,6 +109,8 @@ import {
   resetSettingsState,
   selectedPanel,
   sessionProblem,
+  skillLoadIssues,
+  skillsList,
   subscriptionUsage,
   telemetryEnabled,
   toolDashboardItems,
@@ -166,11 +171,7 @@ export class SettingsApp extends SettingsAppBase {
     const delay = Math.min(nextMonthUtc - now.getTime(), MAX_TIMEOUT_MS);
     this.monthlyProfileRefreshTimer = setTimeout(() => {
       if (Date.now() >= nextMonthUtc) {
-        const view = this.getAttribute('data-desktop-view');
-        postMessage(
-          SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-          view == null ? {} : { view },
-        );
+        this.postReady();
       }
       this.scheduleMonthlyProfileRefresh();
     }, delay);
@@ -363,7 +364,9 @@ export class SettingsApp extends SettingsAppBase {
       case 'subscriptions':
         return html`
           <subscriptions-tab
+            .ackGeneration=${multiAgentSettingsRevision.get()}
             .chatgptAuth=${chatgptAuth.get()}
+            .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
             .grokAuth=${grokAuth.get()}
             .usage=${subscriptionUsage.get()}
             .copilotModels=${copilotRouteInfos.get()}
@@ -405,6 +408,7 @@ export class SettingsApp extends SettingsAppBase {
         const ackGeneration = multiAgentSettingsRevision.get();
         return html`
           <multi-agent-tab
+            .activePresetId=${activePresetId.get()}
             .customPresets=${customPresets.get()}
             .orchestratorAgents=${orchestratorAgents.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}
@@ -424,8 +428,17 @@ export class SettingsApp extends SettingsAppBase {
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
-            .agentSkillsEnabled=${agentSkillsEnabled.get()}
           ></tools-tab>
+        `;
+      case 'skills':
+        return html`
+          <skills-tab
+            .masterEnabled=${agentSkillsEnabled.get()}
+            .disabledSkills=${disabledSkills.get()}
+            .disabledSources=${disabledSkillSources.get()}
+            .skills=${skillsList.get()}
+            .issues=${skillLoadIssues.get()}
+          ></skills-tab>
         `;
       case 'ai-agents':
         return html`
@@ -446,7 +459,6 @@ export class SettingsApp extends SettingsAppBase {
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
             .configValues=${latexConfigValues.get()}
-            .configLoaded=${latexConfigValuesLoaded.get()}
             .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
             .desktopHost=${desktopHost}
             .inlineCriticismSupported=${!isKnownUnsupported(
@@ -481,7 +493,6 @@ export class SettingsApp extends SettingsAppBase {
           <memory-tab
             .items=${memoryItems.get()}
             .enabled=${memoryEnabled.get()}
-            .toggleDisabled=${memoryToggleDisabled.get()}
           ></memory-tab>
         `;
     }

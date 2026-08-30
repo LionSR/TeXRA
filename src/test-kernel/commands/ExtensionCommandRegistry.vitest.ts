@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   EXTENSION_COMMAND_HANDLERS,
   EXTENSION_INTERNAL_COMMAND_IDS,
-  EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
   type ExtensionCommandActions,
   type ExtensionRegistryCommandId,
 } from '@commands/extensionCommandHandlers';
@@ -19,6 +18,13 @@ import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 // the production handler map is exercised directly here. Only
 // `extensionCommandSurface.ts`, which wires the real actions against VS Code
 // APIs, needs the extension host.
+
+// Catalog ids tagged `extensionRegistry: true`, derived here rather than
+// mirrored in production: `EXTENSION_COMMAND_HANDLERS` already `satisfies`
+// `Record<ExtensionRegistryCommandId, ...>` at compile time.
+const catalogRegistryIds = (commandCatalog as readonly CommandCatalogEntry[])
+  .filter((entry) => entry.extensionRegistry === true)
+  .map((entry) => entry.id);
 
 function asyncNoop() {
   return vi.fn().mockResolvedValue(undefined);
@@ -86,7 +92,7 @@ describe('extension command registry — catalog-driven registration', () => {
   it('registers exactly the catalog ids tagged extensionRegistry, plus hidden aliases', () => {
     const registered = Object.keys(EXTENSION_COMMAND_HANDLERS).sort();
     const expected = [
-      ...EXTENSION_REGISTRY_CATALOG_COMMAND_IDS,
+      ...catalogRegistryIds,
       ...EXTENSION_INTERNAL_COMMAND_IDS,
     ].sort();
     expect(registered).toEqual(expected);
@@ -97,11 +103,7 @@ describe('extension command registry — catalog-driven registration', () => {
     // future catalog entry is tagged `extensionRegistry: true` without a
     // matching handler, the id set comparison must fail rather than
     // silently pass.
-    const taggedIds = new Set(
-      (commandCatalog as readonly CommandCatalogEntry[])
-        .filter((entry) => entry.extensionRegistry === true)
-        .map((entry) => entry.id),
-    );
+    const taggedIds = new Set(catalogRegistryIds);
     const registeredIds = new Set(Object.keys(EXTENSION_COMMAND_HANDLERS));
     for (const id of taggedIds) {
       expect(registeredIds.has(id)).toBe(true);
@@ -205,11 +207,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
   });
 
   describe('typed file-operation arguments', () => {
-    const WORKSPACE_INPUT = {
-      kind: 'workspace' as const,
-      absolutePath: '/workspace/main.tex',
-      relativePath: 'main.tex',
-    };
     const BASE_FILE = {
       kind: 'external' as const,
       absolutePath: '/tmp/base.tex',
@@ -306,31 +303,22 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatch(
-          actions,
-          'texra.compare',
-          WORKSPACE_INPUT,
-          BASE_FILE,
-          EDITED_FILE,
-        ),
+        dispatch(actions, 'texra.compare', BASE_FILE, EDITED_FILE),
       ).resolves.toBe(true);
       await expect(
         dispatch(
           actions,
           'texra.acceptEdited',
-          WORKSPACE_INPUT,
           BASE_FILE,
           EDITED_FILE,
           COPY_META,
         ),
       ).resolves.toBe(true);
       expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
         BASE_FILE,
         EDITED_FILE,
       );
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
         BASE_FILE,
         EDITED_FILE,
         COPY_META,
@@ -341,51 +329,10 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       const actions = makeActions();
 
       await expect(
-        dispatch(
-          actions,
-          'texra.acceptEdited',
-          WORKSPACE_INPUT,
-          BASE_FILE,
-          EDITED_FILE,
-        ),
+        dispatch(actions, 'texra.acceptEdited', BASE_FILE, EDITED_FILE),
       ).resolves.toBe(true);
       expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
         BASE_FILE,
-        EDITED_FILE,
-        undefined,
-      );
-    });
-
-    it('preserves the input-location fallback when base is omitted', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(
-          actions,
-          'texra.compare',
-          WORKSPACE_INPUT,
-          undefined,
-          EDITED_FILE,
-        ),
-      ).resolves.toBe(true);
-      await expect(
-        dispatch(
-          actions,
-          'texra.acceptEdited',
-          WORKSPACE_INPUT,
-          undefined,
-          EDITED_FILE,
-        ),
-      ).resolves.toBe(true);
-      expect(actions.compare).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
-        undefined,
-        EDITED_FILE,
-      );
-      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        WORKSPACE_INPUT,
-        undefined,
         EDITED_FILE,
         undefined,
       );

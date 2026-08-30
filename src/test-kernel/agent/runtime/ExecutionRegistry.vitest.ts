@@ -41,14 +41,14 @@ import {
 } from '../progressTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
 }));
 
 const channelTraceMocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-// terminalPersistence deep-imports finalizeExecution from executionLifecycle
+// The registry deep-imports finalizeRun from executionLifecycle
 // (not the `@agent/storage` barrel), so the spy lives on that leaf module.
 // Mocking both the barrel and the leaf with the same `vi.fn` whose
 // implementation points at `importOriginal`'s barrel export recurses through
@@ -56,17 +56,17 @@ const channelTraceMocks = vi.hoisted(() => ({
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
-  storageMocks.finalizeExecution.mockImplementation(actual.finalizeExecution);
+  storageMocks.finalizeRun.mockImplementation(actual.finalizeRun);
   return {
     ...actual,
-    finalizeExecution: storageMocks.finalizeExecution,
+    finalizeRun: storageMocks.finalizeRun,
   };
 });
 vi.mock('@agent/storage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agent/storage')>();
   return {
     ...actual,
-    finalizeExecution: storageMocks.finalizeExecution,
+    finalizeRun: storageMocks.finalizeRun,
   };
 });
 
@@ -124,6 +124,8 @@ function createRegistry(
   const registry = new ExecutionRegistry({
     streamStatus,
     events,
+    approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+    publishResult: () => {},
     releaseRootExecutionLease: async () => {},
     ...options,
   });
@@ -157,7 +159,7 @@ function createLiveToolUseFlowContext(
   overrides: Partial<LiveToolUseFlowContext> = {},
 ): LiveToolUseFlowContext {
   return {
-    session: { appendFollowUp: vi.fn() },
+    ownerSession: {} as SessionHandle,
     modelHandler: { supportsManualCompaction: true },
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(),
@@ -194,40 +196,6 @@ function trackSuspendedWaitingHandle(
 }
 
 describe('executionRegistry', () => {
-  it('retains a child activation across handle tracking until its disposer runs', () => {
-    const { registry } = createRegistry();
-    const activationEvents: boolean[] = [];
-    const executionId = 'pending-child-exec' as ExecutionId;
-    const parentStreamId = 'pending-parent' as StreamTabId;
-    const childStreamId = 'pending-child' as StreamTabId;
-    const detach = registry.addChildActivationListener((_activation, active) =>
-      activationEvents.push(active),
-    );
-
-    try {
-      const release = registry.reserveChildActivation({
-        executionId,
-        parentStreamId,
-        childStreamId,
-        interrupt: vi.fn(),
-        detach: vi.fn(),
-        isDetached: () => false,
-      });
-      expect(activationEvents).toEqual([true]);
-
-      // The activation is the child's lineage for the loop's whole life:
-      // tracking a turn handle does not release it, the loop's disposer does.
-      registry.track(createHandle(executionId, parentStreamId, childStreamId));
-      expect(activationEvents).toEqual([true]);
-
-      release();
-      expect(activationEvents).toEqual([true, false]);
-    } finally {
-      detach();
-      registry.dispose();
-    }
-  });
-
   it('retains and detaches a parent whose child is still activating', () => {
     const { registry } = createRegistry();
     const executionId = 'queued-child-exec' as ExecutionId;
@@ -306,17 +274,11 @@ describe('executionRegistry', () => {
       },
     );
     registry.track(first);
-    const seen: unknown[] = [];
-    const detach = registry.addListener(executionId, (handle) => {
-      seen.push(handle);
-    });
 
     registry.track(second);
     registry.untrack(executionId);
 
-    expect(seen).toEqual([second, undefined]);
     expect(registrations).toEqual([first, second, undefined]);
-    detach();
     detachRegistrations();
     registry.dispose();
   });
@@ -548,7 +510,7 @@ describe('executionRegistry', () => {
   });
 
   it('hands a waiting stop to a successor tracked during cleanup', async () => {
-    storageMocks.finalizeExecution.mockClear();
+    storageMocks.finalizeRun.mockClear();
     const publishResult = vi.fn();
     const { streamStatus, registry } = createRegistry({ publishResult });
     const executionId = 'exec-waiting-stop-handoff' as ExecutionId;
@@ -585,7 +547,7 @@ describe('executionRegistry', () => {
 
       expect(registry.getHandle(executionId)).toBe(successor);
       expect(publishResult).not.toHaveBeenCalled();
-      expect(storageMocks.finalizeExecution).not.toHaveBeenCalled();
+      expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
       expect(streamStatus.get(childStreamId)).toBe(STREAM_PHASE.WAITING);
     } finally {
       registry.dispose();
@@ -628,9 +590,8 @@ describe('executionRegistry', () => {
       'parent-waiting-kill-metadata-failure' as StreamTabId;
     const childStreamId = 'child-waiting-kill-metadata-failure' as StreamTabId;
     const durabilityError = new Error('metadata disk write failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      stage: 'terminal-status',
+    storageMocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       outcomePersisted: false,
       error: durabilityError,
     });
@@ -658,7 +619,6 @@ describe('executionRegistry', () => {
           {
             data: {
               executionId,
-              stage: 'terminal-status',
               outcomePersisted: false,
               error: durabilityError,
             },
@@ -675,11 +635,7 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-cleanup-failure' as ExecutionId;
     const childStreamId = 'child-waiting-cleanup-failure' as StreamTabId;
     const cleanupError = new Error('transcript reload failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'durable',
-      outcomePersisted: true,
-      flowRecord: 'deleted',
-    });
+    storageMocks.finalizeRun.mockResolvedValueOnce({ ok: true });
     channelTraceMocks.warn.mockClear();
 
     try {
@@ -693,10 +649,12 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'delete',
+          // A stopped WAITING run keeps its checkpoint: this is precisely the
+          // run a user resumes (#11315).
+          flowRecord: 'preserve',
         });
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledWith(
@@ -708,15 +666,14 @@ describe('executionRegistry', () => {
     }
   });
 
-  it('persists a waiting stop when only flow-record deletion fails', async () => {
+  it('persists a waiting stop when only flow-record retention fails', async () => {
     const { streamStatus, registry } = createRegistry();
-    const executionId = 'exec-waiting-kill-flow-delete-failure' as ExecutionId;
+    const executionId = 'exec-waiting-kill-flow-retain-failure' as ExecutionId;
     const childStreamId =
-      'child-waiting-kill-flow-delete-failure' as StreamTabId;
-    const cleanupError = new Error('flow delete failed');
-    storageMocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
-      stage: 'flow-record-delete',
+      'child-waiting-kill-flow-retain-failure' as StreamTabId;
+    const cleanupError = new Error('flow retention failed');
+    storageMocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       outcomePersisted: true,
       error: cleanupError,
     });
@@ -733,10 +690,12 @@ describe('executionRegistry', () => {
       expect(registry.kill(executionId)).toBe(true);
 
       await vi.waitFor(() => {
-        expect(storageMocks.finalizeExecution).toHaveBeenCalledWith({
+        expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
           executionId,
           outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'delete',
+          // A stopped WAITING run keeps its checkpoint: this is precisely the
+          // run a user resumes (#11315).
+          flowRecord: 'preserve',
         });
       });
       expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
@@ -744,7 +703,6 @@ describe('executionRegistry', () => {
         {
           data: {
             executionId,
-            stage: 'flow-record-delete',
             outcomePersisted: true,
             error: cleanupError,
           },
@@ -815,17 +773,12 @@ describe('executionRegistry', () => {
     const executionId = 'exec-waiting-stop-after-claim' as ExecutionId;
     const childStreamId = 'child-waiting-stop-after-claim' as StreamTabId;
     const teardown = vi.fn();
-    storageMocks.finalizeExecution.mockClear();
+    storageMocks.finalizeRun.mockClear();
     let releasePersist: (() => void) | undefined;
-    storageMocks.finalizeExecution.mockImplementationOnce(
+    storageMocks.finalizeRun.mockImplementationOnce(
       async () =>
         new Promise((resolve) => {
-          releasePersist = () =>
-            resolve({
-              status: 'durable',
-              outcomePersisted: true,
-              flowRecord: 'deleted',
-            });
+          releasePersist = () => resolve({ ok: true });
         }),
     );
 
@@ -855,7 +808,7 @@ describe('executionRegistry', () => {
       await expect(handle.result).resolves.toMatchObject({
         outcome: RUN_OUTCOME.COMPLETED,
       });
-      expect(storageMocks.finalizeExecution).toHaveBeenCalledExactlyOnceWith({
+      expect(storageMocks.finalizeRun).toHaveBeenCalledExactlyOnceWith({
         executionId,
         outcome: RUN_OUTCOME.COMPLETED,
         flowRecord: 'delete',
@@ -1664,7 +1617,7 @@ describe('executionRegistry', () => {
   });
 
   it('preserves child approvals when detaching it from its parent', () => {
-    const approvals = createSessionApprovals();
+    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     const { registry } = createRegistry({ approvals });
     const parentStreamId = 'parent-detach-approvals' as StreamTabId;
     const childStreamId = 'child-detach-approvals' as StreamTabId;
@@ -1676,9 +1629,7 @@ describe('executionRegistry', () => {
 
     try {
       approvals.toolEdit.bypass.setBypass(parentStreamId, true);
-      approvals.registerStreamParent(childStreamId, parentStreamId, [
-        'toolEdit',
-      ]);
+      approvals.registerStreamParent(childStreamId, parentStreamId);
       registry.track(handle);
 
       registry.detachActiveChildren(parentStreamId);

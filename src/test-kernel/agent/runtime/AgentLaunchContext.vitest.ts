@@ -27,21 +27,17 @@ vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
 import { noopTrace } from '@agent/trace';
 import { createRunScope } from '@agent/runtime/RunScope';
-import { useRunContext } from '@agent/runtime/RunContext';
+import { tryUseRunContext } from '@agent/runtime/RunContext';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { createToolPolicy } from '@agent/core/flows/BaseFlowServices';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   buildAgentLaunchContext,
-  getAgentPath,
   withExecutionRunContext,
   type AgentLaunchContext,
 } from '@agent/runtime/AgentLaunchContext';
-import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -54,13 +50,14 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const EXECUTION_ID = 'launch-context-test' as ExecutionId;
 
-/** Launches with an empty agent/model, asserting the shared missing-agent failure. */
+/** Launches an unresolvable agent, asserting the shared missing-agent failure. */
 async function launchWithMissingAgent(
   session: ReturnType<typeof createTestSession>,
+  agent = '',
 ): Promise<void> {
   await expect(
     buildAgentLaunchContext({
-      config: AgentConfigSchema.parse({ agent: '', model: '' }),
+      config: AgentConfigSchema.parse({ agent, model: '' }),
       executionId: EXECUTION_ID,
       session,
     }),
@@ -68,25 +65,29 @@ async function launchWithMissingAgent(
 }
 
 /**
- * Triggers `getAgentPath`'s queued (no live host attached) missing-agent
- * failure and asserts the shared pending-presentation state, returning the
- * thrown error so the caller can attach a host and assert on replay.
+ * Triggers the launch's queued (no live host attached) missing-agent failure
+ * and asserts the shared claimed-presentation state, returning the owning
+ * session so the caller can attach a host, assert on replay, and dispose it
+ * (disposing earlier would drop the queued replay with the session).
  */
 async function triggerQueuedMissingAgentFailure(
   owner: SessionHostInteractions,
-): Promise<unknown> {
+): Promise<SessionHandle> {
+  const session = createTestSession({ interactions: owner });
   let thrown: unknown;
-  await getAgentPath(
-    '__queued_missing_agent_for_launch_context_test__',
-    owner,
-    AgentCategory.ToolUse,
-  ).catch((error: unknown) => {
+  await buildAgentLaunchContext({
+    config: AgentConfigSchema.parse({
+      agent: '__queued_missing_agent_for_launch_context_test__',
+      model: '',
+    }),
+    executionId: EXECUTION_ID,
+    session,
+  }).catch((error: unknown) => {
     thrown = error;
   });
   expect(String(thrown)).toContain('Could not find agent');
-  expect(hasErrorPresentedMarker(thrown)).toBe(false);
-  expect(hasErrorPresentationPending(thrown)).toBe(true);
-  return thrown;
+  expect(hasErrorPresentationClaimed(thrown)).toBe(true);
+  return session;
 }
 
 describe('AgentLaunchContext', () => {
@@ -103,15 +104,19 @@ describe('AgentLaunchContext', () => {
   });
 
   it('publishes missing-agent banners through the supplied host interactions', async () => {
-    const explicit = createRecordingHost();
+    // Delivery is confirmed so the launch catch adds no generic toast; the
+    // undelivered variant is covered by the generic-error-toast test below.
+    const explicit = createRecordingHost({ emitDelivery: true });
+    const session = createTestSession({ interactions: explicit.host });
 
-    await expect(
-      getAgentPath(
+    try {
+      await launchWithMissingAgent(
+        session,
         '__missing_agent_for_launch_context_test__',
-        explicit.host,
-        AgentCategory.ToolUse,
-      ),
-    ).rejects.toThrow('Could not find agent');
+      );
+    } finally {
+      session.dispose();
+    }
 
     expect(explicit.events).toEqual([
       {
@@ -167,19 +172,17 @@ describe('AgentLaunchContext', () => {
     ).toHaveLength(1);
   });
 
-  it('marks a queued missing-agent banner only after a live host replays and delivers it', async () => {
-    // `emit` without an attached host must not report confirmed delivery:
-    // the throw site only marks `errorPresented` once the retained replay
-    // actually renders on a live host.
+  it('renders a queued missing-agent banner once a live host replays it', async () => {
+    // The retained replay owns the delivery decision: it renders the targeted
+    // banner and emits no generic fallback.
     const recording = createRecordingHost({ emitDelivery: true });
     const owner = new SessionHostInteractions();
-    const thrown = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use(recording.interactions);
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(hasErrorPresentedMarker(thrown)).toBe(true);
     expect(
       recording.events.filter(
         (event) => event.event === 'showAgentConfigBanner',
@@ -188,19 +191,18 @@ describe('AgentLaunchContext', () => {
     expect(
       recording.events.filter((event) => event.event === 'requestShowError'),
     ).toHaveLength(0);
-    owner.dispose();
+    session.dispose();
   });
 
   it('emits the generic fallback when a queued missing-agent banner replay is not delivered', async () => {
     const recording = createRecordingHost({ emitDelivery: false });
     const owner = new SessionHostInteractions();
-    const thrown = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use(recording.interactions);
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
     expect(
       recording.events.filter(
         (event) => event.event === 'showAgentConfigBanner',
@@ -209,7 +211,7 @@ describe('AgentLaunchContext', () => {
     expect(
       recording.events.filter((event) => event.event === 'requestShowError'),
     ).toHaveLength(1);
-    owner.dispose();
+    session.dispose();
   });
 
   it('emits the generic fallback when a queued banner replay throws synchronously', async () => {
@@ -219,7 +221,7 @@ describe('AgentLaunchContext', () => {
     // error stays presentation-pending and surfaces zero times (#10398).
     const events: Array<{ event: string; payload: unknown }> = [];
     const owner = new SessionHostInteractions();
-    const thrown = await triggerQueuedMissingAgentFailure(owner);
+    const session = await triggerQueuedMissingAgentFailure(owner);
 
     owner.use({
       emit: (event, payload) => {
@@ -234,11 +236,10 @@ describe('AgentLaunchContext', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
     expect(
       events.filter((entry) => entry.event === 'requestShowError'),
     ).toHaveLength(1);
-    owner.dispose();
+    session.dispose();
   });
 
   it('normalizes a live-host synchronous banner throw into the generic toast fallback', async () => {
@@ -274,8 +275,7 @@ describe('AgentLaunchContext', () => {
     }
 
     expect(String(thrown)).toContain('Could not find agent');
-    expect(hasErrorPresentedMarker(thrown)).toBe(false);
-    expect(hasErrorPresentationPending(thrown)).toBe(false);
+    expect(hasErrorPresentationClaimed(thrown)).toBe(false);
     expect(
       events.filter((entry) => entry.event === 'requestShowError'),
     ).toHaveLength(1);
@@ -378,7 +378,7 @@ describe('AgentLaunchContext', () => {
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, { onApprovalPolicyDenial }, async () => {
-      const context = useRunContext();
+      const context = tryUseRunContext()!;
       expect(context.model).toBe('deepseekT');
       expect(context.kind).toBe('launch');
       if (context.kind !== 'launch') {
@@ -396,7 +396,7 @@ describe('AgentLaunchContext', () => {
       // context; the `AgentConfig.model` mirror does not drive it.
       modelCell.swap({ dispose: vi.fn() } as never, 'sonnet46T');
 
-      expect(useRunContext().model).toBe('sonnet46T');
+      expect(tryUseRunContext()?.model).toBe('sonnet46T');
     });
   });
 
@@ -419,7 +419,7 @@ describe('AgentLaunchContext', () => {
     } as unknown as AgentLaunchContext;
 
     await withExecutionRunContext(ctx, {}, async () => {
-      const context = useRunContext();
+      const context = tryUseRunContext()!;
       if (context.kind !== 'launch') {
         throw new Error('expected launch context');
       }

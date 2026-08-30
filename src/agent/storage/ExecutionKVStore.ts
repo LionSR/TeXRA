@@ -6,6 +6,7 @@
  * and generic read/write for arbitrary keys.
  */
 
+import { LRUCache } from 'lru-cache';
 import { z } from 'zod';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -15,12 +16,12 @@ import {
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import { KVStore } from '@common/storage/KVStore';
-import { KVStoreCache } from '@common/storage/KVStoreCache';
 import { createLog } from '@logger/logUtils';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ExecutionMetaCoreSchema,
   ExecutionMetaSchema,
+  RUN_OUTCOME,
   WorkflowExecutionSnapshotSchema,
   type ExecutionId,
   type ExecutionMeta,
@@ -28,11 +29,7 @@ import {
 import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  applyExecutionOutcome,
-  ResultMetaSchema,
-  type ResultMeta,
-} from './resultMeta';
+import { ResultMetaSchema, type ResultMeta } from './resultMeta';
 import { runWithExecutionLeaseWriteFence } from './executionLease';
 
 // ============================================================================
@@ -99,14 +96,13 @@ export interface ChildRecord extends ChildRecordData {
 
 /**
  * Logical identity of one child run turn (#9531, introduced 2026-08-03): a
- * stable turn token plus the delivery id its single parent delivery is
- * admitted under. Minted by the child-run loop per accepted turn — not by a
+ * stable turn token. Minted by the child-run loop per accepted turn — not by a
  * global registry — so the same logical delivery always carries the same id
- * and distinct turns never share one.
+ * and distinct turns never share one. The delivery id its single parent
+ * delivery is admitted under is derived from this token at the enqueue site.
  */
 const TurnRefSchema = z.object({
   token: z.string(),
-  deliveryId: z.string(),
 });
 export type ChildTurnRef = z.infer<typeof TurnRefSchema>;
 
@@ -330,12 +326,35 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return entries.filter(filterNotNull);
   }
 
+  /**
+   * The persisted result record with the execution's durable terminal outcome
+   * projected onto it. `meta.outcome` is the only writer of "how did this run
+   * end": the result record is an interim envelope rewritten by every turn,
+   * and a run can end after its last turn wrote one (interrupted between
+   * turns, stopped while suspended, failed by restart repair). A durable
+   * `completed` is never projected: it only ever agrees with the envelope,
+   * whose producer may already have downgraded a nominally completed flow that
+   * reported an application-level error (`buildSubagentFailureResultMeta`).
+   */
   async readResultMeta(): Promise<ResultMeta | null> {
     const [record, meta] = await Promise.all([
       this.readValidated(KEYS.RESULT_META, ResultMetaSchema),
       this.readMeta(),
     ]);
-    return record ? applyExecutionOutcome(record, meta?.outcome) : null;
+    if (!record) return null;
+    const outcome = meta?.outcome;
+    if (
+      record.producer === 'backgroundBash' ||
+      outcome === undefined ||
+      outcome === RUN_OUTCOME.COMPLETED ||
+      record.result.outcome === outcome
+    ) {
+      return record;
+    }
+    return ResultMetaSchema.parse({
+      ...record,
+      result: { ...record.result, outcome },
+    });
   }
 
   async readTurnState(): Promise<ChildTurnState | null> {
@@ -387,17 +406,20 @@ function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
 // ============================================================================
 
 // LRU-capped store cache. StorageFSKVStore is stateless (file-backed),
-// so eviction is lossless — re-creation just makes a new thin wrapper.
-const storeCache = new KVStoreCache<ExecutionId, StorageFSKVStore>(
-  (executionId) => new StorageFSKVStore(executionId),
-  { max: 50 },
-);
+// so eviction is lossless — re-creation just makes a new thin wrapper. The
+// cache exists for instance identity (callers spy on the returned store),
+// not to avoid work.
+const storeCache = new LRUCache<ExecutionId, StorageFSKVStore>({ max: 50 });
 
 export function getExecutionStore(executionId: ExecutionId): ExecutionKVStore {
-  return storeCache.get(executionId);
+  const cached = storeCache.get(executionId);
+  if (cached) return cached;
+  const created = new StorageFSKVStore(executionId);
+  storeCache.set(executionId, created);
+  return created;
 }
 
 /** Clear the in-memory store cache. Called during extension deactivation. */
 export function clearStoreCache(): void {
-  storeCache.invalidateAll();
+  storeCache.clear();
 }

@@ -1,5 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +13,7 @@ import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApp
 import type { ToolEditPermission } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type { ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 
 interface TestUri {
@@ -123,6 +123,7 @@ type ApprovalPrompts = Pick<
 >;
 
 const sessions: SessionHandle[] = [];
+const tempDirs = useTempDirs();
 const activeApprovals: Promise<ToolEditApprovalResult>[] = [];
 let storageRoot: string;
 
@@ -228,7 +229,7 @@ beforeEach(async () => {
       return undefined;
     },
   );
-  storageRoot = await mkdtemp(path.join(tmpdir(), 'texra-native-approval-'));
+  storageRoot = await makeTempDir('texra-native-approval-', tempDirs);
 });
 
 afterEach(async () => {
@@ -236,7 +237,6 @@ afterEach(async () => {
     session.dispose();
   }
   await Promise.allSettled(activeApprovals.splice(0));
-  await rm(storageRoot, { recursive: true, force: true });
 });
 
 describe('VS Code tool edit approval', () => {

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildStatusBarDisplay,
-  ctrlCActionForFocus,
   statusBarStreamTarget,
   subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
@@ -14,7 +13,11 @@ import {
 } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
-import { STREAM_PHASE, STREAM_SUBSTATE } from '@shared/schemas';
+import {
+  STREAM_PHASE,
+  STREAM_SUBSTATE,
+  type StreamPhase,
+} from '@shared/schemas';
 
 // The bar renders the short access-route label.
 const INCLUDED_ACCESS_LABEL = shortCliModelAccessRoute('included');
@@ -258,7 +261,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         isChildStream: true,
-        location: 'Survey (1/1) › Agent runtime',
+        location: { context: 'Survey (1/1)', label: 'Agent runtime' },
         width: 80,
       }),
     );
@@ -382,7 +385,6 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         width: 140,
-        foreground: { shortcutsActive: false },
         childList: {
           focused: true,
           selectionKillable: true,
@@ -409,7 +411,6 @@ describe('CLI StatusBar display model', () => {
     const input = statusInput({
       width: 70,
       ctrlCAction: 'stop',
-      foreground: { shortcutsActive: false },
       childList: {
         focused: true,
         selectionKillable: true,
@@ -449,7 +450,6 @@ describe('CLI StatusBar display model', () => {
         foreground: {
           escapeAction: 'close',
           inputActive: true,
-          shortcutsActive: false,
         },
         childList: {
           focused: true,
@@ -866,7 +866,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 34,
-        foreground: { shortcutsActive: false },
+        foreground: { inputActive: true },
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
@@ -938,31 +938,9 @@ describe('CLI StatusBar display model', () => {
     ]);
   });
 
-  it('scopes Ctrl-C stop to the root when focus is on a child stream', () => {
-    const parentStream = new Map([['child', 'root']]);
-
-    expect(
-      ctrlCActionForFocus({
-        activeStreamId: 'root',
-        canStopActiveRun: true,
-        parentStream,
-      }),
-    ).toBe('stop');
-    expect(
-      ctrlCActionForFocus({
-        activeStreamId: 'child',
-        canStopActiveRun: true,
-        parentStream,
-      }),
-    ).toBe('stop root');
-    expect(
-      ctrlCActionForFocus({
-        activeStreamId: 'child',
-        canStopActiveRun: false,
-        parentStream,
-      }),
-    ).toBe('exit');
-
+  it('labels the root as active while a child stream has focus', () => {
+    // `statusBarStreamTarget` resolves the 'stop root' action itself (see its
+    // table below); this covers the footer it produces.
     const baseDisplayInput = statusInput({
       status: STREAM_PHASE.CANCELLED,
       ctrlCAction: 'stop root',
@@ -1028,11 +1006,16 @@ describe('CLI StatusBar display model', () => {
   // `displaySlice` by identity so the live-ancestor fallback stays
   // distinguishable from a structurally equal slice.
   describe('statusBarStreamTarget', () => {
+    // Lifecycle phase is the session status machine's, not the slice's, so a
+    // fixture tags its intended phase here and the injected `phaseOf` answers
+    // from the same map the case already declares.
+    type PhasedSlice = StreamSlice & { readonly testPhase?: StreamPhase };
+
     function streamSlice(
       streamId: string,
-      status: StreamSlice['status'],
-    ): StreamSlice {
-      return { streamId, status } as StreamSlice;
+      testPhase: StreamPhase | undefined,
+    ): PhasedSlice {
+      return { streamId, testPhase } as PhasedSlice;
     }
 
     function streamMap(
@@ -1075,7 +1058,10 @@ describe('CLI StatusBar display model', () => {
 
     const cases: ReadonlyArray<{
       readonly name: string;
-      readonly input: Parameters<typeof statusBarStreamTarget>[0];
+      readonly input: Omit<
+        Parameters<typeof statusBarStreamTarget>[0],
+        'phaseOf'
+      >;
       readonly ctrlCAction: ReturnType<
         typeof statusBarStreamTarget
       >['ctrlCAction'];
@@ -1282,7 +1268,11 @@ describe('CLI StatusBar display model', () => {
     ];
 
     it.each(cases)('$name', ({ input, ...expected }) => {
-      const target = statusBarStreamTarget(input);
+      const target = statusBarStreamTarget({
+        ...input,
+        phaseOf: (streamId) =>
+          (input.streams.get(streamId) as PhasedSlice | undefined)?.testPhase,
+      });
 
       expect(target.ctrlCAction).toBe(expected.ctrlCAction);
       expect(target.displaySlice).toBe(expected.displaySlice);
@@ -1303,7 +1293,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 2,
         approvalDepth: 1,
         ctrlCAction: 'stop',
-        foreground: { shortcutsActive: false },
+        foreground: { inputActive: true },
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
@@ -1320,7 +1310,7 @@ describe('CLI StatusBar display model', () => {
         status: STREAM_PHASE.RUNNING,
         approvalDepth: 1,
         approvalKind: 'question',
-        foreground: { escapeAction: 'skip', shortcutsActive: false },
+        foreground: { escapeAction: 'skip', inputActive: true },
       }),
     );
 
@@ -1334,7 +1324,7 @@ describe('CLI StatusBar display model', () => {
       statusInput({
         status: STREAM_PHASE.RUNNING,
         approvalDepth: 1,
-        foreground: { escapeAction: 'cancel', shortcutsActive: false },
+        foreground: { escapeAction: 'cancel', inputActive: true },
       }),
     );
 
@@ -1348,7 +1338,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 40,
-        foreground: { shortcutsActive: false },
+        foreground: { inputActive: true },
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
@@ -1363,7 +1353,7 @@ describe('CLI StatusBar display model', () => {
         subagents: 3,
         ctrlCAction: 'stop',
         width: 15,
-        foreground: { shortcutsActive: false },
+        foreground: { inputActive: true },
         shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
@@ -1581,6 +1571,7 @@ describe('CLI StatusBar display model', () => {
     {
       name: 'keeps queued-input discard warnings ahead of status details',
       width: 80,
+      bypass: NO_BYPASS,
       expected: [
         '◆',
         'run 45s',
@@ -1591,12 +1582,20 @@ describe('CLI StatusBar display model', () => {
     {
       name: 'bounds queued-input discard warnings in very narrow footers',
       width: 30,
+      bypass: NO_BYPASS,
       expected: ['◆', '1 queued follow-up will b…'],
     },
-  ])('$name', ({ width, expected }) => {
+    {
+      name: 'drops bypass badges before truncating queued-input discard warnings',
+      width: 30,
+      bypass: { bash: true, superYolo: true, toolEdit: true },
+      expected: ['◆', '1 queued follow-up will b…'],
+    },
+  ])('$name', ({ width, bypass, expected }) => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
+        bypass,
         runningFrame: '/',
         elapsedMs: 45_000,
         transientNotice: {

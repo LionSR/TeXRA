@@ -32,9 +32,7 @@ export const FileOpCommandArgsSchema = z.tuple([
  */
 const fileOpConfigFields = {
   outputFiles: z.array(z.string()).prefault([]),
-  streamId: z.string().optional(),
   executionId: ExecutionIdSchema.optional(),
-  skipProgressViewClear: z.boolean().optional(),
 };
 
 export const PackConfigSchema = FileOpParamsSchema.extend({
@@ -49,8 +47,12 @@ export const CleanConfigSchema = FileOpParamsSchema.extend(fileOpConfigFields);
 
 export type CleanConfig = z.infer<typeof CleanConfigSchema>;
 
-/** Positional arguments for the multi-file pack command. */
-export const PackMultipleCommandArgsSchema = z
+/**
+ * Positional arguments shared by the multi-file pack and clean commands. Both
+ * carry the identical webview payload, so one schema owns the rule: a primary
+ * input file, a non-empty batch, or both.
+ */
+export const MultiFileOpCommandArgsSchema = z
   .tuple([
     z.string().prefault(''),
     FileOpParamsSchema.shape.agent,
@@ -60,11 +62,3 @@ export const PackMultipleCommandArgsSchema = z
   .refine(([inputFile, , , inputFiles]) => inputFile || inputFiles.length > 0, {
     error: 'inputFile or inputFiles required',
   });
-
-/** Positional arguments for the multi-file clean command. */
-export const CleanMultipleCommandArgsSchema = z.tuple([
-  FileOpParamsSchema.shape.inputFile,
-  FileOpParamsSchema.shape.agent,
-  FileOpParamsSchema.shape.model,
-  z.array(z.string()).prefault([]),
-]);

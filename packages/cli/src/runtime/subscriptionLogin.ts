@@ -73,7 +73,7 @@ async function writeCliLoopbackSignInProgress(options: {
   writeProgress('Automatic browser launch failed; open the sign-in URL above.');
 }
 
-export type CliSubscriptionSignOutResult =
+type CliSubscriptionSignOutResult =
   | {
       readonly preferenceUpdate: {
         readonly effective: boolean;

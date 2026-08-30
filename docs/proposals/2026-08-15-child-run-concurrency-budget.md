@@ -19,7 +19,8 @@ capacity. Explicitly _not_ budgeted:
 - **Script governance.** The workflow engine's per-run semaphore
   (`concurrency`, default 4), its lifetime call cap, and `MAX_FANOUT` shape
   what a _script_ may request; they stay where they are. The budget gates
-  what the _process_ may run at once.
+  what the _process_ may run at once. _Amended 2026-08-29: the semaphore now
+  takes its value from the budget — see the amendment at the end._
 - **Generic tool calls.** `ToolUseDispatchNode`'s `PQueue({ concurrency: 4 })`
   gates parallel-safe tool calls (`read_file`, `grep`); routing the budget
   through it would throttle file reads while leaving child lifetimes ungated
@@ -89,7 +90,8 @@ caller. Two acquisition call sites, one budget, zero double-charging.
   `workflowScriptAgentRunner` to avoid the nested deadlock, and the engine
   semaphore already bounds grandchild fan-out per run. Recorded as the
   known soft spot: the budget under-counts scripted fan-out by up to
-  `engine.concurrency − 1` per workflow child.
+  `engine.concurrency − 1` per workflow child — which, since the 2026-08-29
+  amendment, is `budget − 1`.
 
 - **WAITING releases.** A detached tool-use child that suspends WAITING
   holds no model conversation; its slot releases at the turn boundary (the
@@ -110,24 +112,45 @@ execution, and a queued launch aborts cleanly if its parent is cancelled
 - No provider-key partitioning — ever (maintainer-rejected as
   overengineering; see the scope ruling above).
 - No cap on root runs or agent-CLI children.
-- No change to engine semaphore, lifetime call cap, or fan-out caps.
+- No change to the lifetime call cap or fan-out caps. _(The engine-semaphore
+  half of this ruling was amended 2026-08-29 — see below.)_
 
 ## Landed implementation
 
 Issue #10640 lands the previously-cut user-facing setting:
 
 - Canonical key: `texra.childRunConcurrencyBudget`.
-- Default: 16; allowed range 1–100 (integer), validated by
+- Default: `0` = auto — this machine's `os.availableParallelism()` clamped
+  to 1–100, resolved host-side in `childRunBudget.ts` (amended 2026-08-29;
+  was a fixed 16). Explicit values: 1–100 (integer). Validated by
   `ChildRunConcurrencyBudgetSchema`.
 - Persistence: workspace-scoped `.texra/config.json` (the settings-view catalog
   row omits `configTarget`, so the write path uses the workspace target).
-- Surface: the native VS Code/desktop settings view Multi-Agent tab only. The
-  CLI `/config` panel does not surface it, but the CLI still recognizes and
-  honors the key because the runtime reads it.
+- Surface: the native VS Code/desktop settings view Multi-Agent tab and, since
+  2026-08-29, the CLI `/config` panel (`cliConfig`).
 - Runtime: `childRunBudgetFor` re-reads the configured value on every call and
-  live re-pins the session queue unless the caller explicitly pinned it with an
-  explicit `concurrency` argument (tracked by a `WeakSet`, so the existing
-  explicit test seams stay authoritative). Absent and invalid persisted values
-  both resolve to 16.
+  live re-pins the session queue to it, so the queue always tracks the
+  configured value. Absent and invalid persisted values both resolve to auto.
 - Provider-key partitioning remains rejected (maintainer ruling) — this
   implementation is per-session count-based only.
+
+## Amendment (2026-08-29): one owner for the number
+
+- The workflow engine's per-run semaphore no longer carries its own product
+  value: `workflowScriptStrategy` passes `resolveChildRunConcurrencyBudget()`
+  as `concurrency`, so the setting governs scripted fan-out as well as
+  detached children. `DEFAULT_CONCURRENCY = 4` in `runWorkflowScript.ts` is
+  the library fallback for callers that pass nothing (tests, SDK), not a
+  product default. Before this, a workflow's `agent()` calls ran four at a
+  time whatever the setting said, and nothing passed the budget through.
+- The default became `0` = auto: `os.availableParallelism()` clamped to
+  1–100, resolved host-side in `childRunBudget.ts` (`src/shared` stays
+  `os`-free because the settings webview loads it). Model conversations are
+  network bound, so the core count is a floor for useful parallelism, not a
+  ceiling — the setting stays overridable up to 100. The number widget keeps
+  working unchanged: `0` is a value in range and the description names its
+  meaning, the same shape as `compactionThresholdPercent`'s `0 = disable`.
+- Known soft spot, restated: grandchildren still ride the workflow child's one
+  slot, so a workflow can now run up to `budget − 1` more conversations than
+  the budget counts. Charging grandchildren needs the reentrant lease noted
+  above and remains deferred.

@@ -7,13 +7,24 @@ import {
   ValidationErrorDiagnosticsSchema,
 } from '@shared/schemas';
 
-const ERROR_PAYLOAD_STRIPPED_KEYS = new Set([
-  'output',
-  'summary',
-  'lineChanges',
-  'edits',
-  'files',
-]);
+/**
+ * Sanitize the shared `diagnostics` field. Sanitized results only carry the
+ * validation-error diagnostics shape (see `ToolResultSharedFields.diagnostics`
+ * for why the source field is `z.unknown()`); any other tool's diagnostics
+ * payload — or a validation-error payload whose `formatted` doesn't actually
+ * match `FormattedZodIssueSchema` — is dropped rather than passed through
+ * untyped.
+ */
+function sanitizeDiagnostics(
+  diagnostics: unknown,
+): { type: 'validation_error'; formatted: unknown } | undefined {
+  if (diagnostics === undefined) return undefined;
+  const validationError =
+    ValidationErrorDiagnosticsSchema.safeParse(diagnostics);
+  if (!validationError.success) return undefined;
+  const { type, formatted } = validationError.data;
+  return { type, formatted };
+}
 
 /**
  * Result from extracting attachments from a tool result.
@@ -39,51 +50,47 @@ export interface ExtractedToolAttachments {
 export function extractToolAttachments(
   result: ToolResult,
 ): ExtractedToolAttachments {
+  // The parse IS the field whitelist: `ToolResultSchema` has no catchall, so
+  // every undeclared key is already stripped here. Re-listing the declared
+  // fields by hand would only add a place for a newly declared field to go
+  // missing before it reaches `formatToolResultAsText`.
   const parsed = ToolResultSchema.parse(result);
-  const status = parsed.status;
-  const attachments: ToolFileAttachment[] =
-    status === 'executed' ? (parsed.files ?? []) : [];
-  const sanitizedResult: Record<string, unknown> = { status };
 
-  for (const [key, value] of Object.entries(parsed)) {
-    if (value === undefined) continue;
-    if (key === 'base64Data' || key === 'bytes') {
-      continue;
-    }
-    if (status === 'executed' && key === 'error') {
-      continue;
-    }
-    if (status === 'error' && ERROR_PAYLOAD_STRIPPED_KEYS.has(key)) {
-      continue;
-    }
-    if (key === 'diagnostics') {
-      // Sanitized results only carry the validation-error diagnostics shape
-      // (see ToolResultSharedFields.diagnostics); any other tool's
-      // diagnostics payload — or a validation-error payload whose `formatted`
-      // doesn't actually match FormattedZodIssueSchema — is dropped here
-      // rather than passed through untyped.
-      const validationError = ValidationErrorDiagnosticsSchema.safeParse(value);
-      if (validationError.success) {
-        const { type, formatted } = validationError.data;
-        sanitizedResult[key] = { type, formatted };
-      }
-      continue;
-    }
-    sanitizedResult[key] = value;
+  if (parsed.status === 'error') {
+    // No binary-bearing field exists on this branch of the schema
+    // (output/edits/files are all `z.undefined()` here), so the parsed value
+    // needs nothing but its sanitized diagnostics.
+    const { diagnostics: rawDiagnostics, ...rest } = parsed;
+    const diagnostics = sanitizeDiagnostics(rawDiagnostics);
+    return {
+      attachments: [],
+      sanitizedResult: {
+        ...rest,
+        ...(diagnostics !== undefined ? { diagnostics } : {}),
+      },
+    };
   }
 
-  if (status === 'executed' && attachments.length > 0) {
-    sanitizedResult.files = attachments.map((file): FileReference => ({
-      path: file.path,
-      mimeType: file.mimeType,
-      ...(file.description ? { description: file.description } : {}),
-    }));
-  } else {
-    delete sanitizedResult.files;
-  }
+  const { files, diagnostics: rawDiagnostics, ...rest } = parsed;
+  const diagnostics = sanitizeDiagnostics(rawDiagnostics);
+  const attachments: ToolFileAttachment[] = files ?? [];
 
   return {
     attachments,
-    sanitizedResult: sanitizedResult as ToolResult,
+    sanitizedResult: {
+      ...rest,
+      // Binary payloads (base64Data/bytes) are the one thing the schema keeps
+      // and this projection must not: `FileReferenceSchema` is a loose object.
+      ...(attachments.length > 0
+        ? {
+            files: attachments.map((file): FileReference => ({
+              path: file.path,
+              mimeType: file.mimeType,
+              ...(file.description ? { description: file.description } : {}),
+            })),
+          }
+        : {}),
+      ...(diagnostics !== undefined ? { diagnostics } : {}),
+    },
   };
 }

@@ -7,6 +7,7 @@
  */
 import * as vscode from 'vscode';
 
+import { storeCredential } from '@common/secrets/storeCredential';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,
@@ -52,13 +53,16 @@ export class GitHubSubscriptionHandlers {
       placeHolder: 'ghp_…',
       ignoreFocusOut: true,
     });
-    const trimmed = token?.trim();
-    if (!trimmed) return;
+    if (token == null) return;
     await withHandlerErrorHandling(
       this.ctx,
       'Failed to save GitHub token',
       async () => {
-        await platform().secrets.set(GITHUB_TOKEN_STORAGE_KEY, trimmed);
+        await storeCredential(platform().secrets, {
+          secretName: GITHUB_TOKEN_STORAGE_KEY,
+          value: token,
+          kind: 'github',
+        });
         void vscode.window.showInformationMessage(GITHUB_TOKEN_SAVED_MESSAGE);
         await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       },

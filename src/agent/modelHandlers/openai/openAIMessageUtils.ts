@@ -1,6 +1,5 @@
 // Local imports
 import type { FileLocation } from '@shared/schemas';
-import { joinNonEmpty } from '@utils/text/stringUtils';
 import type { MediaAttachmentContext } from '../support/mediaAttachmentPolicy';
 
 /** Options for normalizing OpenAI-style chat messages. */
@@ -299,27 +298,14 @@ export async function initializeChatMessages<T extends MessageLike>(
     userMessageContent.push(...formattedMediaContent);
   }
 
-  // Append content to last user message, or create new user message
-  const lastMsg = messages.at(-1);
-  if (lastMsg?.role === 'user' && Array.isArray(lastMsg.content)) {
-    lastMsg.content.push(...userMessageContent);
-  } else {
-    messages.push({ role: 'user', content: userMessageContent } as T);
-  }
+  // Only the system prompt can precede this, so the user message is always new.
+  messages.push({ role: 'user', content: userMessageContent } as T);
 
-  // Add final user request
+  // Add final user request: into the user message just pushed, or as its own
+  // 'system'-role message when the model requires intermediate dev messages.
   const requestRole = capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-  const lastMessage = messages.at(-1);
-
-  if (
-    requestRole === 'user' &&
-    lastMessage?.role === 'user' &&
-    Array.isArray(lastMessage.content)
-  ) {
-    lastMessage.content.push({
-      type: 'text',
-      text: userRequest,
-    });
+  if (requestRole === 'user') {
+    userMessageContent.push({ type: 'text', text: userRequest });
   } else {
     messages.push({
       role: requestRole,
@@ -372,24 +358,6 @@ export function createChatUserFollowUpMessages<T extends MessageLike>(
     content: [{ type: 'text', text: userMessage }],
   } as T);
   return messages;
-}
-
-/** Extracts the joined text content of a chat-shaped assistant message. */
-export function extractChatAssistantText<T extends MessageLike>(
-  message: T,
-): string | undefined {
-  if (message.role !== 'assistant') return undefined;
-  const { content } = message;
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return undefined;
-  return joinNonEmpty(
-    content
-      .filter(
-        (p): p is { type: 'text'; text: string } =>
-          p.type === 'text' && typeof p.text === 'string',
-      )
-      .map((p) => p.text),
-  );
 }
 
 /**

@@ -4,7 +4,6 @@ import type {
   SettingsRespond,
   SettingsStatePorts,
 } from '@shared/settingsView/types';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { SettingsMemoryController } from './SettingsMemoryController';
 import { SettingsModelSelectionController } from './SettingsModelSelectionController';
@@ -32,13 +31,11 @@ interface SettingsViewHostOptions {
   readonly memoryPrompt: MemoryControllerOptions['prompt'];
   readonly respond?: SettingsRespond;
   readonly controllers?: {
-    readonly memory?: SettingsMemoryController;
     readonly modelSelection?: SettingsModelSelectionController;
   };
 }
 
 interface SettingsViewHostMutationOptions {
-  readonly afterUpdate?: () => Awaitable<void>;
   readonly afterPost?: () => Awaitable<void>;
 }
 
@@ -47,22 +44,9 @@ export class SettingsViewHost {
   readonly modelSelectionController: SettingsModelSelectionController;
 
   constructor(private readonly options: SettingsViewHostOptions) {
-    this.memoryController =
-      options.controllers?.memory ??
-      new SettingsMemoryController({
-        prompt: options.memoryPrompt,
-        isMemoryEnabled: () =>
-          options.state.globalState.get<boolean>(
-            GlobalStateKey.MEMORY_ENABLED,
-            true,
-          ),
-        setMemoryEnabled: async (enabled) => {
-          await options.state.globalState.update(
-            GlobalStateKey.MEMORY_ENABLED,
-            enabled,
-          );
-        },
-      });
+    this.memoryController = new SettingsMemoryController({
+      prompt: options.memoryPrompt,
+    });
     this.modelSelectionController =
       options.controllers?.modelSelection ??
       new SettingsModelSelectionController({
@@ -98,26 +82,12 @@ export class SettingsViewHost {
     }
   }
 
-  async sendMemoryEnabled(respond?: SettingsRespond): Promise<void> {
-    await this.post(this.memoryController.getMemoryEnabledMessage(), respond);
-  }
-
   async deleteMemory(
     data: Pick<MemoryDeleteMessage, 'displayPath' | 'storagePath'>,
     respond?: SettingsRespond,
   ): Promise<void> {
     await this.postMaybe(
       await this.memoryController.deleteMemory(data),
-      respond,
-    );
-  }
-
-  async setMemoryEnabled(
-    enabled: boolean,
-    respond?: SettingsRespond,
-  ): Promise<void> {
-    await this.post(
-      await this.memoryController.setMemoryEnabled(enabled),
       respond,
     );
   }
@@ -159,7 +129,6 @@ export class SettingsViewHost {
   private async postModelSelectionMutation(
     options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
   ): Promise<void> {
-    await options?.afterUpdate?.();
     await this.sendModelSelectionData(options?.respond);
     await options?.afterPost?.();
   }

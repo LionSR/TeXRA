@@ -1,18 +1,28 @@
-// Test-only builders for a projected CLI transcript row.
+// Test-only builders for stream-log projections the suites replay.
 //
 // The CLI paints `@shared/transcript` rows directly, so a tool row is a
 // normalized payload plus the shared fold over it — exactly what
 // `projectTranscriptRow` hands the painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
 // StaticBandResize, TuiStateAndFocus) construct them here so the payload and
-// its model can never drift apart in a fixture.
+// its model can never drift apart in a fixture. The task-group replay below
+// has the same shape as one projection: entries folded through the production
+// reducer.
 
+import {
+  orderedStaticTranscriptEntries,
+  pendingTranscriptEntries,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
   TOOL_USE_STATUS,
   type FileListEntry,
   type NormalizedToolUse,
+  type StreamLogEntry,
+  type StreamPhase,
+  type TaskGroup,
 } from '@shared/schemas';
 import {
   projectTranscriptRow,
@@ -20,8 +30,11 @@ import {
   transcriptText,
   type ToolRow,
   type TranscriptRow,
-  type TranscriptRowOf,
+  type CompactionActivityRow,
+  type FileListRow,
+  type PhaseRow,
 } from '@shared/transcript';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/streams/compactionActivityProjection';
 
@@ -114,7 +127,7 @@ export function textRowFixture(
 export function compactionRowFixture(
   status: CompactionActivityStatus,
   finalized = status === 'completed',
-): TranscriptRowOf<'compactionActivity'> {
+): CompactionActivityRow {
   return {
     kind: 'compactionActivity',
     id: 'compaction:operation-1',
@@ -138,7 +151,7 @@ export function compactionRowFixture(
 export function fileListRowFixture(
   id: string,
   files: readonly FileListEntry[],
-): TranscriptRowOf<'fileList'> {
+): FileListRow {
   const row = projectTranscriptRow({
     id,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -152,4 +165,79 @@ export function fileListRowFixture(
     throw new Error('fileListRowFixture: expected a fileList row');
   }
   return row;
+}
+
+/** Test-local full replay through the production reducer (the resync path). */
+export function projectTaskGroupsFromStreamLog(
+  entries: Iterable<StreamLogEntry>,
+): TaskGroup[] {
+  const taskGroups: TaskGroup[] = [];
+  const taskGroupIndex = new Map<string, number>();
+  for (const entry of entries) {
+    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
+  }
+  return taskGroups;
+}
+
+/**
+ * A workflow root's rows as its own run emits them: phase divider rows in
+ * emission order, each call carrying the phase it was issued in.
+ *
+ * The recorder records the open phase stage as a task group and stamps that
+ * stage's id onto the calls issued inside it, and both hosts group calls by
+ * that `groupId`. Deriving both here lets a fixture state a phase once. A call
+ * whose declared phase is not the open one carries no group, exactly as a
+ * stage-blocked call does.
+ */
+export function workflowPhaseGrouping(rows: readonly TranscriptRow[]): {
+  readonly taskGroups: TaskGroup[];
+  readonly entries: TranscriptRow[];
+} {
+  const taskGroups: TaskGroup[] = [];
+  let openPhase: PhaseRow | undefined;
+  const entries = rows.map((row) => {
+    if (row.kind === 'phase') {
+      openPhase = row;
+      taskGroups.push({
+        id: row.id,
+        name: row.phaseLabel,
+        startTime: row.timestamp,
+        status: STREAM_PHASE.RUNNING,
+        kind: 'phase',
+        ...(row.phaseIndex !== undefined ? { index: row.phaseIndex } : {}),
+        ...(row.phaseTotal !== undefined ? { total: row.phaseTotal } : {}),
+      });
+      return row;
+    }
+    if (
+      row.kind !== 'workflowTask' ||
+      openPhase === undefined ||
+      row.call.phase !== openPhase.phaseLabel
+    ) {
+      return row;
+    }
+    return { ...row, groupId: openPhase.id };
+  });
+  return { taskGroups, entries };
+}
+
+/** The CLI's two panes' rows for one slice: the settled `<Static>` prefix and
+ *  the live rows. Production reads each half from its own pane; suites that
+ *  assert on the partition read both here. */
+export function splitTranscriptEntries(
+  entries: readonly TranscriptRow[],
+  finalizedFrontier: number,
+  status: StreamPhase | undefined,
+): {
+  readonly finalized: readonly TranscriptRow[];
+  readonly pending: readonly TranscriptRow[];
+} {
+  return {
+    finalized: orderedStaticTranscriptEntries(
+      entries,
+      finalizedFrontier,
+      status,
+    ),
+    pending: pendingTranscriptEntries(entries, finalizedFrontier, status),
+  };
 }

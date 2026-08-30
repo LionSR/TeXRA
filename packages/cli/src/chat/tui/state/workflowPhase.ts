@@ -1,63 +1,33 @@
 // Current workflow-script phase for orientation chrome (header, status bar).
 
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
-import type { TranscriptRowOf } from '@shared/transcript';
-
-import { currentWorkflowAttemptId, type StreamSlice } from './cliState';
+import type { StreamStage, StreamTabId } from '@shared/schemas';
+import { formatPhaseStageLabel } from '@shared/streams/streamStatusDisplay';
 
 /**
- * The open phase of one workflow-script stream, if it has emitted one.
- * `category` is the stream's shared-metadata agent category; callers read it
- * (`streamMetadataFor(id)?.agentCategory`) so this selector stays pure.
+ * Nearest workflow-script ancestor's current phase, walking parent links
+ * starting from the stream's parent, named from the shared
+ * `StreamExecutionState.stage` the session applier writes — a `phase` stage
+ * is written by the workflow-script run alone, so its kind is the whole test.
+ * `stage` is ephemeral (a reloaded session has none until the run opens its
+ * next phase), the gap the progress view's header already lives with.
+ *
+ * A stream's own stage is never its location context: the header prints once
+ * into scrollback and would go stale as the workflow advanced, and the status
+ * bar already has a stage slot for the displayed stream's own phase — naming
+ * it here too printed `Derive (1/2) › name … Derive (1/2)` on one row.
  */
-export function currentWorkflowPhaseHeading(
-  slice: StreamSlice | undefined,
-  category: AgentCategory | undefined,
-): TranscriptRowOf<'phase'> | undefined {
-  if (!slice || category !== AgentCategory.Workflow) return undefined;
-  const currentAttemptId = currentWorkflowAttemptId(
-    slice.workflowAttemptId,
-    slice.entries,
-    slice.workflowAttemptBoundaryDeclared,
-  );
-  const phase = slice.entries.findLast(
-    (row): row is TranscriptRowOf<'phase'> =>
-      row.kind === 'phase' &&
-      (currentAttemptId === undefined ||
-        (currentAttemptId !== null && row.attemptId === currentAttemptId)),
-  );
-  return phase;
-}
-
-/** Nearest workflow-script ancestor's current phase, walking parent links. */
-export function ancestorWorkflowPhaseHeading(init: {
-  readonly categoryOf: (streamId: StreamTabId) => AgentCategory | undefined;
+export function ancestorWorkflowPhaseLabel(init: {
+  readonly stageOf: (streamId: StreamTabId) => StreamStage | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streamId: StreamTabId;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): TranscriptRowOf<'phase'> | undefined {
-  let id: StreamTabId | undefined = init.streamId;
+}): string | undefined {
+  let id: StreamTabId | undefined = init.parentStream.get(init.streamId);
   const seen = new Set<StreamTabId>();
   while (id && !seen.has(id)) {
     seen.add(id);
-    const phase = currentWorkflowPhaseHeading(
-      init.streams.get(id),
-      init.categoryOf(id),
-    );
-    if (phase) return phase;
+    const stage = init.stageOf(id);
+    if (stage?.kind === 'phase') return formatPhaseStageLabel(stage);
     id = init.parentStream.get(id);
   }
   return undefined;
-}
-
-/** Status-bar location while a nested session is focused. */
-export function focusedSessionLocationText(init: {
-  readonly isChildStream: boolean;
-  readonly label: string;
-  readonly phaseHeading?: string;
-}): string | undefined {
-  if (!init.isChildStream) return undefined;
-  return init.phaseHeading
-    ? `${init.phaseHeading} › ${init.label}`
-    : init.label;
 }

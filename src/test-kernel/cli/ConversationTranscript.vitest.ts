@@ -5,20 +5,17 @@ import { describe, expect, it } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
-  LIVE_TAIL_ROWS,
   boundedTranscriptEntryLayout,
   fullTranscriptEntryLayout,
-  liveAssistantDisplayLines,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
 } from '@cli/chat/tui/panes/transcriptEntryLayout';
-import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
+import { EntryErrorBoundary } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
   incrementalStaticTranscriptEntries,
   isInquiryContinuationText,
+  isRenderableTranscriptEntry,
   orderedStaticTranscriptEntries,
-  splitTranscriptEntries,
-  terminalVisibleTranscriptText,
   transcriptRowHeadline,
   trimAssistantTranscriptLead,
 } from '@cli/chat/tui/panes/transcriptEntries';
@@ -35,7 +32,7 @@ import {
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   createTuiViewportController,
   type TuiRepaintOptions,
@@ -43,16 +40,15 @@ import {
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import {
   estimateLiveTranscriptEntryRows,
-  estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   emptySlice,
   resetCliState,
   patchStream,
+  streamPhaseFor,
   streams,
   type StreamSlice,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
@@ -76,9 +72,15 @@ import {
 } from '@shared/schemas';
 import type { ToolRow, TranscriptRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
+import {
+  loadInk,
+  renderOutputAtTerminalSize,
+} from '@test/support/inkTestHarness.ts';
 import { buildChildRosters } from '@test/support/childRosters';
 import {
   compactionRowFixture,
+  splitTranscriptEntries,
   textRowFixture,
   toolRowFixture,
 } from '@test/support/transcriptRowFixtures';
@@ -283,26 +285,27 @@ describe('CLI conversation transcript', () => {
       'compaction:operation-1',
     ]);
     expect(
-      staticItemIds([completed], {
-        currentItems: staticItems([completed]),
-      }),
+      advancedItems(staticState([completed]), [completed]).map(
+        (item) => item.id,
+      ),
     ).toEqual(['session-header', 'compaction:operation-1']);
   });
 
   it('holds later rows out of Static until interrupted compaction is final', () => {
     const interrupted = compactionEntry('interrupted');
     const laterUser = entry('u1', 'user', 'Continue', true);
-    const liveItems = staticItems([interrupted, laterUser]);
+    const live = staticState([interrupted, laterUser]);
 
-    expect(liveItems.map((item) => item.id)).toEqual(['session-header']);
+    expect(live.items.map((item) => item.id)).toEqual(['session-header']);
     expect(
       splitTranscriptEntries([interrupted, laterUser], 0, STREAM_PHASE.RUNNING)
         .pending,
     ).toEqual([interrupted, laterUser]);
 
-    const finalItems = staticItems([compactionEntry('completed'), laterUser], {
-      currentItems: liveItems,
-    });
+    const finalItems = advancedItems(live, [
+      compactionEntry('completed'),
+      laterUser,
+    ]);
     expect(finalItems.map((item) => item.id)).toEqual([
       'session-header',
       'compaction:operation-1',
@@ -382,11 +385,8 @@ describe('CLI conversation transcript', () => {
   // syncStreamLog derives finalizeDeferred, otherwise the next run's
   // in-flight entries get finalized early and lose later chunks.
   it('clears a stale final status before the next run streams', () => {
-    // Twice: the first reset retires STREAM_ID from the previous test, and a
-    // retired identity cannot take a status.
     resetCliState();
-    resetCliState();
-    setStreamStatusInCliState({
+    setCliStreamPhase({
       streamId: STREAM_ID,
       status: STREAM_PHASE.WAITING,
     });
@@ -399,7 +399,7 @@ describe('CLI conversation transcript', () => {
         'resume',
       );
 
-      expect(streams.get().get(STREAM_ID)?.status).toBe(STREAM_PHASE.RUNNING);
+      expect(streamPhaseFor(STREAM_ID)?.phase).toBe(STREAM_PHASE.RUNNING);
     } finally {
       dispose();
     }
@@ -474,7 +474,7 @@ describe('CLI conversation transcript', () => {
       toolUse: malformedTool,
     };
 
-    expect(estimateTranscriptEntryRows(malformedEntry, 80)).toBe(1);
+    expect(estimateLiveTranscriptEntryRows(malformedEntry, 80)).toBe(1);
 
     const selected = selectTranscriptEntriesForViewport(
       [malformedEntry],
@@ -486,14 +486,28 @@ describe('CLI conversation transcript', () => {
     expect(selected.rowLimits.has('tool')).toBe(false);
   });
 
-  it('formats unprintable render errors without throwing', () => {
+  it('formats unprintable render errors without throwing', async () => {
     const unprintable = {
       toString() {
         throw new Error('cannot stringify');
       },
     };
+    const { ink, React } = await loadInk();
+    function Boom(): never {
+      throw unprintable;
+    }
 
-    expect(formatRenderError(unprintable)).toBe('');
+    const frame = await renderOutputAtTerminalSize(
+      ink,
+      React.createElement(
+        EntryErrorBoundary,
+        { label: 'entry' },
+        React.createElement(Boom),
+      ),
+      80,
+    );
+    expect(frame).toContain('failed to render entry');
+    expect(frame).not.toContain('failed to render entry:');
   });
 
   it('renders bounded finalized assistant tails through markdown', () => {
@@ -551,11 +565,8 @@ describe('CLI conversation transcript', () => {
     ].join('\n');
     const assistant = entry('a1', 'assistant', text, false);
     const width = 52;
-    const liveRows = liveAssistantDisplayLines({
-      rows: LIVE_TAIL_ROWS,
-      text,
-      width,
-    }).length;
+    const liveRows = transcriptEntryLayout(assistant, { mode: 'live', width })
+      .lines.length;
 
     const selected = selectTranscriptEntriesForViewport(
       [assistant],
@@ -582,9 +593,6 @@ describe('CLI conversation transcript', () => {
     expect(userLayout.lines[1]?.startsWith('  ')).toBe(true);
     expect(userLayout.lines).toHaveLength(2);
     expect(transcriptEntryLayoutRows(userLayout)).toBe(4);
-    expect(estimateTranscriptEntryRows(user, 80)).toBe(
-      transcriptEntryLayoutRows(userLayout),
-    );
 
     const tool = toolEntry('t1', TOOL_USE_STATUS.COMPLETED, 'one\ntwo');
     const toolLayout = transcriptEntryLayout(tool, { width: 80 });
@@ -594,9 +602,7 @@ describe('CLI conversation transcript', () => {
       marginBottomRows: 1,
       marginTopRows: 0,
     });
-    expect(estimateTranscriptEntryRows(tool, 80)).toBe(
-      transcriptEntryLayoutRows(toolLayout),
-    );
+    expect(transcriptEntryLayoutRows(toolLayout)).toBe(4);
   });
 
   it('gives every workflow-call status its own steady marker', () => {
@@ -654,9 +660,9 @@ describe('CLI conversation transcript', () => {
     });
 
     expect(liveLayout.lines).toHaveLength(2);
-    expect(estimateTranscriptEntryRows(tool, 20)).toBeGreaterThan(
-      estimateLiveTranscriptEntryRows(tool, 20),
-    );
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(tool, { width: 20 })),
+    ).toBeGreaterThan(estimateLiveTranscriptEntryRows(tool, 20));
     expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
       transcriptEntryLayoutRows(liveLayout),
     );
@@ -676,7 +682,9 @@ describe('CLI conversation transcript', () => {
   it('budgets live user prompt bands with their margin rows', () => {
     const user = entry('u1', 'user', 'why do you write as a latex?', true);
 
-    expect(estimateTranscriptEntryRows(user, 80)).toBe(3);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(user, { width: 80 })),
+    ).toBe(3);
   });
 
   it('does not render empty assistant placeholders between user and tool rows', () => {
@@ -715,12 +723,7 @@ describe('CLI conversation transcript', () => {
   it('keeps a live prompt out of static scrollback until a continuation exists', () => {
     const user = entry('u1', 'user', 'what is this repo about', true);
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        STREAM_ID,
-        sliceWithEntries(STREAM_ID, [user], {
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ],
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [user])],
     ]);
 
     const split = splitTranscriptEntries([user], 0, STREAM_PHASE.RUNNING);
@@ -729,8 +732,8 @@ describe('CLI conversation transcript', () => {
 
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
-      currentItems: [],
       streams,
+      status: STREAM_PHASE.RUNNING,
       meta: SESSION_META,
     }).items;
     expect(items.map((item) => item.id)).toEqual(['session-header']);
@@ -740,12 +743,7 @@ describe('CLI conversation transcript', () => {
     const user = entry('u1', 'user', 'what is this repo about', true);
     const tool = toolEntry('t1', 'in_progress');
     const streams = new Map<StreamTabId, StreamSlice>([
-      [
-        STREAM_ID,
-        sliceWithEntries(STREAM_ID, [user, tool], {
-          status: STREAM_PHASE.RUNNING,
-        }),
-      ],
+      [STREAM_ID, sliceWithEntries(STREAM_ID, [user, tool])],
     ]);
 
     const split = splitTranscriptEntries([user, tool], 0, STREAM_PHASE.RUNNING);
@@ -754,8 +752,8 @@ describe('CLI conversation transcript', () => {
 
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: STREAM_ID,
-      currentItems: [],
       streams,
+      status: STREAM_PHASE.RUNNING,
       meta: SESSION_META,
     }).items;
     expect(items.map((item) => item.id)).toEqual(['session-header', 'u1']);
@@ -791,7 +789,7 @@ describe('CLI conversation transcript', () => {
     const tool = toolEntry('t1', 'in_progress');
 
     const invisibleText = transcriptRowHeadline(invisibleAssistant);
-    expect(terminalVisibleTranscriptText(invisibleText)).toBe('');
+    expect(isRenderableTranscriptEntry(invisibleAssistant)).toBe(false);
     expect(trimAssistantTranscriptLead(invisibleText)).toBe('');
     expect(trimAssistantTranscriptLead('\u001B[2m\u200B\nvisible')).toBe(
       '\u001B[2mvisible',
@@ -821,44 +819,53 @@ describe('CLI conversation transcript', () => {
       '[inquiry] ei_123 answered.\nQ: Can this be simplified?\nA: Yes.',
       true,
     );
-    expect(estimateTranscriptEntryRows(continuation, 80)).toBe(3);
+    expect(
+      transcriptEntryLayoutRows(
+        transcriptEntryLayout(continuation, { width: 80 }),
+      ),
+    ).toBe(3);
 
     // 77 chars exceeds the padded wrap width (80 - 4 = 76) by one, so the
     // row estimate must reflect the gutter + prefix geometry, not the
     // terminal width, and normal user prompts include the band margins.
     const long = entry('u2', 'user', 'x'.repeat(77), true);
-    expect(estimateTranscriptEntryRows(long, 80)).toBe(4);
+    expect(
+      transcriptEntryLayoutRows(transcriptEntryLayout(long, { width: 80 })),
+    ).toBe(4);
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', false);
 
-    const first = staticItems([user, assistant]);
-    expect(first).toHaveLength(2);
-    expect(first[0]?.kind).toBe('header');
-    expect(first.slice(1).map((item) => item.id)).toEqual(['u1']);
+    const first = staticState([user, assistant]);
+    expect(first.items).toHaveLength(2);
+    expect(first.items[0]?.kind).toBe('header');
+    expect(first.items.slice(1).map((item) => item.id)).toEqual(['u1']);
 
-    const second = staticItems([user, settled(assistant)], {
-      currentItems: first,
-    });
+    const second = advancedItems(first, [user, settled(assistant)]);
     expect(second).toHaveLength(3);
     expect(second.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
   });
 
   it('shows the session header exactly once', () => {
-    const first = buildStaticTranscriptItems({
+    const inputs = {
+      childRosters: new Map(),
+      ownerKey: 'root',
+      parentStream: new Map(),
       scrollbackStreamId: undefined,
-      currentItems: [],
       streams: new Map(),
+      width: 80,
+    };
+    const first = buildStaticTranscriptState({
+      ...inputs,
       meta: SESSION_META,
-    }).items;
-    expect(first).toHaveLength(1);
+      repaintEpoch: 0,
+    });
+    expect(first.items).toHaveLength(1);
 
-    const again = buildStaticTranscriptItems({
-      scrollbackStreamId: undefined,
-      currentItems: first,
-      streams: new Map(),
+    const again = advanceStaticTranscriptState(first, {
+      ...inputs,
       meta: { ...SESSION_META, model: 'sonnet' },
     }).items;
     expect(again).toHaveLength(1);
@@ -886,10 +893,12 @@ describe('CLI conversation transcript', () => {
   it('inserts a newly eligible header before existing compact transcript entries', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', true);
-    const compact = staticItems([user, assistant], { maxRows: 0, width: 80 });
+    const compact = staticState([user, assistant], { maxRows: 0, width: 80 });
 
     expect(
-      staticItemIds([user, assistant], { currentItems: compact, width: 80 }),
+      advancedItems(compact, [user, assistant], { width: 80 }).map(
+        (item) => item.id,
+      ),
     ).toEqual(['session-header', 'u1', 'a1']);
   });
 
@@ -913,14 +922,13 @@ describe('CLI conversation transcript', () => {
     );
     expect(budgetRows).toBeGreaterThan(renderedRows);
 
-    const withoutHeader = staticItems([tool], { maxRows: 0, width: 80 });
-    expect(withoutHeader.map((item) => item.id)).toEqual(['t1']);
+    const withoutHeader = staticState([tool], { maxRows: 0, width: 80 });
+    expect(withoutHeader.items.map((item) => item.id)).toEqual(['t1']);
     expect(
-      staticItemIds([tool], {
-        currentItems: withoutHeader,
+      advancedItems(withoutHeader, [tool], {
         maxRows: renderedRows + 4,
         width: 80,
-      }),
+      }).map((item) => item.id),
     ).toEqual(['t1']);
   });
 
@@ -951,22 +959,20 @@ describe('CLI conversation transcript', () => {
   ])(
     'budgets $name before inserting a compact static header',
     ({ target, budgetWithoutHeader, budgetWithHeader }) => {
-      const compact = staticItems([target], { maxRows: 0, width: 80 });
+      const compact = staticState([target], { maxRows: 0, width: 80 });
 
-      expect(compact.map((item) => item.id)).toEqual([target.id]);
+      expect(compact.items.map((item) => item.id)).toEqual([target.id]);
       expect(
-        staticItemIds([target], {
-          currentItems: compact,
+        advancedItems(compact, [target], {
           maxRows: budgetWithoutHeader,
           width: 80,
-        }),
+        }).map((item) => item.id),
       ).toEqual([target.id]);
       expect(
-        staticItemIds([target], {
-          currentItems: compact,
+        advancedItems(compact, [target], {
           maxRows: budgetWithHeader,
           width: 80,
-        }),
+        }).map((item) => item.id),
       ).toEqual(['session-header', target.id]);
     },
   );
@@ -992,7 +998,6 @@ describe('CLI conversation transcript', () => {
       byteLowWater: 1024 * 1024,
     };
     const built = buildStaticTranscriptItems({
-      currentItems: [],
       streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
       meta: SESSION_META,
       scrollbackStreamId: STREAM_ID,
@@ -1021,7 +1026,6 @@ describe('CLI conversation transcript', () => {
       byteLowWater: 64,
     };
     const built = buildStaticTranscriptItems({
-      currentItems: [],
       streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
       meta: SESSION_META,
       scrollbackStreamId: STREAM_ID,
@@ -1044,7 +1048,6 @@ describe('CLI conversation transcript', () => {
       byteLowWater: 5,
     };
     const built = buildStaticTranscriptItems({
-      currentItems: [],
       streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, [oversized])]]),
       meta: SESSION_META,
       scrollbackStreamId: STREAM_ID,
@@ -1067,7 +1070,6 @@ describe('CLI conversation transcript', () => {
       byteLowWater: 1024 * 1024,
     };
     const built = buildStaticTranscriptItems({
-      currentItems: [],
       streams: new Map([
         [
           STREAM_ID,
@@ -1151,6 +1153,7 @@ describe('CLI conversation transcript', () => {
       scannedIndex: 0,
       lastScannedEntry: undefined,
       status: undefined,
+      lastAppendedKey: undefined,
     } as const;
 
     expect(
@@ -1603,6 +1606,7 @@ describe('CLI conversation transcript', () => {
       scannedIndex: 0,
       lastScannedEntry: undefined,
       status: undefined,
+      lastAppendedKey: undefined,
     } as const;
 
     const first = incrementalStaticTranscriptEntries(
@@ -1631,6 +1635,113 @@ describe('CLI conversation transcript', () => {
     );
     expect(third.appended.map((item) => item.id)).toEqual(['a1']);
     expect(third.cursor.scannedIndex).toBe(2);
+  });
+
+  it('checks live-prompt continuation only in the incremental suffix', () => {
+    const prefix = Array.from({ length: 100 }, (_, index) =>
+      entry(`a${index}`, 'assistant', `settled ${index}`, true),
+    );
+    const user = entry('u-new', 'user', 'continue', true);
+    const assistant = entry('a-new', 'assistant', 'done', true);
+    const inspectedPrefixIndexes: number[] = [];
+    const source = new Proxy([...prefix, user, assistant], {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          const index = Number.parseInt(property, 10);
+          if (index < prefix.length) inspectedPrefixIndexes.push(index);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const previous = {
+      entriesRef: prefix,
+      scannedIndex: prefix.length,
+      lastScannedEntry: prefix.at(-1),
+      status: STREAM_PHASE.RUNNING,
+      lastAppendedKey: [prefix.length, 0] as const,
+    };
+
+    const result = incrementalStaticTranscriptEntries(
+      source,
+      0,
+      STREAM_PHASE.RUNNING,
+      previous,
+    );
+
+    expect(result.rebuild).toBe(false);
+    expect(result.appended.map((item) => item.id)).toEqual(['u-new', 'a-new']);
+    expect(result.cursor.scannedIndex).toBe(source.length);
+    expect(inspectedPrefixIndexes).toEqual([prefix.length - 1]);
+  });
+
+  it('appends an incremental suffix in the same settlement order a repaint uses', () => {
+    // Wire order is [t1, a1] but a1 settled first. The live path prints the
+    // suffix once; a repaint rebuilds from `orderedStaticTranscriptEntries`,
+    // so both must agree or rows swap places across the repaint.
+    const rows = [
+      { ...toolEntry('t1', TOOL_USE_STATUS.COMPLETED), settlementSeqNo: 20 },
+      { ...entry('a1', 'assistant', 'done', true), settlementSeqNo: 10 },
+    ];
+    const oracle = orderedStaticTranscriptEntries(
+      rows,
+      0,
+      STREAM_PHASE.RUNNING,
+    ).map((row) => row.id);
+    expect(oracle).toEqual(['a1', 't1']);
+
+    const emptyCursor = {
+      entriesRef: undefined,
+      scannedIndex: 0,
+      lastScannedEntry: undefined,
+      status: undefined,
+      lastAppendedKey: undefined,
+    } as const;
+    const live = incrementalStaticTranscriptEntries(
+      rows,
+      0,
+      STREAM_PHASE.RUNNING,
+      emptyCursor,
+    );
+    expect(live.appended.map((row) => row.id)).toEqual(oracle);
+
+    // The same swap across a tick boundary: A settles late (key 20) and is
+    // printed while C still runs; then B (key 10) settles behind C. Sorting
+    // the new suffix alone would print [A, B, C] where the oracle says
+    // [B, A, C], so the scan must hand back to the oracle instead.
+    const a = {
+      ...toolEntry('a', TOOL_USE_STATUS.COMPLETED),
+      settlementSeqNo: 20,
+    };
+    const running = toolEntry('c', TOOL_USE_STATUS.IN_PROGRESS);
+    const c = {
+      ...running,
+      status: TOOL_USE_STATUS.COMPLETED,
+      settlementSeqNo: 30,
+    };
+    const b = {
+      ...entry('b', 'assistant', 'files', true),
+      settlementSeqNo: 10,
+    };
+    const tick1 = incrementalStaticTranscriptEntries(
+      [a, running],
+      0,
+      STREAM_PHASE.RUNNING,
+      emptyCursor,
+    );
+    expect(tick1.appended.map((row) => row.id)).toEqual(['a']);
+    const tick2 = incrementalStaticTranscriptEntries(
+      [a, c, b],
+      0,
+      STREAM_PHASE.RUNNING,
+      tick1.cursor,
+    );
+    expect(tick2.rebuild).toBe(true);
+    expect(tick2.appended).toEqual([]);
+    expect(
+      orderedStaticTranscriptEntries([a, c, b], 0, STREAM_PHASE.RUNNING).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['b', 'a', 'c']);
   });
 
   it('labels preset-launched sessions with team and root identity', () => {
@@ -1726,6 +1837,13 @@ describe('CLI conversation transcript', () => {
         agentCategory: AgentCategory.Workflow,
         config: { model: 'kimi26T' },
       });
+      // The open phase is the shared stage fact every host names a phase from,
+      // not a transcript row this host happens to hold.
+      childState.getOrCreateStreamState(WORKFLOW, AgentCategory.Workflow);
+      childState.updateStreamState(WORKFLOW, (prev) => ({
+        ...prev,
+        stage: { kind: 'phase', label: 'Survey', index: 0, total: 1 },
+      }));
       childState.updateStreamMetadata(TASK, {
         config: { model: 'kimi26T' },
       });
@@ -1778,7 +1896,6 @@ describe('CLI conversation transcript', () => {
       expect(
         buildStaticTranscriptItems({
           scrollbackStreamId: CHILD,
-          currentItems: [],
           streams,
           childRosters,
           meta: SESSION_META,
@@ -1807,7 +1924,6 @@ describe('CLI conversation transcript', () => {
       expect(
         buildStaticTranscriptItems({
           scrollbackStreamId: CHILD,
-          currentItems: [],
           streams: streamSlices,
           meta: SESSION_META,
           parentStream,
@@ -1821,7 +1937,6 @@ describe('CLI conversation transcript', () => {
       expect(
         buildStaticTranscriptItems({
           scrollbackStreamId: CHILD,
-          currentItems: [],
           streams: streamSlices,
           meta: SESSION_META,
           parentStream,
@@ -1833,7 +1948,6 @@ describe('CLI conversation transcript', () => {
   it('only feeds the root scrollback stream, not background subagents', () => {
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: ROOT_STREAM,
-      currentItems: [],
       streams: rootChildStreams('do x', 'done'),
       meta: SESSION_META,
     }).items;
@@ -1849,7 +1963,6 @@ describe('CLI conversation transcript', () => {
     });
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: scrollbackTarget.streamId,
-      currentItems: [],
       streams: rootChildStreams('root prompt', 'child detail'),
       meta: SESSION_META,
     }).items;
@@ -1869,7 +1982,6 @@ describe('CLI conversation transcript', () => {
     });
     const items = buildStaticTranscriptItems({
       scrollbackStreamId: scrollbackTarget.streamId,
-      currentItems: [],
       streams: rootChildStreams('root prompt', 'child detail'),
       meta: SESSION_META,
     }).items;
@@ -1906,17 +2018,12 @@ describe('CLI conversation transcript', () => {
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [CHILD_STREAM, ROOT_STREAM],
     ]);
-    const rootViewportKey = transcriptViewportKey({
-      activeStreamId: ROOT_STREAM,
-      parentStream,
-    });
-    const childViewportKey = transcriptViewportKey({
-      activeStreamId: CHILD_STREAM,
-      parentStream,
-    });
-
-    expect(rootViewportKey).toBe('root-scrollback');
-    expect(childViewportKey).toBe(`scoped:${CHILD_STREAM}`);
+    expect(
+      activeTranscriptViewport({ activeStreamId: ROOT_STREAM, parentStream }),
+    ).toEqual({ key: 'root-scrollback', scoped: false });
+    expect(
+      activeTranscriptViewport({ activeStreamId: CHILD_STREAM, parentStream }),
+    ).toEqual({ key: `scoped:${CHILD_STREAM}`, scoped: true });
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {
@@ -2075,6 +2182,55 @@ describe('CLI conversation transcript', () => {
   });
 });
 
+// Yoga does not collapse adjacent margins, so a boundary where both rows
+// declare a separator costs two blank rows unless the layout collapses them.
+// These pin the collapse at the geometry SSOT, where every render path and
+// every row budget reads it.
+describe('transcript entry margin collapse', () => {
+  const user = (id: string): TranscriptRow =>
+    entry(id, 'user', 'a user turn', true);
+  const assistant = (id: string): TranscriptRow =>
+    entry(id, 'assistant', 'a reply', true);
+  const phase = (id: string): TranscriptRow => phaseRow(id, 'Scan');
+
+  const topRows = (row: TranscriptRow, previousEntry?: TranscriptRow): number =>
+    transcriptEntryLayout(row, { previousEntry, width: 60 }).marginTopRows;
+
+  it('keeps the declared top margin when no previous entry is known', () => {
+    // Callers that cannot identify the row above (the live pane's first row,
+    // the row-budget estimators) must keep reserving the full separator.
+    expect(topRows(user('u1'))).toBe(1);
+    expect(topRows(phase('p1'))).toBe(1);
+  });
+
+  it('absorbs the top margin into the previous entry’s bottom margin', () => {
+    // Both sides declare 1, so the boundary is worth 1 row, not 2.
+    expect(topRows(user('u2'), user('u1'))).toBe(0);
+    expect(topRows(phase('p1'), user('u1'))).toBe(0);
+  });
+
+  it('keeps the separator when the entry above declares none', () => {
+    // An assistant turn has no bottom margin, so the next turn owns the gap.
+    expect(topRows(user('u2'), assistant('a1'))).toBe(1);
+    expect(topRows(phase('p1'), assistant('a1'))).toBe(1);
+  });
+
+  it('leaves entries that declare no top margin alone', () => {
+    expect(topRows(assistant('a1'), user('u1'))).toBe(0);
+    expect(topRows(assistant('a2'), assistant('a1'))).toBe(0);
+  });
+
+  it('does not change the bottom margin an entry declares', () => {
+    const withPrevious = transcriptEntryLayout(user('u2'), {
+      previousEntry: user('u1'),
+      width: 60,
+    });
+    const without = transcriptEntryLayout(user('u2'), { width: 60 });
+    expect(withPrevious.marginBottomRows).toBe(without.marginBottomRows);
+    expect(withPrevious.marginBottomRows).toBe(1);
+  });
+});
+
 function sliceWithEntries(
   streamId: StreamTabId,
   entries: readonly TranscriptRow[],
@@ -2118,18 +2274,54 @@ function rootChildStreams(
 function staticItems(
   entries: readonly TranscriptRow[],
   options: {
-    readonly currentItems?: readonly StaticTranscriptItem[];
     readonly maxRows?: number;
     readonly width?: number;
   } = {},
 ): readonly StaticTranscriptItem[] {
   return buildStaticTranscriptItems({
-    currentItems: options.currentItems ?? [],
     maxRows: options.maxRows,
     meta: SESSION_META,
     scrollbackStreamId: STREAM_ID,
     streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
     width: options.width,
+  }).items;
+}
+
+type StaticState = ReturnType<typeof buildStaticTranscriptState>;
+
+/** The live transcript state after a cold build over `entries`. */
+function staticState(
+  entries: readonly TranscriptRow[],
+  options: { readonly maxRows?: number; readonly width?: number } = {},
+): StaticState {
+  return buildStaticTranscriptState({
+    childRosters: new Map(),
+    maxRows: options.maxRows,
+    meta: SESSION_META,
+    ownerKey: 'static-test',
+    parentStream: new Map(),
+    repaintEpoch: 0,
+    scrollbackStreamId: STREAM_ID,
+    streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
+    width: options.width ?? 80,
+  });
+}
+
+/** Items after one ordinary stream-sync tick from `state` to `entries`. */
+function advancedItems(
+  state: StaticState,
+  entries: readonly TranscriptRow[],
+  options: { readonly maxRows?: number; readonly width?: number } = {},
+): readonly StaticTranscriptItem[] {
+  return advanceStaticTranscriptState(state, {
+    childRosters: new Map(),
+    maxRows: options.maxRows,
+    meta: SESSION_META,
+    ownerKey: state.ownerKey,
+    parentStream: new Map(),
+    scrollbackStreamId: STREAM_ID,
+    streams: new Map([[STREAM_ID, sliceWithEntries(STREAM_ID, entries)]]),
+    width: options.width ?? 80,
   }).items;
 }
 

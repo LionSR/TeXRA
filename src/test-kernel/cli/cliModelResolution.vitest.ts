@@ -13,13 +13,8 @@ import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 
 const mocks = vi.hoisted(() => ({
-  initCliPlatform: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   writeTextStderr: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/initPlatform', () => ({
-  initCliPlatform: mocks.initCliPlatform,
 }));
 
 vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
@@ -52,7 +47,6 @@ const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 describe('selectCliRunModel precedence', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.initCliPlatform.mockResolvedValue(undefined);
     selectCliRunnableModelMock.mockImplementation(async (request) => ({
       model: Array.isArray(request)
         ? (request.find((candidate) => candidate.model)?.model ??
@@ -122,10 +116,6 @@ describe('selectCliRunModel precedence', () => {
       ]),
       {},
     );
-    expect(mocks.initCliPlatform).toHaveBeenCalledWith({
-      ...context,
-      quietLogs: true,
-    });
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Using deepseekT instead.',
     );
@@ -154,14 +144,12 @@ describe('selectCliRunModel precedence', () => {
 });
 
 describe('buildHeadlessRunContext', () => {
-  it('preserves the helper model, quiets logs, and enables progress for text output', () => {
+  it('quiets logs and enables progress for text output', () => {
     const context = makeContext({
-      helperModel: 'configured-helper',
       outputFormat: 'text',
       quietLogs: false,
     });
     const runContext = buildHeadlessRunContext(context);
-    expect(runContext.helperModel).toBe('configured-helper');
     expect(runContext.quietLogs).toBe(true);
     expect(runContext.renderRunProgress).toBe(true);
   });

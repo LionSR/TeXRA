@@ -24,7 +24,6 @@ function createTokenProvider(
   return {
     whenReady: async () => {},
     ensureFreshToken: async () => 'access-token',
-    getSessionTokens: async () => null,
     getStoredSessionState: async () => 'none',
     getStoredAccountLabel: async () => null,
     getLastRefreshFailure: () => null,
@@ -32,42 +31,10 @@ function createTokenProvider(
   };
 }
 
-/** Provider holding a refreshable session pair for `accessToken`. */
-function sessionTokenProvider(accessToken: string): AuthTokenProvider {
-  return createTokenProvider({
-    ensureFreshToken: async () => accessToken,
-    getSessionTokens: async () => ({
-      accessToken,
-      refreshToken: 'refresh-token',
-    }),
-  });
-}
-
 describe('SupabaseClient', () => {
   afterEach(() => {
     SupabaseClient.resetForTests();
     vi.restoreAllMocks();
-  });
-
-  it('reads session tokens through the registered token provider', async () => {
-    SupabaseClient.setAuthProvider(sessionTokenProvider('access-token'));
-
-    assert.deepEqual(await SupabaseClient.getSessionTokens(), {
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-    });
-  });
-
-  it('returns null when the token provider throws while reading session tokens', async () => {
-    const provider = createTokenProvider({
-      getSessionTokens: async () => {
-        throw new Error('storage unavailable');
-      },
-    });
-
-    SupabaseClient.setAuthProvider(provider);
-
-    assert.equal(await SupabaseClient.getSessionTokens(), null);
   });
 
   it('waits for token provider readiness', async () => {

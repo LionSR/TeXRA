@@ -8,8 +8,3 @@
 export function isGpt5ModelName(name: string): boolean {
   return name.startsWith('gpt5') || name.startsWith('gpt-5');
 }
-
-/** True for any GPT-family model name (`gpt4*`, `gpt5*`, `gpt-oss*`, …). */
-export function isGptFamilyModelName(name: string): boolean {
-  return name.toLowerCase().startsWith('gpt');
-}

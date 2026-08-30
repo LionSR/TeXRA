@@ -1,19 +1,17 @@
 // Local imports
 import {
   initializeBundledPrompts,
-  settleLiveSessionExecutions,
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
-import type { LifecycleHost } from '@platform/interfaces';
+import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
@@ -24,21 +22,23 @@ import {
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
-import { registerAgentShutdownHandlers } from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup/platform';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { applyCliGitAuthorConfig } from './gitAuthor';
-import { tryResumeCliStream } from './agentResume';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
-import { flushNdjsonStdout, writeTextStderr } from './logSinks';
+import {
+  flushNdjsonStdout,
+  flushTextStderr,
+  writeTextStderr,
+} from './logSinks';
 import { initializeCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
-import type { LogBackend } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 
 let supabaseAuthInitialized = false;
@@ -57,7 +57,7 @@ const installedShutdownHandlers: Partial<
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  'cwd' | 'helperModel' | 'resourcesPath' | 'skillSourceOptions' | 'version'
+  'cwd' | 'resourcesPath' | 'skillSourceOptions' | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
@@ -78,7 +78,14 @@ function showPersistentConfigWarning(message: string): void {
   writeTextStderr(`[warn] [cli.config] ${message}`);
 }
 
-const cliPlatformLog: LogBackend = {
+// A shutdown-handler failure is actionable degradation by the same rule, so it
+// bypasses quietLogs too — every CLI command passes quietLogs:true, and routing
+// this through logAt would make the cross-host parity below unreachable.
+function showLifecycleError(message: string): void {
+  writeTextStderr(`[error] [cli.lifecycle] ${message}`);
+}
+
+const cliPlatformLog: SupabaseSessionLog = {
   debug: (channel, message) => logAt('debug', channel, message),
   info: (channel, message) => logAt('info', channel, message),
   warn: (channel, message) => logAt('warn', channel, message),
@@ -102,6 +109,11 @@ export async function runCliPlatformShutdownSequence(
     await lifecycle?.runShutdown();
   } catch {
     // Signal shutdown is best effort; output still gets one final flush.
+  }
+  try {
+    await flushTextStderr();
+  } catch {
+    // A closed stderr pipe must not prevent signal-based termination.
   }
   try {
     await flushNdjsonStdout();
@@ -157,6 +169,22 @@ export function handOffCliShutdownSignalHandlers(): void {
     delete installedShutdownHandlers[signal];
   }
   shutdownHandlersInstalled = false;
+}
+
+/**
+ * The chat TUI's stream resume, installed while a chat session is mounted.
+ * The platform port above forwards to it; outside a chat there is no host
+ * that can resume, so the port answers `false`.
+ */
+let cliResumeHandler: AgentResumePort['tryResumeStream'] | undefined;
+
+export function setCliAgentResumeHandler(
+  handler: AgentResumePort['tryResumeStream'],
+): () => void {
+  cliResumeHandler = handler;
+  return () => {
+    if (cliResumeHandler === handler) cliResumeHandler = undefined;
+  };
 }
 
 export async function setCliHelperModel(
@@ -227,7 +255,7 @@ export async function initCliPlatform(
   if (!tryPlatform()) {
     const stateStores = await createCliStateStores({
       storageRoot: context.storageRoot,
-      workspacePath: () => cliWorkspaceCwd,
+      workspacePath: context.cwd,
     });
     // The project `.texra/config.json` backs the workspace target and
     // user-level config (`~/.texra/global-storage/config.json`, the same file
@@ -244,9 +272,7 @@ export async function initCliPlatform(
     // handler failure is an error everywhere, not a warning in one host.
     const lifecycle = createLifecycleHost({
       onError: (phase, error) => {
-        logAt(
-          'error',
-          'cli.lifecycle',
+        showLifecycleError(
           `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },
@@ -264,7 +290,8 @@ export async function initCliPlatform(
         secrets: getCliSecrets(context.storageRoot),
         lifecycle,
         agentResume: {
-          tryResumeStream: tryResumeCliStream,
+          tryResumeStream: async (streamId, recovery) =>
+            (await cliResumeHandler?.(streamId, recovery)) ?? false,
         },
         agentDirectories,
         getWorkspacePath: () => cliWorkspaceCwd,
@@ -283,27 +310,10 @@ export async function initCliPlatform(
     // lives in shared `~/.texra` state. Preferred defaults reconcile when
     // MODEL_LIST_VERSION changes; retired entries are swept on every startup.
     try {
-      const { added, removed, reordered, routePreferencesCleared } =
-        await refreshModelListStateIfNeeded(stateStores.globalState);
-      const changed = added.length > 0 || removed.length > 0 || reordered;
-      const clearedRoutes = routePreferencesCleared.length > 0;
-      if (changed || clearedRoutes) {
-        invalidateModelOptionsCache();
-        if (changed) {
-          logAt(
-            'info',
-            'cli.models',
-            `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
-          );
-        }
-        if (clearedRoutes) {
-          logAt(
-            'info',
-            'cli.models',
-            `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
-          );
-        }
-      }
+      const { messages } = await refreshModelListAndLog(
+        stateStores.globalState,
+      );
+      for (const message of messages) logAt('info', 'cli.models', message);
     } catch (error) {
       logAt(
         'error',
@@ -336,24 +346,13 @@ export async function initCliPlatform(
     // this drain they are orphaned. Registered before the usage-log flush
     // below so the kills (all synchronous) land first, matching the other
     // hosts' ordering.
-    registerAgentShutdownHandlers(lifecycle);
-
-    // Same session teardown the extension and desktop hosts run: drain the
-    // session's durable writers once the agent kills above have landed, then
-    // dispose the session last so pending host interactions settle after
-    // persistence. `tryDefaultSession` because the session is installed later,
-    // by whichever entry point opens transcripts.
-    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-      tryDefaultSession()?.flushArtifacts(),
-    );
-    // First ON handler, as on the other two hosts: `runExecution`'s own
-    // shutdown handler settles the headless run it owns during BEFORE, so this
-    // drain only reaches what that left — notably a TUI flow parked at its
-    // WAIT node — and still runs before `teardownDefaultSession()` disposes it.
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, (signal) =>
-      settleLiveSessionExecutions(signal),
-    );
-    lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => teardownDefaultSession());
+    registerRuntimeShutdownHandlers(lifecycle, {
+      // The default session is installed later by whichever entry point opens
+      // transcripts, so its shutdown lookup remains lazy.
+      flushArtifacts: () => tryDefaultSession()?.flushArtifacts(),
+      afterFlushArtifacts: [() => UsageLogService.dispose()],
+      afterExecutionSettlement: [() => teardownDefaultSession()],
+    });
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
@@ -365,9 +364,6 @@ export async function initCliPlatform(
     // runs on normal exit (bin/texra.ts finally) and on signals, both of
     // which call lifecycle.runShutdown().
     UsageLogService.initialize({}, context.version, 'cli');
-    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-      UsageLogService.dispose(),
-    );
   }
 
   if (!supabaseAuthInitialized) {
@@ -383,7 +379,6 @@ export async function initCliPlatform(
     },
   });
 
-  await setCliHelperModel(context.helperModel);
   initializeBundledPrompts(context.resourcesPath);
 
   await bootstrapNodeAgentDirectories({
@@ -394,6 +389,7 @@ export async function initCliPlatform(
   });
 
   initializeNodeRuntimeSkills({
+    host: 'cli',
     cwd: context.cwd,
     resourcesPath: context.resourcesPath,
     skillSourceOptions: context.skillSourceOptions,

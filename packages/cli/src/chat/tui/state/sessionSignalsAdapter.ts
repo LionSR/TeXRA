@@ -26,10 +26,9 @@ import {
 import { assertNever } from '@utils/core';
 import {
   activeStreamId,
-  focusStream,
+  cliStreamAcceptsStatus,
   patchStream,
   removeStream,
-  setStreamStatusInCliState,
   streams,
 } from './cliState';
 import {
@@ -38,7 +37,11 @@ import {
   isChildStreamRemoved,
   unbindChildStreamState,
 } from './childExecutions';
-import { markArtifactStreamHydrated } from './subscribeStreamArtifacts';
+import { presentStream } from './childControls';
+import {
+  bumpStreamArtifactRevision,
+  markWorkPlanArtifactHydrated,
+} from './subscribeStreamArtifacts';
 import {
   releaseInactiveStreamTranscript,
   syncStreamLog,
@@ -80,20 +83,22 @@ class TuiSessionRenderer implements SessionRendererPort {
     switch (slice) {
       case 'files':
       case 'compileFailures':
-        // Renderers read `StreamArtifactProjection` directly. The write itself
-        // is proof of established provenance for this session — a live fact
-        // must not wait on the focus-driven disk preload
-        // (`markArtifactStreamHydrated`'s other caller) that exists only to
-        // seed a stream cold, or a background (never-focused, or focus-raced)
-        // workflow's output files never surface.
-        return markArtifactStreamHydrated(streamId);
+      case 'missingOutputs':
+        // Renderers read `StreamArtifactProjection` directly, and the store
+        // already accepted this write (eagerly, ahead of any seed), so it is
+        // the store that reports the record has provenance — a live fact
+        // never waits on the focus-driven disk preload that exists only to
+        // seed a stream cold. Only the repaint is owed here.
+        return bumpStreamArtifactRevision();
       case 'parentStreamId':
       case 'queuedFollowUps':
       case 'contextState':
+      case 'subagents':
         // The applier already landed the edge / the session-owned queue /
-        // the model handler's context snapshot on `SessionState`; the CLI's
-        // topology snapshot, `queuedFollowUpsFor`, and the status bar's
-        // `streamStateFor` read re-derive from there at paint.
+        // the model handler's context snapshot / the child-activity roster
+        // on `SessionState`; the CLI's topology snapshot, `queuedFollowUpsFor`,
+        // and the status bar's `streamStateFor` read re-derive from there at
+        // paint.
         return invalidateChildStreams();
       case 'goalPaused':
         return appendLocalAssistantTranscript(
@@ -105,12 +110,11 @@ class TuiSessionRenderer implements SessionRendererPort {
   }
 
   onStreamStatusChanged(): void {
-    // The slice already carries this transition: the CLI writes it from the
-    // `status` fact before handing the fact to the applier, and the fact
-    // carries the status machine's own `runStartedAt`, so there is nothing
-    // left for this callback to re-apply. Roster rows carry phase
-    // (`recordChildPhase`); re-derive snapshots so child rows repaint on
-    // phase flips.
+    // The status machine already holds this transition — it writes its entry
+    // before publishing the fact — and `streamPhaseFor` reads it at paint, so
+    // there is nothing to re-apply. Bump the shared revision so the phase,
+    // substate, run-window start, and the roster rows that carry phase
+    // (`recordChildPhase`) all repaint.
     invalidateChildStreams();
   }
 
@@ -120,7 +124,7 @@ class TuiSessionRenderer implements SessionRendererPort {
       return;
     }
     if (isChildStreamRemoved(streamId)) return;
-    focusStream(streamId);
+    presentStream(streamId);
   }
 
   onStreamDescriptionChanged(
@@ -146,42 +150,23 @@ class TuiSessionRenderer implements SessionRendererPort {
     invalidateChildStreams();
   }
 
-  onBadgesChanged(_streamId: StreamTabId): void {
-    // The shared applier already landed this roster on `SessionState` — live
-    // rows plus the finished children it retains for display (phase-merged,
-    // 200-capped). The CLI reads it there; only the snapshots re-derive.
-    invalidateChildStreams();
-  }
-
-  onMissingOutputsChanged(streamId: StreamTabId): void {
-    // Renderers read `StreamArtifactProjection` directly; a disk-restored
-    // clear invalidates the memo like any other change. See `invalidate` for
-    // why the write marks the stream hydrated rather than only bumping.
-    markArtifactStreamHydrated(streamId);
-  }
-
-  onRunUsageChanged(
-    streamId: StreamTabId,
-    _storageKey: string,
-    latestUsage: Parameters<SessionRendererPort['onRunUsageChanged']>[2],
-  ): void {
-    // The latest-usage gauge is payload-only (no synchronous shared read);
-    // the cumulative sum is `StreamArtifactProjection.cumulativeUsage`. See
-    // `invalidate` for why the write marks the stream hydrated.
-    patchStream(streamId, (slice) => ({ ...slice, usage: latestUsage }));
-    markArtifactStreamHydrated(streamId);
+  onRunUsageChanged(): void {
+    // The store accumulated this delta before the callback; every usage
+    // reader projects `StreamArtifactProjection.cumulativeUsage` from it. See
+    // `invalidate` for why only the repaint is owed here.
+    bumpStreamArtifactRevision();
   }
 
   // Live todos/plan are readable from the snapshot store synchronously: a
   // live update is applied to `getWorkPlan` before the stream seeds
   // (StreamSnapshotStore eager-apply overlay), so renderers read the store.
-  // See `invalidate` for why the write marks the stream hydrated.
+  // The reader-authority promotion is the CLI's own `/plan` modality.
   onTodosChanged(streamId: StreamTabId, _todos: TodoItem[]): void {
-    markArtifactStreamHydrated(streamId);
+    markWorkPlanArtifactHydrated(streamId, 'todos');
   }
 
   onPlanChanged(streamId: StreamTabId, _plan: Plan | null): void {
-    markArtifactStreamHydrated(streamId);
+    markWorkPlanArtifactHydrated(streamId, 'plan');
   }
 
   onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}
@@ -190,11 +175,6 @@ class TuiSessionRenderer implements SessionRendererPort {
     _streamId: StreamTabId,
     _active: boolean,
     _details?: { status?: GoalStatus; objective?: string },
-  ): void {}
-
-  syncStreamContent(
-    _stream: PresentedStreamId,
-    _options?: { includeActiveState?: boolean },
   ): void {}
 }
 
@@ -218,19 +198,12 @@ export function attachSessionSignalsAdapter(
     if (fact.type === 'status') {
       // CLI status modality runs BEFORE the shared applier sees the fact:
       // the applier requests transcript eviction for non-active phases, and
-      // the final fold must land while the log is still resident. So the
-      // slice patch lands first (a reused stream still carrying `WAITING`
-      // from the previous turn would otherwise finalize the next run's
-      // first chunks early), THEN the log sync folds under the current
-      // status, THEN lifecycle releases residency for a stream that just
-      // left its active phase.
-      const recognized = setStreamStatusInCliState({
-        streamId: fact.streamId,
-        status: fact.phase,
-        substate: fact.substate,
-        runStartedAt: fact.runStartedAt,
-      });
-      if (recognized) {
+      // the final fold must land while the log is still resident. The status
+      // machine already holds this phase (it writes before publishing), so
+      // the fold below reads the new status through `streamPhaseFor`, THEN
+      // lifecycle releases residency for a stream that just left its active
+      // phase.
+      if (cliStreamAcceptsStatus(fact.streamId)) {
         syncStreamLog(
           session,
           fact.streamId,
@@ -251,7 +224,7 @@ export function attachSessionSignalsAdapter(
           fact.streamId,
         ).parentStreamId;
         if (ownerStreamId && !state.isStreamRemoved(ownerStreamId)) {
-          focusStream(ownerStreamId);
+          presentStream(ownerStreamId);
         }
       }
       // Roster phase-merge, tombstone gating, and eviction requests.

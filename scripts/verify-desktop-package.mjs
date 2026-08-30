@@ -1,14 +1,12 @@
-import { access, readdir, readFile, stat } from 'node:fs/promises';
+import { statSync } from 'node:fs';
+import { access, readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, posix, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
-  getDesktopSharedSourceDirs,
-  getDesktopVscodeFreeSourceDirs,
   requiredMonacoWorkers,
-  vscodeBackedStateImportPattern,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
 import {
@@ -25,13 +23,6 @@ const packageRoot =
   process.env.TEXRA_DESKTOP_PACKAGE_ROOT ?? join(desktopRoot, 'dist-packaged');
 const desktopPackageJsonPath = join(desktopRoot, 'package.json');
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
-const desktopSharedSourceDirs = getDesktopSharedSourceDirs(repoRoot);
-const desktopVscodeFreeSourceDirs = getDesktopVscodeFreeSourceDirs(repoRoot);
-const desktopSharedSourceDirSet = new Set(desktopSharedSourceDirs);
-const desktopVscodeFreeSourceDirSet = new Set(desktopVscodeFreeSourceDirs);
-const desktopSourceBoundaryDirs = [
-  ...new Set([...desktopSharedSourceDirs, ...desktopVscodeFreeSourceDirs]),
-];
 const bundledRuntimeResourceDirs = ['agents', 'tool_use_agents', 'skills'];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
@@ -100,20 +91,6 @@ async function exists(path) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
-}
-
-async function collectFiles(dir) {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const entryPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await collectFiles(entryPath)));
-    } else if (entry.isFile()) {
-      files.push(entryPath);
-    }
-  }
-  return files.sort();
 }
 
 async function findPackagedApp() {
@@ -256,12 +233,10 @@ function createAsarAppReader(asarPath) {
       for (const entry of entries) {
         if (entry.startsWith(`${normalizedPath}/`)) return true;
       }
-      try {
-        return (await stat(join(resourceRoot, path))).isDirectory();
-      } catch (error) {
-        if (error?.code === 'ENOENT') return false;
-        throw error;
-      }
+      const entryStat = statSync(join(resourceRoot, path), {
+        throwIfNoEntry: false,
+      });
+      return entryStat?.isDirectory() ?? false;
     },
     async readJson(path) {
       return JSON.parse(readAsarFile(path).toString('utf8'));
@@ -307,12 +282,10 @@ function createDirectoryAppReader(appRoot) {
       return exists(join(appRoot, path));
     },
     async isDirectory(path) {
-      try {
-        return (await stat(join(appRoot, path))).isDirectory();
-      } catch (error) {
-        if (error?.code === 'ENOENT') return false;
-        throw error;
-      }
+      const entryStat = statSync(join(appRoot, path), {
+        throwIfNoEntry: false,
+      });
+      return entryStat?.isDirectory() ?? false;
     },
     readJson(path) {
       return readJson(join(appRoot, path));
@@ -468,38 +441,6 @@ async function checkDesktopStartupBundles(app, failures) {
   }
 }
 
-async function checkDesktopSourceBoundaries(failures) {
-  for (const dir of desktopSourceBoundaryDirs) {
-    if (!(await exists(dir))) continue;
-    for (const filePath of await collectFiles(dir)) {
-      if (!/\.[cm]?tsx?$/.test(filePath)) continue;
-      const source = await readFile(filePath, 'utf8');
-      if (
-        desktopSharedSourceDirSet.has(dir) &&
-        vscodeBackedStateImportPattern.test(source)
-      ) {
-        failures.push(
-          `Desktop-shared source imports the VS Code-backed state barrel instead of @common/state/stateKeys: ${relative(
-            repoRoot,
-            filePath,
-          )}`,
-        );
-      }
-      if (
-        desktopVscodeFreeSourceDirSet.has(dir) &&
-        vscodeRuntimeImportPattern.test(source)
-      ) {
-        failures.push(
-          `Desktop-shared source imports the VS Code runtime module: ${relative(
-            repoRoot,
-            filePath,
-          )}`,
-        );
-      }
-    }
-  }
-}
-
 function dependencyPackageJsonPath(name) {
   return join('node_modules', name, 'package.json');
 }
@@ -549,13 +490,8 @@ async function checkNoBundledNativeCliPayload(app, failures) {
 }
 
 async function onDiskSize(path) {
-  let entryStat;
-  try {
-    entryStat = await stat(path);
-  } catch (error) {
-    if (error?.code === 'ENOENT') return null;
-    throw error;
-  }
+  const entryStat = statSync(path, { throwIfNoEntry: false });
+  if (entryStat == null) return null;
   if (!entryStat.isDirectory()) return entryStat.size;
 
   let total = 0;
@@ -702,8 +638,6 @@ if (!app) {
   }
 }
 
-await checkDesktopSourceBoundaries(failures);
-
 if (failures.length > 0) {
   console.error('Desktop package check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
@@ -726,8 +660,6 @@ const summary = [
   '- no VS Code extension host runtime import',
   '- desktop main dynamic require shim',
   '- desktop startup import graph excludes provider SDKs',
-  '- desktop-shared source uses vscode-free state keys',
-  '- desktop-shared source avoids VS Code runtime imports',
 ];
 
 if (checkedMacIcon) summary.splice(7, 0, '- macOS app icon');

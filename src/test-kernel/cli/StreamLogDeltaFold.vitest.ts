@@ -18,7 +18,6 @@ import {
   activeStreamId,
   patchStream,
   resetCliState,
-  setStreamStatusInCliState,
   streams,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
@@ -32,11 +31,11 @@ import {
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import {
-  invalidateTranscriptFoldForTest,
   subscribeStreamLog,
   syncStreamLog,
   transcriptFoldCountersForTest,
 } from '@cli/chat/tui/state/subscribeStreamLog';
+import { resetTranscriptFoldState } from '@cli/chat/tui/state/transcriptFold';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
@@ -49,6 +48,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import {
   appendTranscriptEntry,
   appendTranscriptText,
@@ -85,7 +85,7 @@ interface StreamConfig {
 
 const CONFIGS: readonly StreamConfig[] = [
   { name: 'tool-use transcript', category: AgentCategory.ToolUse },
-  { name: 'workflow operational feed', category: AgentCategory.Workflow },
+  { name: 'workflow agent transcript', category: AgentCategory.Workflow },
   {
     name: 'workflow full-log child',
     category: AgentCategory.Workflow,
@@ -107,9 +107,6 @@ function projectedView(slice: StreamSlice | undefined): unknown {
     thinkingActive: slice?.thinkingActive ?? false,
     compactingActive: slice?.compactingActive ?? false,
     taskGroups: slice?.taskGroups ?? [],
-    workflowAttemptId: slice?.workflowAttemptId,
-    workflowAttemptBoundaryDeclared:
-      slice?.workflowAttemptBoundaryDeclared ?? false,
   };
 }
 
@@ -386,7 +383,10 @@ function syncBothAndCompare(
   const active = activeStreamId.get();
   syncStreamLog(defaultSession(), FOLD_STREAM, options);
   activeStreamId.set(active);
-  invalidateTranscriptFoldForTest(ORACLE_STREAM);
+  // Drop the oracle's fold state so its next sync rebuilds from scratch —
+  // the production resync path, used as the equivalence oracle.
+  const oracleFold = streams.get().get(ORACLE_STREAM)?.transcriptFold;
+  if (oracleFold) resetTranscriptFoldState(oracleFold);
   syncStreamLog(defaultSession(), ORACLE_STREAM, options);
   activeStreamId.set(active);
   const fold = projectedView(streams.get().get(FOLD_STREAM));
@@ -448,7 +448,7 @@ describe('transcript fold vs from-scratch oracle', () => {
         configureStreams(config);
         activeStreamId.set(undefined);
         for (const streamId of MIRRORED) {
-          setStreamStatusInCliState({
+          setCliStreamPhase({
             streamId,
             status: STREAM_PHASE.RUNNING,
           });
@@ -463,14 +463,14 @@ describe('transcript fold vs from-scratch oracle', () => {
           const statusRoll = rng();
           if (statusRoll < 0.05) {
             for (const streamId of MIRRORED) {
-              setStreamStatusInCliState({
+              setCliStreamPhase({
                 streamId,
                 status: STREAM_PHASE.WAITING,
               });
             }
           } else if (statusRoll < 0.1) {
             for (const streamId of MIRRORED) {
-              setStreamStatusInCliState({
+              setCliStreamPhase({
                 streamId,
                 status: STREAM_PHASE.RUNNING,
               });
@@ -496,7 +496,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       // dashboard selection. Status stays RUNNING so no release path fires.
       activeStreamId.set(OTHER_STREAM);
       for (const streamId of MIRRORED) {
-        setStreamStatusInCliState({ streamId, status: STREAM_PHASE.RUNNING });
+        setCliStreamPhase({ streamId, status: STREAM_PHASE.RUNNING });
       }
 
       for (let step = 0; step < 120; step += 1) {
@@ -506,69 +506,27 @@ describe('transcript fold vs from-scratch oracle', () => {
     });
   });
 
-  it('folds a hidden workflow-attempt marker into projection state', () => {
+  it("keeps a relaunched workflow's prior attempt as a closed group", () => {
+    // Parity with the progress view: a relaunch appends a fresh attempt's
+    // rows, and the board keeps the previous attempt's cards on screen (each
+    // relaunch carries fresh stage ids and fresh `workflow-task-*` log ids, so
+    // nothing is double-counted). The terminal shows the same rows. The
+    // attempt marker itself is an `internal` entry, which the shared projector
+    // gives no row on either host.
     withStreamSubscription(() => {
-      configureStreams(CONFIGS[1]);
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-current',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'current-attempt' },
-      });
+      const planMarker = (id: string, attemptId: string, timestamp: number) =>
+        appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
+          id,
+          type: STREAM_LOG_ENTRY_TYPES.LOG,
+          level: LOG_LEVELS.INFO,
+          timestamp,
+          messageType: MESSAGE_TYPES.INTERNAL,
+          text: '',
+          data: { kind: 'workflowPlan', attemptId, phases: [], tasks: [] },
+        });
 
-      syncStreamLog(defaultSession(), FOLD_STREAM);
-
-      const slice = streams.get().get(FOLD_STREAM);
-      expect(slice?.workflowAttemptId).toBe('current-attempt');
-      expect(slice?.workflowAttemptBoundaryDeclared).toBe(true);
-      expect(slice?.entries).toEqual([]);
-
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'unrelated-internal',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 2,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'otherInternalRecord' },
-      });
-      syncStreamLog(defaultSession(), FOLD_STREAM);
-      expect(streams.get().get(FOLD_STREAM)?.workflowAttemptId).toBe(
-        'current-attempt',
-      );
-
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-malformed',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 3,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: '' },
-      });
-      syncStreamLog(defaultSession(), FOLD_STREAM);
-      const invalidSlice = streams.get().get(FOLD_STREAM);
-      expect(invalidSlice?.workflowAttemptId).toBeUndefined();
-      expect(invalidSlice?.workflowAttemptBoundaryDeclared).toBe(true);
-      expect(invalidSlice?.entries).toEqual([]);
-    });
-  });
-
-  it('evicts a failed prior attempt when a new workflow attempt starts', () => {
-    withStreamSubscription(() => {
       configureStreams(CONFIGS[2]);
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-old',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 1,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'attempt-old' },
-      });
+      planMarker('workflow-attempt-old', 'attempt-old', 1);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'old-failed',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -598,17 +556,9 @@ describe('transcript fold vs from-scratch oracle', () => {
           .get()
           .get(FOLD_STREAM)
           ?.entries.map((entry) => entry.id),
-      ).toEqual(expect.arrayContaining(['old-failed', 'survey-complete-old']));
+      ).toEqual(['old-failed', 'survey-complete-old']);
 
-      appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
-        id: 'workflow-attempt-new',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 4,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
-        data: { kind: 'workflowAttempt', attemptId: 'attempt-new' },
-      });
+      planMarker('workflow-attempt-new', 'attempt-new', 4);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'new-running',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -625,14 +575,12 @@ describe('transcript fold vs from-scratch oracle', () => {
       });
       syncStreamLog(defaultSession(), FOLD_STREAM);
 
-      const ids =
+      expect(
         streams
           .get()
           .get(FOLD_STREAM)
-          ?.entries.map((entry) => entry.id) ?? [];
-      expect(ids).not.toContain('old-failed');
-      expect(ids).not.toContain('survey-complete-old');
-      expect(ids).toContain('new-running');
+          ?.entries.map((entry) => entry.id),
+      ).toEqual(['old-failed', 'survey-complete-old', 'new-running']);
     });
   });
 
@@ -647,7 +595,7 @@ describe('transcript fold vs from-scratch oracle', () => {
       configureStreams(CONFIGS[0]);
       activeStreamId.set(undefined);
       for (const streamId of MIRRORED) {
-        setStreamStatusInCliState({ streamId, status: STREAM_PHASE.RUNNING });
+        setCliStreamPhase({ streamId, status: STREAM_PHASE.RUNNING });
         appendTranscriptEntry(store, streamId, {
           id: 'u1',
           type: STREAM_LOG_ENTRY_TYPES.LOG,

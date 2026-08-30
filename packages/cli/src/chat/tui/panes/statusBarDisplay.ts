@@ -27,6 +27,7 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@shared/schemas';
+import { APPROVAL_BYPASS_BADGE } from '@shared/copy/approvalBypass';
 import {
   FOREGROUND_OWNERSHIP,
   RUNNING_SESSION,
@@ -135,7 +136,7 @@ export interface StatusBarDisplayInput {
   readonly isChildStream?: boolean;
   /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
    *  the root session, where the header already names the conversation. */
-  readonly location?: string;
+  readonly location?: { readonly context?: string; readonly label: string };
   /** Which surface currently owns input and global chat shortcuts: a
    *  foreground surface (approval, detail, form, slash palette, reverse
    *  search) or the persistent child list. Neither active means the normal
@@ -150,21 +151,14 @@ export interface StatusBarDisplayInput {
 interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
   readonly inputActive?: boolean;
-  /** Label for the foreground surface's Escape action while `shortcutsActive`
-   *  is false. */
+  /** Label for the foreground surface's Escape action while `inputActive`. */
   readonly escapeAction?: string;
-  /** False while a foreground surface owns input and global chat shortcuts
-   *  are intentionally inactive. */
-  readonly shortcutsActive?: boolean;
 }
 
 interface StatusBarChildListInput {
   /** True while the persistent child list, rather than the input, owns keys. */
   readonly focused?: boolean;
   readonly selectionKillable?: boolean;
-  /** True while the focused row is an in-flight workflow-script grandchild
-   *  that can be skipped or retried. */
-  readonly selectionWorkflowControllable?: boolean;
 }
 
 interface StatusBarShortcutsInput {
@@ -279,13 +273,15 @@ function formatUsage(
 // One status-bar slot carries whichever stage this stream has (mirrors the
 // SubagentList row's `stageLabel`).
 function locationSegment(
-  location: string | undefined,
+  location: { readonly context?: string; readonly label: string } | undefined,
 ): StatusBarSegment | undefined {
   if (!location) return undefined;
-  const separator = location.indexOf(' › ');
+  const text = location.context
+    ? `${location.context} › ${location.label}`
+    : location.label;
   return {
-    text: location,
-    compactText: separator >= 0 ? location.slice(0, separator) : location,
+    text,
+    compactText: location.context ?? location.label,
     color: 'dim',
     compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
   };
@@ -446,6 +442,12 @@ function fitTransientNoticeStatusBarLeftSegments(
     livenessIndex === undefined ? undefined : fitted[livenessIndex];
   const discardWarning =
     discardWarningIndex === undefined ? undefined : fitted[discardWarningIndex];
+  // Bypass badges announce active auto-approval and must not be silently
+  // dropped by the trailing-removal sweep below (see
+  // STATUS_BAR_COMPACT_PRIORITY.bypassBadge) — they are exempt here the same
+  // way discardWarning is, and only give way to the final fallback sweep.
+  const isBypassBadge = (segment: StatusBarSegment): boolean =>
+    segment.compactPriority === STATUS_BAR_COMPACT_PRIORITY.bypassBadge;
 
   // Compact liveness before removing content. In particular, the queued-input
   // discard warning is safety-critical and must not be displaced by the wider
@@ -456,10 +458,14 @@ function fitTransientNoticeStatusBarLeftSegments(
     fitted[index] = liveness;
   }
 
-  // Remove trailing segments after the notice (excluding the discard warning).
+  // Remove trailing segments after the notice (excluding the discard warning
+  // and bypass badges).
   while (statusBarSegmentsWidth(fitted) > innerWidth) {
     const removableIndex = fitted.findLastIndex(
-      (segment, index) => index > noticeIndex && segment !== discardWarning,
+      (segment, index) =>
+        index > noticeIndex &&
+        segment !== discardWarning &&
+        !isBypassBadge(segment),
     );
     if (removableIndex < 0) break;
     fitted.splice(removableIndex, 1);
@@ -500,6 +506,20 @@ function fitTransientNoticeStatusBarLeftSegments(
     fitNotice();
   }
 
+  const sacrificeBypassBadgesUntilFit = (): void => {
+    while (statusBarSegmentsWidth(fitted) > innerWidth) {
+      const badgeIndex = fitted.findLastIndex(isBypassBadge);
+      if (badgeIndex < 0) break;
+      fitted.splice(badgeIndex, 1);
+      fitNotice();
+    }
+  };
+
+  // Preserve the destructive-action warning before retaining auto-approval
+  // badges. Otherwise warning truncation can reduce it to empty text, making
+  // the row fit while hiding that queued input will be discarded.
+  if (discardWarning) sacrificeBypassBadgesUntilFit();
+
   // Extremely narrow terminals may not fit even the full discard warning.
   // Drop the lower-priority confirmation text and truncate the warning so the
   // status row never exceeds its layout budget.
@@ -514,6 +534,12 @@ function fitTransientNoticeStatusBarLeftSegments(
       innerWidth,
     );
   }
+
+  // Last resort: a bypass badge wider than innerWidth is unfittable above and
+  // would soft-wrap the row, breaking the 2-row chrome budget. Sacrifice
+  // badges from the tail — mirroring how liveness is sacrificed above — only
+  // while the row still overflows.
+  sacrificeBypassBadgesUntilFit();
 
   return fitted;
 }
@@ -683,10 +709,8 @@ function statusBarBindingsText(
       statusBarBindingRow([childList, agent, ctrlC]),
     childNavigationAvailable &&
       statusBarBindingRow([childList, fullOutput, ctrlC]),
-    transcriptAvailable && statusBarBindingRow([childList, fullOutput, ctrlC]),
     parentNavigationAvailable && ctrlC,
     childNavigationAvailable && childList,
-    transcriptAvailable && statusBarBindingRow([fullOutput, ctrlC]),
   ].map((candidate) =>
     parentBack && candidate
       ? statusBarBindingRow([parentBack, candidate])
@@ -719,10 +743,7 @@ function foregroundBindingsText(
 }
 
 function childListBindingsText(
-  {
-    selectionKillable = false,
-    selectionWorkflowControllable = false,
-  }: StatusBarChildListInput,
+  { selectionKillable = false }: StatusBarChildListInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
 ): string {
@@ -730,12 +751,6 @@ function childListBindingsText(
   const enterBinding = keyHintText({ key: 'Enter', action: 'focus' });
   const killBinding = selectionKillable
     ? keyHintText({ key: 'k', action: 'kill' })
-    : undefined;
-  const skipBinding = selectionWorkflowControllable
-    ? keyHintText({ key: 's', action: 'skip' })
-    : undefined;
-  const retryBinding = selectionWorkflowControllable
-    ? keyHintText({ key: 'r', action: 'retry' })
     : undefined;
   const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
   const tabBinding = keyHintText({ key: 'Tab', action: 'input' });
@@ -746,8 +761,6 @@ function childListBindingsText(
         selectBinding,
         enterBinding,
         killBinding,
-        skipBinding,
-        retryBinding,
         tabBinding,
         escBinding,
         ctrlCBinding,
@@ -774,21 +787,6 @@ function childListBindingsText(
     maxColumns,
     ctrlCBinding,
   );
-}
-
-export function ctrlCActionForFocus({
-  activeStreamId,
-  canStopActiveRun,
-  parentStream,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly canStopActiveRun: boolean;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-}): CtrlCAction {
-  if (!canStopActiveRun) return 'exit';
-  return activeStreamScope({ activeStreamId, parentStream }).kind === 'child'
-    ? 'stop root'
-    : 'stop';
 }
 
 function rootActiveSegment(
@@ -848,12 +846,15 @@ export function statusBarStreamTarget({
   canStopActiveRun,
   canStopPendingRunWithoutStream = false,
   parentStream,
+  phaseOf,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly canStopActiveRun: boolean;
   readonly canStopPendingRunWithoutStream?: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  /** Lifecycle phase for a stream, from the session status machine. */
+  readonly phaseOf: (streamId: StreamTabId) => StreamPhase | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StatusBarStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -861,11 +862,12 @@ export function statusBarStreamTarget({
     activeStreamId,
     parentStream,
     values: streams,
-    canUseValue: (stream) => isActivePhase(stream.status),
+    canUseValue: (_stream, streamId) => isActivePhase(phaseOf(streamId)),
   });
   let hasPendingOrLiveStream = false;
-  for (const stream of streams.values()) {
-    if (stream.status === undefined || isActivePhase(stream.status)) {
+  for (const streamId of streams.keys()) {
+    const phase = phaseOf(streamId);
+    if (phase === undefined || isActivePhase(phase)) {
       hasPendingOrLiveStream = true;
       break;
     }
@@ -874,12 +876,17 @@ export function statusBarStreamTarget({
     canStopActiveRun &&
     (canStopPendingRunWithoutStream || hasPendingOrLiveStream);
   const displayStreamId = activeSlice ? activeStreamId : liveAncestor?.streamId;
+  let ctrlCAction: CtrlCAction;
+  if (!canStopVisibleRun) {
+    ctrlCAction = 'exit';
+  } else {
+    ctrlCAction =
+      activeStreamScope({ activeStreamId, parentStream }).kind === 'child'
+        ? 'stop root'
+        : 'stop';
+  }
   return {
-    ctrlCAction: ctrlCActionForFocus({
-      activeStreamId,
-      canStopActiveRun: canStopVisibleRun,
-      parentStream,
-    }),
+    ctrlCAction,
     displaySlice: activeSlice ?? liveAncestor?.value,
     displayStreamId,
     isChildStream:
@@ -894,9 +901,21 @@ const BYPASS_BADGES: ReadonlyArray<{
   readonly text: string;
   readonly badgeColor: typeof COLOR_ERROR | typeof COLOR_WARNING;
 }> = [
-  { field: 'superYolo', text: 'AUTO-TASK', badgeColor: COLOR_ERROR },
-  { field: 'bash', text: 'AUTO-BASH', badgeColor: COLOR_WARNING },
-  { field: 'toolEdit', text: 'AUTO-EDIT', badgeColor: COLOR_WARNING },
+  {
+    field: 'superYolo',
+    text: APPROVAL_BYPASS_BADGE.superYolo,
+    badgeColor: COLOR_ERROR,
+  },
+  {
+    field: 'bash',
+    text: APPROVAL_BYPASS_BADGE.bash,
+    badgeColor: COLOR_WARNING,
+  },
+  {
+    field: 'toolEdit',
+    text: APPROVAL_BYPASS_BADGE.toolEdit,
+    badgeColor: COLOR_WARNING,
+  },
 ];
 
 // Which text occupies the bindings row is a priority order, not a single
@@ -926,21 +945,25 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   if (input.childList.focused) {
     return childListBindingsText(input.childList, ctrlCAction, maxColumns);
   }
-  if (input.foreground.shortcutsActive === false) {
-    return foregroundBindingsText(
-      ctrlCAction,
-      maxColumns,
-      input.foreground.escapeAction,
-    );
-  }
   return statusBarBindingsText(input.shortcuts, ctrlCAction, maxColumns);
 }
 
-function buildStatusSegments(input: StatusBarDisplayInput): {
-  segments: StatusBarSegment[];
-  transientLivenessIndex?: number;
-} {
-  const segments: StatusBarSegment[] = [];
+export function buildStatusBarDisplay(
+  input: StatusBarDisplayInput,
+): StatusBarDisplay {
+  const left: StatusBarSegment[] = [
+    { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
+  ];
+  if (input.transcriptMode === 'ephemeral') {
+    left.push({
+      text: 'EPHEMERAL TRANSCRIPT',
+      compactText: 'EPHEMERAL',
+      badge: true,
+      badgeColor: COLOR_WARNING,
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.ephemeralBadge,
+    });
+  }
+
   const statusLabel = formatCliStatusLabel(
     input.status,
     input.substate,
@@ -960,8 +983,8 @@ function buildStatusSegments(input: StatusBarDisplayInput): {
         input.elapsedMs === undefined
           ? ''
           : ` ${formatCompactDuration(input.elapsedMs)}`;
-      transientLivenessIndex = segments.length;
-      segments.push({
+      transientLivenessIndex = left.length;
+      left.push({
         text: `${spinPrefix}${statusLabel}${elapsed}`,
         compactText:
           input.elapsedMs === undefined
@@ -971,12 +994,12 @@ function buildStatusSegments(input: StatusBarDisplayInput): {
       });
     }
   } else {
-    segments.push({
+    left.push({
       text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
     });
     if (isActivePhase(input.status) && input.elapsedMs !== undefined) {
-      segments.push({
+      left.push({
         text: formatCompactDuration(input.elapsedMs),
         color: 'dim',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
@@ -987,44 +1010,18 @@ function buildStatusSegments(input: StatusBarDisplayInput): {
   // painting them yellow trains the eye to ignore the color that also
   // announces auto-approval bypasses and quota exhaustion.
   if (input.compactingActive === true && isActivePhase(input.status)) {
-    segments.push({
+    left.push({
       text: 'compacting...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
   } else if (input.thinkingActive === true && isActivePhase(input.status)) {
-    segments.push({
+    left.push({
       text: 'thinking...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
     });
   }
-  return { segments, transientLivenessIndex };
-}
-
-export function buildStatusBarDisplay(
-  input: StatusBarDisplayInput,
-): StatusBarDisplay {
-  const left: StatusBarSegment[] = [
-    { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
-  ];
-  if (input.transcriptMode === 'ephemeral') {
-    left.push({
-      text: 'EPHEMERAL TRANSCRIPT',
-      compactText: 'EPHEMERAL',
-      badge: true,
-      badgeColor: COLOR_WARNING,
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.ephemeralBadge,
-    });
-  }
-
-  const { segments: statusSegs, transientLivenessIndex: statusLivenessIndex } =
-    buildStatusSegments(input);
-  const transientLivenessIndex =
-    statusLivenessIndex === undefined
-      ? undefined
-      : left.length + statusLivenessIndex;
-  left.push(...statusSegs);
 
   let transientNoticeIndex: number | undefined;
   let discardWarningIndex: number | undefined;

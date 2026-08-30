@@ -18,6 +18,7 @@ import {
 import type {
   ExecutionId,
   OutputFileInfo,
+  ReadonlyRoundIndexed,
   RoundIndexed,
 } from '@shared/schemas';
 
@@ -71,7 +72,7 @@ export interface RunLatexdiffForExecutionParams {
    * Pre-resolved round outputs (e.g. from a progress-toolbar payload). When
    * present, discovery is skipped and the metadata engine runs directly.
    */
-  readonly outputsByRound?: RoundIndexed<OutputFileInfo> | null;
+  readonly outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo> | null;
   readonly mathMarkup?: MathMarkupOption;
   readonly generateBetweenRoundDiffs: boolean;
   /** Host-supplied diff service + logger channel (see {@link LatexdiffRuntime}). */

@@ -1,4 +1,6 @@
 // Test composition imports
+import * as os from 'node:os';
+
 import '@test/support/defaultSessionTestSetup';
 
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
@@ -13,7 +15,7 @@ import pDefer, { type DeferredPromise } from 'p-defer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  finalizeExecution: vi.fn(),
+  finalizeRun: vi.fn(),
   persistChildRunReport: vi.fn(),
   persistChildRunResultMeta: vi.fn(),
   deliverChildRunFollowUp: vi.fn(),
@@ -27,19 +29,18 @@ const mocks = vi.hoisted(() => ({
 // the loop writes it best-effort and no assertion here depends on it.
 vi.mock('@agent/storage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage')>()),
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
-// terminalPersistence deep-imports finalizeExecution from executionLifecycle.
+// The registry deep-imports finalizeRun from executionLifecycle.
 vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@agent/storage/executionLifecycle')
   >()),
-  finalizeExecution: mocks.finalizeExecution,
+  finalizeRun: mocks.finalizeRun,
 }));
 
 vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/storage/executionLease')>()),
-  markOwnedExecutionLeaseUndurable: vi.fn(),
   assertOwnedExecutionLease: mocks.assertOwnedExecutionLease,
 }));
 
@@ -55,10 +56,6 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
 import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
 import {
-  childRunBudgetFor,
-  DEFAULT_CHILD_RUN_BUDGET,
-} from '@agent/runtime/childRunBudget';
-import {
   startChildRunLoop,
   type ChildRunLoopHandle,
   type ChildRunLoopParams,
@@ -70,7 +67,9 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { platform } from '@platform/platform';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -78,7 +77,10 @@ import {
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
@@ -263,11 +265,7 @@ beforeEach(() => {
   vi.spyOn(session, 'releaseExecutionLease').mockImplementation((executionId) =>
     mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
   );
-  mocks.finalizeExecution.mockResolvedValue({
-    status: 'durable',
-    terminalStatusPersisted: true,
-    flowRecord: 'deleted',
-  });
+  mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
     return { kind: 'persisted' as const, msg };
   });
@@ -319,7 +317,10 @@ describe('childRunLoop E2E fixtures', () => {
 
   it('unwinds provider ownership and loop resources when synchronous setup fails', () => {
     const { childStreamId, executionId } = loopIds('setup-failure');
-    const registry = new AgentCliSessionRegistry('test_session_id');
+    const registry = new AgentCliSessionRegistry(
+      'test_session_id',
+      session.executions,
+    );
     const releaseSessionOwnership = vi.fn(() =>
       registry.releaseByExecutionId(executionId),
     );
@@ -342,12 +343,8 @@ describe('childRunLoop E2E fixtures', () => {
           { childStreamId, executionId },
           {
             ...strategy,
-            onLoopStart: (runSession) => {
-              registry.trackInFlight({
-                childStreamId,
-                executionId,
-                executions: runSession.executions,
-              });
+            onLoopStart: () => {
+              registry.trackInFlight({ childStreamId, executionId });
             },
             releaseSessionOwnership,
           },
@@ -380,7 +377,6 @@ describe('childRunLoop E2E fixtures', () => {
         codexThreadsFor(runSession).trackInFlight({
           childStreamId,
           executionId,
-          executions: runSession.executions,
         }),
       interruptAll: () => codexThreadsFor(session).interruptAll(),
       release: (executionId: ExecutionId) =>
@@ -396,7 +392,6 @@ describe('childRunLoop E2E fixtures', () => {
         claudeAgentSessionsFor(runSession).trackInFlight({
           childStreamId,
           executionId,
-          executions: runSession.executions,
         }),
       interruptAll: () => claudeAgentSessionsFor(session).interruptAll(),
       release: (executionId: ExecutionId) =>
@@ -535,7 +530,7 @@ describe('childRunLoop E2E fixtures', () => {
         delivery.expectedGenerationId,
       );
       admissions.push(admission.kind);
-      return admission.kind === 'duplicate' || admission.kind === 'unavailable'
+      return admission.kind === 'duplicate' || admission.kind === 'refused'
         ? { kind: 'dropped' as const }
         : { kind: 'delivered' as const };
     });
@@ -547,7 +542,7 @@ describe('childRunLoop E2E fixtures', () => {
       await expect(
         startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
       ).resolves.toBeUndefined();
-      expect(admissions).toEqual(['live_flow', 'live_flow']);
+      expect(admissions).toEqual(['delivered_live', 'delivered_live']);
       const delivered = session.followUps.queue(parentLease).drainItems();
       expect(delivered.map((item) => item.text)).toEqual([
         'delivered:done',
@@ -653,7 +648,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'keep going', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     expect(callCount()).toBe(1);
 
     deliveryCompleted.resolve({ kind: 'delivered' });
@@ -673,25 +668,6 @@ describe('childRunLoop E2E fixtures', () => {
       );
     });
     await waitForLoopEnd(childStreamId);
-  });
-
-  it('fences parent deliveries to the continuation generation that launched the child', async () => {
-    const parentLease = session.followUps.claimLive(PARENT_STREAM_ID, 'flow')!;
-    const { childStreamId, executionId } = loopIds('parent-generation-fence');
-    const strategy = createTerminalStrategy('Parent generation fence');
-
-    startLoop({ childStreamId, executionId }, strategy);
-
-    await vi.waitFor(() => {
-      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targetStreamId: PARENT_STREAM_ID,
-          expectedGenerationId: parentLease.generationId,
-        }),
-      );
-    });
-    await waitForLoopEnd(childStreamId);
-    session.followUps.release(parentLease, 'terminal');
   });
 
   it('late result after parent stop: a turn that resolves after interruption is persisted but not delivered', async () => {
@@ -762,11 +738,10 @@ describe('childRunLoop E2E fixtures', () => {
     // resumable-looking — would never settle or untrack.
     const { childStreamId, executionId } = loopIds('ghost-handle-stop');
     const { strategy, resolveTurn } = createFakeStrategy();
-    mocks.finalizeExecution.mockResolvedValueOnce({
-      status: 'failed',
+    mocks.finalizeRun.mockResolvedValueOnce({
+      ok: false,
       error: new Error('metadata disk full'),
-      stage: 'terminal-status',
-      terminalStatusPersisted: false,
+      outcomePersisted: false,
     });
 
     startLoop({ childStreamId, executionId }, strategy);
@@ -804,7 +779,7 @@ describe('childRunLoop E2E fixtures', () => {
     // The loop routes the cancellation through the durable outcome's only
     // writer; the interim result envelope is left exactly as its turn wrote
     // it, and reads project the durable outcome onto it.
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith({
+    expect(mocks.finalizeRun).toHaveBeenCalledWith({
       executionId,
       outcome: RUN_OUTCOME.CANCELLED,
       flowRecord: 'preserve',
@@ -901,7 +876,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'resume please', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
 
     const resumeFailure = new Error('resume storage unreadable');
     await rejectTurn(2, resumeFailure);
@@ -1002,13 +977,37 @@ describe('childRunLoop E2E fixtures', () => {
         message: expect.stringContaining('turn blew up'),
       }),
     });
-    expect(mocks.finalizeExecution).toHaveBeenCalledWith(
+    expect(mocks.finalizeRun).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: RUN_OUTCOME.FAILED }),
     );
   });
 
+  it('sizes the child-run budget to the machine when the setting is auto', () => {
+    const config = platform().config as FakeConfigProvider;
+    try {
+      config.set(
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto,
+      );
+      expect(resolveChildRunConcurrencyBudget()).toBe(
+        Math.min(
+          CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+          Math.max(1, os.availableParallelism()),
+        ),
+      );
+      config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 7);
+      expect(resolveChildRunConcurrencyBudget()).toBe(7);
+    } finally {
+      config.set(
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+      );
+    }
+  });
+
   it('gates budgeted child turns through the session child-run budget', async () => {
-    childRunBudgetFor(session, 1);
+    const config = platform().config as FakeConfigProvider;
+    config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
     try {
       const first = loopIds('budget-first');
       const second = loopIds('budget-second');
@@ -1044,7 +1043,10 @@ describe('childRunLoop E2E fixtures', () => {
       await waitForLoopEnd(second.childStreamId);
       expect(started).toEqual(['first', 'second']);
     } finally {
-      childRunBudgetFor(session, DEFAULT_CHILD_RUN_BUDGET);
+      config.set(
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+        CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
+      );
     }
   });
 
@@ -1092,7 +1094,7 @@ describe('childRunLoop E2E fixtures', () => {
         { text: 'go on', origin: 'user' },
         'live_owner',
       ),
-    ).toEqual({ kind: 'live' });
+    ).toEqual({ kind: 'queued' });
     // Waits for the loop to have actually invoked runTurn (calls increments
     // synchronously inside it) — not for the queue to read empty, which can
     // happen before the loop's own continuation runs (see the "delegate →

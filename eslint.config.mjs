@@ -69,7 +69,9 @@ const VSCODE_FREE_ZONE_DIRS = [
   'src/hosts',
   'src/common',
   'src/utils',
+  'src/logger',
   'packages/agent/src',
+  'packages/desktop/src',
   'packages/extension/src/webview/frontend',
   'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
@@ -647,6 +649,13 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': 'off',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
+    },
+  },
+
+  {
+    files: ['src/replacement/**/*.{ts,tsx}'],
+    rules: {
+      'no-useless-escape': 'error',
     },
   },
 

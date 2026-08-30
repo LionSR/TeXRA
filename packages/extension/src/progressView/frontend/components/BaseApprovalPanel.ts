@@ -8,6 +8,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import './ApproveSplitButton';
 
 // Local imports - base class
+
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 
 // Local imports - progress view events

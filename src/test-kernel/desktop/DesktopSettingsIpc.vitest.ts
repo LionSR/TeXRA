@@ -298,35 +298,6 @@ describe('desktop settings IPC', () => {
     );
   });
 
-  it('delegates agent-selection commands to the required controller', async () => {
-    const baseController = createStubDesktopAgentSettingsController();
-    const setAgentEnabled = vi.fn(async () => undefined);
-    const agentSettingsController = {
-      ...baseController,
-      handlers: { ...baseController.handlers, setAgentEnabled },
-    };
-    const { settings } = createSettingsFixture({ agentSettingsController });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-        category: 'workflow',
-        agentSource: 'custom',
-        agentName: 'proofreader',
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(setAgentEnabled).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
-      category: 'workflow',
-      agentSource: 'custom',
-      agentName: 'proofreader',
-      enabled: false,
-    });
-  });
-
   it('round-trips Git author writes through workspace state and refreshes the renderer', async () => {
     const workspaceState = new FakeStateStore();
 
@@ -591,37 +562,14 @@ describe('desktop settings IPC', () => {
     expect(onError).toHaveBeenCalledWith(failure);
   });
 
-  it('delegates Tools and LaTeX commands to the required controller', async () => {
-    const baseController = createStubDesktopToolingSettingsController();
-    const toggleTool = vi.fn(async () => undefined);
-    const runInstallCommand = vi.fn(async () => undefined);
+  it('round-trips the LaTeX formatter through workspace state and refreshes config values', async () => {
     const postLatexConfigValues = vi.fn();
     const toolingSettingsController =
-      createStubDesktopToolingSettingsController({
-        toolHandlers: { ...baseController.toolHandlers, toggleTool },
-        latexHandlers: {
-          ...baseController.latexHandlers,
-          runInstallCommand,
-        },
-        postLatexConfigValues,
-      });
+      createStubDesktopToolingSettingsController({ postLatexConfigValues });
     const { settings, workspaceState } = createSettingsFixture({
       toolingSettingsController,
     });
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
-        toolId: 'zotero',
-        enabled: false,
-      }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-        installCommand: 'brew install --cask mactex-no-gui',
-      }),
-    ).toBe(true);
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
@@ -631,15 +579,6 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(toggleTool).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
-      toolId: 'zotero',
-      enabled: false,
-    });
-    expect(runInstallCommand).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-      installCommand: 'brew install --cask mactex-no-gui',
-    });
     expect(workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER)).toBe('none');
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
 
@@ -655,65 +594,6 @@ describe('desktop settings IPC', () => {
       workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
     ).toBeUndefined();
     expect(postLatexConfigValues).toHaveBeenCalledTimes(2);
-  });
-
-  it('delegates profile and ChatGPT commands to the credential controller', async () => {
-    const state = newStatePorts();
-    const setProviderKey = vi.fn(async () => undefined);
-    const signIn = vi.fn(async () => undefined);
-    const signOut = vi.fn(async () => undefined);
-    const setPreferSubscription = vi.fn(async () => undefined);
-    const stub = createStubDesktopCredentialSettingsController(state);
-    const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(state, {
-        profileHandlers: {
-          ...stub.profileHandlers,
-          signIn,
-          signOut,
-          setProviderKey,
-        },
-        chatGptHandlers: {
-          ...stub.chatGptHandlers,
-          setChatGptPreferSubscription: setPreferSubscription,
-        },
-      });
-    const { settings } = createSettingsFixture({
-      ...state,
-      credentialSettingsController,
-    });
-
-    expect(
-      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_IN }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({ command: SETTINGS_VIEW_COMMANDS.SIGN_OUT }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-        provider: 'google',
-        apiKey: 'sk-test',
-      }),
-    ).toBe(true);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-        enabled: true,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(signIn).toHaveBeenCalledOnce();
-    expect(signOut).toHaveBeenCalledOnce();
-    expect(setProviderKey).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-      provider: 'google',
-      apiKey: 'sk-test',
-    });
-    expect(setPreferSubscription).toHaveBeenCalledWith({
-      command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-      enabled: true,
-    });
   });
 
   it('persists model settings through global state', async () => {
@@ -922,7 +802,7 @@ describe('desktop settings IPC', () => {
     expect(postLatexConfigValues).toHaveBeenCalledOnce();
   });
 
-  it('writes the agent-skills toggle and returns the shared setting message', async () => {
+  it('writes the agent-skills toggle and returns the skills settings', async () => {
     const config = new FakeScopedConfigProvider();
 
     const { settings, posted } = createCapturedSettingsFixture({
@@ -942,10 +822,14 @@ describe('desktop settings IPC', () => {
     expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
     expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
     expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS),
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS),
     ).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS,
-      values: { [AGENT_SKILLS_CONFIG_KEY]: false },
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_SETTINGS,
+      values: {
+        [AGENT_SKILLS_CONFIG_KEY]: false,
+        [WorkspaceStateKey.DISABLED_SKILLS]: [],
+        [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
+      },
     });
   });
 
@@ -982,28 +866,6 @@ describe('desktop settings IPC', () => {
     expect(refreshAuthDependentData).toHaveBeenCalledTimes(2);
     expect(refreshAuthDependentData).toHaveBeenLastCalledWith();
     expect(agentSettingsController.refreshCatalogData).toHaveBeenCalledOnce();
-  });
-
-  it('handles desktop memory toggle messages', async () => {
-    const globalState = new FakeStateStore();
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      globalState,
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED,
-        enabled: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(globalState.get(GlobalStateKey.MEMORY_ENABLED)).toBe(false);
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: false,
-    });
   });
 
   it('requires UI confirmation before deleting memory', async () => {

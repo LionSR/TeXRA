@@ -11,6 +11,7 @@ export const groupStyles = css`
     border-radius: var(--wa-border-radius-m, var(--border-radius-small));
     cursor: pointer;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     background-color: color-mix(
       in srgb,
@@ -35,6 +36,13 @@ export const groupStyles = css`
        matching the shared status dot and the CLI row marker. */
     &.is-cancelled {
       border-inline-start-color: var(--border-control);
+    }
+
+    /* A phase the plan declares and the run has not opened: hollow glyph,
+       dashed rail, quiet. */
+    &.is-declared {
+      border-inline-start-style: dashed;
+      color: var(--color-text-muted);
     }
   }
 
@@ -62,13 +70,81 @@ export const groupStyles = css`
     flex-grow: 1;
   }
 
-  /* Completed/declared task count for a phase header, right-aligned beside
-     the timestamps. */
+  /* A phase header's tally, right-aligned beside the timestamps. */
   .group-progress {
     font-size: var(--font-size-sm);
     font-variant-numeric: tabular-nums;
     color: var(--color-text-muted);
     margin-inline-start: var(--wa-space-2xs);
+  }
+
+  /* One glyph per card, inline after the tally; a strip too wide for the
+     header wraps its cells rather than squeezing the title. Failed reads
+     red, running blue, done green; the shapes carry the same distinctions
+     without colour. */
+  .group-strip {
+    flex: 0 1 auto;
+    min-width: 0;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 1px 2px;
+    margin-inline-start: var(--wa-space-xs);
+    font-size: var(--font-size-sm);
+    line-height: 1.1;
+    color: var(--color-text-muted);
+  }
+
+  .group-cell--running {
+    color: var(--wa-color-focus);
+  }
+
+  .group-cell--completed,
+  .group-cell--cached {
+    color: var(--color-success);
+  }
+
+  .group-cell--failed {
+    color: var(--color-error);
+  }
+
+  .group-cell--skipped,
+  .group-cell--cancelled {
+    opacity: var(--opacity-subtle);
+  }
+
+  /* A counted group of quiet cards; a click unfolds it in place. */
+  .workflow-row-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    margin: var(--wa-space-2xs) 0;
+    padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
+    border: none;
+    border-radius: var(--wa-border-radius-m, var(--border-radius));
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+  }
+
+  .workflow-row-group:hover {
+    background: var(--wa-color-neutral-fill-quiet);
+  }
+
+  .workflow-row-group:focus-visible {
+    outline: 2px solid var(--wa-color-focus);
+    outline-offset: 1px;
+  }
+
+  .log-run-band {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    border-block-end: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
   .group-time {

@@ -19,9 +19,17 @@
  * and per-component overrides target them.
  */
 
-import { css, type CSSResult } from 'lit';
+import { css, unsafeCSS, type CSSResult } from 'lit';
 
 import { compactFormControlStyles } from './selectStyles';
+
+/**
+ * The seven selector aliases that share the button skins — declared once so
+ * the rules below cannot drift from each other.
+ */
+const INTERACTIVE_CONTROLS: CSSResult = unsafeCSS(
+  '.btn-primary, .btn-secondary, .btn-ghost, .action-button, .header-action, .icon-button, .action-icon-button',
+);
 
 /**
  * One focus ring for every interactive element in the shadow root.
@@ -71,16 +79,7 @@ export const buttonStyles: CSSResult = css`
       box-shadow var(--transition-normal);
   }
 
-  :is(
-      .btn-primary,
-      .btn-secondary,
-      .btn-ghost,
-      .action-button,
-      .header-action,
-      .icon-button,
-      .action-icon-button
-    )
-    wa-icon {
+  :is(${INTERACTIVE_CONTROLS}) wa-icon {
     flex: 0 0 auto;
   }
 
@@ -234,41 +233,36 @@ export const buttonStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
-  :is(
-    .btn-primary,
-    .btn-secondary,
-    .btn-ghost,
-    .action-button,
-    .header-action,
-    .icon-button,
-    .action-icon-button
-  ):not([disabled]) {
+  :is(${INTERACTIVE_CONTROLS}):not([disabled]) {
     transition:
       filter var(--transition-normal),
       transform var(--transition-normal);
   }
 
-  :is(
-      .btn-primary,
-      .btn-secondary,
-      .btn-ghost,
-      .action-button,
-      .header-action,
-      .icon-button,
-      .action-icon-button
-    ):not([disabled]):hover {
+  :is(${INTERACTIVE_CONTROLS}):not([disabled]):hover {
     transform: translateY(-1px);
   }
 
-  :is(
-      .btn-primary,
-      .btn-secondary,
-      .btn-ghost,
-      .action-button,
-      .header-action,
-      .icon-button,
-      .action-icon-button
-    ):not([disabled]):active {
+  :is(${INTERACTIVE_CONTROLS}):not([disabled]):active {
+    transform: translateY(0) scale(0.97);
+  }
+
+  /* Native WA split-action groups (the approve caret menu, the diff-actions
+     dropdown) render nativeChrome segments that carry none of the
+     INTERACTIVE_CONTROLS aliases above, so the fused group needs its own
+     lift/press feedback — applied to the wa-button-group host so the whole
+     control moves as one unit instead of the segments moving independently. */
+  wa-button-group.split-group {
+    transition:
+      filter var(--transition-normal),
+      transform var(--transition-normal);
+  }
+
+  wa-button-group.split-group:hover {
+    transform: translateY(-1px);
+  }
+
+  wa-button-group.split-group:active {
     transform: translateY(0) scale(0.97);
   }
 
@@ -394,15 +388,11 @@ export const buttonStyles: CSSResult = css`
   }
 
   @media (prefers-reduced-motion: reduce) {
-    :is(
-        .btn-primary,
-        .btn-secondary,
-        .btn-ghost,
-        .action-button,
-        .header-action,
-        .icon-button,
-        .action-icon-button
-      ):not([disabled]):is(:hover, :active) {
+    :is(${INTERACTIVE_CONTROLS}):not([disabled]):is(:hover, :active) {
+      transform: none;
+    }
+
+    wa-button-group.split-group:is(:hover, :active) {
       transform: none;
     }
   }
@@ -574,5 +564,18 @@ export const settingsRowStyles: CSSResult = css`
     align-items: center;
     align-self: center;
     gap: var(--wa-space-2xs);
+  }
+
+  /* Skins for the hooks renderSettingsNumberRow hardcodes. They live here
+     rather than per-tab because every tab is its own shadow root and the
+     helper emits the classes for any caller. A tab that needs a different
+     width still overrides locally (latex-tab does). */
+  .setting-number-input {
+    width: 80px;
+  }
+
+  .setting-unit {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
   }
 `;

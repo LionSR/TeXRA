@@ -288,19 +288,18 @@ const WEB_FETCH_ERROR_LABEL: Readonly<Record<string, string>> = {
  */
 function phaseGroupData(
   entry: StreamLogEntry,
-): { index?: number; total?: number; attemptId?: string } | undefined {
+): { index?: number; total?: number } | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
     entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
   ) {
     return undefined;
   }
-  const { kind, index, total, attemptId } = entry.data;
+  const { kind, index, total } = entry.data;
   if (kind !== 'phase') return undefined;
   return {
     ...(index !== undefined ? { index } : {}),
     ...(total !== undefined ? { total } : {}),
-    ...(attemptId !== undefined ? { attemptId } : {}),
   };
 }
 
@@ -333,7 +332,6 @@ export function projectTranscriptRow(
       phaseLabel,
       ...(phaseIndex !== undefined ? { phaseIndex } : {}),
       ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-      ...(phase.attemptId !== undefined ? { attemptId: phase.attemptId } : {}),
     };
   }
 
@@ -400,7 +398,6 @@ export function projectTranscriptRow(
             : {}),
           parsedOutput: entry.data.output,
         }),
-        ...(toolUse.spillPath ? { spillPath: toolUse.spillPath } : {}),
       };
     }
 
@@ -575,7 +572,7 @@ export function projectTranscriptRow(
     // block a stream projects from several of them is, via
     // `compactionActivityRow`. `activeSkills` is a per-run snapshot read on
     // demand from the log (the CLI's `/status`), not a transcript row, and
-    // `internal` is a durable marker (the workflow-attempt boundary) that
+    // `internal` is a durable marker (the workflow plan) that
     // nothing renders. Context utilization is a status surface on both hosts —
     // the CLI reads it off `StreamExecutionState.contextState` and the webview
     // off the raw entry in `logSlice` — so it has no transcript row either.

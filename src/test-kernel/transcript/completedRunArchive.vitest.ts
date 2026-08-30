@@ -60,8 +60,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { loadChatExportInput } from '@agent/export/loadChatExportInput';
-import { resumeToolUseFromResumeData } from '@agent/runtime/executeAgent';
-import { resolveAndResumeStream } from '@agent/runtime/resolveAndResumeStream';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
@@ -72,8 +71,8 @@ import {
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -92,7 +91,7 @@ import {
 } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 function runConfig(agent: string, model = 'deepseekproT'): AgentConfig {
   return AgentConfigSchema.parse({
@@ -265,7 +264,6 @@ describe('completedRunArchive facade', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('serves conversation, chat export, and todos from the sidecars alone (projections gone)', async () => {
@@ -353,9 +351,7 @@ describe('completedRunArchive facade', () => {
       conversationResult.conversation,
     );
 
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult.source).toBe('streamData');
-    expect(todosResult.todos).toEqual([
+    expect(await readCompletedRunTodos(executionId)).toEqual([
       { content: 'Fix the bug', status: 'completed' },
     ]);
   });
@@ -368,8 +364,9 @@ describe('completedRunArchive facade', () => {
     // config would produce a different (wrong) id.
     expect(getStreamTabId(config.agent, { executionId })).not.toBe(streamId);
 
-    const snapshots = await seedStreams(executionId, [{ streamId }]);
+    await seedStreams(executionId, [{ streamId }]);
     await stampStreamId(executionId, streamId);
+    await getExecutionStore(executionId).writeRunRecord(config);
 
     const logs = await StreamLogStore.open();
     const firstTurn = logs.acquireWriter(streamId, executionId);
@@ -437,41 +434,18 @@ describe('completedRunArchive facade', () => {
         return writer;
       });
 
-    const resolveResumeState = vi.fn(async (requestedStreamId: StreamTabId) => {
-      const { config: runState, executionId: resolvedExecutionId } =
-        snapshots.getRunMetadata(requestedStreamId);
-      return runState && resolvedExecutionId
-        ? {
-            status: 'resolved' as const,
-            state: { runState, executionId: resolvedExecutionId },
-          }
-        : {
-            status: 'incomplete' as const,
-            runState,
-            executionId: resolvedExecutionId,
-          };
-    });
-    const reportFailure = vi.fn();
     try {
       await expect(
-        resolveAndResumeStream(streamId, {
-          executions: session.executions,
-          resolveResumeState,
-          resumeToolUse: async (resume) => {
-            await resumeToolUseFromResumeData(resume, { session });
-            return true;
-          },
+        resumeRun(executionId, {
+          session,
           executeWorkflow: vi.fn(async () => undefined),
-          reportFailure,
         }),
-      ).resolves.toBe(false);
+      ).rejects.toBe(launchFailure);
     } finally {
       session.dispose();
     }
     await logs.flush();
 
-    expect(resolveResumeState).toHaveBeenCalledWith(streamId);
-    expect(reportFailure).toHaveBeenCalledWith(streamId, launchFailure);
     expect(resumedWriter).toHaveBeenCalledWith(streamId, executionId);
     expect(
       launchMocks.releaseOwnedExecutionLeaseAfterFailure,
@@ -550,14 +524,13 @@ describe('completedRunArchive facade', () => {
     );
   });
 
-  it('treats a present empty work plan as authoritative', async () => {
+  it('reads an empty task list from a present empty work plan', async () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
     await seedStreams(executionId, [{ streamId, todos: [] }]);
     await stampStreamId(executionId, streamId);
-    const result = await readCompletedRunTodos(executionId);
 
-    expect(result).toEqual({ todos: [], source: 'streamData', streamId });
+    expect(await readCompletedRunTodos(executionId)).toEqual([]);
   });
 
   it('reports none, with no conversation evidence, when metadata has no stamped stream', async () => {
@@ -567,8 +540,7 @@ describe('completedRunArchive facade', () => {
     expect(conversationResult).toEqual({ conversation: null, source: 'none' });
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult).toEqual({ todos: [], source: 'none' });
+    expect(await readCompletedRunTodos(executionId)).toEqual([]);
 
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
@@ -620,8 +592,7 @@ describe('completedRunArchive facade', () => {
     // The stamped stream id alone is association evidence.
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
 
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult).toEqual({ todos: [], source: 'none' });
+    expect(await readCompletedRunTodos(executionId)).toEqual([]);
 
     expect(scan).not.toHaveBeenCalled();
   });

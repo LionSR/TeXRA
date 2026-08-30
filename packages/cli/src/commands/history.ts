@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 
 import { formatChatAsMarkdown } from '@agent/export';
+import { listExecutions } from '@agent/storage';
 import { projectWorkflowCallEntries } from '@model/projectWorkflowCallEntry';
 import { type ExecutionId } from '@shared/schemas';
 import { formatCliHistoryDeletionSummary } from '@shared/copy/executionHistory';
@@ -21,7 +22,6 @@ import {
   formatInvalidExportFormatText,
   listCliHistoryEntries,
   parseCliHistoryId,
-  preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
@@ -208,17 +208,16 @@ async function runHistoryDelete(
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
-  if (options.all) {
-    const preflight = await preflightCliHistoryDeleteAll({
-      all: true,
-      yes: options.yes,
-    });
-    if (!preflight.proceed) {
-      writeTextStderr(
-        `Refusing to delete ${formatResultCount(preflight.count, 'stored execution')}. Re-run with --yes to confirm.`,
-      );
-      return CliExitCode.Usage;
-    }
+  if (options.all && !options.yes) {
+    // Unlike list, a full wipe intentionally counts (and later clears) every
+    // stored execution, including `isUserVisibleExecution`-hidden
+    // process-bookkeeping entries and agent-spawned child runs — don't add the
+    // visibility filter here.
+    const count = (await listExecutions()).length;
+    writeTextStderr(
+      `Refusing to delete ${formatResultCount(count, 'stored execution')}. Re-run with --yes to confirm.`,
+    );
+    return CliExitCode.Usage;
   }
 
   let result: CliHistoryDeleteResult;
@@ -377,9 +376,6 @@ const HISTORY_SUBCOMMANDS = {
   show: historyShowCommand,
   delete: historyDeleteCommand,
 } as const;
-
-export const HISTORY_SUBCOMMAND_NAMES: readonly string[] =
-  Object.keys(HISTORY_SUBCOMMANDS);
 
 export const historyCommand = defineCommand({
   meta: { name: 'history', description: 'Inspect stored executions' },

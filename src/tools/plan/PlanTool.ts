@@ -33,12 +33,18 @@ import {
 } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, ToolResult } from '@shared/schemas';
-import { formatGoalTime, goalElapsedMs, isGoalInFlight } from '@shared/schemas';
+import {
+  formatGoalTime,
+  goalElapsedMs,
+  isGoalInFlight,
+  ToolError,
+} from '@shared/schemas';
 import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
   isGoalEnabled,
-  setGoalSessionBashAutoApproval,
+  setGoalSessionAutoApproval,
+  type GoalAutoApprovalScope,
 } from '@tools/goal';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
@@ -59,9 +65,14 @@ function formatGoalView(goal: Goal): string {
 /**
  * Schema for the unified plan tool input. A discriminated union over
  * `command`: 'update' carries the plan; 'pause'/'complete' carry a reason.
+ *
+ * Branches use looseObject (not strictObject): provider conversion flattens
+ * the union into one advertised object and OpenAI-compatible providers
+ * null-fill the properties belonging to the other commands. See AGENTS.md
+ * "Tool input schemas".
  */
 const PlanToolInputSchema = z.discriminatedUnion('command', [
-  z.strictObject({
+  z.looseObject({
     command: z.literal('update'),
     objective: z
       .string()
@@ -72,14 +83,14 @@ const PlanToolInputSchema = z.discriminatedUnion('command', [
           'structured steps (track those with the todo tool).',
       ),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('pause'),
     reason: z
       .string()
       .min(1)
       .describe('Why you are pausing: describe what you need from the user.'),
   }),
-  z.strictObject({
+  z.looseObject({
     command: z.literal('complete'),
     reason: z
       .string()
@@ -133,17 +144,9 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     const runContext = contexts?.runContext;
 
     if (!callContext?.workPlanState) {
-      logger.warn(
-        'plan called without workPlanState in context: plan will not persist or display in UI',
+      throw new ToolError(
+        'plan(update) requires an active agent tool-use turn: there is no work plan to update.',
       );
-      return {
-        status: 'executed',
-        summary: 'Created plan (no active session)',
-        output: `Plan objective:\n${plan.objective}`,
-        diagnostics: {
-          warning: 'No active plan context: plan may not persist',
-        },
-      };
     }
 
     callContext.workPlanState.updatePlan(plan);
@@ -178,7 +181,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
       );
     }
     const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
-    await this.setBashAutoApproval(streamId, false);
+    await this.setGoalAutoApproval(streamId, false);
     return executed(
       `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
       'Goal paused.',
@@ -186,19 +189,19 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   }
 
   /**
-   * Engage/clear the goal's bash auto-approval bypass when the run context can
-   * reach the host. Best-effort: without a runtime host (e.g.
+   * Engage or clear the goal's selected auto-approval scope when the run
+   * context can reach the host. Best-effort: without a runtime host (e.g.
    * tests or headless edge paths) approvals simply keep prompting.
    */
-  private async setBashAutoApproval(
+  private async setGoalAutoApproval(
     streamId: string,
-    enabled: boolean,
+    scope: GoalAutoApprovalScope | false,
   ): Promise<void> {
     const interactions = getRunContextInteractions(
       getCurrentToolContexts()?.runContext,
     );
     if (interactions) {
-      await setGoalSessionBashAutoApproval(streamId, enabled);
+      await setGoalSessionAutoApproval(streamId, scope);
     }
   }
 
@@ -218,7 +221,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
     // archived one. The autonomous loop stops because no `active` record
     // remains for the next wait-node continuation check.
     await GoalStore.forget(streamId);
-    await this.setBashAutoApproval(streamId, false);
+    await this.setGoalAutoApproval(streamId, false);
     return executed(
       `Goal ${goal.goalId} marked complete.\n\n` +
         `Reason: ${reason}\n\n` +
@@ -259,7 +262,11 @@ pause/complete only affect autonomous goals; with no goal running they return gu
 
     if (result.action === 'approve_and_goal') {
       logger.info('Plan approved by user with goal mode');
-      return this.startGoalForPlan(plan, streamId);
+      return this.startGoalForPlan(
+        plan,
+        streamId,
+        result.autoApproveAll ? 'allAgentWork' : 'commands',
+      );
     }
 
     // Rejected — clear the plan from UI
@@ -324,6 +331,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
   private async startGoalForPlan(
     plan: Plan,
     streamId: string,
+    autoApprovalScope: GoalAutoApprovalScope,
   ): Promise<ToolResult> {
     if (!isGoalEnabled()) {
       logger.warn(
@@ -353,7 +361,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
           retargeted.status === 'paused'
             ? ((await GoalStore.setStatus(streamId, 'active')) ?? retargeted)
             : retargeted;
-        await this.setBashAutoApproval(streamId, true);
+        await this.setGoalAutoApproval(streamId, autoApprovalScope);
         return executed(
           `The user approved a new plan while goal ${active.goalId} ` +
             `was already in flight. The goal has been retargeted to the ` +
@@ -389,7 +397,7 @@ pause/complete only affect autonomous goals; with no goal running they return gu
 
     try {
       const goal = await GoalStore.start(streamId, objective);
-      await this.setBashAutoApproval(streamId, true);
+      await this.setGoalAutoApproval(streamId, autoApprovalScope);
       return executed(
         `The user approved this plan and started an autonomous goal ` +
           `(${goal.goalId}) toward its stopping condition.\n\n` +

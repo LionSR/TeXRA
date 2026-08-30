@@ -1,11 +1,11 @@
+// Local imports - secrets
+import { storeCredential } from '@common/secrets/storeCredential';
 // Local imports - hosts
 import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
 // Local imports - model
 import { apiKeySecretName, isApiProvider } from '@model/apiProviders';
 // Local imports - platform
 import { platform } from '@platform/platform';
-// Local imports - utilities
-import { looksLikeCredentialPlaceholder } from '@utils/text/credentialPlaceholder';
 
 interface SettingsProfileKeyControllerDeps {
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
@@ -75,17 +75,13 @@ export class SettingsProfileKeyController {
     provider: string,
     apiKey: string,
   ): Promise<boolean> {
-    const normalizedApiKey = apiKey.trim();
-    if (!normalizedApiKey) return false;
-
     const displayName = this.deps.getProviderDisplayName(provider);
-    if (looksLikeCredentialPlaceholder(normalizedApiKey)) {
-      throw new Error(
-        `This looks like a placeholder rather than a ${displayName} API key. Enter the key issued by the provider.`,
-      );
-    }
-
-    await platform().secrets.set(secretNameFor(provider), normalizedApiKey);
+    await storeCredential(platform().secrets, {
+      secretName: secretNameFor(provider),
+      value: apiKey,
+      kind: 'provider',
+      label: displayName,
+    });
     void this.deps.prompt.info(`${displayName} API key has been set`);
     return true;
   }

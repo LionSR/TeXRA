@@ -1,7 +1,7 @@
 /**
  * Schema definitions for MemoryView messages.
  *
- * Outbound: Backend → Frontend (UPDATE_MEMORY, UPDATE_MEMORY_ENABLED)
+ * Outbound: Backend → Frontend (UPDATE_MEMORY, UPDATE_MEMORY_PREVIEW)
  * Inbound: Frontend → Backend (GET_MEMORY_DATA, OPEN_MEMORY_FILE, etc.)
  */
 import { z } from 'zod';
@@ -50,11 +50,6 @@ export const UpdateMemoryPreviewMessageSchema = z.object({
   preview: MemoryPreviewSchema,
 });
 
-export const UpdateMemoryEnabledMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED),
-  enabled: z.boolean(),
-});
-
 // ============================================================
 // Inbound message schemas (frontend → backend)
 // ============================================================
@@ -85,11 +80,6 @@ export const OpenMemoryFolderMessageSchema = commandOnly(
 export const DeleteMemoryMessageSchema = MemoryPathMessageSchema.extend({
   command: z.literal(MEMORY_VIEW_COMMANDS.DELETE_MEMORY),
   displayPath: z.string().min(1),
-});
-
-export const SetMemoryEnabledMessageSchema = z.object({
-  command: z.literal(MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED),
-  enabled: z.boolean(),
 });
 
 export const PinMemoryMessageSchema = MemoryPathMessageSchema.extend({

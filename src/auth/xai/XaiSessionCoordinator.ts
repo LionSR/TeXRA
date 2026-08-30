@@ -4,7 +4,6 @@
  * Thin policy over {@link SubscriptionOAuthCoordinator} — only authorize URL,
  * claims, and JWT-exp refresh differ from ChatGPT/Codex.
  */
-import { wrapProviderOAuthClient } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
@@ -105,7 +104,7 @@ export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSessi
     super({
       storage: init.storage,
       policy: XAI_POLICY,
-      client: wrapProviderOAuthClient(client, XaiAuthError),
+      client,
       now: init.now,
       errorType: XaiAuthError,
     });

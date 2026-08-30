@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { flowKey } from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -16,8 +16,8 @@ import { STREAM_PHASE, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
@@ -25,10 +25,11 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { withTempDir } from '@test/support/tempDirPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -126,10 +127,6 @@ describe('ExecutionsTool', () => {
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
-  });
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
   });
 
   it.each([

@@ -10,6 +10,7 @@ import { safeTerminalText } from '@cli/runtime/terminalText';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
+  COLOR_HINT,
   COLOR_SUCCESS,
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
@@ -30,7 +31,7 @@ import {
   roundIndexedEntries,
   type CompileFailure,
   type OutputFileInfo,
-  type RoundIndexed,
+  type ReadonlyRoundIndexed,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
@@ -41,9 +42,9 @@ import {
 import { filterNotNullish, formatCompactDuration } from '@utils/core';
 
 type WorkflowRunDetailTone =
-  'neutral' | 'muted' | 'success' | 'warning' | 'error';
+  'neutral' | 'hint' | 'muted' | 'success' | 'warning' | 'error';
 
-export interface WorkflowRunDetailLine {
+interface WorkflowRunDetailLine {
   readonly key: string;
   readonly text: string;
   readonly tone: WorkflowRunDetailTone;
@@ -52,9 +53,9 @@ export interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
-  readonly outputFilesByRound: RoundIndexed<OutputFileInfo>;
-  readonly missingOutputsByRound: RoundIndexed<string>;
-  readonly compileFailuresByRound: RoundIndexed<CompileFailure>;
+  readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
+  readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
+  readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
 };
 
 interface WorkflowRunDetailGroup {
@@ -65,7 +66,7 @@ interface WorkflowRunDetailGroup {
 }
 
 const TASK_GROUP_APPEARANCE = {
-  [STREAM_PHASE.RUNNING]: { marker: STATUS_DOT, tone: 'neutral' },
+  [STREAM_PHASE.RUNNING]: { marker: STATUS_DOT, tone: 'hint' },
   [STREAM_PHASE.COMPLETED]: { marker: TICK, tone: 'success' },
   [STREAM_PHASE.CANCELLED]: { marker: SKIP_CIRCLE, tone: 'muted' },
   [STREAM_PHASE.FAILED]: { marker: CROSS, tone: 'error' },
@@ -76,6 +77,7 @@ const TASK_GROUP_APPEARANCE = {
 
 const LINE_COLORS = {
   neutral: undefined,
+  hint: COLOR_HINT,
   muted: COLOR_BORDER,
   success: COLOR_SUCCESS,
   warning: COLOR_WARNING,

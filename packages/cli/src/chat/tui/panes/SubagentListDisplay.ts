@@ -6,12 +6,13 @@ import {
   COLOR_SUCCESS,
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
-import { STATUS_DOT, TOKENS_GENERATED } from '@cli/tui/ui/glyphs';
+import { STATUS_DOT } from '@cli/tui/ui/glyphs';
 import { STREAM_PHASE } from '@shared/schemas';
+import { TOKENS_GENERATED } from '@shared/copy/workflowCall';
 import { formatCompactTokenCount } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-// Local imports - TUI state and presentation
+// Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
 /** Row-dot color for a child stream's phase.
@@ -58,10 +59,6 @@ const PENDING_APPROVAL_ROW_LABELS: Record<PendingApprovalKind, string> = {
 /** Terminal width below which the right-aligned metadata column is dropped
  *  and rows keep their inline elapsed, so identity is not crowded out. */
 export const CHILD_ROW_METADATA_MIN_COLUMNS = 60;
-
-/** At this width the workflow dashboard has room for independently navigable
- * phase and task panes; below it, source-ordered tasks use the full row. */
-export const WORKFLOW_DASHBOARD_WIDE_MIN_COLUMNS = 100;
 
 /** Right-aligned metadata column for a child row: elapsed time, the number of
  *  tool calls the child has made, and its generated tokens so far (e.g.

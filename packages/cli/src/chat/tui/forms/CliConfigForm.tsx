@@ -37,13 +37,13 @@ import {
   type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
 import { ToolsListForm } from './ToolsListForm';
+import { SkillsSettingsForm } from './SkillsSettingsForm';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
   readonly stores?: SettingsStores;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
-  readonly openExternalForm?: (formName: string) => void;
   /**
    * Applies the approval-policy side effect when that row is written here — the
    * chat TUI's live-session hook, identical to the one `/approval` drives.
@@ -257,8 +257,14 @@ export function createCliConfigFormProps(
       tools: (onBack) => (
         <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
       ),
+      skills: (onBack) => (
+        <SkillsSettingsForm
+          availableRows={props.availableRows}
+          stores={stores}
+          onClose={onBack}
+        />
+      ),
     },
-    openForm: props.openExternalForm,
     onClose: props.onClose,
     onError: props.onError,
   };

@@ -11,7 +11,7 @@ import {
  * held beside it: a payload without a current run — or a current run whose
  * payload was cleared behind its back — is unrepresentable.
  */
-export interface AgentReviewCollection {
+interface AgentReviewCollection {
   readonly repoRoot: string;
   readonly baseDescription: string;
   /**

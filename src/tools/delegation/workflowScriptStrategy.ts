@@ -12,7 +12,10 @@
  */
 
 // Local imports
-import { readWorkflowScriptCheckpoint } from '@agent/workflowScript';
+import {
+  readWorkflowScriptCheckpoint,
+  type WorkflowScriptRunOptions,
+} from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
@@ -23,6 +26,7 @@ import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
 import type {
   ExecutionId,
@@ -162,7 +166,7 @@ export function createWorkflowScriptStrategy(
    *
    * `taskDone` counts the tasks that produced a result (completed or cached),
    * which is deliberately narrower than the phase header's `done/total`
-   * (workflowPhaseCallProgress), where every settled call counts, failures and
+   * (the run model's tally), where every settled call counts, failures and
    * skips included. The two answer different questions, so the delivery line
    * labels its count "succeeded".
    *
@@ -270,6 +274,9 @@ export function createWorkflowScriptStrategy(
             files: params.files,
           }),
           signal: abortController.signal,
+          // The session's child-run budget is the one owner of "how many at
+          // once": the engine's own default is a library fallback only.
+          concurrency: resolveChildRunConcurrencyBudget(),
           runAgent,
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
@@ -352,7 +359,7 @@ export function createWorkflowScriptStrategy(
           executionId: params.executionId,
         },
         {
-          message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}'; rerunning that file resumes without repeating them.`,
+          message: `${errorCause}${runLog.format()}\n\n${formatWorkflowScriptReference(params.scriptPath)}\n\nCompleted agent() calls are journaled under meta.name '${params.name}' for this agent; rerunning that file with the same agent resumes without repeating them (failed, cancelled, and skipped calls run again).`,
           lines: [formatSummaryLine('failed', errorCause)],
         },
       );

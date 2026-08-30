@@ -18,7 +18,7 @@ import {
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
-import { getConfig } from '@utils/config/configUtils';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
@@ -46,24 +46,16 @@ export function registerGitCommands(context: vscode.ExtensionContext): void {
 }
 
 async function getRecentCommits(rootPath?: string): Promise<string[] | null> {
-  // The probe runs before the config validation so an invalid
-  // `numberOfCommitsToShow` in a non-git workspace still answers `null`
-  // rather than throwing.
   const workspacePath = rootPath ?? WorkspaceFS.getPath();
   if (!workspacePath || !(await isGitRepository(workspacePath))) {
     return null;
   }
 
-  const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow', 20);
-  if (
-    typeof numberOfCommits !== 'number' ||
-    numberOfCommits <= 0 ||
-    numberOfCommits > 1000
-  ) {
-    throw new Error(
-      'Invalid numberOfCommits value. Must be a positive integer between 1 and 1000.',
-    );
-  }
+  // The catalog row owns the range and the default: a corrupt persisted value
+  // warns once through readSetting and resolves to 20 instead of throwing.
+  const numberOfCommits = readPlatformSetting<number>(
+    'texra.git.numberOfCommitsToShow',
+  );
 
   const commits = await readRecentCommitLabels(workspacePath, numberOfCommits);
   return commits ?? [];

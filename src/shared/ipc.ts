@@ -159,6 +159,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_COMPILE_FIXER: 'runCompileFixer',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
   TOGGLE_TOOL_EDIT_APPROVAL_BYPASS: 'toggleToolEditApprovalBypass',
+  TOGGLE_BASH_APPROVAL_BYPASS: 'toggleBashApprovalBypass',
   ENABLE_APPROVAL_BYPASS: 'enableApprovalBypass',
   AGENT_PROPOSAL_ACTION: 'agentProposalAction',
   BASH_APPROVAL_ACTION: 'bashApprovalAction',
@@ -202,7 +203,6 @@ export const MEMORY_VIEW_COMMANDS = {
   OPEN_MEMORY_FILE: 'openMemoryFile',
   OPEN_MEMORY_FOLDER: 'openMemoryFolder',
   DELETE_MEMORY: 'deleteMemory',
-  SET_MEMORY_ENABLED: 'setMemoryEnabled',
   UPDATE_MEMORY_ENABLED: 'updateMemoryEnabled',
   PIN_MEMORY: 'pinMemory',
   UNPIN_MEMORY: 'unpinMemory',
@@ -226,7 +226,6 @@ export const SETTINGS_VIEW_CMD = {
   OPEN_MEMORY_FILE: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FILE,
   OPEN_MEMORY_FOLDER: MEMORY_VIEW_COMMANDS.OPEN_MEMORY_FOLDER,
   DELETE_MEMORY: MEMORY_VIEW_COMMANDS.DELETE_MEMORY,
-  SET_MEMORY_ENABLED: MEMORY_VIEW_COMMANDS.SET_MEMORY_ENABLED,
   PIN_MEMORY: MEMORY_VIEW_COMMANDS.PIN_MEMORY,
   UNPIN_MEMORY: MEMORY_VIEW_COMMANDS.UNPIN_MEMORY,
   // Profile commands
@@ -318,7 +317,8 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Stable outbound name for the broader execution-permissions-and-safety
   // snapshot (bash approval, coding-agent controls, and tool path protection).
   UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
-  UPDATE_AGENT_SKILLS_SETTINGS: 'updateAgentSkillsSettings',
+  UPDATE_SKILLS_SETTINGS: 'updateSkillsSettings',
+  UPDATE_SKILLS_LIST: 'updateSkillsList',
   UPDATE_TELEMETRY_SETTINGS: 'updateTelemetrySettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',

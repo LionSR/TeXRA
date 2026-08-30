@@ -13,6 +13,7 @@ import type {
 import type { SessionState } from '@controllers/session/SessionState';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { cloneRoundIndexed } from '@shared/schemas';
 import type {
   ConversationProgress,
   GoalStatus,
@@ -22,6 +23,7 @@ import type {
   ProgressPermissionKind,
   ProgressViewOutboundMessage,
   ProgressViewPlacement,
+  ReadonlyRoundIndexed,
   RoundIndexed,
   StreamContentRenderPayload,
   StreamMetadata,
@@ -33,13 +35,9 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import {
-  STREAM_LIFECYCLE_HELD,
-  STREAM_LIFECYCLE_UNCLASSIFIED,
-} from '@shared/schemas';
+import { STREAM_LIFECYCLE_UNAVAILABLE } from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
-import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import {
   assertNever,
   createFlushableDebounce,
@@ -111,11 +109,10 @@ export class LitSessionRenderer implements SessionRendererPort {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: PresentedStreamId;
     },
   ): void {
     if (!this.isAvailable()) return;
-    this.updateStreamMetadata(streamId, options?.streamStates, options);
+    this.updateStreamMetadata(streamId, options?.streamStates);
   }
 
   onStreamStatusChanged(
@@ -156,6 +153,12 @@ export class LitSessionRenderer implements SessionRendererPort {
             rounds: nonEmptyRounds(
               this.state.snapshots.getOutputFiles(streamId),
             ),
+            // Replace, don't merge: the store deletes a round whose output-file
+            // list goes empty (ROUND_FIELD_NORMALIZERS), and the read above
+            // already includes the fact that triggered this invalidation, since
+            // the store subscribes to session events in SessionHandle's
+            // constructor, before any host applier.
+            reset: true,
           }),
         );
       case 'compileFailures':
@@ -169,6 +172,16 @@ export class LitSessionRenderer implements SessionRendererPort {
             reset: true,
           }),
         );
+      case 'missingOutputs':
+        return this.sendIfActive(streamId, () => {
+          this.sendMessage({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+            stream: streamId,
+            rounds: nonEmptyRounds(
+              this.state.snapshots.getMissingOutputs(streamId),
+            ),
+          });
+        });
       case 'queuedFollowUps':
         return this.sendIfActive(streamId, () =>
           this.sendMessage({
@@ -191,6 +204,8 @@ export class LitSessionRenderer implements SessionRendererPort {
         // Lit surfaces pause via the goal chip (`goalStateChanged`); no
         // transcript notice, unlike the TUI.
         return;
+      case 'subagents':
+        return this.updateStreamMetadata(streamId);
     }
     assertNever(slice, 'Unhandled session render slice');
   }
@@ -211,33 +226,6 @@ export class LitSessionRenderer implements SessionRendererPort {
       return;
     }
     this.sendIfActive(streamId, () => this.updateStreamMetadata(streamId));
-  }
-
-  onBadgesChanged(streamId: StreamTabId): void {
-    this.updateStreamMetadata(streamId);
-  }
-
-  onMissingOutputsChanged(
-    streamId: StreamTabId,
-    options?: { reset?: boolean },
-  ): void {
-    this.sendIfActive(streamId, () => {
-      if (options?.reset) {
-        this.sendMessage({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-          stream: streamId,
-          reset: true,
-        });
-        return;
-      }
-      this.sendMessage({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-        stream: streamId,
-        rounds: nonEmptyRounds(
-          this.state.snapshots.getMissingOutputs(streamId),
-        ),
-      });
-    });
   }
 
   onRunUsageChanged(
@@ -299,15 +287,8 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  syncStreamContent(
-    stream: PresentedStreamId,
-    options: {
-      includeActiveState?: boolean;
-    } = {},
-  ): void {
+  syncStreamContent(stream: PresentedStreamId): void {
     if (!this.isAvailable()) return;
-
-    const { includeActiveState = false } = options;
 
     if (!stream) {
       this.sendMessage({
@@ -319,7 +300,7 @@ export class LitSessionRenderer implements SessionRendererPort {
 
     this.webviewBridge.syncStream(stream);
 
-    const projection = this.buildStreamContent(stream, includeActiveState);
+    const projection = this.buildStreamContent(stream);
     if (projection) {
       this.sendMessage({
         command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
@@ -337,7 +318,6 @@ export class LitSessionRenderer implements SessionRendererPort {
    */
   private buildStreamContent(
     stream: StreamTabId,
-    includeActiveState: boolean,
   ): StreamContentRenderPayload | undefined {
     const { state, getStreamControls } = this;
     const existingState = state.getStreamState(stream);
@@ -345,12 +325,10 @@ export class LitSessionRenderer implements SessionRendererPort {
       state.getStreamMetadata(stream).agentCategory ?? existingState?.category;
     if (category === undefined) return undefined;
 
-    if (includeActiveState) {
-      state.getOrCreateStreamState(stream, category);
-    }
-    const executionState = includeActiveState
-      ? state.getStreamState(stream)
-      : undefined;
+    // `getOrCreateStreamState` materializes the row; `getStreamState` is the
+    // read that filters removed children out of `subagents`, so both calls stay.
+    state.getOrCreateStreamState(stream, category);
+    const executionState = state.getStreamState(stream);
     return buildStreamContentRender(stream, category, {
       runUsage: mapToRecord(state.snapshots.getRunUsage(stream)),
       activeState: executionState && {
@@ -358,11 +336,16 @@ export class LitSessionRenderer implements SessionRendererPort {
         stage: executionState.stage ?? null,
         badges: { subagents: executionState.subagents },
       },
+      // Wire boundary: this payload is serialized to the webview, so it takes
+      // a snapshot. Lazy via the getter, so a payload that never reads outputs
+      // never pays for one.
       get outputs() {
         return {
-          files: state.snapshots.getOutputFiles(stream),
-          missing: state.snapshots.getMissingOutputs(stream),
-          compileFailures: state.snapshots.getCompileFailures(stream),
+          files: cloneRoundIndexed(state.snapshots.getOutputFiles(stream)),
+          missing: cloneRoundIndexed(state.snapshots.getMissingOutputs(stream)),
+          compileFailures: cloneRoundIndexed(
+            state.snapshots.getCompileFailures(stream),
+          ),
         };
       },
       get workPlan() {
@@ -374,34 +357,21 @@ export class LitSessionRenderer implements SessionRendererPort {
         };
       },
       get controls() {
-        const controls = getStreamControls(stream);
-        return {
-          bashBypass: controls.bashBypass,
-          toolEditBypass: controls.toolEditBypass,
-          superYoloBypass: controls.superYoloBypass,
-          goal: controls.goalActive
-            ? {
-                active: true as const,
-                status: controls.goalStatus,
-                objective: controls.goalObjective,
-              }
-            : { active: false as const },
-        };
+        return getStreamControls(stream);
       },
     });
   }
 
-  /** Push one stream's metadata patch, optionally re-asserting the selection. */
+  /** Push one stream's metadata patch. */
   updateStreamMetadata(
     streamId: StreamTabId,
     streamStates?: Map<StreamTabId, StreamPhaseState>,
-    options?: { activeStream?: PresentedStreamId },
   ): void {
     if (!this.isAvailable()) return;
     const streamInfo = buildStreamInfo(
       this.state,
       streamId,
-      options?.activeStream ?? this.getActiveStream(),
+      this.getActiveStream(),
     );
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
@@ -410,12 +380,11 @@ export class LitSessionRenderer implements SessionRendererPort {
         streamInfo,
         streamStates ?? this.state.streamStatus.getAllStreamStates(),
       ),
-      activeStream: options?.activeStream,
     });
   }
 
   /**
-   * Update stream metadata and theme for the webview.
+   * Update stream metadata for the webview.
    * Use this for structural updates (initial sync, stream add/remove).
    * For incremental updates, prefer the targeted notifications above.
    * `projectedStream` selects which tab gets active-tab enrichment (worktree
@@ -424,11 +393,8 @@ export class LitSessionRenderer implements SessionRendererPort {
   sendStreamMetadata(
     projectedStream: PresentedStreamId,
     activeStream: PresentedStreamId,
-    theme?: 'dark' | 'light',
   ): void {
     if (!this.isAvailable()) return;
-
-    if (theme) this.setTheme(theme);
 
     const streams = buildStreamInfos(this.state, projectedStream);
     const states = this.state.streamStatus.getAllStreamStates();
@@ -459,24 +425,12 @@ export class LitSessionRenderer implements SessionRendererPort {
     const status = streamStates.get(streamInfo.name);
     // A stream held by another process, or one whose run state could not be
     // read, has no phase in this session; the wire carries the sentinel so
-    // the view renders it read-only, with `statusDetail` saying why: the held
-    // copy (which differs when the holder cannot be reached) or the cause.
-    const hold = this.state.streamStatus.holdState(streamInfo.name);
-    const holdStatus =
-      hold &&
-      (hold.kind === 'held'
-        ? STREAM_LIFECYCLE_HELD
-        : STREAM_LIFECYCLE_UNCLASSIFIED);
+    // the view renders it read-only, with `statusDetail` saying why.
+    const statusDetail = this.state.streamStatus.holdState(streamInfo.name);
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
-      status: holdStatus ?? status?.phase,
-      statusDetail:
-        hold &&
-        (hold.kind === 'held'
-          ? streamHeldMessage(hold.executionId, hold.hold)
-          : hold.cause),
-      statusRetryable:
-        hold?.kind === 'unclassified' ? hold.retryable : undefined,
+      status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,
+      statusDetail,
       substate: status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,
@@ -552,14 +506,6 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  /** Push the host theme alone — theme flips need no metadata rebuild. */
-  setTheme(theme: 'dark' | 'light'): void {
-    this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.THEME_SET,
-      theme,
-    });
-  }
-
   /** Send to webview only if streamId is the active stream. */
   private sendIfActive(streamId: string, send: () => void): void {
     if (streamId === this.getActiveStream() && this.isAvailable()) {
@@ -584,8 +530,10 @@ export class LitSessionRenderer implements SessionRendererPort {
 }
 
 /** Omit empty round records so the frontend keeps its "no data" placeholder. */
+// The wire boundary: an outbound message is a snapshot by nature, so this is
+// where the copy belongs — once per message, rather than on every store read.
 function nonEmptyRounds<T>(
-  rounds: RoundIndexed<T>,
+  rounds: ReadonlyRoundIndexed<T>,
 ): RoundIndexed<T> | undefined {
-  return Object.keys(rounds).length ? rounds : undefined;
+  return Object.keys(rounds).length ? cloneRoundIndexed(rounds) : undefined;
 }

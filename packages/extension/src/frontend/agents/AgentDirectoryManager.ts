@@ -26,7 +26,6 @@ const CHANNEL = 'AgentLoad';
 const log = createLog(CHANNEL);
 
 class AgentDirectoryManager {
-  private context: vscode.ExtensionContext | undefined;
   private directoryService: AgentDirectoryService | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
   /** The single watcher subscriber; `undefined` means nobody is listening. */
@@ -35,8 +34,7 @@ class AgentDirectoryManager {
   private watcherDirectories: AgentDirectoryEntry[] | null = null;
   private readonly watcherRebuilds = new PQueue({ concurrency: 1 });
 
-  initialize(context: vscode.ExtensionContext): void {
-    this.context = context;
+  initialize(): void {
     this.directoryService = createPlatformAgentDirectories({
       channel: CHANNEL,
       customDirectoryStore: {
@@ -52,9 +50,9 @@ class AgentDirectoryManager {
   }
 
   private getDirectoryService(): AgentDirectoryService {
-    if (!this.context || !this.directoryService) {
+    if (!this.directoryService) {
       throw new Error(
-        'Agent directories not initialized. Call agentDirectories.initialize(context) first.',
+        'Agent directories not initialized. Call agentDirectories.initialize() first.',
       );
     }
     return this.directoryService;

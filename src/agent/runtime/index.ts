@@ -20,19 +20,21 @@
 // SessionHandle
 export {
   SessionHandle,
-  StorageRootChangeRefusedError,
   currentSession,
   defaultSession,
   initializeDefaultSession,
-  settleLiveSessionExecutions,
   teardownDefaultSession,
   tryDefaultSession,
 } from './SessionHandle';
-export type { WorkspaceStorageTransitionHooks } from './SessionHandle';
 
 // SessionEventHub
 export { SessionEventHub } from './SessionEventHub';
 export type { SessionEvent, SessionFact } from './SessionEventHub';
+
+// StreamStatusMachine — the per-stream lifecycle record hosts render from
+// (`SessionState.streamStatus.getStreamState`). Type only: the machine itself
+// is reached through the session, never constructed by a host.
+export type { StreamPhaseState } from './StreamStatusService';
 
 // HostInteractions
 export {
@@ -62,7 +64,6 @@ export type { RunAgentOptions, RunAgentRequest } from './runAgent';
 
 // SessionResumeRetrieval
 export { retrieveSessionResumeData } from './SessionResumeRetrieval';
-export type { ToolUseResumeData } from './SessionResumeRetrieval';
 
 // runClassification
 export { classifyRun } from './runClassification';
@@ -73,14 +74,12 @@ export {
   trackTerminalResultPresentation,
 } from './terminalResultToast';
 
-// resolveAndResumeStream
-export {
-  describeResumeFailure,
-  describeResumeStateResolution,
-  resolveAndResumeStream,
-  resolveResumeStateFromSnapshots,
-  resumeStreamWithRecovery,
-} from './resolveAndResumeStream';
+// resumeRun
+export { lookupStreamExecutionId, resumeRun, resumeStream } from './resumeRun';
+export type { ResumeRunOptions } from './resumeRun';
+// The refusal wording a host applies to a `ResumeRunResult` failure, and the
+// stream -> execution lookup the stream-keyed host resume ports need.
+export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 
 // detachSubagentsOnStop
 export { detachSubagentsOnStop } from './detachSubagentsOnStop';
@@ -96,15 +95,6 @@ export type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-// resumeQueuedToolUse
-export { resumeQueuedToolUseFromResumeData } from './resumeQueuedToolUse';
-
-// executionRegistry
-export type { ManualCompactionRequestResult } from './executionRegistry';
-
-// executeAgent
-export { resumeToolUseFromResumeData } from './executeAgent';
 
 // textEnhancement
 export { polishTextWithAI } from './textEnhancement';

@@ -18,7 +18,7 @@ import {
   handOffCliShutdownSignalHandlers,
   runCliPlatformShutdownSequence,
 } from '@cli/runtime/initPlatform';
-import { writeTextStdout } from '@cli/runtime/logSinks';
+import { writeTextStderrAndWait, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   cleanupTerminalModes,
   restoreTuiInputModes,
@@ -51,6 +51,7 @@ import {
   chatTuiSigintAction,
   type TuiSession,
 } from './state/sessionRunState';
+import { terminalCapabilities } from './state/terminalCapabilities';
 import type PQueue from 'p-queue';
 import type { Instance as InkInstance } from 'ink';
 
@@ -74,10 +75,6 @@ interface SessionExitControllerContext {
   readonly cwd: string;
   /** Whether this session persists a resumable transcript. */
   readonly canResume: boolean;
-  /** Clear iTerm2 progress on teardown (mirrors the render-time flag). */
-  readonly clearItermProgress: boolean;
-  /** Re-arm the Kitty keyboard protocol on SIGCONT when the terminal supports it. */
-  readonly kittyKeyboardEnabled: boolean;
   /** Session-scoped subscriptions torn down on graceful exit. */
   readonly disposables: DisposableStore;
   /** Removes the process-exit terminal backstop after terminal restoration. */
@@ -185,14 +182,17 @@ export function createSessionExitController(
   const persistBeforePlatformShutdown = async (): Promise<void> => {
     try {
       await ctx.flushArtifacts();
-    } catch {
+    } catch (error) {
       // Signal exit remains best-effort, but platform shutdown must still run.
+      // The resume hint is printed before this runs, so a silent failure hands
+      // the user a `texra resume` for a session whose tail was never written.
+      await writeTextStderrAndWait(
+        `[warn] [cli.lifecycle] Transcript flush failed during signal exit; the session tail may be missing: ${toErrorMessage(error)}`,
+      );
     }
-    try {
-      await runPlatformShutdown();
-    } catch {
-      // process.exit below remains the terminal owner when shutdown fails.
-    }
+    // `runCliPlatformShutdownSequence` catches its own failures and never
+    // rejects, so there is no rejection arm to write here.
+    await runPlatformShutdown();
   };
   const armExit = (): void => {
     exitConfirmationExpiresAt = Date.now() + EXIT_CONFIRMATION_TTL_MS;
@@ -248,7 +248,7 @@ export function createSessionExitController(
     }
     void teardown({ kind: 'signal', exitCode });
   };
-  const handleSigterm = (): void => handleTermSignal(143);
+  const handleSigterm = (): void => handleTermSignal(CliExitCode.Terminated);
   const handleSighup = (): void => handleTermSignal(129);
   // Suspend/resume (Ctrl-Z / `kill -TSTP` / `fg`). Raw mode keeps the tty
   // driver from ever turning ^Z into a signal, so App's unified useInput
@@ -259,7 +259,7 @@ export function createSessionExitController(
   const handleSigtstp = (): void => {
     if (!terminalJobControlSupported) return;
     ctx.suspendTerminalTitle();
-    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+    cleanupTerminalModes();
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.kill(process.pid, 'SIGSTOP');
   };
@@ -270,7 +270,9 @@ export function createSessionExitController(
   // clear-and-reprint path as a width change is the only safe redraw.
   const handleSigcont = (): void => {
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
-    restoreTuiInputModes({ kittyKeyboard: ctx.kittyKeyboardEnabled });
+    restoreTuiInputModes({
+      kittyKeyboard: terminalCapabilities.get().kittyKeyboard,
+    });
     ctx.resumeTerminalTitle();
     ctx.repaintAfterTerminalResume();
   };
@@ -309,7 +311,7 @@ export function createSessionExitController(
       // This synchronous prefix is load-bearing: force/signal exits must restore
       // the terminal before the first await so a stalled flush cannot strand raw
       // mode or emulator keyboard state.
-      cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+      cleanupTerminalModes();
       printResumeHintOnExit(childRosters);
       return persistBeforePlatformShutdown().finally(() =>
         process.exit(cause.exitCode),
@@ -339,7 +341,7 @@ export function createSessionExitController(
       await session.runPromise;
     }
     await ctx.flushArtifacts();
-    cleanupTerminalModes({ clearItermProgress: ctx.clearItermProgress });
+    cleanupTerminalModes();
     ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.

@@ -3,9 +3,9 @@
  *
  * Pure functions extracted from `ModelHandlerOpenRouterNative` so token
  * accounting and cache-aware price computation can be reasoned about and
- * unit-tested without a live handler instance. The handler keeps thin
- * `computePrice` / `normalizeUsage` overrides that delegate here with the
- * model's pricing config and provider id.
+ * unit-tested without a live handler instance. The handler keeps a thin
+ * `normalizeUsage` override that delegates here with the model's pricing
+ * config and provider id.
  */
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -31,7 +31,7 @@ function toStandardTokens(usage: ChatUsage) {
  * split between OpenRouter credits and the upstream provider account, so keep
  * the existing static full-inference estimate for that route.
  */
-export function computeOpenRouterPrice(
+function computeOpenRouterPrice(
   responseUsage: ChatUsage | null,
   config: StandardPricingConfig,
 ): number {

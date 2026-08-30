@@ -17,6 +17,7 @@
 
 // Local imports
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import type { SettingHost } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   defaultSkillSources,
@@ -92,6 +93,7 @@ export interface NodeAgentDirectoryBootstrapOptions {
 }
 
 export interface NodeRuntimeSkillOptions {
+  readonly host: SettingHost;
   readonly cwd: string;
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;
@@ -154,6 +156,7 @@ export function initializeNodeRuntimeSkills(
       },
       options.skillSourceOptions,
     ),
+    options.host,
   );
 }
 

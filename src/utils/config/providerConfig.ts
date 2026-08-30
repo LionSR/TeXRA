@@ -92,12 +92,10 @@ export function getProviderDisplayName(
   return regionSet(provider) ? region.displayName : defaultName;
 }
 
-export function getProviderKeyUrl(provider: string): string | undefined;
-export function getProviderKeyUrl(provider: string, defaultUrl: string): string;
-export function getProviderKeyUrl(
-  provider: string,
-  defaultUrl = PROVIDER_URLS[provider],
-): string | undefined {
+export function getProviderKeyUrl(provider: string): string | undefined {
+  // PROVIDER_URLS is a Record<string, string>, so this lookup is typed as
+  // string even for an unknown provider; the guard is what makes it honest.
+  const defaultUrl = PROVIDER_URLS[provider];
   if (!defaultUrl) return undefined;
   const region = entry(provider)?.region;
   if (!region) return defaultUrl;
@@ -107,18 +105,9 @@ export function getProviderKeyUrl(
   return defaultUrl;
 }
 
-// China-region routing defaults per provider, used when the provider's region
-// key is unset (providers without region metadata).
-const USE_CHINA_DEFAULT: Readonly<Record<string, boolean>> = {
-  dashscope: false,
-  minimax: false,
-  moonshot: true,
-  glm: true,
-};
-
 /** Whether a provider routes through its China-region endpoint. */
 export function useChinaRegion(provider: string): boolean {
-  return regionSet(provider) ?? USE_CHINA_DEFAULT[provider] ?? false;
+  return regionSet(provider) ?? false;
 }
 
 // ---------------------------------------------------------------------------

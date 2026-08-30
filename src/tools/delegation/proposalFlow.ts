@@ -13,7 +13,6 @@ import {
   classifyRejection,
   type ProposalResult,
 } from '@agent/runtime/HostInteractions';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import type {
   AgentDelegationScope,
   StreamTabId,
@@ -28,10 +27,9 @@ import { assertNever, generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
-  availableModelNamesFromOptions,
   getDelegationAgent,
   getDelegationAgents,
-  selectDelegationModelFromAvailableNames,
+  selectAvailableDelegationModel,
 } from './delegationAvailability';
 
 // Local file imports
@@ -42,17 +40,6 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
   'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
   'continue directly with available context, or ask the user a clarifying question.',
 ].join(' ');
-
-export async function selectAvailableDelegationModel(input: {
-  readonly requestedModel?: string | null;
-  readonly parentModel?: string | null;
-}): Promise<string> {
-  const modelOptions = await computeModelOptionsData();
-  return selectDelegationModelFromAvailableNames({
-    ...input,
-    availableModels: availableModelNamesFromOptions(modelOptions),
-  });
-}
 
 /**
  * Return the visible agent entry, or throw with the current visible list. The
@@ -83,18 +70,22 @@ export function requireWorkflowOrToolUseAgent(
   name: string,
   scope?: AgentDelegationScope,
 ): { agent: AgentEntry; category: AgentCategory } {
-  let firstError: unknown;
-  for (const category of [
-    AgentCategory.Workflow,
-    AgentCategory.ToolUse,
-  ] as const) {
-    try {
-      return { agent: requireVisibleAgent(category, name, scope), category };
-    } catch (error) {
-      firstError ??= error;
-    }
+  const searched = [AgentCategory.Workflow, AgentCategory.ToolUse] as const;
+  for (const category of searched) {
+    const agent = getDelegationAgent(category, name, scope);
+    if (agent) return { agent, category };
   }
-  throw firstError;
+  // Both rosters were searched, so both belong in the message: rethrowing the
+  // workflow-only error would advertise half the candidates the caller had.
+  const available = searched
+    .map((category) => {
+      const names = getDelegationAgents(category, scope).map((a) => a.name);
+      return `${category}: ${names.join(', ') || 'none'}`;
+    })
+    .join('; ');
+  throw new Error(
+    `Unknown workflow or toolUse agent '${name}'. Available: ${available}`,
+  );
 }
 
 /** Build a concise summary of proposal parameters for rejection echo. */

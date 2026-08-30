@@ -6,7 +6,6 @@ import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import {
@@ -24,20 +23,18 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
-import {
-  apiKeyExistsUncached,
-  hasUsableApiKey,
-  type ApiProvider,
-} from './apiProviders';
+import { hasUsableApiKey, type ApiProvider } from './apiProviders';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
 } from './providerCapabilities';
-import { kimiCodeEffectiveConfig } from './kimiCodeSubscriptionRouting';
+import {
+  kimiCodeEffectiveConfig,
+  type KimiCodeRoutingFacts,
+} from './kimiCodeSubscriptionRouting';
 import { resolveEffectiveHelperModel } from './helperModelSelection';
 import {
   buildBaseModelOption,
-  buildBasicModelOptionsData,
   DEFAULT_MODELS,
   isRetiredModel,
 } from './modelOptionsBasic';
@@ -47,7 +44,10 @@ import {
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
-import { prefersCopilotRoute } from './copilotRouting';
+import {
+  copilotRouteUnavailableReason,
+  prefersCopilotRoute,
+} from './copilotRouting';
 import {
   discoveredCopilotRoutes,
   getRuntimeModelConfig,
@@ -58,12 +58,6 @@ import type { ProviderCapabilityProfile } from './providerCapabilities';
 import type { ModelConfig } from 'llm-zoo';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
-
-export interface ModelOptionsAccess {
-  readonly visibleModels: readonly string[];
-  readonly secrets: PlatformSecrets;
-  readonly useOpenRouter: boolean;
-}
 
 /**
  * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
@@ -196,9 +190,16 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     const providerName = providerDisplayName(modelSource);
     return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
+  // Both Copilot arms defer to the dispatch path's own wording
+  // ({@link copilotRouteUnavailableReason}), so the picker shows exactly the
+  // sentence a run would fail with. The `??` arm is unreachable: these kinds
+  // are only chosen inside the `prefersCopilotRoute` branch, which is the one
+  // case that helper never answers `undefined` for.
   'copilot-consent-required': ({ model }) =>
-    `Model "${model}" needs your approval before TeXRA can use it through Copilot in VS Code.`,
+    copilotRouteUnavailableReason(model) ??
+    `Model "${model}" is currently unavailable through Copilot in VS Code.`,
   'copilot-unavailable': ({ model }) =>
+    copilotRouteUnavailableReason(model) ??
     `Model "${model}" is currently unavailable through Copilot in VS Code.`,
   // Unreachable from `getModelUnavailableReason` today (it returns its own
   // "not recognized" message before a config resolves far enough to compute
@@ -257,33 +258,12 @@ interface ModelAvailabilityContext {
   codexSignedIn: boolean;
   /** Whether the user is signed in with Grok (only when prefer is on). */
   xaiSignedIn: boolean;
-  /** Whether the "Prefer Kimi Code" switch is on. */
-  preferKimiCode: boolean;
-  /** Whether a Kimi Code console API key is stored. */
-  kimiCodeKeySet: boolean;
-}
-
-/**
- * The config a Kimi-subscription-eligible model actually runs with, mirroring
- * ModelFactory's dispatch: when the shared route resolver picks the Kimi Code
- * endpoint for a dual-backend model (`kimi3`), swap in the synthesized runtime
- * config (coding base URL + `k3` wire id) so availability, the row's product
- * source, and the unavailable-reason all match what the handler builds.
- * Exclusive models already carry the pinned config, so this is only material
- * for dual-backend routes. Returns the original config otherwise.
- */
-function effectiveKimiCodeConfig(
-  config: ModelConfig,
-  ctx: ModelAvailabilityContext,
-): ModelConfig {
-  if (!isKimiSubscriptionEligible(config)) return config;
-  // The same route decision and post-route config synthesis ModelFactory
-  // applies, driven by the pre-resolved context facts.
-  return kimiCodeEffectiveConfig(config, {
-    useOpenRouter: ctx.useOpenRouter,
-    keySet: ctx.kimiCodeKeySet,
-    preferKimiCode: ctx.preferKimiCode,
-  });
+  /**
+   * The Kimi Code route facts in their canonical shape, so this module feeds
+   * the shared resolver ({@link kimiCodeEffectiveConfig}) the same assembly
+   * ModelFactory's dispatch uses instead of a hand-renamed copy.
+   */
+  kimiRouting: KimiCodeRoutingFacts;
 }
 
 /** Determine how a model can be used in the current access mode. */
@@ -370,14 +350,11 @@ async function resolveModelAvailability(
   return availabilityStatus('missing-key');
 }
 
-async function buildAvailabilityContext(
-  access: ModelOptionsAccess,
-  useApiKeyCache: boolean,
-): Promise<ModelAvailabilityContext> {
+async function buildAvailabilityContext(): Promise<ModelAvailabilityContext> {
+  const secrets = platform().secrets;
+  const useOpenRouter = getUseOpenRouter();
   const hasApiKey = (provider: ApiProvider) =>
-    useApiKeyCache
-      ? hasUsableApiKey(access.secrets, provider)
-      : apiKeyExistsUncached(access.secrets, provider);
+    hasUsableApiKey(secrets, provider);
   const [hasOpenRouter, codexSignedIn, xaiSignedIn, kimiCodeKeySet] =
     await Promise.all([
       hasApiKey('openRouter'),
@@ -389,11 +366,14 @@ async function buildAvailabilityContext(
   return {
     hasUsableApiKey: hasApiKey,
     hasOpenRouter,
-    useOpenRouter: access.useOpenRouter,
+    useOpenRouter,
     codexSignedIn,
     xaiSignedIn,
-    preferKimiCode: getPreferKimiCode(),
-    kimiCodeKeySet,
+    kimiRouting: {
+      useOpenRouter,
+      keySet: kimiCodeKeySet,
+      preferKimiCode: getPreferKimiCode(),
+    },
   };
 }
 
@@ -470,43 +450,16 @@ export async function setModelEnabled(input: {
   return next;
 }
 
-function buildDefaultModelOptionsAccess(): ModelOptionsAccess {
-  const host = platform();
-  return {
-    visibleModels: getEnabledModels(host.globalState),
-    secrets: host.secrets,
-    useOpenRouter: getUseOpenRouter(),
-  };
-}
-
-/**
- * Build synchronous fallback options from the current host-visible model list.
- *
- * Secret-free by design (no key reads), so it cannot resolve credential-
- * dependent routing: a dual-backend model like `kimi3` shows its canonical
- * provider home (Moonshot), and the async {@link computeModelOptionsData}
- * refines it to Kimi Code when "Prefer Kimi Code" plus a stored key actually
- * reroute it. Exclusive Kimi Code models still show `kimiCode` here because
- * that is a pure registry fact needing no secret.
- */
-export function buildVisibleBasicModelOptionsData(
-  visibleModels: readonly string[] = getEnabledModels(),
-): ModelOptionData[] {
-  return buildBasicModelOptionsData(visibleModels);
-}
-
 /** Returns a human-readable reason why a model is unavailable, or `null` if available. */
 export async function getModelUnavailableReason(
   model: string,
-  access?: ModelOptionsAccess,
 ): Promise<string | null> {
   await discoveredCopilotRoutes();
   const rawConfig = getRuntimeModelConfig(model);
   if (!rawConfig) return `Model "${model}" is not recognized.`;
 
-  const effectiveAccess = access ?? buildDefaultModelOptionsAccess();
-  const ctx = await buildAvailabilityContext(effectiveAccess, access == null);
-  const config = effectiveKimiCodeConfig(rawConfig, ctx);
+  const ctx = await buildAvailabilityContext();
+  const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
   const availability = await resolveModelAvailability(model, config, ctx);
   if (availability.available) return null;
 
@@ -536,7 +489,7 @@ async function buildModelOptionData(
   }
   // Mirror ModelFactory: a dual-backend Kimi model routed to the coding
   // endpoint runs with the synthesized runtime config, so the row reflects it.
-  const config = effectiveKimiCodeConfig(rawConfig, ctx);
+  const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
 
   const availability = await resolveModelAvailability(model, config, ctx);
   const copilotConfig =
@@ -606,29 +559,19 @@ export function invalidateModelOptionsCache(): void {
  * so alternate global-state views stay isolated while repeated settings/CLI
  * refreshes do not redo secret and server-side key checks.
  *
- * Passing `access` computes directly from that dependency snapshot and skips
- * the shared TTL cache. Use it when the caller owns access-state freshness,
- * such as tests or host adapters with explicitly supplied state.
+ * Callers that own access-state freshness invalidate the shared caches
+ * ({@link invalidateModelOptionsCache}, `invalidateApiKeyCache`) instead of
+ * passing their own dependency snapshot.
  */
 export async function computeModelOptionsData(
   models?: readonly string[],
-  access?: ModelOptionsAccess,
 ): Promise<ModelOptionData[]> {
-  if (access) {
-    return computeModelOptionsDataUncached(models, access, false);
-  }
-
   const cacheKey = getModelOptionsCacheKey(models);
   return coalesceAsync<string, ModelOptionData[]>(
     resolvedModelOptions,
     pendingModelOptions,
     cacheKey,
-    () =>
-      computeModelOptionsDataUncached(
-        models,
-        buildDefaultModelOptionsAccess(),
-        true,
-      ),
+    () => computeModelOptionsDataUncached(models),
   );
 }
 
@@ -642,17 +585,12 @@ function getModelOptionsCacheKey(
 
 async function computeModelOptionsDataUncached(
   modelsOverride: readonly string[] | undefined,
-  access: ModelOptionsAccess,
-  useApiKeyCache: boolean,
 ): Promise<ModelOptionData[]> {
   await discoveredCopilotRoutes();
-  const availabilityCtx = await buildAvailabilityContext(
-    access,
-    useApiKeyCache,
-  );
+  const availabilityCtx = await buildAvailabilityContext();
   const models =
     modelsOverride ??
-    visibleModelsForAccess(access.visibleModels, availabilityCtx);
+    visibleModelsForAccess(getEnabledModels(), availabilityCtx);
 
   return Promise.all(
     models.map((model) => buildModelOptionData(model, availabilityCtx)),

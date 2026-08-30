@@ -8,7 +8,10 @@ import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { UsageRoute } from '@shared/schemas';
-import { DEFAULT_CORE_SETTINGS, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import {
+  TELEMETRY_ENABLED_DEFAULT,
+  TELEMETRY_ENABLED_KEY,
+} from '@shared/schemas';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -125,9 +128,7 @@ function isTelemetryEnabledBySetting(): boolean {
   // not reverse a user-wide privacy choice, while the CLI still honours a
   // project-local `false` when no global value is present.
   if (configuredValues.includes(false)) return false;
-  return configuredValues.length > 0
-    ? true
-    : DEFAULT_CORE_SETTINGS.telemetry.enabled;
+  return configuredValues.length > 0 ? true : TELEMETRY_ENABLED_DEFAULT;
 }
 
 /** Why optional usage logging is off, or `null` when it is on. */

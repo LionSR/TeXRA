@@ -1,5 +1,6 @@
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+import { invalidateModelOptionsCache } from './computeModelOptions';
 import {
   DEFAULT_MODELS,
   isDeprecatedModel,
@@ -23,7 +24,7 @@ interface CopilotRouteReconciliation {
   cleared: string[];
 }
 
-export interface ModelListRefreshResult {
+interface ModelListRefreshResult {
   skipped: boolean;
   previousVersion: number | undefined;
   currentVersion: number;
@@ -124,8 +125,12 @@ function sameModelList(
  * sweep and version-gated default reconciliation; Copilot route preferences
  * are swept unconditionally so stale retired/deprecated routes are cleared
  * even when MODEL_LIST_VERSION is already current.
+ *
+ * File-local: {@link refreshModelListAndLog} is the public entry point.
+ * `ModelListRefresh.vitest.ts` exercises this reconciliation logic through
+ * that wrapper.
  */
-export async function refreshModelListStateIfNeeded(
+async function refreshModelListStateIfNeeded(
   state: ModelListState,
 ): Promise<ModelListRefreshResult> {
   const previousVersion = state.get<number>(GlobalStateKey.MODEL_LIST_VERSION);
@@ -187,4 +192,36 @@ export async function refreshModelListStateIfNeeded(
     reordered,
     routePreferencesCleared,
   };
+}
+
+/**
+ * Runs {@link refreshModelListStateIfNeeded} and, when it changed anything,
+ * invalidates the model-options cache. Every host (extension, desktop, CLI)
+ * calls this at startup with the same added/removed/reordered/route-
+ * preference handling; only the resulting `messages` (logged by the caller,
+ * so a host can interleave its own follow-up lines, e.g. the extension's
+ * version-change message, in whatever order it already logs) stay at the
+ * call site.
+ */
+export async function refreshModelListAndLog(
+  state: ModelListState,
+): Promise<ModelListRefreshResult & { messages: readonly string[] }> {
+  const result = await refreshModelListStateIfNeeded(state);
+  const { added, removed, reordered, routePreferencesCleared } = result;
+  const changed = added.length > 0 || removed.length > 0 || reordered;
+  const messages: string[] = [];
+  if (changed || routePreferencesCleared.length > 0) {
+    invalidateModelOptionsCache();
+    if (changed) {
+      messages.push(
+        `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]${reordered ? ', reordered' : ''}`,
+      );
+    }
+    if (routePreferencesCleared.length > 0) {
+      messages.push(
+        `Cleared stale Copilot route preferences: [${routePreferencesCleared.join(', ')}]`,
+      );
+    }
+  }
+  return { ...result, messages };
 }

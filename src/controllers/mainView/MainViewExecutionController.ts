@@ -42,7 +42,7 @@ export function prepareMainViewTeamExecutionRequest(
   fields: {
     agent: string;
     delegationAgentScope: AgentDelegationScope;
-    cliMultiAgentPresetId: string;
+    cli: { multiAgentPresetId: string };
   },
 ): MainViewExecutionPreparationResult {
   if (!message.model) {
@@ -68,7 +68,7 @@ function buildMainViewExecutionRequest(
   agentCategory: AgentCategory,
   teamFields?: {
     readonly delegationAgentScope: AgentDelegationScope;
-    readonly cliMultiAgentPresetId: string;
+    readonly cli: { readonly multiAgentPresetId: string };
   },
 ): MainViewExecutionPreparationResult {
   const isToolUse = agentCategory === AgentCategory.ToolUse;
@@ -94,8 +94,18 @@ function buildMainViewExecutionRequest(
   }
 
   // The webview's session preset id is always nullish; only teamFields is
-  // authoritative, so strip it rather than relying on spread order.
-  const { cliMultiAgentPresetId: _, ...sessionFields } = message.session ?? {};
+  // authoritative, so strip it rather than relying on spread order. The
+  // session's `cli.outputFile` (if ever set) still passes through for both
+  // team and non-team requests.
+  const { cli: sessionCli, ...sessionFields } = message.session ?? {};
+  const cli = {
+    ...(sessionCli?.outputFile != null
+      ? { outputFile: sessionCli.outputFile }
+      : {}),
+    ...(teamFields
+      ? { multiAgentPresetId: teamFields.cli.multiAgentPresetId }
+      : {}),
+  };
   const validation = validateExecutionRequest({
     config: {
       agent,
@@ -106,7 +116,10 @@ function buildMainViewExecutionRequest(
       ...sessionFields,
       ...files,
       agentCategory,
-      ...teamFields,
+      ...(teamFields
+        ? { delegationAgentScope: teamFields.delegationAgentScope }
+        : {}),
+      ...(Object.keys(cli).length > 0 ? { cli } : {}),
       // Workflow output paths are implicit in the input list. Agent settings
       // may still declare generated filenames later during prompt rendering.
       outputFiles: [],
@@ -116,7 +129,6 @@ function buildMainViewExecutionRequest(
           file && isPastedImage(file) ? getPastedImageFullPath(file) : file,
         )
         .filter(filterNotNull),
-      editedFile: null,
     },
   });
 

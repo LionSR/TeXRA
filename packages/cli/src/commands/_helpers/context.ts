@@ -8,12 +8,12 @@ export async function contextFromArgs(
   args: ParsedGlobalArgs,
   rawArgs: readonly string[] = [],
 ): Promise<CliContext> {
-  const skillSourcePaths =
-    rawArgs.length > 0
-      ? collectStringFlagValues(rawArgs, 'source', 's')
-      : undefined;
   const context = await buildCliContext({
-    globalArgs: pickGlobalArgs(args, { skillSourcePaths }),
+    // Raw argv is the only reader that survives repeated `--source/-s`:
+    // citty's parsed args keep the last value only.
+    globalArgs: pickGlobalArgs(args, {
+      skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),
+    }),
   });
   if (!context.quietLogs) {
     for (const warning of context.configWarnings) {

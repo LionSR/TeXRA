@@ -2,9 +2,11 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { formatExit, waitForExit } from './smoke-process-utils.mjs';
+import {
+  renderWebviewHtml,
+  runElectronWebviewHarness,
+} from './webview-electron-harness.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const extensionRoot = join(repoRoot, 'packages', 'extension');
@@ -16,8 +18,8 @@ const desktopRequire = createRequire(
 const nonce = 'texra-webview-smoke';
 
 const progressViewReplacements = {
-  progressBundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
-  progressStyleUri: fileUri('packages/extension/dist/progressView/index.css'),
+  bundleUri: fileUri('packages/extension/dist/progressView/bundle.js'),
+  styleUri: fileUri('packages/extension/dist/progressView/index.css'),
 };
 
 const commonReplacements = {
@@ -35,7 +37,7 @@ const views = [
     tagName: 'main-app',
     templatePath: join(extensionRoot, 'src', 'webview', 'index.html'),
     replacements: {
-      mainViewBundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
+      bundleUri: fileUri('packages/extension/dist/webview/bundle.js'),
     },
     fixtureMessages: [
       {
@@ -289,23 +291,13 @@ const views = [
     tagName: 'settings-app',
     templatePath: join(extensionRoot, 'src', 'settingsView', 'index.html'),
     replacements: {
-      settingsBundleUri: fileUri(
-        'packages/extension/dist/settingsView/bundle.js',
-      ),
+      bundleUri: fileUri('packages/extension/dist/settingsView/bundle.js'),
     },
   },
 ];
 
 function fileUri(relativePath) {
   return pathToFileURL(join(repoRoot, relativePath)).toString();
-}
-
-function applyReplacements(template, replacements) {
-  let html = template;
-  for (const [key, value] of Object.entries(replacements)) {
-    html = html.replaceAll(`\${${key}}`, value);
-  }
-  return html;
 }
 
 function hostBridgeShim() {
@@ -328,65 +320,14 @@ function hostBridgeShim() {
   return `<script nonce="${nonce}">${shim}</script>`;
 }
 
-function injectHostBridge(html) {
-  const bodyTagPattern = /<body\b[^>]*>/i;
-  if (!bodyTagPattern.test(html)) {
-    throw new Error('Webview template is missing a <body> tag.');
-  }
-  return html.replace(
-    bodyTagPattern,
-    (bodyTag) => `${bodyTag}\n    ${hostBridgeShim()}`,
-  );
-}
-
-function injectDesktopThemeTokens(html) {
-  return html.replace(
-    /<link rel="stylesheet" href="\$\{commonStyleUri\}" \/>/,
-    `$&\n    <link rel="stylesheet" href="\${desktopThemeTokensUri}" />`,
-  );
-}
-
-function escapeAttributeValue(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
-}
-
-function serializeAttributes(attributes = {}) {
-  return Object.entries(attributes)
-    .map(([name, value]) => {
-      if (!/^[A-Za-z_:][\w:.-]*$/.test(name)) {
-        throw new Error(`Invalid smoke attribute name: ${name}`);
-      }
-      return ` ${name}="${escapeAttributeValue(value)}"`;
-    })
-    .join('');
-}
-
-function injectViewAttributes(html, view) {
-  const attributes = serializeAttributes(view.attributes);
-  if (!attributes) return html;
-
-  const tagPattern = new RegExp(`<${view.tagName}(?=[\\s>])`, 'i');
-  if (!tagPattern.test(html)) {
-    throw new Error(`Webview template is missing <${view.tagName}>.`);
-  }
-  return html.replace(tagPattern, `$&${attributes}`);
-}
-
 async function prepareViewHtml(view) {
   const template = await readFile(view.templatePath, 'utf8');
-  const html = injectViewAttributes(
-    injectHostBridge(
-      applyReplacements(injectDesktopThemeTokens(template), {
-        ...commonReplacements,
-        ...view.replacements,
-      }),
-    ),
+  const html = renderWebviewHtml(template, {
+    attributeLabel: 'smoke',
+    bridgeScript: hostBridgeShim(),
+    replacements: { ...commonReplacements, ...view.replacements },
     view,
-  );
+  });
   const htmlPath = join(generatedHtmlDir, `${view.name}.html`);
   await writeFile(htmlPath, html);
   return {
@@ -401,29 +342,15 @@ async function prepareViewHtml(view) {
 }
 
 async function runElectron(configPath) {
-  const electronBinaryPath = desktopRequire('electron');
-  const runnerPath = join(
-    repoRoot,
-    'scripts',
-    'smoke-webviews-electron-runner.cjs',
-  );
-  const electronArgs =
-    process.env.TEXRA_WEBVIEW_SMOKE_NO_SANDBOX === '1'
-      ? ['--no-sandbox', runnerPath]
-      : [runnerPath];
-  const child = spawn(electronBinaryPath, electronArgs, {
+  await runElectronWebviewHarness({
+    configEnv: 'TEXRA_WEBVIEW_SMOKE_CONFIG',
+    configPath,
     cwd: repoRoot,
-    env: {
-      ...process.env,
-      TEXRA_WEBVIEW_SMOKE_CONFIG: configPath,
-    },
-    stdio: 'inherit',
+    electronBinaryPath: desktopRequire('electron'),
+    failureLabel: 'Electron webview smoke',
+    noSandboxEnv: 'TEXRA_WEBVIEW_SMOKE_NO_SANDBOX',
+    runnerPath: join(repoRoot, 'scripts', 'smoke-webviews-electron-runner.cjs'),
   });
-
-  const exit = await waitForExit(child);
-  if (exit.code === 0) return;
-
-  throw new Error(`Electron webview smoke failed with ${formatExit(exit)}.`);
 }
 
 await rm(outputDir, { recursive: true, force: true });

@@ -9,8 +9,7 @@
 
 import * as path from 'node:path';
 
-import escapeRegExp from 'escape-string-regexp';
-
+import { OUTPUT_DOCUMENTS_TAG } from '@shared/schemas';
 import { getBasename, normalizeFilePath } from '@utils/core';
 import {
   getExtractedDocOutputFileName,
@@ -213,7 +212,7 @@ function makeUniquePercentHeaderName(
   reservedFinalPaths: Set<string>,
   roundDir: string,
 ): string {
-  const safeName = safeDocumentName(source);
+  const safeName = getSafeDocumentRelativePath(source);
   let candidate = safeName;
   let suffix = 2;
 
@@ -233,25 +232,20 @@ function makeUniquePercentHeaderName(
   return candidate;
 }
 
-function safeDocumentName(source: string): string {
-  return getSafeDocumentRelativePath(source);
-}
+const DOCUMENTS_ENVELOPE_OPEN_REGEX = new RegExp(
+  `^<${OUTPUT_DOCUMENTS_TAG}\\b[^>]*>\\s*$`,
+  'i',
+);
+const DOCUMENTS_ENVELOPE_CLOSE_REGEX = new RegExp(
+  `^<\\/${OUTPUT_DOCUMENTS_TAG}>\\s*$`,
+  'i',
+);
 
-function stripDocumentsEnvelope(
-  lines: readonly string[],
-  wrapperTag: string,
-): string[] {
-  const trimmedTag = wrapperTag.trim();
-  if (!trimmedTag) return [...lines];
-  const openRegex = new RegExp(
-    `^<${escapeRegExp(trimmedTag)}\\b[^>]*>\\s*$`,
-    'i',
-  );
-  const closeRegex = new RegExp(`^<\\/${escapeRegExp(trimmedTag)}>\\s*$`, 'i');
+function stripDocumentsEnvelope(lines: readonly string[]): string[] {
   return stripFirstLastLineIfWrapped(
     lines,
-    (line) => openRegex.test(line.trim()),
-    (_openLine, line) => closeRegex.test(line.trim()),
+    (line) => DOCUMENTS_ENVELOPE_OPEN_REGEX.test(line.trim()),
+    (_openLine, line) => DOCUMENTS_ENVELOPE_CLOSE_REGEX.test(line.trim()),
   );
 }
 
@@ -301,7 +295,6 @@ function shouldParseHeaderInsideNonLatexFence(
 export function extractFilenameHeaderDocuments(
   outputContent: string,
   options: {
-    thinkingTag: string;
     roundDir: string;
     /** Names a bare label may resolve to (declared outputs, else inputs). */
     labelFiles: readonly string[];
@@ -317,16 +310,13 @@ export function extractFilenameHeaderDocuments(
      * target; multi-file and in-place edits still keep duplicate names unique.
      */
     coalesceRepeatedName?: string | null;
-    wrapperTag: string;
   },
 ): NamedDocument[] | null {
   const {
-    thinkingTag,
     roundDir,
     labelFiles,
     synthesisName,
     coalesceRepeatedName = null,
-    wrapperTag,
   } = options;
   const documents: NamedDocument[] = [];
   const reservedFinalPaths = new Set<string>();
@@ -343,7 +333,7 @@ export function extractFilenameHeaderDocuments(
   let sawSoleOutputChunkLabel = false;
 
   const coalescedOutputName = coalesceRepeatedName
-    ? safeDocumentName(coalesceRepeatedName)
+    ? getSafeDocumentRelativePath(coalesceRepeatedName)
     : null;
   const coalescedOutput = () =>
     coalescedOutputName
@@ -351,7 +341,7 @@ export function extractFilenameHeaderDocuments(
       : undefined;
 
   const appendCoalescedContent = (source: string, content: string): void => {
-    const name = safeDocumentName(source);
+    const name = getSafeDocumentRelativePath(source);
     const existing = documents.find((document) => document.name === name);
     if (existing) {
       existing.content = `${existing.content.trim()}\n\n${content}`;
@@ -396,12 +386,8 @@ export function extractFilenameHeaderDocuments(
   const lines = stripSurroundingMarkdownFence(
     stripDocumentsEnvelope(
       stripSurroundingMarkdownFence(
-        stripDocumentsEnvelope(
-          responseLines(outputContent, thinkingTag),
-          wrapperTag,
-        ),
+        stripDocumentsEnvelope(responseLines(outputContent)),
       ),
-      wrapperTag,
     ),
   );
   for (const [index, line] of lines.entries()) {

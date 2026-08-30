@@ -1,8 +1,5 @@
 // Node imports
 import { strict as assert } from 'node:assert';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 
 // Third-party imports
 import { describe, it, vi } from 'vitest';
@@ -16,9 +13,6 @@ import { APIUserAbortError, OpenAIError } from 'openai';
 
 // Local imports
 import { noopTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import type {
@@ -39,19 +33,16 @@ import {
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { AgentCategory, type ToolDefinition } from '@shared/schemas';
+import type { ToolDefinition } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { pathToLocation } from '@utils/files/fileLocation';
 import type {
   ResponseInputItem,
   ResponseUsage,
 } from 'openai/resources/responses/responses';
 import type OpenAI from 'openai';
 
-// pathToLocation and AbsoluteFS resolve through platform services, so this
-// suite needs the real node fs rather than the in-memory default.
 setupPlatform({}, { fs: nodeFilesystem });
 
 const OPENAI_RESPONSE_TEST_CONFIG = Object.freeze({
@@ -1303,25 +1294,21 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     // Mirrors ModelHandler.validateTokenLimits (#8078, followed up in #8100):
     // isContextWindowError() must recognize this throw via its typed marker,
     // not by string-matching wording that this method owns and may reword
-    // freely. Without the marker, a future reword of "exceeds context
-    // window" would silently break the
+    // freely. Without the marker, this throw would silently break the
     // `isContextWindowError(error) && this.chainState.hasPreviousResponseId()`
-    // compaction-recovery check that reads this throw upstream.
-    class FailOnReducedBudgetHandler extends ModelHandlerOpenAIResponse {
-      protected override shouldFailWhenFallbackOutputBudgetIsReduced(): boolean {
-        return true;
-      }
-    }
-    const handler = createHandlerOf(FailOnReducedBudgetHandler, {
+    // compaction-recovery check that reads it upstream.
+    const handler = createHandler({
       openRouterOnly: false,
       maxOutputTokens: 200,
       contextWindow: 1000,
     });
+    // 990 + TOKEN_SAFETY_BUFFER (10) reaches the route input limit, which with
+    // no capability profile is the context window itself.
     (
       handler as unknown as {
         chainState: { setCumulativeInputTokens: (tokens: number) => void };
       }
-    ).chainState.setCumulativeInputTokens(900);
+    ).chainState.setCumulativeInputTokens(990);
 
     let caught: unknown;
     try {
@@ -1335,12 +1322,11 @@ describe('ModelHandlerOpenAIResponse.createResponse', () => {
     }
 
     assert.ok(caught instanceof Error);
-    assert.match(caught.message, /exceeds context window/);
-    // Load-bearing assertion: the typed marker itself, independent of the
-    // fenced-string fallback that `isContextWindowError` also happens to
-    // match today (this exact message currently contains "exceeds context
-    // window"). The marker is what keeps classification correct if that
-    // wording is ever reworded on the assumption it's Anthropic-only.
+    assert.match(caught.message, /exceeds route input limit/);
+    // Load-bearing assertion: the typed marker itself. This message does NOT
+    // contain the fenced "exceeds context window" string that
+    // `isContextWindowError` also matches, so the marker is the only thing
+    // keeping classification correct here.
     assert.equal(hasContextWindowErrorMarker(caught), true);
     assert.equal(isContextWindowError(caught), true);
   });
@@ -1425,47 +1411,6 @@ describe('ModelHandlerOpenAIResponse.extractResponse', () => {
     );
 
     assert.equal(result.text, expected);
-  });
-});
-
-describe('ModelHandlerOpenAIResponse.initializeOutputAndPrefill', () => {
-  it('preserves user content when no output file exists', async () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'openai-response-prefill-empty-'),
-    );
-    const outputPath = path.join(tempDir, 'r0', 'output.xml');
-
-    try {
-      const handler = createHandler();
-      const agentSetting = AgentSettingSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-      });
-      const userMessage: ResponseInputItem = {
-        type: 'message',
-        role: 'user',
-        content: [{ type: 'input_text', text: 'revise the document' }],
-      } as ResponseInputItem;
-      const messages: ResponseInputItem[] = [userMessage];
-      const workspaceState = AgentWorkspaceState.create();
-
-      const [isComplete, updatedMessages] =
-        await handler.initializeOutputAndPrefill(
-          {} as AgentConfig,
-          agentSetting,
-          messages,
-          workspaceState,
-          pathToLocation(outputPath),
-        );
-
-      assert.equal(isComplete, false);
-      assert.equal(updatedMessages.length, 1);
-      const onlyContent = (updatedMessages[0] as any).content;
-      assert.deepEqual(onlyContent, [
-        { type: 'input_text', text: 'revise the document' },
-      ]);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
   });
 });
 

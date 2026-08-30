@@ -26,7 +26,7 @@ function isInvisibleTranscriptChar(char: string | undefined): boolean {
   return char !== undefined && INVISIBLE_TRANSCRIPT_CHARS.has(char);
 }
 
-export function terminalVisibleTranscriptText(text: string): string {
+function terminalVisibleTranscriptText(text: string): string {
   let out = '';
   for (const char of stripAnsi(text)) {
     if (!isInvisibleTranscriptChar(char)) out += char;
@@ -208,22 +208,6 @@ function userPromptAwaitsLiveContinuation(
   );
 }
 
-/** Whether an entry belongs in append-only terminal scrollback now. */
-function isStaticTranscriptEntryAt(
-  rows: readonly TranscriptRow[],
-  index: number,
-  finalizedFrontier: number,
-  status: StreamPhase | undefined,
-): boolean {
-  const row = rows[index];
-  return (
-    row !== undefined &&
-    isFinalizedTranscriptRow(row, index, finalizedFrontier) &&
-    isRenderableTranscriptEntry(row) &&
-    !userPromptAwaitsLiveContinuation(rows, index, status)
-  );
-}
-
 /** `(settlement order, local-after-source tiebreak)` sort key for one row. */
 function transcriptOrderKey(
   row: TranscriptRow,
@@ -238,6 +222,27 @@ function compareTranscriptOrderKeys(
   right: readonly [number, number],
 ): number {
   return left[0] - right[0] || left[1] - right[1];
+}
+
+/**
+ * Candidates already in settlement order, else stably sorted into it. Used
+ * identically by the append-only scan and its rebuild oracle so the two
+ * paths can never disagree on scrollback order.
+ */
+function inSettlementOrder<
+  T extends {
+    readonly index: number;
+    readonly key: readonly [number, number];
+  },
+>(items: readonly T[]): readonly T[] {
+  return items.every(
+    (c, i) =>
+      i === 0 || compareTranscriptOrderKeys(items[i - 1]!.key, c.key) <= 0,
+  )
+    ? items
+    : items.toSorted(
+        (l, r) => compareTranscriptOrderKeys(l.key, r.key) || l.index - r.index,
+      );
 }
 
 /**
@@ -264,47 +269,35 @@ export function orderedStaticTranscriptEntries(
     key: readonly [number, number];
   }> = [];
   for (const [index, entry] of entries.entries()) {
+    // Finalized, renderable, and not a user prompt still awaiting its live
+    // continuation: the three conditions for append-only scrollback.
     if (!isFinalizedTranscriptRow(entry, index, finalizedFrontier)) break;
-    if (!isStaticTranscriptEntryAt(entries, index, finalizedFrontier, status)) {
-      continue;
-    }
+    if (!isRenderableTranscriptEntry(entry)) continue;
+    if (userPromptAwaitsLiveContinuation(entries, index, status)) continue;
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
 
-  const alreadyOrdered = candidates.every(
-    (candidate, i) =>
-      i === 0 ||
-      compareTranscriptOrderKeys(candidates[i - 1]!.key, candidate.key) <= 0,
-  );
-  const ordered = alreadyOrdered
-    ? candidates
-    : candidates.toSorted(
-        (left, right) =>
-          compareTranscriptOrderKeys(left.key, right.key) ||
-          left.index - right.index,
-      );
+  const ordered = inSettlementOrder(candidates);
 
   return ordered.map(({ entry }) => entry);
 }
 
-export function splitTranscriptEntries(
+/**
+ * Non-finalized entries in original stream order — the live pane's rows. The
+ * renderer must walk this list (rather than rendering tool rows and the live
+ * assistant as separate buckets) so that text emitted before a tool call
+ * appears above the tool row instead of below it. Tool entries defer
+ * finalization until the stream itself finalizes — promoting them earlier
+ * would let a fast tool jump ahead of still-streaming assistant text in
+ * `<Static>` scrollback, where insertion order is fixed. The complement (the
+ * settled prefix) is {@link orderedStaticTranscriptEntries}.
+ */
+export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
   finalizedFrontier: number,
   status: StreamPhase | undefined,
-): {
-  readonly finalized: TranscriptRow[];
-  /** Non-finalized entries in original stream order. The renderer must
-   *  walk this list (rather than rendering tool rows and the live
-   *  assistant as separate buckets) so that text emitted before a tool
-   *  call appears above the tool row instead of below it. Tool entries
-   *  defer finalization until the stream itself finalizes — promoting
-   *  them earlier would let a fast tool jump ahead of still-streaming
-   *  assistant text in `<Static>` scrollback, where insertion order is
-   *  fixed. */
-  readonly pending: TranscriptRow[];
-} {
+): TranscriptRow[] {
   const showLiveAssistant = isActivePhase(status);
-  const finalized: TranscriptRow[] = [];
   const pending: TranscriptRow[] = [];
   let canPromoteToStatic = true;
   for (const [index, entry] of entries.entries()) {
@@ -325,7 +318,7 @@ export function splitTranscriptEntries(
       continue;
     }
     if (entryFinalized) {
-      (canPromoteToStatic ? finalized : pending).push(entry);
+      if (!canPromoteToStatic) pending.push(entry);
       continue;
     }
     if (
@@ -343,7 +336,7 @@ export function splitTranscriptEntries(
       pending.push(entry);
     }
   }
-  return { finalized, pending };
+  return pending;
 }
 
 const EMPTY_TRANSCRIPT_ENTRIES: readonly TranscriptRow[] = Object.freeze([]);
@@ -362,9 +355,12 @@ export interface StaticTranscriptScanCursor {
   readonly lastScannedEntry: TranscriptRow | undefined;
   /** Stream phase at scan time; a phase change forces a rescan of the tail. */
   readonly status: StreamPhase | undefined;
+  /** Order key of the last row this cursor's scans appended to scrollback.
+   *  A later suffix that sorts before it cannot be appended in place. */
+  readonly lastAppendedKey: readonly [number, number] | undefined;
 }
 
-export interface StaticTranscriptScanResult {
+interface StaticTranscriptScanResult {
   readonly appended: readonly TranscriptRow[];
   readonly cursor: StaticTranscriptScanCursor;
   /** True when the caller must rebuild from scratch instead of using the
@@ -376,6 +372,7 @@ function makeStaticTranscriptScanCursor(
   entriesRef: readonly TranscriptRow[] | undefined,
   scannedIndex: number,
   status: StreamPhase | undefined,
+  lastAppendedKey: readonly [number, number] | undefined,
 ): StaticTranscriptScanCursor {
   return {
     entriesRef,
@@ -385,6 +382,7 @@ function makeStaticTranscriptScanCursor(
         ? entriesRef[scannedIndex - 1]
         : undefined,
     status,
+    lastAppendedKey,
   };
 }
 
@@ -393,10 +391,6 @@ function makeStaticTranscriptScanCursor(
  * {@link orderedStaticTranscriptEntries} (the full rebuild path), this walks
  * only the suffix after `previous.scannedIndex`, so ordinary stream-sync ticks
  * cost O(delta) instead of O(history).
- *
- * The suffix is exact: `hasLaterRenderable` is computed backward over just
- * the suffix, which is all that is needed to resolve the live-user-prompt
- * deferral rule (`userPromptAwaitsLiveContinuation`).
  */
 export function incrementalStaticTranscriptEntries(
   entries: readonly TranscriptRow[] | undefined,
@@ -408,7 +402,7 @@ export function incrementalStaticTranscriptEntries(
   if (previous === undefined) {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
   }
@@ -430,24 +424,19 @@ export function incrementalStaticTranscriptEntries(
   if (!canContinue) {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status),
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
   }
 
   const start = previous.scannedIndex;
   const suffix = source.slice(start);
-  const hasLaterRenderable = new Array<boolean>(suffix.length);
-  let laterRenderable = false;
-  for (let index = suffix.length - 1; index >= 0; index -= 1) {
-    hasLaterRenderable[index] = laterRenderable;
-    const entry = suffix[index]!;
-    if (isRenderableTranscriptEntry(entry)) {
-      laterRenderable = true;
-    }
-  }
 
-  const appended: TranscriptRow[] = [];
+  const appended: Array<{
+    entry: TranscriptRow;
+    index: number;
+    key: readonly [number, number];
+  }> = [];
   let scannedIndex = start;
   for (let index = 0; index < suffix.length; index += 1) {
     const entry = suffix[index]!;
@@ -458,19 +447,45 @@ export function incrementalStaticTranscriptEntries(
       scannedIndex = start + index + 1;
       continue;
     }
-    const defersLiveUserPrompt =
-      isActivePhase(status) &&
-      entry.kind === 'user' &&
-      !isInquiryContinuationText(transcriptRowHeadline(entry)) &&
-      !hasLaterRenderable[index];
-    if (defersLiveUserPrompt) break;
+    if (userPromptAwaitsLiveContinuation(suffix, index, status)) {
+      break;
+    }
     scannedIndex = start + index + 1;
-    appended.push(entry);
+    appended.push({
+      entry,
+      index: start + index,
+      key: transcriptOrderKey(entry, start + index),
+    });
+  }
+  // Print the suffix in the same settlement order the rebuild oracle uses
+  // (`orderedStaticTranscriptEntries`): a row that settled while an earlier
+  // tool was still running must not swap places across a repaint. Sorting
+  // covers a reorder inside one tick; a suffix whose first row belongs before
+  // rows an earlier tick already printed cannot be appended at all, so it
+  // falls back to the oracle rebuild (a known-origin repaint).
+  const ordered = inSettlementOrder(appended);
+
+  const first = ordered[0];
+  if (
+    first !== undefined &&
+    previous.lastAppendedKey !== undefined &&
+    compareTranscriptOrderKeys(first.key, previous.lastAppendedKey) < 0
+  ) {
+    return {
+      appended: [],
+      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
+      rebuild: true,
+    };
   }
 
   return {
-    appended,
-    cursor: makeStaticTranscriptScanCursor(source, scannedIndex, status),
+    appended: ordered.map(({ entry }) => entry),
+    cursor: makeStaticTranscriptScanCursor(
+      source,
+      scannedIndex,
+      status,
+      ordered.at(-1)?.key ?? previous.lastAppendedKey,
+    ),
     rebuild: false,
   };
 }

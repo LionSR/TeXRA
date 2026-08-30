@@ -1,34 +1,8 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-export type ChildListValue =
-  `stream:${string}` | `workflowPhase:${string}` | `workflowTask:${string}`;
-
-export function childStreamListValue(streamId: StreamTabId): ChildListValue {
-  return `stream:${streamId}`;
-}
-
-export function workflowPhaseListValue(entryId: string): ChildListValue {
-  return `workflowPhase:${entryId}`;
-}
-
-export function workflowTaskListValue(entryId: string): ChildListValue {
-  return `workflowTask:${entryId}`;
-}
-
-export function isWorkflowTaskListValue(
-  value: ChildListValue | undefined,
-): value is `workflowTask:${string}` {
-  return value?.startsWith('workflowTask:') ?? false;
-}
-
-export function childListStreamId(
-  value: ChildListValue | undefined,
-): StreamTabId | undefined {
-  return value?.startsWith('stream:')
-    ? (value.slice('stream:'.length) as StreamTabId)
-    : undefined;
-}
+/** A child-list row is a stream; the selection carries its id as is. */
+export type ChildListValue = StreamTabId;
 
 export interface ChildListSelectionState {
   readonly focused: boolean;
@@ -63,7 +37,7 @@ function resolveChildSelectionValue(
 ): ChildListValue | undefined {
   if (selectedValue && values.includes(selectedValue)) return selectedValue;
   if (activeStreamId) {
-    const activeValue = childStreamListValue(activeStreamId);
+    const activeValue = activeStreamId;
     if (values.includes(activeValue)) return activeValue;
     return undefined;
   }
@@ -86,7 +60,7 @@ export function reduceChildListSelection(
     case 'focusStream':
       return {
         focused: false,
-        selectedValue: childStreamListValue(action.streamId),
+        selectedValue: action.streamId,
       };
     case 'highlight':
       return action.value === state.selectedValue

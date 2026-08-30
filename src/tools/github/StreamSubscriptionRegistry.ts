@@ -4,7 +4,7 @@
  * the polling source and key derivation differ.
  *
  * Each (streamId, key) pair holds one disposable from the polling source.
- * Event callbacks route through `deliverLiveNotification` so events land in
+ * Event callbacks submit a `live_notification` follow-up so events land in
  * the same follow-up queue user-typed messages use; the agent consumes them
  * via the normal `waitForFollowUp` mechanism. When a stream's queue is released
  * (orchestrator disposed, user deleted the stream) subscriptions owned by
@@ -12,7 +12,7 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { deliverLiveNotification } from '@agent/followUp/liveNotification';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   currentSession,
   type SessionHandle,
@@ -57,8 +57,6 @@ interface BoundSubscription {
    * session (for example, the desktop process session).
    */
   owner: SessionHandle;
-  /** Continuation generation in which this detached producer was bound. */
-  expectedGenerationId: string | undefined;
 }
 
 export class StreamSubscriptionRegistry<K extends string, Input> {
@@ -94,8 +92,6 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
       this.ensureReleaseHook(session);
       const previousOwner = existing.owner;
       existing.owner = session;
-      existing.expectedGenerationId =
-        session.followUps.currentGenerationId(streamId);
       if (previousOwner !== session) {
         this.detachReleaseHookIfUnused(previousOwner);
       }
@@ -105,24 +101,31 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const onEvent = (text: string) => {
       const subscription = bound.get(key);
       if (!subscription) return;
-      deliverLiveNotification({
-        streamId,
-        followUp: text,
-        session: subscription.owner,
-        expectedGenerationId: subscription.expectedGenerationId,
-        logger: this.logger,
-        failure: {
-          message: 'Failed to deliver subscription follow-up',
-          data: { key, streamId },
-        },
-      });
+      // Capture the owner before awaiting: bind() reassigns it on rebind, and
+      // the queued-follow-up refresh belongs to the session that delivered.
+      const owner = subscription.owner;
+      void submitFollowUp(streamId, text, {
+        session: owner,
+        mode: 'live_notification',
+      })
+        .then((result) => {
+          if (result.status !== 'sent' && result.status !== 'queued') return;
+          owner.events.emit({
+            scope: 'session',
+            event: { type: 'updateQueuedFollowUps', payload: { streamId } },
+          });
+        })
+        .catch((err: unknown) => {
+          this.logger.warn('Failed to deliver subscription follow-up', {
+            data: { key, streamId, err },
+          });
+        });
     };
     const disposable = this.opts.source.subscribe(input, onEvent);
     const subscription: BoundSubscription = {
       disposable,
       onEvent,
       owner: session,
-      expectedGenerationId: session.followUps.currentGenerationId(streamId),
     };
     bound.set(key, subscription);
     this.perStream.set(streamId, bound);

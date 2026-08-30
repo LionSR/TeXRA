@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
 import { WORKSPACE_SIDECAR_FILE } from '@common/storage/storageLayout';
@@ -21,7 +21,7 @@ import {
   workspaceStorageId,
 } from '@platform/defaults/workspaceStorage';
 import { pathExists } from '@test/support/fsTestUtils';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 async function readWorkspaceMarker(
   storagePath: string,
@@ -34,15 +34,11 @@ async function readWorkspaceMarker(
 }
 
 describe('workspace storage defaults', () => {
-  const tempDirs: string[] = [];
+  const tempDirs = useTempDirs();
 
   function makeStorageRoot(): Promise<string> {
     return makeTempDir('texra-workspace-storage-', tempDirs);
   }
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('computes a stable workspace storage identity', () => {
     expect(workspaceStorageId('/workspace/a')).toMatch(/^a-[0-9a-f]{8}$/);
@@ -100,49 +96,6 @@ describe('workspace storage defaults', () => {
       );
     },
   );
-
-  it('creates workspace-scoped storage roots on demand', async () => {
-    const root = await makeStorageRoot();
-    let workspacePath: string | undefined = '/workspace/a';
-    const provider = new WorkspaceStorageProvider(root, () => workspacePath);
-    const firstStoragePath = provider.getStoragePath();
-
-    workspacePath = '/workspace/b';
-    expect(provider.getStoragePath()).toBe(firstStoragePath);
-    expect(provider.hasPendingWorkspaceStorageChange()).toBe(true);
-    expect(provider.commitWorkspaceStorageChange()).toBe(true);
-    const secondStoragePath = provider.getStoragePath();
-
-    expect(provider.hasPendingWorkspaceStorageChange()).toBe(false);
-    provider.finalizeWorkspaceStorageChange();
-    expect(provider.commitWorkspaceStorageChange()).toBe(false);
-    expect(provider.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
-    expect(firstStoragePath).not.toBe(secondStoragePath);
-    await expect(pathExists(firstStoragePath)).resolves.toBe(true);
-    await expect(pathExists(secondStoragePath)).resolves.toBe(true);
-    await expect(readWorkspaceMarker(firstStoragePath)).resolves.toMatchObject({
-      path: '/workspace/a',
-    });
-    await expect(readWorkspaceMarker(secondStoragePath)).resolves.toMatchObject(
-      { path: '/workspace/b' },
-    );
-  });
-
-  it('restores the previous root after a failed workspace replacement', async () => {
-    const root = await makeStorageRoot();
-    let workspacePath: string | undefined = '/workspace/a';
-    const provider = new WorkspaceStorageProvider(root, () => workspacePath);
-    const firstStoragePath = provider.getStoragePath();
-
-    workspacePath = '/workspace/b';
-    expect(provider.commitWorkspaceStorageChange()).toBe(true);
-    expect(provider.getStoragePath()).not.toBe(firstStoragePath);
-    expect(provider.rollbackWorkspaceStorageChange()).toBe(true);
-
-    expect(provider.getStoragePath()).toBe(firstStoragePath);
-    expect(provider.hasPendingWorkspaceStorageChange()).toBe(true);
-    expect(provider.rollbackWorkspaceStorageChange()).toBe(false);
-  });
 
   it('migrates legacy hash-only workspace storage when possible', async () => {
     const root = await makeStorageRoot();

@@ -26,6 +26,7 @@ import {
   rootRunPending as rootRunPendingSignal,
   rootRunStreamId as rootRunStreamIdSignal,
   sessionMeta as sessionMetaSignal,
+  streamPhaseFor,
   streams as streamsSignal,
   NO_BYPASS,
 } from '../state/cliState';
@@ -39,11 +40,12 @@ import {
   streamStateFor,
   visibleSubagentRows,
 } from '../state/childExecutions';
-import { streamDisplayLabel } from '../state/streamViews';
 import {
-  ancestorWorkflowPhaseHeading,
-  focusedSessionLocationText,
-} from '../state/workflowPhase';
+  readStreamArtifacts,
+  streamArtifactRevision,
+} from '../state/subscribeStreamArtifacts';
+import { streamLabelForId } from '../state/streamViews';
+import { ancestorWorkflowPhaseLabel } from '../state/workflowPhase';
 import { useSignal } from '../state/useSignal';
 import {
   buildStatusBarDisplay,
@@ -54,18 +56,15 @@ import {
 const CODEX_SUBSCRIPTION_REFRESH_MS = 10_000;
 const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
 interface StatusBarProps {
-  readonly agentSelectionAvailable?: boolean;
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
-  readonly childListSelectionWorkflowControllable?: boolean;
   readonly runningSessions?: number;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
   readonly foregroundEscapeAction?: string;
   readonly foregroundInputActive?: boolean;
-  readonly shortcutsActive?: boolean;
   readonly streamFocusAvailable: boolean;
   readonly transcriptAvailable?: boolean;
 }
@@ -81,6 +80,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // Subscribe to the shared SessionState: the model/stage/queued-follow-up
   // reads below go through its helpers rather than the streams map.
   useSignal(sessionStateRevision);
+  // The usage gauge projects `StreamArtifactProjection.cumulativeUsage`, which
+  // repaints on this revision rather than on the streams map.
+  useSignal(streamArtifactRevision);
   const transientNotice = useSignal(transientNoticeSignal);
   const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
@@ -96,17 +98,22 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     canStopActiveRun: chatTuiCanStopVisibleRun({
       runPending: rootRunPending,
       streamId: rootRunStreamId,
-      status: rootRunStreamId
-        ? streams.get(rootRunStreamId)?.status
-        : undefined,
+      status: streamPhaseFor(rootRunStreamId)?.phase,
     }),
     canStopPendingRunWithoutStream:
       rootRunPending && rootRunStreamId === undefined,
     parentStream,
+    phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
     streams,
   });
   const statusSlice = target.displaySlice;
   const displayStreamId = target.displayStreamId;
+  const displayPhase = streamPhaseFor(displayStreamId);
+  // Cumulative per-run usage for the displayed stream — the store's own sum,
+  // the same figure the subagent rows and the exit summary present.
+  const displayUsage = displayStreamId
+    ? readStreamArtifacts(displayStreamId)?.cumulativeUsage
+    : undefined;
   // Use root-session access facts only before any stream exists.
   const accessModel =
     (displayStreamId === undefined
@@ -134,9 +141,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionProbeFailed =
     resolutionCurrent &&
     subscriptionResolution?.failed === true &&
-    statusSlice?.usage?.usageRoute === undefined;
+    displayUsage?.usageRoute === undefined;
   const modelAccess = resolveCliModelAccessRoute({
-    usageRoute: statusSlice?.usage?.usageRoute,
+    usageRoute: displayUsage?.usageRoute,
     prospectiveRoute,
   });
 
@@ -210,7 +217,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   );
 
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
-    usageRoute: statusSlice?.usage?.usageRoute,
+    usageRoute: displayUsage?.usageRoute,
     prospectiveRoute,
   });
   const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
@@ -226,20 +233,16 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         return;
       }
       const provider = subscriptionUsageProvider;
-      void subscriptionUsage
-        .getUsage(provider)
-        .then((snapshot) => {
-          if (desiredUsageProviderRef.current !== provider) return;
-          setSubscriptionQuotaRead({
-            provider,
-            snapshot,
-          });
-        })
-        .catch(() => {
-          if (desiredUsageProviderRef.current === provider) {
-            setSubscriptionQuotaRead(undefined);
-          }
+      // `getUsage` always resolves to a snapshot rather than rejecting (see its
+      // class doc), and an `unavailable` snapshot is the designed carrier of a
+      // transport failure — so there is no rejection arm to write here.
+      void subscriptionUsage.getUsage(provider).then((snapshot) => {
+        if (desiredUsageProviderRef.current !== provider) return;
+        setSubscriptionQuotaRead({
+          provider,
+          snapshot,
         });
+      });
     },
     SUBSCRIPTION_QUOTA_REFRESH_MS,
     subscriptionUsageProvider,
@@ -255,8 +258,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const displayStreamState =
     displayStreamId === undefined ? undefined : streamStateFor(displayStreamId);
 
-  const runStartedAt = isActivePhase(statusSlice?.status)
-    ? statusSlice?.runStartedAt
+  const runStartedAt = isActivePhase(displayPhase?.phase)
+    ? displayPhase?.runStartedAt
     : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
@@ -270,9 +273,29 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     [childRosters, displayStreamId],
   );
 
+  // Nested-session location: the nearest workflow-script ancestor's open
+  // phase, then the focused stream's label.
+  const focusedStreamId = target.isChildStream ? displayStreamId : undefined;
+  const focusedLabel =
+    focusedStreamId === undefined
+      ? undefined
+      : streamLabelForId({
+          childRosters,
+          parentStream,
+          streamId: focusedStreamId,
+        });
+  const focusedPhaseHeading =
+    focusedStreamId === undefined
+      ? undefined
+      : ancestorWorkflowPhaseLabel({
+          stageOf: (id) => streamStateFor(id)?.stage,
+          parentStream,
+          streamId: focusedStreamId,
+        });
+
   const display = buildStatusBarDisplay({
-    status: statusSlice?.status,
-    substate: statusSlice?.substate,
+    status: displayPhase?.phase,
+    substate: displayPhase?.substate,
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     runningFrame: runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
     transientNotice,
@@ -282,7 +305,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     compactingActive: statusSlice?.compactingActive ?? false,
     queuedFollowUpMessages:
       displayStreamId === undefined ? [] : queuedFollowUpsFor(displayStreamId),
-    usage: statusSlice?.usage,
+    usage: displayUsage,
     contextState: displayStreamState?.contextState,
     stage: displayStreamState?.stage,
     subagents: subagentCount,
@@ -297,39 +320,20 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
-    location: focusedSessionLocationText({
-      isChildStream: target.isChildStream,
-      label:
-        target.displayStreamId === undefined
-          ? ''
-          : streamDisplayLabel({
-              childRosters,
-              parentStream,
-              streamId: target.displayStreamId,
-            }),
-      phaseHeading:
-        target.displayStreamId === undefined
-          ? undefined
-          : ancestorWorkflowPhaseHeading({
-              categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
-              parentStream,
-              streamId: target.displayStreamId,
-              streams,
-            })?.heading,
-    }),
+    location:
+      focusedLabel === undefined
+        ? undefined
+        : { context: focusedPhaseHeading, label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,
-      shortcutsActive: props.shortcutsActive,
     },
     childList: {
       focused: props.childListFocused,
       selectionKillable: props.childListSelectionKillable,
-      selectionWorkflowControllable:
-        props.childListSelectionWorkflowControllable,
     },
     shortcuts: {
-      agentSelectionAvailable: props.agentSelectionAvailable,
+      agentSelectionAvailable: !rootRunPending,
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable:

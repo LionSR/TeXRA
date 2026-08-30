@@ -20,10 +20,12 @@ import {
 import {
   DiffView,
   initialDiffScrollOffset,
-  maxDiffScrollOffset,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
-import { COMPACT_SCROLLABLE_CONTENT_ROWS } from '../render/scrollBounds';
+import {
+  COMPACT_SCROLLABLE_CONTENT_ROWS,
+  maxScrollableRowOffset,
+} from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type {
   ApprovalDecision,
@@ -82,7 +84,6 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
   const [feedbackExitCount, setFeedbackExitCount] = useState(0);
-  const feedbackModeRef = useRef(false);
   const feedbackWasCompactRef = useRef(false);
   const { data, tui } = props.payload;
   const title = `Apply edit to ${data.path}?`;
@@ -104,7 +105,10 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],
   );
-  const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
+  const maxScrollOffset = maxScrollableRowOffset({
+    maxDisplayLines: maxDiffLines,
+    totalLines: diffRows,
+  });
   const initialScrollOffset = useMemo(
     () => initialDiffScrollOffset(hunks, diffWidth, maxDiffLines),
     [diffWidth, hunks, maxDiffLines],
@@ -140,11 +144,12 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       if (active && feedbackDiffIsCompact(feedbackValue)) {
         feedbackWasCompactRef.current = true;
       }
-      if (feedbackModeRef.current && !active && feedbackWasCompactRef.current) {
+      // `feedbackWasCompactRef` is only ever latched while feedback mode is
+      // open and cleared on the way out, so it already implies the transition.
+      if (!active && feedbackWasCompactRef.current) {
         setFeedbackExitCount((count) => count + 1);
       }
       if (!active) feedbackWasCompactRef.current = false;
-      feedbackModeRef.current = active;
       setFeedbackMode(active);
     },
     [feedbackDiffIsCompact, feedbackValue],

@@ -3,17 +3,23 @@ import type {
   HostUserQuestionRequest,
 } from '@agent/runtime';
 import {
+  AgentCategory,
   agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
   type RetryPermission,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
+import {
+  WORKFLOW_SCRIPT_PROPOSAL_COPY,
+  workflowScriptPlanSummary,
+} from '@shared/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import {
   cliRetryActionHint,
-  classifyCliRetryAction,
+  cliRetryQuotaRoute,
   type CliApprovalContent,
 } from './approvalPrompts';
 
@@ -106,7 +112,8 @@ function equalLines(
   );
 }
 
-function formatAgentProposalFileGroup(
+/** `label: a, b, +N more`, bounded to `maxFiles` names. */
+export function formatAgentProposalFileGroup(
   label: string,
   files: readonly string[],
   maxFiles = AGENT_PROPOSAL_FILE_GROUP_MAX_FILES,
@@ -123,18 +130,42 @@ function agentProposalApprovalSummary(
   boundFileGroups: boolean,
 ): string {
   const workingDirectory = proposal.workingDirectory?.trim();
+  const workflow =
+    proposal.agentCategory === AgentCategory.Workflow
+      ? proposal.workflowScript
+      : undefined;
+  const fileGroups = getProposalFileGroups(proposal).map((group) =>
+    boundFileGroups
+      ? formatAgentProposalFileGroup(group.label, group.files)
+      : formatAgentProposalFileGroup(group.label, group.files, Infinity),
+  );
+  // A multi-agent workflow is a container, not one agent run: its agent and
+  // model are defaults each call may override, and its files are what the
+  // script may hand to calls, not every call's inputs.
+  const header = workflow
+    ? [
+        `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+          proposal.agent,
+          getModelLabel(proposal.model),
+        ),
+        WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
+        `Script: ${workflow.scriptPath}`,
+      ]
+    : [
+        `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
+          proposal.agentCategory,
+        )})`,
+        `Model: ${getModelLabel(proposal.model)}`,
+      ];
   return [
-    `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
-      proposal.agentCategory,
-    )})`,
-    `Model: ${proposal.model}`,
+    ...header,
     ...(workingDirectory ? [`Working directory: ${workingDirectory}`] : []),
-    ...getProposalFileGroups(proposal).map((group) =>
-      boundFileGroups
-        ? formatAgentProposalFileGroup(group.label, group.files)
-        : formatAgentProposalFileGroup(group.label, group.files, Infinity),
-    ),
-    'Instruction:',
+    ...(workflow && fileGroups.length > 0
+      ? [`${WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading}:`]
+      : []),
+    ...fileGroups,
+    workflow ? 'Description:' : 'Instruction:',
     ...instructionLines.map((line) => `  ${line}`),
   ].join('\n');
 }
@@ -167,7 +198,7 @@ export function buildAgentProposalApprovalContent(
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const hint = cliRetryActionHint(classifyCliRetryAction(payload));
+  const hint = cliRetryActionHint(cliRetryQuotaRoute(payload));
   return hint ? [message, hint].join('\n') : message;
 }
 

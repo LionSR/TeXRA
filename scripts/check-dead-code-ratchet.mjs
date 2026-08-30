@@ -26,16 +26,6 @@ const baselinePath = path.join(
   'knip-baseline.json',
 );
 
-export {
-  classifyFindings,
-  compareFindings,
-  countByCategory,
-  diffFindings,
-  extractFindings,
-  findingKey,
-  parseKnipIssues,
-  readBaseline,
-} from './check-dead-code-ratchet-core.mjs';
 import {
   classifyFindings,
   countByCategory,
@@ -61,6 +51,12 @@ function runKnip({ production = false } = {}) {
     cwd: rootDir,
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
+    // Knip's vite plugin loads packages/extension/vite.config.ts for entry
+    // detection, and that config throws unless VITE_WEBVIEW names a webview.
+    // Without this the analyzer swallowed a permanent config-load ERROR on
+    // every green run, hiding any real config failure behind it. Build callers
+    // set the variable themselves, so the per-webview build guard is untouched.
+    env: { ...process.env, VITE_WEBVIEW: 'webview' },
   });
   if (result.error) {
     throw result.error;

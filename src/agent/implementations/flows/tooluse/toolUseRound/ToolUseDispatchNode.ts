@@ -89,9 +89,9 @@ function endsToolUseTurn(result: ToolExecutionResult | null): boolean {
  *
  * Batches follow-up messages for Google/DeepSeek handlers to preserve thought signatures.
  */
-export class ToolUseDispatchNode<C> extends BaseNode<
+export class ToolUseDispatchNode extends BaseNode<
   ToolUseRoundShared,
-  ToolUseRoundServices<C>
+  ToolUseRoundServices
 > {
   /** Instruction snapshot associated with the tool calls being dispatched. */
   private _currentUserInstruction: string | undefined;
@@ -105,7 +105,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
   private _duplicateToPrimary = new Map<string, number>();
 
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
-  async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
+  override async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
     this._duplicateToPrimary.clear();
     this._currentUserInstruction = shared.currentUserInstruction;
     const toolCalls = shared.toolCalls ?? [];
@@ -151,7 +151,9 @@ export class ToolUseDispatchNode<C> extends BaseNode<
    * through the run's abort signal. Retry lives on `ModelInvocationNode`,
    * which this node does not extend.
    */
-  async _exec(calls: SdkToolCall[]): Promise<(ToolExecutionResult | null)[]> {
+  override async _exec(
+    calls: SdkToolCall[],
+  ): Promise<(ToolExecutionResult | null)[]> {
     if (calls.length === 0) return [];
 
     const results = new Array<ToolExecutionResult | null>(calls.length).fill(
@@ -229,7 +231,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
   }
 
   /** Execute a single tool call, returning null if interrupted. */
-  async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
+  override async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
     if (this.services.runScope.signal.aborted) {
       return null;
     }
@@ -254,12 +256,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
       const primary = results[primaryIndex];
       // Primary interrupted or never ran: leave the duplicate null too.
       if (!primary) continue;
-      const {
-        edits: _edits,
-        files: _files,
-        lineChanges: _lineChanges,
-        ...sharedResult
-      } = primary.result;
+      const { edits: _edits, files: _files, ...sharedResult } = primary.result;
       // The primary already injected any attachments into the follow-up;
       // repeating them per duplicate would duplicate binary context.
       results[index] = this.makeSyntheticResult(
@@ -269,13 +266,6 @@ export class ToolUseDispatchNode<C> extends BaseNode<
         primary.extracted.sanitizedResult,
       );
     }
-  }
-
-  clone(): this {
-    const cloned = super.clone();
-    cloned._duplicateToPrimary = new Map();
-    cloned._currentUserInstruction = undefined;
-    return cloned;
   }
 
   /** Invoke a tool with error handling, returning an error result if the tool is missing. */
@@ -430,16 +420,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
     const trackedEdits = options.workspace.interactions.recordEdits(
       result.status === 'executed' ? result.edits : undefined,
     );
-    if (
-      result.status === 'executed' &&
-      !result.lineChanges &&
-      trackedEdits.lineChanges
-    ) {
-      result.lineChanges = trackedEdits.lineChanges;
-      extracted.sanitizedResult.lineChanges = trackedEdits.lineChanges;
-    }
-
-    const editedFiles = trackedEdits.paths.map((path) => ({
+    const editedFiles = trackedEdits.map((path) => ({
       path,
       ok: true,
       source: 'tool',
@@ -522,7 +503,7 @@ export class ToolUseDispatchNode<C> extends BaseNode<
   }
 
   /** Process tool execution results and create follow-up messages. */
-  async post(
+  override async post(
     shared: ToolUseRoundShared,
     dispatchedCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],

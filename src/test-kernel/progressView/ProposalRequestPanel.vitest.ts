@@ -188,8 +188,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
         { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
       ],
     };
-    permission.modelOptionsData = [{ value: 'sonnet', label: 'Sonnet' }];
-    permission.agentOptionsData = [{ value: 'writer', label: 'Writer' }];
+    permission.data.model = 'gpt56';
 
     const element = await mountPanel(permission);
     const summary = element.shadowRoot?.querySelector(
@@ -200,11 +199,20 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     );
 
     expect(summary?.textContent).toContain('review-team');
-    expect(summary?.textContent).toContain('2 tasks · 2 phases');
-    expect(summary?.textContent).toContain('Review');
+    expect(summary?.textContent).toContain('2 phases · 2 declared items');
+    expect(summary?.textContent).not.toContain('tasks');
     expect(element.shadowRoot?.textContent).toContain('Multi-agent workflow');
-    expect(element.shadowRoot?.textContent).toContain('Default agent: writer');
+    expect(
+      element.shadowRoot
+        ?.querySelector('.workflow-proposal__model')
+        ?.textContent?.trim(),
+    ).toBe('GPT-5.6 Sol');
+    expect(element.shadowRoot?.textContent).toContain(
+      'Defaults: writer (GPT-5.6 Sol)',
+    );
     expect(element.shadowRoot?.textContent).toContain('high model cost');
+    expect(details?.textContent).toContain('plan labels');
+    expect(details?.textContent).toContain('Files available to the script');
     expect(details?.hasAttribute('open')).toBe(false);
     expect(
       element.shadowRoot?.querySelector('.proposal-agent-dropdown'),

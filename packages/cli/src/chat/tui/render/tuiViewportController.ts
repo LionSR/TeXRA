@@ -5,7 +5,7 @@ export interface TuiRepaintOptions {
   readonly preserveStatic?: boolean;
 }
 
-export interface TuiRepaintTarget {
+interface TuiRepaintTarget {
   repaint(options: TuiRepaintOptions): void;
 }
 
@@ -19,7 +19,7 @@ const TRANSCRIPT_VIEWPORT_REPAINT_OPTIONS = {
   preserveStatic: false,
 } satisfies TuiRepaintOptions;
 
-export interface TuiViewportController {
+interface TuiViewportController {
   readonly repaintTranscript: () => void;
   readonly repaintAfterTerminalResume: () => void;
 }

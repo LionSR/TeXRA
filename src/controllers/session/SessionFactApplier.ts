@@ -115,7 +115,6 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
     case 'inquiryThreadUpdated':
       return fact.payload.parentStreamId ? [fact.payload.parentStreamId] : [];
     case 'goalStateChanged':
-    case 'clearMissingOutputs':
     case 'updateQueuedFollowUps':
     case 'followUpSent':
     case 'setActiveStream':
@@ -197,7 +196,7 @@ export class SessionFactApplier {
     addOutputFiles: (_streamId, event) =>
       this.renderer.invalidate(event.streamId, 'files'),
     updateMissingOutputs: (_streamId, event) =>
-      this.renderer.onMissingOutputsChanged(event.streamId),
+      this.renderer.invalidate(event.streamId, 'missingOutputs'),
     updateCompileFailures: (_streamId, event) =>
       this.renderer.invalidate(event.streamId, 'compileFailures'),
     goalPaused: (_streamId, event) =>
@@ -330,11 +329,6 @@ export class SessionFactApplier {
             return this.handleGoalStateChanged(fact.payload.streamId);
           case 'inquiryThreadUpdated':
             return this.renderer.onInquiryThreadUpdated(fact.payload);
-          case 'clearMissingOutputs':
-            return this.renderer.onMissingOutputsChanged(
-              fact.payload.streamId,
-              { reset: true },
-            );
           // followUpSent refreshes from the follow-ups store exactly like
           // updateQueuedFollowUps: the send itself is not a payload, but the
           // queue may have changed.
@@ -578,7 +572,7 @@ export class SessionFactApplier {
    * Complete a command-owned removal once its host delete resolves. A retained
    * (`active`/`failed`) outcome retires the barrier and replays buffered facts;
    * a committed outcome discards the buffer; anything the command path reports
-   * as `undefined` (reserved id, no durable data, storage-root change) retires
+   * as `undefined` (reserved id, or the data directory cannot be used) retires
    * the barrier because nothing was deleted.
    */
   completeCommandRemoval(
@@ -798,7 +792,7 @@ export class SessionFactApplier {
       return { ...prev, subagents: [...live, ...retained] };
     });
 
-    this.renderer.onBadgesChanged(parentStreamId);
+    this.renderer.invalidate(parentStreamId, 'subagents');
   }
 
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
@@ -814,7 +808,7 @@ export class SessionFactApplier {
           withEventErrorHandling(
             'SessionFacts',
             `failed to notify roster changes for ${parent}`,
-            () => this.renderer.onBadgesChanged(parent),
+            () => this.renderer.invalidate(parent, 'subagents'),
           );
         }
       },
@@ -886,7 +880,7 @@ export class SessionFactApplier {
 
     const isNewStream = !this.state.streamLogs.has(streamId);
     this.state.streamLogs.ensureStream(streamId);
-    // Persisted streams may be in stream logs but missing from _streamStates.
+    // Persisted streams may be in stream logs but missing from _ephemeralState.
     // The first RUNNING transition already created/reset the state above.
     const category = runningCategory ?? this.getStreamCategory(streamId);
     if (!isNewRunningTransition && category !== undefined) {

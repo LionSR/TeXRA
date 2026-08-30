@@ -2,14 +2,13 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - tool under test
+import { convertToolSchema } from '@agent/modelHandlers/toolConversion';
 import { ClaudeAgentTool } from '@tools/claudeAgent';
 
 describe('ClaudeAgentTool schema', () => {
   it('recommends current Claude Code models in the model field', () => {
-    const parameters = new ClaudeAgentTool().definition.parameters as {
-      properties?: { model?: { description?: string } };
-    };
-    const modelDescription = parameters.properties?.model?.description ?? '';
+    const parameters = convertToolSchema(new ClaudeAgentTool().definition);
+    const modelDescription = parameters?.properties?.model?.description ?? '';
 
     expect(modelDescription).toContain('claude-sonnet-5');
     expect(modelDescription).toContain('claude-fable-5');

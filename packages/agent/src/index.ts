@@ -42,7 +42,6 @@ export type {
   ITool,
   IToolRegistry,
   ToolHost,
-  ToolHostExclusion,
 } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/define';
@@ -260,7 +259,7 @@ export function runAgent(input: RunAgentInput): AgentRun {
         reason: 'Interactive retries are unavailable in the agent package.',
       }),
     };
-    const detachInteractions = session.useHostInteractions(interactions);
+    const detachInteractions = session.interactions.use(interactions);
     try {
       await loadAgents({ includeRemote: false });
       const resolved = resolveAgent(input.agent);

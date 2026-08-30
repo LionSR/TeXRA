@@ -23,12 +23,7 @@ interface RowLocation {
 
 /** The wall-clock fallback order key for a log row. */
 function rowTime(row: TranscriptRow): number {
-  return row.timestamp ?? 0;
-}
-
-/** Full-rebuild fallback: rows missing a timestamp sort last. */
-function rowTimeForRebuild(row: TranscriptRow): number {
-  return row.timestamp ?? Number.MAX_SAFE_INTEGER;
+  return row.timestamp;
 }
 
 /** The wall-clock fallback order key for a task-group child. */
@@ -36,25 +31,13 @@ function groupStartTime(group: TaskGroup): number {
   return group.startTime;
 }
 
-/** Full-rebuild fallback: root groups missing a start time sort last. */
-function groupStartTimeForRebuild(group: TaskGroup): number {
-  return group.startTime ?? Number.MAX_SAFE_INTEGER;
-}
-
+/** Wire append sequence when both rows carry one, wall-clock otherwise. */
 function compareRows(a: TranscriptRow, b: TranscriptRow): number {
   return compareBySeqNo(a, b, (row) => row.seqNo, rowTime);
 }
 
-function compareRowsForRebuild(a: TranscriptRow, b: TranscriptRow): number {
-  return compareBySeqNo(a, b, (row) => row.seqNo, rowTimeForRebuild);
-}
-
 function compareGroups(a: TaskGroup, b: TaskGroup): number {
   return compareBySeqNo(a, b, () => undefined, groupStartTime);
-}
-
-function compareRootGroups(a: TaskGroup, b: TaskGroup): number {
-  return compareBySeqNo(a, b, () => undefined, groupStartTimeForRebuild);
 }
 
 function compareTimeline(a: TimelineEntry, b: TimelineEntry): number {
@@ -212,10 +195,9 @@ export class TranscriptIndex {
   ): boolean {
     if (previousGroups.length !== nextGroups.length) return false;
 
-    for (let i = 0; i < nextGroups.length; i++) {
+    for (const [i, next] of nextGroups.entries()) {
       const previous = previousGroups[i];
-      const next = nextGroups[i];
-      if (!previous || !next) return false;
+      if (!previous) return false;
       if (
         previous.id !== next.id ||
         previous.parentGroupId !== next.parentGroupId ||
@@ -257,7 +239,7 @@ export class TranscriptIndex {
     // Sort rows by wire append sequence and classify by groupId. Rows
     // without a usable sequence (archived/compat) fall back to timestamp.
     // JS engines use stable sort, so equal order keys preserve original order.
-    const sortedRows = rows.toSorted(compareRowsForRebuild);
+    const sortedRows = rows.toSorted(compareRows);
     const rowsByGroup = new Map<string, TranscriptRow[]>();
     const ungrouped: TranscriptRow[] = [];
     this.rowLocations.clear();
@@ -298,7 +280,7 @@ export class TranscriptIndex {
     // Stable sort preserves original order for equal order keys.
     this.tree = groups
       .filter((g) => !g.parentGroupId || !groupMap.has(g.parentGroupId))
-      .sort(compareRootGroups)
+      .sort(compareGroups)
       .map(buildNode);
     this.ungrouped = ungrouped;
   }
@@ -308,12 +290,12 @@ export class TranscriptIndex {
     const timeline: TimelineEntry[] = [
       ...this.ungrouped.map((m) => ({
         key: m.id,
-        time: m.timestamp ?? 0,
+        time: m.timestamp,
         row: m,
       })),
       ...this.tree.map((t) => ({
         key: t.group.id,
-        time: t.group.startTime ?? 0,
+        time: t.group.startTime,
         tree: t,
       })),
     ].sort(compareTimeline);
@@ -442,15 +424,15 @@ export class TranscriptIndex {
 
   /**
    * Re-derive the homogeneous row arrays (`node.rows` / `ungrouped`)
-   * from the current snapshot in rebuild order — the same
-   * `compareRowsForRebuild` fallback `rebuildTree` uses. Used when a
+   * from the current snapshot in rebuild order — the same `compareRows`
+   * ordering `rebuildTree` uses. Used when a
    * delta batch changed ordering keys, where in-place replacement cannot
    * preserve the sorted invariant. The group tree shape and the time-only
    * timeline are left untouched; the caller's `updateTimelineRowRefs`
    * pass refreshes timeline row refs.
    */
   private rebuildRowArrays(rows: readonly TranscriptRow[]): void {
-    const sorted = rows.toSorted(compareRowsForRebuild);
+    const sorted = rows.toSorted(compareRows);
     const rowsByGroup = new Map<string, TranscriptRow[]>();
     const ungrouped: TranscriptRow[] = [];
 
@@ -478,8 +460,8 @@ export class TranscriptIndex {
     for (const location of this.rowLocations.values()) {
       delete location.ungroupedIndex;
     }
-    for (let i = 0; i < ungrouped.length; i++) {
-      this.locationFor(ungrouped[i].id).ungroupedIndex = i;
+    for (const [i, row] of ungrouped.entries()) {
+      this.locationFor(row.id).ungroupedIndex = i;
     }
   }
 

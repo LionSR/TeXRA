@@ -1,4 +1,4 @@
-import { Mutex } from 'async-mutex';
+import PQueue from 'p-queue';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -68,7 +68,12 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private lastStoredSession: SupabaseSession | null = null;
   private lastStoredSessionVersion = 0;
   private lastRefreshFailure: SessionRefreshFailure | null = null;
-  private readonly sessionMutex = new Mutex();
+  // Single-flight serialized writes, same mechanism as
+  // SubscriptionOAuthCoordinator's `sessionMutations`: concurrency:1 makes
+  // `.onIdle()` alone a sufficient "no mutation in flight, and none can start
+  // without bumping sessionMutationVersion first" barrier for
+  // `loadStableSessionSnapshot`'s version-recheck loop below.
+  private readonly sessionMutations = new PQueue({ concurrency: 1 });
   private readonly log: Required<SupabaseSessionLog>;
 
   constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
@@ -103,15 +108,14 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    * delete the replacement.
    */
   async clearSessionIfCurrent(expected: SupabaseSession): Promise<boolean> {
-    let cleared = false;
-    await this.sessionMutex.runExclusive(async () => {
+    return this.sessionMutations.add(async () => {
       const current = await this.loadSession();
       if (
         !current ||
         current.accessToken !== expected.accessToken ||
         current.refreshToken !== expected.refreshToken
       ) {
-        return;
+        return false;
       }
 
       this.sessionMutationVersion += 1;
@@ -119,10 +123,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
       await this.options.storage.delete();
       this.lastStoredSession = null;
       this.lastStoredSessionVersion = mutationVersion;
-      cleared = true;
+      return true;
     });
-
-    return cleared;
   }
 
   /**
@@ -130,8 +132,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
    *
    * @returns Fresh access token, or null if no session or refresh failed.
    */
-  async ensureFreshToken(forceRefresh?: boolean): Promise<string | null> {
-    const session = await this.getFreshSession(forceRefresh);
+  async ensureFreshToken(): Promise<string | null> {
+    const session = await this.getFreshSession();
     return session?.accessToken ?? null;
   }
 
@@ -165,7 +167,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   /**
    * Read the stored session's account label without attempting a token
    * refresh. Returns null when no session is stored or the data is
-   * unreadable — the caller decides whether to surface "N/A".
+   * unreadable — the caller decides what to show in its place.
    */
   async getStoredAccountLabel(): Promise<string | null> {
     const session = await this.loadSession();
@@ -273,9 +275,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     return toStorableSupabaseSession(data.session);
   }
 
-  private async getFreshSession(
-    forceRefresh?: boolean,
-  ): Promise<SupabaseSession | null> {
+  private async getFreshSession(): Promise<SupabaseSession | null> {
     try {
       const { session, version } = await this.loadStableSessionSnapshot();
       if (!session) {
@@ -284,22 +284,17 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
 
       const timeUntilExpiry = session.expiresAt - Date.now();
 
-      if (
-        forceRefresh ||
-        timeUntilExpiry < this.options.tokenRefreshThresholdMs
-      ) {
+      if (timeUntilExpiry < this.options.tokenRefreshThresholdMs) {
         this.log.info(
           'SupabaseSession',
           `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
         );
         const refreshed = await this.refreshSession(session, version);
         if (refreshed) return refreshed;
-        if (forceRefresh || timeUntilExpiry <= 0) {
+        if (timeUntilExpiry <= 0) {
           this.log.warn(
             'SupabaseSession',
-            forceRefresh
-              ? 'Force refresh requested but refresh failed, returning null'
-              : 'Token expired and refresh failed, returning null',
+            'Token expired and refresh failed, returning null',
           );
           return null;
         }
@@ -324,12 +319,9 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   private async loadStableSessionSnapshot(): Promise<StableSessionSnapshot> {
     for (;;) {
       const versionBeforeLoad = this.sessionMutationVersion;
-      await this.sessionMutex.waitForUnlock();
+      await this.sessionMutations.onIdle();
       const session = await this.loadSession();
-      if (
-        versionBeforeLoad === this.sessionMutationVersion &&
-        !this.sessionMutex.isLocked()
-      ) {
+      if (versionBeforeLoad === this.sessionMutationVersion) {
         return { session, version: versionBeforeLoad };
       }
     }
@@ -339,7 +331,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     session: SupabaseSession | null,
     operation: () => Promise<void>,
   ): Promise<void> {
-    await this.sessionMutex.runExclusive(async () => {
+    await this.sessionMutations.add(async () => {
       this.sessionMutationVersion += 1;
       const mutationVersion = this.sessionMutationVersion;
       await operation();
@@ -354,7 +346,8 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
   ): Promise<SupabaseSession | null> {
     if (
       this.sessionMutationVersion !== expectedVersion ||
-      this.sessionMutex.isLocked()
+      this.sessionMutations.size > 0 ||
+      this.sessionMutations.pending > 0
     ) {
       return this.loadStableSession();
     }

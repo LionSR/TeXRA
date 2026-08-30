@@ -1,7 +1,8 @@
 // Regression coverage for atomic Codex disk-resume claims. Concurrent calls
 // with the same stale thread_id must share one fallback loop: the first call
 // owns asynchronous SDK setup, while later calls wait for registration and
-// enqueue through the ordinary follow-up path.
+// enqueue through the ordinary follow-up path. The detached-rejection case is
+// also the only place the fresh `startThread` launch branch is exercised.
 
 import pDefer from 'p-defer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   getCurrentToolContexts: vi.fn(),
   registerExecution: vi.fn(),
   getExecutionStore: vi.fn(),
-  ensureRunDir: vi.fn(),
   createChildStream: vi.fn(),
   startChildRunLoop: vi.fn(),
   currentSession: vi.fn(),
@@ -54,6 +54,12 @@ vi.mock('@agent/runtime/SessionHandle', () => ({
 // registry that dispatch resolves for it through the same accessor.
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
+  // The session-keyed registry resolves live handles through its session's
+  // ExecutionRegistry; this suite never tracks real handles, so lookups miss.
+  executions: {
+    getHandle: () => undefined,
+    getAgentHandleByStream: () => undefined,
+  },
 } as unknown as SessionHandle;
 const CodexThreads = codexThreadsFor(testSession);
 
@@ -64,10 +70,10 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/storage/executionLease', () => ({
   assertOwnedExecutionLease: vi.fn(),
-}));
-
-vi.mock('@utils/files/taskRunStorage', () => ({
-  ensureRunDir: mocks.ensureRunDir,
+  runWithOwnedExecutionLeaseLaunchGuard: (
+    _executionId: string,
+    operation: () => unknown,
+  ) => operation(),
 }));
 
 vi.mock('@tools/delegation/childStream', () => ({
@@ -93,6 +99,7 @@ vi.mock('@tools/codexConfig', () => ({
 }));
 
 vi.mock('@tools/codexImport', () => ({
+  codexBinarySupportsXhigh: async () => false,
   importCodexClass: mocks.importCodexClass,
   findCodexBinaryPath: mocks.findCodexBinaryPath,
 }));
@@ -143,7 +150,6 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.getCurrentToolContexts.mockReturnValue(toolContext());
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.getExecutionStore.mockReturnValue({ write: async () => {} });
-    mocks.ensureRunDir.mockResolvedValue(undefined);
     mocks.findCodexBinaryPath.mockResolvedValue(undefined);
     mocks.createChildStream.mockReturnValue(
       createFakeAgentCliChildStream(childStreamId),
@@ -157,26 +163,7 @@ describe('codex tool - atomic resume fallback', () => {
     CodexThreads.release('stale-thread');
   });
 
-  it('refuses a one-shot run whose follow-up could never be collected', async () => {
-    mocks.getCurrentToolContexts.mockReturnValue(
-      toolContext({ stopAfterCycle: true }),
-    );
-
-    await expect(
-      new CodexTool().call({
-        prompt: 'launch Codex',
-        sandbox_mode: 'workspace-write',
-      }),
-    ).resolves.toMatchObject({
-      status: 'error',
-      error: expect.stringContaining('codex is unavailable in one-shot runs'),
-    });
-    expect(mocks.requestBashApproval).not.toHaveBeenCalled();
-    expect(mocks.registerExecution).not.toHaveBeenCalled();
-    expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-  });
-
-  it('logs a detached run-loop rejection through the child trace', async () => {
+  it('logs a detached run-loop rejection from a fresh Codex thread launch', async () => {
     const childStream = createFakeAgentCliChildStream(childStreamId);
     const error = vi
       .spyOn(childStream.logger, 'error')
@@ -269,78 +256,6 @@ describe('codex tool - atomic resume fallback', () => {
       'also update the tests',
       expect.objectContaining({ session: expect.anything() }),
     );
-
-    getStrategy()?.releaseSessionOwnership?.();
-    expect(CodexThreads.lookup('stale-thread')).toBeUndefined();
-  });
-
-  it('exposes an in-flight initial turn to the shared shutdown drain', async () => {
-    const interrupt = vi.fn();
-    const thread = { id: undefined, runStreamed: vi.fn() };
-    const getStrategy = captureRunLoopStrategy();
-    mocks.importCodexClass.mockResolvedValue(
-      class MockCodex {
-        startThread(): typeof thread {
-          return thread;
-        }
-      },
-    );
-
-    await new CodexTool().call({
-      prompt: 'start a long initial turn',
-      sandbox_mode: 'workspace-write',
-    });
-
-    const executions = {
-      getAgentHandleByStream: () => ({ interrupt }),
-    } as any;
-    getStrategy()?.onLoopStart?.({ executions } as any);
-    CodexThreads.interruptAll();
-
-    expect(interrupt).toHaveBeenCalledOnce();
-    getStrategy()?.releaseSessionOwnership?.();
-  });
-
-  it('lets a waiting caller own the fallback after the first launch fails', async () => {
-    const firstImportStarted = pDefer<void>();
-    const firstImport = pDefer<any>();
-    const thread = { id: 'stale-thread', runStreamed: vi.fn() };
-    const getStrategy = captureRunLoopStrategy();
-    mocks.importCodexClass
-      .mockImplementationOnce(() => {
-        firstImportStarted.resolve(undefined);
-        return firstImport.promise;
-      })
-      .mockResolvedValueOnce(
-        class MockCodex {
-          resumeThread(): typeof thread {
-            return thread;
-          }
-        },
-      );
-
-    const tool = new CodexTool();
-    const first = tool.call({
-      prompt: 'first attempt',
-      sandbox_mode: 'workspace-write',
-      thread_id: 'stale-thread',
-    });
-    await firstImportStarted.promise;
-    const second = tool.call({
-      prompt: 'retry from the waiter',
-      sandbox_mode: 'workspace-write',
-      thread_id: 'stale-thread',
-    });
-    await Promise.resolve();
-
-    firstImport.reject(new Error('first SDK import failed'));
-    const [firstResult, secondResult] = await Promise.all([first, second]);
-
-    expect(firstResult.status).toBe('error');
-    expect(secondResult.status).toBe('executed');
-    expect(secondResult.summary).toMatch(/Launched Codex/);
-    expect(mocks.importCodexClass).toHaveBeenCalledTimes(2);
-    expect(mocks.startChildRunLoop).toHaveBeenCalledOnce();
 
     getStrategy()?.releaseSessionOwnership?.();
     expect(CodexThreads.lookup('stale-thread')).toBeUndefined();

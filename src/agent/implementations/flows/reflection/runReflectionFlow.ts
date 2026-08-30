@@ -1,11 +1,17 @@
 import { getExecutionStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
-import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
+import type {
+  BaseFlowContextInit,
+  ToolPolicy,
+} from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
+import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import {
   PersistedFlowStateError,
@@ -18,21 +24,21 @@ import {
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
-  type StorageKey,
   type FileLocation,
+  fileLocationDisplayPath,
+  MESSAGE_TYPES,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { pathToLocation } from '@utils/files/fileLocation';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LatexDiffManager } from './output/LatexDiffManager';
 import { XmlOutputManager } from './output/XmlOutputManager';
 import {
   createOutputState,
-  setActiveRun,
   getOutputFilesByRound,
   roundsFromPersisted,
 } from './output/outputState';
@@ -47,30 +53,34 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
-import type {
-  ReflectionServices,
-  WorkflowOutputPolicy,
-} from './ReflectionServices';
+import type { ReflectionServices } from './ReflectionServices';
 
-/**
- * Widen a round stage's `total` for a granted compile-repair round (#7077):
- * that round opens with `roundIndex === totalRounds` (one past the
- * configured last round), so without this the progress badge would render
- * an over-total "Round 3 of 2".
- */
-export function computeRoundStageTotal(
-  totalRounds: number,
-  roundIndex: number,
-): number {
-  return Math.max(totalRounds, roundIndex + 1);
+export interface RunReflectionFlowInput extends BaseFlowContextInit {
+  setting: AgentWorkflowSetting;
+  parentStage: StageHandle;
 }
 
-export interface RunReflectionFlowInput<
-  C = unknown,
-> extends BaseFlowContextInit<C> {
-  setting: AgentWorkflowSetting;
-  storageKey: StorageKey;
-  parentStage: StageHandle;
+/**
+ * Resolve workflow tool declarations at flow startup so a workflow advertises
+ * the registry-owned contract, just like a tool-use flow.
+ * Models without function calling receive no tool definitions, matching the
+ * reflection flow's former model-facing capability gate.
+ */
+async function resolveWorkflowSettingTools(
+  setting: AgentWorkflowSetting,
+  toolPolicy: ToolPolicy,
+  logger: { warn: (msg: string) => void },
+  supportsFunctionCalling: boolean,
+): Promise<AgentWorkflowSetting> {
+  const tools = await resolveAgentTools({
+    tools: setting.tools,
+    logger,
+    approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
+    runtimeUnavailableTools: toolPolicy.runtimeUnavailableTools,
+    // Workflow agents do not use the tool-use flow's conditional infrastructure.
+    toolInjections: new ToolInjectionRegistry(),
+  });
+  return { ...setting, tools: supportsFunctionCalling ? tools : [] };
 }
 
 export interface RunReflectionFlowResult {
@@ -85,8 +95,25 @@ export interface RunReflectionFlowResult {
   error?: RetryErrorInfo;
 }
 
-export async function runReflectionFlow<C = unknown>(
-  input: RunReflectionFlowInput<C>,
+function collectRunSupportFiles(agentConfig: AgentConfig): FileLocation[] {
+  const allPaths = [
+    ...agentConfig.contextFiles,
+    ...agentConfig.mediaFiles,
+    ...agentConfig.inputFiles,
+  ];
+
+  const extras = new Map<string, FileLocation>();
+  for (const value of allPaths) {
+    if (!value) continue;
+    const location = pathToLocation(value);
+    extras.set(fileLocationDisplayPath(location), location);
+  }
+
+  return [...extras.values()];
+}
+
+export async function runReflectionFlow(
+  input: RunReflectionFlowInput,
 ): Promise<RunReflectionFlowResult> {
   const {
     modelCell,
@@ -94,12 +121,17 @@ export async function runReflectionFlow<C = unknown>(
     setting,
     prompt,
     logger,
-    storageKey,
     parentStage,
     userVarChannels,
     runScope,
   } = input;
   const { streamId, executionId } = runScope;
+  const resolvedSetting = await resolveWorkflowSettingTools(
+    setting,
+    input.toolPolicy,
+    logger,
+    modelCell.handler.capabilities?.supportsFunctionCalling === true,
+  );
 
   let shared: ReflectionFlowShared | undefined;
 
@@ -120,19 +152,14 @@ export async function runReflectionFlow<C = unknown>(
     streamId,
   );
   const diffManager = new LatexDiffManager(
-    setting,
+    setting.isRewrite,
     () => getOutputFilesByRound(outputState),
-    baseFiles,
     logger,
     streamId,
     fileService,
   );
 
-  const promptBuilder = new PromptBuilder(
-    prompt,
-    userVarChannels.transient,
-    logger,
-  );
+  const promptBuilder = new PromptBuilder(prompt, userVarChannels, logger);
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
@@ -148,17 +175,9 @@ export async function runReflectionFlow<C = unknown>(
       workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
     ) as AgentFileLocation;
 
-  const workflowOutputPolicy: WorkflowOutputPolicy = {
-    shouldAutoOpenPdfOrLog: () =>
-      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-    shouldRejectOnCompileFailure: () =>
-      readPlatformSetting<boolean>(
-        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-      ),
-  };
-
-  const services: ReflectionServices<C> = {
+  const services: ReflectionServices = {
     ...input,
+    setting: resolvedSetting,
     outputState,
     xmlManager,
     diffManager,
@@ -166,12 +185,26 @@ export async function runReflectionFlow<C = unknown>(
     promptBuilder,
     fileService,
     getOutputFileLocation,
-    workflowOutputPolicy,
     baseFiles,
   };
 
   // Kick off run-workspace preparation (awaited lazily by extractFilesFromXml).
-  setActiveRun(outputState, services, storageKey);
+  // Handle failure here too: a response can fail or be cancelled before output
+  // extraction reaches the promise, and leaving it rejected would both hide the
+  // filesystem failure and trigger an unhandled rejection.
+  outputState.runPreparation = fileService
+    .prepareRunWorkspace(baseFiles, {
+      linkFiles: collectRunSupportFiles(services.config),
+    })
+    .catch((error) => {
+      logger.warn(
+        `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
+        {
+          data: error,
+          messageType: MESSAGE_TYPES.INTERNAL,
+        },
+      );
+    });
 
   const kv = getExecutionStore(executionId);
 
@@ -211,7 +244,6 @@ export async function runReflectionFlow<C = unknown>(
       workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
       context: null,
       outputLocation: null,
-      conversation: [],
       modelHandlerCompatibilityKey: compatibilityKey,
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       roundOutputs: [],
@@ -223,56 +255,38 @@ export async function runReflectionFlow<C = unknown>(
   // Hydrate the canonical live collection from the persisted round snapshot.
   outputState.rounds = roundsFromPersisted(shared.roundOutputs);
 
-  const prepContextNode = new PrepareContextNode<C>();
-  const texCountNode = new TeXCountNode<C>();
-  const mediaNode = new MediaExtractionNode<C>();
-  const responseCycleNode = new ResponseCycleNode<C>();
-  const outputNode = new OutputNode<C>();
+  const prepContextNode = new PrepareContextNode();
+  const texCountNode = new TeXCountNode();
+  const mediaNode = new MediaExtractionNode();
+  const responseCycleNode = new ResponseCycleNode();
+  const outputNode = new OutputNode();
 
   prepContextNode.next(texCountNode);
   texCountNode.next(mediaNode);
   mediaNode.next(responseCycleNode);
   responseCycleNode.next(outputNode);
 
-  const pf = new RoundPersistedFlow<
-    ReflectionFlowShared,
-    ReflectionServices<C>
-  >(prepContextNode, kv, {
-    parentStage,
-    sharedSchema: ReflectionFlowStateSchema,
-    callbacks: {
-      createRoundStage: (roundIndex, parent, shared) =>
-        logger.openStage(`r${roundIndex}`, {
-          parent: parent ?? undefined,
-          kind: 'round',
-          index: roundIndex,
-          total: computeRoundStageTotal(shared.totalRounds, roundIndex),
-        }),
-      resetForNextRound: (s) => {
-        s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
-      },
-      signal: runScope.signal,
-      // Bounded compile-repair round (#7077): a compile failure on what
-      // would otherwise be the final round gets exactly one extra round
-      // so the model sees the failure context via PrepareContextNode
-      // instead of the run silently ending on a broken output. Gated on
-      // the same setting that produced compileFailureContext in the
-      // first place, and on the one-shot `compileRepairRoundGranted`
-      // flag so a repair round that itself fails to compile doesn't
-      // chain a second one — even across resume.
-      grantExtraRound: (s) => {
-        if (
-          !s.compileFailureContext ||
-          s.compileRepairRoundGranted ||
-          !workflowOutputPolicy.shouldRejectOnCompileFailure()
-        ) {
-          return false;
-        }
-        s.compileRepairRoundGranted = true;
-        return true;
+  const pf = new RoundPersistedFlow<ReflectionFlowShared, ReflectionServices>(
+    prepContextNode,
+    kv,
+    {
+      parentStage,
+      sharedSchema: ReflectionFlowStateSchema,
+      callbacks: {
+        createRoundStage: (roundIndex, parent, shared) =>
+          logger.openStage(`r${roundIndex}`, {
+            parent: parent ?? undefined,
+            kind: 'round',
+            index: roundIndex,
+            total: shared.totalRounds,
+          }),
+        resetForNextRound: (s) => {
+          s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
+        },
+        signal: runScope.signal,
       },
     },
-  });
+  );
 
   pf.setServices(services);
 

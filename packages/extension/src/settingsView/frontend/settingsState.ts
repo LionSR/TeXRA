@@ -29,6 +29,7 @@ import {
   AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
   byCategory,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEFAULT_GLOBAL_STREAMING,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -58,6 +59,8 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
+  type SkillDisplayIssue,
+  type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
 } from '@shared/schemas';
@@ -149,8 +152,9 @@ export const selectedPanel = trackedSignal<SettingsTabPanelName>(
 // Memory state
 // ---------------------------------------------------------------------------
 export const memoryItems = trackedSignal<MemoryViewItem[]>(() => []);
-export const memoryEnabled = trackedSignal(() => false);
-export const memoryToggleDisabled = trackedSignal(() => true);
+export const memoryEnabled = settingSignal<boolean>(
+  GlobalStateKey.MEMORY_ENABLED,
+);
 
 // ---------------------------------------------------------------------------
 // Profile state
@@ -196,12 +200,17 @@ export const agentSubTab = trackedSignal<AgentCategory | undefined>(
 // ---------------------------------------------------------------------------
 export const customPresets = trackedSignal<AgentModePreset[]>(() => []);
 export const orchestratorAgents = trackedSignal<string[]>(() => []);
+/** Team the workspace roster resolves to; null when the roster runs no team. */
+export const activePresetId = trackedSignal<string | null>(() => null);
 
 // ---------------------------------------------------------------------------
 // Multi-agent coordination state
 // ---------------------------------------------------------------------------
 export const compactionThresholdPercent = settingSignal<number>(
   MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+);
+export const chatgptCodexContextWindow = settingSignal<number>(
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
 );
 export const modelRetryMaxAttempts = settingSignal<number>(
   MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
@@ -242,6 +251,14 @@ export const toolPathProtectionEnabled = settingSignal<boolean>(
 export const agentSkillsEnabled = settingSignal<boolean>(
   AGENT_SKILLS_CONFIG_KEY,
 );
+export const disabledSkills = settingSignal<string[]>(
+  WorkspaceStateKey.DISABLED_SKILLS,
+);
+export const disabledSkillSources = settingSignal<string[]>(
+  WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+);
+export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
+export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);
 export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);
 export const codexSandboxMode = settingSignal<CodexSandboxMode>(
   WorkspaceStateKey.CODEX_SANDBOX_MODE,
@@ -310,7 +327,6 @@ export const latexSettingsStatus = trackedSignal(() => ({
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
 export const latexConfigValues = trackedSignal<LatexConfigValues>(() => ({}));
-export const latexConfigValuesLoaded = trackedSignal(() => false);
 export const inlineCriticismEnabled = trackedSignal(() => false);
 
 // ---------------------------------------------------------------------------

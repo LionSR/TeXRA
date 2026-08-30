@@ -57,7 +57,7 @@ export function registerFileDecorations(
     events,
     ({ filesByRound }) => {
       // Only mark the primary output location. Lineage entries (original,
-      // diffBase, diffFile) are reference points; marking them would badge the
+      // diffBase) are reference points; marking them would badge the
       // source file as "Modified by TeXRA" before the user has actually
       // accepted the workflow output.
       const paths = new Set<string>();

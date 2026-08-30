@@ -73,7 +73,6 @@ describe('output summary transforms', () => {
             'snapshots/main.tex',
             '/run/r1/original/main.tex',
           ),
-          diffFile: null,
         },
         diff: { added: 7, removed: 3 },
       }),

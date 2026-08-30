@@ -2,11 +2,7 @@ import { logUserMessage, type AgentTrace } from '@agent/trace';
 import type { IModelHandler } from '@agent/types/IModelHandler';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
-import {
-  countMediaFilesNeedingVision,
-  formatMediaNeedsVisionWarning,
-  shouldWarnMediaNeedsVision,
-} from '@agent/runtime/mediaVisionWarning';
+import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   deliveryTagOf,
@@ -21,10 +17,10 @@ import type {
 import type { TaskRunFileService } from '@utils/files/taskRunStorage';
 import type { FollowUpQueueBatchItem } from './FollowUpQueue';
 
-interface FollowUpMessageServices<C> {
+interface FollowUpMessageServices {
   readonly modelCell: {
     readonly handler: Pick<
-      IModelHandler<ProviderMessage, unknown, SdkToolCall, C>,
+      IModelHandler<ProviderMessage, unknown, SdkToolCall>,
       'addMediaToUserMessage' | 'capabilities' | 'createUserFollowUpMessages'
     >;
   };
@@ -75,15 +71,15 @@ export function userFollowUpInstruction(
   return instruction || undefined;
 }
 
-export interface AppendFollowUpResult {
+interface AppendFollowUpResult {
   readonly messages: ProviderMessage[];
   readonly attachmentKinds: MediaAttachmentKind[];
 }
 
-export async function appendFollowUpAsUserMessage<C>(
+export async function appendFollowUpAsUserMessage(
   messages: ProviderMessage[],
   followUp: FollowUpQueueBatchItem,
-  services: FollowUpMessageServices<C>,
+  services: FollowUpMessageServices,
 ): Promise<AppendFollowUpResult> {
   const nextMessages =
     await services.modelCell.handler.createUserFollowUpMessages(
@@ -95,17 +91,12 @@ export async function appendFollowUpAsUserMessage<C>(
     return { messages: nextMessages, attachmentKinds: [] };
   }
 
-  if (
-    shouldWarnMediaNeedsVision(
-      followUp.mediaFiles,
-      services.modelCell.handler.capabilities,
-    )
-  ) {
-    const visionMediaCount = countMediaFilesNeedingVision(followUp.mediaFiles);
-    services.logger.warn(
-      formatMediaNeedsVisionWarning(visionMediaCount, 'pasted'),
-    );
-  }
+  const visionWarning = mediaNeedsVisionWarning(
+    followUp.mediaFiles,
+    services.modelCell.handler.capabilities,
+    'pasted',
+  );
+  if (visionWarning) services.logger.warn(visionWarning);
 
   const attachmentKinds =
     await services.modelCell.handler.addMediaToUserMessage(
@@ -115,8 +106,8 @@ export async function appendFollowUpAsUserMessage<C>(
   return { messages: nextMessages, attachmentKinds };
 }
 
-interface FollowUpBatchServices<C> extends Omit<
-  FollowUpMessageServices<C>,
+interface FollowUpBatchServices extends Omit<
+  FollowUpMessageServices,
   'logger'
 > {
   readonly logger: AgentTrace;
@@ -140,11 +131,11 @@ interface FollowUpBatchServices<C> extends Omit<
  * the resume wrapper restores it for replay instead of treating the lost input
  * as consumed.
  */
-export async function applyFollowUpBatch<C>(
+export async function applyFollowUpBatch(
   target: { messages: ProviderMessage[] },
   followUps: readonly FollowUpQueueBatchItem[],
   synthetic: boolean | undefined,
-  services: FollowUpBatchServices<C>,
+  services: FollowUpBatchServices,
 ): Promise<void> {
   for (const followUp of followUps) {
     let result: AppendFollowUpResult | undefined;

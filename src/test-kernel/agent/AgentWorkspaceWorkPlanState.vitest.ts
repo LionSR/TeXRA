@@ -44,16 +44,15 @@ describe('agent workspace file-interaction state', () => {
       { path: 'notes.md', added: 2, removed: 5 },
     ]);
 
-    const rehydrated = AgentWorkspaceState.fromCanonicalSnapshot(snapshot);
+    const rehydrated = AgentWorkspaceState.fromSnapshot(snapshot);
     expect(rehydrated.interactions.editedFilePaths).toEqual([
       'paper.tex',
       'notes.md',
     ]);
 
-    const merged = rehydrated.interactions.recordEdits([
+    rehydrated.interactions.recordEdits([
       { path: 'paper.tex', lineChanges: { added: 1, removed: 0 } },
     ]);
-    expect(merged.lineChanges).toEqual({ added: 1, removed: 0 });
     expect(rehydrated.interactions.toSnapshot().edits).toEqual([
       { path: 'paper.tex', added: 4, removed: 1 },
       { path: 'notes.md', added: 2, removed: 5 },

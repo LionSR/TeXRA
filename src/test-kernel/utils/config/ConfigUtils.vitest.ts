@@ -3,11 +3,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import * as logger from '@logger/logUtils';
+import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
-import { getValidatedConfig } from '@utils/config/configUtils';
+import { getConfig, getValidatedConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getProviderKeyUrl,
@@ -30,6 +31,23 @@ const SETTING_PATH = 'agentReview.approach';
 function readApproach(): 'quick' | 'thorough' {
   return getValidatedConfig(SETTING_PATH, APPROACH_SCHEMA, 'quick');
 }
+
+describe('getConfig', () => {
+  it('resolves catalog defaults for caller-supplied config providers', async () => {
+    const callerDefaultConfig: ConfigProvider = {
+      get<T>(_key: string, defaultValue?: T): T {
+        return defaultValue as T;
+      },
+      async update<T>(_key: string, _value: T): Promise<void> {},
+      inspect: () => undefined,
+      isExplicitlySet: () => false,
+    };
+    await installPlatform({}, { config: callerDefaultConfig });
+
+    expect(getConfig<boolean>('texra.model.useOpenAIResponsesAPI')).toBe(true);
+    expect(getConfig('not.a.catalog.key', 'fallback')).toBe('fallback');
+  });
+});
 
 describe('getValidatedConfig', () => {
   it('returns the stored value when it matches the schema', async () => {

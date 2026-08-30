@@ -517,14 +517,6 @@ export const instructionPanelStyles: CSSResult = css`
     }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .session-hint,
-    .launcher-picker-pane,
-    :host([desktop-host]) .instruction-box {
-      transition: none;
-    }
-  }
-
   .recording {
     color: var(--wa-color-danger-on-quiet);
     animation: pulse-record 1.2s ease-in-out infinite;

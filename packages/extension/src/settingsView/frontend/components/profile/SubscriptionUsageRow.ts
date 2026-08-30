@@ -73,7 +73,7 @@ export class SubscriptionUsageRow extends LitElement {
       progress {
         width: 100%;
         height: 0.45rem;
-        accent-color: var(--vscode-progressBar-background);
+        accent-color: var(--wa-color-progress-bg);
       }
 
       .usage-window,
@@ -87,7 +87,7 @@ export class SubscriptionUsageRow extends LitElement {
 
       .usage-updated,
       .usage-unavailable-detail {
-        color: var(--vscode-descriptionForeground);
+        color: var(--color-text-secondary);
         font-size: var(--wa-font-size-xs, 0.75rem);
       }
     `,

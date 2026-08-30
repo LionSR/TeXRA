@@ -57,6 +57,8 @@ import {
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
+  resumeWorkflowOutputDirectory,
+  resumeWorkflowOutputFile,
 } from '../runtime/workflowOutput';
 
 const MULTI_INPUT_OUTPUT_MESSAGE =
@@ -110,7 +112,7 @@ export async function runWorkflowAgent(
     init.contextFiles,
     context.cwd,
     { readStdinText: readCliStdinText },
-    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
+    async ({ inputFiles, contextFiles, stdinInputPath }) => {
       if (init.output && inputFiles.length > 1) {
         throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
       }
@@ -118,24 +120,35 @@ export async function runWorkflowAgent(
       const model = await selectCliRunModel(context, init.model, 'run');
       const runContext = buildHeadlessRunContext(context);
       const expectedOutputFiles = init.outputDir
-        ? expectedOutputFilesForOutputDir(agent, inputFiles)
+        ? expectedOutputFilesForOutputDir(agent, inputFiles, stdinInputPath)
         : undefined;
+      // Persist CLI destinations absolutely so resumption has one path
+      // representation and never reconstructs output locations.
+      const cliOutputFile = absoluteOutputDestination(
+        init.output,
+        runContext.cwd,
+      );
+      const cliOutputDirectory = absoluteOutputDestination(
+        init.outputDir,
+        runContext.cwd,
+      );
       const config: AgentConfigPayload = {
         agent: init.agent,
         model,
         inputFiles,
         contextFiles,
         outputFiles: [],
-        // Persist CLI destinations absolutely so resumption has one path
-        // representation and never reconstructs output locations.
-        cliOutputFile: absoluteOutputDestination(init.output, runContext.cwd),
-        cliOutputDirectory: absoluteOutputDestination(
-          init.outputDir,
-          runContext.cwd,
-        ),
-        cliExpectedOutputFiles: expectedOutputFiles
-          ? [...expectedOutputFiles]
-          : undefined,
+        ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
+          ? {
+              cli: {
+                outputFile: cliOutputFile,
+                outputDirectory: cliOutputDirectory,
+                expectedOutputFiles: expectedOutputFiles
+                  ? [...expectedOutputFiles]
+                  : undefined,
+              },
+            }
+          : {}),
         instruction,
         workingDirectory: runContext.cwd,
         agentCategory: AgentCategory.Workflow,
@@ -143,10 +156,7 @@ export async function runWorkflowAgent(
 
       return executeCliWorkflowConfig(config, runContext, {
         categoryMismatchMessage: `Agent "${init.agent}" resolved to a non workflow run.`,
-        output: init.output,
-        outputDir: init.outputDir,
-        expectedOutputFiles,
-        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
+        recoveryInputIsDurable: stdinInputPath === undefined,
       });
     },
   );
@@ -165,9 +175,6 @@ export async function executeCliWorkflowConfig(
   runContext: CliContext,
   options: {
     readonly categoryMismatchMessage: string;
-    readonly output?: string;
-    readonly outputDir?: string;
-    readonly expectedOutputFiles?: readonly string[];
     readonly recoveryInputIsDurable?: boolean;
     readonly executionId?: ExecutionId;
     readonly modelHandlerCompatibilityKey?: CliConfigExecuteOptions['modelHandlerCompatibilityKey'];
@@ -176,10 +183,15 @@ export async function executeCliWorkflowConfig(
   let workflowResult: CliWorkflowRunResult | undefined;
   let workflowOutputError: unknown;
   let resumeHintWritten = false;
+  // The persisted `cli` block is the single representation of where this run
+  // writes; never take the destinations a second time as call options.
+  const output = resumeWorkflowOutputFile(config);
+  const outputDir = resumeWorkflowOutputDirectory(config);
+  const expectedOutputFiles = config.cli?.expectedOutputFiles ?? undefined;
   const recoveryProcessCwd = tryReadCliCwd();
   const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
   const canAdvertiseInterruptedExecution = (
-    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+    resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
   ): boolean => {
     const shared = resumability.flowRecord.shared;
     const lastError =
@@ -208,7 +220,7 @@ export async function executeCliWorkflowConfig(
     if (!execution.ok || !execution.outcomePersisted) return;
     const resumability = await deriveResumability(executionId);
     if (
-      resumability.resumable &&
+      resumability.kind === 'checkpoint' &&
       canAdvertiseInterruptedExecution(resumability)
     ) {
       writeResumeHint(executionId);
@@ -227,14 +239,11 @@ export async function executeCliWorkflowConfig(
     openWorkflowOutput: async (result, tryCommitPublication) => {
       try {
         workflowResult = await resolveWorkflowOutput(
-          options.output,
-          options.outputDir,
+          output,
+          outputDir,
           result,
           runContext,
-          {
-            expectedOutputFiles: options.expectedOutputFiles,
-            tryCommitPublication,
-          },
+          { expectedOutputFiles, tryCommitPublication },
         );
       } catch (error) {
         workflowOutputError = error;

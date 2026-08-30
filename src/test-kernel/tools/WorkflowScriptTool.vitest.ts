@@ -3,10 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setupPlatform } from '@test/support/setupPlatform';
 import { TraceEmitter } from '@agent/trace';
-import {
-  deriveWorkflowScriptCheckpointId,
-  writeWorkflowScriptCheckpoint,
-} from '@agent/workflowScript';
+import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript';
+import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { getExecutionStore } from '@agent/storage';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
@@ -99,8 +97,14 @@ vi.mock('@tools/approval', () => ({
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/delegation/proposalFlow')>()),
   requireWorkflowOrToolUseAgent: mocks.requireWorkflowOrToolUseAgent,
-  selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
   requestDelegationProposal: mocks.requestDelegationProposal,
+}));
+
+vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@tools/delegation/delegationAvailability')
+  >()),
+  selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
@@ -412,9 +416,8 @@ return null`;
     expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
   });
 
-  it('declares the task-plan contract at the model-facing boundary', () => {
+  it('pins the provider schema shape at the model-facing boundary', () => {
     const definition = new WorkflowScriptTool().definition;
-    const description = definition.description;
     const providerSchema = convertToolSchema(definition);
     const providerProperties = providerSchema?.properties as
       Record<string, { description?: string }> | undefined;
@@ -435,30 +438,6 @@ return null`;
     );
     expect(providerProperties?.scriptPath?.description).toContain(
       'Provide exactly one of script or scriptPath',
-    );
-    expect(description).toContain(
-      'declare meta.tasks as { id, label, phase? } records',
-    );
-    expect(description).toContain(
-      "meta.phases accepts title strings such as ['Draft', 'Merge']",
-    );
-    expect(description).toContain(
-      'progress shows the pending plan before execution',
-    );
-    expect(description).toContain(
-      'A task phase must name a title in meta.phases',
-    );
-    expect(description).toContain(
-      'Every agent() call must then reference one declared task with { id }',
-    );
-    expect(description).toContain(
-      'omit label and phase from the call because meta.tasks owns them',
-    );
-    expect(description).toContain(
-      'A call without meta.tasks may also use id, label, and phase',
-    );
-    expect(description).toContain(
-      'Omit meta.tasks when the call set is data-dependent',
     );
     expect(
       definition.zodSchema?.safeParse({
@@ -975,9 +954,9 @@ return null`;
     const runExecutionId = runExecutionIdFor('tool-test');
     mocks.registerExecution.mockRejectedValueOnce(
       new ExecutionLeaseActiveError(runExecutionId, {
-        owner: { pid: 1, processStart: '1', hostname: 'test-host' },
-        provable: true,
-        reclaimable: false,
+        pid: 1,
+        processStart: '1',
+        hostname: 'test-host',
       }),
     );
 

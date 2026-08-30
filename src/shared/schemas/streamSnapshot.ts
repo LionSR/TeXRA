@@ -129,13 +129,6 @@ export const StreamSnapshotSchema = SharedBackendOwnedFieldsSchema.extend({
   // -- Pointers (resume / lookup) -------------------------------------------
   executionId: ExecutionIdSchema.optional(),
   parentStreamId: StreamTabIdSchema.optional(),
-  /**
-   * Legacy sidecar mirror only (#9590 Stage 6): current records carry their
-   * description on `ExecutionMeta.description` (A4), which display readers use
-   * — e.g. the trace viewer reads `trace.meta.description`. Populated here
-   * only from a legacy sidecar that still holds the retired mirror field.
-   */
-  description: z.string().optional(),
 
   // -- Log-derived (recomputed from the StreamLog on load) ------------------
   status: z

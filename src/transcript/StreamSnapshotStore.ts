@@ -18,7 +18,6 @@
 
 import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
-import PQueue from 'p-queue';
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
@@ -27,11 +26,11 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
-import { KVStoreCache } from '@common/storage/KVStoreCache';
 import { createLog } from '@logger/logUtils';
 import {
   CompileFailureSchema,
   cloneRoundIndexed,
+  EMPTY_ROUND_INDEXED,
   emptyUsageStats,
   isEmptyUsage,
   OutputFileInfoListSchema,
@@ -48,8 +47,8 @@ import {
   type OutputFileInfo,
   type RunIdentity,
   type Plan,
+  type ReadonlyRoundIndexed,
   type RoundIndexed,
-  type StorageKey,
   type StreamSnapshot,
   type StreamTabId,
   type StreamTabMeta,
@@ -61,6 +60,7 @@ import {
 } from '@shared/schemas';
 
 import { mapToRecord, throwAggregated } from '@utils/core';
+import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -82,14 +82,16 @@ import {
   EMPTY_WORK_PLAN,
   emptyStreamData,
   readMeta,
-  readMetaForOwnership,
   readStreamData,
-  readUsageData,
   type StreamData,
 } from './streamSnapshotRead';
+import type PQueue from 'p-queue';
 import type { StreamSummaryMeta } from './StreamLogStore';
 
 const log = createLog('StreamSnapshotStore');
+
+/** Shared empty view for a stream with no per-run usage recorded yet. */
+const EMPTY_RUN_USAGE: ReadonlyMap<string, TokenUsageStats> = new Map();
 
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
@@ -98,6 +100,31 @@ const SEED_IO_CONCURRENCY = 8;
 const MAX_DIRTY_WRITE_RETRIES = 3;
 
 class DirtySidecarWritesError extends Error {}
+
+/** Artifact state whose in-memory values remain authoritative after preload fails. */
+export interface StreamArtifactAuthority {
+  /**
+   * The whole in-memory record is authoritative: a prior seed or an existence
+   * probe already established this stream's disk baseline, so every
+   * accumulator holds the complete field value and not just a delta.
+   */
+  readonly complete: boolean;
+  readonly todos: boolean;
+  readonly plan: boolean;
+}
+
+/** A failed preload together with the in-memory fields that remain usable. */
+export class StreamSnapshotPreloadError extends Error {
+  override readonly name = 'StreamSnapshotPreloadError';
+
+  constructor(
+    cause: unknown,
+    readonly streamId: StreamTabId,
+    readonly authoritativeFields: StreamArtifactAuthority,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+  }
+}
 
 /**
  * The run facts this store subscribes to, and the single source of truth for
@@ -179,18 +206,50 @@ function mergeRoundPatch<T>(
   return merged;
 }
 
-/**
- * Overlay shape for {@link StreamSnapshotStore.updateMissingOutputs} /
- * {@link StreamSnapshotStore.clearMissingOutputs} on an unseeded stream:
- * `reset` records that a `clearMissingOutputs()` happened somewhere in the
- * recorded sequence, so replay wipes the disk-read state before layering
- * `patch` on top, instead of merging onto stale disk rounds a clear was
- * supposed to erase.
- */
-interface RoundOverlay<T> {
-  reset: boolean;
-  patch: Map<number, T[] | null>;
+/** Element type per round-keyed accumulator field; keys define {@link RoundKeyedField}. */
+interface RoundFieldElement {
+  outputFiles: OutputFileInfo;
+  missingOutputs: string;
+  compileFailures: CompileFailure;
 }
+type RoundKeyedField = keyof RoundFieldElement;
+
+/**
+ * Wire→domain normalizer per round-keyed field, applied to each round's raw
+ * value by {@link StreamSnapshotStore.applyRoundFieldFact}. Returning `null`
+ * deletes the round's entry; `missingOutputs` deliberately keeps `[]` so an
+ * empty list overwrites the round (clearing its missing set) rather than
+ * deleting it.
+ */
+const ROUND_FIELD_NORMALIZERS: {
+  [K in RoundKeyedField]: (raw: unknown) => RoundFieldElement[K][] | null;
+} = {
+  outputFiles: (raw) => {
+    const normalized = OutputFileInfoListSchema.parse(
+      Array.isArray(raw) ? raw : [],
+    );
+    return normalized.length === 0 ? null : normalized;
+  },
+  missingOutputs: (raw) =>
+    z.array(z.string()).parse(Array.isArray(raw) ? raw : []),
+  compileFailures: (raw) => {
+    const normalized = CompileFailureSchema.array().parse(
+      Array.isArray(raw) ? raw : [],
+    );
+    return normalized.length === 0 ? null : normalized;
+  },
+};
+
+/** Record accessor per round-keyed field, typed so a generic caller keeps the element type. */
+const ROUND_FIELD_OF: {
+  [K in RoundKeyedField]: (
+    record: StreamRecord,
+  ) => RoundIndexed<RoundFieldElement[K]>;
+} = {
+  outputFiles: (record) => record.outputFiles,
+  missingOutputs: (record) => record.missingOutputs,
+  compileFailures: (record) => record.compileFailures,
+};
 
 /** Partial work-plan fields recorded while a stream is unseeded. */
 interface WorkPlanOverlay {
@@ -206,9 +265,9 @@ interface WorkPlanOverlay {
  */
 interface OverlayPatches {
   outputFiles: OutputFilesPatch;
-  missingOutputs: RoundOverlay<string>;
+  missingOutputs: Map<number, string[] | null>;
   compileFailures: Map<number, CompileFailure[] | null>;
-  usage: Map<StorageKey, TokenUsageStats>;
+  usage: Map<ExecutionId, TokenUsageStats>;
   workPlan: WorkPlanOverlay;
 }
 
@@ -231,6 +290,25 @@ const OVERLAY_TO_SIDECAR_KEY = {
 type OverlaySidecarKey =
   (typeof OVERLAY_TO_SIDECAR_KEY)[keyof typeof OVERLAY_TO_SIDECAR_KEY];
 
+/**
+ * Apply one pending overlay patch, mark its sidecar for the merged write, and
+ * clear it. Factors out the check/apply/track/clear shape every
+ * {@link OverlayPatches} field replays through in `applyStreamData`; each
+ * field's own apply logic stays with its caller.
+ */
+function consumeOverlay<K extends keyof OverlayPatches>(
+  overlays: Partial<OverlayPatches>,
+  key: K,
+  sidecarsToWrite: Set<OverlaySidecarKey>,
+  apply: (patch: OverlayPatches[K]) => void,
+): void {
+  const patch = overlays[key];
+  if (patch === undefined) return;
+  apply(patch);
+  sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY[key]);
+  overlays[key] = undefined;
+}
+
 /** Later unseeded todos/plan patches win per field. */
 function mergeWorkPlanOverlay(
   existing: WorkPlanOverlay | undefined,
@@ -240,36 +318,16 @@ function mergeWorkPlanOverlay(
 }
 
 /**
- * Merge {@link RoundOverlay} patches in call order so `clearMissingOutputs`
- * interleaved with `updateMissingOutputs` on the same unseeded stream
- * replays correctly regardless of which fired first: a reset (`clear`)
- * supersedes everything recorded before it — it drops the earlier round
- * patch outright, matching a disk write of `{}` — while a later update
- * layers its round patch on top and preserves whichever reset flag is
- * already recorded.
- */
-function mergeMissingOutputsOverlay(
-  existing: RoundOverlay<string> | undefined,
-  patch: RoundOverlay<string>,
-): RoundOverlay<string> {
-  if (patch.reset) return patch;
-  return {
-    reset: existing?.reset ?? false,
-    patch: mergeRoundPatch(existing?.patch, patch.patch),
-  };
-}
-
-/**
  * Merge a per-run usage delta patch into an existing overlay patch,
  * accumulating (not replacing) each run's totals — mirrors the in-memory
  * sum `applyUsageDeltaMemory` performs, so the overlay replayed after
  * seeding matches what was already applied eagerly.
  */
 function mergeUsagePatch(
-  existing: Map<StorageKey, TokenUsageStats> | undefined,
-  patch: Map<StorageKey, TokenUsageStats>,
-): Map<StorageKey, TokenUsageStats> {
-  const merged = existing ?? new Map<StorageKey, TokenUsageStats>();
+  existing: Map<ExecutionId, TokenUsageStats> | undefined,
+  patch: Map<ExecutionId, TokenUsageStats>,
+): Map<ExecutionId, TokenUsageStats> {
+  const merged = existing ?? new Map<ExecutionId, TokenUsageStats>();
   for (const [storageKey, delta] of patch) {
     merged.set(
       storageKey,
@@ -290,6 +348,22 @@ function mergeUsagePatch(
  * without a disk read. Never inferred from any global fact (#9956).
  */
 type DiskState = 'unknown' | 'verified-absent' | 'loaded';
+
+function artifactAuthorityAfterPreloadFailure(
+  baseline: DiskState,
+  overlays: Partial<OverlayPatches>,
+): StreamArtifactAuthority {
+  // Without an established baseline the output-file / missing-output /
+  // compile-failure / usage overlays are deltas over an unread disk state, so
+  // they establish nothing. Plan and todos are replacements, so a live overlay
+  // for either is authoritative on its own.
+  const complete = baseline !== 'unknown';
+  return {
+    complete,
+    todos: complete || overlays.workPlan?.todos !== undefined,
+    plan: complete || overlays.workPlan?.plan !== undefined,
+  };
+}
 
 /**
  * Every per-stream field this store tracks, keyed by stream id in ONE map
@@ -318,8 +392,6 @@ interface StreamRecord {
    * lossy read permanently deleting them on the next save (#7464).
    */
   usageUnparsed: Map<string, unknown>;
-  /** Usage was hydrated by a usage-only seed; `getRunUsage` needs no warning. */
-  usageProvenance: boolean;
   workPlan: WorkPlanSnapshot;
   meta: StreamTabMeta | undefined;
   /**
@@ -386,7 +458,6 @@ export class StreamSnapshotStore {
     compileFailures: {},
     usage: new Map(),
     usageUnparsed: new Map(),
-    usageProvenance: false,
     workPlan: EMPTY_WORK_PLAN,
     meta: undefined,
     runExecutionId: undefined,
@@ -403,29 +474,16 @@ export class StreamSnapshotStore {
     overlays: {},
   }));
   /**
-   * Lazily-created per-stream handles over `streamDataDir(streamId)`. A
-   * handle is a stateless wrapper, so dropping one is lossless:
-   * `evict()`/`evictAll()` drop handles alongside the records, and
-   * {@link invalidateKvHandles} forces re-resolution after a stream's
-   * directory may have moved (staged-deletion rollback, storage-root
-   * refresh).
-   */
-  private readonly kvHandles = new KVStoreCache<StreamTabId>(
-    (streamId) => new KVStore(streamDataDir(streamId)),
-  );
-  /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
-   * behind that rename; this store keeps the records, KV handles, write
-   * mutexes, and stream versions it reaches back for through
-   * {@link StagedDeletionHost}.
+   * behind that rename; this store keeps the records, write mutexes, and
+   * stream versions it reaches back for through {@link StagedDeletionHost}.
    */
   private readonly deletions = new StagedDeletionCoordinator({
     queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
     cancelPendingWrites: (stream) => this.cancelPendingWritesForStream(stream),
     bumpStreamVersion: (stream) => this.records.bumpVersion(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
-    invalidateKvHandles: (stream) => this.invalidateKvHandles(stream),
     evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
 
@@ -439,17 +497,12 @@ export class StreamSnapshotStore {
    * mutations queued behind them — the same `PQueue({ concurrency: 1 })`-
    * per-key precedent as `streamApprovalQueue.ts`. Each queued unit of work
    * still publishes its promise onto `record.seedChain` for the readers that
-   * await it (`awaitSeeded`, `seedUsageOnly`, `flush`, staged deletion).
+   * await it (`awaitSeeded`, `flush`, staged deletion).
    */
   private readonly seedQueues = new Map<StreamTabId, PQueue>();
 
   private seedQueueFor(stream: StreamTabId): PQueue {
-    let queue = this.seedQueues.get(stream);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      this.seedQueues.set(stream, queue);
-    }
-    return queue;
+    return getOrCreatePQueue(this.seedQueues, stream);
   }
 
   /**
@@ -537,15 +590,10 @@ export class StreamSnapshotStore {
   }
 
   private kv(streamId: StreamTabId): KVStore {
-    // Record creation on read-only access stays deliberate (see
-    // clearMissingOutputs): hasDiskProvenance() keys off record presence.
-    this.getOrCreateRecord(streamId);
-    return this.kvHandles.get(streamId);
-  }
-
-  /** Drop the cached KV handle so the next access re-resolves against the stream's current directory. */
-  private invalidateKvHandles(stream: StreamTabId): void {
-    this.kvHandles.invalidate(stream);
+    // A handle holds only the storage-root-relative directory and every
+    // operation re-resolves the root, so constructing one per access is
+    // equivalent to caching it and never goes stale.
+    return new KVStore(streamDataDir(streamId));
   }
 
   private async listStreamsUnder(root: string): Promise<StreamTabId[]> {
@@ -635,13 +683,25 @@ export class StreamSnapshotStore {
             this.setPlan(event.streamId, event.plan);
             return;
           case 'addOutputFiles':
-            this.addOutputFiles(event.streamId, event.filesByRound);
+            this.applyRoundFieldFact(
+              event.streamId,
+              'outputFiles',
+              event.filesByRound,
+            );
             return;
           case 'updateMissingOutputs':
-            this.updateMissingOutputs(event.streamId, event.filesByRound);
+            this.applyRoundFieldFact(
+              event.streamId,
+              'missingOutputs',
+              event.filesByRound,
+            );
             return;
           case 'updateCompileFailures':
-            this.updateCompileFailures(event.streamId, event.filesByRound);
+            this.applyRoundFieldFact(
+              event.streamId,
+              'compileFailures',
+              event.filesByRound,
+            );
             return;
           default: {
             // Exhaustiveness check: adding a type to `SNAPSHOT_RUN_FACT_TYPES`
@@ -657,11 +717,6 @@ export class StreamSnapshotStore {
       (sessionEvent) => {
         if (sessionEvent.scope !== 'session') return;
         switch (sessionEvent.event.type) {
-          case 'clearMissingOutputs':
-            // Exactly addressed (#9590 rule A3): the payload carries the
-            // initiator-selected streamId; there is no config fan-out.
-            this.clearMissingOutputs(sessionEvent.event.payload.streamId);
-            return;
           case 'updateStreamDescription':
             this.setDescription(
               sessionEvent.event.payload.streamId,
@@ -782,25 +837,6 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   /**
-   * Shared round→value patch parsing for the round-keyed accumulators
-   * (output files, missing outputs, compile failures). `normalize` returns
-   * `null` to delete a round's entry (e.g. once its failure list empties
-   * out) or the value list to store otherwise.
-   */
-  private parseRoundPatch<T>(
-    filesByRound: Record<string, unknown>,
-    normalize: (raw: unknown) => T[] | null,
-  ): Map<number, T[] | null> {
-    const patch = new Map<number, T[] | null>();
-    for (const [round, raw] of Object.entries(filesByRound)) {
-      const key = RoundKeySchema.safeParse(round);
-      if (!key.success) continue;
-      patch.set(key.data, normalize(raw));
-    }
-    return patch;
-  }
-
-  /**
    * Apply a parsed round-keyed patch to one round-keyed field of a stream's
    * record. `field` selects which field (output files / missing outputs /
    * compile failures) — always present on the record (defaulted at
@@ -822,29 +858,22 @@ export class StreamSnapshotStore {
     return rounds;
   }
 
-  // Shallow copies: each write is queued, so snapshot the record at call time
-  // rather than letting later round mutations leak into a pending write.
-  private writeOutputFiles(stream: StreamTabId): void {
-    this.write(stream, STREAM_DATA_KEYS.OUTPUT_FILES, {
-      ...this.records.get(stream)?.outputFiles,
-    });
-  }
-
-  private writeMissingOutputs(stream: StreamTabId): void {
-    this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {
-      ...this.records.get(stream)?.missingOutputs,
-    });
-  }
-
-  private writeCompileFailures(stream: StreamTabId): void {
-    this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, {
-      ...this.records.get(stream)?.compileFailures,
+  // Shallow copy: each write is queued, so the record is snapshotted at call
+  // time rather than letting later round mutations leak into a pending write.
+  // The sidecar key is derived from OVERLAY_TO_SIDECAR_KEY rather than taken
+  // as a separate param, so a caller can't pass a field/key pair that disagree.
+  private writeRoundKeyedField(
+    stream: StreamTabId,
+    field: RoundKeyedField,
+  ): void {
+    this.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
+      ...this.records.get(stream)?.[field],
     });
   }
 
   private applyUsageDeltaMemory(
     record: StreamRecord,
-    storageKey: StorageKey,
+    storageKey: ExecutionId,
     delta: TokenUsageStats,
   ): TokenUsageStats | undefined {
     if (isEmptyUsage(delta)) return record.usage.get(storageKey);
@@ -910,81 +939,46 @@ export class StreamSnapshotStore {
     this.queueAfterSeed(stream, version, () => undefined);
   }
 
-  private addOutputFiles(
+  /**
+   * Apply one round-keyed run fact (`addOutputFiles` / `updateMissingOutputs`
+   * / `updateCompileFailures`) to its field: parse the wire patch per round
+   * through the field's normalizer (see {@link ROUND_FIELD_NORMALIZERS} for
+   * the delete-vs-overwrite semantics), skip effectively-empty patches, and
+   * run the shared eager-apply + overlay-reconcile sequence.
+   */
+  private applyRoundFieldFact<K extends RoundKeyedField>(
     stream: StreamTabId,
-    filesByRound: RoundIndexed<OutputFileInfo>,
+    field: K,
+    filesByRound: RoundIndexed<RoundFieldElement[K]>,
   ): void {
-    const patch = this.parseRoundPatch<OutputFileInfo>(filesByRound, (raw) => {
-      const normalized = OutputFileInfoListSchema.parse(
-        Array.isArray(raw) ? raw : [],
-      );
-      return normalized.length === 0 ? null : normalized;
-    });
+    const normalize = ROUND_FIELD_NORMALIZERS[field];
+    const patch = new Map<number, RoundFieldElement[K][] | null>();
+    for (const [round, raw] of Object.entries(filesByRound)) {
+      const key = RoundKeySchema.safeParse(round);
+      if (!key.success) continue;
+      patch.set(key.data, normalize(raw));
+    }
     if (patch.size === 0) return;
 
+    // The two casts restate what the tables above pin per key — `patch`
+    // holds exactly the element type `OverlayPatches[K]` stores, and
+    // `mergeRoundPatch` services every round-keyed overlay — but TS cannot
+    // reduce the `OverlayPatches[K]` indexed access while `K` is generic.
     this.mutateWithOverlay(
       stream,
-      'outputFiles',
-      patch,
-      mergeRoundPatch,
+      field,
+      patch as OverlayPatches[K],
+      mergeRoundPatch as (
+        existing: OverlayPatches[K] | undefined,
+        next: OverlayPatches[K],
+      ) => OverlayPatches[K],
       () =>
         this.applyRoundPatch(
-          (record) => record.outputFiles,
+          ROUND_FIELD_OF[field],
           this.getOrCreateRecord(stream),
           patch,
         ),
-      () => this.writeOutputFiles(stream),
-    );
-  }
-
-  private updateMissingOutputs(
-    stream: StreamTabId,
-    filesByRound: RoundIndexed<string>,
-  ): void {
-    const patch = this.parseRoundPatch<string>(filesByRound, (raw) =>
-      z.array(z.string()).parse(Array.isArray(raw) ? raw : []),
-    );
-    if (patch.size === 0) return;
-
-    this.mutateWithOverlay(
-      stream,
-      'missingOutputs',
-      { reset: false, patch },
-      mergeMissingOutputsOverlay,
-      () =>
-        this.applyRoundPatch(
-          (record) => record.missingOutputs,
-          this.getOrCreateRecord(stream),
-          patch,
-        ),
-      () => this.writeMissingOutputs(stream),
-    );
-  }
-
-  private updateCompileFailures(
-    stream: StreamTabId,
-    filesByRound: RoundIndexed<CompileFailure>,
-  ): void {
-    const patch = this.parseRoundPatch<CompileFailure>(filesByRound, (raw) => {
-      const normalized = CompileFailureSchema.array().parse(
-        Array.isArray(raw) ? raw : [],
-      );
-      return normalized.length === 0 ? null : normalized;
-    });
-    if (patch.size === 0) return;
-
-    this.mutateWithOverlay(
-      stream,
-      'compileFailures',
-      patch,
-      mergeRoundPatch,
-      () =>
-        this.applyRoundPatch(
-          (record) => record.compileFailures,
-          this.getOrCreateRecord(stream),
-          patch,
-        ),
-      () => this.writeCompileFailures(stream),
+      () => this.writeRoundKeyedField(stream, field),
     );
   }
 
@@ -993,7 +987,7 @@ export class StreamSnapshotStore {
    */
   private addUsage(
     stream: StreamTabId,
-    storageKey: StorageKey,
+    storageKey: ExecutionId,
     usage: ExtendedTokenUsageStats,
   ): void {
     // UI-only per-round display fields are not part of the durable usage row.
@@ -1018,7 +1012,7 @@ export class StreamSnapshotStore {
     const delta = parsed.success ? parsed.data : emptyUsageStats();
     const overlayPatch = isEmptyUsage(delta)
       ? undefined
-      : new Map<StorageKey, TokenUsageStats>([[storageKey, delta]]);
+      : new Map<ExecutionId, TokenUsageStats>([[storageKey, delta]]);
 
     this.mutateWithOverlay(
       stream,
@@ -1041,31 +1035,43 @@ export class StreamSnapshotStore {
   // Read accessors over in-memory accumulated state
   // ==========================================================================
 
-  // Deep-enough copies (fresh record, fresh per-round array): a caller that
-  // mutates the returned value — including pushing into a returned round's
-  // array — can never corrupt these in-memory accumulators. A shallow
-  // `{ ...map }` spread would share the per-round arrays by reference.
-  getOutputFiles(stream: StreamTabId): RoundIndexed<OutputFileInfo> {
+  // These four hand back the live record as a readonly view rather than a
+  // defensive copy. Every reader enumerates, filters, or forwards the result;
+  // none mutates it, so the copy bought nothing at runtime while allocating a
+  // fresh object and a fresh array per round on every call — on each render
+  // pass, in every host.
+  //
+  // The rule this puts on callers: a synchronous read is safe, because renders
+  // compose in one tick and the CLI's projection memo is cleared on every
+  // artifact write. **A caller that carries the result across an `await` must
+  // clone it** — `applyRoundPatch` mutates these records in place, so a live
+  // run can add or drop a round while the caller is suspended. See
+  // `ProgressWorkflowActionsController.diffStream`, which snapshots before the
+  // request crosses an interactive quick pick.
+  //
+  // The write path still snapshots (`snapshotFromMemory`, `writeRoundKeyedField`),
+  // where the isolation is load-bearing: writes are queued, so the record must
+  // be frozen at call time.
+  getOutputFiles(stream: StreamTabId): ReadonlyRoundIndexed<OutputFileInfo> {
     this.warnIfUnseeded('getOutputFiles', stream);
-    return cloneRoundIndexed(this.records.get(stream)?.outputFiles);
+    return this.records.get(stream)?.outputFiles ?? EMPTY_ROUND_INDEXED;
   }
 
-  getMissingOutputs(stream: StreamTabId): RoundIndexed<string> {
+  getMissingOutputs(stream: StreamTabId): ReadonlyRoundIndexed<string> {
     this.warnIfUnseeded('getMissingOutputs', stream);
-    return cloneRoundIndexed(this.records.get(stream)?.missingOutputs);
+    return this.records.get(stream)?.missingOutputs ?? EMPTY_ROUND_INDEXED;
   }
 
-  getCompileFailures(stream: StreamTabId): RoundIndexed<CompileFailure> {
+  getCompileFailures(
+    stream: StreamTabId,
+  ): ReadonlyRoundIndexed<CompileFailure> {
     this.warnIfUnseeded('getCompileFailures', stream);
-    return cloneRoundIndexed(this.records.get(stream)?.compileFailures);
+    return this.records.get(stream)?.compileFailures ?? EMPTY_ROUND_INDEXED;
   }
 
-  getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
-    const record = this.records.get(stream);
-    if (!record?.usageProvenance) {
-      this.warnIfUnseeded('getRunUsage', stream);
-    }
-    return new Map(record?.usage ?? []);
+  getRunUsage(stream: StreamTabId): ReadonlyMap<string, TokenUsageStats> {
+    this.warnIfUnseeded('getRunUsage', stream);
+    return this.records.get(stream)?.usage ?? EMPTY_RUN_USAGE;
   }
 
   /** Flattened set of known output-file paths for a stream. */
@@ -1088,42 +1094,6 @@ export class StreamSnapshotStore {
     return paths;
   }
 
-  /**
-   * Clear the missing-outputs marker for a stream (memory + disk). Goes
-   * through the same `mutateWithOverlay` shape as `updateMissingOutputs` (via
-   * the shared `reset`-aware overlay), so a clear and an update racing on the
-   * same unseeded stream replay in call order instead of the clear always
-   * landing last.
-   *
-   * `existed` checks `missingOutputs` content specifically, not merely
-   * whether the stream has a record: every record defaults `missingOutputs`
-   * to `{}` on creation, and a record gets created for read-only reasons
-   * too (`kv()` — used by `read()` and other read-only `kv()` calls — as
-   * well as any other accumulator's own lazy creation, e.g. `setTodos`).
-   * Gating on record
-   * presence alone would treat those as "missing outputs existed" and write
-   * a spurious `missingOutputs.json`, resurrecting a `streamData/{id}/`
-   * directory `listPersistedStreams()` would then report for a stream that
-   * was never actually tracking missing outputs (or was just deleted).
-   */
-  private clearMissingOutputs(stream: StreamTabId): void {
-    let existed = false;
-    this.mutateWithOverlay(
-      stream,
-      'missingOutputs',
-      { reset: true, patch: new Map<number, string[] | null>() },
-      mergeMissingOutputsOverlay,
-      () => {
-        const record = this.records.get(stream);
-        existed = !!record && Object.keys(record.missingOutputs).length > 0;
-        this.getOrCreateRecord(stream).missingOutputs = {};
-      },
-      () => {
-        if (existed) this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {});
-      },
-    );
-  }
-
   // ==========================================================================
   // Lifecycle
   // ==========================================================================
@@ -1131,7 +1101,6 @@ export class StreamSnapshotStore {
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
     this.records.evict(stream);
-    this.kvHandles.invalidate(stream);
     this.seedQueues.delete(stream);
     for (const key of [...this.writeMutexes.keys()]) {
       if (!key.startsWith(`${stream}::`)) continue;
@@ -1145,7 +1114,6 @@ export class StreamSnapshotStore {
 
   evictAll(): void {
     this.records.evictAll();
-    this.kvHandles.invalidateAll();
     this.seedQueues.clear();
     this.writeMutexes.clear();
     this.dirtyWrites.clear();
@@ -1226,23 +1194,6 @@ export class StreamSnapshotStore {
   async deleteStream(stream: StreamTabId): Promise<void> {
     const deletion = await this.stageDeleteStream(stream);
     await deletion.commit();
-  }
-
-  /** Delete the entire `streamData/` tree + all in-memory state. */
-  async deleteAll(): Promise<void> {
-    const pending = [...this.writeMutexes.values()].map((mutex) =>
-      mutex.waitForUnlock(),
-    );
-    this.evictAll();
-    await Promise.all(pending);
-    await Promise.all([
-      new KVStore(STREAM_DATA_DIR).deleteDir(),
-      StorageFS.delete(STREAM_DATA_DELETION_DIR, { recursive: true }).catch(
-        (error: unknown) => {
-          if (!isFileNotFoundError(error)) throw error;
-        },
-      ),
-    ]);
   }
 
   private setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -1460,6 +1411,25 @@ export class StreamSnapshotStore {
     });
   }
 
+  /**
+   * Whether this stream's accumulators answer from memory rather than from
+   * unread defaults: its disk provenance is established, or a live fact has
+   * already been eagerly applied ahead of any seed (the overlay this store
+   * replays after seeding). That is the disk-provenance condition
+   * {@link warnIfUnseeded} checks plus any live overlay, so it is the weaker
+   * of the two: an overlay-only record answers here but still emits
+   * unseeded-read warnings for the fields it holds no overlay for. Published
+   * so a caller can gate its reads on this bookkeeping instead of shadowing
+   * it with a hydration set of its own. A usage-only seed does not count: it
+   * leaves every round artifact unread.
+   */
+  hasProvenance(stream: StreamTabId): boolean {
+    const record = this.records.get(stream);
+    if (!record) return false;
+    if (record.diskState !== 'unknown') return true;
+    return Object.values(record.overlays).some((patch) => patch !== undefined);
+  }
+
   /** Streams with persisted sidecars under `streamData/`. */
   async listPersistedStreams(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DIR);
@@ -1468,36 +1438,6 @@ export class StreamSnapshotStore {
   /** Streams left in reversible staging by an interrupted deletion. */
   async listStagedDeletions(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DELETION_DIR);
-  }
-
-  /**
-   * Execution id recorded in a stream sidecar's `meta.json`, without seeding
-   * memory or reading the stream's other sidecar files. Callers that scan
-   * every persisted stream (bulk admin sweeps in `SessionStores`) only ever
-   * need this one field, so this reads just `meta.json` rather than the full
-   * 6-file `readStreamData()`.
-   */
-  async readPersistedExecutionId(
-    stream: StreamTabId,
-  ): Promise<ExecutionId | undefined> {
-    // Resolve the KV handle directly rather than through `kv()`, which would
-    // mint an in-memory record for a stream this caller only needs one disk
-    // field from. The bounded-startup invariant (#9947) keeps cold historical
-    // streams record-free until a caller actually seeds or mutates them.
-    //
-    // Use the strict ownership read: corrupt-present metadata must surface as
-    // an unreadable sidecar (and skip the stream) rather than masquerade as a
-    // legacy stream with no persisted FK.
-    return (await readMetaForOwnership(this.kvHandles.get(stream)))
-      ?.executionId;
-  }
-
-  /**
-   * Whether a stream has a persisted `workPlan.json` sidecar — an existence
-   * check only (a single stat via `KVStore.exists`), not a read.
-   */
-  async hasPersistedWorkPlan(stream: StreamTabId): Promise<boolean> {
-    return this.kv(stream).exists(STREAM_DATA_KEYS.WORK_PLAN);
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
@@ -1555,9 +1495,9 @@ export class StreamSnapshotStore {
     for (const [stream, record] of this.records) {
       // Per-record loudness: a resident record without established disk
       // provenance may be missing its persisted executionId here. Streams
-      // with no record at all are this accessor's contract (callers merge
-      // `readPersistedExecutionId` for those), so only resident-but-unknown
-      // records warrant a warning.
+      // with no record at all are outside this accessor's contract (callers
+      // merge `readExecutionStreamIndex` for those), so only
+      // resident-but-unknown records warrant a warning.
       this.warnIfUnseeded('getExecutionIdMap', stream);
       const executionId = record.runExecutionId;
       if (executionId) map.set(stream, executionId);
@@ -1761,8 +1701,8 @@ export class StreamSnapshotStore {
    * seeded (via {@link load} or a progress event) its in-memory accumulators
    * are the single source of truth — they already hold the disk state plus any
    * newer deltas — so we assemble from memory and skip a redundant disk re-read.
-   * The CLI resume path calls `load` then `read` back-to-back. Only an unseeded
-   * stream, such as a display-only read that was never resumed, hits disk.
+   * Only an unseeded stream — a display-only read from a call-scoped store that
+   * was never `load`ed or `preload`ed — hits disk.
    */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
     if (await this.awaitSeeded(streamId)) {
@@ -1783,8 +1723,9 @@ export class StreamSnapshotStore {
 
   /**
    * Assemble the snapshot from already-hydrated in-memory accumulators.
-   * Clones the round-indexed records (same as the public getOutputFiles/
-   * getMissingOutputs/getCompileFailures accessors) so a caller reassigning
+   * Clones the round-indexed records — unlike the public getOutputFiles/
+   * getMissingOutputs/getCompileFailures accessors, which return live readonly
+   * views — so a caller reassigning
    * or pushing/splicing a returned per-round array can't corrupt these live
    * accumulators. Per cloneRoundIndexed's own contract, item objects
    * themselves are not cloned — they're treated as immutable value objects,
@@ -1801,21 +1742,6 @@ export class StreamSnapshotStore {
       usageUnparsed: record?.usageUnparsed ?? new Map(),
       workPlan: this.getWorkPlan(streamId),
     });
-  }
-
-  /**
-   * A stream's output files (round → files). Served from the seeded in-memory
-   * accumulators when available — the single source of truth — so a caller that
-   * already `load()`ed the stream doesn't re-read all sidecars from disk; only
-   * an unseeded stream falls back to a disk read.
-   */
-  async readOutputFiles(
-    streamId: StreamTabId,
-  ): Promise<RoundIndexed<OutputFileInfo>> {
-    if (await this.awaitSeeded(streamId)) {
-      return this.getOutputFiles(streamId);
-    }
-    return (await readStreamData(this.kv(streamId))).outputFiles;
   }
 
   /**
@@ -1837,55 +1763,28 @@ export class StreamSnapshotStore {
    * startup; later mutations for other streams must still seed from disk before
    * writing.
    *
-   * `usageOnly` hydrates only the per-stream usage sidecar. Restart repair uses
-   * it for parked WAITING streams so the status-bar usage total is correct
-   * immediately without making the full 6-file record resident for the whole
-   * session (#9947, #10520).
+   * `reportArtifactAuthority` wraps a failed full preload with the fields whose
+   * prior seed or live overlay remains authoritative, so a reader may retain
+   * accepted in-memory state without treating unread disk defaults as facts.
    */
   async preload(
     streamIds: readonly StreamTabId[],
-    options?: { readonly usageOnly?: boolean },
+    options?: {
+      readonly reportArtifactAuthority?: boolean;
+    },
   ): Promise<void> {
-    if (options?.usageOnly) {
-      await pMap(streamIds, (streamId) => this.seedUsageOnly(streamId), {
-        concurrency: SEED_IO_CONCURRENCY,
-      });
-      return;
-    }
-    await this.seedStreams(streamIds);
+    await this.seedStreams(streamIds, options?.reportArtifactAuthority);
   }
 
-  private async seedUsageOnly(streamId: StreamTabId): Promise<void> {
-    if (this.hasDiskProvenance(streamId)) return;
-    const version = this.streamVersion(streamId);
-    const record = this.getOrCreateRecord(streamId);
-    if (record.seedChain) {
-      await record.seedChain.catch(() => undefined);
-    }
-    if (this.streamVersion(streamId) !== version) return;
-    if (this.hasDiskProvenance(streamId)) return;
-    const usage = await readUsageData(this.kv(streamId));
-    if (this.streamVersion(streamId) !== version) return;
-    const current = this.records.get(streamId);
-    if (!current || current.diskState !== 'unknown') return;
-    current.usage = new Map(usage.usage);
-    current.usageUnparsed = new Map(usage.unparsedRuns);
-    // Replay any eager live usage delta that landed while the disk read was
-    // pending. The overlay stays in place so a later full seed replays it once
-    // on top of freshly-read disk usage; this seed performs no writes itself.
-    const usageOverlay = current.overlays.usage;
-    if (usageOverlay) {
-      for (const [storageKey, delta] of usageOverlay) {
-        this.applyUsageDeltaMemory(current, storageKey, delta);
-      }
-    }
-    current.usageProvenance = true;
-  }
-
-  private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {
-    await pMap(streamIds, (streamId) => this.refreshSeed(streamId), {
-      concurrency: SEED_IO_CONCURRENCY,
-    });
+  private async seedStreams(
+    streamIds: readonly StreamTabId[],
+    reportArtifactAuthority = false,
+  ): Promise<void> {
+    await pMap(
+      streamIds,
+      (streamId) => this.refreshSeed(streamId, reportArtifactAuthority),
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
@@ -1894,7 +1793,10 @@ export class StreamSnapshotStore {
     }
   }
 
-  private refreshSeed(stream: StreamTabId): Promise<void> {
+  private refreshSeed(
+    stream: StreamTabId,
+    reportArtifactAuthority = false,
+  ): Promise<void> {
     const version = this.streamVersion(stream);
     const record = this.getOrCreateRecord(stream);
     const refreshBaseline = record.seedRefreshBaseline ?? record.diskState;
@@ -1906,7 +1808,6 @@ export class StreamSnapshotStore {
         if (this.streamVersion(stream) !== version) return;
         await this.retryDirtyWrites(stream);
         if (this.streamVersion(stream) !== version) return;
-        this.invalidateKvHandles(stream);
         await this.seedFromDisk(stream, version);
       })
       .then(
@@ -1921,9 +1822,19 @@ export class StreamSnapshotStore {
         },
         (error: unknown) => {
           const current = this.records.get(stream);
+          const versionIsCurrent = this.streamVersion(stream) === version;
+          const authoritativeFields =
+            reportArtifactAuthority && current && versionIsCurrent
+              ? artifactAuthorityAfterPreloadFailure(
+                  refreshBaseline === 'unknown'
+                    ? current.diskState
+                    : refreshBaseline,
+                  current.overlays,
+                )
+              : undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            this.streamVersion(stream) === version
+            versionIsCurrent
           ) {
             current.diskState = refreshBaseline;
             current.seedRefreshBaseline = undefined;
@@ -1931,6 +1842,13 @@ export class StreamSnapshotStore {
               this.persistEagerOverlays(stream, current);
             }
             if (current.seedChain === next) current.seedChain = undefined;
+          }
+          if (authoritativeFields) {
+            throw new StreamSnapshotPreloadError(
+              error,
+              stream,
+              authoritativeFields,
+            );
           }
           throw error;
         },
@@ -2087,39 +2005,24 @@ export class StreamSnapshotStore {
     }
 
     const { overlays } = record;
-    if (overlays.outputFiles) {
-      this.applyRoundPatch((r) => r.outputFiles, record, overlays.outputFiles);
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.outputFiles);
-      overlays.outputFiles = undefined;
-    }
-    if (overlays.missingOutputs) {
-      if (overlays.missingOutputs.reset) record.missingOutputs = {};
-      this.applyRoundPatch(
-        (r) => r.missingOutputs,
-        record,
-        overlays.missingOutputs.patch,
-      );
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.missingOutputs);
-      overlays.missingOutputs = undefined;
-    }
-    if (overlays.compileFailures) {
-      this.applyRoundPatch(
-        (r) => r.compileFailures,
-        record,
-        overlays.compileFailures,
-      );
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.compileFailures);
-      overlays.compileFailures = undefined;
-    }
-    if (overlays.usage) {
+    consumeOverlay(overlays, 'outputFiles', sidecarsToWrite, (patch) =>
+      this.applyRoundPatch((r) => r.outputFiles, record, patch),
+    );
+    consumeOverlay(overlays, 'missingOutputs', sidecarsToWrite, (patch) =>
+      this.applyRoundPatch((r) => r.missingOutputs, record, patch),
+    );
+    consumeOverlay(overlays, 'compileFailures', sidecarsToWrite, (patch) =>
+      this.applyRoundPatch((r) => r.compileFailures, record, patch),
+    );
+    // Pre-await snapshot, not `patch`: deltas that landed during the hydration
+    // await were already applied to the refreshed record.usage, so replaying
+    // the merged overlay would count them twice.
+    consumeOverlay(overlays, 'usage', sidecarsToWrite, () => {
       for (const [storageKey, delta] of usageOverlayToReplay) {
         this.applyUsageDeltaMemory(record, storageKey, delta);
       }
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.usage);
-      overlays.usage = undefined;
-    }
-    if (overlays.workPlan) {
-      const overlay = overlays.workPlan;
+    });
+    consumeOverlay(overlays, 'workPlan', sidecarsToWrite, (overlay) => {
       if (overlay.todos !== undefined) {
         record.workPlan = { ...record.workPlan, todos: [...overlay.todos] };
       }
@@ -2132,9 +2035,7 @@ export class StreamSnapshotStore {
             : null,
         };
       }
-      sidecarsToWrite.add(OVERLAY_TO_SIDECAR_KEY.workPlan);
-      overlays.workPlan = undefined;
-    }
+    });
     record.diskState = provenance;
     this.writeMergedSidecars(stream, record, sidecarsToWrite);
     // Hydration republishes the metadata mirror: the deep-equal gate makes an
@@ -2162,16 +2063,16 @@ export class StreamSnapshotStore {
     for (const key of keys) {
       switch (key) {
         case STREAM_DATA_KEYS.OUTPUT_FILES:
-          this.writeOutputFiles(stream);
+          this.writeRoundKeyedField(stream, 'outputFiles');
           break;
         case STREAM_DATA_KEYS.USAGE_STATS:
           this.writeUsage(stream);
           break;
         case STREAM_DATA_KEYS.MISSING_OUTPUTS:
-          this.writeMissingOutputs(stream);
+          this.writeRoundKeyedField(stream, 'missingOutputs');
           break;
         case STREAM_DATA_KEYS.COMPILE_FAILURES:
-          this.writeCompileFailures(stream);
+          this.writeRoundKeyedField(stream, 'compileFailures');
           break;
         case STREAM_DATA_KEYS.WORK_PLAN:
           this.writeWorkPlan(stream, record.workPlan);

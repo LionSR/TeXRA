@@ -13,7 +13,7 @@ describe('extension team auth catalog refresh scope', () => {
   it('defers auth listeners and fetches the remote catalog exactly once', async () => {
     let refreshed = false;
     let remoteFetches = 0;
-    const commitPresetResolution = vi.fn(async () => {});
+    const commitPreset = vi.fn(async () => {});
     const preset = {
       id: 'remote-team',
       name: 'Remote team',
@@ -56,7 +56,7 @@ describe('extension team auth catalog refresh scope', () => {
                   unresolvedNames: ['orchestrator'],
                 },
           }),
-          commitPresetResolution,
+          commitPreset,
         },
         loadLocalCatalog: async () => {},
         canAccessRemoteCatalog: async () => false,
@@ -78,6 +78,6 @@ describe('extension team auth catalog refresh scope', () => {
 
     expect(result.status).toBe('applied');
     expect(remoteFetches).toBe(1);
-    expect(commitPresetResolution).toHaveBeenCalledOnce();
+    expect(commitPreset).toHaveBeenCalledOnce();
   });
 });

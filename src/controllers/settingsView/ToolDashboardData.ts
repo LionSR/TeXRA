@@ -154,7 +154,8 @@ const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
  *
  * @param host - the product host asking. A built-in group whose every tool
  *   declares itself unavailable on that host is dropped rather than shown as
- *   "available": the tool would throw its host-exclusion reason if called.
+ *   "available": host exclusion removes those tools from the resolved roster,
+ *   so they can never be called there.
  * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.

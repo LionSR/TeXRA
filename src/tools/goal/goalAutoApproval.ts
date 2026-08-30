@@ -1,32 +1,33 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { StreamTabId } from '@shared/schemas';
 
+export type GoalAutoApprovalScope = 'commands' | 'allAgentWork';
+
 /**
- * Engage or clear the per-stream bash approval bypass for an autonomous goal.
- *
- * "Run as Goal" is the user's explicit consent to unattended
- * command execution; without the bypass, the first verification/build command
- * silently parks the loop, which reads as the goal "stopping early". File edits
- * keep their normal diff approval prompt because an approved plan is not an
- * edit approval. Engaged when a goal starts or is retargeted, cleared whenever
- * it pauses or ends so manual follow-up turns prompt normally again.
- *
- * Subagents inherit the parent stream's bypass through the existing
- * delegation wiring (`configureDelegatedChildApprovals`), so no
- * child-stream handling is needed here — per-kind ancestry means a goal
- * parent with bash bypassed but edits gated propagates exactly that split.
- *
- * The approval modules are imported lazily: this file sits in the host-neutral
- * agent-loop import graph (via ToolUseWaitNode), and pulling the approval
- * modules at module scope drags their filesystem/logger imports into every
- * consumer — breaking partial logger mocks in CLI tests.
+ * Apply one goal's selected approval scope, or clear every goal grant.
+ * Commands-only remains the default: an approved plan is not consent to edit
+ * files or launch delegated work unless the user explicitly enables the
+ * broader scope. Descendants inherit each bypass through session ancestry.
  */
-export async function setGoalSessionBashAutoApproval(
+export async function setGoalSessionAutoApproval(
   streamId: StreamTabId,
-  enabled: boolean,
+  scope: GoalAutoApprovalScope | false,
   options?: { session?: SessionHandle },
 ): Promise<void> {
-  const { setBashApprovalSessionBypass } =
-    await import('@tools/approval/bashApproval');
-  setBashApprovalSessionBypass(streamId, enabled, options);
+  // Keep this lazy: a static SessionHandle import pulls host runtime into the
+  // host-neutral goal graph and breaks tests that install partial logger mocks.
+  const session =
+    options?.session ??
+    (await import('@agent/runtime/SessionHandle')).currentSession();
+  if (scope === 'allAgentWork') {
+    session.approvals.setDelegatedWorkBypasses(streamId, true);
+  } else if (scope === 'commands') {
+    // Retargeting from all-agent-work must revoke the broad grants without
+    // publishing a transient command revocation immediately before re-enable.
+    session.approvals.toolEdit.bypass.setBypass(streamId, false);
+    session.approvals.proposal.setBypass(streamId, false);
+    session.approvals.bash.bypass.setBypass(streamId, true);
+  } else {
+    session.approvals.setDelegatedWorkBypasses(streamId, false);
+  }
 }

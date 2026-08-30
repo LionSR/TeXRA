@@ -8,10 +8,10 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   computeAgentOptionsData,
   getAgent,
-  getAgentsBySource,
   getVisibleAgent,
   getVisibleAgents,
   invalidateRemoteAgentsAfterSignOut,
+  isRemoteAgent,
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
@@ -185,12 +185,12 @@ describe('agent registry', () => {
   it('reloads local-only definitions after sign-out invalidation', async () => {
     useAgentDirectories();
     await refresh({ includeRemote: true });
-    expect(getAgentsBySource('remote')).not.toHaveLength(0);
+    expect(isRemoteAgent('orchestrator')).toBe(true);
     const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
     await invalidateRemoteAgentsAfterSignOut();
 
-    expect(getAgentsBySource('remote')).toEqual([]);
+    expect(isRemoteAgent('orchestrator')).toBe(false);
     expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
   });
 
@@ -198,7 +198,7 @@ describe('agent registry', () => {
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     useAgentDirectories();
     await refresh({ includeRemote: true });
-    expect(getAgentsBySource('remote')).not.toHaveLength(0);
+    expect(isRemoteAgent('orchestrator')).toBe(true);
     useAgentDirectories({
       builtIn: async () => {
         throw new Error('local catalog unavailable');
@@ -207,9 +207,9 @@ describe('agent registry', () => {
 
     try {
       const invalidation = invalidateRemoteAgentsAfterSignOut();
-      expect(getAgentsBySource('remote')).toEqual([]);
+      expect(isRemoteAgent('orchestrator')).toBe(false);
       await expect(invalidation).resolves.toBeUndefined();
-      expect(getAgentsBySource('remote')).toEqual([]);
+      expect(isRemoteAgent('orchestrator')).toBe(false);
       expect(warn).toHaveBeenCalledWith(
         'agentRegistry',
         expect.stringContaining(
@@ -252,7 +252,7 @@ describe('agent registry', () => {
       await staleLoad;
 
       expect(getAgent('lateRemote')).toBeUndefined();
-      expect(getAgentsBySource('remote')).toEqual([]);
+      expect(isRemoteAgent('orchestrator')).toBe(false);
 
       localRebuild.resolve();
       await invalidation;

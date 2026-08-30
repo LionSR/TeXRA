@@ -1,31 +1,13 @@
 // Third-party imports
 import { z } from 'zod';
 
-import {
-  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-  DEFAULT_ENABLED_REPLACEMENTS,
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-} from '@shared/constants/replacementCategories';
-
-import {
-  AGENT_SKILLS_ENABLED_DEFAULT,
-  AgentSkillsSettingsSchema,
-} from './agentSkills';
-
 /**
- * Core (host-neutral) TeXRA settings.
+ * Config keys, bounded schemas, and defaults shared by more than one reader.
  *
- * These settings apply to any host that integrates the TeXRA core — VS Code
- * extension, Electron desktop, or CLI. All three hosts read them from the
- * TeXRA-owned JSON configuration; host-specific schemas may add controls that
- * do not represent runtime configuration.
- *
- * Per the project's split policy: a setting belongs in Core if any host could
- * plausibly implement it, even if only one host implements it today. Truly
- * host-specific settings (those that name-reference a host or are
- * UI affordances unique to one host's toolkit) live in the per-host
- * extension schema, when one exists.
+ * The settings themselves — schema, default, copy, honoring hosts, rendering
+ * surfaces — live as rows on the one catalog in `stateSettings.ts`. This module
+ * holds only what a runtime reader needs to name a key or reuse a bounded
+ * schema without importing the catalog.
  */
 
 export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
@@ -43,7 +25,12 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
 /** Canonical config key for the usage-telemetry opt-in. */
 export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
 
-type LatexdiffTempFileLocation = (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number];
+/**
+ * Telemetry is on unless a scope opts out. Shared by the catalog row and by
+ * `UsageLogService`, which resolves both scopes itself rather than through the
+ * merged config read.
+ */
+export const TELEMETRY_ENABLED_DEFAULT = true;
 
 /**
  * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
@@ -77,6 +64,15 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
     "When the conversation reaches this percentage of the model's context limit, TeXRA automatically summarizes earlier messages to free up space. Lower values trigger summarization sooner. Set to 0 to disable.",
 } as const);
 
+export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
+  configKey: 'texra.chatgptCodex.contextWindow',
+  defaultValue: 272_000,
+  min: 1,
+  max: 872_000,
+  description:
+    "Input token budget for ChatGPT-subscription (Codex) routing, mirroring Codex CLI's model_context_window. The default 272,000 matches the Codex default; GPT-5.6 models accept up to 872,000. Automatic compaction may run earlier according to the separate compaction threshold. TeXRA adds the model's output budget when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery.",
+} as const);
+
 /**
  * Bounds, default, and copy for `childRunConcurrencyBudget`. The value caps the
  * number of live native child model conversations one session runs at once.
@@ -85,464 +81,37 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
  * about the range.
  */
 export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
-  defaultValue: 16,
-  min: 1,
+  /** `0` sizes the budget to this machine's core count at runtime — the
+   *  same "special value inside the range" shape as the compaction
+   *  threshold's `0 = disable`, so the number widget needs no second mode. */
+  auto: 0,
+  defaultValue: 0,
+  min: 0,
   max: 100,
   description:
-    'Maximum number of live native child model conversations one session may run at once. Detached subagents beyond this wait for a slot to free.',
+    "Maximum number of detached child runs one session may run at once; a workflow script also runs this many agent() calls concurrently (in-band, not counted against the session budget). 0 (the default) sizes it to this machine's CPU count. Detached subagents beyond the budget wait for a slot to free.",
 } as const);
-
-export const DEFAULT_CORE_SETTINGS = {
-  agentOutputs: {
-    autoOpenFinal: true,
-  },
-  goal: {
-    enabled: true,
-  },
-  model: {
-    useOpenAIResponsesAPI: true,
-    useGoogleInteractionsServerState: true,
-    useBackgroundResponses: true,
-    openaiParallelToolCalls: true,
-    compactionThresholdPercent: MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue,
-    gpt5ReasoningSummary: false,
-    retry: {
-      maxAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-    },
-  },
-  chatgptCodex: {
-    preferSubscription: false,
-  },
-  xaiGrok: {
-    preferSubscription: false,
-  },
-  maxImageDimension: 2000,
-  bib: {
-    defaultPath: '',
-    zoteroPort: 23119,
-  },
-  latex: {
-    latexindentConfig: '',
-    texfmtConfig: '',
-    tikzInputDirectory: '',
-    tikzTemplate:
-      '\\documentclass[tikz,border=10pt]{standalone}\n' +
-      '\\usepackage{tikz}\n' +
-      '\\usepackage{pgfplots}\n' +
-      '\\usetikzlibrary{positioning}\n' +
-      '\\usetikzlibrary{patterns}\n' +
-      '\\usetikzlibrary{arrows.meta, shapes.geometric, matrix, calc, decorations.pathreplacing}\n' +
-      '\\usetikzlibrary{shapes, arrows}\n\n' +
-      '\\begin{document}\n' +
-      '{{ tikzpicture }}\n' +
-      '\\end{document}',
-    includeWorkspaceInTexinputs: true,
-    wrapCritiqueInAlign: true,
-    enabledReplacements: DEFAULT_ENABLED_REPLACEMENTS,
-    enabledReplacementsRegex: DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-    customReplacementsRegex: {},
-    customReplacements: {},
-  },
-  latexdiff: {
-    tempFileLocation: 'sameDirectory' as LatexdiffTempFileLocation,
-  },
-  git: {
-    numberOfCommitsToShow: 20,
-  },
-  agentReview: {
-    runOnCommit: false,
-  },
-  audio: {
-    soxPath: '',
-  },
-  logger: {
-    debugMode: false,
-  },
-  telemetry: {
-    enabled: true,
-  },
-  debug: {
-    saveModelIO: false,
-  },
-  skills: {
-    enabled: AGENT_SKILLS_ENABLED_DEFAULT,
-  },
-  toolUse: {
-    requireEditApproval: true,
-    requireBashApproval: true,
-  },
-  childRunConcurrencyBudget: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
-};
-
-const stringRecord = (
-  defaultValue: Record<string, string>,
-  description: string,
-) =>
-  z.record(z.string(), z.string()).describe(description).prefault(defaultValue);
-
-const boolField = (defaultValue: boolean, description: string) =>
-  z.boolean().describe(description).prefault(defaultValue);
-
-const stringField = (defaultValue: string, description: string) =>
-  z.string().describe(description).prefault(defaultValue);
-
-const numberField = (
-  defaultValue: number,
-  description: string,
-  range?: { min?: number; max?: number },
-) => {
-  let schema = z.number();
-  if (range?.min !== undefined) schema = schema.min(range.min);
-  if (range?.max !== undefined) schema = schema.max(range.max);
-  return schema.describe(description).prefault(defaultValue);
-};
 
 export const ModelRetryMaxAttemptsSchema = z
   .int()
   .min(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min)
   .max(MODEL_RETRY_MAX_ATTEMPTS_SETTING.max)
-  .describe(MODEL_RETRY_MAX_ATTEMPTS_SETTING.description)
   .prefault(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue);
 
 export const ModelCompactionThresholdPercentSchema = z
   .number()
   .min(MODEL_COMPACTION_THRESHOLD_SETTING.min)
   .max(MODEL_COMPACTION_THRESHOLD_SETTING.max)
-  .describe(MODEL_COMPACTION_THRESHOLD_SETTING.description)
   .prefault(MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue);
+
+export const ChatgptCodexContextWindowSchema = z
+  .int()
+  .min(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min)
+  .max(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.max)
+  .prefault(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue);
 
 export const ChildRunConcurrencyBudgetSchema = z
   .int()
   .min(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min)
   .max(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max)
-  .describe(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description)
   .prefault(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue);
-
-/**
- * Field shape for {@link CoreSettingsSchema}.
- *
- * Exported as a plain object so host-specific schemas can compose with it via
- * `z.strictObject({ ...CoreSettingsShape, ...HostExtensionShape })`. The
- * standalone schema below applies the outer `.prefault()` for the whole-tree
- * default.
- */
-export const CoreSettingsShape = {
-  agentOutputs: z
-    .strictObject({
-      autoOpenFinal: boolField(
-        DEFAULT_CORE_SETTINGS.agentOutputs.autoOpenFinal,
-        "When a workflow run completes, automatically preview the final revised file in a new editor tab. Disable for batch runs when you don't want a tab to steal focus.",
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.agentOutputs),
-  goal: z
-    .strictObject({
-      enabled: boolField(
-        DEFAULT_CORE_SETTINGS.goal.enabled,
-        'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.goal),
-  model: z
-    .strictObject({
-      useOpenAIResponsesAPI: boolField(
-        DEFAULT_CORE_SETTINGS.model.useOpenAIResponsesAPI,
-        "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-      ),
-      useGoogleInteractionsServerState: boolField(
-        DEFAULT_CORE_SETTINGS.model.useGoogleInteractionsServerState,
-        "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-      ),
-      useBackgroundResponses: boolField(
-        DEFAULT_CORE_SETTINGS.model.useBackgroundResponses,
-        'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-      ),
-      openaiParallelToolCalls: boolField(
-        DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
-        'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
-      ),
-      compactionThresholdPercent: ModelCompactionThresholdPercentSchema,
-      gpt5ReasoningSummary: boolField(
-        DEFAULT_CORE_SETTINGS.model.gpt5ReasoningSummary,
-        "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-      ),
-      retry: z
-        .strictObject({
-          maxAttempts: ModelRetryMaxAttemptsSchema,
-        })
-        .prefault(DEFAULT_CORE_SETTINGS.model.retry),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.model),
-  chatgptCodex: z
-    .strictObject({
-      preferSubscription: boolField(
-        DEFAULT_CORE_SETTINGS.chatgptCodex.preferSubscription,
-        'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.chatgptCodex),
-  xaiGrok: z
-    .strictObject({
-      preferSubscription: boolField(
-        DEFAULT_CORE_SETTINGS.xaiGrok.preferSubscription,
-        'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.xaiGrok),
-  childRunConcurrencyBudget: ChildRunConcurrencyBudgetSchema,
-  maxImageDimension: numberField(
-    DEFAULT_CORE_SETTINGS.maxImageDimension,
-    'Maximum dimension (width or height) in pixels for images before resizing. Images larger than this will be resized to fit within this dimension while maintaining aspect ratio.',
-    { min: 100, max: 10000 },
-  ),
-  bib: z
-    .strictObject({
-      defaultPath: stringField(
-        DEFAULT_CORE_SETTINGS.bib.defaultPath,
-        'Default path to bibliography file (.bib). This is used by bibliography tools when no explicit path is provided. Supports Zotero auto-exported .bib files.',
-      ),
-      zoteroPort: numberField(
-        DEFAULT_CORE_SETTINGS.bib.zoteroPort,
-        'Port number for Zotero integration (default: 23119). Used by both the Connector API and Better BibTeX JSON-RPC.',
-        { min: 1, max: 65535 },
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.bib),
-  latex: z
-    .strictObject({
-      latexindentConfig: stringField(
-        DEFAULT_CORE_SETTINGS.latex.latexindentConfig,
-        'Path to latexindent configuration file',
-      ),
-      texfmtConfig: stringField(
-        DEFAULT_CORE_SETTINGS.latex.texfmtConfig,
-        'Path to tex-fmt configuration file',
-      ),
-      tikzInputDirectory: stringField(
-        DEFAULT_CORE_SETTINGS.latex.tikzInputDirectory,
-        'Directory where to look for extra input files when compiling extracted TikZ figures. Absolute path is required. Sets TEXINPUTS environment variable for TikZ compilation.',
-      ),
-      tikzTemplate: stringField(
-        DEFAULT_CORE_SETTINGS.latex.tikzTemplate,
-        'Template used for generating standalone documents when extracting and compiling TikZ figures',
-      ),
-      includeWorkspaceInTexinputs: boolField(
-        DEFAULT_CORE_SETTINGS.latex.includeWorkspaceInTexinputs,
-        'Include the workspace root directory in TEXINPUTS when compiling TikZ figures',
-      ),
-      wrapCritiqueInAlign: boolField(
-        DEFAULT_CORE_SETTINGS.latex.wrapCritiqueInAlign,
-        'When enabled, bare \\critique and \\comment commands inside align blocks are wrapped with \\intertext.',
-      ),
-      enabledReplacements: z
-        .array(z.enum(NON_REGEX_REPLACEMENT_CATEGORIES))
-        .describe('List of enabled non-regex LaTeX replacement categories')
-        .prefault(DEFAULT_CORE_SETTINGS.latex.enabledReplacements),
-      enabledReplacementsRegex: z
-        .array(z.enum(REGEX_REPLACEMENT_CATEGORIES))
-        .describe('List of enabled regex LaTeX replacement categories')
-        .prefault(DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex),
-      customReplacementsRegex: stringRecord(
-        DEFAULT_CORE_SETTINGS.latex.customReplacementsRegex,
-        "Custom regex replacements in the format: { 'pattern': 'replacement' }. Use capture groups with $1, $2, etc. Example: { '\\\\section\\{([^}]+)\\}': '\\section{$1}' }",
-      ),
-      customReplacements: stringRecord(
-        DEFAULT_CORE_SETTINGS.latex.customReplacements,
-        "Custom LaTeX replacements in the format: { 'from': 'to' }. Example: { '\\alpha': '\\al' }",
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.latex),
-  latexdiff: z
-    .strictObject({
-      tempFileLocation: z
-        .enum(LATEXDIFF_TEMP_FILE_LOCATIONS)
-        .describe(
-          'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
-        )
-        .meta({
-          enumDescriptions: [
-            'Create temp files in the same directory as the original file. Best for resolving \\input{} and relative paths.',
-            'Create temp files in .texra-temp directory at workspace root. Keeps source directories clean but may break relative paths.',
-          ],
-        })
-        .prefault(DEFAULT_CORE_SETTINGS.latexdiff.tempFileLocation),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.latexdiff),
-  git: z
-    .strictObject({
-      numberOfCommitsToShow: numberField(
-        DEFAULT_CORE_SETTINGS.git.numberOfCommitsToShow,
-        'Number of recent commits to show in the commit selection dropdown',
-        { min: 1, max: 100 },
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.git),
-  agentReview: z
-    .strictObject({
-      runOnCommit: boolField(
-        DEFAULT_CORE_SETTINGS.agentReview.runOnCommit,
-        'Automatically review your changes for issues after each commit.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.agentReview),
-  audio: z
-    .strictObject({
-      soxPath: stringField(
-        DEFAULT_CORE_SETTINGS.audio.soxPath,
-        'Path to the SoX executable. Overrides automatic detection.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.audio),
-  logger: z
-    .strictObject({
-      debugMode: boolField(
-        DEFAULT_CORE_SETTINGS.logger.debugMode,
-        'Whether to show verbose debug messages in the logger view',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.logger),
-  telemetry: z
-    .strictObject({
-      enabled: boolField(
-        DEFAULT_CORE_SETTINGS.telemetry.enabled,
-        'Send a usage record for each model round to TeXRA: model and provider, agent name and category, token counts, cost, response time, how the round was paid for, stream id, and the TeXRA version and host. Never prompt text, document content, or file names. Records are sent only while signed in. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan. Setting TEXRA_NO_TELEMETRY=1 or DO_NOT_TRACK=1 in the environment turns it off regardless of this setting.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.telemetry),
-  debug: z
-    .strictObject({
-      saveModelIO: boolField(
-        DEFAULT_CORE_SETTINGS.debug.saveModelIO,
-        'Save what TeXRA sends to and receives from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.debug),
-  skills: AgentSkillsSettingsSchema.prefault(DEFAULT_CORE_SETTINGS.skills),
-  toolUse: z
-    .strictObject({
-      requireEditApproval: boolField(
-        DEFAULT_CORE_SETTINGS.toolUse.requireEditApproval,
-        'Require user approval in a diff view before tool-driven edits modify workspace files',
-      ),
-      requireBashApproval: boolField(
-        DEFAULT_CORE_SETTINGS.toolUse.requireBashApproval,
-        'Require user approval before tool-use agents execute bash commands',
-      ),
-    })
-    .prefault(DEFAULT_CORE_SETTINGS.toolUse),
-};
-
-const CoreSettingsSchema = z
-  .strictObject(CoreSettingsShape)
-  .prefault(DEFAULT_CORE_SETTINGS);
-
-type CoreSettings = z.infer<typeof CoreSettingsSchema>;
-
-/** True for an index-signature record, false for a fixed-key settings group. */
-type IsRecord<T> = string extends keyof T ? true : false;
-
-/**
- * Dotted leaf paths of the settings tree, enumerated at the type level.
- *
- * Drives the compile-time guards below so {@link CORE_SETTING_PATHS} stays in
- * lockstep with {@link CoreSettingsShape}: a record/array/primitive field is a
- * leaf, a nested settings group is recursed into.
- *
- * `NonNullable` is applied before the `extends object` test so that an optional
- * group added without a default (`Group | undefined`) still recurses into its
- * leaves instead of silently collapsing to a single key. The guard therefore
- * stays sound whether a nested group is declared with `.prefault()` (every group
- * today) or `.optional()`.
- */
-type LeafPaths<T> = {
-  [K in keyof T & string]: NonNullable<T[K]> extends readonly unknown[]
-    ? K
-    : NonNullable<T[K]> extends object
-      ? IsRecord<NonNullable<T[K]>> extends true
-        ? K
-        : `${K}.${LeafPaths<NonNullable<T[K]>>}`
-      : K;
-}[keyof T & string];
-
-/** Errors at build time unless `T` is exactly `never`. */
-type AssertNever<T extends never> = T;
-
-/**
- * Dotted leaf paths for every Core setting.
- *
- * Used by per-host "known TeXRA key" sets to derive `texra.*` prefixed key
- * lists for typo detection without hand-maintaining the list in each host.
- *
- * Kept in sync with the schema by the two compile-time guards just below: the
- * `satisfies` clause rejects a typo'd or renamed path, and
- * `_AssertCorePathsExhaustive` fails the build if a setting is added to the
- * schema without a matching entry here.
- */
-export const CORE_SETTING_PATHS = [
-  'agentOutputs.autoOpenFinal',
-  'childRunConcurrencyBudget',
-  'goal.enabled',
-  'model.gpt5ReasoningSummary',
-  'model.useOpenAIResponsesAPI',
-  'model.useGoogleInteractionsServerState',
-  'model.useBackgroundResponses',
-  'model.openaiParallelToolCalls',
-  'model.compactionThresholdPercent',
-  'model.retry.maxAttempts',
-  'chatgptCodex.preferSubscription',
-  'xaiGrok.preferSubscription',
-  'maxImageDimension',
-  'bib.defaultPath',
-  'bib.zoteroPort',
-  'latex.latexindentConfig',
-  'latex.texfmtConfig',
-  'latex.tikzInputDirectory',
-  'latex.tikzTemplate',
-  'latex.includeWorkspaceInTexinputs',
-  'latex.wrapCritiqueInAlign',
-  'latex.enabledReplacements',
-  'latex.enabledReplacementsRegex',
-  'latex.customReplacementsRegex',
-  'latex.customReplacements',
-  'latexdiff.tempFileLocation',
-  'git.numberOfCommitsToShow',
-  'agentReview.runOnCommit',
-  'audio.soxPath',
-  'logger.debugMode',
-  'telemetry.enabled',
-  'debug.saveModelIO',
-  'skills.enabled',
-  'toolUse.requireEditApproval',
-  'toolUse.requireBashApproval',
-] as const satisfies readonly LeafPaths<CoreSettings>[];
-
-export type CoreSettingPath = (typeof CORE_SETTING_PATHS)[number];
-
-const CORE_SETTING_PATH_SET = new Set<string>(CORE_SETTING_PATHS);
-
-/** Return a fresh copy of a Core setting's schema-owned default value. */
-export function getCoreSettingDefault(key: string): unknown {
-  const settingPath = key.startsWith('texra.') ? key.slice(6) : key;
-  if (!CORE_SETTING_PATH_SET.has(settingPath)) return undefined;
-
-  let value: unknown = DEFAULT_CORE_SETTINGS;
-  for (const segment of settingPath.split('.')) {
-    if (value === null || typeof value !== 'object') return undefined;
-    value = (value as Record<string, unknown>)[segment];
-  }
-  return value !== null && typeof value === 'object'
-    ? structuredClone(value)
-    : value;
-}
-
-// Build fails if any schema leaf path is missing from CORE_SETTING_PATHS above.
-type _AssertCorePathsExhaustive = AssertNever<
-  Exclude<LeafPaths<CoreSettings>, CoreSettingPath>
->;
-
-// Which hosts honor each Core setting — and the file in each host that reads
-// it — is declared once on the setting catalog's rows (`stateSettings.ts`,
-// `CORE_SETTING_ROWS`), keyed exhaustively by `CoreSettingPath`. The CLI's
-// unknown-key whitelist and the extension-only set are filters over those rows,
-// so the two hand-kept path lists that used to live here (and the guard that
-// checked one against the other) no longer exist.

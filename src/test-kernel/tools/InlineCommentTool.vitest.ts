@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  InlineCommentInputSchema,
   InlineCommentTool,
   setInlineCommentProvider,
   type InlineCommentProvider,
@@ -12,7 +11,6 @@ function fakeProvider(
   overrides: Partial<InlineCommentProvider> = {},
 ): InlineCommentProvider {
   return {
-    available: () => true,
     add: () => ({ threadId: 'c1', resolvedPath: '/abs/paper.tex' }),
     reply: () => true,
     setResolved: () => true,
@@ -23,54 +21,8 @@ function fakeProvider(
 
 const tool = new InlineCommentTool();
 
-describe('InlineCommentInputSchema', () => {
-  it('accepts a valid add command and rejects unknown keys', () => {
-    expect(
-      InlineCommentInputSchema.parse({
-        command: 'add',
-        path: 'paper.tex',
-        line: 12,
-        body: 'tighten this claim',
-      }).command,
-    ).toBe('add');
-
-    expect(() =>
-      InlineCommentInputSchema.parse({
-        command: 'list',
-        unexpected: true,
-      }),
-    ).toThrow();
-  });
-
-  it('rejects empty body and non-positive lines', () => {
-    expect(() =>
-      InlineCommentInputSchema.parse({
-        command: 'add',
-        path: 'p.tex',
-        line: 1,
-        body: '',
-      }),
-    ).toThrow();
-    expect(() =>
-      InlineCommentInputSchema.parse({
-        command: 'add',
-        path: 'p.tex',
-        line: 0,
-        body: 'x',
-      }),
-    ).toThrow();
-  });
-});
-
 describe('InlineCommentTool.call', () => {
   beforeEach(() => setInlineCommentProvider(fakeProvider()));
-
-  it('reports unavailable when no host provider is wired', async () => {
-    setInlineCommentProvider(fakeProvider({ available: () => false }));
-    const result = await tool.call({ command: 'list' });
-    expect(result.summary).toBe('Inline comments unavailable');
-    expect(result.status).toBe('executed');
-  });
 
   it('validates required fields for add', async () => {
     const result = await tool.call({ command: 'add', path: 'p.tex', line: 3 });

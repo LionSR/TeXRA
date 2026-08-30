@@ -15,10 +15,6 @@ import type { MathMarkupOption } from './mathMarkup';
 export const NO_LATEXDIFF_OPERATIONS_MESSAGE =
   'No LaTeX diff operations available for this run.';
 
-/** A single `runDiff` call returned no usable diff path. */
-export const LATEXDIFF_GENERATE_FAILED_MESSAGE =
-  'Failed to generate diff file.';
-
 /**
  * Every operation in a run failed. No trailing period: this sentence belongs to
  * the markup-annotated family the extension also uses for its partial-success

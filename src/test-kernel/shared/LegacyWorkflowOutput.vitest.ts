@@ -1,13 +1,12 @@
 // Node imports
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import { runCleanSingle } from '@housekeeping/clean';
+import { runCleanMultiple, runCleanSingle } from '@housekeeping/clean';
 import { runPackMultiple } from '@housekeeping/pack';
 import {
   findFilesFromPatterns,
@@ -20,13 +19,16 @@ import {
   workflowOutputCopyStem,
 } from '@shared/constants/workflowOutput';
 import { installPlatform } from '@test/support/setupPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('filename-era workflow output grammar', () => {
+  const tempDirs = useTempDirs();
   let workspacePath: string;
 
   beforeEach(async () => {
-    workspacePath = await mkdtemp(
-      path.join(tmpdir(), 'texra-legacy-workflow-output-'),
+    workspacePath = await makeTempDir(
+      'texra-legacy-workflow-output-',
+      tempDirs,
     );
     await installPlatform(
       {
@@ -39,7 +41,6 @@ describe('filename-era workflow output grammar', () => {
 
   afterEach(async () => {
     await installPlatform();
-    await rm(workspacePath, { recursive: true, force: true });
   });
 
   it.each([
@@ -170,5 +171,15 @@ describe('filename-era workflow output grammar', () => {
       code: 'ENOENT',
     });
     await expect(access(inputPath)).resolves.toBeUndefined();
+  });
+
+  it('cleans a nonempty batch without a primary input file', async () => {
+    const outputPath = path.join(workspacePath, 'chapter_polish_r0_gpt-4.tex');
+    await writeFile(outputPath, 'fixture');
+
+    await expect(
+      runCleanMultiple('gpt-4', '', 'custom:polish_long', ['chapter.tex']),
+    ).resolves.toEqual({ status: 'success' });
+    await expect(access(outputPath)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });

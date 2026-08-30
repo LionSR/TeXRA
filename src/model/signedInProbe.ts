@@ -13,7 +13,7 @@
 /** Reads the current sign-in state. Never throws; never hits the network. */
 export type SignedInProbe = () => Promise<boolean>;
 
-export interface SignedInProbeSlot {
+interface SignedInProbeSlot {
   /** Install the app's sign-in probe. */
   setProbe(next: SignedInProbe): void;
   isSignedIn(): Promise<boolean>;

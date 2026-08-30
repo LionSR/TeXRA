@@ -3,18 +3,12 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports - common
-import * as logger from '@logger/logUtils';
+import { createLog, type Log } from '@logger/logUtils';
 import {
   UnsupportedCommandError,
   type DispatcherFn,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-
-/** The channel-first logging surface this view and its subclasses use. */
-type ViewMessageLogger = Pick<
-  typeof logger,
-  'debug' | 'info' | 'warn' | 'error'
->;
 
 type CommandMessage = { command: string };
 
@@ -38,9 +32,8 @@ function isCommandMessage(
 export abstract class BaseViewMessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
 > {
-  protected readonly logger: ViewMessageLogger;
   protected readonly channel: string;
-  private readonly log: ReturnType<typeof logger.createLog>;
+  protected readonly log: Log;
 
   /**
    * Active webview reference, tracked on every dispatch. Subclasses access it
@@ -49,9 +42,8 @@ export abstract class BaseViewMessageHandler<
   private _activeView: T | undefined;
 
   constructor(protected readonly viewName: string) {
-    this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
-    this.log = logger.createLog(this.channel);
+    this.log = createLog(this.channel);
   }
 
   /**
@@ -99,12 +91,18 @@ export abstract class BaseViewMessageHandler<
   }
 
   /**
-   * Extension point invoked at the start of {@link dispatchInbound}, before
-   * the dispatcher runs. Subclasses that need per-message setup against the
-   * active webview (e.g. attaching it to sub-managers) override this instead
-   * of reimplementing dispatch.
+   * Post a message to the active view's webview, awaiting delivery. A `null`
+   * or `undefined` message posts nothing, so callers can forward an optional
+   * response payload without a guard of their own. Unlike
+   * {@link postToActiveView}, this resolves only after the post settles —
+   * mutation paths that run a follow-up step depend on that ordering.
    */
-  protected onDispatch?(webviewView: T): void;
+  protected async postMessageToActiveWebview(message: unknown): Promise<void> {
+    if (message == null) return;
+    await this.withActiveWebview(async (webview) => {
+      await webview.postMessage(message);
+    });
+  }
 
   /**
    * Schema-driven dispatch shared by views that route through a typed
@@ -119,7 +117,6 @@ export abstract class BaseViewMessageHandler<
     handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
     this.setActiveView(webviewView);
-    this.onDispatch?.(webviewView);
 
     let unsupported = false;
     const handled = dispatcher(message, handlers, (error) => {

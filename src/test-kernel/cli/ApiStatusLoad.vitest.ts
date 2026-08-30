@@ -23,6 +23,14 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
 
 vi.mock('@cli/runtime/modelAccessSelection', () => ({
   readCliModelAccessStatus: mocks.readCliModelAccessStatus,
+  mergeCliTexraAccountStatus: (
+    access: Record<string, unknown>,
+    profile: { authenticated: boolean; accountLabel?: string },
+  ) => ({
+    ...access,
+    texraSignedIn: profile.authenticated,
+    texraAccountLabel: profile.accountLabel,
+  }),
 }));
 
 vi.mock('@model/apiProviders', () => ({
@@ -77,6 +85,16 @@ function codingPlans(
 
 function accountStatusLines(): Promise<string[]> {
   return loadCliDetailedAccountStatusLines();
+}
+
+function launcherStatus(
+  profile: {
+    authenticated: boolean;
+    accountLabel?: string;
+    note?: string;
+  } = { authenticated: false },
+): Promise<readonly string[]> {
+  return loadCliApiStatus(profile);
 }
 
 function renderPreferenceRoute(
@@ -152,21 +170,19 @@ describe('loadCliApiStatus', () => {
   ])(
     'preserves signed-out launcher details $name',
     async ({ profile, lines }) => {
-      mocks.getCliAuthProfile.mockResolvedValue(profile);
-
-      await expect(loadCliApiStatus()).resolves.toEqual(lines);
+      await expect(launcherStatus(profile)).resolves.toEqual(lines);
     },
   );
 
   it('groups personal keys with their route', async () => {
-    mocks.getCliAuthProfile.mockResolvedValue({
+    const profile = {
       authenticated: true,
       accountLabel: 'researcher@example.com',
       note: 'Account metadata may be stale.',
-    });
+    };
     setPersonalKeys('deepseek');
 
-    await expect(loadCliApiStatus()).resolves.toEqual([
+    await expect(launcherStatus(profile)).resolves.toEqual([
       'api: your own API keys',
       'your own API keys: DeepSeek',
       'auth: signed in as researcher@example.com',
@@ -179,12 +195,12 @@ describe('loadCliApiStatus', () => {
       new Error('preference store offline'),
     );
 
-    await expect(loadCliApiStatus()).resolves.toEqual([
+    await expect(launcherStatus()).resolves.toEqual([
       'api: your own API keys',
       'auth: signed out',
     ]);
     expect(mocks.readCliModelAccessStatus).not.toHaveBeenCalled();
-    expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
+    expect(mocks.getCliAuthProfile).not.toHaveBeenCalled();
     expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
   });
 
@@ -490,6 +506,7 @@ describe('loadCliApiStatus', () => {
         grokSignedIn: false,
         chatGptAccountLabel: 'chatgpt@example.com',
         texraSignedIn: true,
+        texraAccountLabel: 'texra@example.com',
       },
       lines: [
         'ChatGPT preference: On · chatgpt@example.com',
@@ -505,19 +522,6 @@ describe('loadCliApiStatus', () => {
     expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
   });
 
-  it('does not ask signed-out personal-key users to add another key', async () => {
-    setPersonalKeys('deepseek');
-
-    await expect(
-      loadCliApiStatus({ includeActionHint: true }),
-    ).resolves.toEqual([
-      'api: your own API keys',
-      'your own API keys: DeepSeek',
-      'auth: signed out',
-      'actions: choose Model access below; provider keys are configured',
-    ]);
-  });
-
   it('lists providers configured by secret or env origin', async () => {
     const originsByProvider: Record<string, 'secret' | 'env' | 'none'> = {
       deepseek: 'secret',
@@ -528,7 +532,7 @@ describe('loadCliApiStatus', () => {
         Promise.resolve(originsByProvider[provider] ?? 'none'),
     );
 
-    await expect(loadCliApiStatus()).resolves.toEqual([
+    await expect(launcherStatus()).resolves.toEqual([
       'api: your own API keys',
       'your own API keys: DeepSeek, Kimi Code',
       'auth: signed out',

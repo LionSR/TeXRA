@@ -242,20 +242,6 @@ export function suggestSlashCommand(
   return best?.command;
 }
 
-export function slashPickIntent(
-  command: SlashCommand,
-  acceptKey: 'enter' | 'tab',
-): SlashPickIntent {
-  // Tab always just fills the input so the user can keep editing (e.g. add
-  // arguments). Enter runs the highlighted command immediately — except for:
-  //  - commands that mount a structured form, which need the input cleared so
-  //    the form can take over (InputBar handles that branch before reading the
-  //    intent, so 'complete' here is just a safe default for them).
-  if (acceptKey !== 'enter') return 'complete';
-  if (command.formComponent) return 'complete';
-  return 'submit';
-}
-
 /**
  * Parse a `"/cmd remainder"` input into `{ name, remainder }`.
  * Returns `undefined` if `text` is not a slash command. Only command-shaped

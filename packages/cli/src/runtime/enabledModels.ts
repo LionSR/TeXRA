@@ -6,16 +6,12 @@
  * every host. This module only resolves CLI argument spellings and shapes the
  * rows `texra models enabled` and the `/models` form print.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { getModelLabel } from '@shared/model/modelLabel';
 
-import {
-  isCliSupportedModelId,
-  knownCliModelIds,
-  resolveKnownCliModelId,
-} from './cliConfig';
+import { knownCliModelIds, resolveKnownCliModelId } from './cliConfig';
 
 export interface CliEnabledModelRow {
   readonly id: string;
@@ -23,11 +19,6 @@ export interface CliEnabledModelRow {
   readonly provider: string;
   readonly enabled: boolean;
   readonly deprecated: boolean;
-}
-
-function modelLabel(id: string): string {
-  const config = MODEL_CONFIGS[id];
-  return config?.label ?? config?.fullName ?? id;
 }
 
 /**
@@ -39,10 +30,10 @@ export function listCliEnabledModelCatalog(): readonly CliEnabledModelRow[] {
   return knownCliModelIds()
     .filter((id) => !isRetiredModel(id))
     .map((id) => {
-      const config = MODEL_CONFIGS[id];
+      const config = getRuntimeModelConfig(id);
       return {
         id,
-        label: modelLabel(id),
+        label: getModelLabel(id),
         provider: config?.provider ?? 'unknown',
         enabled: enabled.has(id),
         deprecated: isDeprecatedModel(id),
@@ -67,7 +58,7 @@ export async function setCliModelEnabled(
   readonly list: readonly string[];
 }> {
   const model = resolveKnownCliModelId(modelInput);
-  if (!model || !isCliSupportedModelId(model)) {
+  if (!model) {
     throw new Error(
       `Unknown model "${modelInput}". Use an id from \`texra models list --all\`.`,
     );

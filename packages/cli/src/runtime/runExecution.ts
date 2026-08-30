@@ -1,3 +1,4 @@
+import pDefer from 'p-defer';
 import {
   attachTerminalResultToast,
   runAgent,
@@ -9,16 +10,14 @@ import {
 import {
   deriveResumability,
   ExecutionLeaseLostError,
-  inspectExecutionLease,
   type ResumabilityDecision,
+  finalizeRun,
+  retainFlowRecordUnlessCompleted,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -29,14 +28,13 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
-import { finalizeCliExecution } from './executionFinalization';
 import {
   formatInterruptedResumeHint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
-import { initializeHeadlessTranscriptSession } from './transcriptSession';
+import { initializeCliTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -61,8 +59,6 @@ interface CliExecuteOptions {
   readonly enforceCategory?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
-  /** Additional tools unavailable in this CLI runtime. */
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Workflow output handler extended with the CLI publication gate; attempt
    *  the commit synchronously once before destination validation or I/O. */
   readonly openWorkflowOutput?: CliWorkflowOutputHandler;
@@ -75,13 +71,8 @@ interface CliExecuteOptions {
   ) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedExecution?: (
-    resumability: Extract<ResumabilityDecision, { resumable: true }>,
+    resumability: Extract<ResumabilityDecision, { kind: 'checkpoint' }>,
   ) => boolean;
-  /** Wrap the run (e.g. multi-agent preset visibility) without leaking the
-   *  runtime-host lifecycle into the caller. */
-  readonly wrap?: (
-    run: () => Promise<ExecuteAgentResult>,
-  ) => Promise<ExecuteAgentResult>;
 }
 
 type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
@@ -154,13 +145,15 @@ export async function executeCliConfig<
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await finalizeCliExecution(
+    await finalizeRun({
       executionId,
-      RUN_OUTCOME.FAILED,
-      'delete',
-      (finalizationError) =>
+      outcome: RUN_OUTCOME.FAILED,
+      // Reported FAILED, so the run's own checkpoint outlives the mismatch
+      // and stays resumable (#11315).
+      flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.FAILED),
+      report: (finalizationError) =>
         writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-    );
+    });
     writeTextStderr(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
@@ -221,8 +214,8 @@ export async function executeCliToolUseConfig(
 
 /**
  * Shared headless-execution skeleton for `run`, `agents run`, and
- * `multi-agent run`: stand up a runtime host, run the request (optionally
- * wrapped), always close the host, and resolve the terminal outcome.
+ * `multi-agent run`: stand up a runtime host, run the request, always close
+ * the host, and resolve the terminal outcome.
  * Centralizing this stops the three runners from drifting apart on host
  * lifecycle and outcome handling, which is how their behavior diverged before.
  *
@@ -252,7 +245,7 @@ export async function executeCliRequest(
 > {
   // Transcript persistence is a launch prerequisite for every headless run.
   // This executes before runtime-host construction and before runAgent.
-  const { session } = await initializeHeadlessTranscriptSession();
+  const { session } = await initializeCliTranscriptSession();
   session.setApprovalPolicy(runContext.approvalPolicy);
   const presentationHost = createCliRuntimeHost(runContext);
   let failurePresented = false;
@@ -260,7 +253,7 @@ export async function executeCliRequest(
     runContext.outputFormat === 'text' && runContext.renderRunProgress === true;
   const detachRunProgressRenderer =
     presentationHost.attachRunProgressRenderer(session);
-  const detachHostInteractions = session.useHostInteractions(
+  const detachHostInteractions = session.interactions.use(
     createHeadlessCliHostInteractions(runContext, {
       beforePrompt: () => presentationHost.prepareInteractivePrompt?.(),
       emit: (event, payload) => {
@@ -296,78 +289,74 @@ export async function executeCliRequest(
   let ownedExecutionId: ExecutionId | undefined;
   const launchAbortController = new AbortController();
   let shutdownRequested = false;
-  let shutdownInterrupted = false;
-  let workflowOutputPublicationCommitted = false;
-  let shutdownArtifactFailure: unknown;
-  let shutdownFinalizationFailureReported = false;
+  // Workflow-output publication and shutdown-driven interruption race on the
+  // same synchronous tick (see tryCommitWorkflowOutputPublication and the
+  // onShutdown handler below): at most one may own the terminal verdict for
+  // this launch. Modeling that as one variable makes "both committed and
+  // interrupted" unrepresentable instead of relying on two booleans staying
+  // in sync by hand. The artifact-failure and report-dedupe bookkeeping are
+  // only ever meaningful once interrupted, so they live on that variant too.
+  type LaunchVerdict =
+    | { readonly kind: 'undecided' }
+    | { readonly kind: 'published' }
+    | {
+        readonly kind: 'interrupted';
+        artifactFailure: unknown;
+        finalizationFailureReported: boolean;
+      };
+  let launchVerdict: LaunchVerdict = { kind: 'undecided' };
   const reportFinalizationFailure = (error: unknown): void => {
     session.interactions.emit('requestShowError', {
       message: toErrorMessage(error),
     });
   };
   const reportShutdownFinalizationFailure = (error: Error): void => {
-    if (shutdownFinalizationFailureReported) return;
-    shutdownFinalizationFailureReported = true;
+    if (
+      launchVerdict.kind !== 'interrupted' ||
+      launchVerdict.finalizationFailureReported
+    ) {
+      return;
+    }
+    launchVerdict.finalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
-  let settleLeaseAcquired: (
-    executionId: ExecutionId | undefined,
-  ) => void = () => undefined;
-  const leaseAcquired = new Promise<ExecutionId | undefined>((resolve) => {
-    settleLeaseAcquired = resolve;
-  });
-  let settleShutdownFinalization: () => void = () => undefined;
-  const shutdownFinalizationDone = new Promise<void>((resolve) => {
-    settleShutdownFinalization = resolve;
-  });
-  let settleRecoveryNoticeStarted: () => void = () => undefined;
-  const recoveryNoticeStarted = new Promise<void>((resolve) => {
-    settleRecoveryNoticeStarted = resolve;
-  });
+  const leaseAcquired = pDefer<ExecutionId | undefined>();
+  const shutdownFinalizationDone = pDefer<void>();
+  const recoveryNoticeStarted = pDefer<void>();
   let shutdownStatusFinalized: Promise<boolean> | undefined;
   // Both callbacks enter on this event loop, and neither yields between the
   // check and assignment. Exactly one can therefore own the terminal verdict.
   const tryCommitWorkflowOutputPublication = (): boolean => {
-    if (shutdownInterrupted) return false;
-    workflowOutputPublicationCommitted = true;
+    if (launchVerdict.kind === 'interrupted') return false;
+    launchVerdict = { kind: 'published' };
     return true;
   };
   const finalizeShutdownStatus = (): Promise<boolean> => {
-    if (!shutdownInterrupted) return Promise.resolve(false);
+    if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
-      const executionId = await leaseAcquired;
+      const executionId = await leaseAcquired.promise;
       if (!executionId) return false;
       try {
-        const terminalStatusPersisted = await finalizeCliExecution(
-          executionId,
-          RUN_OUTCOME.CANCELLED,
-          'preserve',
-          reportShutdownFinalizationFailure,
-        );
+        const terminalStatusPersisted = (
+          await finalizeRun({
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            report: reportShutdownFinalizationFailure,
+          })
+        ).ok;
         await session.releaseExecutionLease(executionId);
         const resumability = terminalStatusPersisted
           ? await deriveResumability(executionId)
           : undefined;
-        const canAdvertiseRecovery =
-          resumability?.resumable === true &&
-          options.onInterruptedExecutionFinalized !== undefined &&
-          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true);
-        let lease:
-          Awaited<ReturnType<typeof inspectExecutionLease>> | undefined;
-        if (canAdvertiseRecovery) {
-          try {
-            lease = await inspectExecutionLease(executionId);
-          } catch {
-            // Lease inspection only decides whether the optional recovery
-            // notice is immediately usable. Failure suppresses that notice;
-            // it does not invalidate the durable cancellation above.
-          }
-        }
+        // The lease was released just above, so the checkpoint alone decides
+        // whether the recovery notice is usable.
         if (
-          canAdvertiseRecovery &&
-          (lease?.status === 'missing' || lease?.status === 'orphaned')
+          resumability?.kind === 'checkpoint' &&
+          options.onInterruptedExecutionFinalized !== undefined &&
+          (options.canAdvertiseInterruptedExecution?.(resumability) ?? true)
         ) {
-          settleRecoveryNoticeStarted();
+          recoveryNoticeStarted.resolve();
           await options.onInterruptedExecutionFinalized(executionId);
         }
         return true;
@@ -376,8 +365,11 @@ export async function executeCliRequest(
         // below, which rethrows it into runAgent's artifact aggregate. This
         // memoized operation itself resolves false so the outer shutdown await
         // cannot rethrow the same error over the primary run failure.
-        if (!(error instanceof ExecutionLeaseLostError)) {
-          shutdownArtifactFailure = error;
+        if (
+          !(error instanceof ExecutionLeaseLostError) &&
+          launchVerdict.kind === 'interrupted'
+        ) {
+          launchVerdict.artifactFailure = error;
         }
         return false;
       }
@@ -389,24 +381,32 @@ export async function executeCliRequest(
     async (shutdownDeadline) => {
       shutdownRequested = true;
       launchAbortController.abort();
-      // Paired with tryCommitWorkflowOutputPublication: keep this flag read
-      // and the shutdownInterrupted assignment below in one synchronous turn.
+      // Paired with tryCommitWorkflowOutputPublication: keep this read of
+      // launchVerdict and the assignment below in one synchronous turn.
       // Headless shutdown deliberately cascades into active children: a
       // detached child cannot outlive the exiting CLI process, so the
       // detach-on-stop toggle is not consulted on this path.
       const interruptionAccepted =
-        !workflowOutputPublicationCommitted && launchExecutionId
+        launchVerdict.kind !== 'published' && launchExecutionId
           ? session.executions.kill(launchExecutionId, {
               detachActiveChildren: false,
             })
           : false;
-      shutdownInterrupted = interruptionAccepted || shutdownInterrupted;
+      if (interruptionAccepted && launchVerdict.kind === 'undecided') {
+        launchVerdict = {
+          kind: 'interrupted',
+          artifactFailure: undefined,
+          finalizationFailureReported: false,
+        };
+      }
       let resumableCheckpoint:
-        Extract<ResumabilityDecision, { resumable: true }> | undefined;
-      if (shutdownInterrupted && ownedExecutionId) {
+        Extract<ResumabilityDecision, { kind: 'checkpoint' }> | undefined;
+      if (launchVerdict.kind === 'interrupted' && ownedExecutionId) {
         try {
           const resumability = await deriveResumability(ownedExecutionId);
-          if (resumability.resumable) resumableCheckpoint = resumability;
+          if (resumability.kind === 'checkpoint') {
+            resumableCheckpoint = resumability;
+          }
         } catch {
           // The ordinary bounded shutdown path below remains authoritative
           // when checkpoint inspection itself is unavailable.
@@ -427,20 +427,24 @@ export async function executeCliRequest(
           true) &&
         options.onInterruptedExecutionFinalized
       ) {
-        await shutdownFinalizationDone;
+        await shutdownFinalizationDone.promise;
         return;
       }
       const first = await Promise.race([
-        shutdownFinalizationDone.then(() => 'finalized' as const),
+        shutdownFinalizationDone.promise.then(() => 'finalized' as const),
         new Promise<'deadline'>((resolve) =>
           onAbort(shutdownDeadline, () => resolve('deadline')),
         ),
         ...(options.onInterruptedExecutionFinalized
-          ? [recoveryNoticeStarted.then(() => 'recovery-started' as const)]
+          ? [
+              recoveryNoticeStarted.promise.then(
+                () => 'recovery-started' as const,
+              ),
+            ]
           : []),
       ]);
       if (first === 'recovery-started') {
-        await shutdownFinalizationDone;
+        await shutdownFinalizationDone.promise;
       }
     },
   );
@@ -459,16 +463,19 @@ export async function executeCliRequest(
         launchSignal: launchAbortController.signal,
         beforeLeaseRelease: async () => {
           const handled = await finalizeShutdownStatus();
-          if (shutdownArtifactFailure !== undefined) {
-            const error = shutdownArtifactFailure;
-            shutdownArtifactFailure = undefined;
+          if (
+            launchVerdict.kind === 'interrupted' &&
+            launchVerdict.artifactFailure !== undefined
+          ) {
+            const error = launchVerdict.artifactFailure;
+            launchVerdict.artifactFailure = undefined;
             throw error;
           }
           return handled;
         },
         onExecutionLeaseAcquired: (executionId) => {
           ownedExecutionId = executionId;
-          settleLeaseAcquired(executionId);
+          leaseAcquired.resolve(executionId);
         },
         stopAfterCycle: options.stopAfterCycle,
         approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
@@ -477,15 +484,12 @@ export async function executeCliRequest(
         ),
         onApprovalPolicyDenial: () =>
           warnApprovalDenied(runContext, 'Tool or edit approval'),
-        runtimeUnavailableTools: [
-          ...getDefaultUnavailableToolNames('cli'),
-          ...(options.runtimeUnavailableTools ?? []),
-        ],
+        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
       });
     } finally {
       // Unblock an in-flight shutdown when acquisition failed before a scope
       // became available. Promise resolution is one-shot after success.
-      settleLeaseAcquired(undefined);
+      leaseAcquired.resolve(undefined);
     }
   };
 
@@ -507,7 +511,7 @@ export async function executeCliRequest(
     await presentationHost.close();
   };
   try {
-    const result = await (options.wrap ? options.wrap(invoke) : invoke());
+    const result = await invoke();
     runResult = { ok: true, result };
   } catch (err) {
     // Only a classified, already-handled AgentError resolves to a non-zero
@@ -518,11 +522,7 @@ export async function executeCliRequest(
       shutdownLaunchAborted = true;
     } else if (!(err instanceof AgentError)) {
       primaryRunFailure = { error: err };
-    } else if (
-      !failurePresented &&
-      !hasErrorPresentedMarker(err) &&
-      !hasErrorPresentationPending(err)
-    ) {
+    } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
       // A failure before lifecycle startup has no `result` event. Preserve the
       // ordinary toast path when it ran, and provide the missing direct fallback
       // while the presentation host is still attached. A launch failure that
@@ -550,7 +550,7 @@ export async function executeCliRequest(
   } catch (error) {
     cleanupFailures.push(error);
   } finally {
-    settleShutdownFinalization();
+    shutdownFinalizationDone.resolve();
     if (!runResult.ok || !finalizationCompleted) {
       try {
         await detachPresentation();

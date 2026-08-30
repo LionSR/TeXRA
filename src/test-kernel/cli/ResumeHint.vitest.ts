@@ -1,4 +1,8 @@
+import '@test/support/defaultSessionTestSetup';
+
 import { describe, expect, it } from 'vitest';
+
+import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
   collectResumeUsage,
@@ -12,19 +16,31 @@ import {
 import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   type ActiveChildInfo,
+  type ExecutionId,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { buildChildRosters } from '@test/support/childRosters';
+import { snapshotFacts } from '@test/support/storeTestDrivers';
 
+/** A stream's view slice, with any `usage` accumulated on the snapshot store
+ *  instead — the resume summary sums the store's cumulative projection. */
 function makeSlice(
-  over: Partial<StreamSlice> & { streamId: string },
+  over: Partial<StreamSlice> & {
+    streamId: string;
+    readonly usage?: TokenUsageStats;
+  },
 ): StreamSlice {
-  return {
-    ...emptySlice(over.streamId as StreamTabId),
-    ...over,
-    streamId: over.streamId as StreamTabId,
-  };
+  const { usage, ...sliceOverrides } = over;
+  const streamId = over.streamId as StreamTabId;
+  if (usage) {
+    snapshotFacts(defaultSession().snapshots).addUsage(
+      streamId,
+      `${over.streamId}-usage` as ExecutionId,
+      usage,
+    );
+  }
+  return { ...emptySlice(streamId), ...sliceOverrides, streamId };
 }
 
 /** A finished roster row retained for display — the resume-target shape. */

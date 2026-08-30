@@ -2,7 +2,8 @@
  * Agent tool resolution — single source of truth for the effective tool list.
  *
  * The pipeline, in order:
- *   1. Start with the tool names declared in the agent YAML.
+ *   1. Start with the tool names declared in the agent YAML, and take each
+ *      one's contract (description, parameter schema) from the registry.
  *   2. Strip approval-gated tools when approval prompts are unavailable
  *      (e.g. a subagent running without an interactive approval channel).
  *   3. Strip user-disabled tools (settings dashboard toggle).
@@ -16,10 +17,10 @@
  *      and an "Available agents:" roster instead of a snapshot frozen when the
  *      tool registry was first constructed.
  *
- * Routine filtering outcomes (disabled, unavailable, not in registry) are
- * intentionally silent — YAML typos are surfaced once at load time by
- * `resolveToolDefinitions`; tools with missing external dependencies are
- * skipped quietly and stay inactive until set up (no toast on each cycle).
+ * Routine filtering outcomes (disabled, unavailable) are intentionally silent;
+ * tools with missing external dependencies are skipped quietly and stay
+ * inactive until set up (no toast on each cycle). A declared name the registry
+ * does not hold is the one reported case.
  */
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
@@ -34,11 +35,8 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import {
+  annotateDelegationAvailability,
   availableModelNamesFromOptions,
-  visibleDelegationAgentsBlock,
-  withDelegationAgentAvailability,
-  withDelegationModelAvailability,
-  withDelegationWorktreeAvailability,
 } from '@tools/delegation/delegationAvailability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -59,10 +57,6 @@ interface ResolveAgentToolsInput {
   runtimeUnavailableTools?: readonly string[];
   /** Conditional runtime tool injections. Defaults to the shared registry. */
   toolInjections?: ToolInjectionRegistry;
-}
-
-export interface ResolvedAgentTools {
-  tools: ToolDefinition[];
 }
 
 /**
@@ -109,7 +103,7 @@ export async function resolveAgentTools({
   approvalPromptsUnavailable,
   runtimeUnavailableTools,
   toolInjections = SharedToolInjectionRegistry,
-}: ResolveAgentToolsInput): Promise<ResolvedAgentTools> {
+}: ResolveAgentToolsInput): Promise<ToolDefinition[]> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
@@ -129,19 +123,24 @@ export async function resolveAgentTools({
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
   for (const config of toolConfigs) {
-    const def = typeof config === 'string' ? { name: config } : config;
-    if (!passesRuntimeGates(def.name)) continue;
-    if (disabled.has(def.name)) continue;
-    if (unavailable.has(def.name)) continue;
-    if (!effectiveRegistry.has(def.name)) {
+    const name = typeof config === 'string' ? config : config.name;
+    if (resolvedNames.has(name)) continue;
+    if (!passesRuntimeGates(name)) continue;
+    if (disabled.has(name)) continue;
+    if (unavailable.has(name)) continue;
+    const registered = effectiveRegistry.get(name);
+    if (!registered) {
       // A declared name with no registration is a configuration error (typo,
       // or a tool retired from the registry) — dropping it silently would
       // strip the agent's capability with no trace.
-      logger.warn(`Declared tool not found in registry: ${def.name}`);
+      logger.warn(`Declared tool not found in registry: ${name}`);
       continue;
     }
-    resolved.push(def);
-    resolvedNames.add(def.name);
+    // The contract the model is shown is the registry's own, never one an
+    // agent definition carries: a declaration names a tool, it does not
+    // redefine it.
+    resolved.push(registered.definition);
+    resolvedNames.add(name);
   }
   for (const injection of toolInjections.list()) {
     if (!injection.shouldInject()) continue;
@@ -158,40 +157,7 @@ export async function resolveAgentTools({
 
   const availableModelNames =
     await availableDelegationModelNamesForTools(resolved);
-  return {
-    tools: resolved.map((tool) =>
-      annotateDelegationTool(tool, availableModelNames),
-    ),
-  };
-}
-
-/**
- * Refresh a delegation tool's "Available models:", "Available agents:", and
- * "Git worktree support:" lines from current state. A tool declaring no
- * `availabilityCategory` returns untouched at the early guard.
- * `availableModelNames` is `undefined` only when the resolved list held no
- * delegation tool at all, so in that case every tool reaching this function is a
- * non-delegation tool that returns early — `category` and `availableModelNames`
- * are independent (one keys off the tool name, the other off the whole list),
- * not causally linked.
- */
-function annotateDelegationTool(
-  tool: ToolDefinition,
-  availableModelNames: readonly string[] | null | undefined,
-): ToolDefinition {
-  const category = tool.availabilityCategory;
-  if (!category) return tool;
-  const withModels =
-    availableModelNames === undefined
-      ? tool
-      : withDelegationModelAvailability(tool, availableModelNames);
-  // The annotators no-op without a description, and resolving the roster /
-  // worktree state reaches platform state — skip those lookups when there is
-  // nothing to annotate (e.g. a tool config that carries only a name).
-  if (!withModels.description) return withModels;
-  const withAgents = withDelegationAgentAvailability(
-    withModels,
-    visibleDelegationAgentsBlock(category),
+  return resolved.map((tool) =>
+    annotateDelegationAvailability(tool, availableModelNames),
   );
-  return withDelegationWorktreeAvailability(withAgents);
 }

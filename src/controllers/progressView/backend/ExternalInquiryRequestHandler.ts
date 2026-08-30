@@ -15,7 +15,7 @@ import { ApprovalRequestHandler } from './ApprovalRequestHandler';
 
 const MAX_INQUIRY_THREADS = 100;
 
-export interface ExternalInquiryRequestHandlerOptions {
+interface ExternalInquiryRequestHandlerOptions {
   show: (permission: ExternalInquiryPermission) => void;
   dismiss: (requestId: string) => void;
   syncThreads: (threads: InquiryThreadUpdatedEvent[]) => void;
@@ -77,7 +77,7 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
         const lastTurn = manifest.turns.at(-1);
         if (!lastTurn || lastTurn.kind !== 'open') continue;
 
-        const basePermission = {
+        const permission = {
           requestId: manifest.threadId,
           threadId: manifest.threadId,
           question: lastTurn.question,
@@ -90,11 +90,7 @@ export class ExternalInquiryRequestHandler extends ApprovalRequestHandler<
           draft: getOpenTurnDraft(manifest),
           transcript: manifestToTranscript(manifest),
         };
-        this.stagePresentationForReplay(
-          manifest.turns.length > 1
-            ? { ...basePermission, mode: 'followUp' }
-            : { ...basePermission, mode: 'new' },
-        );
+        this.stagePresentationForReplay(permission);
       } catch (error) {
         // Skip unreadable manifests; the thread-list read reports valid peers.
         this.options.logger?.debug(

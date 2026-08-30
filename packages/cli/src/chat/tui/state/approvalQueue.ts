@@ -15,6 +15,7 @@
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 
+import { warn as logWarning } from '@logger/logUtils';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { QuotaFallbackRouteId } from '@shared/quotaFallbackRoutes';
 import type {
@@ -25,8 +26,8 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { assertNever } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export type { ApprovalBypassKind };
 export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 /**
@@ -89,6 +90,8 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly disableQuotaRoute?: QuotaFallbackRouteId;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
   readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
+  /** Run-as-goal only: extend automatic commands to edits and delegated work. */
+  readonly goalAutoApproveAll?: true;
 }
 
 export interface PendingApproval {
@@ -218,9 +221,13 @@ function presentForeground(): void {
     item.presented = true;
     try {
       item.onPresent?.(item.payload);
-    } catch {
+    } catch (error) {
       // Presentation hooks update surrounding TUI state only; approval
       // resolution must remain available even if focus activation fails.
+      logWarning(
+        'cli.tui',
+        `Approval presentation hook failed: ${toErrorMessage(error)}`,
+      );
     }
   }
   if (foregroundItem() !== item) return;
@@ -337,10 +344,15 @@ export function approvalPayloadStreamId(
  * focusing a session surfaces that session's approval immediately.
  * `includeSessionWide` also promotes stream-less (session-wide) items — pass
  * it when promoting the root stream, whose row those items fold onto.
+ * `includeStreamIds` lets a composite surface promote requests owned by the
+ * streams it presents, such as a workflow popup's direct children.
  */
 export function promoteApprovalsForStream(
   streamId: StreamTabId,
-  options: { readonly includeSessionWide?: boolean } = {},
+  options: {
+    readonly includeSessionWide?: boolean;
+    readonly includeStreamIds?: ReadonlySet<StreamTabId>;
+  } = {},
 ): void {
   const items = QUEUE.get();
   if (items.length < 2) return;
@@ -348,6 +360,8 @@ export function promoteApprovalsForStream(
     const itemStreamId = approvalPayloadStreamId(item.payload);
     return (
       itemStreamId === streamId ||
+      (itemStreamId !== undefined &&
+        options.includeStreamIds?.has(itemStreamId) === true) ||
       (options.includeSessionWide === true && itemStreamId === undefined)
     );
   };

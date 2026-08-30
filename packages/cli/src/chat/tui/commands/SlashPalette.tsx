@@ -11,7 +11,6 @@ import { POINTER } from '@cli/tui/ui/glyphs';
 import { clamp } from '@utils/core';
 import {
   matchSlashCommands,
-  slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
 } from './slashRegistry';
@@ -106,9 +105,7 @@ export function slashPaletteOwnsArrows(matchCount: number): boolean {
 export function slashPaletteEnterHintAction(
   command: SlashCommand | undefined,
 ): string {
-  if (!command) return 'run';
-  if (command.formComponent) return 'open';
-  return slashPickIntent(command, 'enter') === 'submit' ? 'run' : 'complete';
+  return command?.formComponent ? 'open' : 'run';
 }
 
 export function slashPaletteCommandLabelWidth(
@@ -155,12 +152,11 @@ export function SlashPalette(
       const returnPressed = isPlainReturnInput(input, key);
       if (returnPressed || key.tab || input === '\t') {
         const chosen = matches[highlight];
-        if (chosen) {
-          props.onPick(
-            chosen,
-            slashPickIntent(chosen, returnPressed ? 'enter' : 'tab'),
-          );
-        }
+        // Tab always just fills the input so the user can keep editing (e.g.
+        // add arguments); Enter runs the highlighted command immediately.
+        // Form-mounting commands never reach the intent — `acceptSlashCommand`
+        // opens the form first.
+        if (chosen) props.onPick(chosen, returnPressed ? 'submit' : 'complete');
       }
     },
     { isActive: matchCount > 0 },

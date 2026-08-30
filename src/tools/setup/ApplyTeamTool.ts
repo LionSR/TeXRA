@@ -27,6 +27,7 @@ import {
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
+import { appSignals } from '@eventBus/AppSignals';
 import type { ToolResult } from '@shared/schemas';
 import {
   AGENT_MODE_PRESETS,
@@ -102,12 +103,12 @@ ${describeTeams()}`,
           resolution: resolveTeamRoster(state, preset),
         };
       },
-      // `resolution` is unused: roster.setTeam persists a live {kind:'team'}
-      // reference and re-resolves against the catalog on read, rather than
-      // committing the frozen per-agent-key snapshot the preflight computed.
-      commitPresetResolution: async (preset) => {
+      commitPreset: async (preset) => {
         await roster.setTeam(preset.id);
         await roster.setDefaultTeam(preset.id);
+        // The setup agent runs this mid-conversation, so an open settings
+        // view is showing a roster this call just replaced.
+        appSignals.emit('agentRosterChanged', undefined);
       },
     };
 
@@ -157,12 +158,13 @@ ${describeTeams()}`,
       unresolvedNames,
     );
 
-    // `keys` holds only the agent keys that resolved in the registry; names
-    // that didn't resolve right now stay in the roster as name slots (from
-    // `unresolvedNames`), where visibility matches by name and they activate
-    // the moment they appear. Account-served leads are absent until sign-in —
-    // say so instead of letting it read as a silent failure; check registry
-    // resolution, never auth.
+    // `keys` holds only the agent keys that resolved in the registry. Names
+    // that didn't resolve are not dropped: the roster stores the team
+    // reference and re-resolves `preset.agents` on every read, so a member
+    // activates the moment it appears. `unresolvedNames` is preflight
+    // evidence, not stored state. Account-served leads are absent until
+    // sign-in — say so instead of letting it read as a silent failure; check
+    // registry resolution, never auth.
     const activeWorkflow = keys.workflow;
     const activeToolUse = keys.toolUse;
     const pendingRemoteLeads = unresolvedNames.filter((name) =>

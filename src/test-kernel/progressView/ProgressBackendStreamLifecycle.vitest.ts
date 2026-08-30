@@ -261,7 +261,7 @@ describe('ProgressBackend', () => {
       backend.state.streamLogs.ensureStream(streamId);
       backend.state.getOrCreateStreamState(streamId, AgentCategory.ToolUse);
       setChildRoster(backend, parent, [before, child, after]);
-      const badgesChanged = vi.spyOn(backend.renderer, 'onBadgesChanged');
+      const invalidate = vi.spyOn(backend.renderer, 'invalidate');
 
       emitRemoveStream(target, streamId);
 
@@ -272,7 +272,7 @@ describe('ProgressBackend', () => {
         before,
         after,
       ]);
-      expect(badgesChanged).toHaveBeenLastCalledWith(parent);
+      expect(invalidate).toHaveBeenCalledWith(parent, 'subagents');
     } finally {
       await backend.state.clearAll();
     }
@@ -378,7 +378,7 @@ describe('ProgressBackend', () => {
     vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
       {} as never,
     );
-    const badgesChanged = vi.spyOn(backend.renderer, 'onBadgesChanged');
+    const invalidate = vi.spyOn(backend.renderer, 'invalidate');
 
     expect(
       backend.applySessionFact({
@@ -387,7 +387,7 @@ describe('ProgressBackend', () => {
       }),
     ).toBe(true);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
-    expect(badgesChanged).toHaveBeenCalledWith(parent);
+    expect(invalidate).toHaveBeenCalledWith(parent, 'subagents');
   });
 
   it('keeps superseded settlements from revealing rows across parent and child reclaims', () => {
@@ -834,7 +834,7 @@ describe('ProgressBackend', () => {
 
     await backend.syncRenderedStreams({ syncActiveStream: true });
 
-    expect(sendStreamMetadata).toHaveBeenCalledWith(stream, '', undefined);
+    expect(sendStreamMetadata).toHaveBeenCalledWith(stream, '');
     expect(messages).toContainEqual(
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
@@ -1301,11 +1301,17 @@ describe('ProgressBackend', () => {
     // The notification no longer carries the roster, so capture what a host
     // would re-read at scrub time to keep the scrub→restore sequence observable.
     let rosterDuringScrub: ActiveChildInfo[] | undefined;
-    const badgesChanged = vi
-      .spyOn(backend.renderer, 'onBadgesChanged')
-      .mockImplementationOnce(() => {
-        rosterDuringScrub = backend.state.getStreamState(parent)?.subagents;
-        throw new Error('renderer unavailable during roster scrub');
+    let subagentsScrubThrown = false;
+    const realInvalidate = backend.renderer.invalidate.bind(backend.renderer);
+    const invalidate = vi
+      .spyOn(backend.renderer, 'invalidate')
+      .mockImplementation((invalidatedStreamId, slice) => {
+        if (slice === 'subagents' && !subagentsScrubThrown) {
+          subagentsScrubThrown = true;
+          rosterDuringScrub = backend.state.getStreamState(parent)?.subagents;
+          throw new Error('renderer unavailable during roster scrub');
+        }
+        return realInvalidate(invalidatedStreamId, slice);
       });
     const clearStream = vi
       .spyOn(backend.state, 'clearStream')
@@ -1324,7 +1330,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.isStreamRemoved(stream)).toBe(false);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual(roster);
     expect(rosterDuringScrub).toEqual([before, after]);
-    expect(badgesChanged).toHaveBeenCalledWith(parent);
+    expect(invalidate).toHaveBeenCalledWith(parent, 'subagents');
     expect(lifecycle.notifyDeletionRetained).toHaveBeenCalledWith(0, 1);
   });
 

@@ -1,8 +1,8 @@
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
-// Suites for src/tools/wolfram (WolframTool approval gating +
-// wolframScriptUtils argument handling).
+// Suites for src/tools/wolfram (WolframTool approval gating and the
+// wolframscript invocation it builds).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
@@ -13,9 +13,7 @@ import {
   wolframRunSummary,
   WolframTool,
 } from '@tools/wolfram/WolframTool';
-import * as wolframScriptUtils from '@tools/wolfram/wolframScriptUtils';
 import * as toolUtils from '@utils/system/toolUtils';
-import * as execUtils from '@utils/system/execUtils';
 import {
   createRecordingHost,
   sessionWithInteractions,
@@ -47,15 +45,13 @@ describe('WolframTool approval', () => {
 
   it('requests bash-style approval before executing wolframscript', async () => {
     const streamId = 'stream:wolfram-approval' as StreamTabId;
-    const execute = vi
-      .spyOn(wolframScriptUtils, 'executeWolframCode')
-      .mockResolvedValue({
-        success: true,
-        output: '2',
-        error: '',
-        timedOut: false,
-        exitCode: 0,
-      });
+    const execute = vi.spyOn(toolUtils, 'runToolWithCheck').mockResolvedValue({
+      success: true,
+      stdout: '2',
+      stderr: '',
+      timedOut: false,
+      exitCode: 0,
+    });
 
     const { explicit, result, show } = await dispatchWolfram(streamId, '1+1');
     expect(show.payload).toMatchObject({
@@ -74,7 +70,11 @@ describe('WolframTool approval', () => {
       output: '2',
       summary: 'Executed: 1+1',
     });
-    expect(execute).toHaveBeenCalledWith('1+1', { timeout: 30000 });
+    expect(execute).toHaveBeenCalledWith(
+      'wolframscript',
+      ['-code', '1+1'],
+      expect.objectContaining({ timeout: 30000 }),
+    );
   });
 
   it.each([
@@ -91,7 +91,7 @@ describe('WolframTool approval', () => {
       expectedGuidance: true,
     },
   ])('$name', async ({ feedback, expectedInstruction, expectedGuidance }) => {
-    const execute = vi.spyOn(wolframScriptUtils, 'executeWolframCode');
+    const execute = vi.spyOn(toolUtils, 'runToolWithCheck');
 
     const { explicit, result, show } = await dispatchWolfram(
       'stream:wolfram-rejected' as StreamTabId,
@@ -144,32 +144,4 @@ describe('wolframRunSummary', () => {
       expect(wolframRunSummary(code)).toBe('Executed');
     },
   );
-});
-
-describe('wolframScriptUtils', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('executeWolframCode runs wolframscript with code args', async () => {
-    vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
-    const executeCommand = vi
-      .spyOn(execUtils, 'executeCommand')
-      .mockResolvedValue({
-        success: true,
-        stdout: '2',
-        stderr: '',
-        timedOut: false,
-        exitCode: 0,
-      });
-
-    const result = await wolframScriptUtils.executeWolframCode('1+1');
-
-    expect(executeCommand).toHaveBeenCalledWith(
-      ['wolframscript', '-code', '1+1'],
-      expect.objectContaining({ timeout: 30000 }),
-    );
-    expect(result.success).toBe(true);
-    expect(result.output).toBe('2');
-  });
 });

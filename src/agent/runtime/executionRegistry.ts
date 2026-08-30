@@ -5,14 +5,15 @@
  * notification, and subagent lineage tracking in a single module.
  */
 
+import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
 import { createChannelTrace, type ResultEvent } from '@agent/trace';
+import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import {
-  ExecutionLeaseLostError,
-  markOwnedExecutionLeaseUndurable,
-} from '@agent/storage/executionLease';
-import { persistTerminalExecution } from '@agent/storage/terminalPersistence';
+  finalizeRun,
+  retainFlowRecordUnlessCompleted,
+} from '@agent/storage/executionLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
@@ -117,11 +118,11 @@ export type ToolUseFollowUpTarget =
       readonly streamStatus: StreamPhase | undefined;
     };
 
-export type ManualCompactionRequestResult =
+type ManualCompactionRequestResult =
   | {
       readonly kind: 'requested';
       readonly streamId: StreamTabId;
-      readonly session?: SessionHandle;
+      readonly session: SessionHandle;
     }
   | {
       readonly kind: 'unsupported';
@@ -140,8 +141,8 @@ export type ManualCompactionRequestResult =
 interface ExecutionRegistryInit {
   readonly streamStatus: StreamStatusMachine;
   readonly events: SessionEventHub;
-  readonly approvals?: SessionApprovals;
-  readonly publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
+  readonly approvals: SessionApprovals;
+  readonly publishResult: (event: ResultEvent, streamId: StreamTabId) => void;
   /**
    * The session's one exit choreography (`SessionHandle.releaseExecutionLease`)
    * — required so no construction path can silently release a lease without
@@ -170,7 +171,7 @@ export class ExecutionRegistry {
   private readonly disposeStatusSubscription: () => void;
   private readonly streamStatus: StreamStatusMachine;
   private readonly events: SessionEventHub;
-  private readonly approvals: SessionApprovals | undefined;
+  private readonly approvals: SessionApprovals;
   /**
    * Publishes a synthesized terminal `result` event to the owning session's
    * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
@@ -178,8 +179,10 @@ export class ExecutionRegistry {
    * `terminateWaitingHandle` produces its `result` event *after* the
    * suspended run's own trace has already been disposed (see there).
    */
-  private readonly publishResult:
-    ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
+  private readonly publishResult: (
+    event: ResultEvent,
+    streamId: StreamTabId,
+  ) => void;
   private readonly releaseRootExecutionLease: (
     executionId: ExecutionId,
   ) => Promise<void>;
@@ -194,14 +197,7 @@ export class ExecutionRegistry {
     string,
     ChildExecutionActivation
   >();
-  private readonly childActivationListeners: ListenerSet<
-    (activation: ChildExecutionActivation, active: boolean) => void
-  > = createListenerSet();
   private readonly lanes = new Map<string, ExecutionLane>();
-  /** Generations started on a lane that have not yet disposed. */
-  private readonly liveGenerations = new Map<string, Promise<void>>();
-  /** While set, every new lifecycle step is refused with this error. */
-  private lifecycleHold: Error | undefined;
 
   constructor(options: ExecutionRegistryInit) {
     this.events = options.events;
@@ -240,7 +236,6 @@ export class ExecutionRegistry {
       lane.waiting.clear();
     }
     this.lanes.clear();
-    this.liveGenerations.clear();
     const executionIds = [...this.handles.keys()];
     this.handles.clear();
     for (const executionId of executionIds) {
@@ -248,59 +243,12 @@ export class ExecutionRegistry {
       this.notifyWaiters(executionId);
     }
     for (const activation of this.childActivations.values()) {
-      this.notifyChildActivationListeners(activation, false);
+      this.interactionOwnership.observeChildActivation(activation, false);
     }
     this.childActivations.clear();
     this.listeners.clear();
     this.registrationListeners.clear();
-    this.childActivationListeners.clear();
-  }
-
-  /**
-   * Refuse new lifecycle steps (launches, resumes, deletes) until the
-   * returned release runs; each refused step rejects with `blocked()`. Throws
-   * `refusal(live)` instead, changing nothing, when any execution is live:
-   * session maintenance that would pull the storage out from under a run is
-   * refused, never queued behind it. Live means tracked, a generation not yet
-   * disposed, a lane step admitted but not yet finished, or a child loop whose
-   * activation is still reserved: every one of them writes under the current
-   * storage root.
-   */
-  holdLifecycle(
-    refusal: (liveExecutionIds: string[]) => Error,
-    blocked: () => Error,
-  ): () => void {
-    this.assertActive();
-    const live = this.liveExecutionIds();
-    if (live.length > 0) throw refusal(live);
-    if (this.lifecycleHold) {
-      throw new Error(
-        'A storage location change is already in progress. Retry once it finishes.',
-      );
-    }
-    const hold = blocked();
-    this.lifecycleHold = hold;
-    return () => {
-      if (this.lifecycleHold === hold) this.lifecycleHold = undefined;
-    };
-  }
-
-  private liveExecutionIds(): string[] {
-    const live = new Set<string>([
-      ...this.handles.keys(),
-      ...this.liveGenerations.keys(),
-      ...this.childActivations.keys(),
-    ]);
-    for (const [executionId, lane] of this.lanes) {
-      if (
-        lane.queue.size > 0 ||
-        lane.queue.pending > 0 ||
-        lane.waiting.size > 0
-      ) {
-        live.add(executionId);
-      }
-    }
-    return [...live];
+    this.interactionOwnership.dispose();
   }
 
   /**
@@ -338,23 +286,8 @@ export class ExecutionRegistry {
   launchExecution<T>(executionId: string, start: () => Promise<T>): Promise<T> {
     return this.enqueueLaneStep(executionId, (lane) => {
       const result = start();
-      this.setLiveGeneration(lane, executionId, result);
+      lane.live = settled(result);
       return { result, hold: undefined };
-    });
-  }
-
-  private setLiveGeneration(
-    lane: ExecutionLane,
-    executionId: string,
-    generation: Promise<unknown>,
-  ): void {
-    const live = settled(generation);
-    lane.live = live;
-    this.liveGenerations.set(executionId, live);
-    void live.then(() => {
-      if (this.liveGenerations.get(executionId) === live) {
-        this.liveGenerations.delete(executionId);
-      }
     });
   }
 
@@ -367,15 +300,10 @@ export class ExecutionRegistry {
     },
   ): Promise<T> {
     this.assertActive();
-    if (this.lifecycleHold) return Promise.reject(this.lifecycleHold);
-    const lane = this.lanes.get(executionId) ?? this.createLane();
-    this.lanes.set(executionId, lane);
-    let settle!: (result: Promise<T>) => void;
-    let refuse!: (error: Error) => void;
-    const handedOut = new Promise<Promise<T>>((resolve, reject) => {
-      settle = resolve;
-      refuse = reject;
-    });
+    const lane = this.laneFor(executionId);
+    const handedOut = pDefer<Promise<T>>();
+    const settle: (result: Promise<T>) => void = handedOut.resolve;
+    const { reject: refuse } = handedOut;
     lane.waiting.add(refuse);
     void lane.queue
       .add(async () => {
@@ -393,15 +321,20 @@ export class ExecutionRegistry {
         if (run.hold) await settled(run.hold);
       })
       .finally(() => this.forgetIdleLane(executionId, lane));
-    return handedOut.then((result) => result);
+    return handedOut.promise.then((result) => result);
   }
 
-  private createLane(): ExecutionLane {
-    return {
-      queue: new PQueue({ concurrency: 1 }),
-      live: undefined,
-      waiting: new Set(),
-    };
+  private laneFor(executionId: string): ExecutionLane {
+    let lane = this.lanes.get(executionId);
+    if (!lane) {
+      lane = {
+        queue: new PQueue({ concurrency: 1 }),
+        live: undefined,
+        waiting: new Set(),
+      };
+      this.lanes.set(executionId, lane);
+    }
+    return lane;
   }
 
   private forgetIdleLane(executionId: string, lane: ExecutionLane): void {
@@ -586,7 +519,7 @@ export class ExecutionRegistry {
     return {
       kind: 'requested',
       streamId,
-      ...(context.ownerSession && { session: context.ownerSession }),
+      session: context.ownerSession,
     };
   }
 
@@ -655,26 +588,8 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Wait for any change on an execution: status transition, kill, or
-   * completion (untrack). Pass an AbortSignal for timeout cleanup.
-   */
-  waitForChange(executionId: string, signal?: AbortSignal): Promise<void> {
-    return new Promise<void>((resolve) => {
-      let detachAbort: () => void = () => {};
-      const detachListener = this.addListener(executionId, () => {
-        detachAbort();
-        detachListener();
-        resolve();
-      });
-      detachAbort = onAbort(signal, () => {
-        detachListener();
-        resolve();
-      });
-    });
-  }
-
-  /**
-   * Wait for any of the given executions to change.
+   * Wait for any of the given executions to change — see {@link addListener}
+   * for the full wake set. Pass an AbortSignal for timeout cleanup.
    * Resolves with the execution id that changed first (or '' on abort).
    */
   waitForAnyChange(
@@ -756,12 +671,12 @@ export class ExecutionRegistry {
     const detachedChildStreamIds: StreamTabId[] = [];
     for (const activation of this.activeChildActivations(parentStreamId)) {
       activation.detach();
-      this.approvals?.detachStreamFromParent(activation.childStreamId);
+      this.approvals.detachStreamFromParent(activation.childStreamId);
       detachedChildStreamIds.push(activation.childStreamId);
     }
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
-      this.approvals?.detachStreamFromParent(handle.childStreamId);
+      this.approvals.detachStreamFromParent(handle.childStreamId);
       handle.detach();
       detachedChildStreamIds.push(handle.childStreamId);
     }
@@ -811,13 +726,27 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Add a persistent listener invoked on every change to `executionId` (status
-   * transition, progress update, kill, untrack). Returns a disposer.
+   * Register a change waiter for `executionId` and return its disposer.
+   *
+   * The full wake set, which is what an `executions wait` observes:
+   *
+   * - a status transition on this execution's child stream;
+   * - {@link track}, including a *replacement* handle for the same id (a
+   *   resumed generation taking over from its predecessor) — a `track` that
+   *   skipped this would strand a waiter across a resume;
+   * - {@link untrack}, including for an id that holds no handle;
+   * - {@link kill}, unconditionally, even when no live interrupt target was
+   *   reached;
+   * - {@link dispose}, for every execution still tracked at session teardown.
+   *
+   * Private: the only caller is {@link waitForAnyChange}, which detaches
+   * inside the callback, so nothing observes a second wake through the same
+   * callback.
    *
    * The callback receives the current handle, or `undefined` once the
-   * execution has been untracked (terminal event).
+   * execution has been untracked (terminal event) or the session disposed.
    */
-  addListener(
+  private addListener(
     executionId: string,
     cb: (handle: AgentExecutionHandle | undefined) => void,
   ): () => void {
@@ -852,16 +781,9 @@ export class ExecutionRegistry {
       return () => {};
     }
     this.childActivations.set(activation.executionId, activation);
-    this.notifyChildActivationListeners(activation, true);
+    this.interactionOwnership.observeChildActivation(activation, true);
     return () =>
       this.releaseChildActivation(activation.executionId, activation);
-  }
-
-  /** Observe child-loop activation reservations and their release/promotion. */
-  addChildActivationListener(
-    cb: (activation: ChildExecutionActivation, active: boolean) => void,
-  ): () => void {
-    return this.childActivationListeners.add(cb);
   }
 
   private emitChildActivity(parentStreamId: StreamTabId): void {
@@ -1012,41 +934,38 @@ export class ExecutionRegistry {
       teardown,
       cancelledResult,
     ).catch(async (error: unknown) => {
+      // Durable finalization never ran, so recovery only settles what this
+      // generation privately owns. Each step is guarded on its own: a failure
+      // in one must not cost the others. A former generation owns only its
+      // private result — it must not mark, release, untrack, or cancel a
+      // locally reacquired successor, which is what `untrackIfCurrent` gates.
       const recoveryFailures = [error];
-      if (!(error instanceof ExecutionLeaseLostError)) {
-        try {
-          markOwnedExecutionLeaseUndurable(handle.executionId);
-          const untracked = this.settleTerminal(handle, cancelledResult, {
-            publish: false,
-            untrackMode: 'ifCurrent',
-          });
-          if (untracked && !handle.isChildExecution) {
-            await this.releaseRootExecutionLease(handle.executionId);
-          }
-          logger.warn(
-            'Waiting-execution termination failed; recovered under the execution lease',
-            { data: { executionId: handle.executionId, recoveryFailures } },
-          );
-          return;
-        } catch (recoveryError) {
-          recoveryFailures.push(recoveryError);
-        }
-      }
-
-      // A former generation owns only its private result. It must not mark,
-      // release, untrack, or cancel a locally reacquired successor.
+      let untracked = false;
       try {
         handle.settleResult(cancelledResult);
       } catch (recoveryError) {
         recoveryFailures.push(recoveryError);
       }
       try {
-        const untracked = this.untrackIfCurrent(handle);
+        untracked = this.untrackIfCurrent(handle);
         if (untracked) {
           this.cancelStreamStatus(handle.childStreamId);
         }
       } catch (recoveryError) {
         recoveryFailures.push(recoveryError);
+      }
+      // A lost lease is already gone: releasing it would reach whatever holds
+      // the record now. Every other failure still owes the release.
+      if (
+        untracked &&
+        !handle.isChildExecution &&
+        !(error instanceof ExecutionLeaseLostError)
+      ) {
+        try {
+          await this.releaseRootExecutionLease(handle.executionId);
+        } catch (recoveryError) {
+          recoveryFailures.push(recoveryError);
+        }
       }
       logger.warn(
         'Waiting-execution termination failed; settled the run without durable finalization',
@@ -1058,12 +977,9 @@ export class ExecutionRegistry {
     // claim the execution again.
     // A child loop's generation stays the lane's live promise until the loop
     // ends; the turn's teardown chains onto it rather than replacing it.
-    const lane = this.lanes.get(handle.executionId) ?? this.createLane();
-    this.lanes.set(handle.executionId, lane);
+    const lane = this.laneFor(handle.executionId);
     const previous = lane.live;
-    this.setLiveGeneration(
-      lane,
-      handle.executionId,
+    lane.live = settled(
       previous ? Promise.all([previous, termination]) : termination,
     );
     this.forgetIdleLane(handle.executionId, lane);
@@ -1079,9 +995,7 @@ export class ExecutionRegistry {
       await teardown;
     } catch (error) {
       // Transcript closure and terminal execution metadata are independent
-      // durable facts. Preserve the failed artifact fence, but still give the
-      // terminal status its own opportunity to reach disk.
-      markOwnedExecutionLeaseUndurable(handle.executionId);
+      // durable facts; the terminal status still gets its own chance to land.
       logger.warn(
         'Waiting-execution cleanup failed; continuing terminal persistence',
         { data: { executionId: handle.executionId, error } },
@@ -1098,20 +1012,31 @@ export class ExecutionRegistry {
 
     // Cleanup closes the suspended run's transcript group. Publish the
     // terminal state only after that owned artifact is settled so every host
-    // observes one coherent cancellation boundary.
-    this.settleTerminal(handle, cancelledResult, {
-      publish: true,
-      untrackMode: 'unconditional',
-    });
+    // observes one coherent cancellation boundary, and in one fixed order:
+    // publish, settle the envelope, drop the handle, cancel the stream.
+    handle.trace?.emit(cancelledResult);
+    this.publishResult(cancelledResult, handle.childStreamId);
+    handle.settleResult(cancelledResult);
+    this.untrackHandle(handle);
+    this.cancelStreamStatus(handle.childStreamId);
 
     try {
-      await persistTerminalExecution({
+      const finalization = await finalizeRun({
         executionId: handle.executionId,
         outcome: RUN_OUTCOME.CANCELLED,
-        flowRecord: 'delete',
-        logger,
-        failedMessage: 'Failed to finalize stopped waiting execution',
+        // A stopped WAITING run is exactly what a user resumes. Deleting its
+        // checkpoint here was the #11304 invariant's first violation (#11315).
+        flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.CANCELLED),
       });
+      if (!finalization.ok) {
+        logger.warn('Failed to finalize stopped waiting execution', {
+          data: {
+            executionId: handle.executionId,
+            outcomePersisted: finalization.outcomePersisted,
+            error: finalization.error,
+          },
+        });
+      }
     } finally {
       if (!handle.isChildExecution) {
         try {
@@ -1123,45 +1048,6 @@ export class ExecutionRegistry {
         }
       }
     }
-  }
-
-  /**
-   * Owns the settle -> untrack -> cancel-stream ordering shared by the
-   * waiting-termination arms so every arm settles the terminal envelope, drops
-   * the handle from the registry, and cancels the stream in the same order.
-   *
-   * `publish` prepends the trace emit + `publishResult` fan-out used only by the
-   * happy path, where cleanup has already closed the suspended run's transcript
-   * group so hosts observe one coherent cancellation boundary. The
-   * recovery/lease-lost arms settle the private result without republishing.
-   *
-   * `untrackMode` selects the registry drop: `'unconditional'` uses
-   * `untrackHandle` (the caller has already confirmed this handle still owns the
-   * slot) and always cancels; `'ifCurrent'` uses `untrackIfCurrent` and cancels
-   * only when the drop actually removed this handle. The returned boolean
-   * reports whether the handle was untracked (always true for `'unconditional'`)
-   * so a caller can gate a lease release on it.
-   */
-  private settleTerminal(
-    handle: AgentExecutionHandle,
-    result: ResultEvent,
-    opts: { publish: boolean; untrackMode: 'unconditional' | 'ifCurrent' },
-  ): boolean {
-    if (opts.publish) {
-      handle.trace?.emit(result);
-      this.publishResult?.(result, handle.childStreamId);
-    }
-    handle.settleResult(result);
-    if (opts.untrackMode === 'ifCurrent') {
-      const untracked = this.untrackIfCurrent(handle);
-      if (untracked) {
-        this.cancelStreamStatus(handle.childStreamId);
-      }
-      return untracked;
-    }
-    this.untrackHandle(handle);
-    this.cancelStreamStatus(handle.childStreamId);
-    return true;
   }
 
   /**
@@ -1204,15 +1090,6 @@ export class ExecutionRegistry {
     const activation = this.childActivations.get(executionId);
     if (!activation || (expected && activation !== expected)) return;
     this.childActivations.delete(executionId);
-    this.notifyChildActivationListeners(activation, false);
-  }
-
-  private notifyChildActivationListeners(
-    activation: ChildExecutionActivation,
-    active: boolean,
-  ): void {
-    for (const listener of [...this.childActivationListeners]) {
-      listener(activation, active);
-    }
+    this.interactionOwnership.observeChildActivation(activation, false);
   }
 }

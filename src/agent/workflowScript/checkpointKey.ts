@@ -1,7 +1,3 @@
-// Third-party imports
-import stableStringify from 'fast-json-stable-stringify';
-
-// Local imports
 import { truncatedHexId } from '@utils/core/idHash';
 
 const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
@@ -11,8 +7,8 @@ const WORKFLOW_SCRIPT_CHECKPOINT_KEY_PREFIX = 'workflow-script-';
  * parent execution owns one durable journal. A retry after a timeout or
  * interruption resumes that journal even when the model rewrites the script
  * (models rarely reproduce source byte-for-byte); safety lives in the journal
- * itself, whose entries replay only on a matching call index and prompt/
- * options hash — a changed call re-executes, an unchanged one is free.
+ * itself, whose entries replay only on a matching prompt/options hash key —
+ * a changed call re-executes, while an unchanged call is free to move.
  * A script that must re-execute everything from scratch needs a new
  * meta.name.
  */
@@ -21,8 +17,10 @@ export function deriveWorkflowScriptCheckpointId(identity: {
   readonly defaultAgent: string;
   readonly parentExecutionId: string;
 }): string {
+  // Key order is part of the persisted identity: keep it alphabetical, the
+  // order the original stable-stringify derivation produced.
   return truncatedHexId(
-    stableStringify({
+    JSON.stringify({
       defaultAgent: identity.defaultAgent,
       name: identity.name,
       parentExecutionId: identity.parentExecutionId,

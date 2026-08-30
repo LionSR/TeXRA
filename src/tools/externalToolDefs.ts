@@ -52,16 +52,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** Node.js semver range the `texra` CLI supports. */
 export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '>=22.9.0';
 
-/** Human-readable rendering of {@link TEXRA_CLI_SUPPORTED_NODE_RANGE}. */
-export const TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY = (() => {
-  const versions = TEXRA_CLI_SUPPORTED_NODE_RANGE.split(' || ');
-  const finalVersion = versions.at(-1);
-
-  return versions.length > 1 && finalVersion != null
-    ? `${versions.slice(0, -1).join(', ')}, or ${finalVersion}`
-    : TEXRA_CLI_SUPPORTED_NODE_RANGE;
-})();
-
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
 // ============================================================
@@ -216,6 +206,47 @@ async function probeSdkBinaryAvailable(
   } catch {
     return false;
   }
+}
+
+/** Resolved status of an SDK-backed CLI integration for the dashboard. */
+type SdkBinaryStatus =
+  { ok: false; message: string } | { ok: true; binaryPath: string };
+
+/**
+ * Human-readable probe shared by the SDK-backed CLI integrations (Codex,
+ * Claude Code): import the SDK (classifying a missing package specially),
+ * then resolve the native binary (appending {@link wslInstallHint} when it is
+ * absent). Callers own only the final "ready" line, so the import/binary
+ * narrative lives in one place instead of once per entry.
+ */
+async function probeSdkBinaryStatus(config: {
+  importSdk: () => Promise<unknown>;
+  findBinary: () => Promise<string | undefined>;
+  missingPackageMessage: string;
+  importFailedLabel: string;
+  binaryNotFoundMessage: string;
+  classifyImportError?: (msg: string) => string | undefined;
+}): Promise<SdkBinaryStatus> {
+  try {
+    await config.importSdk();
+  } catch (err: unknown) {
+    const msg = toErrorMessage(err);
+    if (isMissingPackageError(msg)) {
+      return { ok: false, message: config.missingPackageMessage };
+    }
+    const classified = config.classifyImportError?.(msg);
+    if (classified != null) return { ok: false, message: classified };
+    return { ok: false, message: `${config.importFailedLabel}: ${msg}` };
+  }
+
+  const binaryPath = await config.findBinary();
+  if (!binaryPath) {
+    return {
+      ok: false,
+      message: config.binaryNotFoundMessage + wslInstallHint(),
+    };
+  }
+  return { ok: true, binaryPath };
 }
 
 /**
@@ -514,7 +545,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
     installGuide:
       'Run the same agents on your .tex projects without an editor. This works well for scripts, CI, and remote machines.\n\n' +
-      `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY}):\n` +
+      `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE}):\n` +
       '  npm install -g @texra-ai/cli\n\n' +
       'The CLI also ships with the TeXRA package. Make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
       'Check from a terminal:\n' +
@@ -571,31 +602,22 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     toggleable: true,
     check: () => probeSdkBinaryAvailable(importCodexClass, findCodexBinaryPath),
     detailCheck: async () => {
-      // Step 1: Can we import the SDK?
-      try {
-        await importCodexClass();
-      } catch (err: unknown) {
-        const msg = toErrorMessage(err);
-        if (isMissingPackageError(msg)) {
-          return '@openai/codex-sdk not found. Install with: npm install -g @openai/codex';
-        }
-        if (msg.includes('Unsupported platform')) {
-          return `Platform not supported: ${msg}`;
-        }
-        return `Codex SDK import failed: ${msg}`;
-      }
-
-      // Step 2: Can we find the native binary?
-      const codexPath = await findCodexBinaryPath();
-      if (!codexPath) {
-        return (
+      const status = await probeSdkBinaryStatus({
+        importSdk: importCodexClass,
+        findBinary: findCodexBinaryPath,
+        missingPackageMessage:
+          '@openai/codex-sdk not found. Install with: npm install -g @openai/codex',
+        importFailedLabel: 'Codex SDK import failed',
+        classifyImportError: (msg) =>
+          msg.includes('Unsupported platform')
+            ? `Platform not supported: ${msg}`
+            : undefined,
+        binaryNotFoundMessage:
           'Codex SDK loaded but native binary not found. ' +
-          'Install with: npm install -g @openai/codex' +
-          wslInstallHint()
-        );
-      }
-
-      return `Codex CLI ready. Binary: ${codexPath}`;
+          'Install with: npm install -g @openai/codex',
+      });
+      if (!status.ok) return status.message;
+      return `Codex CLI ready. Binary: ${status.binaryPath}`;
     },
   },
 
@@ -638,24 +660,18 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     check: () =>
       probeSdkBinaryAvailable(importClaudeAgentSdk, findClaudeBinaryPath),
     detailCheck: async () => {
-      try {
-        await importClaudeAgentSdk();
-      } catch (err: unknown) {
-        const msg = toErrorMessage(err);
-        if (isMissingPackageError(msg)) {
-          return '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk';
-        }
-        return `Claude Code SDK import failed: ${msg}`;
-      }
-
-      const claudePath = await findClaudeBinaryPath();
-      if (!claudePath) {
-        return (
+      const status = await probeSdkBinaryStatus({
+        importSdk: importClaudeAgentSdk,
+        findBinary: findClaudeBinaryPath,
+        missingPackageMessage:
+          '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk',
+        importFailedLabel: 'Claude Code SDK import failed',
+        binaryNotFoundMessage:
           'Claude Code SDK loaded but native `claude` binary not found. ' +
-          'Install via: npm install -g @anthropic-ai/claude-code' +
-          wslInstallHint()
-        );
-      }
+          'Install via: npm install -g @anthropic-ai/claude-code',
+      });
+      if (!status.ok) return status.message;
+      const claudePath = status.binaryPath;
 
       const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
       const keyOrigin = await lookupApiKeyOrigin(

@@ -68,12 +68,11 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       }
       action="toggle"
       showTransientCloseHint={false}
-      onSelect={(id, { data: tools, setData: setTools }) => {
+      onSelect={(id, { data: tools, reload }) => {
         const tool = tools.find((candidate) => candidate.id === id);
         if (!tool || tool.enabled == null) return;
         void setCliToolEnabled(id, !tool.enabled)
-          .then(() => readCliToolStatuses())
-          .then(setTools)
+          .then(reload)
           .catch((error: unknown) => {
             setTransientNotice(toErrorMessage(error));
           });

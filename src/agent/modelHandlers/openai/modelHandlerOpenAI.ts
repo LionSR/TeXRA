@@ -36,7 +36,6 @@ import {
   type ToolDefinition,
   type ToolFileAttachment,
   type ToolResult,
-  DEFAULT_CORE_SETTINGS,
 } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
@@ -55,12 +54,11 @@ import {
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
 import { tagOpenAISdkError } from './openAISdkError';
-import { computeOpenAIPrice, normalizeOpenAIUsage } from './openAIUsage';
+import { normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
   createChatUserFollowUpMessages,
-  extractChatAssistantText,
   initializeChatMessages,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
@@ -204,8 +202,8 @@ export class ModelHandlerOpenAI<
       async (conversationMessages, compactionSystemPrompt) => {
         // System-prompt-swap: send conversation messages as-is with a
         // summarization system prompt. Apply provider-specific normalization
-        // (e.g. DeepSeek's convertContentToString, mergeConsecutiveRoles) so
-        // the compaction call doesn't get rejected.
+        // (e.g. the vision-aware content stringification flag, DeepSeek's
+        // mergeConsecutiveRoles) so the compaction call doesn't get rejected.
         const normalizedConversation =
           this.prepareNormalizedMessages(conversationMessages);
 
@@ -250,6 +248,16 @@ export class ModelHandlerOpenAI<
     return undefined;
   }
 
+  /** Provider-specific reasoning controls for the auxiliary summary call. */
+  protected getCompactionReasoningParameters(): Pick<
+    ChatCompletionSummaryParams,
+    'thinking' | 'reasoning_effort'
+  > {
+    return this.getThinkingParameter() || this.capabilities.supportsReasoning
+      ? { thinking: { type: 'disabled' } }
+      : {};
+  }
+
   protected buildCompactionSummaryParams(
     conversationMessages: ChatCompletionMessageParam[],
     systemPrompt: string,
@@ -263,12 +271,8 @@ export class ModelHandlerOpenAI<
       max_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
       temperature: 0,
       stream: false,
+      ...this.getCompactionReasoningParameters(),
     };
-    // Disable thinking for the summary call — reasoning models
-    // (DeepSeek, Kimi K2.5, GLM) don't need to think for summarization.
-    if (this.getThinkingParameter() || this.capabilities.supportsReasoning) {
-      summaryParams.thinking = { type: 'disabled' };
-    }
     return summaryParams;
   }
 
@@ -285,6 +289,19 @@ export class ModelHandlerOpenAI<
       this.config.provider === ModelProvider.XAI &&
       this.capabilities.supportsReasoning;
     return !this.isOReasoningModel && !isGrokReasoningModel;
+  }
+
+  /** Resolve the provider-facing reasoning effort, if this request should send one. */
+  protected getReasoningEffortParameter(): string | undefined {
+    const reasoningEffort = this.getEffectiveReasoningEffort();
+    if (!this.capabilities.supportsReasoning || !reasoningEffort)
+      return undefined;
+    return this.validateReasoningEffort(
+      toOpenAIReasoningEffort(
+        reasoningEffort,
+        getDeclaredMaxReasoningEffort(this.config.capabilities),
+      ),
+    );
   }
 
   protected buildChatBaseParams(
@@ -304,21 +321,22 @@ export class ModelHandlerOpenAI<
         : { max_tokens: effectiveMaxTokens }),
     };
 
-    if (this.configuresEndTagStopSequence) {
-      if (endTag) {
-        baseParams.stop = [endTag];
-      }
+    // Only the o-series rejects `temperature`. Grok reasoning models take it
+    // (they reject `stop`, which is what configuresEndTagStopSequence is for),
+    // so the two decisions no longer ride on one flag — c70dd4cc96 widened the
+    // stop guard and dropped temperature for xAI as collateral.
+    if (!this.isOReasoningModel) {
       baseParams.temperature = temperature;
     }
 
-    const reasoningEffort = this.getEffectiveReasoningEffort();
-    if (this.capabilities.supportsReasoning && reasoningEffort) {
-      baseParams.reasoning_effort = this.validateReasoningEffort(
-        toOpenAIReasoningEffort(
-          reasoningEffort,
-          getDeclaredMaxReasoningEffort(this.config.capabilities),
-        ),
-      ) as ChatCompletionRequestBase['reasoning_effort'];
+    if (this.configuresEndTagStopSequence && endTag) {
+      baseParams.stop = [endTag];
+    }
+
+    const reasoningEffort = this.getReasoningEffortParameter();
+    if (reasoningEffort) {
+      baseParams.reasoning_effort =
+        reasoningEffort as ChatCompletionRequestBase['reasoning_effort'];
     }
 
     // Add thinking parameter if specified by subclass (Kimi K2.5, DeepSeek)
@@ -330,7 +348,6 @@ export class ModelHandlerOpenAI<
     if (tools?.length) {
       const parallelToolCalls = getConfig<boolean>(
         'texra.model.openaiParallelToolCalls',
-        DEFAULT_CORE_SETTINGS.model.openaiParallelToolCalls,
       );
       baseParams.parallel_tool_calls = parallelToolCalls;
       // These tools are parsed by TeXRA after the response. The SDK's
@@ -421,8 +438,9 @@ export class ModelHandlerOpenAI<
           finalResponse = { ...finalResponse, usage: totalUsage };
         } catch (err) {
           // totalUsage() may fail if stream ended abnormally — leave usage
-          // unset, but log so missing token accounting is traceable.
-          this.logger.debug('totalUsage() fallback failed; usage unavailable', {
+          // unset, but warn so the round's missing token accounting is
+          // traceable in production logs.
+          this.logger.warn('totalUsage() fallback failed; usage unavailable', {
             data: buildErrorLogData(err, { operation: 'totalUsage fallback' }),
           });
         }
@@ -724,12 +742,6 @@ export class ModelHandlerOpenAI<
     return message;
   }
 
-  override extractAssistantText(
-    message: ChatCompletionMessageParam,
-  ): string | undefined {
-    return extractChatAssistantText(message);
-  }
-
   /** Builds the default content parts for inline vision requests. */
   protected buildStandardVisionParts(
     media: MediaEntry,
@@ -747,7 +759,9 @@ export class ModelHandlerOpenAI<
   }
 
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
-  createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
+  override createMediaContent(
+    mediaMessage: MediaEntry[],
+  ): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
       const classification = classifyMediaEntry(media);
 
@@ -911,11 +925,6 @@ export class ModelHandlerOpenAI<
       messages.pop();
     }
     return true;
-  }
-
-  /** Computes cost based on token usage and model pricing. */
-  computePrice(responseUsage: ExtendedCompletionUsage | null): number {
-    return computeOpenAIPrice(responseUsage, this.standardPricingConfig());
   }
 
   /**

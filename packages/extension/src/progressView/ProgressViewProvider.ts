@@ -4,11 +4,7 @@ import * as vscode from 'vscode';
 
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
-import {
-  attachTerminalResultToast,
-  defaultSession,
-  StorageRootChangeRefusedError,
-} from '@agent/runtime';
+import { attachTerminalResultToast, defaultSession } from '@agent/runtime';
 import {
   BaseWebviewProvider,
   BundledViewContentProvider,
@@ -24,10 +20,8 @@ import { getProgressStreamControls } from '@controllers/progressView/progressStr
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
-import type { ExtensionTexraConfig } from '@frontend/vscode/texraConfig';
 import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
-import type { WorkspaceProvider } from '@platform/interfaces';
 import type {
   AgentProposalPermission,
   ProgressViewOutboundMessage,
@@ -99,11 +93,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private _mainViewProvider?: MainViewProvider;
   private readonly detachHostInteractions: () => void;
 
-  constructor(
-    protected readonly context: vscode.ExtensionContext,
-    private readonly config: ExtensionTexraConfig,
-    private readonly workspace: WorkspaceProvider,
-  ) {
+  constructor(protected override readonly context: vscode.ExtensionContext) {
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 
@@ -145,11 +135,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
-      {
-        dist: 'progressView',
-        bundleKey: 'progressBundleUri',
-        styleKey: 'progressStyleUri',
-      },
+      'progressView',
     );
     const presentationHost = createAgentPresentationHost(this);
     const storageRoot = context.storageUri ?? context.globalStorageUri;
@@ -178,8 +164,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       interactions,
     );
     this.backend.setupEventListeners();
-    this.detachHostInteractions =
-      runtimeSession.useHostInteractions(interactions);
+    this.detachHostInteractions = runtimeSession.interactions.use(interactions);
     // Terminal-error toasts come from the run's `result` event (the lifecycle
     // no longer emits them directly). This re-emits `requestShow*` through
     // the session's interactions, reaching the presentation dispatch above
@@ -198,37 +183,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     ProgressViewProvider._instance = this;
 
     this._disposables.add(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        const transition = this.config.enqueueWorkspaceTransition(
-          this.workspace.getWorkspacePath(),
-          (hooks) => this.backend.reloadAfterStorageRootChange(hooks),
-        );
-        void transition.completion.then(
-          () => this.syncFullView(),
-          (error: unknown) => {
-            this.logger.error(
-              `Failed workspace transition ${transition.generation}`,
-              { data: error },
-            );
-            void vscode.window.showErrorMessage(
-              error instanceof StorageRootChangeRefusedError
-                ? error.message
-                : 'TeXRA could not reload settings and transcripts after the workspace changed. Retry the workspace change or restart TeXRA.',
-            );
-          },
-        );
-      }),
-    );
-    this._disposables.add(
-      vscode.window.onDidChangeActiveColorTheme(({ kind }) => {
-        // The webview only needs the THEME_SET message here (BaseWebviewApp's
-        // onThemeChange swaps the body class); rebuilding metadata for every
-        // persisted stream on a theme flip is pure waste (#9959).
-        if (!this.isViewVisible() || !this.canSendToWebview()) return;
-        this.renderer.setTheme(
-          kind === vscode.ColorThemeKind.Dark ? 'dark' : 'light',
-        );
-      }),
+      // Only a non-first workspace folder can be added or removed here: VS
+      // Code restarts the extension host for a first-folder change, so the
+      // storage root never moves under a live window. Nothing to reload but
+      // the view (#11432).
+      vscode.workspace.onDidChangeWorkspaceFolders(() => this.syncFullView()),
     );
   }
 
@@ -247,18 +206,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     await this._mainViewProvider?.refreshOnboardingFunnel();
   }
 
-  public getContentProvider(): BundledViewContentProvider {
-    return this.contentProvider;
-  }
-
-  /** Routes a sidebar message to the progress view message handler. */
-  public handleSidebarMessage(
-    message: unknown,
-    view: vscode.WebviewView,
-  ): void {
-    void this.messageHandler.handleMessage(message, view);
-  }
-
   /** The sidebar stopped showing progress content; its handshake is void. */
   public resetSidebarReady(): void {
     if (this.target?.placement === 'sidebar') this.target.ready = false;
@@ -266,15 +213,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public static getInstance(): ProgressViewProvider | undefined {
     return this._instance;
-  }
-
-  private setupWebviewContent(
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): vscode.Disposable {
-    view.webview.html = this.contentProvider.getHtmlContent(view.webview);
-    return view.webview.onDidReceiveMessage((message) =>
-      this.messageHandler.handleMessage(message, view),
-    );
   }
 
   public syncFullView(): void {
@@ -296,14 +234,9 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     if (!this.getActiveWebview()) return Promise.resolve();
 
-    const theme =
-      vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
-        ? 'dark'
-        : 'light';
-
     this.renderer.setPlacement(target.placement);
 
-    return this.backend.syncRenderedStreams({ syncActiveStream, theme });
+    return this.backend.syncRenderedStreams({ syncActiveStream });
   }
 
   public async markWebviewReady(
@@ -382,10 +315,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     // Claiming the sidebar releases the editor panel: one surface owns
     // progress content at a time, so the panel cannot outlive its target.
     this.releaseEditorTarget({ disposePanel: true });
-    // Any target other than a sidebar already in place is a real transition
-    // that needs a permission replay — including the gap left by a panel the
-    // user just closed.
-    const placementChanged = this.target?.placement !== 'sidebar';
     this.target ??= { placement: 'sidebar', ready: false };
 
     // Focus first to ensure VS Code resolves the webview before switching content.
@@ -395,12 +324,12 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     }
     this._mainViewProvider?.switchMode(SIDEBAR_VIEWS.PROGRESS);
 
+    // A ready sidebar target means `switchMode` found the view already showing
+    // progress and returned early, so no ready handshake follows to refresh it.
+    // A target created just above is not ready, and its handshake replays
+    // pending prompts itself (`markWebviewReady`).
     if (this.target?.ready === true) {
       this.syncFullView();
-      // Only replay permissions when switching from editor → sidebar.
-      // If already on sidebar, the webview already has the correct permissions;
-      // replaying would cause duplicates.
-      if (placementChanged) await this.replayPendingPrompts();
     }
   }
 

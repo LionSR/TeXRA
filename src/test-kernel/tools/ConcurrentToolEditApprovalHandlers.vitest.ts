@@ -71,11 +71,11 @@ describe('Concurrent session tool edit approval handlers', () => {
 
     const sessionA = createTestSession();
     const sessionB = createTestSession();
-    sessionA.useHostInteractions({
+    sessionA.interactions.use({
       requestToolEditApproval: recordingHandler(seenByA, 'from-a'),
       cancel: () => undefined,
     });
-    sessionB.useHostInteractions({
+    sessionB.interactions.use({
       requestToolEditApproval: recordingHandler(seenByB, 'from-b'),
       cancel: () => undefined,
     });

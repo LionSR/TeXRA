@@ -7,8 +7,8 @@ import { testRunScope, withTestRunContext } from '../progressTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
 
 function buildServices(
-  overrides: Partial<ToolUseRoundServices<unknown>> = {},
-): ToolUseRoundServices<unknown> {
+  overrides: Partial<ToolUseRoundServices> = {},
+): ToolUseRoundServices {
   return {
     runScope: testRunScope('test-stream'),
     config: { model: 'deepseekT', agent: 'chat' } as never,
@@ -21,8 +21,11 @@ function buildServices(
     }) as never,
     fileService: { createLocation: vi.fn() } as never,
     toolRegistry: {} as never,
+    // ToolUseRoundPrepNode reads the round counter off run state now that the
+    // node-local roundIndex mirror is gone.
+    run: { totalResponseTimeMs: 0, usageAccumulator: {}, totalRounds: 0 },
     ...overrides,
-  } as ToolUseRoundServices<unknown>;
+  } as ToolUseRoundServices;
 }
 
 function buildShared(): ToolUseRoundShared {
@@ -35,7 +38,7 @@ function buildShared(): ToolUseRoundShared {
 
 describe('ToolUseRoundPrepNode follow-up transcript logging (regression: #7508 pattern on a round)', () => {
   function rejectFollowUpAppend(
-    services: ToolUseRoundServices<unknown>,
+    services: ToolUseRoundServices,
     message: string,
   ): void {
     (

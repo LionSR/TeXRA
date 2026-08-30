@@ -10,7 +10,10 @@ import {
   type refresh,
 } from '@agent/index';
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
-import { loadTeamOptions } from '@common/teams/TeamPlan';
+import {
+  loadTeamOptions,
+  type TeamAvailabilityPrompt,
+} from '@common/teams/TeamPlan';
 import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import { createSettingsAgentActions } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
@@ -19,10 +22,7 @@ import {
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
-import {
-  applySettingsTeamRoster,
-  type SettingsTeamAvailabilityPrompt,
-} from '@controllers/settingsView/SettingsTeamRosterController';
+import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -97,7 +97,7 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
       message: string;
     }) => Promise<boolean>;
     readonly chooseTeamAvailability: (
-      prompt: SettingsTeamAvailabilityPrompt,
+      prompt: TeamAvailabilityPrompt,
     ) => Promise<TeamAvailabilityChoice | undefined>;
   };
   /**
@@ -187,14 +187,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
       refreshAfterMutation: () => this.refreshAfterAgentMutation(),
-      run: async (command, failureMessage, action) => {
-        if (
-          command === SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML ||
-          command === SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE
-        ) {
-          await action();
-          return;
-        }
+      run: async (failureMessage, action) => {
         try {
           await action();
         } catch (error) {
@@ -231,6 +224,10 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
   }
 
   async refreshCatalogData(): Promise<void> {
+    // Presets ride along because every roster mutation can move the effective
+    // team: enabling one agent rewrites the selection as `custom`, which
+    // retires whatever team was applied.
+    this.postAgentModePresets();
     await Promise.all([
       this.postAgentSelectionData(),
       this.postMainAgentAndTeamOptionsData(),
@@ -295,6 +292,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         getCustomPresets: () => this.catalogController.getCustomPresets(),
         getOrchestratorAgentNames: () =>
           this.catalogController.getOrchestratorAgentNames(),
+        getActiveTeamId: () => this.roster.getActiveTeamId(),
       }),
     );
   }
@@ -457,6 +455,7 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         showErrorMessage: this.notifications.showErrorMessage,
       },
       refreshAfterApply: async (selectedToolUseAgent) => {
+        this.postAgentModePresets();
         await Promise.all([
           this.postAgentSelectionData(),
           this.postMainAgentAndTeamOptionsData(selectedToolUseAgent),

@@ -27,6 +27,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import type { CreatedMedia } from '@agent/modelHandlers/ModelHandler';
 import type { AnthropicToolCall } from '@agent/types/ModelHandlerContracts';
 import { ANTHROPIC_STOP } from '@agent/types/StopReasonTypes';
 import {
@@ -206,15 +207,18 @@ describe('ModelHandlerAnthropic cache pricing', () => {
         outputPrice: 15,
       }),
     );
-    const price = handler.computePrice({
-      input_tokens: 1000,
-      output_tokens: 100,
-      cache_read_input_tokens: 0,
-      cache_creation_input_tokens: 30,
-      cache_creation: cacheCreation,
-      server_tool_use: null,
-      service_tier: 'standard',
-    } as any);
+    const { cost: price } = handler.normalizeUsage(
+      {
+        input_tokens: 1000,
+        output_tokens: 100,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 30,
+        cache_creation: cacheCreation,
+        server_tool_use: null,
+        service_tier: 'standard',
+      } as any,
+      0,
+    );
 
     expect(price).toBeCloseTo(expected, 12);
   });
@@ -493,8 +497,10 @@ class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
     this.mediaContent = content;
   }
 
-  protected override async createMediaMessage(): Promise<any[]> {
-    return this.mediaContent;
+  protected override async createMediaMessage(): Promise<
+    CreatedMedia<ContentBlockParam>
+  > {
+    return { media: this.mediaContent, entries: [] };
   }
 }
 
@@ -2578,38 +2584,6 @@ describe('ModelHandlerAnthropic output initialization', () => {
       assert.equal(workspaceState.assembly.accumulatedOutput, '');
       assert.equal(updatedMessages.length, 1);
       assert.equal(updatedMessages.at(-1)?.role, 'user');
-    });
-  });
-
-  it('leaves messages untouched for models without assistant prefill', async () => {
-    await withTempOutputPath('anthropic-no-prefill-', async (outputPath) => {
-      const handler = createAnthropicHandler({
-        supportsAssistantPrefill: false,
-      });
-      stubHandlerForTest(handler);
-
-      const agentSetting = createOutputInitAgentSetting();
-      const userText = 'revise the document';
-      const messages: MessageParam[] = [
-        {
-          role: 'user',
-          content: [{ type: 'text', text: userText }],
-        },
-      ];
-      const workspaceState = AgentWorkspaceState.create();
-
-      const [, updatedMessages] = await handler.initializeOutputAndPrefill(
-        {} as AgentConfig,
-        agentSetting,
-        messages,
-        workspaceState,
-        pathToLocation(outputPath),
-      );
-
-      assert.equal(updatedMessages.length, 1);
-      const last = updatedMessages.at(-1);
-      assert.equal(last?.role, 'user');
-      assert.deepEqual(last?.content, [{ type: 'text', text: userText }]);
     });
   });
 });

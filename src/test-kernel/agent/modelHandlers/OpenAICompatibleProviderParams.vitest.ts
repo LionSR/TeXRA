@@ -462,7 +462,7 @@ describe('OpenAI-compatible provider request params', () => {
     assert.equal(createCalls[0].thinking, undefined);
   });
 
-  it('maps GLM low reasoning effort to the provider minimum', async () => {
+  it('preserves GLM low reasoning effort when the registry accepts it', async () => {
     const handler = createGlmHandler({
       name: 'glm52',
       fullName: 'glm-5.2',
@@ -470,13 +470,22 @@ describe('OpenAI-compatible provider request params', () => {
         supportsReasoning: true,
         supportsReasoningEffort: true,
         reasoningEffort: ReasoningEffort.LOW,
+        supportedReasoningEfforts: [
+          ReasoningEffort.NONE,
+          ReasoningEffort.MINIMAL,
+          ReasoningEffort.LOW,
+          ReasoningEffort.MEDIUM,
+          ReasoningEffort.HIGH,
+          ReasoningEffort.XHIGH,
+          ReasoningEffort.MAX,
+        ],
       },
     });
 
     const { createCalls } = await sendRequest(handler);
 
     assert.deepEqual(createCalls[0].thinking, { type: 'enabled' });
-    assert.equal(createCalls[0].reasoning_effort, 'high');
+    assert.equal(createCalls[0].reasoning_effort, 'low');
   });
 
   it('maps GLM max reasoning effort to the provider maximum', async () => {
@@ -495,6 +504,18 @@ describe('OpenAI-compatible provider request params', () => {
     ]);
 
     assert.equal(createCalls[0].reasoning_effort, 'max');
+  });
+
+  it('preserves temperature for Grok reasoning models', async () => {
+    const handler = createXaiHandler({
+      name: 'grok45',
+      fullName: 'grok-4.5',
+      capabilities: { supportsReasoning: true },
+    });
+
+    const { createCalls } = await sendRequest(handler);
+
+    assert.equal(createCalls[0].temperature, 0);
   });
 
   it('passes medium reasoning effort through for current Grok models', async () => {

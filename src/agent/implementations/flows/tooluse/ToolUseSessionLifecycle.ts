@@ -5,7 +5,6 @@ import {
 import type {
   FollowUpQueue,
   FollowUpQueueBatch,
-  FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import type { IToolUseSession } from '@agent/core/flows/IToolUseSession';
 import type { StreamTabId } from '@shared/schemas';
@@ -19,13 +18,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
   constructor(
     private readonly streamTabId: StreamTabId,
     private readonly queue: ToolUseFollowUpQueue,
-    continuationGenerationId: string,
   ) {
-    const lease = queue.claimLive(
-      streamTabId,
-      'flow',
-      continuationGenerationId,
-    );
+    const lease = queue.claimLive(streamTabId, 'flow');
     if (lease) {
       this.lease = lease;
       this.followUps = queue.queue(lease);
@@ -33,20 +27,13 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
     }
     // A native child loop owns continuation across all of its turns. Its inner
     // one-cycle flow uses that queue without becoming a second consumer.
-    const childQueue = queue.externallyOwnedQueue(
-      streamTabId,
-      continuationGenerationId,
-    );
+    const childQueue = queue.externallyOwnedQueue(streamTabId);
     if (!childQueue) {
       throw new Error(
         `Follow-up continuation already has an owner for stream ${streamTabId}.`,
       );
     }
     this.followUps = childQueue;
-  }
-
-  appendFollowUp(followUp: FollowUpQueueInput): void {
-    this.followUps.enqueue(followUp);
   }
 
   appendSyntheticFollowUp(text: string): void {
@@ -88,8 +75,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
    * input, and is honored only while this flow holds the consumer lease: a
    * borrowed queue belongs to the outer child-loop or recovery consumer, which
    * owns the recoverable/terminal decision it applies at release. Callers pass
-   * `'preserve'` for the one window they alone can see — a resume handoff that
-   * is not yet interruptible.
+   * `'preserve'` during the startup recovery/ownership window, before this
+   * invocation's checkpoint disposition is established.
    */
   interrupt(queue: 'clear' | 'preserve'): void {
     this.syntheticFollowUpPending = false;

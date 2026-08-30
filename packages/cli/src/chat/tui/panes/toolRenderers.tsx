@@ -12,6 +12,7 @@
 // beyond its plain-text projection.
 
 // Local imports - shared schemas and utilities
+import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   textDisplayWidth,
   truncateSummaryToWidth,
@@ -65,7 +66,7 @@ const OUTPUT_LINE_MAX_CHARS = 2000;
  *  row instead of the historical fixed 80 columns, so wide terminals show the
  *  whole command and narrow ones truncate to fit a single row. Returns 0 (no
  *  preview) when the tool name plus chrome already eat the row. */
-export function toolHeaderPreviewBudget(
+function toolHeaderPreviewBudget(
   columns: number | undefined,
   displayName: string,
 ): number {
@@ -136,10 +137,14 @@ function cornerRows(
   );
 }
 
-/** The terminal's own budget over one of the row's untruncated texts. */
+/** The terminal's own budget over one of the row's untruncated texts. The
+ * per-line cap only protects the head/tail *budgeted* rendering from one
+ * pathological line — when elide is false (the Ctrl-T full print), the
+ * caller already wraps every line to terminal columns, so leave lines
+ * uncapped there rather than silently cutting the "full output" view. */
 function elidedLines(text: TranscriptText, elide: boolean): string[] {
   return elidedTextLines(text, elide).map((line) =>
-    truncateWithEllipsis(line, OUTPUT_LINE_MAX_CHARS),
+    elide ? truncateWithEllipsis(line, OUTPUT_LINE_MAX_CHARS) : line,
   );
 }
 
@@ -223,7 +228,8 @@ function sectionLines(section: ToolSection, elide: boolean): readonly string[] {
       return [
         section.label,
         ...section.groups.map(
-          (group) => `  ${group.label}: ${group.files.join(', ')}`,
+          (group) =>
+            `  ${formatAgentProposalFileGroup(group.label, group.files, elide ? undefined : Infinity)}`,
         ),
       ];
     case 'text':

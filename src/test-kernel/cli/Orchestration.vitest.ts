@@ -2,41 +2,32 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import {
-  orchestrationBlockRowCost,
   orchestrationFooterHints,
-  orchestrationKeyHints,
   orchestrationLauncherLayout,
   orchestrationPreviousStep,
-  orchestrationWrappedLineRows,
 } from '@cli/orchestration/runOrchestrationTui';
 import {
-  buildCliAccountItems,
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
   buildCliTeamItems,
   orchestrationModelAccessView,
   type BuildCliOrchestrationItemsInput,
-  type CliAccountStatus,
   type CliOrchestrationItem,
 } from '@cli/runtime/orchestration';
 import {
   buildCliModelAccessItems,
+  type CliAccountStatus,
   type CliModelAccessStatus,
 } from '@cli/runtime/modelAccessRoute';
 
-import {
-  CLI_HISTORY_RESUMABLE_STATUS,
-  type CliHistoryEntry,
-} from '@cli/runtime/history';
+import type { CliHistoryEntry } from '@cli/runtime/history';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
-import {
-  type CliMultiAgentPreset,
-  type CliMultiAgentPresetRunPlan,
-} from '@cli/runtime/multiAgentPresets';
-import { planTeamRun } from '@common/teams/TeamPlan';
+import { type CliMultiAgentPresetRunPlan } from '@cli/runtime/multiAgentPresets';
+import { planTeamRun, type TeamPreset } from '@common/teams/TeamPlan';
 import type { ExecutionId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, HISTORY_RUN_STATUS } from '@shared/schemas';
 
 function codingPlans(
   kimiPreferred = false,
@@ -60,7 +51,7 @@ function historyEntry(
     agent: 'orchestrator',
     model: 'claude-opus-4-7',
     status: 'completed',
-    resumable: overrides.status === CLI_HISTORY_RESUMABLE_STATUS,
+    resumable: overrides.status === HISTORY_RUN_STATUS.RESUMABLE,
     inputBasename: '-',
     category: AgentCategory.ToolUse,
     ...overrides,
@@ -104,7 +95,7 @@ function modelAccess(
   };
 }
 
-function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
+function preset(overrides: Partial<TeamPreset>): TeamPreset {
   return {
     id: 'physicist',
     name: 'Physicist',
@@ -121,7 +112,7 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
 }
 
 function presetPlan(
-  overrides: Partial<CliMultiAgentPreset>,
+  overrides: Partial<TeamPreset>,
   agents: {
     readonly workflow?: readonly AgentEntry[];
     readonly toolUse?: readonly AgentEntry[];
@@ -133,7 +124,7 @@ function presetPlan(
 }
 
 function readyPresetPlan(
-  overrides: Partial<CliMultiAgentPreset> = {},
+  overrides: Partial<TeamPreset> = {},
 ): CliMultiAgentPresetRunPlan {
   return presetPlan(
     { id: 'physicist', name: 'Physicist', ...overrides },
@@ -169,10 +160,43 @@ function orchestrationItems(
   });
 }
 
+function accountStatus(
+  overrides: Partial<CliAccountStatus> = {},
+): CliAccountStatus {
+  return {
+    preferences: { chatGpt: 'off', grok: 'off' },
+    codingPlans: codingPlans(),
+    texraSignedIn: false,
+    chatGptSignedIn: false,
+    grokSignedIn: false,
+    ...overrides,
+  };
+}
+
 function accountDescription(account: CliAccountStatus): string | undefined {
-  return orchestrationItems({ account }).find(
-    (item) => item.label === 'Account',
+  return orchestrationItems({ accountAccess: account }).find(
+    (item) => item.label === 'Account & access',
   )?.description;
+}
+
+/** The four preference toggles every account & access step opens with. */
+function accountAccessToggleRows(
+  oauthState: 'on' | 'off' = 'on',
+): readonly unknown[] {
+  return (['chatgpt', 'grok', 'kimi-code', 'glm-code'] as const).map(
+    (provider) =>
+      expect.objectContaining({
+        value: {
+          kind: 'set-model-access',
+          access: {
+            kind: 'subscription-preference',
+            provider,
+            state:
+              provider === 'chatgpt' || provider === 'grok' ? oauthState : 'on',
+          },
+        },
+      }),
+  );
 }
 
 function kimiCodePreferenceItem(
@@ -184,9 +208,6 @@ function kimiCodePreferenceItem(
       item.value.provider === 'kimi-code',
   );
 }
-
-const SIGNED_IN_AUTH_STATUS =
-  'auth: signed in as researcher@example.com · tier: Ultra · included usage this month: 25% used, 75% remaining';
 
 const ORCHESTRATION_TEST_HEADER_LINES = [
   'TeXRA v0.0.0-test',
@@ -223,30 +244,6 @@ describe('CLI orchestration items', () => {
     expect(
       orchestrationPreviousStep({ kind: 'model', action, backTo: 'launcher' }),
     ).toEqual({ kind: 'launcher' });
-  });
-
-  it('advertises the full direct-open hotkey range used by Select', () => {
-    expect(orchestrationKeyHints()).toContainEqual({
-      key: '1-9/a-z/Enter',
-      action: 'open',
-    });
-  });
-
-  it('keeps the exit hint out of the Select letter hotkey range', () => {
-    const hints = orchestrationKeyHints();
-
-    expect(hints).toContainEqual({ key: 'Esc', action: 'exit' });
-    expect(hints).not.toContainEqual({ key: 'q/Esc', action: 'exit' });
-  });
-
-  it('budgets wrapped launcher status rows instead of assuming one row per line', () => {
-    const accountHint =
-      'actions: choose Model access below; `texra login --select-account` changes account';
-
-    expect(orchestrationWrappedLineRows(accountHint, 52)).toBeGreaterThan(1);
-    expect(orchestrationBlockRowCost([accountHint], 52)).toBe(
-      1 + orchestrationWrappedLineRows(accountHint, 52),
-    );
   });
 
   it('keeps compact launcher orientation before advisory footer text', () => {
@@ -310,48 +307,6 @@ describe('CLI orchestration items', () => {
     });
   });
 
-  it('keeps compact signed-in auth after the API mode on short launchers', () => {
-    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
-
-    const layout = launcherLayout({ rows: 14, statusLines });
-
-    expect(layout).toEqual({
-      statusLines: [
-        'api: your own API keys',
-        'auth: signed in as researcher@example.com',
-      ],
-      footerHints: [],
-      maxVisibleItems: 4,
-      showOverflow: true,
-    });
-  });
-
-  it('keeps footer hints when compact auth creates enough room', () => {
-    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
-    const footerHints = ['Team settings are available from the launcher.'];
-
-    const layout = launcherLayout({ rows: 16, statusLines, footerHints });
-
-    expect(layout.statusLines).toEqual([
-      'api: your own API keys',
-      'auth: signed in as researcher@example.com',
-    ]);
-    expect(layout.footerHints).toEqual(footerHints);
-    expect(layout.maxVisibleItems).toBe(4);
-  });
-
-  it('uses the compact auth fallback when the launcher is narrow', () => {
-    const statusLines = ['api: your own API keys', SIGNED_IN_AUTH_STATUS];
-
-    const layout = launcherLayout({ rows: 16, columns: 40, statusLines });
-
-    expect(layout.statusLines).toEqual([
-      'api: your own API keys',
-      'auth: signed in as researcher@example.com',
-    ]);
-    expect(layout.maxVisibleItems).toBe(4);
-  });
-
   it('keeps visible choices instead of overflow-only output on tiny row budgets', () => {
     const layout = launcherLayout({ rows: 7 });
 
@@ -376,24 +331,19 @@ describe('CLI orchestration items', () => {
     });
   });
 
-  it('keeps model access directly below new chat and presents every access route', () => {
-    const status = {
-      preferences: {
-        chatGpt: 'off',
-        grok: 'off',
-      } as const,
-      codingPlans: codingPlans(),
+  it('keeps account & access directly below new chat and presents every access route', () => {
+    const status = accountStatus({
       chatGptSignedIn: true,
-      grokSignedIn: false,
       chatGptAccountLabel: 'researcher@example.com',
-    };
-    const items = orchestrationItems({ modelAccess: status });
+      texraSignedIn: true,
+    });
+    const items = orchestrationItems({ accountAccess: status });
 
     expect(items[1]).toEqual({
-      label: 'Model access',
+      label: 'Account & access',
       description:
-        'ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
-      value: { kind: 'configure-model-access' },
+        'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      value: { kind: 'browse-account-access' },
     });
     expect(
       buildCliModelAccessItems({ kind: 'loaded', access: status }),
@@ -470,11 +420,15 @@ describe('CLI orchestration items', () => {
       'On · key configured',
     );
 
-    expect(orchestrationItems({ modelAccess: kimiOnAccess })[1]).toEqual({
-      label: 'Model access',
+    expect(
+      orchestrationItems({
+        accountAccess: { ...kimiOnAccess, texraSignedIn: false },
+      })[1],
+    ).toEqual({
+      label: 'Account & access',
       description:
-        'ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
-      value: { kind: 'configure-model-access' },
+        'Researcher Access signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
+      value: { kind: 'browse-account-access' },
     });
   });
 
@@ -508,74 +462,91 @@ describe('CLI orchestration items', () => {
     });
   });
 
-  it('offers account management as one startup row with provider actions', () => {
-    const account = {
+  it('offers account & access as one startup row with toggles first', () => {
+    const account = accountStatus({
       texraSignedIn: true,
       texraAccountLabel: 'researcher@example.com',
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    };
-    const items = orchestrationItems({ account });
+      chatGptSignedIn: true,
+      chatGptAccountLabel: 'chatgpt@example.com',
+      grokSignedIn: true,
+      grokAccountLabel: 'grok@example.com',
+    });
+    const items = orchestrationItems({ accountAccess: account });
 
     expect(items.map((item) => item.label)).toEqual([
       'New chat',
-      'Account',
+      'Account & access',
       'Settings',
       'Help',
     ]);
-    expect(items.find((item) => item.label === 'Account')?.description).toBe(
-      'TeXRA · researcher@example.com',
+    expect(
+      items.find((item) => item.label === 'Account & access')?.description,
+    ).toBe(
+      'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
-    expect(buildCliAccountItems(account)).toEqual([
+    expect(buildCliAccountAccessItems(account)).toEqual([
+      ...accountAccessToggleRows(),
       expect.objectContaining({
-        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
+        label: 'Sign out of ChatGPT',
+        description: 'chatgpt@example.com',
+        value: { kind: 'account', provider: 'chatgpt', operation: 'sign-out' },
       }),
       expect.objectContaining({
-        value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
+        label: 'Sign out of Grok',
+        description: 'grok@example.com',
+        value: { kind: 'account', provider: 'grok', operation: 'sign-out' },
       }),
       expect.objectContaining({
-        label: 'Log out of TeXRA',
-        description: '',
+        label: 'Sign out of Researcher Access',
+        description: 'researcher@example.com',
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
     ]);
   });
 
-  it('summarizes multiple signed-in accounts with natural list grammar', () => {
-    // #9719: "A and B and C" is awkward once Grok is a third account.
-    expect(
-      accountDescription({
-        texraSignedIn: true,
-        chatGptSignedIn: true,
-        grokSignedIn: false,
-      }),
-    ).toBe('TeXRA and ChatGPT signed in');
-
-    expect(
-      accountDescription({
-        texraSignedIn: true,
-        chatGptSignedIn: true,
-        grokSignedIn: true,
-      }),
-    ).toBe('TeXRA, ChatGPT, and Grok signed in');
+  it('prefixes the launcher access summary with the Researcher Access sign-in state', () => {
+    expect(accountDescription(accountStatus({ texraSignedIn: true }))).toBe(
+      'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+    );
+    expect(accountDescription(accountStatus())).toBe(
+      'Researcher Access signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+    );
   });
 
-  it('offers both sign-in paths when no account is present', () => {
-    const account = {
-      texraSignedIn: false,
-      chatGptSignedIn: false,
-      grokSignedIn: false,
-    };
+  it('keeps signed-out subscriptions on their toggle rows and always lists TeXRA', () => {
+    const account = accountStatus();
 
-    expect(buildCliAccountItems(account)).toEqual([
+    expect(buildCliAccountAccessItems(account)).toEqual([
+      ...accountAccessToggleRows(),
       expect.objectContaining({
+        label: 'Sign in with Researcher Access',
+        description: '',
+        value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
+      }),
+    ]);
+  });
+
+  it('offers browser sign-in when a preferred subscription is signed out', () => {
+    // Expired or revoked session with the preference still 'on': the toggle
+    // would only disable the preference, so the row must offer re-sign-in.
+    const account = accountStatus({
+      preferences: { chatGpt: 'on', grok: 'on' },
+    });
+
+    expect(buildCliAccountAccessItems(account)).toEqual([
+      ...accountAccessToggleRows('off'),
+      expect.objectContaining({
+        label: 'Sign in with ChatGPT',
+        description: 'Use a ChatGPT subscription',
         value: { kind: 'account', provider: 'chatgpt', operation: 'sign-in' },
       }),
       expect.objectContaining({
+        label: 'Sign in with Grok',
+        description: 'Use a Grok / SuperGrok subscription',
         value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
       }),
       expect.objectContaining({
-        label: 'Log in to TeXRA',
+        label: 'Sign in with Researcher Access',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
@@ -586,11 +557,11 @@ describe('CLI orchestration items', () => {
     const history = [
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
       }),
       historyEntry('bbbbbbbbbbbb', {
         agent: 'orchestrator',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
       }),
     ];
     const items = orchestrationItems({
@@ -643,7 +614,7 @@ describe('CLI orchestration items', () => {
     const items = buildCliResumeItems([
       historyEntry('aaaaaaaaaaaa', {
         agent: 'review',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
         inputBasename: 'paper.tex',
       }),
     ]);
@@ -657,7 +628,7 @@ describe('CLI orchestration items', () => {
     const items = buildCliResumeItems([
       historyEntry('aaaaaaaaaaaa', {
         agent: 'assistant',
-        status: CLI_HISTORY_RESUMABLE_STATUS,
+        status: HISTORY_RUN_STATUS.RESUMABLE,
         inputBasename: '-',
         description: 'Sketching inductive Lean proof of Nat.add_comm.',
       }),
@@ -824,7 +795,7 @@ describe('CLI orchestration items', () => {
         history: [
           historyEntry('aaaaaaaaaaaa', {
             agent: 'review',
-            status: CLI_HISTORY_RESUMABLE_STATUS,
+            status: HISTORY_RUN_STATUS.RESUMABLE,
           }),
         ],
         toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],

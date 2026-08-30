@@ -3,12 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { AUTH_COMMANDS } from '@auth/constants';
-import {
-  formatUnavailableTeamMembersMessage,
-  TEAM_LAUNCH_CANCEL_LABEL,
-  TEAM_LAUNCH_CONTINUE_LABEL,
-  TEAM_LAUNCH_SIGN_IN_LABEL,
-} from '@common/teams/TeamPlan';
+import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import { prepareMainViewExecutionLaunch } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { createLog } from '@logger/logUtils';
@@ -18,10 +13,22 @@ import type {
   MainViewExecuteMessage,
   MainViewInboundMessage,
 } from '@shared/schemas';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocation } from '@utils/files/fileLocation';
 
 const CHANNEL = 'ExecutionHandlers';
 const log = createLog(CHANNEL);
+
+function observeNotification(
+  notification: Thenable<unknown>,
+  kind: 'information' | 'error',
+): void {
+  void Promise.resolve(notification).catch((err: unknown) => {
+    log.warn(
+      `${kind[0].toUpperCase()}${kind.slice(1)} notification failed: ${toErrorMessage(err)}`,
+    );
+  });
+}
 
 type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
   MainViewInboundMessage,
@@ -59,15 +66,15 @@ export async function handleExecute(
 
   const launch = await prepareMainViewExecutionLaunch(message, {
     chooseTeamAvailability: async (unavailableNames) => {
+      const prompt = teamAvailabilityPrompt(unavailableNames);
       const choice = await vscode.window.showWarningMessage(
-        formatUnavailableTeamMembersMessage(unavailableNames),
-        TEAM_LAUNCH_SIGN_IN_LABEL,
-        TEAM_LAUNCH_CONTINUE_LABEL,
-        TEAM_LAUNCH_CANCEL_LABEL,
+        prompt.message,
+        ...prompt.actions.map((action) => action.label),
       );
-      if (choice === TEAM_LAUNCH_SIGN_IN_LABEL) return 'sign-in';
-      if (choice === TEAM_LAUNCH_CONTINUE_LABEL) return 'continue';
-      return 'cancel';
+      return (
+        prompt.actions.find((action) => action.label === choice)?.choice ??
+        'cancel'
+      );
     },
     signInForRemoteAgentCatalog: async () =>
       Boolean(
@@ -76,11 +83,17 @@ export async function handleExecute(
   });
   if (launch.status === 'cancelled') return;
   if (launch.status === 'error') {
-    await vscode.window.showErrorMessage(launch.message);
+    observeNotification(
+      vscode.window.showErrorMessage(launch.message),
+      'error',
+    );
     return;
   }
   if (launch.infoMessage) {
-    await vscode.window.showInformationMessage(launch.infoMessage);
+    observeNotification(
+      vscode.window.showInformationMessage(launch.infoMessage),
+      'information',
+    );
   }
   const { preparation } = launch;
   if (!preparation.valid) {
@@ -124,7 +137,6 @@ export function handleFileOperation(message: FileOperationMessage): void {
     case MAIN_VIEW_COMMANDS.ACCEPT_EDITED:
       void vscode.commands.executeCommand(
         `texra.${message.command}`,
-        pathToLocation(message.baseFile),
         pathToLocation(message.baseFile),
         pathToLocation(message.editedFile),
       );

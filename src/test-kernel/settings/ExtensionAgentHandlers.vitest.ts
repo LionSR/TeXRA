@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentEntry } from '@agent/index/agentEntry';
 import { resetAgentCatalogAuthRefreshScopeForTests } from '@frontend/auth/agentCatalogRefreshScope';
-import type { AgentCategory, AgentSource } from '@shared/schemas';
+import type { AgentCategory } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  physicistCatalog,
+  type AgentCatalog,
+} from '@test/support/agentCatalogFixtures';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 
-type AgentCatalog = Record<AgentCategory, AgentEntry[]>;
-
 const host = vi.hoisted(() => ({
+  showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
   executeCommand: vi.fn(),
@@ -21,6 +23,7 @@ vi.mock('vscode', async () => {
     ...actual,
     window: {
       ...actual.window,
+      showErrorMessage: host.showErrorMessage,
       showInformationMessage: host.showInformationMessage,
       showWarningMessage: host.showWarningMessage,
     },
@@ -66,30 +69,6 @@ function applyPreset(handlers: Handlers, presetId: string): Promise<void> {
   });
 }
 
-function physicistCatalog(): AgentCatalog {
-  const workflow = ['correct', 'polish'].map((name): AgentEntry => ({
-    source: 'builtInWorkflow',
-    name,
-    path: `/agents/${name}.yaml`,
-    category: 'workflow',
-  }));
-  const toolUse = [
-    ['orchestrator', 'builtInToolUse'],
-    ['research', 'custom'],
-    ['numerics', 'builtInToolUse'],
-    ['review', 'builtInToolUse'],
-    ['presenter', 'builtInToolUse'],
-    ['latexFixer', 'builtInToolUse'],
-  ].map(([name, source]): AgentEntry => ({
-    source: source as AgentSource,
-    name,
-    path: `/agents/${name}.yaml`,
-    category: 'toolUse',
-    ...(name === 'orchestrator' ? { tools: ['delegate_agent'] } : {}),
-  }));
-  return { workflow, toolUse };
-}
-
 interface HandlerFixtureOptions {
   readonly workspaceState?: FakeStateStore;
   readonly catalog?: AgentCatalog;
@@ -112,7 +91,7 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
   });
   host.showWarningMessage.mockImplementation(async (message: string) => {
     modalPrompts.push(message);
-    return options.modalChoice;
+    return options.modalChoice ? { title: options.modalChoice } : undefined;
   });
 
   const refreshAfterAgentMutation = vi.fn(
@@ -121,9 +100,15 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
   const handlers = new AgentHandlers(
     {
       channel: 'TeXRA',
-      logger: { warn: () => {}, error: () => {}, debug: () => {} },
+      log: {
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      },
       extensionContext: {} as never,
       withActiveWebview: async () => {},
+      postMessageToActiveWebview: async () => {},
     },
     refreshAfterAgentMutation,
   );
@@ -268,9 +253,12 @@ describe('extension settings AgentHandlers', () => {
     expect(host.showWarningMessage).toHaveBeenCalledWith(
       modalPrompts[0],
       { modal: true },
-      'Sign In to TeXRA',
-      'Continue with Available Members',
-      'Cancel',
+      { title: 'Sign In to TeXRA', isCloseAffordance: false },
+      {
+        title: 'Continue with Available Members',
+        isCloseAffordance: false,
+      },
+      { title: 'Cancel', isCloseAffordance: true },
     );
     expect(registry.refreshAgents).not.toHaveBeenCalled();
     expect(refreshAfterAgentMutation).not.toHaveBeenCalled();

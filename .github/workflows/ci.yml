@@ -79,8 +79,8 @@ jobs:
             END { exit !found }'
           }
           # A file counts as "code" unless every changed path lives under docs/
-          # or is a *.md file. Remote-agent docs keep this classification:
-          # their separate drift job must not suppress the public docs build.
+          # or is a *.md file. Remote-agent docs keep this classification: the
+          # drift check runs as a step of the docs build, not full validation.
           code_change_match() {
             awk -F '\t' '{
               for (i = 2; i <= NF; i++) {
@@ -222,34 +222,6 @@ jobs:
       - name: Check remote-agents catalog generates
         run: npm run sync:remote-agents
 
-  remote-agent-docs:
-    name: remote-agents catalog
-    needs: changes
-    if: needs.changes.outputs.code != 'true' && needs.changes.outputs.remote_agent_docs == 'true' && github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Check remote-agents catalog generates
-        run: npm run sync:remote-agents
-
   guidance-refs:
     name: guidance references
     # Deliberately ungated: this is the one check that must run on BOTH sides
@@ -374,7 +346,7 @@ jobs:
             orchestrate-history orchestrate-resume-submenu \
             compact-orchestrate-launcher single-run-liveness \
             subagent-followup-summary \
-            agent-proposal-approve-all workflow-timeline workflow-running \
+            agent-proposal-approve-all workflow-running \
             root-transcript-reader-full-tool-output compact-api-form \
             narrow-slash-palette-command-names
 
@@ -535,13 +507,18 @@ jobs:
         working-directory: docs
         run: npm run docs:build
 
+      # Runs even when an earlier step failed so a docs-only PR still gets the
+      # formatting, docs-build and catalog verdicts in one round trip.
+      - name: Check remote-agents catalog generates
+        if: ${{ !cancelled() && needs.changes.outputs.remote_agent_docs == 'true' }}
+        run: npm run sync:remote-agents
+
   validate-status:
     name: validate
     runs-on: ubuntu-latest
     needs:
       - changes
       - checks
-      - remote-agent-docs
       - guidance-refs
       - test
       - build
@@ -575,7 +552,6 @@ jobs:
           fi
           for result in \
             'checks:${{ needs.checks.result }}' \
-            'remote-agent-docs:${{ needs.remote-agent-docs.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
@@ -596,12 +572,5 @@ jobs:
              [ '${{ needs.checks.result }}' = 'skipped' ] && \
              [ '${{ needs.docs-check.result }}' != 'success' ]; then
             echo 'Docs-only PR but docs build did not succeed: ${{ needs.docs-check.result }}'
-            exit 1
-          fi
-          if [ '${{ github.event_name }}' = 'pull_request' ] && \
-             [ '${{ needs.changes.outputs.code }}' != 'true' ] && \
-             [ '${{ needs.changes.outputs.remote_agent_docs }}' = 'true' ] && \
-             [ '${{ needs.remote-agent-docs.result }}' != 'success' ]; then
-            echo 'Remote-agent catalog config changed but generate did not succeed: ${{ needs.remote-agent-docs.result }}'
             exit 1
           fi

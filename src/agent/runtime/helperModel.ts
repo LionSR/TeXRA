@@ -24,7 +24,6 @@ import { getHelperModelName } from './helperModelName';
 export interface HelperModelKit {
   handler: ModelHandler;
   client: unknown;
-  modelName: string;
 }
 
 type HelperModelResult =
@@ -57,7 +56,7 @@ export async function createHelperModelKit(
   handler.setProgressViewEnabled(false);
 
   const client = await handler.getClient();
-  return { kit: { handler, client, modelName } };
+  return { kit: { handler, client } };
 }
 
 /** A single non-streaming helper-model text completion. */

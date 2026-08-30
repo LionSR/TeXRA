@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -23,8 +23,8 @@ import {
 } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import {
   appendTranscriptEntry,
@@ -38,7 +38,7 @@ import { assembleTrace, StreamLogStore } from '@transcript';
 // so a plain relative import is the simplest way to reach it.
 import { replayTrace } from '../../../packages/trace-viewer/src/replayTrace';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 setupPlatform(() => createTempDirPlatform('texra-replay-trace-', tempDirs));
 
@@ -46,10 +46,6 @@ beforeEach(() => {
   // replayTrace's slices write the shared progressState singletons directly;
   // reset them so each test starts from a clean slate.
   resetProgressState();
-});
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
 });
 
 type TraceEntry = TraceDocument['entries'][number];
@@ -98,9 +94,6 @@ function legacyTrace(
       streamId,
       status: snapshotStatus,
     }),
-    // The bug under test: `null` is what real traces recorded before outcome
-    // tracking (or that never reached a terminal state) persist here.
-    terminalStatus: null,
   };
 }
 
@@ -177,7 +170,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     const result = await assembleTrace(executionId);
     expect(result.status).toBe('ok');
     if (result.status !== 'ok') return;
-    expect(result.trace.terminalStatus).toBeNull();
+    expect(result.trace.meta?.outcome).toBeUndefined();
     expect(result.trace.snapshot.status).toBeUndefined();
 
     replayTrace(result.trace);
@@ -336,7 +329,7 @@ describe('replayTrace legacy-status fallback (issue #7188)', () => {
     },
   );
 
-  it('still reports READY when neither terminalStatus nor snapshot.status is set', () => {
+  it('still reports READY when neither meta.outcome nor snapshot.status is set', () => {
     const trace = legacyTrace(undefined);
 
     replayTrace(trace);

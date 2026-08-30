@@ -1,7 +1,5 @@
 // Third-party imports
 import { LitElement } from 'lit';
-import { createContext, provide } from '@lit/context';
-import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@shared/ipc';
@@ -9,15 +7,14 @@ import { postMessage } from '@shared/hostBridge';
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
+  type Theme,
 } from '@shared/schemas';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
-// Local imports - webview commands
-import { setWaColorScheme, themeIsDark } from '@shared/wa/waColorScheme';
 import type { ZodError } from 'zod';
 
 interface CommonMessageContext {
-  setTheme: (theme: string) => void;
+  setTheme: (theme: Theme) => void;
   setDebugMode: (enabled: boolean) => void;
   restoreState: (message: StateRestoreMessage) => void;
   onSchemaError?: (context: string, error: ZodError) => void;
@@ -55,8 +52,6 @@ function handleCommonMessage(
   }
 }
 
-export const themeContext = createContext<string>('shared-theme');
-
 /**
  * Base class for Lit-powered webview apps.
  *
@@ -67,15 +62,11 @@ export const themeContext = createContext<string>('shared-theme');
  */
 
 export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
-  @provide({ context: themeContext })
-  @state()
-  protected theme = '';
-
   protected debugMode = false;
 
   private readonly messageListener = (event: MessageEvent) => {
     const handled = handleCommonMessage(event.data, {
-      setTheme: (theme) => this.onThemeChange(theme),
+      setTheme: () => {},
       setDebugMode: (enabled) => {
         this.debugMode = enabled;
       },
@@ -86,13 +77,6 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
       this.handleMessage(event.data as TMessage);
     }
   };
-
-  /**
-   * Override to change or suppress the ready command.
-   */
-  protected get readyCommand(): string | null {
-    return COMMON_COMMANDS.WEBVIEW_READY;
-  }
 
   /**
    * True when this webview is mounted by the Electron desktop renderer.
@@ -142,32 +126,6 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   }
 
   /**
-   * Handle theme updates from the extension host.
-   *
-   * Mirrors the theme kind onto `<html>` as `wa-light` / `wa-dark` so Web
-   * Awesome's color-scheme classes activate (per WA's native theming model).
-   * Also keeps the legacy `body.<theme>` class for downstream rules.
-   */
-  protected onThemeChange(theme: string): void {
-    this.theme = theme;
-    document.body.className = theme;
-    // 'high-contrast' renders against the active OS color-scheme — pick dark
-    // unless the body class explicitly signals light HC. Defer the actual
-    // class swap to the shared helper so the class set + ordering stays in
-    // one place across hosts. Reuse `themeIsDark()` for the typed ('dark' /
-    // 'high-contrast') case so the dark-detection rule lives next to the
-    // desktop renderer's path in @shared/wa/hostTheme.
-    const isTypedDark =
-      (theme === 'dark' || theme === 'light' || theme === 'high-contrast') &&
-      themeIsDark(theme);
-    const wantsDark =
-      isTypedDark ||
-      document.body.classList.contains('vscode-dark') ||
-      document.body.classList.contains('vscode-high-contrast');
-    setWaColorScheme(wantsDark);
-  }
-
-  /**
    * Handle state restoration from the extension host.
    */
   protected onStateRestore(_message: StateRestoreMessage): void {
@@ -178,11 +136,13 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
     super.connectedCallback();
     installToolbarTooltips();
     window.addEventListener('message', this.messageListener);
-    const command = this.readyCommand;
-    if (command) {
-      const view = this.getAttribute('data-desktop-view');
-      postMessage(command, view == null ? {} : { view });
-    }
+    this.postReady();
+  }
+
+  /** Tell the host this view is mounted, tagged with the desktop surface. */
+  protected postReady(): void {
+    const view = this.getAttribute('data-desktop-view');
+    postMessage(COMMON_COMMANDS.WEBVIEW_READY, view == null ? {} : { view });
   }
 
   override disconnectedCallback(): void {

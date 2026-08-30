@@ -32,7 +32,6 @@ import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 // Local imports - progress view frontend
 import { progressAppStyles } from './progressAppStyles';
 import {
-  activeStreamId$,
   displayedActiveStreamId$,
   childStreamsByParent$,
   diffStatusAnnouncement,
@@ -141,11 +140,7 @@ export class ProgressApp extends ProgressAppBase {
     super.disconnectedCallback();
   }
 
-  protected get readyCommand(): string | null {
-    return PROGRESS_VIEW_COMMANDS.WEBVIEW_READY;
-  }
-
-  render(): TemplateResult {
+  override render(): TemplateResult {
     const isEditorMode = placement.get() === 'editor';
     const desktopView = this.getAttribute('data-desktop-view');
     const isDesktopMode = desktopView !== null;

@@ -237,15 +237,24 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
 
     for (const question of data.questions) {
       const custom = this.freeText[question.question]?.trim();
+      const selected = this.selections[question.question] ?? [];
+      if (question.multiSelect) {
+        // The box is labelled "Type another answer", so on a multi-select
+        // question it adds to the checked options instead of replacing them.
+        const merged = custom ? [...selected, custom] : selected;
+        const answer = [...new Set(merged)];
+        if (answer.length === 0) continue;
+        answers[question.question] = answer;
+        continue;
+      }
+      // Single-select holds one answer, so free text stays an override — it is
+      // the escape hatch for "none of these options fit".
       if (custom) {
         answers[question.question] = custom;
         continue;
       }
-      const selected = this.selections[question.question] ?? [];
       if (selected.length === 0) continue;
-      answers[question.question] = question.multiSelect
-        ? selected
-        : selected[0];
+      answers[question.question] = selected[0];
     }
 
     this.emitAction({ action: 'submit', answers });

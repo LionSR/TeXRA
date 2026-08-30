@@ -11,7 +11,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   claudeAgentSessionsFor,
   codexThreadsFor,
-  registerAgentShutdownHandlers,
+  registerRuntimeShutdownHandlers,
 } from '@tools/agentCliSessionStores';
 
 describe('agent shutdown', () => {
@@ -45,7 +45,9 @@ describe('agent shutdown', () => {
 
     try {
       const lifecycle = createLifecycleHost();
-      registerAgentShutdownHandlers(lifecycle);
+      registerRuntimeShutdownHandlers(lifecycle, {
+        flushArtifacts: () => {},
+      });
 
       await Promise.all([lifecycle.runShutdown(), lifecycle.runShutdown()]);
       await lifecycle.runShutdown();
@@ -58,6 +60,40 @@ describe('agent shutdown', () => {
     } finally {
       firstSession.dispose();
       secondSession.dispose();
+    }
+  });
+
+  it('preserves the shared shutdown order around host hooks', async () => {
+    const session = createTestSession();
+    const order: string[] = [];
+    vi.spyOn(session.executions, 'killBackgroundProcesses').mockImplementation(
+      () => {
+        order.push('agent-shutdown');
+      },
+    );
+
+    try {
+      const lifecycle = createLifecycleHost();
+      registerRuntimeShutdownHandlers(lifecycle, {
+        beforeAgentShutdown: [() => void order.push('before-agent')],
+        afterAgentShutdown: [() => void order.push('after-agent')],
+        flushArtifacts: () => void order.push('flush'),
+        afterFlushArtifacts: [() => void order.push('after-flush')],
+        afterExecutionSettlement: [() => void order.push('after-settle')],
+      });
+
+      await lifecycle.runShutdown();
+
+      expect(order).toEqual([
+        'before-agent',
+        'agent-shutdown',
+        'after-agent',
+        'flush',
+        'after-flush',
+        'after-settle',
+      ]);
+    } finally {
+      session.dispose();
     }
   });
 });

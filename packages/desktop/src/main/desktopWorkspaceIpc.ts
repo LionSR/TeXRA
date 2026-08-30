@@ -228,17 +228,17 @@ export function createDesktopWorkspaceIpc(
       // the input picker's `.ts`/`.js`/`.json` exclusions. Only known binary
       // media and office formats are hidden from this text editor.
       const filters = prepareFileFilters({
-        extensions: [],
-        ignoredExtensions: [
+        include: [],
+        excludeExtensions: [
           ...new Set([
             ...getIncludedExtensions('media'),
             ...OFFICE_EXTENSIONS,
             '.vsix',
           ]),
         ],
-        ignoredDirs: settings.ignoredDirectories,
-        ignoredKeywords: [],
-        ignoredFiles: [],
+        excludeDirs: settings.ignoredDirectories,
+        excludeKeywords: [],
+        excludeFiles: [],
       });
       const absoluteDirectory = normalizedDirectory
         ? await resolveWorkspacePath(normalizedDirectory)

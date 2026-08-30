@@ -35,28 +35,18 @@ import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemo
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
 function createController(options?: {
-  memoryEnabled?: boolean;
   confirmResponses?: readonly boolean[];
 }): {
   controller: SettingsMemoryController;
   hosts: ReturnType<typeof createFakeUIHosts>;
-  memoryEnabledValue: () => boolean;
 } {
   const hosts = createFakeUIHosts({
     confirmResponses: options?.confirmResponses,
   });
-  let memoryEnabled = options?.memoryEnabled ?? true;
 
   return {
-    controller: new SettingsMemoryController({
-      prompt: hosts.prompt,
-      isMemoryEnabled: () => memoryEnabled,
-      setMemoryEnabled: async (enabled) => {
-        memoryEnabled = enabled;
-      },
-    }),
+    controller: new SettingsMemoryController({ prompt: hosts.prompt }),
     hosts,
-    memoryEnabledValue: () => memoryEnabled,
   };
 }
 
@@ -117,16 +107,6 @@ describe('SettingsMemoryController', () => {
         error: true,
       },
     });
-  });
-
-  it('updates memory enabled state and returns the refreshed setting', async () => {
-    const { controller, memoryEnabledValue } = createController();
-
-    assert.deepEqual(await controller.setMemoryEnabled(false), {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED,
-      enabled: false,
-    });
-    assert.equal(memoryEnabledValue(), false);
   });
 
   it('leaves memory files untouched when deletion is cancelled', async () => {

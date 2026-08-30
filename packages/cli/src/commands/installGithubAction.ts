@@ -1,10 +1,11 @@
-import { mkdir, stat, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { pathExists } from '../runtime/initConfig';
 import { tryOpenBrowser } from '../runtime/browser';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import {
@@ -100,15 +101,6 @@ interface InstallOptions {
   readonly openPr: boolean;
 }
 
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await stat(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
   const range = `${encodeURIComponent(base)}...${encodeURIComponent(branch)}`;
   return `https://github.com/${slug.owner}/${slug.repo}/compare/${range}?expand=1`;
@@ -183,7 +175,6 @@ async function runInstallGithubAction(
 
   const url = remoteUrl(root);
   const slug = url ? parseGitHubSlug(url) : null;
-  await openGitHubAppInstaller(slug);
   const base = opts.base ?? defaultBranch(root) ?? 'main';
   const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
   const startBranch = currentBranch(root);
@@ -196,17 +187,24 @@ async function runInstallGithubAction(
     return CliExitCode.Usage;
   }
 
+  const baseRef = branchExists ? base : resolveBaseRef(root, base);
+  if (!baseRef) {
+    writeTextStderr(
+      `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
+    );
+    return CliExitCode.Usage;
+  }
+
+  // Only once the command is committed to writing the workflow file: the
+  // guards above still abort having done nothing, so they must not leave an
+  // installer tab open behind them. Open it before checkout so interruption
+  // during the launch cannot strand the user on the target branch.
+  await openGitHubAppInstaller(slug);
+
   let checkout: ExecResult;
   if (branchExists) {
     checkout = git(root, 'checkout', branch);
   } else {
-    const baseRef = resolveBaseRef(root, base);
-    if (!baseRef) {
-      writeTextStderr(
-        `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
-      );
-      return CliExitCode.Usage;
-    }
     checkout = git(root, 'checkout', '-b', branch, baseRef);
   }
   if (!checkout.success) {

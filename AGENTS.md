@@ -141,7 +141,7 @@ frozen deep-import lists, not another lint rule.
     - `utils/core/keyedMutex.ts` - `KeyedMutex` for independently serialized asynchronous work by key
     - `utils/core/pathCore.ts` - sibling Node-only path module
   - `utils/files/` - Filesystem utilities, rules, and vars
-  - `utils/config/` - Settings helpers (`getConfig`, `updateConfig`, `watchConfig`)
+  - `utils/config/` - Settings helpers: raw path reads (`getConfig`, `getValidatedConfig` in `src/utils/config/configUtils.ts`) and catalog-modeled settings (`readPlatformSetting`, `writePlatformSetting` in `src/utils/config/platformSettings.ts`)
   - `utils/system/` - Shell command execution (`execUtils`)
   - `utils/text/` - Text, string, and XML processing utilities — the single home for generic string helpers (validation, truncation, duration/token/percent formatting)
   - `src/utils/prompt.ts` - Prompt builder utilities
@@ -221,7 +221,7 @@ This project uses Zod v4. Follow these idiomatic patterns:
 - `.iso.datetime()` instead of `.string().datetime()` - ISO datetime validator
 - `.enum(MyEnum)` instead of `.nativeEnum(MyEnum)` - works with TS enums
 - `.looseObject({...})` instead of `.object({...}).passthrough()` - allows extra keys
-- `.strictObject({...})` - disallows extra keys (use for tool input schemas)
+- `.strictObject({...})` - disallows extra keys (use for tool input schemas, except discriminated-union branches - see "Tool input schemas")
 
 **Validation and refinement**
 
@@ -310,6 +310,10 @@ When passing nullish tool values to functions expecting `T | undefined` (not `T 
 // Function expects string | undefined, but .nullish() gives string | null | undefined
 const result = processPath(input.path ?? undefined);
 ```
+
+**Discriminated-union branches use `.looseObject()`, not `.strictObject()`.** Provider conversion flattens a top-level union into ONE object schema whose properties are the union of every branch's, and it emits no `additionalProperties` key - so the model is never told the flattened object is closed. OpenAI-compatible providers (DeepSeek, Kimi, etc.) then fill every advertised property, including ones that belong to a different command, with `null` rather than omitting it. A `strictObject` branch rejects that as an unrecognized key regardless of nullability; `looseObject` tolerates the cross-branch leakage while still enforcing each branch's own required fields.
+
+A union-branch field with a default needs `nullishWithDefault` (`src/tools/core/inputSchema.ts`) rather than `.prefault()`: `.prefault()` substitutes only for `undefined`, so an explicit `null` fails validation inside the correctly-selected branch, where `looseObject` gives no help.
 
 See: https://platform.openai.com/docs/guides/structured-outputs
 
@@ -464,7 +468,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Configuration, storage, and workspace files**
 
-- Use `getConfig`, `updateConfig`, and `watchConfig` from `@utils/config/configUtils` to read and react to settings changes.
+- For a raw config path, read with `getConfig`/`getValidatedConfig` from `src/utils/config/configUtils.ts` and write with `platform().config.update(...)` (the `ConfigProvider.update` port) — there is no standalone `updateConfig`/`watchConfig` helper, and no change-notification API today. Nearly every `texra.*` config path is also modeled in the Zod catalog (`src/shared/schemas/coreSettings.ts` / `stateSettings.ts`), and for most catalog-modeled settings `readPlatformSetting`/`writePlatformSetting` from `src/utils/config/platformSettings.ts` is preferable — host-neutral code (`src/model/`, `src/latex/`, `src/agent/`, `src/tools/`) already calls them directly, not just VS Code-allowed code, and they route through the shared validation/`onWrite` path. Exception: the handful of `configTarget: 'global'` rows (the five Models-tab provider toggles, `texra.telemetry.enabled`) read global scope only through `readPlatformSetting`, while `getConfig`/`platform().config` deliberately merge workspace over global for those — keep using `getConfig` for their reads. Both platform-setting helpers also default to the `'vscode'` storage slot; the CLI's git-author keys (`GIT_MARK_COMMITS`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_WORKTREE_SUPPORT`) diverge by host and go through the CLI's own `readGitAuthorSettingsFromState` instead. For a write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`), call `applyStateSettingUpdate` (`src/shared/settingsView/handlers/stateSettingWrite.ts`) rather than `writePlatformSetting` directly — it adds the open-workspace guard and the approval-policy side effect that a bare catalog write skips.
 - Interact with the filesystem through `@utils/files` helpers (`WorkspaceFS`, `RelativeFS`, `StorageFS`, `GlobalStorageFS`, `AbsoluteFS`). They resolve workspace paths, manage global storage, and expose cleanup helpers like `RelativeFS.cleanupOldFiles`.
 - Generate and identify pasted-image filenames with
   `@utils/files/pastedImageName`. Resolve, validate, and persist their paths
@@ -495,8 +499,8 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
 - **Flow transitions** - use named constants instead of magic values:
   - `FlowTransition.DEFAULT` - follow next() successor
   - `FlowTransition.CONTINUE` - loop back to flow entry
-  - `FlowTransition.FINALIZE` - exit flow after finalization
-  - `FlowTransition.COMPLETE` - return control to caller
+  - `FlowTransition.COMPLETE` - end the flow and return control to caller
+  - `FlowTransition.WAITING` - pause with the cursor kept for resume
 - **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. A failing `exec()` goes to `execFallback(prepRes, error)`, which by default rethrows; override it to convert the failure into something `post()` can route on. Retries are **not** a `BaseNode` feature: the manual-retry loop and its `shouldAutoRetry(error)` / `retryPrompt(prepRes, error)` / `signal` hooks live on `ModelInvocationNode` (`src/agent/core/flows/ModelInvocationNode.ts`), the only node that invokes a model. Do not re-add retry machinery to the kernel for a node that does not call a provider.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (`runFlowWithLifecycle` / `executeAgent` catch).
 
@@ -680,3 +684,29 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 - `.github/PULL_REQUEST_TEMPLATE.md` requires `## Net elements (R6)` and
   `## Consumer counts (R8)` sections on any `refactor:` / `simplify:` /
   `consolidate` / `dedupe` / `extract` PR — see the review checklist § 14.
+
+<!-- effect-solutions:start -->
+
+## Effect Best Practices
+
+When the optional local `effect-solutions` tool is installed, consult it before
+writing non-trivial Effect code:
+
+1. Run `effect-solutions list` to see available guides
+2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
+3. Search `~/.local/share/effect-solutions/effect` for real implementations
+
+Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
+
+If the tool is unavailable, consult the pinned package sources and types in
+`node_modules` instead of guessing at Effect patterns.
+
+### Local Effect Source
+
+`effect-solutions` may clone the Effect repository to
+`~/.local/share/effect-solutions/effect` for reference. This optional checkout
+is not provisioned by the repository. When present, it should track
+`Effect-TS/effect` `main` (v4); Effect v3 lives on that repository's `v3`
+branch. Match the installed `effect` version when APIs differ.
+
+<!-- effect-solutions:end -->

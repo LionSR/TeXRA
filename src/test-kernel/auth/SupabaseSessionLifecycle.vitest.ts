@@ -436,22 +436,6 @@ describe('SupabaseSession', () => {
       });
     });
 
-    it('force-refreshes native sessions without reloading storage', async () => {
-      const initialSession = makeSession({
-        accessToken: 'old-access',
-        refreshToken: 'old-refresh',
-      });
-      const { coordinator, getReadCount } = createCoordinator({
-        initialSession,
-      });
-
-      assert.equal(
-        await coordinator.ensureFreshToken(true),
-        'refreshed-access',
-      );
-      assert.equal(getReadCount(), 1);
-    });
-
     it('returns refreshed session tokens without reloading storage', async () => {
       const { coordinator, getReadCount } = createCoordinator({
         initialSession: expiredSession(),

@@ -6,6 +6,14 @@
 //
 // Names are the existing `TeXRAIconName` values, so no call site changes: every
 // `waIcon('file-code')` in the shared components silently upgrades.
+//
+// Independent from docs/.vitepress/theme/webAwesomeIcons.js by necessity, not
+// by drift: that module resolves a wider codicon-style alias vocabulary to
+// Font Awesome glyphs for the statically-built VitePress site, which cannot
+// import this Electron-only module or its Lucide geometry. Keep the two
+// tables' canonical-name overlap in sync by hand — see
+// docs/proposals/2026-08-25-simplification-survey-49-candidates.md and issue
+// #11424 for the last reconciliation pass.
 
 import {
   registerIconLibrary,
@@ -13,6 +21,7 @@ import {
 } from '@awesome.me/webawesome/dist/components/icon/library.js';
 import iconNodes from 'lucide-static/icon-nodes.json';
 
+import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 /**
@@ -38,52 +47,31 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'backward-step': 'skip-back',
   'forward-step': 'skip-forward',
   'caret-down': 'chevron-down',
-  'up-right-and-down-left-from-center': 'maximize-2',
-  'down-left-and-up-right-to-center': 'minimize-2',
 
   // Files / storage
   'file-lines': 'file-text',
   'file-pdf': 'file-text',
-  'file-import': 'file-input',
   'file-export': 'file-output',
   'floppy-disk': 'save',
   'box-archive': 'archive',
   box: 'package',
   'magnifying-glass': 'search',
-  'magnifying-glass-plus': 'zoom-in',
   'cloud-arrow-down': 'cloud-download',
   'cloud-arrow-up': 'cloud-upload',
-  'arrow-up-from-bracket': 'upload',
-  'arrow-down-to-line': 'download',
 
   // Tools / concepts
   gear: 'settings',
-  gears: 'settings-2',
-  screwdriver: 'wrench',
   'screwdriver-wrench': 'wrench',
   'wand-magic-sparkles': 'wand-sparkles',
   flask: 'flask-conical',
   microphone: 'mic',
   'paper-plane': 'send',
-  'pen-to-square': 'square-pen',
-  'trash-can': 'trash-2',
   'clock-rotate-left': 'clock-arrow-left',
-  'right-left': 'arrow-left-right',
   'code-branch': 'git-branch',
-  'code-commit': 'git-commit-horizontal',
-  'code-pull-request': 'git-pull-request',
   'code-compare': 'git-compare',
-  'user-group': 'users',
   'check-double': 'check-check',
   'list-check': 'list-checks',
-  microchip: 'cpu',
-  'shield-halved': 'shield',
-  'triangle-exclamation-solid': 'triangle-alert',
   bolt: 'zap',
-  'money-bill': 'banknote',
-  'circle-half-stroke': 'contrast',
-  'sun-bright': 'sun',
-  'moon-stars': 'moon',
   thumbtack: 'pin',
   'thumbtack-slash': 'pin-off',
   spinner: 'loader-circle',
@@ -103,20 +91,14 @@ const LUCIDE_NAME_BY_TEXRA_NAME: Readonly<Record<string, string>> = {
   'magnifying-glass-chart': 'search-code',
   'note-sticky': 'sticky-note',
   'plus-minus': 'diff',
-  'circle-large-outline': 'circle',
   meteor: 'sparkles',
   cube: 'box',
   'diagram-project': 'workflow',
   'list-ul': 'list',
   comments: 'messages-square',
   comment: 'message-circle',
-  // Codicon-style symbol aliases used by the agent-team presets.
-  'symbol-structure': 'boxes',
   hashtag: 'hash',
-  'symbol-method': 'braces',
-  'symbol-namespace': 'box',
-  'symbol-keyword': 'key-round',
-};
+} satisfies Partial<Record<TeXRAIconName, string>>;
 
 /**
  * Lucide's icon geometry as data: `{ name: [[tag, attrs], ...] }`.

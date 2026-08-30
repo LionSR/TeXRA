@@ -19,11 +19,11 @@ import type { ToolUseRunShared, CyclePrepResult } from './types';
  * `../toolUseRound/`, which is the inner per-LLM-call prep node that
  * runs at the start of every model invocation inside `ToolUseRoundFlow`.
  */
-export class ToolUsePrepareNode<C> extends BaseNode<
+export class ToolUsePrepareNode extends BaseNode<
   ToolUseRunShared,
-  ToolUseServices<C>
+  ToolUseServices
 > {
-  async exec(_prepRes: void): Promise<CyclePrepResult> {
+  override async exec(_prepRes: void): Promise<CyclePrepResult> {
     const {
       userVarChannels,
       logger,
@@ -43,7 +43,7 @@ export class ToolUsePrepareNode<C> extends BaseNode<
     // baked into the channel, so a resume that rebuilds this prompt states the
     // model the run is actually on.
     const promptVars = {
-      ...userVarChannels.transient,
+      ...userVarChannels,
       [USER_VAR_MODEL]: this.services.modelCell.modelId,
     };
 
@@ -81,14 +81,7 @@ export class ToolUsePrepareNode<C> extends BaseNode<
         runState: resumeShared.stateSlices.runStateSnapshot,
         workspaceState,
         cycleStartLastResponse: workspaceState.assembly.lastResponse,
-        userChannels: {
-          input: Object.freeze({
-            ...resumeShared.stateSlices.userChannels.input,
-          }),
-          transient: {
-            ...resumeShared.stateSlices.userChannels.transient,
-          },
-        },
+        userChannels: { ...resumeShared.stateSlices.userChannels },
         shouldSkipCycle: true,
         systemPrompt: systemMessage,
       };
@@ -149,7 +142,7 @@ export class ToolUsePrepareNode<C> extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRunShared,
     _prepRes: void,
     execRes: CyclePrepResult,

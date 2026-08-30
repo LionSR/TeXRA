@@ -74,26 +74,26 @@ Current ownership:
 ```mermaid
 flowchart LR
   runtime[executeAgent / tool-use runtime]
-  host[runtimeHost + wrapRuntimeHost]
+  hub[SessionEventHub session facts]
   streamLog[StreamLogStore]
-  statusService[StreamStatusService]
+  statusService[StreamStatusMachine]
   cliState[chat/tui/state/cliState signals]
-  statusSub[subscribeStreamStatus]
+  factAdapter[sessionSignalsAdapter]
   logSub[subscribeStreamLog]
-  projection[transcriptProjection]
+  applier[SessionFactApplier + SessionState]
   app[chat/tui/App]
   viewport[transcriptViewportMode]
   staticPane[StaticConversationTranscript]
   livePane[ConversationPane]
   statusBar[StatusBar / StreamTabsStrip / side panels]
 
-  runtime --> host
+  runtime --> hub
   runtime --> streamLog
-  runtime --> statusService
-  host --> cliState
+  statusService --> hub
+  hub --> factAdapter
   streamLog --> logSub --> cliState
-  statusService --> statusSub --> cliState
-  statusSub --> projection --> cliState
+  factAdapter --> cliState
+  factAdapter --> applier --> cliState
   cliState --> app
   app --> viewport
   viewport -->|selected scrollback owner| staticPane
@@ -206,15 +206,15 @@ team planning. Startup should need only names, descriptions, and availability.
   Return a `CliMultiAgentPlanSnapshot` from the planner and let launch validate or
   reuse it unless registry/auth state changed.
 - Model selection ownership:
-  Root model paths now use `selectCliRootModel` for API-mode-aware runnable
-  resolution plus helper-model persistence. Keep candidate precedence
+  Root model paths now use `selectCliRunModel` (`runtime/runModel.ts`) for
+  API-mode-aware runnable resolution. Keep candidate precedence
   entrypoint-specific (`chat` defaults, headless `run`, resume history), but do
   not reintroduce direct resolve-and-persist pairs outside the runtime helper.
 - Stream status lookup:
-  `subscribeStreamStatus` mirrors `StreamStatusService` events into `StreamSlice`
-  once, including retained parent child rows. TUI routing and rendering should
-  read status from that normalized stream map, keeping the service as an input
-  source rather than a UI/session fallback.
+  `sessionSignalsAdapter` projects the session's `status` facts into
+  `StreamSlice` once, including retained parent child rows. TUI routing and
+  rendering should read status from that normalized stream map, keeping the
+  status machine as an input source rather than a UI/session fallback.
 - Transcript viewport repaint:
   `App` detects root/scoped changes and `runChatTui` wires them to
   `render/tuiViewportController`. Keep repaint options and SIGCONT clear-repaint

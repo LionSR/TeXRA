@@ -35,7 +35,6 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
-  readCliToolUseResumeData: vi.fn(),
   readCliResumeDataForListing: vi.fn(),
   assembleTrace: vi.fn(),
 }));
@@ -63,12 +62,7 @@ vi.mock('@agent/storage', async () => {
   };
 });
 
-vi.mock('@utils/files/taskRunStorage', () => ({
-  findExistingRunStoragePath: vi.fn(async () => undefined),
-}));
-
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
-  readCliToolUseResumeData: mocks.readCliToolUseResumeData,
   readCliResumeDataForListing: mocks.readCliResumeDataForListing,
 }));
 
@@ -124,7 +118,6 @@ import {
   formatInvalidExportFormatText,
   listCliHistoryEntries,
   parseCliHistoryId,
-  preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
@@ -286,7 +279,6 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.readCliToolUseResumeData.mockResolvedValue(null);
     mocks.readCliResumeDataForListing.mockResolvedValue(null);
   });
 
@@ -403,7 +395,7 @@ describe('CLI history runtime', () => {
   it('labels multi-agent team runs by preset in history lists', async () => {
     const teamConfig = toolUseAgentConfig({
       agent: 'engineer',
-      cliMultiAgentPresetId: ' software-engineer ',
+      cli: { multiAgentPresetId: ' software-engineer ' },
     });
     mocks.listExecutions.mockResolvedValue([
       runListEntry('team1', {
@@ -596,7 +588,7 @@ describe('CLI history runtime', () => {
         agent: 'engineer',
         model: 'sonnet46T',
         agentCategory: 'toolUse',
-        cliMultiAgentPresetId: ' software-engineer ',
+        cli: { multiAgentPresetId: ' software-engineer ' },
       }),
     );
 
@@ -612,7 +604,7 @@ describe('CLI history runtime', () => {
     mocks.readConfig.mockResolvedValue(
       AgentConfigSchema.parse({
         ...config,
-        cliOutputFile: ' /tmp/texra-output/polished.tex ',
+        cli: { outputFile: ' /tmp/texra-output/polished.tex ' },
       }),
     );
 
@@ -1119,9 +1111,9 @@ describe('CLI history runtime', () => {
 
     await expect(persistedLogs.exists(streamId)).resolves.toBe(false);
     await expect(persistedLogs.exists(unrelated)).resolves.toBe(true);
-    await expect(
-      new StreamSnapshotStore().readPersistedExecutionId(streamId),
-    ).resolves.toBeUndefined();
+    const reopened = new StreamSnapshotStore();
+    await reopened.preload([streamId]);
+    expect(reopened.getRunMetadata(streamId).executionId).toBeUndefined();
   });
 
   it('clears a deleted parent from its child stream summary mirror', async () => {
@@ -1198,36 +1190,6 @@ describe('CLI history runtime', () => {
   it('validates execution id shape before command handlers use storage', () => {
     expect(parseCliHistoryId('abc123')).toBe('abc123');
     expect(parseCliHistoryId('../abc123')).toBeUndefined();
-  });
-
-  it('preflight refuses --all without --yes and quotes the count', async () => {
-    mocks.listExecutions.mockResolvedValue([{}, {}, {}, {}, {}]);
-
-    await expect(
-      preflightCliHistoryDeleteAll({ all: true, yes: false }),
-    ).resolves.toEqual({ proceed: false, count: 5 });
-
-    // The runtime listing was the source of truth — assert we asked it.
-    expect(mocks.listExecutions).toHaveBeenCalled();
-    // Critically, deleteAllExecutions was NOT called by the preflight.
-    expect(mocks.deleteAllExecutions).not.toHaveBeenCalled();
-  });
-
-  it('preflight clears --all when --yes is set and reports the count', async () => {
-    mocks.listExecutions.mockResolvedValue([{}, {}]);
-
-    await expect(
-      preflightCliHistoryDeleteAll({ all: true, yes: true }),
-    ).resolves.toEqual({ proceed: true, count: 2 });
-  });
-
-  it('preflight short-circuits when --all is not set', async () => {
-    await expect(
-      preflightCliHistoryDeleteAll({ all: false, yes: false }),
-    ).resolves.toEqual({ proceed: false, count: 0 });
-
-    // No need to ask storage if we are not in the bulk path.
-    expect(mocks.listExecutions).not.toHaveBeenCalled();
   });
 
   it('surfaces the bulk-delete count in the structured result', async () => {

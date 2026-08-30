@@ -9,8 +9,7 @@ import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { detachSubagentsOnStop, type ToolUseResumeData } from '@agent/runtime';
-import { setCliAgentResumeHandler } from '@cli/runtime/agentResume';
+import { detachSubagentsOnStop, type AgentConfig } from '@agent/runtime';
 import { chatAgentSupportsDelegation } from '@cli/runtime/agents';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import {
@@ -21,6 +20,7 @@ import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   initInteractiveCliPlatform,
+  setCliAgentResumeHandler,
   setCliHelperModel,
 } from '@cli/runtime/initPlatform';
 import {
@@ -31,7 +31,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
+import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
@@ -90,6 +90,7 @@ import {
   patchSessionMeta,
   sessionMeta as sessionMetaSignal,
   streams as streamsSignal,
+  streamPhaseFor,
 } from './state/cliState';
 import { subscribeStreamArtifacts } from './state/subscribeStreamArtifacts';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
@@ -131,10 +132,10 @@ interface RunChatInit {
   /** Multi-agent preset id when chat was launched from a team preset. */
   readonly cliMultiAgentPresetId?: string;
   readonly delegationAgentScope?: AgentDelegationScope;
-  /** Pre-resolved startup resume from `texra resume <id>`. */
+  /** Startup resume from `texra resume <id>`, with the run's persisted config. */
   readonly initialResume?: {
     readonly id: ExecutionId;
-    readonly resolution: ToolUseResumeData;
+    readonly config: AgentConfig;
   };
 }
 
@@ -151,7 +152,6 @@ export async function runChat(
   // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
   // mount and emit garbled output instead of a usable session).
   const terminalFailure = interactiveTerminalFailure(context);
-  const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
   if (terminalFailure) {
     // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
     // actionable advice is "use `texra run`", not "fix your TERM".
@@ -174,7 +174,7 @@ export async function runChat(
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   const initialResume = init.initialResume;
-  const transcriptLifecycle = await initializeInteractiveTranscriptSession(
+  const transcriptLifecycle = await initializeCliTranscriptSession(
     initialResume
       ? { onPersistentOpenFailure: 'fail' }
       : {
@@ -201,8 +201,7 @@ export async function runChat(
   // through the same override slot resolveChatDefaults already honors, and
   // only when the user didn't pin an agent (--agent, resume, or env) — an
   // explicit choice always wins.
-  const explicitAgent =
-    initialResume?.resolution.agentConfig.agent ?? init.agentOverride;
+  const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
   const setupAgentOverride = firstRunSetupAgentOverride({
     onboardingConfigured: onboarding.configured,
     firstRunDone: getFirstRunDone(platform().globalState),
@@ -213,11 +212,11 @@ export async function runChat(
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: explicitAgent ?? setupAgentOverride,
-    modelOverride:
-      initialResume?.resolution.agentConfig.model ?? init.modelOverride,
+    modelOverride: initialResume?.config.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,
     visibleToolUseAgents,
+    quiet: context.quietLogs,
   });
   const agentUsageError = chatToolUseAgentUsageError(defaults.agent);
   if (agentUsageError) {
@@ -247,9 +246,11 @@ export async function runChat(
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
     runtimeSession.approvalPolicy;
-  const currentSessionContext = (helperModel: string): CliContext => ({
+  // A fresh context object per run: warnApprovalDenied dedupes the denied-gate
+  // operator warning on context identity, so each run start/resume must get
+  // its own.
+  const currentSessionContext = (): CliContext => ({
     ...context,
-    helperModel,
     quietLogs: true,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
@@ -262,8 +263,6 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
-    commandName: context.commandName,
-    cwd: context.cwd,
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,
@@ -275,9 +274,8 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeExecution: chatController.resume,
   });
-  const initialPresetId = initialResume
-    ? (initialResume.resolution.agentConfig.cliMultiAgentPresetId ?? undefined)
-    : init.cliMultiAgentPresetId;
+  const initialPresetId =
+    initialResume?.config.cli?.multiAgentPresetId ?? init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
     category: AgentCategory.ToolUse,
@@ -287,13 +285,10 @@ export async function runChat(
     approvalPolicy: runtimeSession.approvalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
-    teamName: initialResume
-      ? readCliMultiAgentPresetName(initialPresetId)
-      : (init.teamName ?? readCliMultiAgentPresetName(initialPresetId)),
+    teamName: init.teamName ?? readCliMultiAgentPresetName(initialPresetId),
     cliMultiAgentPresetId: initialPresetId,
-    delegationAgentScope: initialResume
-      ? (initialResume.resolution.agentConfig.delegationAgentScope ?? undefined)
-      : init.delegationAgentScope,
+    delegationAgentScope:
+      initialResume?.config.delegationAgentScope ?? init.delegationAgentScope,
     version,
   });
   if (transcriptLifecycle.warning) {
@@ -328,9 +323,7 @@ export async function runChat(
   // Crash safety stays armed until graceful teardown has restored the terminal;
   // it outlives session subscriptions so a later teardown failure cannot leave
   // the user's shell in raw/kitty/mouse mode with a hidden cursor.
-  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit({
-    clearItermProgress,
-  });
+  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit();
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
@@ -343,9 +336,7 @@ export async function runChat(
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const rootStreamStatus = (): StreamPhase | undefined =>
-    session.streamId
-      ? streamsSignal.get().get(session.streamId)?.status
-      : undefined;
+    streamPhaseFor(session.streamId)?.phase;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
@@ -395,11 +386,7 @@ export async function runChat(
     followUpQueue,
     snapshotStore: runtimeSession.snapshots,
   });
-  disposables.add(
-    setCliAgentResumeHandler({
-      tryResumeStream: chatController.tryResumeStream,
-    }),
-  );
+  disposables.add(setCliAgentResumeHandler(chatController.tryResumeStream));
 
   // Session-command engine: slash-command dispatch, follow-up admission, the
   // stream-id poll loop, queued-follow-up emission, and skill-activation
@@ -423,9 +410,7 @@ export async function runChat(
 
   const resetSessionForClear = (): void => {
     const currentStreamId = session.streamId ?? activeStreamIdSignal.get();
-    const activeStatus = currentStreamId
-      ? streamsSignal.get().get(currentStreamId)?.status
-      : undefined;
+    const activeStatus = streamPhaseFor(currentStreamId)?.phase;
     const isRunPending = chatTuiRunPending(session);
 
     if (
@@ -502,18 +487,15 @@ export async function runChat(
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
-      onSubmit={(line, mediaFiles) =>
-        void submitDriver.handleSubmittedLine(line, mediaFiles)
+      onSubmit={(line, mediaFiles, images) =>
+        void submitDriver.handleSubmittedLine(line, mediaFiles, images)
       }
-      canInterruptActiveRun={canInterruptActiveRun}
       canInterruptStream={(streamId) =>
         (streamId === session.streamId && canInterruptActiveRun()) ||
         runtimeSession.status.isInFlight(streamId)
       }
-      canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
-      onInterruptActive={interruptActive}
       onInterruptStream={chatController.stopStream}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
@@ -565,8 +547,6 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     canResume: transcriptLifecycle.canResume,
-    clearItermProgress,
-    kittyKeyboardEnabled: terminalCaps.kittyKeyboard,
     disposables,
     disposeTerminalRestoreOnExit,
     followUpQueue,
@@ -592,7 +572,7 @@ export async function runChat(
   // session.runPromise, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.streamId as usual).
   if (initialResume) {
-    void chatController.resume(initialResume.id, initialResume.resolution);
+    void chatController.resume(initialResume.id);
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly

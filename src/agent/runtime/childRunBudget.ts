@@ -10,6 +10,8 @@
  * budget starts as soon as a slot frees, and a queued turn cancelled before
  * its slot never starts fresh model work.
  */
+import * as os from 'node:os';
+
 import PQueue from 'p-queue';
 
 import {
@@ -21,66 +23,49 @@ import { getValidatedConfig } from '@utils/config/configUtils';
 
 import type { SessionHandle } from './SessionHandle';
 
-/**
- * High enough that deliberate double-digit concurrent fan-out never queues,
- * low enough to stop a runaway recursive fan-out from opening unbounded
- * model conversations. The canonical value now lives in
- * `CHILD_RUN_CONCURRENCY_BUDGET_SETTING`; this re-export keeps the original
- * seam (and existing explicit-pin tests) authoritative.
- */
-export const DEFAULT_CHILD_RUN_BUDGET =
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
-
 const budgets = new WeakMap<SessionHandle, PQueue>();
 
 /**
- * Queues whose limit was pinned by an explicit `concurrency` argument. Live
- * config reads must not re-pin these — the caller (today: the existing
- * explicit test seams) remains authoritative until it passes a new value.
+ * The configured budget with the `auto` sentinel resolved to this machine's
+ * core count, clamped to the schema range. Model conversations are network
+ * bound, so the core count is a floor for useful parallelism rather than a
+ * ceiling — which is why the setting stays overridable up to `max`. This is
+ * the one host-side owner of the number: the session queue below and the
+ * workflow engine's per-run semaphore (`workflowScriptStrategy`) both read
+ * it here. Resolved host-side because `src/shared` is loaded by the settings
+ * webview and must stay free of `node:os`.
  */
-const callerPinned = new WeakSet<PQueue>();
-
-function readConfiguredChildRunBudget(): number {
-  return getValidatedConfig(
+export function resolveChildRunConcurrencyBudget(): number {
+  const configured = getValidatedConfig(
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
     ChildRunConcurrencyBudgetSchema,
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue,
   );
+  if (configured !== CHILD_RUN_CONCURRENCY_BUDGET_SETTING.auto) {
+    return configured;
+  }
+  return Math.min(
+    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+    Math.max(1, os.availableParallelism()),
+  );
 }
 
 /**
- * The session's shared child-run budget.
- *
- * - First call: creates the queue at the configured value, or at `concurrency`
- *   when a caller explicitly pins it.
- * - Later call with `concurrency`: re-pins the live queue's limit.
- * - Later call without `concurrency`: re-reads the configured value and
- *   re-pins only queues the caller has not explicitly pinned. A mid-session
- *   settings change therefore takes effect on the next call to
- *   `childRunBudgetFor` (the next child-run launch for that session); existing
- *   loops sharing that queue then pick up the new limit on their subsequent
- *   turns, without replacing queued work or overriding an authoritative caller
- *   pin.
+ * The session's shared child-run budget, created at the configured value on
+ * first call and re-pinned to it on every later call. A mid-session settings
+ * change therefore takes effect on the next call to `childRunBudgetFor` (the
+ * next child-run launch for that session); existing loops sharing that queue
+ * then pick up the new limit on their subsequent turns, without replacing
+ * queued work.
  */
-export function childRunBudgetFor(
-  session: SessionHandle,
-  concurrency?: number,
-): PQueue {
-  const configured = readConfiguredChildRunBudget();
-  let queue = budgets.get(session);
-  if (!queue) {
-    queue = new PQueue({
-      concurrency: concurrency ?? configured,
-    });
-    budgets.set(session, queue);
-    if (concurrency !== undefined) {
-      callerPinned.add(queue);
-    }
-  } else if (concurrency !== undefined) {
-    queue.concurrency = concurrency;
-    callerPinned.add(queue);
-  } else if (!callerPinned.has(queue)) {
-    queue.concurrency = configured;
+export function childRunBudgetFor(session: SessionHandle): PQueue {
+  const configured = resolveChildRunConcurrencyBudget();
+  const existing = budgets.get(session);
+  if (existing) {
+    existing.concurrency = configured;
+    return existing;
   }
+  const queue = new PQueue({ concurrency: configured });
+  budgets.set(session, queue);
   return queue;
 }

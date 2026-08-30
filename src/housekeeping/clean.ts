@@ -80,18 +80,15 @@ export async function runCleanMultiple(
   );
   log.debug(`Additional files: ${inputFiles.join(', ')}`);
 
-  const firstResult = await runCleanSingle(model, inputFile, agent);
-  if (
-    firstResult.status === 'missingParams' ||
-    firstResult.status === 'error'
-  ) {
-    return firstResult;
+  const files = inputFile ? [inputFile, ...inputFiles] : inputFiles;
+  if (!model || !agent || files.length === 0 || files.some((file) => !file)) {
+    return { status: 'missingParams' };
   }
-  let anyCleaned = firstResult.status === 'success';
 
-  for (const file of inputFiles) {
+  let anyCleaned = false;
+  for (const file of files) {
     const res = await runCleanSingle(model, file, agent);
-    if (res.status === 'error') {
+    if (res.status === 'missingParams' || res.status === 'error') {
       return res;
     }
     anyCleaned ||= res.status === 'success';

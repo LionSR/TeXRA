@@ -15,15 +15,7 @@ import {
   type CliOrchestrationItem,
   type CliOrchestrationModelPickAction,
 } from '../runtime/orchestration';
-import {
-  buildCliModelAccessItems,
-  CLI_MODEL_ACCESS_DESCRIPTION,
-  type CliModelAccessStatus,
-} from '../runtime/modelAccessRoute';
-import {
-  AUTH_SIGNED_IN_LINE_PREFIX,
-  AUTH_STATUS_SEGMENT_SEPARATOR,
-} from '../runtime/apiStatus';
+import { CLI_ACCOUNT_ACCESS_DESCRIPTION } from '../runtime/modelAccessRoute';
 import type { CliModelAccess } from '../runtime/modelAccess';
 
 interface OrchestrationAppProps {
@@ -31,12 +23,13 @@ interface OrchestrationAppProps {
   readonly resumeItems?: readonly CliOrchestrationItem[];
   readonly agentItems?: readonly CliOrchestrationItem[];
   readonly teamItems?: readonly CliOrchestrationItem[];
-  readonly accountItems?: readonly CliOrchestrationItem[];
+  /** Rows of the "Account & access" step — preference toggles plus account
+   *  sign-in/out actions, already resolvable launcher actions. */
+  readonly accountAccessItems?: readonly CliOrchestrationItem[];
   /** Model access list for the second step. An empty list means unknown
    *  registry state, so the launcher still starts chats with runtime defaults;
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
-  readonly modelAccess?: CliModelAccessStatus;
   /** CLI version, shown in the launcher header (matches the chat session
    *  header) so a directly-launched `texra` reports which build is running. */
   readonly version: string;
@@ -52,11 +45,10 @@ type OrchestrationLauncherStep =
       readonly action: CliOrchestrationModelPickAction;
       readonly backTo: 'launcher' | 'agent' | 'team';
     }
-  | { readonly kind: 'model-access' }
+  | { readonly kind: 'account-access' }
   | { readonly kind: 'resume' }
   | { readonly kind: 'agent' }
-  | { readonly kind: 'team' }
-  | { readonly kind: 'account' };
+  | { readonly kind: 'team' };
 
 /** Return the parent picker for Escape, or null when Escape exits the launcher. */
 export function orchestrationPreviousStep(
@@ -80,7 +72,7 @@ function orchestrationStepKeyHints(
   ];
 }
 
-export function orchestrationKeyHints(): readonly KeyHint[] {
+function orchestrationKeyHints(): readonly KeyHint[] {
   return orchestrationStepKeyHints('open', 'exit');
 }
 
@@ -99,10 +91,7 @@ export function orchestrationFooterHints(
   return hints;
 }
 
-export function orchestrationWrappedLineRows(
-  line: string,
-  columns: number,
-): number {
+function orchestrationWrappedLineRows(line: string, columns: number): number {
   return Math.max(
     1,
     wrapAnsiToWidth(line, Math.max(1, columns)).split('\n').length,
@@ -110,7 +99,7 @@ export function orchestrationWrappedLineRows(
 }
 
 /** Rows a marginTop=1 block of lines occupies (wrapped lines plus the margin). */
-export function orchestrationBlockRowCost(
+function orchestrationBlockRowCost(
   lines: readonly string[],
   columns: number,
 ): number {
@@ -142,6 +131,9 @@ interface OrchestrationLauncherLayoutInput {
 const ORCHESTRATION_SELECT_MARGIN_ROWS = 1;
 const ORCHESTRATION_KEY_HINT_ROWS = 2;
 const ORCHESTRATION_TARGET_VISIBLE_ITEMS = 4;
+// Shared by the launcher's branded header render and the row measurement that
+// budgets around it, so the two can never disagree about the header's width.
+const LAUNCHER_BRAND = '{ T } TeXRA';
 
 function orchestrationLinesRowCost(
   lines: readonly string[],
@@ -153,35 +145,15 @@ function orchestrationLinesRowCost(
   );
 }
 
-function compactOrchestrationStatusLines(
-  statusLines: readonly string[],
-): readonly string[] {
-  return statusLines.map((line) => {
-    if (!line.startsWith(AUTH_SIGNED_IN_LINE_PREFIX)) return line;
-    const suffix = line.indexOf(AUTH_STATUS_SEGMENT_SEPARATOR);
-    return suffix < 0 ? line : line.slice(0, suffix);
-  });
-}
-
 function orchestrationLauncherLayoutCandidates(
   statusLines: readonly string[],
   footerHints: readonly string[],
 ): OrchestrationLauncherLayoutCandidate[] {
-  const compactStatusLines = compactOrchestrationStatusLines(statusLines);
-  const hasCompactFallback = compactStatusLines.some(
-    (line, index) => line !== statusLines[index],
-  );
   const candidates: OrchestrationLauncherLayoutCandidate[] = [
     { statusLines, footerHints },
   ];
-  if (hasCompactFallback) {
-    candidates.push({ statusLines: compactStatusLines, footerHints });
-  }
   if (footerHints.length > 0) {
     candidates.push({ statusLines, footerHints: [] });
-    if (hasCompactFallback) {
-      candidates.push({ statusLines: compactStatusLines, footerHints: [] });
-    }
   }
 
   for (let count = statusLines.length - 1; count > 0; count -= 1) {
@@ -189,14 +161,8 @@ function orchestrationLauncherLayoutCandidates(
       statusLines: statusLines.slice(0, count),
       footerHints: [],
     });
-    if (hasCompactFallback) {
-      candidates.push({
-        statusLines: compactStatusLines.slice(0, count),
-        footerHints: [],
-      });
-    }
   }
-  candidates.push({ statusLines: [], footerHints: [] });
+  // No empty-detail candidate: the caller's post-loop fallback is that layout.
   return candidates;
 }
 
@@ -266,12 +232,6 @@ export function OrchestrationApp(
     kind: 'launcher',
   });
   const pending = step.kind === 'model' ? step.action : undefined;
-  const modelAccessItems = props.modelAccess
-    ? buildCliModelAccessItems({
-        kind: 'loaded',
-        access: props.modelAccess,
-      })
-    : [];
   const isPendingTeam = pending?.kind === 'preset';
   // One header per step, shared between the wrapped-row measurement below and
   // the styled render further down so the measured and displayed text can't
@@ -280,10 +240,10 @@ export function OrchestrationApp(
   let subtitle: string;
   let itemCount: number;
   switch (step.kind) {
-    case 'model-access':
-      title = 'Model access';
-      subtitle = CLI_MODEL_ACCESS_DESCRIPTION;
-      itemCount = modelAccessItems.length;
+    case 'account-access':
+      title = 'Account & access';
+      subtitle = CLI_ACCOUNT_ACCESS_DESCRIPTION;
+      itemCount = props.accountAccessItems?.length ?? 0;
       break;
     case 'resume':
       title = 'Resume';
@@ -300,11 +260,6 @@ export function OrchestrationApp(
       subtitle = 'Choose a team for this session.';
       itemCount = teamItems.length;
       break;
-    case 'account':
-      title = 'Account';
-      subtitle = 'Sign in, change account, or sign out.';
-      itemCount = props.accountItems?.length ?? 0;
-      break;
     case 'model':
       title = isPendingTeam ? 'Lead model' : 'Model';
       subtitle = isPendingTeam
@@ -314,7 +269,7 @@ export function OrchestrationApp(
       break;
     case 'launcher':
       // The launcher renders its own branded header; measure the same rows.
-      title = `TeXRA v${props.version}`;
+      title = `${LAUNCHER_BRAND} v${props.version}`;
       subtitle = 'Start a session or configure model access.';
       itemCount = items.length;
       break;
@@ -354,8 +309,8 @@ export function OrchestrationApp(
   };
 
   const onItemSelect = (action: CliOrchestrationAction): void => {
-    if (action.kind === 'configure-model-access') {
-      setStep({ kind: 'model-access' });
+    if (action.kind === 'browse-account-access') {
+      setStep({ kind: 'account-access' });
       return;
     }
     if (action.kind === 'browse-resumes') {
@@ -368,10 +323,6 @@ export function OrchestrationApp(
     }
     if (action.kind === 'browse-teams') {
       setStep({ kind: 'team' });
-      return;
-    }
-    if (action.kind === 'browse-accounts') {
-      setStep({ kind: 'account' });
       return;
     }
     if (isCliOrchestrationModelPickAction(action) && modelItems.length > 0) {
@@ -405,12 +356,12 @@ export function OrchestrationApp(
   let stepSelect: React.JSX.Element;
   let stepKeyHints: readonly KeyHint[];
   switch (step.kind) {
-    case 'model-access':
+    case 'account-access':
       stepSelect = (
         <Select
-          key="orchestration-model-access-picker"
-          items={modelAccessItems}
-          onSelect={(access) => finish({ kind: 'set-model-access', access })}
+          key="orchestration-account-access-picker"
+          items={props.accountAccessItems ?? []}
+          onSelect={finish}
           {...selectProps}
         />
       );
@@ -428,16 +379,8 @@ export function OrchestrationApp(
       stepKeyHints = orchestrationStepKeyHints('resume', 'back');
       break;
     case 'agent':
-    case 'team':
-    case 'account': {
-      let pickerItems: readonly CliOrchestrationItem[];
-      if (step.kind === 'agent') {
-        pickerItems = agentItems;
-      } else if (step.kind === 'team') {
-        pickerItems = teamItems;
-      } else {
-        pickerItems = props.accountItems ?? [];
-      }
+    case 'team': {
+      const pickerItems = step.kind === 'agent' ? agentItems : teamItems;
       stepSelect = (
         <Select
           key={`orchestration-${step.kind}-picker`}
@@ -479,7 +422,7 @@ export function OrchestrationApp(
         step.kind === 'launcher' ? (
           <Box gap={1}>
             <Text bold color={COLOR_HINT}>
-              {'{ T } TeXRA'}
+              {LAUNCHER_BRAND}
             </Text>
             <Text dimColor>v{props.version}</Text>
           </Box>

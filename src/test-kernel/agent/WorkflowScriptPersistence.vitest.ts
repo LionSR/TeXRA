@@ -3,10 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   readWorkflowScriptCheckpoint,
   runPersistedWorkflowScript,
-  runWorkflowScript,
-  workflowScriptCheckpointKvKey,
-  WorkflowScriptPersistenceError,
-  writeWorkflowScriptCheckpoint,
   type WorkflowScriptControl,
 } from '@agent/workflowScript';
 import {
@@ -14,6 +10,12 @@ import {
   getExecutionStore,
   type ExecutionKVStore,
 } from '@agent/storage';
+import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
+import {
+  WorkflowScriptPersistenceError,
+  writeWorkflowScriptCheckpoint,
+} from '@agent/workflowScript/persistence';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import {
   WorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
@@ -347,7 +349,6 @@ return await agent('run planned call', { id: 'planned-call' })`;
       expect(runner).toHaveBeenCalledOnce();
       expect(call.status).toBe('completed');
       expect(call.timestamps.createdAt).toBe(prior.timestamps.createdAt);
-      expect(call.timestamps.queuedAt).toBe('2026-01-02T00:00:00.000Z');
       expect(call.timestamps.startedAt).toBe('2026-01-02T00:00:00.000Z');
       expect(call.timestamps.completedAt).toBe('2026-01-02T00:00:00.000Z');
     } finally {
@@ -409,7 +410,6 @@ return await agent('run dynamic call', { id: 'dynamic-call' })`;
       expect(resumed.result).toBe('resumed result');
       expect(call.status).toBe('completed');
       expect(call.timestamps.createdAt).toBe(prior.timestamps.createdAt);
-      expect(call.timestamps.queuedAt).toBe('2026-02-02T00:00:00.000Z');
       expect(call.timestamps.startedAt).toBe('2026-02-02T00:00:00.000Z');
       expect(call.timestamps.completedAt).toBe('2026-02-02T00:00:00.000Z');
     } finally {
@@ -504,9 +504,7 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       await runnerStarted.promise;
       await Promise.resolve();
       const rerunSnapshots = snapshots.filter((snapshot) =>
-        ['queued', 'starting', 'running'].includes(
-          snapshot.calls[0]?.status ?? '',
-        ),
+        ['queued', 'running'].includes(snapshot.calls[0]?.status ?? ''),
       );
       const running = rerunSnapshots.find(
         (snapshot) => snapshot.calls[0]?.status === 'running',
@@ -520,7 +518,9 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       for (const snapshot of rerunSnapshots) {
         expect(snapshot.calls[0]?.childExecutionId).toBeUndefined();
         expect(snapshot.calls[0]?.childStreamId).toBeUndefined();
-        expect(snapshot.calls[0]?.model).toBeUndefined();
+        // The rerun shows the script's own declaration, never the model the
+        // prior attempt resolved.
+        expect(snapshot.calls[0]?.model).toBe('changed-model');
         expect(snapshot.calls[0]?.costUsd).toBe(3.75);
         expect(snapshot.calls[0]?.attempts[0]).toMatchObject({
           id: 'cccccccccccc',
@@ -531,13 +531,11 @@ return await agent('original prompt', { id: 'dynamic-call', model: 'first-model'
       }
       expect(running?.timestamps).toEqual({
         createdAt: prior.timestamps.createdAt,
-        queuedAt: '2026-03-02T00:00:00.000Z',
         startedAt: '2026-03-02T00:00:00.000Z',
         updatedAt: '2026-03-02T00:00:00.000Z',
       });
       expect(call.timestamps).toEqual({
         createdAt: prior.timestamps.createdAt,
-        queuedAt: '2026-03-02T00:00:00.000Z',
         startedAt: '2026-03-02T00:00:00.000Z',
         updatedAt: '2026-03-02T00:00:00.000Z',
         completedAt: '2026-03-02T00:00:00.000Z',
@@ -890,9 +888,9 @@ return 'guest success'`,
       runAgent: retryRunner,
     });
 
-    // 'first' is unchanged (same index + prompt hash) so it replays free;
-    // only the drifted second call executes live, and the evolved script
-    // becomes the stored one.
+    // 'first' is unchanged (same prompt hash) so it replays free; only the
+    // drifted second call executes live, and the evolved script becomes the
+    // stored one.
     expect(retryRunner).toHaveBeenCalledTimes(1);
     expect(evolved.result).toEqual(['v1:first', 'v2:changed']);
     await expect(
@@ -903,6 +901,41 @@ return 'guest success'`,
     ).resolves.toMatchObject({
       script: expect.stringContaining(`agent('changed')`),
     });
+  });
+
+  it('replays a call that moved because a sibling was inserted before it', async () => {
+    const store = getExecutionStore(executionId);
+    await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'moved-call',
+      script,
+      runAgent: async ({ prompt }) => `v1:${prompt}`,
+    });
+
+    clearStoreCache();
+    const retryRunner = vi.fn(
+      async ({ prompt }: { prompt: string }) => `v2:${prompt}`,
+    );
+    const evolved = await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: 'moved-call',
+      script: script.replace(
+        `const second = await agent('second')`,
+        `await agent('inserted')\nconst second = await agent('second')`,
+      ),
+      runAgent: retryRunner,
+    });
+
+    // Identity is the content key, not the position: 'second' now runs third
+    // and still replays; only the inserted call executes.
+    expect(retryRunner).toHaveBeenCalledTimes(1);
+    expect(evolved.result).toEqual(['v1:first', 'v1:second']);
+    expect(retryRunner.mock.calls[0]?.[0]?.prompt).toBe('inserted');
+    const checkpoint = await readWorkflowScriptCheckpoint(
+      getExecutionStore(executionId),
+      'moved-call',
+    );
+    expect(checkpoint?.journal.map((entry) => entry.index)).toEqual([0, 1, 2]);
   });
 
   it('round-trips an undefined agent result explicitly', async () => {

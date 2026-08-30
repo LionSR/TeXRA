@@ -118,12 +118,6 @@ type SettledInBandTurn = Parameters<
   NonNullable<DetachedChildRunInput<never>['onTurnSettled']>
 >[0];
 
-interface CompletedInBandSubagent {
-  readonly executionId: ExecutionId;
-  readonly result: AgentFinalResult;
-  readonly delivery?: string;
-}
-
 type StableAttemptInspection =
   | { readonly kind: 'absent' }
   | { readonly kind: 'advance' }
@@ -330,24 +324,6 @@ async function throwRetryableDurabilityError(
   throw error;
 }
 
-function recordCost(
-  onCost: InBandSubagentExecutionBaseOptions['onCost'],
-  totalCostUsd: number | undefined,
-): void {
-  try {
-    const observed = onCost?.(totalCostUsd);
-    void Promise.resolve(observed).catch((error: unknown) => {
-      log.warn('Subagent cost observer rejected', {
-        data: error,
-      });
-    });
-  } catch (error) {
-    log.warn('Subagent cost observer failed', {
-      data: error,
-    });
-  }
-}
-
 /**
  * Execute one child through the one shared driver and read its typed result
  * back from the durable record. The child runs under the same detached
@@ -369,7 +345,7 @@ async function executeInBand(
   mode: PersistenceMode,
   executionId: ExecutionId,
   stableAttempt?: StableSubagentAttempt,
-): Promise<CompletedInBandSubagent> {
+): Promise<InBandSubagentDeliveryResult> {
   options.signal?.throwIfAborted();
 
   const config = AgentConfigSchema.parse(options.configPayload);
@@ -403,7 +379,7 @@ async function executeInBand(
       parentStreamId: options.parentStreamId,
       childStreamId,
       agentName: options.agentName,
-      recordCost: (totalCostUsd) => recordCost(options.onCost, totalCostUsd),
+      recordCost: options.onCost,
       // The parent is blocked awaiting this child, so it rides the parent's
       // budget slot (child-run budget design note).
       budgeted: false,
@@ -474,7 +450,7 @@ async function executeInBand(
             workingDirectory,
             executionMode: 'single-cycle',
             resultOnly: mode === 'required-result',
-            onStreamResolved: options.onStreamResolved ?? (() => {}),
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           }),
         };
       },
@@ -487,10 +463,11 @@ async function executeInBand(
       loopFailure = error;
     }
 
-    // The loop handed this caller the settled turn's facts in memory
-    // (persistence stays best-effort loop-side); no turn settling means the
-    // run was interrupted or the infrastructure failed before terminal
-    // persistence — durable callers mark the attempt retryable.
+    // The loop hands this caller the settled turn's facts only once its
+    // report and result manifest are on disk; no turn settling means the run
+    // was interrupted, or a delivery write or the infrastructure failed
+    // before terminal persistence — durable callers mark the attempt
+    // retryable.
     const resultMeta = settledTurn?.resultMeta;
     if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
       const failure = new SubagentDurabilityError(
@@ -539,10 +516,17 @@ async function executeInBand(
       // 'launched' marker, so a later run refuses to repeat side-effectful
       // work rather than executing it twice.
       let persisted: ResultMeta | null;
+      // A read failure is NOT the same fact as a missing manifest: keep it so
+      // the thrown error names the I/O cause instead of blaming persistence.
+      let readFailure: unknown;
       try {
         persisted = await store.readResultMeta();
-      } catch {
+      } catch (cause) {
+        log.warn('Failed to read the persisted result manifest', {
+          data: { executionId, error: cause },
+        });
         persisted = null;
+        readFailure = cause;
       }
       if (!persisted) {
         if (childFailed) {
@@ -554,11 +538,17 @@ async function executeInBand(
               `Subagent ${executionId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
               {
                 cause: new AggregateError(
-                  [error],
+                  readFailure === undefined ? [error] : [error, readFailure],
                   `Subagent ${executionId} execution and persistence both failed.`,
                 ),
               },
             ),
+          );
+        }
+        if (readFailure !== undefined) {
+          throw new SubagentDurabilityError(
+            `Failed to verify the persisted result for subagent ${executionId}.`,
+            { cause: readFailure },
           );
         }
         throw new SubagentDurabilityError(
@@ -586,11 +576,7 @@ async function executeInBand(
       throw childError();
     }
 
-    return {
-      executionId,
-      result,
-      ...(mode === 'best-effort-delivery' && { delivery: turnMessage }),
-    };
+    return { executionId, result, delivery: turnMessage };
   })();
 
   // Post-run cancellation deliberately observes a terminal record: stable
@@ -724,9 +710,15 @@ export async function executeStableSubagentInBand(
         `Prepared subagent ${executionId} changed its parent execution.`,
       );
     }
-    // The in-band driver never attaches a delivery in required-result mode, so
-    // the completed record already matches the typed result contract.
-    return executeInBand(prepared, 'required-result', executionId, attempt);
+    // The typed-result contract carries no delivery: a required-result child
+    // renders none (`resultOnly`), and a recovered attempt has none to give.
+    const completed = await executeInBand(
+      prepared,
+      'required-result',
+      executionId,
+      attempt,
+    );
+    return { executionId: completed.executionId, result: completed.result };
   });
 }
 
@@ -734,18 +726,5 @@ export async function executeStableSubagentInBand(
 export async function executeSubagentForDeliveryInBand(
   options: InBandSubagentDeliveryOptions,
 ): Promise<InBandSubagentDeliveryResult> {
-  const executionId = generateExecutionId();
-  const completed = await executeInBand(
-    options,
-    'best-effort-delivery',
-    executionId,
-  );
-  if (completed.delivery === undefined) {
-    throw new Error('Subagent delivery was not constructed.');
-  }
-  return {
-    executionId: completed.executionId,
-    result: completed.result,
-    delivery: completed.delivery,
-  };
+  return executeInBand(options, 'best-effort-delivery', generateExecutionId());
 }

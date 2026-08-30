@@ -58,8 +58,7 @@ type CliSkillSourceArgsDef = {
 };
 
 function formatCommaList(items: readonly string[]): string {
-  if (items.length <= 2) return items.join(' and ');
-  return `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`;
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(items);
 }
 
 export const GLOBAL_ARGS: CliGlobalArgsDef = {
@@ -164,7 +163,6 @@ export const INTERACTIVE_COMMAND_NAMES: readonly string[] = [
   'chat',
   'orchestrate',
   'setup',
-  'resume',
 ];
 
 // The long flag plus any single-character alias for a routable global flag.
@@ -212,23 +210,16 @@ export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function camelCaseFlagName(name: string): string {
-  return name.replaceAll(/-([a-z])/g, (_match, letter: string) =>
-    letter.toUpperCase(),
-  );
-}
-
 /**
- * Read a boolean flag from citty's parsed args under every spelling citty can
- * produce: the declared hyphenated key, the camelCase alias, and — for a
+ * Read a boolean flag from citty's parsed args. citty's args object is a proxy
+ * that resolves the declared hyphenated key through its camelCase alias, so
+ * only two spellings can ever reach here: the declared key, and — for a
  * `no-`-prefixed flag — the positive key set to `false` (citty rewrites
- * `--no-browser` into `browser: false`).
+ * `--no-browser` into `browser: false` before parsing).
  */
 export function booleanArg(args: object, name: string): boolean {
   const record = args as Record<string, unknown>;
-  if (record[name] === true || record[camelCaseFlagName(name)] === true) {
-    return true;
-  }
+  if (record[name] === true) return true;
   return name.startsWith('no-') && record[name.slice(3)] === false;
 }
 

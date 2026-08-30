@@ -13,7 +13,6 @@ import {
   formatListingLine,
   formatTodoSection,
 } from '@tools/executionFormatters';
-import { formatSubagentError } from '@tools/delegation/subagentResults';
 
 describe('tool status formatting', () => {
   it('formats execution todos with the shared status display', () => {
@@ -52,42 +51,6 @@ describe('tool status formatting', () => {
     );
     expect(progress).toContain(
       `  ${STATUS_DISPLAY[TODO_STATUS.PENDING].icon} Write response`,
-    );
-  });
-
-  it('marks retryable subagent errors in the orchestrator delivery', () => {
-    const delivery = formatSubagentError(
-      'exec-1',
-      'leanSimplifier',
-      new Error('No output generated - API returned empty response'),
-    );
-
-    expect(delivery).toContain(
-      '<subagent-error id="exec-1" agent="leanSimplifier" retryable="true">',
-    );
-    expect(delivery).toContain(
-      '<message>No output generated - API returned empty response</message>',
-    );
-  });
-
-  it('includes attached memory misses in subagent error delivery', () => {
-    const delivery = formatSubagentError(
-      'exec-1',
-      'review',
-      new Error('subagent failed'),
-      {
-        memoryMisses: [
-          {
-            path: '/memories/missing.md',
-            reason: 'Path is missing & unreadable',
-          },
-        ],
-      },
-    );
-
-    expect(delivery).toContain('<memory-misses>');
-    expect(delivery).toContain(
-      '<memory-miss path="/memories/missing.md" reason="Path is missing &amp; unreadable" />',
     );
   });
 

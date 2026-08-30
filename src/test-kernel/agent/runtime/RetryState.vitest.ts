@@ -44,7 +44,6 @@ import {
   MESSAGE_TYPES,
   STREAM_PHASE,
   STREAM_STATUS,
-  DEFAULT_CORE_SETTINGS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -247,8 +246,6 @@ interface CapturedModelRetry {
   readonly classifyModelFailure: (
     error: Error,
   ) => { retryAfterMs?: number } | undefined;
-  readonly isWireUnobservedFailure?: (error: Error) => boolean;
-  readonly isModelUnobservedFailure?: (error: Error) => boolean;
   readonly gateCalls: number;
 }
 
@@ -301,18 +298,17 @@ async function captureModelRetry(
     await withRetryRunContext(streamId, session, () =>
       node.exec({ shouldStop: false, messages: [] }),
     );
-    const [wireRoute, modelOptions] = run.mock.calls[0]!;
-    const modelRoute = modelOptions.additionalRoutes?.[0];
-    if (!modelRoute) {
-      throw new Error('Expected model-specific retry route');
+    // The gate acquires narrowest-first: the model route, then the wire route.
+    const [routes] = run.mock.calls[0]!;
+    const [modelRoute, wire] = routes;
+    if (!modelRoute || !wire) {
+      throw new Error('Expected the model-specific and wire retry routes');
     }
     return {
-      wireRoute,
+      wireRoute: wire.key,
       modelRetryRoute: modelRoute.key,
-      classifyFailure: modelOptions.classifyFailure,
+      classifyFailure: wire.classifyFailure,
       classifyModelFailure: modelRoute.classifyFailure,
-      isWireUnobservedFailure: modelOptions.isUnobservedFailure,
-      isModelUnobservedFailure: modelRoute.isUnobservedFailure,
       gateCalls: run.mock.calls.length,
     };
   } finally {
@@ -419,7 +415,7 @@ describe('ModelInvocationNode retry', () => {
     {
       name: 'settings are unset',
       stored: undefined,
-      expectedAttempts: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     },
     {
       name: 'the stored count is the canonical maximum',
@@ -429,7 +425,7 @@ describe('ModelInvocationNode retry', () => {
     {
       name: 'the stored count exceeds the canonical maximum',
       stored: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max + 1,
-      expectedAttempts: DEFAULT_CORE_SETTINGS.model.retry.maxAttempts,
+      expectedAttempts: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
     },
   ])(
     'resolves the canonical retry count and delay when $name',
@@ -1215,7 +1211,7 @@ describe('ModelInvocationNode retry', () => {
     const streamId = 'retry-state-session-bridge' as StreamTabId;
     const session = createTestSession();
     const recording = createRecordingHost();
-    session.useHostInteractions(recording.interactions);
+    session.interactions.use(recording.interactions);
     const { node } = createRetryNode(streamId, undefined, undefined, session);
     const streamStatus = session.status;
 

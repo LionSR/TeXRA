@@ -14,8 +14,6 @@ import {
 } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import {
-  parseTexraApprovalPolicy,
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   TexraApprovalPolicySchema,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -44,7 +42,7 @@ export interface CliConfigValues extends CliCommandConfig {
   readonly run?: CliCommandConfig;
 }
 
-export interface LoadedCliConfig {
+interface LoadedCliConfig {
   readonly path?: string;
   readonly values: CliConfigValues;
   readonly warnings: readonly string[];
@@ -105,14 +103,42 @@ const ModelSchema = NonEmptyStringSchema.refine(isCliSupportedModelId, {
 });
 const OutputFormatSchema = z.enum(CLI_OUTPUT_FORMATS);
 
-const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+type CliScalarFields = Required<Omit<CliConfigValues, 'chat' | 'run'>>;
+type CliRequiredCommandConfig = Required<CliCommandConfig>;
+
+/** One `[key, schema]` pair whose schema output matches `T`'s type for that
+ *  same key — so a transposed pair (e.g. `model`'s key with an output-format
+ *  schema) is a compile error at the declaration below, not just a runtime
+ *  mismatch caught by `pickFields`. */
+type FieldSchemaEntry<T> = {
+  [K in keyof T]-?: readonly [K, z.ZodType<T[K]>];
+}[keyof T];
+
+/** Single source of truth for the top-level scalar fields: `pickFields` walks
+ *  this one list to produce both the picked value and its validation warning
+ *  in the same pass, instead of each being a separately re-declared walk. */
+const TOP_LEVEL_FIELD_SCHEMAS: ReadonlyArray<
+  FieldSchemaEntry<CliScalarFields>
+> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
   ['outputFormat', OutputFormatSchema],
-  ['approvalPolicy', TexraApprovalPolicySchema],
+  // Same normalization the catalog row (`stateSettings.ts`) applies for the
+  // other hosts, so a hand-edited " Yolo" reads the same way in all three.
+  [
+    'approvalPolicy',
+    z.preprocess(
+      (raw) => (typeof raw === 'string' ? raw.trim().toLowerCase() : raw),
+      TexraApprovalPolicySchema,
+    ),
+  ],
 ];
 
-const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
+/** Same role as {@link TOP_LEVEL_FIELD_SCHEMAS}, for the `chat`/`run` command
+ *  sections — shared by `pickCommandSection`. */
+const COMMAND_FIELD_SCHEMAS: ReadonlyArray<
+  FieldSchemaEntry<CliRequiredCommandConfig>
+> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
 ];
@@ -144,96 +170,146 @@ function warnUnknownKeys(
   }
 }
 
-function warnInvalidField(
+/** Picks every `[key, schema]` pair present and valid in `record`, reading
+ *  each field under `keyFor(key)` (the raw key for command sections, the
+ *  canonical `texra.*` key at the top level), and pushing one warning per
+ *  invalid field into `warnings` in the same pass — a value and its warning
+ *  can no longer drift apart by only calling one of two walks. `fields`'
+ *  declaration site is checked against `T` (see {@link FieldSchemaEntry});
+ *  only this loop body — not the caller — needs to assert the per-iteration
+ *  correlation back to a specific `K`. */
+function pickFields<T extends object>(
+  record: Record<string, unknown>,
+  fields: ReadonlyArray<FieldSchemaEntry<T>>,
+  keyFor: (key: keyof T) => string,
   warnings: string[],
   filePath: string,
-  record: Record<string, unknown>,
-  key: string,
-  schema: z.ZodType,
   prefix = '',
-): void {
-  if (!Object.hasOwn(record, key)) return;
-  const parsed = schema.safeParse(record[key]);
-  if (!parsed.success) {
-    warnings.push(`Ignoring invalid ${filePath} key "${prefix}${key}".`);
+): Partial<T> {
+  const picked: Partial<T> = {};
+  for (const [key, schema] of fields) {
+    const storedKey = keyFor(key);
+    if (!Object.hasOwn(record, storedKey)) continue;
+    const parsed = schema.safeParse(record[storedKey]);
+    if (parsed.success) {
+      picked[key] = parsed.data as T[typeof key];
+    } else {
+      warnings.push(
+        `Ignoring invalid ${filePath} key "${prefix}${storedKey}".`,
+      );
+    }
   }
+  return picked;
 }
 
-function collectValidationWarnings(
+interface PickConfigOptions {
+  /** Gates only the *top-level* unknown-key check — the shared user config
+   *  holds rows the other hosts honor and the CLI doesn't (see
+   *  {@link parseCliConfigValues}). The `chat`/`run` sections underneath a
+   *  known top-level key are CLI-exclusive structure in every host (nothing
+   *  else reads or writes `texra.chat.*`/`texra.run.*`), so an unknown key
+   *  nested inside one of them always warns regardless of this flag — a
+   *  typo like `texra.chat.modle` is a bug report worth surfacing even when
+   *  the file's other top-level rows are being read leniently. */
+  readonly reportUnknownKeys: boolean;
+  /** Restricts which command sections get read (and thus warned about) —
+   *  `undefined` means all of {@link COMMAND_SECTIONS}. A caller that only
+   *  resolves `chat` values has no use warning about a `run.*` typo, and
+   *  every extra field read is a field a caller invoked on every loop
+   *  iteration (e.g. `resolveChatDefaults` from `orchestrate`'s launcher
+   *  loop) can print the same warning again on the next pass. */
+  readonly sections?: ReadonlySet<(typeof COMMAND_SECTIONS)[number]>;
+  /** Restricts which top-level scalar fields get read — same rationale as
+   *  `sections`, one level up. */
+  readonly topLevelFields?: ReadonlySet<keyof CliScalarFields>;
+}
+
+function pickCommandSection(
+  record: Record<string, unknown>,
+  section: (typeof COMMAND_SECTIONS)[number],
+  warnings: string[],
   filePath: string,
-  record: Record<string, unknown>,
-): string[] {
-  const warnings: string[] = [];
-  warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
-
-  for (const [key, schema] of TOP_LEVEL_FIELD_SCHEMAS) {
-    const storedKey = canonicalConfigKey(key);
-    warnInvalidField(warnings, filePath, record, storedKey, schema);
+): CliCommandConfig | undefined {
+  const sectionKey = canonicalConfigKey(section);
+  if (!Object.hasOwn(record, sectionKey)) return undefined;
+  const sectionValue = record[sectionKey];
+  if (!isObject(sectionValue)) {
+    warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
+    return undefined;
   }
+  const prefix = `${sectionKey}.`;
+  // Always checked: chat.*/run.* are CLI-exclusive structure, so a typo'd
+  // key here is never a false positive the way a shared top-level row is.
+  warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
+  return pickFields<CliRequiredCommandConfig>(
+    sectionValue,
+    COMMAND_FIELD_SCHEMAS,
+    (key) => key,
+    warnings,
+    filePath,
+    prefix,
+  );
+}
 
-  for (const section of COMMAND_SECTIONS) {
-    const sectionKey = canonicalConfigKey(section);
-    if (!Object.hasOwn(record, sectionKey)) continue;
-    const sectionValue = record[sectionKey];
-    if (!isObject(sectionValue)) {
-      warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
-      continue;
-    }
-    const prefix = `${sectionKey}.`;
-    warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
-    for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
-      warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
-    }
+function pickConfigValues(
+  record: Record<string, unknown>,
+  warnings: string[],
+  filePath: string,
+  options: PickConfigOptions,
+): CliConfigValues {
+  if (options.reportUnknownKeys) {
+    warnUnknownKeys(warnings, filePath, record, TOP_LEVEL_KEYS);
   }
-  return warnings;
-}
-
-function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
-  return schema.optional().catch(undefined).parse(value);
-}
-
-function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
+  const wantsSection = (section: (typeof COMMAND_SECTIONS)[number]): boolean =>
+    options.sections?.has(section) ?? true;
+  const chat = wantsSection('chat')
+    ? pickCommandSection(record, 'chat', warnings, filePath)
+    : undefined;
+  const run = wantsSection('run')
+    ? pickCommandSection(record, 'run', warnings, filePath)
+    : undefined;
+  const topLevelFields = options.topLevelFields
+    ? TOP_LEVEL_FIELD_SCHEMAS.filter(([key]) =>
+        options.topLevelFields?.has(key),
+      )
+    : TOP_LEVEL_FIELD_SCHEMAS;
   return {
-    agent: parseOptional(NonEmptyStringSchema, record.agent),
-    model: parseOptional(ModelSchema, record.model),
-  };
-}
-
-function pickValue<T>(
-  record: Record<string, unknown>,
-  key: string,
-  schema: z.ZodType<T>,
-): T | undefined {
-  return parseOptional(schema, record[canonicalConfigKey(key)]);
-}
-
-function pickRecord(
-  record: Record<string, unknown>,
-  key: string,
-): Record<string, unknown> | undefined {
-  const value = record[canonicalConfigKey(key)];
-  return isObject(value) ? value : undefined;
-}
-
-function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
-  const chat = pickRecord(record, 'chat');
-  const run = pickRecord(record, 'run');
-  return {
-    agent: pickValue(record, 'agent', NonEmptyStringSchema),
-    model: pickValue(record, 'model', ModelSchema),
-    outputFormat: pickValue(record, 'outputFormat', OutputFormatSchema),
-    approvalPolicy: pickValue(
+    ...pickFields<CliScalarFields>(
       record,
-      'approvalPolicy',
-      TexraApprovalPolicySchema,
+      topLevelFields,
+      canonicalConfigKey,
+      warnings,
+      filePath,
     ),
-    chat: chat ? pickCommandConfig(chat) : undefined,
-    run: run ? pickCommandConfig(run) : undefined,
+    ...(chat ? { chat } : {}),
+    ...(run ? { run } : {}),
   };
 }
 
-export function parseCliConfigValues(value: unknown): CliConfigValues {
-  return isObject(value) ? pickConfigValues(value) : {};
+/** Parses one config file's values and warnings in a single walk — the
+ *  single source of truth for both is {@link TOP_LEVEL_FIELD_SCHEMAS} /
+ *  {@link COMMAND_FIELD_SCHEMAS}, read once per field. `filePath` is only
+ *  used to word warning messages; pass the caller's best label for `value`'s
+ *  origin (a real path, or a description) when there isn't one on disk.
+ *  `reportUnknownKeys` (default `true`) should be `false` for the shared
+ *  user-level config file: it holds rows the other hosts honor and the CLI
+ *  doesn't, so flagging them as "unknown" would be a false positive — the
+ *  same reasoning {@link loadUserApprovalPolicy} documents for that file.
+ *  `topLevelFields`/`sections` scope which fields get read at all — use
+ *  them when a caller only consumes a subset (see {@link PickConfigOptions}). */
+export function parseCliConfigValues(
+  value: unknown,
+  filePath: string,
+  options: Partial<PickConfigOptions> = {},
+): { readonly values: CliConfigValues; readonly warnings: readonly string[] } {
+  const warnings: string[] = [];
+  const values = isObject(value)
+    ? pickConfigValues(value, warnings, filePath, {
+        ...options,
+        reportUnknownKeys: options.reportUnknownKeys ?? true,
+      })
+    : {};
+  return { values, warnings };
 }
 
 /**
@@ -288,11 +364,8 @@ export async function loadWorkspaceCliConfig(
   if (result.status === 'warning') {
     return { path: filePath, values: {}, warnings: [result.warning] };
   }
-  return {
-    path: filePath,
-    values: parseCliConfigValues(result.parsed),
-    warnings: collectValidationWarnings(filePath, result.parsed),
-  };
+  const { values, warnings } = parseCliConfigValues(result.parsed, filePath);
+  return { path: filePath, values, warnings };
 }
 
 /**
@@ -325,20 +398,12 @@ export async function loadUserApprovalPolicy(
   if (result.status === 'missing') return { warnings: [] };
   if (result.status === 'warning') return { warnings: [result.warning] };
 
-  const stored = result.parsed[TEXRA_APPROVAL_POLICY_CONFIG_KEY];
-  if (stored === undefined) return { warnings: [] };
-  // Same normalization the catalog row applies for every other host, so a
-  // hand-edited " Yolo" reads the same way in all three.
-  const policy =
-    typeof stored === 'string' ? parseTexraApprovalPolicy(stored) : undefined;
-  if (!policy) {
-    return {
-      warnings: [
-        `Ignoring invalid ${filePath} key "${TEXRA_APPROVAL_POLICY_CONFIG_KEY}".`,
-      ],
-    };
-  }
-  return { value: policy, warnings: [] };
+  const { values, warnings } = parseCliConfigValues(result.parsed, filePath, {
+    reportUnknownKeys: false,
+    topLevelFields: new Set(['approvalPolicy']),
+    sections: new Set(),
+  });
+  return { value: values.approvalPolicy, warnings };
 }
 
 /**

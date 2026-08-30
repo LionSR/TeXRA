@@ -26,10 +26,6 @@ import {
   type ToolbarCommandDetail,
 } from './events';
 import { appState, setStreamStateForId } from './progressState';
-import {
-  approvalBypassMessage,
-  orderWithOptionalBypass,
-} from './permissionActionPolicy';
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
@@ -198,14 +194,18 @@ export function runCompileFixer(): void {
   postMessage(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER, { stream });
 }
 
-/** Post protocol messages, keeping any bypass-enable ordered ahead of the terminal message it gates. */
+/**
+ * Post protocol messages, keeping any bypass-enable ahead of the terminal
+ * message it gates. Webview messages are delivered FIFO to the host, and the
+ * enable handler sets the per-stream bypass synchronously, so the agent cannot
+ * race ahead and re-prompt the next gated action before bypass is live.
+ */
 function postWithOptionalBypass(
   bypassMessage: ProgressViewInboundMessage | undefined,
   message: ProgressViewInboundMessage,
 ): void {
-  for (const outbound of orderWithOptionalBypass(bypassMessage, message)) {
-    postPermissionMessage(outbound);
-  }
+  if (bypassMessage) postPermissionMessage(bypassMessage);
+  postPermissionMessage(message);
 }
 
 export function handlePermissionAction(
@@ -223,9 +223,17 @@ export function handlePermissionAction(
       // action. The other kind keeps asking. It never reaches the backend
       // approval protocol.
       const isYolo = decision.action === APPROVE_SESSION_ACTION;
-      const bypassMessage = isYolo
-        ? approvalBypassMessage(data.streamId, detail.kind)
-        : undefined;
+      // Per-kind set-on: an edit prompt never auto-approves shell commands.
+      // Inversion-proof if the header toggle or delegated inheritance already
+      // granted this kind.
+      const bypassMessage =
+        isYolo && data.streamId
+          ? ({
+              command: PROGRESS_VIEW_COMMANDS.ENABLE_APPROVAL_BYPASS,
+              stream: data.streamId,
+              kind: detail.kind,
+            } satisfies ProgressViewInboundMessage)
+          : undefined;
       // The two commands share the requestId/action/feedback payload and differ
       // only in command constant + action vocabulary, but the payload must
       // match a single discriminated message member — branch on the kind and

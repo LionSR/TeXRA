@@ -481,7 +481,7 @@ describe('resolveTeamLaunch', () => {
           workflow: ['builtInWorkflow:writer'],
           toolUse: ['builtInToolUse:lead', 'builtInToolUse:member'],
         },
-        cliMultiAgentPresetId: 'custom-team',
+        cli: { multiAgentPresetId: 'custom-team' },
       },
       partial: false,
       missingNames: [],

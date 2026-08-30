@@ -27,7 +27,6 @@
  * Redaction is lossy by construction: a literal `API_KEY=<value>` in a
  * model-written code sample is scrubbed along with a real key.
  */
-import PQueue from 'p-queue';
 
 import type {
   AgentEvent,
@@ -49,7 +48,7 @@ import {
   type LogLevel,
   type MessageType,
   type ToolUseLog,
-  type WorkflowAttemptMarker,
+  type WorkflowPlanMarker,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
@@ -59,6 +58,8 @@ import {
   isObject,
   type FlushableDebounce,
 } from '@utils/core';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
+import type PQueue from 'p-queue';
 
 import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
@@ -72,6 +73,7 @@ const TRANSCRIPT_TRUNCATION_MARKER =
 const LIVE_TOOL_TRUNCATION_MARKER =
   '\n\n… output truncated while the tool is running …\n\n';
 const UTF8_ENCODER = new TextEncoder();
+const UTF8_DECODER = new TextDecoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -163,7 +165,7 @@ interface StreamSinkState {
 
 type StageMetadata = Pick<
   Extract<AgentEvent, { type: 'stage.start' }>,
-  'kind' | 'index' | 'total' | 'attemptId'
+  'kind' | 'index' | 'total'
 >;
 
 /**
@@ -213,48 +215,37 @@ function boundedTranscriptPreview(
   return `${head}${marker}${tail}`;
 }
 
+/**
+ * The longest prefix of `text` that encodes within `byteBudget` UTF-8 bytes.
+ * `encodeInto` reports how many source code units fit whole into the
+ * destination, which is exactly the code-point boundary we want.
+ */
 function utf8Prefix(text: string, byteBudget: number): string {
-  let bytes = 0;
-  let end = 0;
-  for (const character of text) {
-    const characterBytes = utf8CharacterBytes(character);
-    if (bytes + characterBytes > byteBudget) break;
-    bytes += characterBytes;
-    end += character.length;
-  }
-  return text.slice(0, end);
+  if (byteBudget <= 0) return '';
+  const { read } = UTF8_ENCODER.encodeInto(text, new Uint8Array(byteBudget));
+  return text.slice(0, read);
 }
 
+/**
+ * The longest suffix of `text` that encodes within `byteBudget` UTF-8 bytes,
+ * found by walking the encoded bytes back past any `10xxxxxx` continuation
+ * bytes to the nearest code-point boundary. Only a bounded tail window is
+ * encoded: every UTF-16 code unit contributes at least one UTF-8 byte, so a
+ * `byteBudget + 1`-unit window always covers the kept bytes without an
+ * input-sized allocation on a huge single-line input, and the extra unit
+ * guarantees that a surrogate pair split by the window edge has its
+ * replacement bytes dropped before the kept region. Not exact for ill-formed
+ * input: a lone surrogate inside the kept suffix decodes to U+FFFD instead of
+ * surviving as a raw code unit (the persisted JSON bytes are identical either
+ * way, and the byte accounting matches — both encode to three bytes).
+ */
 function utf8Suffix(text: string, byteBudget: number): string {
-  let bytes = 0;
-  let start = text.length;
-  while (start > 0) {
-    let characterStart = start - 1;
-    const codeUnit = text.charCodeAt(characterStart);
-    if (
-      codeUnit >= 0xdc00 &&
-      codeUnit <= 0xdfff &&
-      characterStart > 0 &&
-      text.charCodeAt(characterStart - 1) >= 0xd800 &&
-      text.charCodeAt(characterStart - 1) <= 0xdbff
-    ) {
-      characterStart -= 1;
-    }
-    const character = text.slice(characterStart, start);
-    const characterBytes = utf8CharacterBytes(character);
-    if (bytes + characterBytes > byteBudget) break;
-    bytes += characterBytes;
-    start = characterStart;
-  }
-  return text.slice(start);
-}
-
-function utf8CharacterBytes(character: string): number {
-  const codePoint = character.codePointAt(0) ?? 0;
-  if (codePoint <= 0x7f) return 1;
-  if (codePoint <= 0x7ff) return 2;
-  if (codePoint <= 0xffff) return 3;
-  return 4;
+  const window = text.slice(Math.max(0, text.length - (byteBudget + 1)));
+  const bytes = UTF8_ENCODER.encode(window);
+  if (window.length === text.length && bytes.length <= byteBudget) return text;
+  let start = Math.max(0, bytes.length - byteBudget);
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
+  return UTF8_DECODER.decode(bytes.subarray(start));
 }
 
 export function attachTranscriptRecorder(
@@ -275,25 +266,14 @@ export function attachTranscriptRecorder(
   ): string | undefined => {
     if (preview === text || !spillWriter) return undefined;
     const path = spillWriter.pathFor(id);
-    let queue = spillQueues.get(path);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      spillQueues.set(path, queue);
-    }
-    const pending = queue
-      .add(() => spillWriter.write(path, text))
+    const pending = runOnPerKeyQueue(spillQueues, path, () =>
+      spillWriter.write(path, text),
+    )
       .catch((error: unknown) => {
         pendingSpillFailure ??= error;
       })
       .finally(() => {
         pendingSpills.delete(pending);
-        if (
-          queue.pending === 0 &&
-          queue.size === 0 &&
-          spillQueues.get(path) === queue
-        ) {
-          spillQueues.delete(path);
-        }
       });
     pendingSpills.add(pending);
     return path;
@@ -366,7 +346,12 @@ export function attachTranscriptRecorder(
     if (!state.enabled) return;
 
     if (!state.created) {
-      const entry = {
+      // A state is only ever created by the `stream.start` arm, which flushes
+      // it synchronously with `ended: false`, so this row is always the
+      // still-running opener. An ended-before-created variant would be the one
+      // write path that persists `state.buffer` raw, bypassing
+      // `boundModelResponse`'s bounding and spill.
+      writer.append({
         id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
         level: 'info',
@@ -374,11 +359,9 @@ export function attachTranscriptRecorder(
         groupId: state.groupId,
         messageType: state.messageType,
         text: redactSecrets(state.buffer),
-        data: { status: state.ended ? 'completed' : 'running' },
+        data: { status: 'running' },
         verbose: isDebugModeEnabled(),
-      } satisfies StreamLogAppendInput;
-      if (state.ended) writer.appendSettled(entry);
-      else writer.append(entry);
+      } satisfies StreamLogAppendInput);
       state.created = true;
       return;
     }
@@ -458,9 +441,6 @@ export function attachTranscriptRecorder(
             ...(event.kind !== undefined ? { kind: event.kind } : {}),
             ...(event.index !== undefined ? { index: event.index } : {}),
             ...(event.total !== undefined ? { total: event.total } : {}),
-            ...(event.attemptId !== undefined
-              ? { attemptId: event.attemptId }
-              : {}),
           } satisfies StageMetadata;
           stageMetadata.set(event.id, metadata);
           // A new model-turn boundary starts fresh: whatever MODEL_RESPONSE
@@ -560,13 +540,25 @@ export function attachTranscriptRecorder(
           return;
         }
 
-        case 'workflow.attempt': {
+        case 'workflow.plan': {
+          // Display strings pass through record-time redaction like every
+          // stage label and card the recorder persists; ids stay verbatim.
           const marker = {
-            kind: 'workflowAttempt',
+            kind: 'workflowPlan',
             attemptId: event.attemptId,
-          } satisfies WorkflowAttemptMarker;
+            phases: event.phases.map((phase) => ({
+              title: redactSecrets(phase.title),
+            })),
+            tasks: event.tasks.map((task) => ({
+              ...task,
+              label: redactSecrets(task.label),
+              ...(task.phase !== undefined && {
+                phase: redactSecrets(task.phase),
+              }),
+            })),
+          } satisfies WorkflowPlanMarker;
           writer.appendSettled({
-            id: `workflow-attempt-${event.attemptId}`,
+            id: `workflow-plan-${event.attemptId}`,
             type: STREAM_LOG_ENTRY_TYPES.LOG,
             level: 'info',
             timestamp: Date.now(),

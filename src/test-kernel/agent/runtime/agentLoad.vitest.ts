@@ -48,44 +48,43 @@ afterAll(async () => {
 describe('validateAgentYamlContent', () => {
   it('rejects root settings that only satisfy the partial YAML schema', () => {
     assert.throws(() =>
-      validateAgentYamlContent({
-        name: 'bad_tool_use_root',
-        settings: {
-          agentCategory: AgentCategory.ToolUse,
-          rounds: 2,
-        },
-      }),
+      validateAgentYamlContent(
+        [
+          'name: bad_tool_use_root',
+          'settings:',
+          '  agentCategory: toolUse',
+          '  rounds: 2',
+          '',
+        ].join('\n'),
+      ),
     );
   });
 
   it('keeps inherited child settings partial before parent merging', () => {
-    const result = validateAgentYamlContent({
-      name: 'child',
-      inherits: 'parent',
-      settings: {
-        rounds: 2,
-      },
-      prompts: {
-        userRequest: 'Override the parent request.',
-      },
-    });
-
-    assert.deepStrictEqual(result.settings, { rounds: 2 });
-    assert.deepStrictEqual(result.prompts, {
-      userRequest: 'Override the parent request.',
-    });
+    validateAgentYamlContent(
+      [
+        'name: child',
+        'inherits: parent',
+        'settings:',
+        '  rounds: 2',
+        'prompts:',
+        '  userRequest: Override the parent request.',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('validates root agents after resolving raw tool names', () => {
-    const result = validateAgentYamlContent({
-      name: 'root_tool_use',
-      settings: {
-        agentCategory: AgentCategory.ToolUse,
-        tools: ['grep'],
-      },
-    });
-
-    assert.deepStrictEqual(result.settings.tools, ['grep']);
+    validateAgentYamlContent(
+      [
+        'name: root_tool_use',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  tools:',
+        '    - grep',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('wraps malformed YAML text through the shared parse boundary', () => {

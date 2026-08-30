@@ -28,7 +28,6 @@ import {
   defaultSession,
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -57,6 +56,7 @@ import {
   type StreamPhase,
   type StreamTabId,
   type UserQuestionPermission,
+  HISTORY_RUN_STATUS,
 } from '@shared/schemas';
 import {
   toolRowModel,
@@ -70,6 +70,11 @@ import {
   isInFlightPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
+// The status machine stamps its own `Date.now()` run window and no production
+// fact lets a caller supply one, so a display fixture that needs a plausible
+// elapsed time reaches for the same seeding helper the kernel suites use.
+// Dev-harness only — this file is never part of the shipped CLI bundle.
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { GoalStore } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
@@ -97,7 +102,6 @@ import {
 import {
   activeStreamId as activeStreamIdSignal,
   rootRunPending,
-  rootRunStartAvailable,
   rootRunStreamId,
   rootStreamId,
   resetCliState,
@@ -105,15 +109,17 @@ import {
   setCliSessionModelOverride,
   patchStream,
   streams,
-  setStreamStatusInCliState,
+  streamPhaseFor,
 } from '../src/chat/tui/state/cliState';
 import {
   activeSubagentsFor,
   childRosters,
+  invalidateChildStreams,
   streamMetadataFor,
   parentStream,
   visibleSubagentRows,
 } from '../src/chat/tui/state/childExecutions';
+import { readStreamArtifacts } from '../src/chat/tui/state/subscribeStreamArtifacts';
 import { focusedChildFollowUpRoute } from '../src/chat/tui/state/focusedChildFollowUp';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
@@ -139,20 +145,14 @@ import {
   resolveCliModelAccessRoute,
 } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
+import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
 import {
-  formatCliApiStatusActionHint,
-  formatCliAuthStatusLine,
-} from '../src/runtime/apiStatus';
-import {
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
   buildCliTeamItems,
 } from '../src/runtime/orchestration';
-import {
-  CLI_HISTORY_RESUMABLE_STATUS,
-  type CliHistoryEntry,
-} from '../src/runtime/history';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
@@ -161,6 +161,7 @@ import {
   type CliRuntimeHost,
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
+import type { CliHistoryEntry } from '../src/runtime/history';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
@@ -168,7 +169,6 @@ import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 const STREAM_ID = 'harness-stream-1';
 const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
   'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
-const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
@@ -228,7 +228,6 @@ const SHOW_ORCHESTRATION_HISTORY =
   process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
-const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
@@ -268,7 +267,6 @@ const AGENT_PROPOSAL_INSTRUCTION =
     '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
-const CAN_SELECT_AGENT = process.env.HARNESS_CAN_SELECT_AGENT === '1';
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const DISABLED_MODEL_SWITCHES = new Set(
   parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
@@ -337,7 +335,6 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   commandName: 'texra',
   configWarnings: [],
   cwd: HARNESS_CWD,
-  helperModel: 'harness-model',
   mode: 'interactive',
   outputFormat: 'text',
   quietLogs: true,
@@ -416,7 +413,6 @@ await initLocalCliPlatform({
   installSignalHandlers: false,
   resourcesPath: HARNESS_RESOURCES_PATH,
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
-  helperModel: 'harness-model',
   skillSourceOptions: {},
   version: '0.0.0-harness',
 });
@@ -495,7 +491,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       timestamp: '2026-06-06T00:02:00Z',
       agent: 'orchestrator',
       model: 'harness-model',
-      status: CLI_HISTORY_RESUMABLE_STATUS,
+      status: HISTORY_RUN_STATUS.RESUMABLE,
       resumable: true,
       inputBasename: '-',
       category: AgentCategory.ToolUse,
@@ -534,14 +530,18 @@ const HARNESS_MODEL_ACCESS =
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
         grokSignedIn: false,
+        texraSignedIn: false,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
   toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-  modelAccess: HARNESS_MODEL_ACCESS,
+  accountAccess: HARNESS_MODEL_ACCESS,
 });
+const HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS = HARNESS_MODEL_ACCESS
+  ? buildCliAccountAccessItems(HARNESS_MODEL_ACCESS)
+  : undefined;
 const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
   HARNESS_ORCHESTRATION_HISTORY,
 );
@@ -622,15 +622,9 @@ function harnessOrchestrationModels(): readonly CliModelAccess[] {
 }
 
 function harnessOrchestrationStatusLines(): readonly string[] {
-  const authenticated = HARNESS_AUTHENTICATED === '1';
-  const profile = {
-    authenticated,
-    accountLabel: authenticated ? 'harness@example.edu' : undefined,
-  };
   return [
     `api: ${formatCliModelAccessRouteInline('personal')}`,
-    formatCliAuthStatusLine(profile),
-    formatCliApiStatusActionHint(profile),
+    formatCliAuthStatusLine({ authenticated: false }),
   ];
 }
 
@@ -642,7 +636,7 @@ if (SHOW_ORCHESTRATION) {
       agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
       teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
       models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
-      modelAccess={HARNESS_MODEL_ACCESS}
+      accountAccessItems={HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS}
       version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
@@ -660,22 +654,6 @@ if (SHOW_ORCHESTRATION) {
   );
   await instance.waitUntilExit();
   process.exit(0);
-}
-
-if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
-  const accessToken = HARNESS_AUTHENTICATED === '1' ? 'harness-token' : null;
-  SupabaseClient.setAuthProvider({
-    whenReady: async () => {},
-    ensureFreshToken: async () => accessToken,
-    getSessionTokens: async () =>
-      accessToken
-        ? { accessToken, refreshToken: 'harness-refresh-token' }
-        : null,
-    getStoredSessionState: async () =>
-      accessToken === null ? 'none' : 'authenticated',
-    getStoredAccountLabel: async () => null,
-    getLastRefreshFailure: () => null,
-  });
 }
 
 /** A settled text row the way the fold hands one to the painter. `seqNo` and
@@ -1174,10 +1152,7 @@ async function appendHarnessPlanDecision(
       ...slice,
       bypass: { ...slice.bypass, bash: true },
     }));
-    setStreamStatusInCliState({
-      streamId: STREAM_ID,
-      status: STREAM_PHASE.RUNNING,
-    });
+    seedHarnessStreamPhase(STREAM_ID, STREAM_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
@@ -1199,7 +1174,6 @@ function harnessInitialStreamStatus(): StreamPhase | undefined {
 }
 
 function harnessInitialEntries(): TranscriptRow[] {
-  if (SHOW_WORKFLOW_TIMELINE) return [];
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
@@ -1230,12 +1204,12 @@ patchStream(STREAM_ID, (slice) => ({
 }));
 const HARNESS_INITIAL_STREAM_STATUS = harnessInitialStreamStatus();
 if (HARNESS_INITIAL_STREAM_STATUS) {
-  setStreamStatusInCliState({
-    streamId: STREAM_ID,
-    status: HARNESS_INITIAL_STREAM_STATUS,
+  seedHarnessStreamPhase(
+    STREAM_ID,
+    HARNESS_INITIAL_STREAM_STATUS,
     // Backdated so the status bar shows a plausible elapsed time.
-    ...(HARNESS_RUN_ACTIVE ? { runStartedAt: Date.now() - 42_000 } : {}),
-  });
+    HARNESS_RUN_ACTIVE ? Date.now() - 42_000 : undefined,
+  );
 }
 
 if (SHOW_LIVE_TOOL_ONLY) {
@@ -1244,109 +1218,6 @@ if (SHOW_LIVE_TOOL_ONLY) {
 
 if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
-}
-
-function seedWorkflowTimeline(): void {
-  // Hex-valid: the StreamSnapshotStore (the one artifact accumulator) parses
-  // payload execution ids and drops non-conforming rows.
-  const executionId = 'aaaa0001f10e' as ExecutionId;
-  const childStreamId = 'workflow-script#aaaa0001f10e' as StreamTabId;
-  emitSetActiveStream(childStreamId, AgentCategory.Workflow);
-  emitChildRoster(STREAM_ID, [
-    {
-      executionId,
-      agentName: 'repositoryAudit',
-      childStreamId,
-      identity: { kind: 'multiAgentWorkflow', workflowName: 'repositoryAudit' },
-    },
-  ]);
-  emitParentStreamEdge(childStreamId, STREAM_ID);
-  transitionStreamRunning(childStreamId);
-  // Mirror a user focusing the running child before its terminal transition.
-  // The session adapter's status rail must return this focus to the owner
-  // below.
-  activeStreamIdSignal.set(childStreamId);
-
-  const output = {
-    source: 'paper.tex',
-    location: {
-      kind: 'runStorage' as const,
-      executionId,
-      relativePath: 'r1/paper.tex',
-      absolutePath: '/private/tmp/texra-harness/r1/paper.tex',
-    },
-    round: 0,
-    lineage: null,
-    diff: null,
-  };
-  const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
-  const runStage = runTrace.trace.openStage('Repository audit', {
-    id: 'harness-workflow-run',
-    kind: 'run',
-  });
-  const roundStage = runTrace.trace.openStage('Round 1', {
-    id: 'harness-workflow-round-1',
-    index: 0,
-    kind: 'round',
-    parent: runStage,
-    total: 2,
-  });
-
-  roundStage.end('completed');
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: childStreamId,
-    event: {
-      type: 'addOutputFiles',
-      filesByRound: { 0: [output] },
-      streamId: childStreamId,
-    },
-  });
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: childStreamId,
-    event: {
-      type: 'updateCompileFailures',
-      filesByRound: {
-        0: [
-          {
-            round: 0,
-            displayName: 'paper.tex',
-            output: output.location,
-            log: {
-              kind: 'runStorage',
-              executionId,
-              relativePath: 'r1/paper.log',
-              absolutePath: '/private/tmp/texra-harness/r1/paper.log',
-            },
-            logRelativePath: 'r1/paper.log',
-          },
-        ],
-      },
-      streamId: childStreamId,
-    },
-  });
-  const secondRoundStage = runTrace.trace.openStage('Round 2', {
-    id: 'harness-workflow-round-2',
-    index: 1,
-    kind: 'round',
-    parent: runStage,
-    total: 2,
-  });
-  secondRoundStage.end('completed');
-  runStage.end('completed');
-  syncStreamLog(defaultSession(), childStreamId);
-  transitionStreamTerminal(childStreamId);
-  emitChildRoster(STREAM_ID, []);
-  runTrace.dispose();
-
-  if (activeStreamIdSignal.get() !== STREAM_ID) {
-    throw new Error('Completed workflow child did not return focus to owner');
-  }
-  const retained = visibleSubagentRows(STREAM_ID, childRosters.get());
-  if (!retained.some((child) => child.childStreamId === childStreamId)) {
-    throw new Error('Completed workflow child was not retained for refocus');
-  }
 }
 
 function seedRunningWorkflow(): void {
@@ -1378,9 +1249,8 @@ function seedRunningWorkflow(): void {
   // the durable summary mirror (`SessionHandle`'s `attachSessionEvents`) so
   // `getStreamMetadata(...)` overlays `identity` regardless of the RUNNING
   // transition's ephemeral metadata reset. Emit straight onto the hub here,
-  // the same way the output-file/compile-failure facts below do —
-  // `SubagentList`'s `workflowDashboardRoot` gate reads that overlay to pick
-  // the two-column task dashboard.
+  // the same way a real run's facts do — `App` reads that overlay to open
+  // the workflow popup instead of focusing the stream.
   defaultSession().events.emit({
     scope: 'run',
     streamId: childStreamId,
@@ -1432,9 +1302,8 @@ function seedRunningWorkflow(): void {
     },
     stageId: phaseStage.id,
   });
-  // Focus before projection: background workflow streams intentionally keep
-  // only operational rows, while the focused stream owns the task transcript.
-  activeStreamIdSignal.set(childStreamId);
+  // A workflow is never the focused stream: its slice keeps the compact
+  // operational rows the popup renders from.
   syncStreamLog(defaultSession(), childStreamId);
 
   const workflowChildren = [
@@ -1477,10 +1346,7 @@ function seedRunningProcessChild(): void {
     category: AgentCategory.ToolUse,
     description: 'sleep 30',
   }));
-  setStreamStatusInCliState({
-    streamId: childStreamId,
-    status: STREAM_PHASE.RUNNING,
-  });
+  seedHarnessStreamPhase(childStreamId, STREAM_PHASE.RUNNING);
   emitChildRoster(STREAM_ID, [
     {
       executionId: 'aaaa0003f10e',
@@ -1593,6 +1459,27 @@ function emitSetActiveStream(
   });
 }
 
+/**
+ * Place a stream in a phase for a *display* fixture: write the session status
+ * machine — the single owner every renderer reads — the way a real transition
+ * does before it publishes, but without the fact. These fixtures own their
+ * synthetic transcript rows and their scenario's elapsed values, and a
+ * published status would make the adapter re-fold the stream from a log that
+ * has none of those rows and restamp the run window at `Date.now()`. Fixtures
+ * that exercise the fact pipeline itself use the real transitions below.
+ */
+function seedHarnessStreamPhase(
+  streamId: StreamTabId,
+  phase: StreamPhase,
+  runStartedAt?: number,
+): void {
+  seedStreamStatusForTest(defaultSession().status, streamId, {
+    phase,
+    ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+  });
+  invalidateChildStreams();
+}
+
 // Real status-machine transitions on the default session — the session
 // adapter's status rail projects these into `cliState` (see
 // `runChildEventOrderFixture`), exactly as `chatSessionController.ts` wires
@@ -1615,10 +1502,10 @@ function transitionStreamTerminal(streamId: StreamTabId): void {
 
 // Late resume-transition attempt for an already-removed stream: unlike a
 // repeated terminal transition (a same-value no-op the status machine drops
-// before it ever reaches `cliState`), COMPLETED -> RUNNING via `resume` is a
-// transition the machine itself allows, so it reaches
-// `setStreamStatusInCliState` and actually exercises that function's
-// `isChildStreamRemoved` tombstone guard (see `completion-remove` below).
+// before it publishes anything), COMPLETED -> RUNNING via `resume` is a
+// transition the machine itself allows, so the fact reaches the CLI adapter
+// and actually exercises its `cliStreamAcceptsStatus` tombstone guard (see
+// `completion-remove` below).
 function attemptChildEventOrderLateResume(streamId: StreamTabId): void {
   defaultSession().status.transition(
     streamId,
@@ -1833,14 +1720,15 @@ if (SHOW_CHILDREN) {
   // survives.
   emitChildRoster(STREAM_ID, childStreams);
   emitChildRoster(STREAM_ID, activeSubagents);
-  setStreamStatusInCliState({
-    streamId: STREAM_ID,
-    status: STREAM_PHASE.RUNNING,
-    // The status machine stamps a run window once and holds it across every
-    // later active phase, so a scenario that already seeded an initial RUNNING
-    // keeps that backdated start rather than restarting the clock here.
-    runStartedAt: streams.get().get(STREAM_ID)?.runStartedAt ?? startedAt,
-  });
+  seedHarnessStreamPhase(
+    STREAM_ID,
+    STREAM_PHASE.RUNNING,
+    // The status machine holds one run window across every later active
+    // phase, so a scenario that already seeded an initial RUNNING keeps that
+    // backdated start rather than restarting the clock here.
+    defaultSession().status.getStreamState(STREAM_ID)?.runStartedAt ??
+      startedAt,
+  );
   for (const child of childStreams) {
     const streamId = child.childStreamId;
     const addNestedChildren =
@@ -1852,19 +1740,31 @@ if (SHOW_CHILDREN) {
     patchStream(streamId, (slice) => ({
       ...slice,
       entries: makeChildEntries(child.agentName, child.executionId),
-      // One child carries usage so scenarios pin the row metadata column's
-      // generated-token figure (`↓40k`).
-      usage:
-        child.agentName === 'reviewer'
-          ? { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 }
-          : slice.usage,
     }));
-    setStreamStatusInCliState({
-      streamId: streamId,
-      status: child.status,
-      runStartedAt:
+    // One child carries usage so scenarios pin the row metadata column's
+    // generated-token figure (`↓40k`). Usage lives on the snapshot store, so
+    // it arrives as the run fact the store accumulates.
+    if (child.agentName === 'reviewer') {
+      defaultSession().events.emit({
+        scope: 'run',
+        streamId,
+        event: {
+          type: 'usage',
+          payload: {
+            streamId,
+            storageKey: child.executionId as ExecutionId,
+            usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
+          },
+        },
+      });
+    }
+    if (child.status !== undefined) {
+      seedHarnessStreamPhase(
+        streamId,
+        child.status,
         child.status === STREAM_PHASE.RUNNING ? child.startedAt : undefined,
-    });
+      );
+    }
   }
   if (SHOW_NESTED_CHILDREN) {
     emitSetActiveStream(
@@ -1883,11 +1783,11 @@ if (SHOW_CHILDREN) {
       ...slice,
       entries: makeChildEntries('localChecker', 'nested proof check'),
     }));
-    setStreamStatusInCliState({
-      streamId: 'harness-nested-local-checker-stream',
-      status: STREAM_PHASE.RUNNING,
-      runStartedAt: nestedStartedAt,
-    });
+    seedHarnessStreamPhase(
+      'harness-nested-local-checker-stream',
+      STREAM_PHASE.RUNNING,
+      nestedStartedAt,
+    );
   }
 }
 
@@ -2019,7 +1919,7 @@ if (SHOW_RETRY_APPROVAL) {
   await saveProviderApiKey('openai', 'sk-harness-openai-key');
   harnessRetryRuntimeHost = createCliRuntimeHost(HARNESS_CLI_CONTEXT);
   HARNESS_DISPOSERS.push(
-    defaultSession().useHostInteractions(
+    defaultSession().interactions.use(
       createTuiHostInteractions(harnessRetryRuntimeHost, HARNESS_CLI_CONTEXT),
     ),
   );
@@ -2039,7 +1939,6 @@ if (SHOW_EXTERNAL_INQUIRY) {
       kind: 'externalInquiry',
       data: {
         requestId: 'harness-external-inquiry',
-        mode: 'followUp' as const,
         question: EXTERNAL_INQUIRY_QUESTION,
         threadId: EXTERNAL_INQUIRY_THREAD_ID,
         allowBypass: false,
@@ -2084,11 +1983,7 @@ function markHarnessInterrupted(): void {
   // the phase-merge of the real per-child transitions below.
   emitChildRoster(STREAM_ID, []);
   appendHarnessAssistantTranscript('Harness interrupt requested.', STREAM_ID);
-  setStreamStatusInCliState({
-    streamId: STREAM_ID,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
-  });
+  seedHarnessStreamPhase(STREAM_ID, STREAM_PHASE.CANCELLED);
   for (const streamId of childStreamIds) {
     defaultSession().status.transition(
       streamId,
@@ -2099,7 +1994,7 @@ function markHarnessInterrupted(): void {
 }
 
 function canInterruptHarnessStream(streamId: StreamTabId): boolean {
-  return isInFlightPhase(streams.get().get(streamId)?.status);
+  return isInFlightPhase(streamPhaseFor(streamId)?.phase);
 }
 
 function markHarnessStreamInterrupted(streamId: StreamTabId): void {
@@ -2121,11 +2016,6 @@ function markHarnessStreamInterrupted(streamId: StreamTabId): void {
     `Harness focused interrupt requested for ${streamId}.`,
     streamId,
   );
-  setStreamStatusInCliState({
-    streamId: streamId,
-    status: STREAM_PHASE.CANCELLED,
-    runStartedAt: undefined,
-  });
   defaultSession().status.transition(
     streamId,
     STREAM_PHASE.CANCELLED,
@@ -2144,7 +2034,7 @@ function appendHarnessChildSubmitAck(
   text: string,
   streamId: StreamTabId,
 ): void {
-  const isLive = isActivePhase(streams.get().get(streamId)?.status);
+  const isLive = isActivePhase(streamPhaseFor(streamId)?.phase);
   appendHarnessTranscript('assistant', text, streamId, { finalized: !isLive });
 }
 
@@ -2260,7 +2150,6 @@ function handleHarnessSubmit(line: string): void {
     metadata: focusedActiveStreamId
       ? streamMetadataFor(focusedActiveStreamId)
       : undefined,
-    streams: streams.get(),
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
@@ -2289,11 +2178,11 @@ function appendHarnessStatus(): void {
       model: meta.model,
       teamName: meta.teamName,
       modelAccess: resolveCliModelAccessRoute({
-        usageRoute: slice?.usage?.usageRoute,
+        usageRoute: readStreamArtifacts(streamId)?.cumulativeUsage?.usageRoute,
       }),
-      approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),
+      approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: slice?.bypass,
-      status: slice?.status,
+      status: streamPhaseFor(streamId)?.phase,
       goal: GoalStore.getForStream(streamId),
       // The harness never emits an ACTIVE_SKILLS snapshot.
       activeSkills: [],
@@ -2377,7 +2266,9 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 registerBuiltinSlashCommands({
-  canSelectAgent: () => CAN_SELECT_AGENT,
+  // Mirror `texra chat`: agent selection is open exactly while no root run
+  // is pending, the same fact the status bar's `/agent` hint derives from.
+  canSelectAgent: () => !rootRunPending.get(),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
   getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
@@ -2421,7 +2312,6 @@ registerBuiltinSlashCommands({
     );
   },
 });
-rootRunStartAvailable.set(CAN_SELECT_AGENT);
 // Mirror the real publisher's run facts: an interruptible harness run is a
 // pending root-run claim on the harness stream, so the status bar derives
 // the Ctrl-C stop hint from these signals exactly as `texra chat` does.
@@ -2445,12 +2335,9 @@ function renderHarnessApp(): React.JSX.Element {
       onSubmit={handleHarnessSubmit}
       onKillExecution={markHarnessExecutionStopped}
       onWorkflowControl={() => undefined}
-      canInterruptActiveRun={() => canInterrupt}
       canInterruptStream={canInterruptHarnessStream}
-      canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptActive={markHarnessInterrupted}
       onInterruptStream={markHarnessStreamInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
@@ -2482,10 +2369,6 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     );
     void exitHarness(1);
   });
-}
-
-if (SHOW_WORKFLOW_TIMELINE) {
-  seedWorkflowTimeline();
 }
 
 if (SHOW_WORKFLOW_RUNNING) {

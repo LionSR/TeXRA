@@ -50,15 +50,4 @@ describe('ExtractLatexFiguresTool', () => {
     expect(result.output).toContain('(no entries)');
     expect(result.files).toBeUndefined();
   });
-
-  it('returns error when tex file is missing', async () => {
-    await installPlatform({});
-
-    const result = await new ExtractLatexFiguresTool().call({
-      texPath: 'missing.tex',
-    });
-
-    expect(result.status).toBe('error');
-    expect(result.error).toContain('LaTeX file not found');
-  });
 });

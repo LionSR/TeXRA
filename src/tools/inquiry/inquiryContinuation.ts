@@ -13,12 +13,12 @@
  */
 
 import {
+  lookupStreamExecutionId,
   submitFollowUp,
   type SubmitFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
 import {
-  defaultSession,
-  resolveEmitSession,
+  currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
@@ -117,7 +117,7 @@ async function emitInquiryThreadUpdate(
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
-  (resolveEmitSession(session) ?? defaultSession()).events.emit({
+  (session ?? currentSession()).events.emit({
     scope: 'session',
     event: { type: 'inquiryThreadUpdated', payload },
   });
@@ -148,14 +148,12 @@ function mapSubmissionToInquiryOutcome(
 
 async function deliverContinuation(params: {
   parentStreamId: StreamTabId;
-  parentGenerationId: string;
   text: string;
   threadId: InquiryThreadId;
   session?: SessionHandle;
 }): Promise<InjectionOutcome> {
   const result = await submitFollowUp(params.parentStreamId, params.text, {
     session: params.session,
-    expectedGenerationId: params.parentGenerationId,
   });
 
   const outcome = mapSubmissionToInquiryOutcome(result);
@@ -177,8 +175,9 @@ async function deliverContinuation(params: {
 /**
  * Shared body of the answered / dropped injectors: resolve the manifest,
  * archive when there is nothing to continue (missing thread, a turn-less
- * manifest, an `answered` event whose last turn is no longer answered, or
- * no parent stream), then build and deliver the continuation.
+ * manifest, an `answered` event whose last turn is no longer answered, no
+ * parent stream, or a parent stream since re-run under another execution),
+ * then build and deliver the continuation.
  */
 async function injectContinuation(
   event: 'answered' | 'dropped',
@@ -192,8 +191,7 @@ async function injectContinuation(
   const lastTurn = manifest.turns.at(-1);
   if (!lastTurn) {
     // Structural guard: the manifest schema does not require turns, so a
-    // turn-less thread is representable — there is nothing to continue and
-    // no parent generation to fence a follow-up against.
+    // turn-less thread is representable, and there is nothing to continue.
     logger.warn(
       `Inquiry continuation for ${threadId}: manifest has no turns; archiving.`,
     );
@@ -202,6 +200,20 @@ async function injectContinuation(
   if (event === 'answered' && lastTurn.kind !== 'answered') return 'archived';
   if (manifest.parentStreamId == null) {
     return archiveAsParentFinished(threadId, session);
+  }
+  // The answer is addressed to the execution that asked. A manifest written
+  // before the field existed names none and is delivered by stream alone.
+  if (manifest.parentExecutionId != null) {
+    const current = await lookupStreamExecutionId(
+      manifest.parentStreamId,
+      session ?? currentSession(),
+    );
+    if (current !== manifest.parentExecutionId) {
+      logger.warn(
+        `Inquiry continuation for ${threadId}: parent stream ${manifest.parentStreamId} now runs execution ${current ?? 'none'}, not ${manifest.parentExecutionId}; archiving.`,
+      );
+      return archiveAsParentFinished(threadId, session);
+    }
   }
 
   const stillOpen = await listThreadsByStatus({
@@ -222,7 +234,6 @@ async function injectContinuation(
 
   return deliverContinuation({
     parentStreamId: manifest.parentStreamId,
-    parentGenerationId: lastTurn.parentGenerationId,
     text,
     threadId,
     session,

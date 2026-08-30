@@ -9,6 +9,3 @@ export const ExecutionIdSchema = z
   .min(6)
   .regex(/^[0-9a-f][-0-9a-f]*$/i, 'Invalid execution ID: expected hex');
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
-
-/** Run-scoped storage key: a run stage ID or an execution ID. */
-export type StorageKey = string & { readonly __brand: 'StorageKey' };

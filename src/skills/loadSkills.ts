@@ -23,7 +23,7 @@ interface DiscoveredSkill {
   realPath: string;
 }
 
-export interface DiscoverSkillsResult {
+interface SkillRootScan {
   skills: DiscoveredSkill[];
   errors: SkillLoadIssue[];
 }
@@ -78,9 +78,7 @@ function dupRealpathIssue(
  * Missing roots are treated as empty because user and project skill directories
  * are optional. Per-skill failures are reported and do not abort discovery.
  */
-export async function discoverSkills(
-  root: string,
-): Promise<DiscoverSkillsResult> {
+async function scanSkillRoot(root: string): Promise<SkillRootScan> {
   const skills: DiscoveredSkill[] = [];
   const errors: SkillLoadIssue[] = [];
   const seenNames = new Set<string>();
@@ -174,9 +172,9 @@ async function validateRequiredSource(
 /**
  * Discover skills from several roots in precedence order.
  *
- * The one-root loader remains useful for tests and direct imports. This wrapper
- * adds the cross-root invariants needed by runtimes: a skill name or canonical
- * `SKILL.md` file is accepted only from the first source that provides it.
+ * On top of the per-root scan this adds the cross-root invariants runtimes
+ * need: a skill name or canonical `SKILL.md` file is accepted only from the
+ * first source that provides it.
  */
 export async function discoverSkillSources(
   sources: readonly SkillSource[],
@@ -195,7 +193,7 @@ export async function discoverSkillSources(
       }
     }
 
-    const result = await discoverSkills(source.path);
+    const result = await scanSkillRoot(source.path);
     errors.push(
       ...result.errors.map((error) =>
         source.required === true &&

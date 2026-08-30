@@ -9,11 +9,12 @@ export interface DiffSession {
 }
 
 export interface DiffViewHost {
+  /** Show the diff. The caller already holds the session it described. */
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Promise<DiffSession>;
+  ): Promise<void>;
   closeDiff(session: DiffSession): Promise<void>;
   revealFirstChange(session: DiffSession, line: number): Promise<void>;
   readProposedContent(session: DiffSession): Promise<string>;

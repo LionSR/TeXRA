@@ -21,20 +21,21 @@ import type {
   ExecutionId,
   OutputFileInfo,
   Plan,
+  ReadonlyRoundIndexed,
   RoundIndexed,
-  StorageKey,
   StreamTabId,
   TodoItem,
   TokenUsageStats,
   WorkPlanSnapshot,
 } from '@shared/schemas';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
-import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import { StreamSnapshotPreloadError, StreamSnapshotStore } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 import type { StagedStreamSnapshotDeletion } from '@transcript/StagedDeletionCoordinator';
 import {
   stagedStreamDataDir,
@@ -43,12 +44,12 @@ import {
 } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
-const RUN = 'run-1' as StorageKey;
-const RUN_2 = 'run-2' as StorageKey;
+const RUN = 'run-1' as ExecutionId;
+const RUN_2 = 'run-2' as ExecutionId;
 
 const TODO: TodoItem = {
   content: 'Write the introduction',
@@ -189,7 +190,6 @@ describe('StreamSnapshotStore', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   it('persists todos/plan/usage from direct mutators and reassembles them on a fresh store', async () => {
@@ -405,8 +405,7 @@ describe('StreamSnapshotStore', () => {
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
     // Every seed (bulk load included) hydrates the description from the one
-    // authority, ExecutionMeta — it rides the same read as identity. Nothing
-    // writes a sidecar copy, so the assembled snapshot carries none.
+    // authority, ExecutionMeta — it rides the same read as identity.
     expect(reader.getRunMetadata(STREAM)).toMatchObject({
       config: runConfig,
       description: 'session-search / kimi26T',
@@ -416,7 +415,6 @@ describe('StreamSnapshotStore', () => {
       },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
-    expect(snap.description).toBeUndefined();
     expect(snap.parentStreamId).toBe(OTHER_STREAM);
 
     const goalPausedOnly = await new StreamSnapshotStore().read(OTHER_STREAM);
@@ -496,25 +494,6 @@ describe('StreamSnapshotStore', () => {
       expect.stringContaining('unreadable persisted work plan'),
       expect.anything(),
     );
-  });
-
-  it('seeds existing disk data before an unloaded usage mutation, so it is not erased', async () => {
-    // A prior session persisted usage for run-1.
-    await writeStreamFile(STREAM, 'usageStats.json', {
-      'run-1': usage(100, 20, 0.5),
-    });
-
-    // A fresh store (NOT load()ed) handles a delta for a NEW run.
-    const store = new StreamSnapshotStore();
-    void snapshotFacts(store).addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
-    await store.flush();
-
-    // run-1 (prior) survives — the unseeded write did not clobber it.
-    const raw = await readStreamFile(STREAM, 'usageStats.json');
-    expect(raw).toMatchObject({
-      [RUN]: usage(100, 20, 0.5),
-      [RUN_2]: usage(50, 10, 0.25),
-    });
   });
 
   it('merges a mutation with on-disk sidecars for a stream outside the load() id set instead of clobbering them (#9956)', async () => {
@@ -657,7 +636,7 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('returns pre-seed usage only after a partial preload baseline is merged', async () => {
+  it('merges a partial-preload disk baseline into pre-seed usage for same and different runs', async () => {
     await writeStreamFile(OTHER_STREAM, 'usageStats.json', {
       [RUN]: usage(100, 20, 0.5),
     });
@@ -665,89 +644,95 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
+    // Both deltas are eagerly readable while the seed's disk read is still
+    // in flight — before the baseline has merged.
+    snapshotFacts(store).addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
     snapshotFacts(store).addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
+      usage(50, 10, 0.25),
+    );
     expect(store.getRunUsage(OTHER_STREAM).get(RUN_2)).toMatchObject(
       usage(50, 10, 0.25),
     );
     await store.flush();
 
+    // After the seed merges the disk baseline: the same-run delta sums with
+    // it, the different-run delta sits beside it.
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
+      usage(150, 30, 0.75),
+    );
     const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
     expect(raw).toMatchObject({
-      [RUN]: usage(100, 20, 0.5),
+      [RUN]: usage(150, 30, 0.75),
       [RUN_2]: usage(50, 10, 0.25),
     });
   });
 
-  it('includes the disk baseline in a pre-seed usage result for the same run', async () => {
-    await writeStreamFile(OTHER_STREAM, 'usageStats.json', {
-      [RUN]: usage(100, 20, 0.5),
-    });
+  // All three round-keyed accumulators overlay through the shared
+  // mergeRoundPatch path, so one scenario pins each sidecar kind: a stream
+  // outside the preloaded set is still unseeded when the mutation lands, and
+  // the seed's disk read races the caller's read of its own write.
+  it.each<{
+    kind: string;
+    file: string;
+    prior: unknown[];
+    next: unknown[];
+    mutate: (store: StreamSnapshotStore) => void;
+    read: (store: StreamSnapshotStore) => ReadonlyRoundIndexed<unknown>;
+  }>([
+    {
+      kind: 'output files',
+      file: 'outputFiles.json',
+      prior: [outputFile('prior.tex', 0)],
+      next: [outputFile('next.tex', 1)],
+      mutate: (store) =>
+        snapshotFacts(store).addOutputFiles(OTHER_STREAM, {
+          1: [outputFile('next.tex', 1)],
+        }),
+      read: (store) => store.getOutputFiles(OTHER_STREAM),
+    },
+    {
+      kind: 'missing outputs',
+      file: 'missingOutputs.json',
+      prior: ['prior.tex'],
+      next: ['next.tex'],
+      mutate: (store) =>
+        snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
+          1: ['next.tex'],
+        }),
+      read: (store) => store.getMissingOutputs(OTHER_STREAM),
+    },
+    {
+      kind: 'compile failures',
+      file: 'compileFailures.json',
+      prior: [compileFailure('prior.tex', 0)],
+      next: [compileFailure('next.tex', 1)],
+      mutate: (store) =>
+        snapshotFacts(store).updateCompileFailures(OTHER_STREAM, {
+          1: [compileFailure('next.tex', 1)],
+        }),
+      read: (store) => store.getCompileFailures(OTHER_STREAM),
+    },
+  ])(
+    'returns $kind immediately for streams outside a partial preload without erasing disk state',
+    async ({ file, prior, next, mutate, read }) => {
+      await writeStreamFile(OTHER_STREAM, file, { '0': prior });
 
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
+      const store = new StreamSnapshotStore();
+      await store.preload([STREAM]);
 
-    snapshotFacts(store).addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
-      usage(50, 10, 0.25),
-    );
-    await store.flush();
+      mutate(store);
+      // The overlay applies eagerly, so this synchronous read-back sees the
+      // mutation while the seed is still in flight.
+      expect(read(store)[1]).toEqual(next);
+      await store.flush();
 
-    // After the seed merges the disk baseline, the typed view shows the sum.
-    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject(
-      usage(150, 30, 0.75),
-    );
-
-    const raw = await readStreamFile(OTHER_STREAM, 'usageStats.json');
-    expect(raw).toMatchObject({ [RUN]: usage(150, 30, 0.75) });
-  });
-
-  it('returns output files immediately for streams outside a partial preload without erasing disk outputs', async () => {
-    const prior = outputFile('prior.tex', 0);
-    const next = outputFile('next.tex', 1);
-    await writeStreamFile(OTHER_STREAM, 'outputFiles.json', { '0': [prior] });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).addOutputFiles(OTHER_STREAM, { 1: [next] });
-    const returned = store.getOutputFiles(OTHER_STREAM);
-    returned[1]?.push(outputFile('injected.tex', 1));
-    expect(store.getOutputFiles(OTHER_STREAM)[1]).toEqual([next]);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'outputFiles.json');
-    expect(raw).toMatchObject({
-      '0': [prior],
-      '1': [next],
-    });
-  });
-
-  it('returns missing outputs immediately for streams outside a partial preload without erasing disk markers', async () => {
-    // Same race as the output-files case above, replayed for
-    // updateMissingOutputs: a stream outside the preloaded set is still
-    // unseeded when the mutation lands, so the seed's disk read is racing
-    // the caller's read of its own write.
-    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
-      '0': ['prior.tex'],
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
-      1: ['next.tex'],
-    });
-    // The overlay applies eagerly, so this synchronous read-back sees the
-    // mutation while the seed is still in flight.
-    expect(store.getMissingOutputs(OTHER_STREAM)[1]).toEqual(['next.tex']);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
-    expect(raw).toMatchObject({
-      '0': ['prior.tex'],
-      '1': ['next.tex'],
-    });
-  });
+      expect(await readStreamFile(OTHER_STREAM, file)).toMatchObject({
+        '0': prior,
+        '1': next,
+      });
+    },
+  );
 
   it('rejects malformed missing-output patches before mutating memory or persisted state', async () => {
     const store = new StreamSnapshotStore();
@@ -779,128 +764,6 @@ describe('StreamSnapshotStore', () => {
     expect(await readStreamFile(STREAM, 'missingOutputs.json')).toEqual({
       '0': ['prior.tex'],
       '1': ['next.tex'],
-    });
-  });
-
-  it('replays clearMissingOutputs before a later updateMissingOutputs on an unseeded stream', async () => {
-    // clearMissingOutputs must not stay on the plain deferred mutate() path
-    // while updateMissingOutputs eagerly overlays: on an unseeded stream that
-    // ordering let the seed's overlay replay (update) land, then the clear
-    // (queued behind the same seed) run afterward and wipe it out regardless
-    // of call order. Here the clear fires first, so the later update must
-    // survive.
-    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
-      '0': ['stale.tex'],
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).clearMissingOutputs(OTHER_STREAM);
-    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
-      1: ['next.tex'],
-    });
-    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({ 1: ['next.tex'] });
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
-    expect(raw).toEqual({ '1': ['next.tex'] });
-  });
-
-  it('replays a later clearMissingOutputs over an earlier updateMissingOutputs on an unseeded stream', async () => {
-    await writeStreamFile(OTHER_STREAM, 'missingOutputs.json', {
-      '0': ['stale.tex'],
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).updateMissingOutputs(OTHER_STREAM, {
-      1: ['next.tex'],
-    });
-    snapshotFacts(store).clearMissingOutputs(OTHER_STREAM);
-    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({});
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'missingOutputs.json');
-    expect(raw).toEqual({});
-  });
-
-  it('clears missing outputs only on the exactly addressed stream, even with duplicate run configurations (#9590 A3)', async () => {
-    const events = new SessionEventHub();
-    const store = new StreamSnapshotStore();
-    const detach = store.attachSessionEvents(events);
-    // Two look-alike tabs: identical agent/model/input configuration. Only
-    // the initiator-selected StreamTabId may be mutated.
-    const duplicateConfig = AgentConfigSchema.parse({
-      agent: 'correct',
-      model: 'deepseekT',
-      agentCategory: AgentCategory.Workflow,
-      inputFiles: ['paper.tex'],
-    });
-    const executions: Record<string, ExecutionId> = {
-      [STREAM]: 'a1b2c3d4' as ExecutionId,
-      [OTHER_STREAM]: 'd4c3b2a1' as ExecutionId,
-    };
-    for (const stream of [STREAM, OTHER_STREAM]) {
-      events.emit({
-        scope: 'run',
-        streamId: stream,
-        event: {
-          type: 'run.config',
-          streamId: stream,
-          executionId: executions[stream],
-          config: duplicateConfig,
-        },
-      });
-      events.emit({
-        scope: 'run',
-        streamId: stream,
-        event: {
-          type: 'updateMissingOutputs',
-          streamId: stream,
-          filesByRound: { 1: ['missing.tex'] },
-        },
-      });
-    }
-
-    // Exact addressing clears the selected stream alone; the duplicate
-    // configuration on the other tab does not authorize a fan-out.
-    events.emit({
-      scope: 'session',
-      event: {
-        type: 'clearMissingOutputs',
-        payload: { streamId: STREAM },
-      },
-    });
-    expect(store.getMissingOutputs(STREAM)).toEqual({});
-    expect(store.getMissingOutputs(OTHER_STREAM)).toEqual({
-      1: ['missing.tex'],
-    });
-    detach();
-    // Settle the async sidecar writes before afterEach removes the temp dir.
-    await store.flush();
-  });
-
-  it('returns compile failures immediately for streams outside a partial preload without erasing disk markers', async () => {
-    const prior = compileFailure('prior.tex', 0);
-    const next = compileFailure('next.tex', 1);
-    await writeStreamFile(OTHER_STREAM, 'compileFailures.json', {
-      '0': [prior],
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM]);
-
-    snapshotFacts(store).updateCompileFailures(OTHER_STREAM, { 1: [next] });
-    // Eagerly applied for the same reason as the missing-outputs case above.
-    expect(store.getCompileFailures(OTHER_STREAM)[1]).toEqual([next]);
-    await store.flush();
-
-    const raw = await readStreamFile(OTHER_STREAM, 'compileFailures.json');
-    expect(raw).toMatchObject({
-      '0': [prior],
-      '1': [next],
     });
   });
 
@@ -1009,127 +872,6 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
   });
 
-  it('treats corrupt-present ownership metadata as unreadable, not missing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      '{bad json',
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toBeInstanceOf(
-      SyntaxError,
-    );
-  });
-
-  it('rejects valid-JSON ownership metadata with an invalid execution FK', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      JSON.stringify({ schemaVersion: 1, executionId: 42 }),
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
-      'Invalid persisted stream metadata ownership',
-    );
-  });
-
-  it('rejects non-object ownership metadata instead of treating it as missing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'meta.json'),
-      JSON.stringify(['not', 'a', 'meta']),
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(store.readPersistedExecutionId(STREAM)).rejects.toThrow(
-      'Invalid persisted stream metadata ownership',
-    );
-  });
-
-  it('usage-only preload supplies usage without warning and preserves live deltas', async () => {
-    await writeStreamFile(STREAM, 'usageStats.json', {
-      [RUN]: usage(1, 2, 0.1),
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.preload([STREAM], { usageOnly: true });
-    const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
-
-    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
-      inputTokens: 1,
-      outputTokens: 2,
-      cost: 0.1,
-    });
-    expect(warnSpy).not.toHaveBeenCalled();
-
-    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
-    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 3,
-      outputTokens: 4,
-      cost: 0.2,
-    });
-    expect(warnSpy).not.toHaveBeenCalled();
-
-    // Drain the seed chain started by the live usage event so teardown cannot
-    // race an in-flight sidecar write.
-    await store.flush();
-  });
-
-  it('usage-only preload replays an eager usage delta that lands during the read', async () => {
-    await writeStreamFile(STREAM, 'usageStats.json', {
-      [RUN]: usage(1, 2, 0.1),
-    });
-
-    let releaseRead!: () => void;
-    const readGate = new Promise<void>((resolve) => {
-      releaseRead = resolve;
-    });
-    const originalRead = StorageFS.read.bind(StorageFS);
-    const readUsageFile = vi
-      .spyOn(StorageFS, 'read')
-      .mockImplementation(async (filePath) => {
-        if (filePath.endsWith('usageStats.json')) {
-          await readGate;
-        }
-        return originalRead(filePath);
-      });
-
-    const store = new StreamSnapshotStore();
-    const preload = store.preload([STREAM], { usageOnly: true });
-    snapshotFacts(store).addUsage(STREAM, RUN_2, usage(3, 4, 0.2));
-    releaseRead();
-    await preload;
-
-    expect(readUsageFile).toHaveBeenCalled();
-    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
-      inputTokens: 1,
-      outputTokens: 2,
-      cost: 0.1,
-    });
-    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
-      inputTokens: 3,
-      outputTokens: 4,
-      cost: 0.2,
-    });
-
-    await store.flush();
-  });
-
-  it('usage-only preload rejects corrupt-present usageStats instead of zeroing', async () => {
-    await StorageFS.ensureDir(streamDataDir(STREAM));
-    await StorageFS.write(
-      path.join(streamDataDir(STREAM), 'usageStats.json'),
-      '{bad json',
-    );
-
-    const store = new StreamSnapshotStore();
-    await expect(
-      store.preload([STREAM], { usageOnly: true }),
-    ).rejects.toBeInstanceOf(SyntaxError);
-  });
-
   it('strips a retired runDescriptor sidecar without reading its FK', async () => {
     // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
     // The unknown key is stripped: no FK is lifted out of it, and the rest
@@ -1147,7 +889,6 @@ describe('StreamSnapshotStore', () => {
     });
 
     const store = new StreamSnapshotStore();
-    expect(await store.readPersistedExecutionId(STREAM)).toBeUndefined();
     await store.load([STREAM]);
 
     expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();
@@ -1187,7 +928,6 @@ describe('StreamSnapshotStore', () => {
 
     expect(snapshot.executionId).toBeUndefined();
     expect(snapshot.parentStreamId).toBeUndefined();
-    expect(snapshot.description).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
       expect.stringContaining('unreadable persisted stream metadata'),
@@ -1598,12 +1338,11 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).config).toBeUndefined();
   });
 
-  it('persists a late reset and round patch that arrive during async hydration', async () => {
+  it('persists late round and usage patches that arrive during async hydration', async () => {
     await installPlatform();
     const executionId = 'c0ffee' as ExecutionId;
     await Promise.all([
       writeMetaFile(STREAM, { executionId }),
-      writeStreamFile(STREAM, 'missingOutputs.json', { '0': ['stale.tex'] }),
       getExecutionStore(executionId).writeRunRecord(toolUseConfig()),
     ]);
 
@@ -1611,7 +1350,6 @@ describe('StreamSnapshotStore', () => {
     const wereLateOverlaysInjected = injectDuringExecutionConfigHydration(
       executionId,
       () => {
-        snapshotFacts(store).clearMissingOutputs(STREAM);
         snapshotFacts(store).updateMissingOutputs(STREAM, { 1: ['late.tex'] });
         void snapshotFacts(store).addUsage(STREAM, RUN, usage(10, 2, 0.1));
       },
@@ -2605,25 +2343,63 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
   });
 
-  it('retains a mutation queued during a failed refresh', async () => {
+  it('reports and retains authoritative work-plan state after preload fails', async () => {
+    const previous = await storeWithPersistedPlan();
+    previous.evictAll();
+    const readError = new Error('snapshot disk is unreadable');
+    const read = StorageFS.read.bind(StorageFS);
+    const readStarted = pDefer<void>();
+    const failRead = pDefer<void>();
+    let shouldFailRead = true;
+    const readSpy = vi
+      .spyOn(StorageFS, 'read')
+      .mockImplementation(async (...args) => {
+        if (shouldFailRead && args[0].startsWith(streamDataDir(STREAM))) {
+          shouldFailRead = false;
+          readStarted.resolve();
+          await failRead.promise;
+          throw readError;
+        }
+        return read(...args);
+      });
     const store = new StreamSnapshotStore();
-    await store.load([]);
-    const writeSpy = vi
-      .spyOn(StorageFS, 'writeAtomic')
-      .mockRejectedValue(new Error('snapshot disk is full'));
+    const output = outputFile('accepted-live.tex', 1);
 
+    const refresh = store.preload([STREAM], {
+      reportArtifactAuthority: true,
+    });
+    await readStarted.promise;
     snapshotFacts(store).setPlan(STREAM, PLAN);
-    await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledOnce());
-    const refresh = store.load([STREAM]);
     snapshotFacts(store).setTodos(STREAM, [TODO]);
-    await expect(refresh).rejects.toThrow('Sidecar writes remain dirty');
+    snapshotFacts(store).addOutputFiles(STREAM, { 1: [output] });
+    expect(store.getWorkPlan(STREAM)).toMatchObject({
+      plan: PLAN,
+      todos: [TODO],
+    });
+    const newerRefresh = store.preload([STREAM], {
+      reportArtifactAuthority: true,
+    });
+    failRead.resolve();
+    const error = await refresh.catch((cause) => cause);
+    expect(error).toBeInstanceOf(StreamSnapshotPreloadError);
+    expect(error).toMatchObject({
+      message: expect.stringContaining('snapshot disk is unreadable'),
+      streamId: STREAM,
+      authoritativeFields: { complete: false, todos: true, plan: true },
+    });
+    await newerRefresh;
 
-    writeSpy.mockRestore();
+    readSpy.mockRestore();
     await store.flush();
 
     expect(await reloadWorkPlan()).toMatchObject({
       plan: PLAN,
       todos: [TODO],
+    });
+    expect(
+      (await readStreamFile(STREAM, 'outputFiles.json')) as object,
+    ).toEqual({
+      1: [output],
     });
   });
 
@@ -2844,7 +2620,6 @@ describe('StreamSnapshotStore', () => {
     });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
-    expect(snap.description).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(
       'StreamSnapshotStore',
       expect.stringContaining('malformed execution FK'),
@@ -2858,7 +2633,6 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    await cleanupTempDirs(tempDirs);
   });
 
   function unseededWarnings(warnSpy: {

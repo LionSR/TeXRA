@@ -69,9 +69,11 @@ function createController(options?: {
 }): {
   controller: SettingsAgentCatalogController;
   enabled: Partial<Record<AgentCategory, string[] | undefined>>;
+  committedTeams: string[];
   customPresets: unknown[];
 } {
   const enabled = { ...(options?.enabled ?? {}) };
+  const committedTeams: string[] = [];
   let customPresetsRaw: unknown = options?.customPresets ?? [];
   return {
     controller: new SettingsAgentCatalogController({
@@ -80,6 +82,9 @@ function createController(options?: {
         getEnabledAgentKeys: (category) => enabled[category],
         setEnabledAgentKeys: async (category, enabledKeys) => {
           enabled[category] = enabledKeys;
+        },
+        setTeamRoster: async (preset) => {
+          committedTeams.push(preset.id);
         },
         getAgents: (category) =>
           options?.agents?.[category] ?? AGENTS[category],
@@ -97,6 +102,7 @@ function createController(options?: {
       },
     }),
     enabled,
+    committedTeams,
     get customPresets() {
       return Array.isArray(customPresetsRaw) ? customPresetsRaw : [];
     },
@@ -159,7 +165,7 @@ describe('SettingsAgentCatalogController', () => {
     });
   });
 
-  it('applies custom presets by resolving names to canonical source keys', async () => {
+  it('resolves preset members to canonical keys and commits the team symbolically', async () => {
     const persistedPreset = {
       id: 'custom-team',
       name: 'Custom Team',
@@ -170,7 +176,7 @@ describe('SettingsAgentCatalogController', () => {
         toolUse: ['review', 'missing'],
       },
     };
-    const { controller, enabled } = createController({
+    const { controller, enabled, committedTeams } = createController({
       customPresets: [persistedPreset],
     });
 
@@ -182,15 +188,23 @@ describe('SettingsAgentCatalogController', () => {
       icon: 'bookmark',
     });
     expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
-    await controller.commitPresetResolution(
-      resolved.preset,
-      resolved.resolution,
-    );
+    assert.deepEqual(resolved.resolution.keys.workflow, ['remote:writer']);
+    // Unresolved names stay in the resolution's nameSlots to feed the
+    // availability preflight. Nothing persists them: the stored team
+    // reference re-resolves against the catalog on read, so a member joins
+    // the moment it appears (sign-in, install).
+    assert.deepEqual(resolved.resolution.keys.toolUse, [
+      'builtInToolUse:review',
+    ]);
+    assert.deepEqual(resolved.resolution.nameSlots.toolUse, ['missing']);
 
-    assert.deepEqual(enabled.workflow, ['remote:writer']);
-    // Unresolved names are kept bare so the agent joins the roster the
-    // moment it appears (sign-in, install) — never silently dropped.
-    assert.deepEqual(enabled.toolUse, ['builtInToolUse:review', 'missing']);
+    await controller.commitPreset(resolved.preset);
+
+    // The commit stores the team reference, not a frozen key snapshot: the
+    // roster re-resolves it against the catalog on every read.
+    assert.deepEqual(committedTeams, ['custom-team']);
+    assert.deepEqual(enabled.workflow, undefined);
+    assert.deepEqual(enabled.toolUse, undefined);
   });
 
   it('reports unknown presets without writing enabled agent state', () => {
@@ -259,28 +273,6 @@ describe('SettingsAgentCatalogController', () => {
         'leanOrchestrator',
       ]),
       'leanOrchestrator',
-    );
-  });
-
-  it('previews no root for a custom team with no delegating members', () => {
-    const { controller } = createController();
-
-    // The launcher disables this team with "no runnable team root"; the
-    // preview must agree instead of inventing a built-in root.
-    assert.equal(
-      controller.getPresetToolUseRoot(['review', 'customTool']),
-      undefined,
-    );
-  });
-
-  it('previews the engineer root for the built-in Software Engineer team', () => {
-    const { controller } = createController();
-    const softwareEngineer = AGENT_MODE_PRESETS_BY_ID.get('software-engineer');
-
-    assert.ok(softwareEngineer);
-    assert.equal(
-      controller.getPresetToolUseRoot(softwareEngineer.agents.toolUse),
-      'engineer',
     );
   });
 

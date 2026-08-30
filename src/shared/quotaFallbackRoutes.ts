@@ -67,10 +67,6 @@ export const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] =
     ),
   ]);
 
-const ROUTE_BY_ID = new Map<QuotaFallbackRouteId, QuotaFallbackRoute>(
-  QUOTA_FALLBACK_ROUTES.map((route) => [route.id, route]),
-);
-
 const ROUTE_BY_EXHAUSTION = new Map<ExhaustionReason, QuotaFallbackRoute>(
   QUOTA_FALLBACK_ROUTES.map((route) => [route.exhaustionReason, route]),
 );
@@ -80,13 +76,6 @@ export function quotaFallbackRouteForExhaustion(
   reason: ExhaustionReason | undefined,
 ): QuotaFallbackRoute | undefined {
   return reason === undefined ? undefined : ROUTE_BY_EXHAUSTION.get(reason);
-}
-
-/** Resolve a quota-fallback route by catalog id. */
-export function quotaFallbackRouteById(
-  id: QuotaFallbackRouteId,
-): QuotaFallbackRoute | undefined {
-  return ROUTE_BY_ID.get(id);
 }
 
 /** True when `id` is one of {@link CODING_PLAN_SUBSCRIPTIONS}. */

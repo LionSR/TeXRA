@@ -25,8 +25,6 @@ const STORAGE_LAYOUT = {
 export const MEMORY_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.memory;
 export const RUNS_STORAGE_DIR = WORKSPACE_STORAGE_LAYOUT.runs;
 
-type WorkspacePathSource = string | undefined | (() => string | undefined);
-
 function legacyWorkspaceStorageId(workspacePath: string | undefined): string {
   const source = workspacePath?.trim() || 'no-workspace';
   return truncatedHexId(source, 16);
@@ -158,19 +156,20 @@ function migrateLegacyWorkspaceStorage(
 }
 
 export class WorkspaceStorageProvider implements StorageProvider {
-  private readonly getWorkspacePath: () => string | undefined;
-  private activeWorkspacePath: string | undefined;
+  /**
+   * The workspace root is pinned once, at construction. A host whose source
+   * can move (VS Code's first workspace folder, Electron's window) answers a
+   * move by restarting, exactly as the desktop app and the CLI do, so the
+   * storage root never changes under live runs.
+   */
+  private readonly activeWorkspacePath: string | undefined;
   private readonly initializedStoragePaths = new Set<string>();
-  private workspaceChangeRollback:
-    { readonly workspacePath: string | undefined } | undefined;
 
   constructor(
     private readonly storageRoot: string,
-    workspacePath: WorkspacePathSource,
+    workspacePath: string | undefined,
   ) {
-    this.getWorkspacePath =
-      typeof workspacePath === 'function' ? workspacePath : () => workspacePath;
-    this.activeWorkspacePath = this.getWorkspacePath();
+    this.activeWorkspacePath = workspacePath;
   }
 
   private storagePathFor(workspacePath: string | undefined): string {
@@ -189,53 +188,6 @@ export class WorkspaceStorageProvider implements StorageProvider {
     writeWorkspaceSidecar(storagePath, workspacePath);
     this.initializedStoragePaths.add(storagePath);
     return storagePath;
-  }
-
-  private resolveTargetWorkspacePath(target?: {
-    workspacePath: string | undefined;
-  }): string | undefined {
-    return target ? target.workspacePath : this.getWorkspacePath();
-  }
-
-  hasPendingWorkspaceStorageChange(target?: {
-    workspacePath: string | undefined;
-  }): boolean {
-    const targetWorkspacePath = this.resolveTargetWorkspacePath(target);
-    return (
-      this.storagePathFor(this.activeWorkspacePath) !==
-      this.storagePathFor(targetWorkspacePath)
-    );
-  }
-
-  commitWorkspaceStorageChange(target?: {
-    workspacePath: string | undefined;
-  }): boolean {
-    const targetWorkspacePath = this.resolveTargetWorkspacePath(target);
-    if (
-      this.storagePathFor(targetWorkspacePath) ===
-      this.storagePathFor(this.activeWorkspacePath)
-    ) {
-      return false;
-    }
-    if (this.workspaceChangeRollback) {
-      throw new Error('A workspace storage change is already in progress.');
-    }
-    this.workspaceChangeRollback = {
-      workspacePath: this.activeWorkspacePath,
-    };
-    this.activeWorkspacePath = targetWorkspacePath;
-    return true;
-  }
-
-  finalizeWorkspaceStorageChange(): void {
-    this.workspaceChangeRollback = undefined;
-  }
-
-  rollbackWorkspaceStorageChange(): boolean {
-    if (!this.workspaceChangeRollback) return false;
-    this.activeWorkspacePath = this.workspaceChangeRollback.workspacePath;
-    this.workspaceChangeRollback = undefined;
-    return true;
   }
 
   getGlobalStoragePath(): string {

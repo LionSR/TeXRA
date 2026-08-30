@@ -9,7 +9,7 @@ Research tools benefit from community collaboration. TeXRA's client software is 
 [![GitHub](https://img.shields.io/github/stars/LionSR/TeXRA)](https://github.com/LionSR/TeXRA)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/LionSR/TeXRA/blob/main/LICENSE)
 
-TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the specialist agents that derive, check, and formalize results, and all three hosts over it. The hosted service (accounts, the relay, and the account-served agent catalog) remains governed by its Terms of Service.
+TeXRA's client software is licensed under the Apache License 2.0: the agent runtime, the specialist agents that derive, check, and formalize results, and all three hosts over it. The hosted service (TeXRA accounts and the account-served agent catalog) remains governed by its Terms of Service.
 
 [TeXRA on GitHub](https://github.com/LionSR/TeXRA)
 

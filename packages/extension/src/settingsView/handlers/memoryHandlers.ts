@@ -2,8 +2,8 @@
  * Memory-settings domain handlers.
  *
  * Handles listing memory files, opening them (markdown in preview mode),
- * previewing a single entry, deleting, enabling, and pinning workspace
- * memory from the Settings view.
+ * previewing a single entry, deleting, and pinning workspace memory from the
+ * Settings view.
  */
 import * as vscode from 'vscode';
 
@@ -28,12 +28,6 @@ export class MemoryHandlers {
 
   async sendMemoryData(webview: vscode.Webview): Promise<void> {
     await this.settingsHost.sendMemoryData((message) =>
-      webview.postMessage(message),
-    );
-  }
-
-  async sendMemoryEnabled(webview: vscode.Webview): Promise<void> {
-    await this.settingsHost.sendMemoryEnabled((message) =>
       webview.postMessage(message),
     );
   }
@@ -106,8 +100,9 @@ export class MemoryHandlers {
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
   ): Promise<void> {
     try {
-      await this.settingsHost.deleteMemory(data, (message) =>
-        this.postMessageToActiveWebview(message),
+      await this.settingsHost.deleteMemory(
+        data,
+        this.ctx.postMessageToActiveWebview,
       );
     } catch (error) {
       await showLoggedErrorMessage(
@@ -119,18 +114,12 @@ export class MemoryHandlers {
     }
   }
 
-  async handleSetMemoryEnabled(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_MEMORY_ENABLED>,
-  ): Promise<void> {
-    await this.settingsHost.setMemoryEnabled(data.enabled, (message) =>
-      this.postMessageToActiveWebview(message),
-    );
-  }
-
   async setMemoryPinned(storagePath: string, pinned: boolean): Promise<void> {
     try {
-      await this.settingsHost.setMemoryPinned(storagePath, pinned, (message) =>
-        this.postMessageToActiveWebview(message),
+      await this.settingsHost.setMemoryPinned(
+        storagePath,
+        pinned,
+        this.ctx.postMessageToActiveWebview,
       );
     } catch (error) {
       const action = pinned ? 'pin' : 'unpin';
@@ -140,12 +129,5 @@ export class MemoryHandlers {
         error,
       );
     }
-  }
-
-  private async postMessageToActiveWebview(message: unknown): Promise<void> {
-    if (message == null) return;
-    await this.ctx.withActiveWebview(async (webview) => {
-      await webview.postMessage(message);
-    });
   }
 }

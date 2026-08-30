@@ -18,20 +18,22 @@ export type PresentedStreamId = StreamTabId | '';
 /**
  * A projection slice whose new value the host re-reads from the shared state
  * rather than receiving on the wire. Each key names the field the host reads
- * (`outputs.files`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
+ * (`outputs.files`, `outputs.missingOutputs`, `outputs.compileFailures`, `workPlan.queuedFollowUps`,
  * `SessionStreamMetadata.parentStreamId`,
- * `StreamExecutionState.contextState`) or the fact it reacts to
- * (`goalPaused`); nothing here is new vocabulary. Slices whose notification
- * carries real delta semantics — `onMissingOutputsChanged`'s `reset`,
+ * `StreamExecutionState.contextState`, `SessionState.getStreamState(streamId).subagents`)
+ * or the fact it reacts to (`goalPaused`); nothing here is new vocabulary.
+ * Slices whose notification carries real delta semantics —
  * `onStageChanged`'s phase-vs-round split — keep their own method.
  */
 export type SessionRenderSlice =
   | 'files'
   | 'compileFailures'
+  | 'missingOutputs'
   | 'queuedFollowUps'
   | 'parentStreamId'
   | 'contextState'
-  | 'goalPaused';
+  | 'goalPaused'
+  | 'subagents';
 
 /**
  * Host-renderer notifications from {@link SessionFactApplier}.
@@ -57,7 +59,6 @@ export interface SessionRendererPort {
     streamId: StreamTabId,
     options?: {
       streamStates?: Map<StreamTabId, StreamPhaseState>;
-      activeStream?: PresentedStreamId;
     },
   ): void;
 
@@ -68,8 +69,6 @@ export interface SessionRendererPort {
     lastTimestamp?: number,
     substate?: StreamSubstate,
   ): void;
-
-  onActiveStreamChanged(streamId: PresentedStreamId): void;
 
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void;
 
@@ -83,18 +82,6 @@ export interface SessionRendererPort {
    * other hosts project the slot verbatim.
    */
   onStageChanged(streamId: StreamTabId, stage: StreamStage): void;
-
-  /** The stream's child-activity roster changed; hosts re-read
-   *  `SessionState.getStreamState(streamId).subagents`. */
-  onBadgesChanged(streamId: StreamTabId): void;
-
-  /** Delta-semantic: `reset` clears the stream's rounds instead of replacing
-   *  them, so this one keeps its own envelope rather than folding into
-   *  {@link SessionRendererPort.invalidate}. */
-  onMissingOutputsChanged(
-    streamId: StreamTabId,
-    options?: { reset?: boolean },
-  ): void;
 
   onRunUsageChanged(
     streamId: StreamTabId,
@@ -116,13 +103,4 @@ export interface SessionRendererPort {
 
   /** Drop buffered conversation-progress pushes for a stream (new RUNNING). */
   clearPendingConversationProgress(streamId: StreamTabId): void;
-
-  /**
-   * Full active-viewport rebuild. Lit owns bridge cursor sync + controls packing;
-   * TUI no-ops (transcript projection is separate).
-   */
-  syncStreamContent(
-    stream: PresentedStreamId,
-    options?: { includeActiveState?: boolean },
-  ): void;
 }

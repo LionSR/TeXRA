@@ -11,8 +11,8 @@ import { testModelCell } from '../modelCellTestUtils';
 import { testRunScope } from '../progressTestUtils';
 
 function buildServices(
-  overrides: Partial<ToolUseServices<unknown>> = {},
-): ToolUseServices<unknown> {
+  overrides: Partial<ToolUseServices> = {},
+): ToolUseServices {
   return {
     config: AgentConfigSchema.parse({ agent: 'chat', model: 'deepseekT' }),
     runScope: testRunScope('test-stream'),
@@ -32,9 +32,9 @@ function buildServices(
     setting: { agentCategory: 'toolUse', tools: [] } as never,
     resumeShared: null,
     toolRegistry: {} as never,
-    userVarChannels: { input: {}, transient: {} },
+    userVarChannels: {},
     ...overrides,
-  } as ToolUseServices<unknown>;
+  } as ToolUseServices;
 }
 
 describe('ToolUsePrepareNode transcript logging (regression #7508)', () => {
@@ -109,7 +109,7 @@ describe('ToolUsePrepareNode resume (prompt-cache preservation)', () => {
     const resolvedToolNames = services.setting.tools.map((tool) => tool.name);
     const rebuiltPrompts = await buildInitialToolUsePrompts(
       services.prompt,
-      services.userVarChannels.transient,
+      services.userVarChannels,
       services.logger,
       {
         resolvedToolNames,

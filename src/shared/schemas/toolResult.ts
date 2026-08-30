@@ -66,13 +66,10 @@ export type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
  * Structured validation error diagnostics. One of several shapes a tool's
  * `ToolResult.diagnostics` may carry (see that field's own comment) — this is
  * the one produced for Zod input-validation failures, used to provide rich
- * error information to models for self-correction. `issues` stays
- * `z.custom<ZodIssue>()` since `ZodIssue` is Zod's own internal type with no
- * exported schema to compose against.
+ * error information to models for self-correction.
  */
 export const ValidationErrorDiagnosticsSchema = z.object({
   type: z.literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
-  issues: z.array(z.custom<ZodIssue>()),
   formatted: z.array(FormattedZodIssueSchema),
 });
 export type ValidationErrorDiagnostics = z.infer<
@@ -154,8 +151,6 @@ const ExecutedToolResultSchema = z.object({
   /** End the current model turn after this successful tool result is paired. */
   endTurn: z.boolean().optional(),
   error: z.undefined().optional(),
-  /** Statistics about line changes made */
-  lineChanges: LineChangesSchema.optional(),
   /** Records of edits made during tool execution */
   edits: z.array(EditRecordSchema).optional(),
   /** File attachments (may contain binary data) */
@@ -170,7 +165,6 @@ const ErrorToolResultSchema = z.object({
   /** Brief summary for human-facing logs */
   summary: z.string().optional(),
   output: z.undefined().optional(),
-  lineChanges: z.undefined().optional(),
   edits: z.undefined().optional(),
   files: z.undefined().optional(),
   ...ToolResultSharedFields,

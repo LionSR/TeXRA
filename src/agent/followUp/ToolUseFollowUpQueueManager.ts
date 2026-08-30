@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -12,15 +10,10 @@ import { FollowUpQueue, type FollowUpQueueInput } from './FollowUpQueue';
 
 const logger = createLog('ToolUseFollowUpQueue');
 
-type QueueLifecycle = 'live' | 'recoverable' | 'recovering';
-export type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
+type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
 
 interface QueueEntry {
   readonly queue: FollowUpQueue;
-  /** Stable identity of this continuation generation across recovery claims. */
-  generationId: string;
-  /** True until persisted flow state or a resumed flow confirms the identity. */
-  generationProvisional: boolean;
   /**
    * Delivery ids already admitted for this stream (#9531). In-memory,
    * transport-level replay suppression only — NOT crash-safe exactly-once: a
@@ -29,7 +22,7 @@ interface QueueEntry {
    * deferred until crash/restart tests reproduce duplicate or lost insertion.
    */
   readonly admittedDeliveryIds: BoundedIdSet<string>;
-  lifecycle: QueueLifecycle;
+  /** At most one consumer; an unowned entry is a recoverable persisted cursor. */
   owner?: FollowUpConsumerLease;
 }
 
@@ -44,8 +37,6 @@ interface QueueEntry {
  */
 export interface FollowUpConsumerLease {
   readonly streamId: StreamTabId;
-  /** Opaque identity of this session-owned queue generation. */
-  readonly generationId: string;
   readonly kind: FollowUpConsumerKind;
 }
 
@@ -54,21 +45,25 @@ export interface FollowUpRecoveryLease
   readonly kind: 'recovery';
 }
 
-export type FollowUpSubmission =
-  | { readonly kind: 'unavailable' }
-  | { readonly kind: 'not_owned' }
+/**
+ * How one submission landed: a replayed delivery id, input a live flow
+ * consumer will read this turn, input parked on the stream's queue (with the
+ * recovery lease when this submission claimed it), or a refusal — the
+ * boundary has no entry to join and will not create one (disposed session,
+ * terminalized stream, or a live-owner submission to a stream whose entry is
+ * gone).
+ */
+type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
-  | { readonly kind: 'queued' }
-  | { readonly kind: 'live' }
-  | { readonly kind: 'live_flow' }
-  | { readonly kind: 'recovering' }
-  | { readonly kind: 'recovery'; readonly lease: FollowUpRecoveryLease };
+  | { readonly kind: 'delivered_live' }
+  | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
+  | { readonly kind: 'refused' };
 
 /**
  * Session-owned continuation boundary indexed by stream ID.
  *
- * Lifecycle is explicit: an owned entry is `live` or `recovering`, an unowned
- * persisted cursor is `recoverable`, and a terminal entry is gone. A stream
+ * An owned entry has a live or recovering consumer, an unowned entry is a
+ * recoverable persisted cursor, and a terminal entry is gone. A stream
  * whose queue was ended by {@link terminalize} (its stream deleted, or its
  * parked run torn down) is marked so that a producer that is not an owner,
  * such as a child whose activation outlives its parent's teardown, cannot
@@ -98,42 +93,11 @@ export class ToolUseFollowUpQueue {
   claimLive(
     streamId: StreamTabId,
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
-    generationId?: string,
   ): FollowUpConsumerLease | undefined {
     if (this.disposed) return undefined;
     this.terminalized.delete(streamId);
-    const entry =
-      this.entries.get(streamId) ?? this.createEntry(streamId, generationId);
-    if (generationId !== undefined && entry.generationId !== generationId) {
-      return undefined;
-    }
+    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
     return this.claim(entry, streamId, kind);
-  }
-
-  /**
-   * Restore a generation read from the stream's authoritative flow record.
-   * Distinguishes session dispose from mismatch rejection so callers can
-   * label diagnostics accurately.
-   */
-  restorePersistedGeneration(
-    streamId: StreamTabId,
-    generationId: string,
-  ): 'restored' | 'disposed' | 'unavailable' {
-    if (this.disposed) return 'disposed';
-    const entry = this.entries.get(streamId);
-    if (entry) {
-      if (entry.generationId === generationId) {
-        entry.generationProvisional = false;
-        return 'restored';
-      }
-      if (!entry.generationProvisional) return 'unavailable';
-      entry.generationId = generationId;
-      entry.generationProvisional = false;
-      return 'restored';
-    }
-    if (this.terminalized.has(streamId)) return 'unavailable';
-    this.createEntry(streamId, generationId);
-    return 'restored';
   }
 
   /**
@@ -151,9 +115,8 @@ export class ToolUseFollowUpQueue {
       );
     }
     this.terminalized.delete(streamId);
-    const retained = this.entries.get(streamId);
-    if (retained) return this.claim(retained, streamId, 'child');
-    return this.claim(this.createEntry(streamId), streamId, 'child');
+    const entry = this.entries.get(streamId) ?? this.createEntry(streamId);
+    return this.claim(entry, streamId, 'child');
   }
 
   /** Claim persisted recovery before any asynchronous resume preparation. */
@@ -165,12 +128,8 @@ export class ToolUseFollowUpQueue {
     if (createIfMissing) this.terminalized.delete(streamId);
     const entry =
       this.entries.get(streamId) ??
-      (createIfMissing
-        ? this.createEntry(streamId, undefined, true)
-        : undefined);
-    if (!entry || entry.lifecycle !== 'recoverable' || entry.owner) {
-      return undefined;
-    }
+      (createIfMissing ? this.createEntry(streamId) : undefined);
+    if (!entry || entry.owner) return undefined;
     return this.claim(entry, streamId, 'recovery') as FollowUpRecoveryLease;
   }
 
@@ -194,25 +153,17 @@ export class ToolUseFollowUpQueue {
     streamId: StreamTabId,
     followUp: FollowUpQueueInput,
     admission: 'live_owner' | 'recoverable',
-    expectedGenerationId?: string,
   ): FollowUpSubmission {
-    if (this.disposed) return { kind: 'unavailable' };
+    if (this.disposed) return { kind: 'refused' };
 
     let entry = this.entries.get(streamId);
-    if (
-      expectedGenerationId !== undefined &&
-      entry?.generationId !== expectedGenerationId
-    ) {
-      return { kind: 'unavailable' };
-    }
     if (admission === 'live_owner') {
-      if (!entry) return { kind: 'not_owned' };
+      if (!entry) return { kind: 'refused' };
     } else {
       if (!entry && this.terminalized.has(streamId)) {
-        return { kind: 'unavailable' };
+        return { kind: 'refused' };
       }
-      entry ??= this.createEntry(streamId, undefined, true);
-      if (!entry.owner) entry.lifecycle = 'recoverable';
+      entry ??= this.createEntry(streamId);
     }
 
     // Replay suppression is synchronous check-and-add: concurrent submissions
@@ -230,9 +181,8 @@ export class ToolUseFollowUpQueue {
     entry.queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     const owner = entry.owner;
-    if (owner?.kind === 'flow') return { kind: 'live_flow' };
-    if (owner?.kind === 'child') return { kind: 'live' };
-    if (owner?.kind === 'recovery') return { kind: 'recovering' };
+    if (owner?.kind === 'flow') return { kind: 'delivered_live' };
+    if (owner !== undefined) return { kind: 'queued' };
 
     if (admission === 'live_owner') {
       // Live notifications use this path to reach WAITING parents whose
@@ -241,8 +191,9 @@ export class ToolUseFollowUpQueue {
     }
 
     const lease = this.claim(entry, streamId, 'recovery');
-    if (!lease) return { kind: 'recovering' };
-    return { kind: 'recovery', lease: lease as FollowUpRecoveryLease };
+    return lease
+      ? { kind: 'queued', lease: lease as FollowUpRecoveryLease }
+      : { kind: 'queued' };
   }
 
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
@@ -251,29 +202,11 @@ export class ToolUseFollowUpQueue {
     return owner?.kind === 'flow' || owner?.kind === 'child';
   }
 
-  /**
-   * Inner child/recovery flows borrow the queue their outer owner consumes.
-   * A recovery created before persisted state was read has a provisional
-   * generation; the resumed flow is the authority that rebinds it. Child
-   * ownership is already authoritative and must match exactly.
-   */
-  externallyOwnedQueue(
-    streamId: StreamTabId,
-    generationId: string,
-  ): FollowUpQueue | undefined {
+  /** Inner child/recovery flows borrow the queue their outer owner consumes. */
+  externallyOwnedQueue(streamId: StreamTabId): FollowUpQueue | undefined {
     const entry = this.entries.get(streamId);
-    const owner = entry?.owner;
-    if (!entry || (owner?.kind !== 'child' && owner?.kind !== 'recovery')) {
-      return undefined;
-    }
-    if (entry.generationId !== generationId) {
-      if (owner.kind !== 'recovery' || !entry.generationProvisional) {
-        return undefined;
-      }
-      entry.generationId = generationId;
-    }
-    entry.generationProvisional = false;
-    return entry.queue;
+    const kind = entry?.owner?.kind;
+    return kind === 'child' || kind === 'recovery' ? entry?.queue : undefined;
   }
 
   queue(lease: FollowUpConsumerLease): FollowUpQueue {
@@ -281,7 +214,7 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Release only the generation represented by `lease`. `recoverable` keeps
+   * Release the entry `lease` owns, if it still does. `recoverable` keeps
    * queued data for a successor claim; `terminal` disposes it permanently.
    */
   release(
@@ -291,10 +224,7 @@ export class ToolUseFollowUpQueue {
     const entry = this.entryForLease(lease);
     if (!entry) return false;
     entry.owner = undefined;
-    if (next === 'recoverable') {
-      entry.lifecycle = 'recoverable';
-      return true;
-    }
+    if (next === 'recoverable') return true;
     entry.queue.dispose();
     this.entries.delete(lease.streamId);
     logger.debug(`Terminalized follow-up queue for stream ${lease.streamId}.`);
@@ -360,30 +290,12 @@ export class ToolUseFollowUpQueue {
     return this.entries.get(streamId)?.queue.getAll() ?? [];
   }
 
-  /** Generation fence for detached producers bound to the current stream. */
-  currentGenerationId(streamId: StreamTabId): string | undefined {
-    return this.entries.get(streamId)?.generationId;
-  }
-
-  /** Generation authority supplied by an outer child loop to its inner flow. */
-  currentChildGenerationId(streamId: StreamTabId): string | undefined {
-    const entry = this.entries.get(streamId);
-    return entry?.owner?.kind === 'child' ? entry.generationId : undefined;
-  }
-
-  private createEntry(
-    streamId: StreamTabId,
-    generationId: string = randomUUID(),
-    generationProvisional = false,
-  ): QueueEntry {
+  private createEntry(streamId: StreamTabId): QueueEntry {
     const entry: QueueEntry = {
       queue: new FollowUpQueue(),
-      generationId,
-      generationProvisional,
       admittedDeliveryIds: createBoundedIdSet(
         ToolUseFollowUpQueue.DELIVERY_ID_CAP,
       ),
-      lifecycle: 'recoverable',
     };
     this.entries.set(streamId, entry);
     return entry;
@@ -395,15 +307,8 @@ export class ToolUseFollowUpQueue {
     kind: FollowUpConsumerKind,
   ): FollowUpConsumerLease | undefined {
     if (entry.owner) return undefined;
-    const lease: FollowUpConsumerLease = {
-      streamId,
-      get generationId() {
-        return entry.generationId;
-      },
-      kind,
-    };
+    const lease: FollowUpConsumerLease = { streamId, kind };
     entry.owner = lease;
-    entry.lifecycle = kind === 'recovery' ? 'recovering' : 'live';
     return lease;
   }
 

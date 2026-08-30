@@ -26,16 +26,38 @@ import { formatZodIssuesMessage } from './toolResult';
 export type RoundIndexed<T> = { [round: number]: T[] };
 
 /**
+ * A caller-visible view of a {@link RoundIndexed} record: the same shape, with
+ * mutation closed off at the type level.
+ *
+ * Store accessors hand this back instead of a defensive copy. Every reader
+ * only enumerates, filters, or forwards these records, so the copy bought
+ * nothing at runtime while allocating a fresh object and a fresh array per
+ * round on every call — on each render pass, for every host. The write path
+ * still snapshots with {@link cloneRoundIndexed}, where the isolation is real:
+ * writes are queued, so the record must be frozen at call time.
+ */
+export type ReadonlyRoundIndexed<T> = {
+  readonly [round: number]: readonly T[];
+};
+
+/** Shared empty view for a stream with no rounds recorded yet. */
+export const EMPTY_ROUND_INDEXED: ReadonlyRoundIndexed<never> = Object.freeze(
+  {},
+);
+
+/**
  * Coerces and validates round keys from string record keys: non-negative
  * safe integers only. Rounds never go negative (round 0 is the first), and
  * every consumer that reads a `RoundIndexed<T>` record via plain
  * `Object.keys()`/`for...in` enumeration (rather than {@link
  * roundIndexedEntries}) relies on the ES2015+ spec guarantee that
- * non-negative-integer-string keys enumerate in ascending numeric order —
- * that guarantee does NOT hold for negative or non-integer keys, so this is
- * a structural invariant, not just a naming convention. Canonical record
- * schemas enforce it through {@link RoundKeyStringSchema}; the persisted-file
- * parser applies this schema directly while salvaging individual keys.
+ * canonical non-negative-integer-string keys enumerate in ascending numeric
+ * order — that guarantee does NOT hold for negative or non-integer keys.
+ * {@link RoundKeyStringSchema} accepts anything this schema can COERCE (see
+ * its own note), so a record straight off the wire is not guaranteed to hold
+ * canonical keys: iterate with {@link roundIndexedEntries}, or re-key through
+ * `Number(round)` the way {@link cloneRoundIndexed} and
+ * {@link parsePersistedRoundIndexed} do, which restores the ordering.
  */
 export const RoundKeySchema = z.coerce.number().int().nonnegative();
 
@@ -61,6 +83,11 @@ export const RoundNumberSchema = z.int().nonnegative();
  * to round `100000`) is accepted or rejected identically by canonical record
  * schemas and persisted-file parsing instead of drifting between a strict
  * `/^\d+$/`-style regex in one place and looser numeric coercion in another.
+ * That deliberate width (#7532) is why acceptance is NOT canonicality: this
+ * schema also admits `" 1"`, `"1.0"`, `"0x10"` and `""`, which the record
+ * keeps verbatim while any re-keying path folds them onto their canonical
+ * twin. Producers must therefore key by `String(round)`; readers must not
+ * assume enumeration order without re-keying.
  */
 export const RoundKeyStringSchema = z
   .string()
@@ -73,8 +100,9 @@ export const RoundKeyStringSchema = z
  * Trusted-input role (IPC messages, live state, snapshots): callers attach
  * their own field policy (`.prefault({})`, `.optional()`). Untrusted persisted
  * files go through {@link parsePersistedRoundIndexed} instead. Keys are
- * validated against {@link RoundKeyStringSchema} so every consumer of a
- * parsed record can rely on the ascending-iteration-order invariant.
+ * validated against {@link RoundKeyStringSchema}, which admits every
+ * coercible key rather than only canonical ones — see its note before relying
+ * on enumeration order.
  */
 export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
   return z.record(RoundKeyStringSchema, z.array(valueSchema));
@@ -89,10 +117,10 @@ export function roundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
  * handling a record that was not necessarily schema-validated.
  */
 export function roundIndexedEntries<T>(
-  rounds: RoundIndexed<T>,
-): [number, T[]][] {
+  rounds: ReadonlyRoundIndexed<T>,
+): [number, readonly T[]][] {
   return Object.entries(rounds)
-    .map(([round, items]): [number, T[]] => [Number(round), items])
+    .map(([round, items]): [number, readonly T[]] => [Number(round), items])
     .sort((a, b) => a[0] - b[0]);
 }
 
@@ -105,7 +133,7 @@ export function roundIndexedEntries<T>(
  * schema-derived type in this codebase.
  */
 export function cloneRoundIndexed<T>(
-  rounds: RoundIndexed<T> | undefined,
+  rounds: ReadonlyRoundIndexed<T> | undefined,
 ): RoundIndexed<T> {
   const clone: RoundIndexed<T> = {};
   if (!rounds) return clone;

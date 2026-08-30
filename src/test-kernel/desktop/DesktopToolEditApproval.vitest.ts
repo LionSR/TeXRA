@@ -8,7 +8,7 @@ import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
-import type { DiffSession, DiffSource } from '@hosts/uiHosts';
+import type { DiffSource } from '@hosts/uiHosts';
 
 import type { ToolEditPermission } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
@@ -169,7 +169,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       typeof import('@agent/runtime/streamApprovalQueue')
     >('@agent/runtime/streamApprovalQueue');
     // Session-owned approval state (bypass reads) for the fake run session.
-    const approvals = createSessionApprovals();
+    const approvals = createSessionApprovals({ setApprovalBypassState() {} });
     return {
       ...actual,
       tryUseRunContext: vi.fn(() =>
@@ -228,7 +228,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 
   const [
     { requestToolEditApproval },
-    { cleanupApprovalsForStream },
+    { releaseStreamResources },
     controllerModule,
     desktopModule,
   ] = await Promise.all([
@@ -240,7 +240,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
   return {
     activeApproval,
     requestToolEditApproval,
-    cleanupApprovalsForStream,
+    releaseStreamResources,
     controllerModule,
     desktopModule,
   };
@@ -397,7 +397,6 @@ describe('desktop tool edit approval', () => {
           payload: {
             streamId: 'stream-2',
             suppressViewSwitch: true,
-            ensureVisible: true,
           },
         },
       });
@@ -441,10 +440,10 @@ describe('desktop tool edit approval', () => {
       const openPath = vi.fn(async (_filePath: string) => {});
       const openDiff = vi.fn(
         async (
-          original: DiffSource,
-          proposed: DiffSource,
-          title: string,
-        ): Promise<DiffSession> => ({ original, proposed, title }),
+          _original: DiffSource,
+          _proposed: DiffSource,
+          _title: string,
+        ): Promise<void> => undefined,
       );
       const { requestToolEditApproval, controller, interactions } =
         await createApprovalFixture({
@@ -810,13 +809,13 @@ describe('desktop tool edit approval', () => {
     'cleans pending entries and temp files when stream cleanup rejects a request',
     async () => {
       const {
-        cleanupApprovalsForStream,
+        releaseStreamResources,
         controller,
         interactions,
         session,
         tempRoot,
       } = await createApprovalFixture();
-      session.useHostInteractions({
+      session.interactions.use({
         requestToolEditApproval: (request) =>
           controller.requestApproval(request),
         cancel: (selector) => controller.cancel(selector),
@@ -836,7 +835,7 @@ describe('desktop tool edit approval', () => {
       await vi.waitFor(() => expect(shown).toHaveLength(1));
 
       // Pending interactions are session-owned: sweep the owning session.
-      cleanupApprovalsForStream('stream-cleanup', session);
+      releaseStreamResources('stream-cleanup', session);
 
       await expect(resultPromise).resolves.toMatchObject({
         action: 'reject',

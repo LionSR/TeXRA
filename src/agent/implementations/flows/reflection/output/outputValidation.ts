@@ -13,16 +13,10 @@ import {
 import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
-import {
-  getStorageKey,
-  withOutputStage,
-  type OutputState,
-  type OutputDependencies,
-} from './outputState';
+import { withOutputStage, type OutputDependencies } from './outputState';
 
 /** Checks that expected output files exist. */
 export async function checkExpectedOutputs(
-  state: OutputState,
   deps: OutputDependencies,
   outputLocation: FileLocation,
   currRound: number,
@@ -33,7 +27,6 @@ export async function checkExpectedOutputs(
     `Validate expected r${currRound}`,
     stage,
     async (): Promise<{ missing: string[] }> => {
-      const storageKey = getStorageKey(state);
       const expected = deps.config.outputFiles;
       let missing: string[] = [];
 
@@ -69,7 +62,7 @@ export async function checkExpectedOutputs(
       } else {
         debugInternal(
           deps.logger,
-          `No expected outputs for round ${currRound} storageKey=${storageKey}`,
+          `No expected outputs for round ${currRound}`,
         );
       }
 

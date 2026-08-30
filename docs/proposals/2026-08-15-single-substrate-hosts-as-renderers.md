@@ -51,6 +51,15 @@
 > (`sessionSignalsAdapter` 372 → 312 against ~90, `runProgressRenderer`
 > 573 → 535 against ~395, `cliState` 929 → 876 against ~490) — read the §3
 > table as a direction, not a budget.
+>
+> **Reconciled again (2026-08-28), after the CLI status / usage / run-config /
+> provenance PR.** The §4 promotion list is closed: `contextState` and
+> `runStartedAt` **landed** (each with one §8 fence row), `thinkingActive` is
+> **withdrawn** (fold output, no producer, one consumer), and root-run stream
+> identity and run input files + `plannedRounds` are **closed as
+> non-promotions** — the first is presentation state with an existing
+> execution-keyed query, the second was already on `StreamSnapshotStore`. The
+> per-row §3 and §4 lines below carry the detail.
 
 ## 0. The directive as a ruling, and what it does to prior rulings
 
@@ -232,7 +241,13 @@ Then, container by container:
   composition: 30 fields → 15, every mirror deleted, but the slice is still a
   standalone interface rather than the `StreamState & CliOnlyFields` shape this
   row named, and the file is 876 L against the ~490 target. The §0.1-item-8
-  supersession is executed.
+  supersession is executed. **Extended by the status/usage PR:** the lifecycle
+  triple (`status`, `substate`, `runStartedAt`) and the latest-usage gauge are
+  gone too — 15 fields → 11 — and with them `PatchableStreamSlice`,
+  `StreamSlicePatch`, `streamSliceWithStatus`, and `setStreamStatusInCliState`.
+  Renderers read `streamPhaseFor`, a slice-gated read of
+  `StreamStatusMachine.getStreamState`. What survives is transcript-fold
+  output plus terminal modality.
 - `sessionSignalsAdapter.ts` — **LANDED #10892/#10895/#10932** for the
   mechanism (the per-field patch forwarders and the dual status path are gone;
   `subscribeStreamStatus.ts` is deleted), **not** for the arithmetic: 372 →
@@ -240,17 +255,33 @@ Then, container by container:
 - `runProgressRenderer.ts` — **LANDED #10932**: a real headless
   `SessionRendererPort` implementation over the shared applier, `RenderState`'s
   six fields down to a three-field `RootRunConfigState`. Net −38, not −175.
+  **`RootRunConfigState` is now gone too:** the agent name, input label, and
+  planned rounds are read from
+  `snapshots.getRunMetadata(root, { quiet: true }).config` at paint, and the
+  root phase and its run window from the status machine. The renderer holds one
+  state field of its own (`rootPhaseText`, whose whole semantic is
+  last-write-wins ordering between a status label and a description) plus an
+  attach-time elapsed origin for the window before any run window exists.
 - `subscribeStreamArtifacts.ts` — **PARTIAL #10718/#10735/#10895.** The
   slice-copying is gone (renderers read the canonical projection), but the file
   survives at 222 L holding the async disk-preload edge and its invalidation.
   The "−135 to zero" line was wrong: there was a real asynchronous concern
-  underneath the copying.
+  underneath the copying. **The hydration set went next:**
+  `hydratedArtifactStreams`, `beginLoadedStreamsReconcile`, and
+  `markArtifactStreamHydrated` shadowed a fact the store already held
+  privately, so the store publishes it as `hasProvenance(stream)` (disk
+  provenance established, or a live write eagerly applied ahead of any seed)
+  and the CLI keeps only the revision bump. The `load`-eviction reconcile
+  disappears with it: `load` evicts synchronously, and an evicted record
+  reports no provenance by construction.
 - `streamViews.ts` — **LANDED #10932**; the CLI calls `buildStreamTabInfo`, so
   the ext/CLI name drift this row named is closed.
-- `statusBarDisplay.ts` context gauge — **OPEN.** Still
-  `MODEL_CONFIGS[model]?.contextWindow`; the correctness bug this row called
-  "a correctness fix wearing a refactor" is live, gated on the `contextState`
-  promotion (§4).
+- `statusBarDisplay.ts` context gauge — **LANDED.** `formatUsage` reads
+  `StreamExecutionState.contextState` (window, used input tokens, and the
+  handler's own `utilizationPercent`); the `MODEL_CONFIGS[model]?.contextWindow`
+  re-derivation and the correctness bug behind it are gone. Its pre-first-
+  `contextState` fallback now shows the store's cumulative input tokens rather
+  than the last call's.
 - `resumeHint.ts` targets — **LANDED #10754** via the `resumeEligible` roster
   field.
 
@@ -284,24 +315,44 @@ is noted).
 **Promotion status at `e00b9317f7` (2026-08-19)** — this is where the program's
 remaining work concentrates:
 
-- `contextState` — **OPEN.** Not on `StreamExecutionState`; the webview still
-  folds it out of the log rail and `statusBarDisplay.ts:221` still reads
-  `MODEL_CONFIGS[model]?.contextWindow`. The §7.4 revival note explains why it
-  is the hard one: it has no fact-rail writer today.
+- `contextState` — **LANDED.** It is a `StreamExecutionState` field, the
+  applier writes it, and the CLI status bar renders it instead of re-deriving a
+  window from `MODEL_CONFIGS`. One deliberate asymmetry, now a §8 fence row:
+  `LitSessionRenderer` ignores the `contextState` invalidation
+  (`LitSessionRenderer.ts:197-201`) because Lit's usage footer restores the
+  same snapshot from the transcript rail's own `contextState` entry, which —
+  unlike this session-scoped record — repopulates a stream reopened from disk.
+  Pushing it there too would mint a second writer for one footer.
 - removal tombstone / resurrection guard — **LANDED #10805**, as
   `SessionState._removedStreams` + `isStreamRemoved`, documented as the single
   owner of the rejection; the shared applier honors it for every host, which
   is the cross-host bug this row predicted.
-- `runStartedAt` — **OPEN.** Still CLI-only (`cliState.ts`).
-- `thinkingActive` — **OPEN.** Still derived CLI-side from the log rail.
+- `runStartedAt` — **LANDED.** `StreamPhaseState.runStartedAt` on the status
+  machine is the single stamper, it rides the wire
+  (`streamState.ts` `BackendOwnedFieldsSchema.runStartedAt`), and the board
+  renders elapsed from it. The CLI mirror is deleted by the status/usage PR;
+  every host now reads one clock.
+- `thinkingActive` — **WITHDRAWN**, for the same reason `compactingActive`
+  was: it is fold output, not a fact. Nothing on the fact rail produces it
+  (`subscribeStreamLog` derives it from the live-activity entry), and it has no
+  second consumer — one CLI status-bar segment reads it. Promoting it would
+  mint a producer and an owner for a value one renderer computes for itself.
 - `resumeEligible` — **LANDED #10754** on the roster row
   (`streamState.ts:34`), produced by `executionRegistry.ts`.
-- root-run stream identity — **OPEN.** Three copies survive (two in
-  `cliState.ts`, one in `runProgressRenderer.ts`); no execution-keyed query
-  exists.
-- run input files + `plannedRounds` — **OPEN.** Still headless-only, now in
-  `RootRunConfigState`, whose own comment concedes no shared record carries
-  them.
+- root-run stream identity — **CLOSED, not promoted.** The three "copies" are
+  not one fact restated: each host records _which stream its own root-run
+  claim went to_, and the CLI's claim exists before any stream does (the
+  pending-run window between submit and the first `run.start`). That is
+  presentation state by the §1 rule, and the live query the row asked for
+  already exists — `executions.getHandle(executionId).streamId`. Nothing to
+  promote.
+- run input files + `plannedRounds` — **CLOSED, not promoted.** The premise
+  was wrong: `StreamSnapshotStore` retains the whole `AgentConfig` on
+  `run.config` and serves it from `getRunMetadata`, so input files were already
+  shared and `plannedRounds` is `getAgent(config.agent, Workflow)?.rounds` — a
+  registry lookup, not a fact. `RootRunConfigState` was a duplicate of the
+  store, deleted by the status/usage PR; no GUI consumer asked for a
+  `SessionStreamConfigDetails` in the meantime, so none is added.
 - `cumulativeUsage` sum rule — **LANDED.** One owner,
   `StreamArtifactProjection.sumUsageStats`; the CLI reads it rather than
   eager-summing.
@@ -504,6 +555,21 @@ re-flagging them:
   (into `HostInteractions` result types, no registry merge); the rest is
   fenced unless the maintainer supersedes A16 by name — **this plan does not
   ask for that.**
+- **The Lit log-rail fold of `contextState`.** `LitSessionRenderer` drops the
+  `contextState` invalidation on purpose (`LitSessionRenderer.ts:197-201`):
+  Lit's usage footer restores that snapshot from the transcript rail's own
+  entry, which repopulates a stream reopened from disk while the session-scoped
+  record does not. One footer, one writer — pushing the shared record there as
+  well would create the second writer this plan exists to remove.
+- **Durable-rail vs ephemeral-rail facts are not one rail.** A fact a reopened
+  stream must still show (the workflow phase heading, `contextState`) is
+  recorded on the transcript rail and replayed from disk; a fact only a live
+  session needs (lifecycle phase, run window, roster) lives on the ephemeral
+  session record and dies with the process. Some values appear on both, and
+  that is not duplication to collapse: the rails answer different questions
+  ("what happened" vs "what is true now"), have different lifetimes, and a
+  single rail would either persist ephemera or lose history. Collapse the
+  _rules_ that read them, not the rails.
 - **`DesktopProgressBridge`** beyond its three 2-line sync wrappers — it is
   IPC + host callbacks, not a state layer.
 - **Platform ports, vocabulary aliases, `SessionHostInteractions` forwards**

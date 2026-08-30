@@ -4,7 +4,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
 
-import { getFilesForRound, workspaceFromSnapshot } from '../helpers';
+import { getFilesForRound } from '../helpers';
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
@@ -15,16 +15,18 @@ interface PrepInput {
   currentRound: number;
 }
 
-export class MediaExtractionNode<C = unknown> extends BaseNode<
+export class MediaExtractionNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService } = this.services;
     const modelHandler = this.services.modelCell.handler;
     const { currentRound, roundOutputs } = shared;
 
-    const workspaceState = workspaceFromSnapshot(shared.workspaceSnapshot);
+    const workspaceState = AgentWorkspaceState.fromSnapshot(
+      shared.workspaceSnapshot,
+    );
 
     const extraMediaFiles: FileLocation[] = [];
     if (currentRound === 0 && modelHandler.capabilities.supportsVision) {
@@ -41,7 +43,7 @@ export class MediaExtractionNode<C = unknown> extends BaseNode<
     };
   }
 
-  async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
+  override async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
     const modelHandler = this.services.modelCell.handler;
     const { latexMediaManager, config, fileService } = this.services;
 
@@ -76,7 +78,7 @@ export class MediaExtractionNode<C = unknown> extends BaseNode<
     return [...prepRes.workspaceState.media.files];
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: PrepInput,
     error: Error,
   ): Promise<FileLocation[] | null> {
@@ -85,7 +87,7 @@ export class MediaExtractionNode<C = unknown> extends BaseNode<
     return null;
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     prepRes: PrepInput,
     mediaFiles: FileLocation[] | null,
@@ -103,7 +105,7 @@ export class MediaExtractionNode<C = unknown> extends BaseNode<
       if (mediaFiles?.length && shared.context) {
         attachmentKinds =
           await this.services.modelCell.handler.addMediaToUserMessage(
-            shared.context.messages,
+            shared.context,
             mediaFiles,
           );
       }

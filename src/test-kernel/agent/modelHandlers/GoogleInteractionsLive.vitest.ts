@@ -108,7 +108,8 @@ function mockConfig(background: boolean): void {
     <T>(k: string, d?: T): T => {
       if (k === 'texra.model.useGoogleInteractionsServerState')
         return true as T;
-      if (k === 'texra.model.useBackgroundResponses') return background as T;
+      if (k === 'texra.model.useGoogleBackgroundResponses')
+        return background as T;
       return orig(k, d);
     },
   );

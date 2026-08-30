@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
-import { processMultipleOutputs } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
+import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import {
   createOutputState,
   ensureRoundData,
@@ -86,7 +86,6 @@ async function writeAndSplitDocuments(
   return createXmlManager(inputFiles, options).splitScratchpadMultipleOutputXml(
     createExternalLocation('/tmp/run/output.xml'),
     0,
-    'scratchpad',
     options.baseFiles?.map((name) =>
       createExternalLocation(`/tmp/run/${name}`),
     ),
@@ -913,7 +912,7 @@ Appendix.
     );
     const manager = createXmlManager();
     const state = createOutputState();
-    await processMultipleOutputs(
+    await extractFilesFromXml(
       state,
       processorDeps({ logger: spiedTrace() }),
       manager,
@@ -1367,7 +1366,7 @@ Appendix.
         diff: null,
       },
     ];
-    await processMultipleOutputs(
+    await extractFilesFromXml(
       state,
       processorDeps({
         logger: spiedTrace(),

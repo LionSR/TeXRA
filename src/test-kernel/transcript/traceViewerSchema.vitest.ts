@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -16,8 +16,8 @@ import {
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 import {
-  cleanupTempDirs,
   createTempDirPlatform,
+  useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
@@ -27,7 +27,7 @@ import {
   TraceDataSchema,
 } from '../../../packages/trace-viewer/src/traceDataSchema';
 
-const tempDirs: string[] = [];
+const tempDirs = useTempDirs();
 
 function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return AgentConfigSchema.parse({
@@ -51,7 +51,6 @@ function trace(
     meta: null,
     entries: [],
     snapshot: { streamId: 'stream-1' },
-    terminalStatus: null,
     ...overrides,
   };
 }
@@ -62,10 +61,6 @@ function expectTraceRejected(payload: unknown): void {
 
 describe('trace-viewer TraceDataSchema', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-viewer-', tempDirs));
-
-  afterEach(async () => {
-    await cleanupTempDirs(tempDirs);
-  });
 
   it('accepts a real trace document produced by assembleTrace', async () => {
     const executionId = 'abc12345' as ExecutionId;
@@ -98,7 +93,7 @@ describe('trace-viewer TraceDataSchema', () => {
     if (!parsed.success) return;
     expect(parsed.data.executionId).toBe(executionId);
     expect(parsed.data.streamId).toBe(streamId);
-    expect(parsed.data.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
+    expect(parsed.data.meta?.outcome).toBe('completed');
     expect(parsed.data.entries).toHaveLength(1);
 
     // parseTraceData must accept the same real document without throwing.
@@ -106,7 +101,7 @@ describe('trace-viewer TraceDataSchema', () => {
   });
 
   it('rejects a trace missing required top-level fields', () => {
-    // config, meta, entries, snapshot, terminalStatus all missing.
+    // config, meta, entries and snapshot all missing.
     expectTraceRejected({ executionId: 'abcdef', streamId: 'stream-1' });
   });
 

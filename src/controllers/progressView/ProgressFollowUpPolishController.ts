@@ -13,7 +13,7 @@ type UpdateFollowUpTextMessage = Extract<
   { command: typeof PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT }
 >;
 
-export interface ProgressFollowUpPolishInput {
+interface ProgressFollowUpPolishInput {
   readonly stream: StreamTabId;
   readonly text: string;
   /** The run's config, which the command handler resolves before dispatching:
@@ -32,7 +32,7 @@ type ProgressFollowUpPolishText = (
   fileContext?: FileContext,
 ) => Promise<ProgressFollowUpPolishTextResult>;
 
-export interface ProgressFollowUpPolishControllerDeps {
+interface ProgressFollowUpPolishControllerDeps {
   readonly polishText: ProgressFollowUpPolishText;
 }
 
@@ -66,8 +66,17 @@ export class ProgressFollowUpPolishController {
     input: ProgressFollowUpPolishInput,
   ): Promise<ProgressFollowUpPolishResult> {
     try {
-      const fileContext = this.buildFileContext(input.runConfig);
-      const result = await this.deps.polishText(input.text, fileContext);
+      // `formatFileContext` already skips a missing agent and every empty
+      // array, so the config's fields project straight through.
+      const { agent, inputFiles, contextFiles, mediaFiles, outputFiles } =
+        input.runConfig;
+      const result = await this.deps.polishText(input.text, {
+        agent,
+        inputFiles,
+        contextFiles,
+        mediaFiles,
+        outputFiles,
+      });
       if (result.success) {
         return {
           kind: 'updated',
@@ -98,28 +107,6 @@ export class ProgressFollowUpPolishController {
         ...(error instanceof Error && { logData: error }),
       };
     }
-  }
-
-  private buildFileContext(agentConfig: AgentConfig): FileContext {
-    const context: FileContext = {};
-
-    if (agentConfig.agent) {
-      context.agent = agentConfig.agent;
-    }
-
-    const arrayFields = [
-      'inputFiles',
-      'contextFiles',
-      'mediaFiles',
-      'outputFiles',
-    ] as const;
-    for (const field of arrayFields) {
-      if (agentConfig[field].length > 0) {
-        context[field] = agentConfig[field];
-      }
-    }
-
-    return context;
   }
 
   private createPolishErrorUpdate(

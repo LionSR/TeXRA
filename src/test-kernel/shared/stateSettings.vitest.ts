@@ -12,7 +12,6 @@ import * as logger from '@logger/logUtils';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
   ALL_SETTINGS,
-  CORE_SETTING_PATHS,
   AGENT_SKILLS_CONFIG_KEY,
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
@@ -21,6 +20,7 @@ import {
   DEFAULT_GIT_WORKTREE_SUPPORT,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   STATE_SETTINGS,
+  settingByKey,
   settingEnumChoices,
   settingEnumOptions,
   modelsTabSettings,
@@ -36,6 +36,8 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
@@ -59,7 +61,10 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
+import {
+  LATEX_CONFIG_DEFAULTS,
+  LATEX_CONFIG_FIELD_TO_KEY,
+} from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -106,6 +111,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: DEFAULT_GIT_WORKTREE_SUPPORT,
   [GlobalStateKey.ALLOW_ORCHESTRATOR_KILL]: true,
   [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: false,
+  [GlobalStateKey.MEMORY_ENABLED]: true,
   [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]:
     DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   [WorkspaceStateKey.CODEX_SANDBOX_MODE]: CODEX_SANDBOX_MODE_DEFAULT,
@@ -148,6 +154,8 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.GLM_USE_CHINA]: true,
   [GlobalStateKey.GLM_CODING_PLAN]: false,
   [GlobalStateKey.DISABLED_TOOLS]: [],
+  [WorkspaceStateKey.DISABLED_SKILLS]: [],
+  [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
 };
 
 /** Every canonical `texra.*` key in the state-backed catalog. */
@@ -158,6 +166,12 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 describe('state settings catalog', () => {
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
+  });
+
+  it('backs every LaTeX config field with a catalog entry', () => {
+    for (const [field, key] of Object.entries(LATEX_CONFIG_FIELD_TO_KEY)) {
+      assert.ok(settingByKey(key), `${field} has no catalog entry: ${key}`);
+    }
   });
 
   it('every honoring host names an existing reader file', () => {
@@ -398,6 +412,7 @@ describe('state settings catalog', () => {
       ),
       [
         'none — None',
+        'minimal — Minimal',
         'low — Low',
         'medium — Medium',
         'high — High',
@@ -427,6 +442,8 @@ describe('state settings catalog', () => {
     //    dual-backend Kimi models in CLI runs.
     //  - agent skills is read by buildUserVars (userVars) when assembling
     //    tool-use agent prompts, skipping skill discovery when disabled.
+    //  - skill and source exclusions are read by runtimeSkills before prompt
+    //    injection and explicit `/skills` activation.
     //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
     //    SessionHandle before bash/edit approval boundaries decide.
     //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
@@ -435,6 +452,9 @@ describe('state settings catalog', () => {
     //    orchestrator asks to kill one of its own child executions.
     //  - compaction threshold and retry attempts are read by the shared model
     //    handler and invocation node used by headless CLI runs.
+    //  - the child-run concurrency budget is read by childRunBudget (via the
+    //    child-run loop every detached subagent and workflow script launches
+    //    through) and passed to the workflow engine's semaphore.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
@@ -469,25 +489,16 @@ describe('state settings catalog', () => {
         GlobalStateKey.GLM_USE_CHINA,
         GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
+        WorkspaceStateKey.DISABLED_SKILLS,
+        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
         AGENT_SKILLS_CONFIG_KEY,
+        CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
         MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
         MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ].sort(),
     );
-  });
-
-  it('shares no keys with the config-tree catalog', () => {
-    // The two catalogs must stay disjoint: a state-backed key must never reach
-    // the shared config schema via CoreSettingsShape, and a config key must
-    // never be double-registered through the catalog.
-    const coreKeys = new Set(CORE_SETTING_PATHS.map((path) => `texra.${path}`));
-    for (const key of STATE_SETTING_KEYS) {
-      assert.ok(
-        !coreKeys.has(key),
-        `${key} is in both CoreSettingsShape and STATE_SETTINGS`,
-      );
-    }
   });
 
   it('round-trips each `.prefault()` default to the real getter default', () => {
@@ -626,19 +637,19 @@ describe('knownKeys derivation', () => {
     );
   });
 
-  it('recognizes exactly the Core paths a CLI reader honors', () => {
+  it('recognizes exactly the config-file keys a CLI reader honors', () => {
     // The derived whitelist replaced two hand-kept path lists; this pins the
-    // whole Core half of it so a mis-filed `honoredBy` cannot silently widen or
-    // narrow what `.texra/config.json` accepts.
-    const honoredCorePaths = CORE_SETTING_PATHS.filter((path) =>
-      KNOWN_TEXRA_KEYS.has(`texra.${path}`),
-    );
+    // whole config-file half of it so a mis-filed `honoredBy` cannot silently
+    // widen or narrow what `.texra/config.json` accepts.
+    const configKeys = ALL_SETTINGS.filter(
+      (entry) => entry.slots.cli === 'config',
+    ).map((entry) => entry.key);
     assert.deepEqual(
-      [...honoredCorePaths].sort(),
-      CORE_SETTING_PATHS.filter(
-        (path) => path !== 'agentReview.runOnCommit',
-      ).toSorted(),
-      'only agentReview.runOnCommit is extension-only',
+      configKeys.filter((key) => KNOWN_TEXRA_KEYS.has(key)).toSorted(),
+      configKeys
+        .filter((key) => key !== 'texra.agentReview.runOnCommit')
+        .toSorted(),
+      'only texra.agentReview.runOnCommit is extension-only',
     );
   });
 });

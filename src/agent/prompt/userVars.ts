@@ -7,16 +7,15 @@ import {
   AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import { shouldSaveModelIO } from '@agent/debug/debugMessageSaver';
-import type {
-  BuiltUserVars,
-  UserVars,
+import {
+  USER_VAR_RUNTIME_TOKENS,
+  type BuiltUserVars,
+  type UserVars,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentDelegationScope, FileListEntry } from '@shared/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
-  AGENT_SKILLS_ENABLED_DEFAULT,
   AgentCategory,
   AgentSkillsEnabledSchema,
 } from '@shared/schemas';
@@ -62,58 +61,6 @@ const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 export const USER_VAR_MODEL = 'MODEL';
 /** Transient user-variable key carrying the current user instruction. */
 export const USER_VAR_INSTRUCTION = 'INSTRUCTION';
-
-export const USER_VAR_RUNTIME_TOKENS = [
-  USER_VAR_MODEL,
-  USER_VAR_INSTRUCTION,
-  'IS_OPENAI_MODEL',
-  'IS_ANTHROPIC_MODEL',
-  'IS_GOOGLE_MODEL',
-  'WORKFLOW_AGENTS',
-  'TOOL_USE_AGENTS',
-  'CWD',
-  'DEFAULT_BIB_PATH',
-  'BUILTIN_WORKFLOW_DIR',
-  'BUILTIN_TOOLUSE_DIR',
-  'CUSTOM_AGENTS_DIR',
-  'AGENT_DOCS_DIR',
-  'INPUT_FILE',
-  'INPUT_CONTENT',
-  'INPUT_FILES',
-  'ALL_INPUTS',
-  'LIST_OF_ALL_INPUTS',
-  'CONTEXT_FILE',
-  'CONTEXT_CONTENT',
-  'CONTEXT_FILES',
-  'ALL_CONTEXTS',
-  'LIST_OF_ALL_CONTEXTS',
-  'EDITED_FILE',
-  'EDITED_CONTENT',
-  'EDITED_FILES',
-  'ALL_EDITEDS',
-  'LIST_OF_ALL_EDITEDS',
-  'MEDIA_FILE',
-  'MEDIA_CONTENT',
-  'OUTPUT_FILES',
-  'AUTO_EXTRACT_FIGURE',
-  'AUTO_EXTRACT_TIKZ_FIGURE',
-  'INCLUDE_TEX_COUNT',
-  'PRINT_INPUT_PROMPT',
-  'AUTO_COMPILE_INPUT_PDF',
-  'CODEX_GUIDANCE',
-  'CLAUDE_CODE_GUIDANCE',
-  'ROUNDS',
-  'LATEX_STYLE_RULES',
-  'ATTACHED_MEMORIES',
-  'ATTACHED_MEMORY_MISSES',
-  'AVAILABLE_SKILLS',
-] as const satisfies readonly (keyof UserVars)[];
-
-type AssertNever<T extends never> = T;
-/** Reverse guard: every fixed variable must stay passthrough-listed. */
-type _UserVarsStayInRuntimeTokens = AssertNever<
-  Exclude<keyof UserVars, (typeof USER_VAR_RUNTIME_TOKENS)[number]>
->;
 
 /** Runtime view of the fixed vocabulary for the required-file collision guard. */
 const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(
@@ -206,9 +153,7 @@ export async function buildUserVars(
     // work for workflow agents. The settings toggle gives users a hard off
     // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
     agentSetting.agentCategory === AgentCategory.ToolUse &&
-    AgentSkillsEnabledSchema.parse(
-      getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY, AGENT_SKILLS_ENABLED_DEFAULT),
-    )
+    AgentSkillsEnabledSchema.parse(getConfig<unknown>(AGENT_SKILLS_CONFIG_KEY))
       ? loadRuntimeSkillCatalog()
       : // A fresh object per call, not a shared constant: `skills` is handed
         // to the snapshot consumer, and a shared array would accumulate.
@@ -224,6 +169,16 @@ export async function buildUserVars(
     logger.emit({ type: 'skills.snapshot', skills: runtimeSkills.skills });
   }
 
+  // The resolved output list is also the run's normalized `config.outputFiles`:
+  // the reflection flow, output validation, and the XML manager all read it
+  // back off the config after this point, so the write happens here in the
+  // open rather than inside a helper the spread below hides.
+  const { outputFiles, vars: outputFileVars } = resolveOutputFiles(
+    agentConfig,
+    agentSetting,
+  );
+  agentConfig.outputFiles = outputFiles;
+
   // Merge all variable sources using spread operator.
   // LATEX_STYLE_RULES is placed last to prevent silent overrides from spreads.
   // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary
@@ -232,8 +187,8 @@ export async function buildUserVars(
     ...getBasicVars(agentConfig, providerFlags, options),
     ...(await getFileVars(agentConfig, agentSetting, logger)),
     ...requiredVars,
-    ...resolveOutputFiles(agentConfig, agentSetting),
-    ...getToolFlags(agentConfig, agentSetting, agentPrompt),
+    ...outputFileVars,
+    ...getToolFlags(agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
     ATTACHED_MEMORIES: attachedMemories.xml,
     ATTACHED_MEMORY_MISSES: attachedMemories.misses,
@@ -287,7 +242,7 @@ function getBasicVars(
   );
 
   // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = getConfig<string>('texra.bib.defaultPath', '');
+  const defaultBibPath = getConfig<string>('texra.bib.defaultPath');
 
   return {
     MODEL: agentConfig.model,
@@ -391,8 +346,7 @@ type FileCategoryVars = {
 };
 
 /** File-based variables: readable categories plus the display-only MEDIA slots. */
-type FileVars = FileCategoryVars &
-  Pick<UserVars, 'MEDIA_FILE' | 'MEDIA_CONTENT'>;
+type FileVars = FileCategoryVars & Pick<UserVars, 'MEDIA_FILE'>;
 
 async function getFileVars(
   agentConfig: AgentConfig,
@@ -420,7 +374,6 @@ async function getFileVars(
     LIST_OF_ALL_CONTEXTS: '',
     LIST_OF_ALL_EDITEDS: '',
     MEDIA_FILE: null,
-    MEDIA_CONTENT: null,
   };
 
   for (const prefix of FILE_VAR_CATEGORIES) {
@@ -490,10 +443,8 @@ async function getFileVars(
 /**
  * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
  * `buildUserVars` spreads after the fixed variables — so a name like `MEDIA`
- * would silently override the fixed `MEDIA_CONTENT: null`, and the persisted
- * channel schema's `z.null()` validator would then reject checkpoints the
- * application itself produced, making the session impossible to resume. Fail
- * loudly when the variables are built instead.
+ * or `INPUT` would silently override a fixed variable. Fail loudly when the
+ * variables are built instead.
  */
 function assertNoFixedVarCollision(varName: string): void {
   for (const generatedKey of [`${varName}_FILE`, `${varName}_CONTENT`]) {
@@ -583,42 +534,37 @@ async function getAttachedMemories(
   };
 }
 
+/**
+ * The run's normalized output list plus the prompt variable derived from it.
+ * The caller owns writing the list back onto the config; see `buildUserVars`.
+ */
 export function resolveOutputFiles(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-): Pick<UserVars, 'OUTPUT_FILES'> {
-  const userVars: Pick<UserVars, 'OUTPUT_FILES'> = {};
+): { outputFiles: string[]; vars: Pick<UserVars, 'OUTPUT_FILES'> } {
   const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
   const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
     Boolean,
   );
   const inputFiles = (agentConfig.inputFiles ?? []).filter(Boolean);
-  const explicitFilesAreSubsetOfInputs =
-    explicitOutputFiles.length > 0 &&
-    explicitOutputFiles.every((file) => inputFiles.includes(file));
+  const explicitFilesAreSubsetOfInputs = explicitOutputFiles.every((file) =>
+    inputFiles.includes(file),
+  );
   // An empty defaultOutputFiles is already `[]`, so this single ternary covers
   // the "no usable outputs" case without a nested fallback branch.
   const useExplicit =
     explicitOutputFiles.length > 0 && !explicitFilesAreSubsetOfInputs;
   const outputFiles = useExplicit ? explicitOutputFiles : defaultOutputFiles;
 
-  agentConfig.outputFiles = outputFiles;
-  if (outputFiles.length > 0) {
-    userVars.OUTPUT_FILES = outputFiles;
-  }
-  return userVars;
+  return {
+    outputFiles,
+    vars: outputFiles.length > 0 ? { OUTPUT_FILES: outputFiles } : {},
+  };
 }
 
 type ToolFlagVars = Pick<
   UserVars,
-  | 'AUTO_EXTRACT_FIGURE'
-  | 'AUTO_EXTRACT_TIKZ_FIGURE'
-  | 'INCLUDE_TEX_COUNT'
-  | 'PRINT_INPUT_PROMPT'
-  | 'AUTO_COMPILE_INPUT_PDF'
-  | 'CODEX_GUIDANCE'
-  | 'CLAUDE_CODE_GUIDANCE'
-  | 'ROUNDS'
+  'CODEX_GUIDANCE' | 'CLAUDE_CODE_GUIDANCE' | 'ROUNDS'
 >;
 
 const TOOL_GUIDANCE = {
@@ -631,7 +577,6 @@ const TOOL_GUIDANCE = {
 } as const;
 
 export function getToolFlags(
-  agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): ToolFlagVars {
@@ -639,11 +584,6 @@ export function getToolFlags(
     agentSetting.tools.some((tool) => tool.name === name);
 
   const flags: ToolFlagVars = {
-    AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
-    AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
-    INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
-    PRINT_INPUT_PROMPT: shouldSaveModelIO(),
-    AUTO_COMPILE_INPUT_PDF: agentConfig.toolConfig.autoCompileInputPdf,
     CODEX_GUIDANCE: hasTool('codex') ? TOOL_GUIDANCE.codex : '',
     CLAUDE_CODE_GUIDANCE: hasTool('claude_code')
       ? TOOL_GUIDANCE.claude_code

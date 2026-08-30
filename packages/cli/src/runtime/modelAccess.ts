@@ -49,7 +49,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'access-list-default': 'silent',
 } satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
-export interface CliModelAccessListOptions {
+interface CliModelAccessListOptions {
   readonly models?: readonly string[];
 }
 
@@ -59,12 +59,12 @@ export interface CliModelAccessListOptions {
  * so a `models` filter passed here would be silently dropped. Keeping the
  * field off the type makes that unrepresentable rather than ignored.
  */
-export interface CliModelAccessEntryOptions {
+interface CliModelAccessEntryOptions {
   /** Optional preloaded list, used by commands that already fetched access. */
   readonly accessList?: readonly CliModelAccess[];
 }
 
-export interface CliRunnableModelOptions extends Pick<
+interface CliRunnableModelOptions extends Pick<
   CliModelAccessEntryOptions,
   'accessList'
 > {
@@ -81,7 +81,7 @@ export interface CliNoAvailableModelsRecoveryOptions {
   readonly configureKeyAction?: string;
 }
 
-const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
+export const NO_RUNNABLE_MODEL_ACCESS_COPY = 'No models are available';
 
 // Point shell users at the guided setup picker rather than leaving them to
 // figure out key storage on their own; TUI contexts override this with
@@ -159,16 +159,6 @@ export function modelSelectItemsForCli(
       disabled: disabledReason != null,
     };
   });
-}
-
-export function modelAccessLaunchBlockDescription(): string {
-  return NO_RUNNABLE_MODEL_ACCESS_COPY;
-}
-
-export function emptyModelListMessage(
-  options: CliNoAvailableModelsRecoveryOptions = {},
-): string {
-  return formatCliNoRunnableModelsMessage(options);
 }
 
 function toCliModelAccess(model: ModelOptionData): CliModelAccess {

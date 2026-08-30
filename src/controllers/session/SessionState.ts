@@ -9,7 +9,7 @@ import {
   defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { createSessionStores } from '@controllers/session/sessionStores';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
 import {
   type ActiveChildInfo,
@@ -56,11 +56,6 @@ export interface SessionStreamMetadata extends StreamIdentityFields {
 type StoredStreamMetadata = Omit<SessionStreamMetadata, 'creationTimestamp'>;
 const EMPTY_STORED_STREAM_METADATA: StoredStreamMetadata = Object.freeze({});
 
-/** Ephemeral session state per stream (not persisted). */
-interface StreamSessionState {
-  metadata: StoredStreamMetadata;
-}
-
 interface CachedStreamMetadata {
   readonly stored: StoredStreamMetadata;
   readonly summary: ReturnType<StreamLogStore['getSummaryMeta']>;
@@ -91,6 +86,25 @@ export interface StreamExecutionState {
 }
 
 /**
+ * Ephemeral session-only state for one stream: live metadata patches plus
+ * backend-owned execution counters. The two are always created and cleared
+ * together (`claimStreamIdentity`, `clearEphemeralStreamState`), so they
+ * share one map entry rather than two separately-keyed maps; `execution` is
+ * still optional because a stream can accrue metadata (e.g. a description
+ * set before RUNNING) before `getOrCreateStreamState` ever mints it.
+ *
+ * `_streamMetadataCache` (a derived read cache invalidated by comparing
+ * `metadata`/summary/timestamp identity), `_streamIncarnations` (identity
+ * generation, which must outlive an ephemeral clear), and `_removedStreams`
+ * (tombstones, which must outlive the very ephemeral state they retire) each
+ * have a genuinely different lifetime and stay as separate maps.
+ */
+interface EphemeralStreamState {
+  metadata: StoredStreamMetadata;
+  execution?: StreamExecutionState;
+}
+
+/**
  * Host-neutral session state.
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and
@@ -109,8 +123,10 @@ export class SessionState {
   readonly stores: SessionStores;
 
   // -- Ephemeral state (session-only, not persisted) --------------------------
-  private readonly _streamStates = new Map<StreamTabId, StreamExecutionState>();
-  private readonly _sessionState = new Map<StreamTabId, StreamSessionState>();
+  private readonly _ephemeralState = new Map<
+    StreamTabId,
+    EphemeralStreamState
+  >();
   private readonly _streamMetadataCache = new Map<
     StreamTabId,
     CachedStreamMetadata
@@ -139,9 +155,8 @@ export class SessionState {
    * so far reopens resurrection for an evicted id and would be a false
    * finality claim. An entry retires when a fresh workflow attachment
    * legitimately re-claims the identity (live-execution evidence → {@link
-   * SessionFactApplier}), or when the whole storage root is replaced
-   * (`resetAfterStorageRootChange`). Otherwise it lives for the session — the
-   * proven horizon for in-flight facts.
+   * SessionFactApplier}). Otherwise it lives for the session — the proven
+   * horizon for in-flight facts.
    */
   private readonly _removedStreams = new Map<StreamTabId, number>();
 
@@ -184,11 +199,11 @@ export class SessionState {
 
   // -- Ephemeral session state ------------------------------------------------
 
-  private getOrCreateSession(stream: StreamTabId): StreamSessionState {
-    let state = this._sessionState.get(stream);
+  private getOrCreateEphemeral(stream: StreamTabId): EphemeralStreamState {
+    let state = this._ephemeralState.get(stream);
     if (!state) {
       state = { metadata: {} };
-      this._sessionState.set(stream, state);
+      this._ephemeralState.set(stream, state);
     }
     return state;
   }
@@ -230,7 +245,7 @@ export class SessionState {
     stream: StreamTabId,
     metadata: StoredStreamMetadata,
   ): void {
-    this.getOrCreateSession(stream).metadata = metadata;
+    this.getOrCreateEphemeral(stream).metadata = metadata;
     this._streamMetadataCache.delete(stream);
   }
 
@@ -246,7 +261,7 @@ export class SessionState {
     stream: StreamTabId,
     patch: Partial<StoredStreamMetadata>,
   ): void {
-    const { metadata } = this.getOrCreateSession(stream);
+    const { metadata } = this.getOrCreateEphemeral(stream);
     this.setStoredStreamMetadata(stream, { ...metadata, ...patch });
   }
 
@@ -264,8 +279,8 @@ export class SessionState {
    */
   getStreamMetadata(stream: StreamTabId): Readonly<SessionStreamMetadata> {
     const removed = this.isStreamRemoved(stream);
-    const session = removed ? undefined : this.getOrCreateSession(stream);
-    const stored = session?.metadata ?? EMPTY_STORED_STREAM_METADATA;
+    const ephemeral = removed ? undefined : this.getOrCreateEphemeral(stream);
+    const stored = ephemeral?.metadata ?? EMPTY_STORED_STREAM_METADATA;
     const summary = this.streamLogs.getSummaryMeta(stream);
     const firstTimestamp = this.streamLogs.getTimestampRange(stream).first;
     const cached = this._streamMetadataCache.get(stream);
@@ -314,14 +329,15 @@ export class SessionState {
     stream: StreamTabId,
     agentCategory: (typeof AgentCategory)[keyof typeof AgentCategory],
   ): StreamExecutionState {
-    const existing = this._streamStates.get(stream);
+    const ephemeral = this.getOrCreateEphemeral(stream);
+    const existing = ephemeral.execution;
     if (!existing) {
       const state: StreamExecutionState = {
         category: agentCategory,
         conversationProgress: { toolCallCount: 0 },
         subagents: [],
       };
-      this._streamStates.set(stream, state);
+      ephemeral.execution = state;
       return state;
     }
     // Roster facts may provision a ToolUse placeholder before RUNNING supplies
@@ -331,7 +347,7 @@ export class SessionState {
         ...existing,
         category: agentCategory,
       };
-      this._streamStates.set(stream, state);
+      ephemeral.execution = state;
       return state;
     }
     return existing;
@@ -341,16 +357,16 @@ export class SessionState {
     stream: StreamTabId,
     updater: (prev: StreamExecutionState) => StreamExecutionState,
   ): void {
-    const current = this._streamStates.get(stream);
+    const current = this._ephemeralState.get(stream)?.execution;
     if (current) {
-      this._streamStates.set(stream, updater(current));
+      this.getOrCreateEphemeral(stream).execution = updater(current);
     }
   }
 
   /** Reset per-run ephemeral child state when a new run starts on the same
    *  stream — retained finished children belong to the previous run. */
   resetPerRunChildState(stream: StreamTabId): void {
-    const current = this._streamStates.get(stream);
+    const current = this._ephemeralState.get(stream)?.execution;
     if (!current) return;
 
     const retainedSubagents = current.subagents.filter(
@@ -362,14 +378,14 @@ export class SessionState {
       current.stage !== undefined;
 
     if (needsReset) {
-      this._streamStates.set(stream, {
+      this.getOrCreateEphemeral(stream).execution = {
         ...current,
         subagents: current.subagents.filter(
           (child) => child.finishedAt === undefined,
         ),
         conversationProgress: { toolCallCount: 0 },
         stage: undefined,
-      });
+      };
     }
   }
 
@@ -379,7 +395,7 @@ export class SessionState {
    * children from every host until that deletion settles.
    */
   getStreamState(stream: StreamTabId): StreamExecutionState | undefined {
-    const state = this._streamStates.get(stream);
+    const state = this._ephemeralState.get(stream)?.execution;
     if (!state) return undefined;
     const subagents = state.subagents.filter(
       (child) => !this.isStreamRemoved(child.childStreamId),
@@ -404,20 +420,22 @@ export class SessionState {
     phase: StreamPhase,
   ): StreamTabId[] {
     const changedParents: StreamTabId[] = [];
-    for (const [parent, state] of this._streamStates) {
+    for (const [parent, ephemeral] of this._ephemeralState) {
+      const state = ephemeral.execution;
+      if (!state) continue;
       const tracksChild = state.subagents.some(
         (child) =>
           child.childStreamId === childStreamId && child.status !== phase,
       );
       if (!tracksChild) continue;
-      this._streamStates.set(parent, {
+      ephemeral.execution = {
         ...state,
         subagents: state.subagents.map((child) =>
           child.childStreamId === childStreamId
             ? { ...child, status: phase }
             : child,
         ),
-      });
+      };
       changedParents.push(parent);
     }
     return changedParents;
@@ -483,8 +501,7 @@ export class SessionState {
     // execution state the previous incarnation left behind (a provisional
     // removal may not have committed yet). The status machine is left alone —
     // the fresh run has already tracked its own phase there.
-    this._sessionState.delete(stream);
-    this._streamStates.delete(stream);
+    this._ephemeralState.delete(stream);
     this._streamMetadataCache.delete(stream);
     return { incarnation, changedRosterParents };
   }
@@ -544,8 +561,12 @@ export class SessionState {
 
   private rosterParentsContaining(stream: StreamTabId): StreamTabId[] {
     const parents: StreamTabId[] = [];
-    for (const [parent, state] of this._streamStates) {
-      if (state.subagents.some((child) => child.childStreamId === stream)) {
+    for (const [parent, ephemeral] of this._ephemeralState) {
+      if (
+        ephemeral.execution?.subagents.some(
+          (child) => child.childStreamId === stream,
+        )
+      ) {
         parents.push(parent);
       }
     }
@@ -554,12 +575,14 @@ export class SessionState {
 
   private scrubStreamFromRosters(stream: StreamTabId): StreamTabId[] {
     const changedParents: StreamTabId[] = [];
-    for (const [parent, state] of this._streamStates) {
+    for (const [parent, ephemeral] of this._ephemeralState) {
+      const state = ephemeral.execution;
+      if (!state) continue;
       const subagents = state.subagents.filter(
         (child) => child.childStreamId !== stream,
       );
       if (subagents.length === state.subagents.length) continue;
-      this._streamStates.set(parent, { ...state, subagents });
+      ephemeral.execution = { ...state, subagents };
       changedParents.push(parent);
     }
     return changedParents;
@@ -570,8 +593,7 @@ export class SessionState {
    *  `_removedStreams` and, for `clearAll`, scrubbing rosters. */
   private clearEphemeralStreamState(stream: StreamTabId): void {
     this.streamStatus.clearStream(stream);
-    this._sessionState.delete(stream);
-    this._streamStates.delete(stream);
+    this._ephemeralState.delete(stream);
     this._streamMetadataCache.delete(stream);
   }
 
@@ -633,9 +655,8 @@ export class SessionState {
     // pre-delete enumeration would reintroduce the TOCTOU this barrier exists
     // to close.
     const preExistingEphemeral = new Set<StreamTabId>([
-      ...this._streamStates.keys(),
-      ...this._sessionState.keys(),
-      ...Array.from(this.streamStatus.entries(), ([stream]) => stream),
+      ...this._ephemeralState.keys(),
+      ...this.streamStatus.getAllStreamStates().keys(),
     ]);
     const identitiesAtStart = new Set<StreamTabId>([
       ...preExistingEphemeral,
@@ -697,20 +718,6 @@ export class SessionState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.logger.info('[Persistence] State load complete');
-  }
-
-  /**
-   * Drop workspace-scoped caches before loading a replacement storage root.
-   * The incarnation generations are an identity projection over the old
-   * root's stream ids, so they reset with the tombstones: a re-claimed
-   * identity in the new root must start from incarnation 0 again.
-   */
-  resetAfterStorageRootChange(): void {
-    this._sessionState.clear();
-    this._streamStates.clear();
-    this._streamMetadataCache.clear();
-    this._removedStreams.clear();
-    this._streamIncarnations.clear();
   }
 
   /**

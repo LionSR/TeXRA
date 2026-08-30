@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  CODEX_CALLBACK_PATH,
-  loginWithLoopback,
-  type CodexSession,
-  type CodexSessionCoordinator,
-} from '@auth/codex';
+import { loginWithLoopback } from '@auth/codex';
+import { CODEX_CALLBACK_PATH } from '@auth/codex/codexConstants';
+import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
+import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import type { SubscriptionAuthorizeRequest } from '@auth/oauth/SubscriptionOAuthCoordinator';
 
 function testSession(): CodexSession {

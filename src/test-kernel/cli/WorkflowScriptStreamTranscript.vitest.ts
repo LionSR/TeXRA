@@ -16,27 +16,31 @@ import { defaultSession } from '@agent/runtime/SessionHandle';
 
 import {
   advanceStaticTranscriptState,
-  buildStaticTranscriptItems,
   buildStaticTranscriptState,
   StaticConversationTranscript,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import {
   isFinalizedTranscriptRow,
-  splitTranscriptEntries,
   transcriptRowHeadline,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
+  activeStreamId,
+  closeForegroundReader,
+  openTranscriptReader,
+  openWorkflowPopup,
   patchStream,
   resetCliState,
   streams,
-  setStreamStatusInCliState,
 } from '@cli/chat/tui/state/cliState';
 import {
   bindChildStreamState,
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
-import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import {
+  subscribeStreamLog,
+  syncStreamLog,
+} from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { SessionState } from '@controllers/session/SessionState';
 import {
@@ -50,8 +54,11 @@ import {
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { setCliStreamPhase } from '@test/support/cliStreamStatus';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.ts';
+import { splitTranscriptEntries } from '@test/support/transcriptRowFixtures';
 import { createRunTrace } from '@transcript';
 import type { StreamSummaryMeta } from '@transcript/StreamLogStore';
 
@@ -118,33 +125,49 @@ async function renderStaticTranscript(): Promise<string> {
   );
 }
 
-type StaticItems = ReturnType<typeof buildStaticTranscriptItems>['items'];
+type StaticState = ReturnType<typeof buildStaticTranscriptState>;
 
+const STATIC_INPUTS = {
+  childRosters: new Map(),
+  meta: SESSION_META,
+  ownerKey: 'root',
+  parentStream: new Map(),
+  scrollbackStreamId: STREAM_ID,
+  width: 80,
+} as const;
+
+/** A cold build over the current slice, or one ordinary stream-sync tick
+ *  advancing `previous` to it. */
 function appendItems(
-  currentItems: StaticItems = [],
-  overrides: Partial<Parameters<typeof buildStaticTranscriptItems>[0]> = {},
-): StaticItems {
-  return buildStaticTranscriptItems({
-    currentItems,
-    meta: SESSION_META,
-    scrollbackStreamId: STREAM_ID,
-    streams: streams.get(),
-    ...overrides,
-  }).items;
+  previous?: StaticState,
+  overrides: Partial<Parameters<typeof buildStaticTranscriptState>[0]> = {},
+): StaticState {
+  return previous === undefined
+    ? buildStaticTranscriptState({
+        ...STATIC_INPUTS,
+        repaintEpoch: 0,
+        streams: streams.get(),
+        ...overrides,
+      })
+    : advanceStaticTranscriptState(previous, {
+        ...STATIC_INPUTS,
+        streams: streams.get(),
+        ...overrides,
+      });
 }
 
-function staticEntries(items: StaticItems): readonly TranscriptRow[] {
+function staticEntries({ items }: StaticState): readonly TranscriptRow[] {
   return items
     .filter((item) => item.kind === 'entry')
     .map((item) => item.entry);
 }
 
-function entryIds(items: StaticItems): string[] {
-  return staticEntries(items).map((entry) => entry.id);
+function entryIds(state: StaticState): string[] {
+  return staticEntries(state).map((entry) => entry.id);
 }
 
-function entryTexts(items: StaticItems): string[] {
-  return staticEntries(items).map(transcriptRowHeadline);
+function entryTexts(state: StaticState): string[] {
+  return staticEntries(state).map(transcriptRowHeadline);
 }
 
 function transcriptEntry(id: string): StreamLogEntry | undefined {
@@ -159,7 +182,7 @@ function streamSlice() {
 }
 
 function setStatus(status: StreamPhase): void {
-  setStreamStatusInCliState({ streamId: STREAM_ID, status });
+  setCliStreamPhase({ streamId: STREAM_ID, status });
 }
 
 function streamEntries(): readonly TranscriptRow[] {
@@ -201,6 +224,66 @@ afterEach(() => {
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
+  it('loads a complete workflow projection for its popup and Ctrl-T log', async () => {
+    const runTrace = openRunTrace(STREAM_ID);
+    for (let index = 0; index < 2_001; index++) {
+      runTrace.trace.emit({
+        type: 'workflow.call',
+        logId: `task-${index}`,
+        call: {
+          id: `call-${index}`,
+          label: `Call ${index}`,
+          status: 'planned',
+        },
+      });
+    }
+    runTrace.trace.info('Full workflow log detail', {
+      messageType: MESSAGE_TYPES.DEFAULT,
+    });
+    patchStream(PARENT_STREAM_ID, (slice) => ({ ...slice }));
+    activeStreamId.set(PARENT_STREAM_ID);
+
+    syncStreamLog(defaultSession(), STREAM_ID);
+    expect(streamEntries()).toHaveLength(2_000);
+    expect(streamEntries().some((row) => row.id === 'task-0')).toBe(false);
+
+    // Exercise the roster-first interval: the parent already classifies this
+    // child as a workflow, but the child's own run metadata has not landed.
+    seedStreamMeta(STREAM_ID, { agentCategory: AgentCategory.Workflow });
+    boundState.getOrCreateStreamState(PARENT_STREAM_ID, AgentCategory.ToolUse);
+    boundState.updateStreamState(PARENT_STREAM_ID, (state) => ({
+      ...state,
+      subagents: [
+        {
+          executionId: 'workflow-exec-1',
+          agentName: 'draft-sections',
+          identity: WORKFLOW_IDENTITY,
+          childStreamId: STREAM_ID,
+          status: STREAM_PHASE.RUNNING,
+        },
+      ],
+    }));
+    invalidateChildStreams();
+
+    const dispose = subscribeStreamLog(defaultSession());
+    try {
+      openWorkflowPopup(STREAM_ID);
+      await waitFor(() => streamEntries().length === 2_002);
+      expect(streamEntries().some((row) => row.id === 'task-0')).toBe(true);
+      expect(streamEntries().map(transcriptRowHeadline)).toContain(
+        'Full workflow log detail',
+      );
+
+      openTranscriptReader(STREAM_ID);
+      await waitFor(() => streamEntries().length === 2_002);
+
+      closeForegroundReader();
+      await waitFor(() => streamEntries().length === 2_000);
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps lifecycle headings for full-log SDK children', () => {
     const sdkStreamId = 'claude@agent-sdk#exec-1' as StreamTabId;
     // External-CLI agent sessions are full-log children too.
@@ -556,144 +639,6 @@ describe('CLI workflow-script child-stream transcript', () => {
     ]);
   });
 
-  it('holds later settled rows behind pending declared-plan tasks', async () => {
-    const runTrace = openRunTrace(STREAM_ID);
-    for (const [id, label] of [
-      ['core', 'Audit core'],
-      ['extension', 'Audit extension'],
-      ['cli', 'Audit CLI'],
-      ['desktop', 'Audit desktop'],
-      ['scripts', 'Audit scripts'],
-    ] as const) {
-      runTrace.trace.emit({
-        type: 'workflow.call',
-        logId: `${id}-task`,
-        call: {
-          id,
-          label,
-          phase: 'Repository audit',
-          status: 'planned',
-        },
-      });
-    }
-    syncStreamLog(defaultSession(), STREAM_ID);
-
-    runTrace.trace.info('Preparing repository audit', {
-      messageType: MESSAGE_TYPES.DEFAULT,
-    });
-    appendLocalAssistantTranscript('Local audit checkpoint', STREAM_ID);
-    const phase = runTrace.trace.openStage('Repository audit', {
-      id: 'audit-phase',
-      kind: 'phase',
-    });
-    syncStreamLog(defaultSession(), STREAM_ID);
-
-    const buildState = (repaintEpoch = 0) =>
-      buildStaticTranscriptState({
-        childRosters: new Map(),
-        maxRows: undefined,
-        meta: SESSION_META,
-        ownerKey: 'root',
-        parentStream: new Map(),
-        repaintEpoch,
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-        width: 80,
-      });
-    const advance = (
-      current: ReturnType<typeof buildStaticTranscriptState>,
-    ): ReturnType<typeof buildStaticTranscriptState> =>
-      advanceStaticTranscriptState(current, {
-        childRosters: new Map(),
-        maxRows: undefined,
-        meta: SESSION_META,
-        ownerKey: 'root',
-        parentStream: new Map(),
-        scrollbackStreamId: STREAM_ID,
-        streams: streams.get(),
-        width: 80,
-      });
-
-    let state = buildState();
-    expect(entryIds(state.items)).toEqual([]);
-    const initialOutput = await renderStaticTranscript();
-    expect(initialOutput).not.toContain('Preparing repository audit');
-    expect(initialOutput).not.toContain('Local audit checkpoint');
-    expect(initialOutput).not.toContain('Repository audit');
-
-    runTrace.trace.emit({
-      type: 'workflow.call',
-      logId: 'core-task',
-      call: {
-        id: 'core',
-        label: 'Audit core',
-        phase: 'Repository audit',
-        status: 'completed',
-        model: 'deepseekT',
-      },
-    });
-    syncStreamLog(defaultSession(), STREAM_ID);
-    state = advance(state);
-    expect(entryIds(state.items)).toEqual(['core-task']);
-    const liveOutput = await renderStaticTranscript();
-    expect(liveOutput).toContain('Finished: Audit core');
-    expect(liveOutput).not.toContain('Preparing repository audit');
-    expect(liveOutput).not.toContain('Local audit checkpoint');
-    expect(liveOutput).not.toContain('Repository audit');
-
-    phase.end('completed');
-    syncStreamLog(defaultSession(), STREAM_ID);
-    state = advance(state);
-    expect(entryIds(state.items)).toEqual(['core-task']);
-
-    for (const id of ['extension', 'cli', 'desktop', 'scripts'] as const) {
-      runTrace.trace.emit({
-        type: 'workflow.call',
-        logId: `${id}-task`,
-        call: {
-          id,
-          label: `Audit ${id}`,
-          phase: 'Repository audit',
-          status: 'completed',
-          model: 'deepseekT',
-        },
-      });
-    }
-    syncStreamLog(defaultSession(), STREAM_ID);
-    state = advance(state);
-
-    const settledSlice = streamSlice();
-    expect(
-      settledSlice?.entries.findLast((row, index) =>
-        isFinalizedTranscriptRow(row, index, settledSlice.finalizedFrontier),
-      )?.id,
-    ).toBe('audit-phase');
-
-    const incrementalEntryIds = entryIds(state.items);
-    expect(incrementalEntryIds).toEqual([
-      expect.stringMatching(/.+/),
-      expect.stringMatching(/^local:/),
-      'audit-phase',
-      'core-task',
-      'extension-task',
-      'cli-task',
-      'desktop-task',
-      'scripts-task',
-    ]);
-    expect(entryIds(appendItems([]))).toEqual(incrementalEntryIds);
-    const coldOutput = await renderStaticTranscript();
-    expectOutputOrder(coldOutput, [
-      'Preparing repository audit',
-      'Local audit checkpoint',
-      '◆ Repository audit',
-      'Finished: Audit core',
-      'Finished: Audit extension',
-      'Finished: Audit cli',
-      'Finished: Audit desktop',
-      'Finished: Audit scripts',
-    ]);
-  });
-
   it('keeps a dynamic phase header above tasks introduced inside it', async () => {
     const runTrace = openRunTrace(STREAM_ID);
     const phase = runTrace.trace.openStage('Dynamic audit', {
@@ -1045,7 +990,15 @@ describe('CLI workflow-script child-stream transcript', () => {
       ).pending,
     ).toEqual([]);
 
-    const staticItems = appendItems([], {
+    // A run's open phase is the shared stage fact, which the applier writes
+    // from the same `stage.start` this test's `openStage` emitted; the header
+    // reads it there rather than scanning for a phase row of its own.
+    boundState.getOrCreateStreamState(STREAM_ID, AgentCategory.Workflow);
+    boundState.updateStreamState(STREAM_ID, (prev) => ({
+      ...prev,
+      stage: { kind: 'phase', label: 'Draft sections' },
+    }));
+    const staticItems = appendItems(undefined, {
       childRosters: new Map([
         [
           PARENT_STREAM_ID,
@@ -1062,9 +1015,9 @@ describe('CLI workflow-script child-stream transcript', () => {
       parentStream: new Map([[STREAM_ID, PARENT_STREAM_ID]]),
       streams: streams.get(),
     });
-    expect(staticItems.at(0)).toMatchObject({
+    expect(staticItems.items.at(0)).toMatchObject({
       identityLine:
-        'workflow script: draft-sections · Draft sections · parent: main · model: DeepSeek V4 Flash (Thinking)',
+        'workflow script: draft-sections · parent: main · model: DeepSeek V4 Flash (Thinking)',
       kind: 'header',
     });
 

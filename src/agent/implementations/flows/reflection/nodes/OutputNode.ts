@@ -4,11 +4,10 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
   MESSAGE_TYPES,
   type AgentFileLocation,
-  type CompileFailure,
   type CompileResult,
-  type FileLocation,
 } from '@shared/schemas';
-import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   hasCompileFailures,
@@ -16,7 +15,7 @@ import {
   roundsToPersisted,
   setCompileFailures,
 } from '../output/outputState';
-import { runCompileCheck } from '../output/compileCheck';
+import { compileFailuresOf, runCompileCheck } from '../output/compileCheck';
 import { extractFilesFromXml } from '../output/outputFileExtraction';
 import { traceFileLineage } from '../output/lineageMapping';
 import { resolveBaseFilesForDiff } from '../output/snapshotResolution';
@@ -24,7 +23,6 @@ import { checkExpectedOutputs } from '../output/outputValidation';
 import { summarizeRound, type RoundSummary } from '../output/roundSummary';
 import { formatCompileFailureRoundContext } from '../output/compileFailureRoundContext';
 import { tryOperation } from '../output/outputOperations';
-import type { LatexDiffManager } from '../output/LatexDiffManager';
 import type { CompiledPdfArtifact } from '../output/compiledPdfArtifacts';
 import type { RoundFileMapping } from '../output/types';
 
@@ -39,17 +37,16 @@ interface OutputPrepInput {
 
 interface OutputExecResult {
   summary: RoundSummary;
-  compileFailures: CompileFailure[];
   compileResult?: CompileResult;
   compiledArtifacts: CompiledPdfArtifact[];
   emitCompileFailures: boolean;
 }
 
-export class OutputNode<C = unknown> extends BaseNode<
+export class OutputNode extends BaseNode<
   ReflectionFlowShared,
-  ReflectionServices<C>
+  ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<OutputPrepInput> {
     if (!shared.outputLocation) {
       throw new Error(
         'Output location not set - ResponseCycleNode must run first',
@@ -63,7 +60,7 @@ export class OutputNode<C = unknown> extends BaseNode<
     };
   }
 
-  async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
+  override async exec(prepRes: OutputPrepInput): Promise<OutputExecResult> {
     const { outputState, xmlManager, diffManager, setting, logger, baseFiles } =
       this.services;
     const { outputLocation, currentRound, endTurn } = prepRes;
@@ -76,7 +73,6 @@ export class OutputNode<C = unknown> extends BaseNode<
     );
 
     let mapping: RoundFileMapping | undefined;
-    let compileFailures: CompileFailure[] = [];
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: CompiledPdfArtifact[] = [];
     let emitCompileFailures = false;
@@ -110,22 +106,22 @@ export class OutputNode<C = unknown> extends BaseNode<
         );
         mapping = roundMapping;
 
-        await tryOperation(async () => {
-          const diffArtifacts = await this.handleLatexdiff(
+        // `handleLatexdiffOfOutput` already wraps its whole body in
+        // `tryOperation`, so a second recover layer here would only ever see
+        // its own push.
+        compiledArtifacts.push(
+          ...(await diffManager.handleLatexdiffOfOutput(
             currentRound,
-            diffBaseFiles,
             roundMapping,
-            diffManager,
-          );
-          compiledArtifacts.push(...diffArtifacts);
-        }, this.recoverWarn('Latexdiff'));
+          )),
+        );
 
         await tryOperation(async () => {
           const hadCompileFailures = hasCompileFailures(
             outputState,
             currentRound,
           );
-          const compileResult = await runCompileCheck(
+          const check = await runCompileCheck(
             {
               fileService: this.services.fileService,
               outputState,
@@ -134,9 +130,9 @@ export class OutputNode<C = unknown> extends BaseNode<
             },
             currentRound,
           );
-          compileFailures = compileResult.failures;
-          compileRoundResult = compileResult.compileResult;
-          compiledArtifacts.push(...compileResult.artifacts);
+          compileRoundResult = check.compileResult;
+          compiledArtifacts.push(...check.artifacts);
+          const compileFailures = compileFailuresOf(check.compileResult);
           setCompileFailures(outputState, currentRound, compileFailures);
           emitCompileFailures =
             compileFailures.length > 0 || hadCompileFailures;
@@ -151,7 +147,6 @@ export class OutputNode<C = unknown> extends BaseNode<
       outputLocation,
       currentRound,
       {
-        endTurn,
         mapping,
         isRewrite: setting.isRewrite,
         baseFiles: diffBaseFiles,
@@ -160,19 +155,18 @@ export class OutputNode<C = unknown> extends BaseNode<
 
     return {
       summary,
-      compileFailures,
       compileResult: compileRoundResult,
       compiledArtifacts,
       emitCompileFailures,
     };
   }
 
-  async execFallback(
+  override async execFallback(
     prepRes: OutputPrepInput,
     error: Error,
   ): Promise<OutputExecResult> {
     const { logger, outputState, setting } = this.services;
-    const { outputLocation, currentRound, endTurn } = prepRes;
+    const { outputLocation, currentRound } = prepRes;
     logger.warn(`Output processing failed: ${error.message}`, { data: error });
 
     // Still summarize what we can for post() side effects
@@ -183,7 +177,7 @@ export class OutputNode<C = unknown> extends BaseNode<
         this.services,
         outputLocation,
         currentRound,
-        { endTurn, isRewrite: setting.isRewrite },
+        { isRewrite: setting.isRewrite },
       );
     } catch (summaryError) {
       // Double-fault: summarizeRound failed during fallback, so we drop the
@@ -204,24 +198,23 @@ export class OutputNode<C = unknown> extends BaseNode<
 
     return {
       summary,
-      compileFailures: [],
       compileResult: undefined,
       compiledArtifacts: [],
       emitCompileFailures: false,
     };
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { logger, outputState, workflowOutputPolicy, runScope } =
-      this.services;
+    const { logger, outputState, runScope } = this.services;
     const { streamId } = runScope;
     const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
     const { summary } = execRes;
+    const compileFailures = compileFailuresOf(execRes.compileResult);
 
     // Emit output files event
     emitRunFact(logger, 'addOutputFiles', {
@@ -232,7 +225,7 @@ export class OutputNode<C = unknown> extends BaseNode<
     if (execRes.emitCompileFailures) {
       emitRunFact(logger, 'updateCompileFailures', {
         streamId,
-        filesByRound: { [currentRound]: execRes.compileFailures },
+        filesByRound: { [currentRound]: compileFailures },
       });
     }
 
@@ -241,9 +234,12 @@ export class OutputNode<C = unknown> extends BaseNode<
       interactions.emit('requestOpenFile', { location, preserveFocus: true });
     }
 
-    if (endTurn && workflowOutputPolicy.shouldAutoOpenPdfOrLog()) {
-      if (execRes.compileFailures.length > 0) {
-        for (const failure of execRes.compileFailures) {
+    if (
+      endTurn &&
+      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
+    ) {
+      if (compileFailures.length > 0) {
+        for (const failure of compileFailures) {
           interactions.emit('requestOpenFile', {
             location: failure.log,
             preserveFocus: true,
@@ -264,7 +260,6 @@ export class OutputNode<C = unknown> extends BaseNode<
     if (endTurn) {
       await tryOperation(async () => {
         const validationResult = await checkExpectedOutputs(
-          outputState,
           this.services,
           outputLocation,
           currentRound,
@@ -284,7 +279,9 @@ export class OutputNode<C = unknown> extends BaseNode<
     shared.roundOutputs = roundsToPersisted(outputState);
     const compileFailureContext =
       execRes.compileResult &&
-      workflowOutputPolicy.shouldRejectOnCompileFailure()
+      readPlatformSetting<boolean>(
+        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+      )
         ? formatCompileFailureRoundContext(execRes.compileResult)
         : undefined;
     if (compileFailureContext) {
@@ -309,24 +306,5 @@ export class OutputNode<C = unknown> extends BaseNode<
       messageType: MESSAGE_TYPES.DEFAULT,
       recover: () => undefined,
     };
-  }
-
-  private async handleLatexdiff(
-    currentRound: number,
-    baseFiles: FileLocation[],
-    mapping: RoundFileMapping,
-    diffManager: LatexDiffManager,
-  ): Promise<CompiledPdfArtifact[]> {
-    const { logger } = this.services;
-
-    const existingBase = await Promise.all(
-      baseFiles.map((base) => AbsoluteFS.exists(base.absolutePath)),
-    );
-    if (!existingBase.some(Boolean)) {
-      logger.debug('No base files found for latexdiff');
-      return [];
-    }
-
-    return diffManager.handleLatexdiffOfOutput(currentRound, mapping);
   }
 }

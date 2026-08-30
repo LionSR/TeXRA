@@ -12,7 +12,6 @@ import {
   type CopilotModelRoute,
 } from '@model/runtimeModelRegistry';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
-import { isGpt5ModelName } from '@model/modelNames';
 import {
   computeModelOptionsData,
   getEnabledModels,
@@ -129,10 +128,6 @@ export class SettingsModelSelectionController {
     });
   }
 
-  async setHelperModel(modelName: string): Promise<void> {
-    await this.deps.globalState.update(GlobalStateKey.HELPER_MODEL, modelName);
-  }
-
   async setReasoningLevel(input: {
     modelName: string;
     level: ReasoningLevel | null;
@@ -243,6 +238,13 @@ export class SettingsModelSelectionController {
     if (!supportsReasoningLevel(config)) return;
 
     item.supportsReasoningLevel = true;
+    const supportedLevels = config.capabilities.supportedReasoningEfforts
+      ?.map((effort) => EFFORT_TO_LEVEL.get(effort))
+      .filter((level): level is ReasoningLevel => level !== undefined);
+    if (supportedLevels?.length) {
+      item.supportedReasoningLevels = supportedLevels;
+    }
+
     const defaultLevel = EFFORT_TO_LEVEL.get(
       config.capabilities.reasoningEffort,
     );
@@ -251,7 +253,10 @@ export class SettingsModelSelectionController {
     }
 
     const parsed = ReasoningLevelSchema.safeParse(override);
-    if (parsed.success) {
+    if (
+      parsed.success &&
+      (!supportedLevels?.length || supportedLevels.includes(parsed.data))
+    ) {
       item.reasoningLevel = parsed.data;
     }
   }

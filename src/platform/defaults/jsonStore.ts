@@ -1,10 +1,11 @@
 import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import PQueue from 'p-queue';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
+import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
+import type PQueue from 'p-queue';
 
 import type { FileLockProvider, StateStore } from '../interfaces';
 
@@ -94,9 +95,9 @@ const writeQueues = new Map<string, PQueue>();
  * another process, or another instance on the same file — persisted in the
  * meantime. Flushes for a given file path are serialized through
  * {@link writeQueues} for in-process ordering, then guarded by a filesystem
- * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`) still
- * serve this instance's view: open-time contents plus its own mutations; they
- * don't observe other writers' changes.
+ * lock for cross-process exclusion. Reads (`get`, `has`, `snapshot`, `keys`)
+ * still serve this instance's view: open-time contents plus its own
+ * mutations; they don't observe other writers' changes.
  */
 export class JsonStore implements StateStore {
   private constructor(
@@ -146,6 +147,10 @@ export class JsonStore implements StateStore {
     return { ...this.data };
   }
 
+  keys(): string[] {
+    return Object.keys(this.data);
+  }
+
   /**
    * Add the flush to the file's entry in {@link writeQueues} so flushes run
    * in `set()` call order. The task is enqueued synchronously, before any
@@ -158,25 +163,9 @@ export class JsonStore implements StateStore {
     value: unknown,
     missingFallback: JsonRecord,
   ): Promise<void> {
-    let queue = writeQueues.get(this.filePath);
-    if (!queue) {
-      queue = new PQueue({ concurrency: 1 });
-      writeQueues.set(this.filePath, queue);
-    }
-    // `add` widens to `T | void` to cover abort via signal/timeout; we pass
-    // neither, so the task always runs and resolves with `void`.
-    const task = queue.add(() =>
+    return runOnPerKeyQueue(writeQueues, this.filePath, () =>
       this.flush(key, value, missingFallback),
-    ) as Promise<void>;
-    return task.finally(() => {
-      if (
-        queue.pending === 0 &&
-        queue.size === 0 &&
-        writeQueues.get(this.filePath) === queue
-      ) {
-        writeQueues.delete(this.filePath);
-      }
-    });
+    );
   }
 
   private async flush(

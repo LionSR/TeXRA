@@ -34,7 +34,8 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { getBasename } from '@utils/core';
+import { AGENT_DECORATORS } from '@shared/utils/icons';
+import { getBasename, groupBy } from '@utils/core';
 
 // Local imports - shared schemas and events
 import { pluralize } from '@utils/text/stringUtils';
@@ -45,41 +46,27 @@ function agentKey(agent: AgentSelectionItem): string {
   return agentKeyFromSourceName(agent.source, agent.name);
 }
 
+type SourceTone = 'builtin' | 'custom' | 'remote' | 'inline';
+
 /**
  * Per-source presentation: section heading name, list-row tone, and the badge
  * (icon + label) shown for non-built-in origins in both list and detail panes.
+ * The badge is read from the shared `AGENT_DECORATORS.properties` table so
+ * this pane and the launcher dropdown cannot drift on glyph or label; the two
+ * built-in sources have no row there and carry no badge.
  */
-const SOURCE_META: Record<
-  AgentSource,
-  {
-    displayName: string;
-    tone: 'builtin' | 'custom' | 'remote' | 'inline';
-    badge?: { icon: TeXRAIconName; label: string };
+function sourceMeta(source: AgentSource): {
+  displayName: string;
+  tone: SourceTone;
+  badge?: { icon: TeXRAIconName; label: string };
+} {
+  const { properties } = AGENT_DECORATORS;
+  if (!(source in properties)) {
+    return { displayName: 'Built-in', tone: 'builtin' };
   }
-> = {
-  [AGENT_SOURCE.BUILT_IN_WORKFLOW]: {
-    displayName: 'Built-in',
-    tone: 'builtin',
-  },
-  [AGENT_SOURCE.BUILT_IN_TOOL_USE]: {
-    displayName: 'Built-in',
-    tone: 'builtin',
-  },
-  [AGENT_SOURCE.CUSTOM]: {
-    displayName: 'Custom',
-    tone: 'custom',
-    badge: { icon: 'star', label: 'Custom' },
-  },
-  [AGENT_SOURCE.REMOTE]: {
-    displayName: 'Remote',
-    tone: 'remote',
-  },
-  [AGENT_SOURCE.INLINE]: {
-    displayName: 'Inline',
-    tone: 'inline',
-    badge: { icon: 'bolt', label: 'Inline' },
-  },
-};
+  const badge = properties[source as keyof typeof properties];
+  return { displayName: badge.label, tone: source as SourceTone, badge };
+}
 
 @customElement('agent-selection-panel')
 export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
@@ -110,12 +97,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
   protected override willUpdate(changed: PropertyValues): void {
     if (changed.has('agents')) {
-      const groups = new Map<AgentSource, AgentSelectionItem[]>();
-      for (const agent of this.agents) {
-        const list = groups.get(agent.source) ?? [];
-        list.push(agent);
-        groups.set(agent.source, list);
-      }
+      const groups = groupBy(this.agents, (agent) => agent.source);
       this.groupedSources = groups;
       this.displayOrder = AgentSelectionPanel.SOURCE_ORDER.flatMap(
         (source) => groups.get(source) ?? [],
@@ -188,7 +170,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   private renderListItem(agent: AgentSelectionItem): TemplateResult {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
-    const { tone, badge } = SOURCE_META[agent.source];
+    const { tone, badge } = sourceMeta(agent.source);
 
     return html`
       <div
@@ -268,7 +250,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         ${orderedSources.map((source) => {
           const agents = groups.get(source)!;
           const enabledInGroup = agents.filter((a) => a.enabled).length;
-          const sourceName = SOURCE_META[source].displayName;
+          const sourceName = sourceMeta(source).displayName;
           return html`
             <div class="agent-list-section-header">
               <span>${sourceName}</span>
@@ -314,7 +296,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
   /** Detail-pane actions in render order, each with the condition that shows it. */
   private renderDetailActions(agent: AgentSelectionItem): TemplateResult[] {
-    const builtIn = SOURCE_META[agent.source].tone === 'builtin';
+    const builtIn = sourceMeta(agent.source).tone === 'builtin';
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
     const actions: ReadonlyArray<{
       readonly when: boolean;
@@ -412,41 +394,16 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
       .map((action) => renderLabeledActionButton(action.button));
   }
 
-  private renderDetail(): TemplateResult {
-    const agent = this.selectedAgent;
-
-    if (!agent) {
-      return html`
-        <div class="agent-detail-pane">
-          <div class="agent-detail-empty">
-            <em class="text-secondary">Select an agent to view details</em>
-          </div>
-        </div>
-      `;
-    }
-
-    const { tone, badge } = SOURCE_META[agent.source];
-    const builtIn = tone === 'builtin';
+  private renderDetail(agent: AgentSelectionItem): TemplateResult {
+    const { displayName, badge } = sourceMeta(agent.source);
 
     return html`
       <div class="agent-detail-pane">
         <div class="agent-detail-header">
           <span class="agent-detail-name">${agent.name}</span>
-          ${
-            builtIn
-              ? html`<wa-tag variant="neutral" size="s">Built-in</wa-tag>`
-              : nothing
-          }
-          ${
-            badge
-              ? html`<wa-tag
-                  variant="neutral"
-                  size="s"
-                  title="${badge.label} agent"
-                  >${waIcon(badge.icon)} ${badge.label}</wa-tag
-                >`
-              : nothing
-          }
+          <wa-tag variant="neutral" size="s" title="${displayName} agent"
+            >${badge ? html`${waIcon(badge.icon)} ` : nothing}${displayName}</wa-tag
+          >
         </div>
 
         ${
@@ -500,7 +457,10 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   }
 
   override render(): TemplateResult {
-    if (this.agents.length === 0) {
+    // `willUpdate` keeps `selectedKey` pointing at a live row whenever the
+    // roster is non-empty, so a missing agent means an empty roster.
+    const agent = this.selectedAgent;
+    if (!agent) {
       return html` <em class="text-secondary">No agents available.</em> `;
     }
 
@@ -508,7 +468,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
     return html`
       <div class="agent-split-panel">
-        ${this.renderList()} ${this.renderDetail()}
+        ${this.renderList()} ${this.renderDetail(agent)}
       </div>
       <div class="agent-count">
         ${enabledCount}/${this.agents.length}

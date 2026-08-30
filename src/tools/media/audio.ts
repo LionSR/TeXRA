@@ -15,7 +15,6 @@ import {
   BinaryResolver,
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
-import { checkToolInstalled } from '@utils/system/toolUtils';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const log = createLog('AudioUtils');
@@ -34,7 +33,7 @@ function resetRecordingState(): void {
 
 /** Resolve the sox executable command from config or auto-detection. */
 function resolveSoxCommand(): ResolvedBinaryCommand | null {
-  const configuredPath = getConfig<string>('texra.audio.soxPath', '');
+  const configuredPath = getConfig<string>('texra.audio.soxPath');
   if (configuredPath && AbsoluteFS.existsSync(configuredPath)) {
     return BinaryResolver.resolveOptionalCommand('sox', [], {
       resolvedPath: configuredPath,
@@ -55,15 +54,11 @@ export async function startRecording(): Promise<{
     }
 
     const soxCommand = resolveSoxCommand();
-    if (!(await checkToolInstalled('sox', false))) {
-      if (!soxCommand) {
-        return {
-          success: false,
-          error:
-            'Sox is required for audio recording. Please install it first.',
-        };
-      }
-      log.warn(`Sox check failed but found at: ${soxCommand.resolvedPath}`);
+    if (!soxCommand) {
+      return {
+        success: false,
+        error: 'Sox is required for audio recording. Please install it first.',
+      };
     }
 
     await StorageFS.ensureDir(RECORDINGS_DIR);
@@ -87,12 +82,12 @@ export async function startRecording(): Promise<{
     ];
 
     log.info(
-      `Starting audio recording with sox: ${soxCommand?.resolvedPath ?? 'sox'} ${soxArgs.join(' ')}`,
+      `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
     );
 
     const subprocess = execa(
-      soxCommand?.command ?? 'sox',
-      [...(soxCommand?.args ?? []), ...soxArgs],
+      soxCommand.command,
+      [...soxCommand.args, ...soxArgs],
       {
         env: { ...process.env, PATH: extendEnvPath() },
         reject: false,

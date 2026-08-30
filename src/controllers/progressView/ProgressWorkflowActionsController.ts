@@ -1,13 +1,16 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { createLog } from '@logger/logUtils';
 import type {
   OutputFileInfo,
-  RoundIndexed,
+  ReadonlyRoundIndexed,
   StreamTabId,
 } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
+import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
 import type { StreamOutputsSource } from './streamOutputs';
+
+const log = createLog('ProgressWorkflowActions');
 
 export interface WorkflowDiffRequest {
   agent: string;
@@ -17,26 +20,24 @@ export interface WorkflowDiffRequest {
   outputFilesActive: boolean;
   streamId: StreamTabId;
   runId?: string;
-  outputsByRound?: RoundIndexed<OutputFileInfo>;
+  outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
 }
 
 export type WorkflowFileOperation = 'pack' | 'clean';
 
 export interface WorkflowFileOperationRequest {
-  streamId: StreamTabId;
   agent: string;
   model: string;
   inputFile: string;
   outputFiles: string[];
   executionId?: string;
-  skipProgressViewClear: boolean;
 }
 
 interface ProgressWorkflowActionsState extends StreamOutputsSource {
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
 
-export interface ProgressWorkflowActionsControllerDeps {
+interface ProgressWorkflowActionsControllerDeps {
   state: ProgressWorkflowActionsState;
   runDiff(request: WorkflowDiffRequest): Promise<void>;
   runFileOperation(
@@ -56,9 +57,14 @@ export class ProgressWorkflowActionsController {
       // already enumerates ascending per the ES2015+ integer-key spec rule;
       // runLatexdiffForExecution consumes `outputsByRound` in that order
       // without needing an explicit sort here.
+      // Frozen at click time. `getOutputFiles` returns the store's live
+      // record, and this request crosses an interactive quick pick
+      // (`promptForLatexdiffMathMarkup`, `ignoreFocusOut`) before
+      // `handleRunLatexdiff` reads `outputsByRound`, so a run finishing a round
+      // mid-prompt would otherwise widen the diff scope under the user.
       const runOutputs = this.deps.state.getOutputFiles(stream);
       const outputsByRound = Object.keys(runOutputs).length
-        ? runOutputs
+        ? cloneRoundIndexed(runOutputs)
         : undefined;
 
       await this.deps.runDiff({
@@ -82,13 +88,11 @@ export class ProgressWorkflowActionsController {
       const outputFiles = this.resolveOutputFiles(stream, config);
 
       await this.deps.runFileOperation(operation, {
-        streamId: stream,
         agent: config.agent,
         model: config.model,
         inputFile: config.inputFiles[0] ?? '',
         outputFiles,
         ...(executionId && { executionId }),
-        skipProgressViewClear: true,
       });
     });
   }
@@ -99,7 +103,15 @@ export class ProgressWorkflowActionsController {
   ): Promise<void> {
     await this.deps.state.preload?.(stream);
     const { config, executionId } = this.deps.state.getRunMetadata(stream);
-    if (!config || config.agentCategory !== AgentCategory.Workflow) return;
+    if (!config) {
+      // This controller holds no messaging port, so the refusal is at least
+      // recorded rather than dropped: the toolbar action does nothing.
+      log.warn(
+        `Workflow action skipped for stream ${stream}: the run has no persisted config.`,
+      );
+      return;
+    }
+    if (config.agentCategory !== AgentCategory.Workflow) return;
 
     await action(config, executionId);
   }

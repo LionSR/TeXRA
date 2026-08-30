@@ -28,12 +28,12 @@ import {
 } from '@agent/runtime/ModelFactory';
 import {
   CODEX_BACKEND_BASE_URL,
-  CODEX_SESSION_SECRET_KEY,
   CodexAuthError,
   codexCoordinator,
   resetCodexCoordinator,
-  type CodexSession,
 } from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
+import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   invalidateRuntimeModelRegistry,
@@ -45,7 +45,7 @@ import {
 } from '@platform/languageModel';
 import { installPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 // This file calls vi.resetModules(), which desyncs the statically-imported
 // factory from a freshly-imported @platform copy. Blocks that must agree with
@@ -75,10 +75,9 @@ function modelConfig(
 const AVAILABLE_LANGUAGE_MODEL_PORT: LanguageModelPort = {
   isAvailable: () => true,
   selectModels: async () => [],
-  onDidChangeModels: () => ({ dispose() {} }),
+  onDidChange: () => ({ dispose() {} }),
   sendRequest: () => (async function* () {})(),
   countTokens: async () => 0,
-  onDidChangeAccess: () => ({ dispose() {} }),
 };
 
 /** Run `inspect` against a created handler, always disposing it afterwards. */
@@ -104,11 +103,7 @@ function signedInCodexSession(): CodexSession {
   };
 }
 
-const tempDirs: string[] = [];
-
-afterEach(async () => {
-  await cleanupTempDirs(tempDirs);
-});
+const tempDirs = useTempDirs();
 
 describe('Copilot model handler routing', () => {
   const copilotConfig = modelConfig(ModelProvider.COPILOT, {
@@ -116,9 +111,9 @@ describe('Copilot model handler routing', () => {
   });
 
   it('takes precedence over the global OpenRouter route', () => {
-    expect(
-      resolveModelHandlerCompatibilityKey(copilotConfig, true, false),
-    ).toBe('ModelHandlerVscodeLm');
+    expect(resolveModelHandlerCompatibilityKey(copilotConfig, true)).toBe(
+      'ModelHandlerVscodeLm',
+    );
   });
 
   it('fails clearly when the host language-model port is unavailable', async () => {
@@ -188,7 +183,7 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini31p;
-    expect(resolveModelHandlerCompatibilityKey(config, true, false)).toBe(
+    expect(resolveModelHandlerCompatibilityKey(config, true)).toBe(
       'ModelHandlerVscodeLm',
     );
 
@@ -212,10 +207,10 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini31p;
-    expect(
-      resolveModelHandlerCompatibilityKey(config, false, false, 'direct'),
-    ).toBe('ModelHandlerGoogleInteractions');
-    expect(resolveModelHandlerCompatibilityKey(config, false, false)).toBe(
+    expect(resolveModelHandlerCompatibilityKey(config, false, 'direct')).toBe(
+      'ModelHandlerGoogleInteractions',
+    );
+    expect(resolveModelHandlerCompatibilityKey(config, false)).toBe(
       'ModelHandlerVscodeLm',
     );
 
@@ -464,7 +459,6 @@ describe('OpenAI model handler routing', () => {
         resolveModelHandlerCompatibilityKey(
           MODEL_CONFIGS[model],
           useOpenRouter,
-          false,
         ),
       ).toBe(expected);
     },
@@ -473,6 +467,7 @@ describe('OpenAI model handler routing', () => {
   it('uses short-name routing when computing compatibility keys', async () => {
     await installPlatform({
       config: { 'texra.model.useOpenAIResponsesAPI': false },
+      globalState: { 'texra.preferShortModelNames': true },
     });
 
     expect(
@@ -486,7 +481,6 @@ describe('OpenAI model handler routing', () => {
           shortName: 'legacy-chat-test',
         },
         false,
-        true,
       ),
     ).toBe('ModelHandlerOpenAI');
   });
@@ -558,7 +552,7 @@ describe('OpenAI model handler routing', () => {
     });
 
     expect(
-      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false),
     ).toBe('ModelHandlerOpenAIResponse');
     // The active OpenRouter proxy disables the subscription path entirely.
     expect(shouldUseResponsesAPI(codexEligibleConfig, true)).toBe(true);
@@ -569,7 +563,7 @@ describe('OpenAI model handler routing', () => {
     await installPlatform();
 
     expect(
-      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false),
     ).toBe('ModelHandlerOpenAIResponse');
   });
 
@@ -764,7 +758,6 @@ describe('OpenAI model handler routing', () => {
       passingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
         false,
-        false,
       ),
     ).toBe('ModelHandlerValidation');
 
@@ -782,7 +775,6 @@ describe('OpenAI model handler routing', () => {
     expect(() =>
       failingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
-        false,
         false,
       ),
     ).toThrow(/restricted to package validation/);
@@ -813,7 +805,7 @@ describe('Google Interactions API routing', () => {
   it('routes direct Google models to Interactions', async () => {
     const factory = await initGoogleRouting();
     expect(
-      factory.resolveModelHandlerCompatibilityKey(googleConfig(), false, false),
+      factory.resolveModelHandlerCompatibilityKey(googleConfig(), false),
     ).toBe('ModelHandlerGoogleInteractions');
   });
 

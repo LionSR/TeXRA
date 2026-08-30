@@ -47,9 +47,6 @@ function createShared(
     lastError: undefined,
     toolCalls: undefined,
     text: undefined,
-    roundIndex: 0,
-    roundResponseTimeMs: 0,
-    roundNormalizedUsage: undefined,
     systemPrompt,
   };
 }

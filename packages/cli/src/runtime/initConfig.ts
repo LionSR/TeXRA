@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import writeFileAtomic from 'write-file-atomic';
 
-import { isFileNotFoundError } from '@common/errors';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 
@@ -42,16 +42,19 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
 }
 
 /** Stable, pretty JSON with a trailing newline (matches editor/formatter output). */
-export function serializeInitConfig(config: InitConfigShape): string {
+function serializeInitConfig(config: InitConfigShape): string {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
-export async function configFileExists(filePath: string): Promise<boolean> {
+/** `false` only for a genuinely absent path; any other failure (EACCES, EIO)
+ *  propagates instead of being reported as "absent". */
+export async function pathExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    if (isFileNotFoundError(error) || isNotADirectoryError(error)) return false;
+    throw error;
   }
 }
 
@@ -81,7 +84,7 @@ export async function writeInitConfig(
  * when it is already covered. Appends a single `.texra/` entry, preserving any
  * existing content and a single trailing newline.
  */
-export function gitignoreWithTexra(existing: string): string | null {
+function gitignoreWithTexra(existing: string): string | null {
   const entry = `${TEXRA_STORAGE_DIR_NAME}/`;
   const present = existing
     .split('\n')

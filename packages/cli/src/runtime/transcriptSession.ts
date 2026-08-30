@@ -4,7 +4,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { createSessionStores } from '@controllers/session/sessionStores';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 
@@ -12,14 +12,14 @@ const responseTextProcessing = createTexraResponseTextProcessing(
   agentResponseTextConnector,
 );
 
-export type InteractiveTranscriptPolicy =
+type InteractiveTranscriptPolicy =
   | { readonly onPersistentOpenFailure: 'fail' }
   | {
       readonly onPersistentOpenFailure: 'use-ephemeral';
       readonly showPersistentWarning: (message: string) => void;
     };
 
-export interface CliTranscriptSession {
+interface CliTranscriptSession {
   readonly session: SessionHandle;
   readonly canResume: boolean;
   readonly warning?: string;
@@ -66,23 +66,13 @@ function ephemeralSession(
   return { session, canResume: false, warning };
 }
 
-/** Prepare the process session for a noninteractive run before it can start. */
-export async function initializeHeadlessTranscriptSession(
-  openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
-): Promise<CliTranscriptSession> {
-  const existing = tryDefaultSession();
-  if (existing) return persistentSession(existing);
-
-  const transcripts = await openPersistentStore();
-  return initializePersistentSession(transcripts);
-}
-
 /**
- * Prepare the interactive TUI session under an explicit persistence policy.
- * Only the `use-ephemeral` arm permits an in-memory session after open failure.
+ * Prepare the process session under an explicit persistence policy. The
+ * default `fail` policy is what every noninteractive run needs; only the
+ * `use-ephemeral` arm permits an in-memory session after open failure.
  */
-export async function initializeInteractiveTranscriptSession(
-  policy: InteractiveTranscriptPolicy,
+export async function initializeCliTranscriptSession(
+  policy: InteractiveTranscriptPolicy = { onPersistentOpenFailure: 'fail' },
   openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
 ): Promise<CliTranscriptSession> {
   const existing = tryDefaultSession();

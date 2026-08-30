@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -10,7 +10,7 @@ import {
   createOutputState,
   ensureRoundData,
 } from '@agent/implementations/flows/reflection/output/outputState';
-import { processMultipleOutputs } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
+import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import type { OutputDependencies } from '@agent/implementations/flows/reflection/output/outputState';
 import type { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -20,9 +20,10 @@ import type {
   CompileResult,
   FileLocation,
   OutputFileInfo,
-  StorageKey,
   StreamTabId,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,
@@ -43,11 +44,6 @@ function createLocation(path: string): FileLocation {
 function createAgentLocation(path: string): AgentFileLocation {
   return createWorkspaceLocation(path, path);
 }
-
-const defaultWorkflowOutputPolicy = {
-  shouldAutoOpenPdfOrLog: () => true,
-  shouldRejectOnCompileFailure: () => true,
-};
 
 /**
  * Minimal OutputDependencies for the output-extraction tests: the code under
@@ -79,7 +75,6 @@ function createCompileFailureFixture() {
     logExcerpt: '! Missing $ inserted.',
   };
   const summary = {
-    storageKey: 'run:compile-context' as StorageKey,
     currRound: 0,
     fileInfos: [],
     filesToOpen: [],
@@ -98,7 +93,6 @@ function createCompileFailureFixture() {
 function createOutputNode(
   streamId: string,
   host: ReturnType<typeof createRecordingHost>['host'],
-  workflowOutputPolicy: typeof defaultWorkflowOutputPolicy = defaultWorkflowOutputPolicy,
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
 ): OutputNode {
@@ -107,7 +101,6 @@ function createOutputNode(
     runScope: testRunScope(streamId, { interactions: host }),
     logger,
     outputState,
-    workflowOutputPolicy,
   } as unknown as ReflectionServices);
 }
 
@@ -145,23 +138,26 @@ function runOutputPost(
   );
 }
 
-function compileContextCase(
-  streamId: string,
-  workflowOutputPolicy = defaultWorkflowOutputPolicy,
-): {
+function compileContextCase(streamId: string): {
   outputNode: OutputNode;
   fixture: ReturnType<typeof createCompileFailureFixture>;
   shared: ReflectionFlowShared;
 } {
   const { host } = createRecordingHost();
   return {
-    outputNode: createOutputNode(streamId, host, workflowOutputPolicy),
+    outputNode: createOutputNode(streamId, host),
     fixture: createCompileFailureFixture(),
     shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
   };
 }
 
 describe('output progress events', () => {
+  // OutputNode reads the workflow-output settings straight from the platform,
+  // so a case that seeds them must hand the suite default back afterwards.
+  afterEach(async () => {
+    await installPlatform();
+  });
+
   it('publishes output events and projects restored rounds', async () => {
     const projected = createRecordedRuntime('stream:output-node');
     const { events, host, hostEvents, logger } = projected;
@@ -181,7 +177,6 @@ describe('output progress events', () => {
     const outputNode = createOutputNode(
       'stream:output-node',
       host,
-      defaultWorkflowOutputPolicy,
       logger,
       outputState,
     );
@@ -200,7 +195,6 @@ describe('output progress events', () => {
             fileInfos: [fileInfo],
             filesToOpen: [openedLocation],
           },
-          compileFailures: [],
           compiledArtifacts: [],
           emitCompileFailures: false,
         },
@@ -240,10 +234,13 @@ describe('output progress events', () => {
       rejectOnCompileFailure: false,
     },
   ])('$name', async ({ streamId, rejectOnCompileFailure }) => {
-    const { outputNode, fixture, shared } = compileContextCase(streamId, {
-      ...defaultWorkflowOutputPolicy,
-      shouldRejectOnCompileFailure: () => rejectOnCompileFailure,
+    await installPlatform({
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]:
+          rejectOnCompileFailure,
+      },
     });
+    const { outputNode, fixture, shared } = compileContextCase(streamId);
 
     await runOutputPost(
       outputNode,
@@ -255,7 +252,6 @@ describe('output progress events', () => {
       },
       {
         summary: fixture.summary,
-        compileFailures: [fixture.compileFailure],
         compileResult: fixture.compileResult,
         compiledArtifacts: [],
         emitCompileFailures: false,
@@ -292,7 +288,6 @@ describe('output progress events', () => {
       },
       {
         summary: fixture.summary,
-        compileFailures: [],
         compileResult,
         compiledArtifacts: [],
         emitCompileFailures: false,
@@ -326,7 +321,7 @@ describe('output progress events', () => {
     } as unknown as XmlOutputManager;
 
     try {
-      await processMultipleOutputs(
+      await extractFilesFromXml(
         state,
         processorDeps(logger),
         xmlManager,
@@ -367,7 +362,7 @@ describe('output progress events', () => {
         splitScratchpadMultipleOutputXml: async () => [],
       } as unknown as XmlOutputManager;
 
-      await processMultipleOutputs(
+      await extractFilesFromXml(
         createOutputState(),
         processorDeps(logger),
         xmlManager,

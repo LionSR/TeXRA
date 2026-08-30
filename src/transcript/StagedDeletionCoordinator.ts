@@ -20,8 +20,8 @@
  *   `flush()`.
  *
  * It reaches the snapshot store only through {@link StagedDeletionHost} — the
- * store keeps ownership of records, KV handles, write mutexes, and stream
- * versions, and this coordinator never inspects them.
+ * store keeps ownership of records, write mutexes, and stream versions, and
+ * this coordinator never inspects them.
  */
 
 // Third-party imports
@@ -77,8 +77,8 @@ export interface StagedStreamSnapshotDeletion {
 /**
  * The narrow port back into the snapshot store. Every member is a capability
  * the staged-deletion machine cannot own itself: durable writes, the store's
- * per-(stream, category) write locks, its stream-version guard, its cached KV
- * handles, its seeding chain, and its in-memory record.
+ * per-(stream, category) write locks, its stream-version guard, its seeding
+ * chain, and its in-memory record.
  */
 export interface StagedDeletionHost {
   /** Persist one sidecar through the store's serialized write queue. */
@@ -93,8 +93,6 @@ export interface StagedDeletionHost {
   bumpStreamVersion(stream: StreamTabId): void;
   /** The stream's in-flight seed/refresh chain, if one is running. */
   seedChain(stream: StreamTabId): Promise<void> | undefined;
-  /** Drop cached KV handles after a rename moved the stream's directory. */
-  invalidateKvHandles(stream: StreamTabId): void;
   /** Drop the stream's in-memory record once a deletion commits. */
   evict(stream: StreamTabId): void;
 }
@@ -288,7 +286,6 @@ export class StagedDeletionCoordinator {
         if (!hasLiveData) {
           await StorageFS.ensureDir(STREAM_DATA_DIR);
           await StorageFS.rename(stagedDir, liveDir);
-          this.host.invalidateKvHandles(stream);
           if (liveStreams.has(stream)) restored.push(stream);
           else pendingCleanup.push(stream);
           return;
@@ -431,7 +428,6 @@ export class StagedDeletionCoordinator {
           recovering.phase = 'transitioning';
           await StorageFS.rename(stagedDir, liveDir);
           outcome = 'restored';
-          this.host.invalidateKvHandles(stream);
         }
         if (!hasLiveData && (liveWasAuthoritative || !hasStagedData)) {
           await StorageFS.ensureDir(liveDir);

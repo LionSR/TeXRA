@@ -224,30 +224,17 @@ export class ToolCard extends LitElement {
     });
   }
 
-  private static readonly STATUS_CONFIG: Record<
+  private static readonly STATUS_ICON: Record<
     ToolDashboardItem['status'],
-    {
-      icon: TeXRAIconName;
-      variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
-    }
+    TeXRAIconName
   > = {
-    available: { icon: 'check', variant: 'success' },
-    'not-found': {
-      icon: 'triangle-exclamation',
-      variant: 'neutral',
-    },
-    unknown: {
-      icon: 'circle-question',
-      variant: 'neutral',
-    },
-    'coming-soon': {
-      icon: 'clock',
-      variant: 'neutral',
-    },
+    available: 'check',
+    'not-found': 'triangle-exclamation',
+    unknown: 'circle-question',
+    'coming-soon': 'clock',
   };
 
   private renderAvailableStatusIcon(): TemplateResult {
-    const config = ToolCard.STATUS_CONFIG.available;
     const label = toolStatusLabel(this.item.status, this.item.statusLabel);
 
     return html`
@@ -257,19 +244,20 @@ export class ToolCard extends LitElement {
         aria-label=${label}
         title=${label}
       >
-        ${waIcon(config.icon)}
+        ${waIcon(ToolCard.STATUS_ICON.available)}
       </span>
     `;
   }
 
+  // Only the non-available statuses reach this badge (see `render`), and they
+  // all read neutral; the icon carries the distinction.
   private renderStatusBadge(): TemplateResult {
     const { status } = this.item;
-    const config = ToolCard.STATUS_CONFIG[status];
     const label = toolStatusLabel(status, this.item.statusLabel);
 
     return html`
-      <wa-tag class="tool-badge" variant=${config.variant} size="s">
-        ${waIcon(config.icon)} ${label}
+      <wa-tag class="tool-badge" variant="neutral" size="s">
+        ${waIcon(ToolCard.STATUS_ICON[status])} ${label}
       </wa-tag>
     `;
   }

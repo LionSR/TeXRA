@@ -1,3 +1,5 @@
+import pDefer from 'p-defer';
+
 import { jitteredExponentialBackoffMs } from '@utils/core';
 
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
@@ -33,16 +35,11 @@ interface RoutePolicy {
   readonly key: string;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
   readonly isReachableFailure?: (error: Error) => boolean;
-  readonly isUnobservedFailure?: (error: Error) => boolean;
 }
 
 interface RunOptions {
   readonly signal: AbortSignal;
   readonly baseBackoffMs: number;
-  readonly classifyFailure: (error: Error) => RouteFailure | undefined;
-  readonly isReachableFailure?: (error: Error) => boolean;
-  readonly isUnobservedFailure?: (error: Error) => boolean;
-  readonly additionalRoutes?: readonly RoutePolicy[];
   readonly onWait?: (delayMs: number) => void;
 }
 
@@ -67,21 +64,17 @@ export class ModelRetryGate {
   private readonly routes = new Map<string, RouteState>();
   private disposed = false;
 
+  /**
+   * Run `operation` gated on every route in `routes`, narrowest first (see
+   * {@link acquireAll}). The tuple type is non-empty because an empty list
+   * would run the operation entirely ungated.
+   */
   async run<T>(
-    route: string,
+    routes: readonly [RoutePolicy, ...RoutePolicy[]],
     options: RunOptions,
     operation: () => Promise<T>,
   ): Promise<T> {
-    const policies: RoutePolicy[] = [
-      ...(options.additionalRoutes ?? []),
-      {
-        key: route,
-        classifyFailure: options.classifyFailure,
-        isReachableFailure: options.isReachableFailure,
-        isUnobservedFailure: options.isUnobservedFailure,
-      },
-    ];
-    const acquired = await this.acquireAll(policies, options);
+    const acquired = await this.acquireAll(routes, options);
     try {
       const result = await operation();
       for (const entry of acquired) {
@@ -105,10 +98,6 @@ export class ModelRetryGate {
             );
           } else if (entry.isReachableFailure?.(error as Error)) {
             this.markReachable(entry.key, entry.permit);
-          } else if (entry.isUnobservedFailure?.(error as Error)) {
-            // An earlier admission boundary rejected the request, so this
-            // route was never observed. Preserve its recovery state.
-            this.abandon(entry.key, entry.permit);
           } else if (entry.permit.probe) {
             // An unclassified failure does not prove that a recovering route
             // is reachable. Keep the cohort closed and hand probe ownership
@@ -207,25 +196,25 @@ export class ModelRetryGate {
 
     const delayMs = Math.max(0, state.retryAt - Date.now());
     options.onWait?.(delayMs);
-    return new Promise<RetryPermit>((resolve, reject) => {
-      const waiter: WaitingAttempt = {
-        resolve,
-        reject,
-        signal: options.signal,
-        onAbort: () => {
-          const index = state.waiters.indexOf(waiter);
-          if (index >= 0) state.waiters.splice(index, 1);
-          if (state.waiters.length === 0 && state.timer) {
-            clearTimeout(state.timer);
-            state.timer = undefined;
-          }
-          reject(abortReason(options.signal));
-        },
-      };
-      options.signal.addEventListener('abort', waiter.onAbort, { once: true });
-      state.waiters.push(waiter);
-      this.scheduleProbe(state);
-    });
+    const permit = pDefer<RetryPermit>();
+    const waiter: WaitingAttempt = {
+      resolve: permit.resolve,
+      reject: permit.reject,
+      signal: options.signal,
+      onAbort: () => {
+        const index = state.waiters.indexOf(waiter);
+        if (index >= 0) state.waiters.splice(index, 1);
+        if (state.waiters.length === 0 && state.timer) {
+          clearTimeout(state.timer);
+          state.timer = undefined;
+        }
+        permit.reject(abortReason(options.signal));
+      },
+    };
+    options.signal.addEventListener('abort', waiter.onAbort, { once: true });
+    state.waiters.push(waiter);
+    this.scheduleProbe(state);
+    return permit.promise;
   }
 
   private acquireHealthy(route: string): RetryPermit | undefined {

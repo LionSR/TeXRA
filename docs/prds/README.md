@@ -1,6 +1,6 @@
 ---
 created: 2026-06-21
-updated: 2026-08-17
+updated: 2026-08-28
 ---
 
 # PRD Index
@@ -14,16 +14,18 @@ that archived source branch, not `main`.
 
 ## Retired proposals
 
-| Document                                                               | Created    | Retired    |
-| ---------------------------------------------------------------------- | ---------- | ---------- |
-| [Runtime/host decoupling](./2026-06-27-prd-runtime-host-decoupling.md) | 2026-06-27 | 2026-07-18 |
-| [Agent SDK boundary](./2026-06-29-prd-agent-sdk-boundary.md)           | 2026-06-29 | 2026-07-18 |
-| [Runtime gold standard](./2026-06-29-prd-runtime-gold-standard.md)     | 2026-06-29 | 2026-07-18 |
+| Document                                                                                        | Created    | Retired    |
+| ----------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [Runtime/host decoupling](./2026-06-27-prd-runtime-host-decoupling.md)                          | 2026-06-27 | 2026-07-18 |
+| [Agent SDK boundary](./2026-06-29-prd-agent-sdk-boundary.md)                                    | 2026-06-29 | 2026-07-18 |
+| [Runtime gold standard](./2026-06-29-prd-runtime-gold-standard.md)                              | 2026-06-29 | 2026-07-18 |
+| [Proven execution liveness (presence sockets)](./2026-08-16-prd-execution-liveness-presence.md) | 2026-08-16 | 2026-08-23 |
 
 ## Other records
 
 | Document                                                                                                                                 | Created    | Updated    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
+| [PRD: Effect 4 as the TeXRA backend runtime](./2026-08-26-effect-4-runtime-migration.md)                                                 | 2026-08-26 | 2026-08-28 |
 | [PRD: The session event journal — single-authority transcript persistence](./2026-08-18-session-event-journal.md)                        | 2026-08-18 | 2026-08-18 |
 | [PRD: One SQLite database per workspace for app-owned durable state](./2026-08-16-sqlite-workspace-state.md)                             | 2026-08-16 | 2026-08-17 |
 | [PRD: Transcript, persistence, and projection architecture for long-lived sessions](./2026-08-11-transcript-memory-architecture.md)      | 2026-08-11 | 2026-08-11 |

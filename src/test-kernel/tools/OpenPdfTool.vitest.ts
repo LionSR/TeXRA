@@ -8,11 +8,14 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
-import type { OpenPdfRequest } from '@agent/runtime/HostInteractions';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { OpenPdfTool } from '@tools/OpenPdfTool';
+
+/** The request shape the host's PDF opener receives, derived from the port. */
+type OpenPdfRequest = Parameters<NonNullable<HostInteractions['openPdf']>>[0];
 
 describe('OpenPdfTool', () => {
   setupPlatform({
@@ -39,7 +42,7 @@ describe('OpenPdfTool', () => {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Promise<void>>();
     openPdf.mockResolvedValue(undefined);
     detachHostInteractions();
-    detachHostInteractions = defaultSession().useHostInteractions({
+    detachHostInteractions = defaultSession().interactions.use({
       openPdf,
       cancel: () => undefined,
     });

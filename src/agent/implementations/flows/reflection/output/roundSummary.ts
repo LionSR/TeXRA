@@ -10,13 +10,11 @@ import {
   MESSAGE_TYPES,
   type FileLocation,
   type OutputFileInfo,
-  type StorageKey,
 } from '@shared/schemas';
 
 import { computeOutputDiffStats } from './diffComputation';
 import {
   ensureRoundData,
-  getStorageKey,
   withOutputStage,
   type OutputState,
   type OutputDependencies,
@@ -35,7 +33,6 @@ export async function summarizeRound(
   outputFile: FileLocation,
   currRound: number,
   options: {
-    endTurn: boolean;
     mapping?: RoundFileMapping;
     isRewrite?: boolean;
     /** Snapshot-resolved base files. Required for in-place workflows so
@@ -61,7 +58,6 @@ export async function summarizeRound(
         { isRewrite: options.isRewrite },
       );
       data.outputs = fileInfos;
-      const storageKey = getStorageKey(state);
 
       // Collect file paths that haven't been opened yet
       const filesToOpen: FileLocation[] = [];
@@ -74,7 +70,10 @@ export async function summarizeRound(
       }
 
       deps.logger.debug('Finalized round', {
-        data: { round: currRound, storageKey, files: fileInfos.length },
+        data: {
+          round: currRound,
+          files: fileInfos.length,
+        },
         messageType: MESSAGE_TYPES.INTERNAL,
       });
 

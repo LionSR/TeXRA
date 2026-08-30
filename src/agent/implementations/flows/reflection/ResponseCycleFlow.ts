@@ -1,19 +1,16 @@
 import * as path from 'node:path';
 
-import { z } from 'zod';
-
 import { BaseNode, Flow } from '@agent/node';
 import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
-import { recordRound } from '@agent/core/state/AgentState';
+import { recordCycleMetrics } from '@agent/core/state/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
-  BaseCycleFieldsSchema,
+  type BaseCycleFields,
   defaultPostCompactionContext,
   extractModelResponse,
   resetCycleState,
   saveCycleDebug,
   type SkippableNodeResult,
-  type CycleDebugFileOptions,
 } from '@agent/core/flows/CommonCycleTypes';
 import {
   isContextWindowExceededStopReason,
@@ -25,17 +22,17 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ModelInvocationNode } from '@agent/core/flows/ModelInvocationNode';
 import type { ResponseCycleServices } from '@agent/core/flows/CycleServices';
 import {
-  AgentFileLocationSchema,
+  type AgentFileLocation,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
-  type ToolDefinition,
+  SCRATCHPAD_TAG,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 // ============================================================================
-// Cycle Fields Schema (Extends Base)
+// Cycle Fields
 // ============================================================================
 
 /**
@@ -43,17 +40,14 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
  * output tracking. Everything here is structuredClone compatible; the
  * non-serializable rest lives in {@link CycleTransientFields}.
  */
-const CycleFieldsSchema = BaseCycleFieldsSchema.extend({
+interface CycleFields extends BaseCycleFields {
   /** Whether output file exists */
-  outputExists: z.boolean(),
+  outputExists: boolean;
   /** Agent output location selected before this cycle starts. */
-  outputLocation: AgentFileLocationSchema,
+  outputLocation: AgentFileLocation;
   /** Processed response text */
-  processedResponse: z.string().optional(),
-});
-
-/** Serializable cycle fields derived from schema */
-type CycleFields = z.infer<typeof CycleFieldsSchema>;
+  processedResponse?: string;
+}
 
 /**
  * Transient cycle fields that are NOT serialized. These hold non-serializable
@@ -87,43 +81,27 @@ interface ResponsePrepResult {
 }
 
 /**
- * Debug-file identity for one cycle. The request messages and the response are
- * saved from different nodes and must land on the same base name and round.
- */
-function responseDebugFileOptions(
-  shared: ResponseCycleShared,
-  continuationCount: number,
-): CycleDebugFileOptions {
-  return {
-    continuationCount,
-    baseName: 'response',
-    outputFile: shared.outputLocation.relativePath,
-  };
-}
-
-/**
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
  */
-class ResponsePrepNode<C> extends BaseNode<
+class ResponsePrepNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
-  async prep(shared: ResponseCycleShared): Promise<ResponsePrepResult> {
+  override async prep(
+    shared: ResponseCycleShared,
+  ): Promise<ResponsePrepResult> {
     const { prompt, userVarChannels, runScope } = this.services;
     const interrupted = runScope.signal.aborted;
     const exists = await AbsoluteFS.exists(shared.outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
-      : await getSystemPromptWithRules(prompt.systemPrompt, {
-          ...userVarChannels.input,
-          ...userVarChannels.transient,
-        });
+      : await getSystemPromptWithRules(prompt.systemPrompt, userVarChannels);
 
     return { interrupted, exists, systemPrompt };
   }
 
-  async post(
+  override async post(
     shared: ResponseCycleShared,
     prepRes: ResponsePrepResult,
   ): Promise<string | undefined> {
@@ -138,12 +116,12 @@ class ResponsePrepNode<C> extends BaseNode<
     shared.outputExists = prepRes.exists;
     shared.systemPrompt = prepRes.systemPrompt;
 
-    await saveCycleDebug(
-      shared.messages,
-      'messages',
-      this.services,
-      responseDebugFileOptions(shared, round.continuationCount),
-    );
+    // The request messages and the response are saved from different nodes;
+    // each names its own file so neither round nor object kind collides.
+    await saveCycleDebug(shared.messages, 'messages', this.services, {
+      continuationCount: round.continuationCount,
+      baseName: `r${round.roundIndex}_messages`,
+    });
 
     return FlowTransition.DEFAULT;
   }
@@ -204,35 +182,15 @@ type ContinuationNodeResult = SkippableNodeResult<{
   contextWindowExceeded: boolean;
 }>;
 
-export function responseCycleToolsForModel<C>(
-  services: Pick<
-    ResponseCycleServices<C>,
-    'modelCell' | 'setting' | 'toolRegistry' | 'toolPolicy'
-  >,
-): ToolDefinition[] | undefined {
-  if (!services.modelCell.handler.capabilities.supportsFunctionCalling) {
-    return undefined;
-  }
-  const runtimeUnavailable = new Set(
-    services.toolPolicy.runtimeUnavailableTools ?? [],
-  );
-  return services.setting.tools.filter(
-    (tool) =>
-      !runtimeUnavailable.has(tool.name) &&
-      (services.toolPolicy.approvalPromptsUnavailable !== true ||
-        services.toolRegistry.get(tool.name)?.requiresApproval !== true),
-  );
-}
-
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
  */
-class ResponseProcessNode<C> extends BaseNode<
+class ResponseProcessNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
-  async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
+  override async prep(shared: ResponseCycleShared): Promise<ProcessPrepResult> {
     const { assembly } = this.services.workspace;
     return {
       shouldStop: shared.shouldStop,
@@ -243,7 +201,7 @@ class ResponseProcessNode<C> extends BaseNode<
     };
   }
 
-  async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
+  override async exec(prepRes: ProcessPrepResult): Promise<ProcessNodeResult> {
     const { logger } = this.services;
 
     if (prepRes.shouldStop || !prepRes.responseObject) {
@@ -290,7 +248,7 @@ class ResponseProcessNode<C> extends BaseNode<
 
       const scratchpad = await extractScratchpad(
         processedResponse,
-        'scratchpad',
+        SCRATCHPAD_TAG,
       );
       if (scratchpad) {
         logger.info(scratchpad, {
@@ -337,7 +295,7 @@ class ResponseProcessNode<C> extends BaseNode<
     });
   }
 
-  async post(
+  override async post(
     shared: ResponseCycleShared,
     prepRes: ProcessPrepResult,
     execRes: ProcessNodeResult,
@@ -432,19 +390,19 @@ class ResponseProcessNode<C> extends BaseNode<
  * path routes through this single finalization node, so no guard flag is
  * needed: the graph guarantees one execution.
  */
-class ResponseCycleFinalizeNode<C> extends BaseNode<
+class ResponseCycleFinalizeNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
   /** Finalize the round by recording stats and invoking callback. */
-  async exec(): Promise<void> {
+  override async exec(): Promise<void> {
     const { round, run, onRoundFinalized, logger } = this.services;
-    recordRound(run, round);
+    recordCycleMetrics(run, round.responseTimeMs, round.normalizedUsage);
     // Best-effort finalization callback. `ResponseCycleNode` (the reflection
-    // wrapper) re-runs recordRound + onRoundFinalized from its catch block as a
-    // safety net for nodes that throw *before* reaching this single
+    // wrapper) re-runs recordCycleMetrics + onRoundFinalized from its catch
+    // block as a safety net for nodes that throw *before* reaching this single
     // finalization point. Guarding the callback here keeps this node from
-    // throwing *after* recordRound has already mutated run state — otherwise
+    // throwing *after* the metrics have already mutated run state — otherwise
     // that catch would re-record the round and double-count usage/response time.
     try {
       await onRoundFinalized(run);
@@ -460,11 +418,13 @@ class ResponseCycleFinalizeNode<C> extends BaseNode<
  * Evaluates the processed response to decide whether the agent should end the turn,
  * stop entirely, or enqueue a continuation request.
  */
-class ResponseContinuationNode<C> extends BaseNode<
+class ResponseContinuationNode extends BaseNode<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
-  async prep(shared: ResponseCycleShared): Promise<ContinuationPrepResult> {
+  override async prep(
+    shared: ResponseCycleShared,
+  ): Promise<ContinuationPrepResult> {
     if (
       shared.shouldStop ||
       !shared.stopReason ||
@@ -483,7 +443,9 @@ class ResponseContinuationNode<C> extends BaseNode<
     };
   }
 
-  async exec(prepRes: ContinuationPrepResult): Promise<ContinuationNodeResult> {
+  override async exec(
+    prepRes: ContinuationPrepResult,
+  ): Promise<ContinuationNodeResult> {
     const { round, run, setting } = this.services;
     const modelHandler = this.services.modelCell.handler;
 
@@ -534,7 +496,7 @@ class ResponseContinuationNode<C> extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ResponseCycleShared,
     _prepRes: ContinuationPrepResult,
     execRes: ContinuationNodeResult,
@@ -609,31 +571,32 @@ class ResponseContinuationNode<C> extends BaseNode<
  * Creates a response cycle flow. The caller injects {@link ResponseCycleServices}
  * through `setServices()`; only mutable state travels in the shared context.
  */
-export function createResponseCycleFlow<C>(): Flow<
+export function createResponseCycleFlow(): Flow<
   ResponseCycleShared,
-  ResponseCycleServices<C>
+  ResponseCycleServices
 > {
-  const prepNode = new ResponsePrepNode<C>();
+  const prepNode = new ResponsePrepNode();
   const invokeNode = new ModelInvocationNode<
     ResponseCycleShared,
-    ResponseCycleServices<C>
+    ResponseCycleServices
   >({
     operationName: 'Model invocation',
     streaming: false,
     backgroundModeAware: true,
     getSystemPrompt: (shared) => shared.systemPrompt,
     getEndTag: () => OUTPUT_END_TAG,
-    getTools: responseCycleToolsForModel,
     storeResponse: (shared, response) => {
       shared.responseObject = response;
     },
     getPostCompactionContext: defaultPostCompactionContext,
-    getDebugFileOptions: (shared, services) =>
-      responseDebugFileOptions(shared, services.round.continuationCount),
+    getDebugFileOptions: (_shared, services) => ({
+      continuationCount: services.round.continuationCount,
+      baseName: `r${services.round.roundIndex}_response`,
+    }),
   });
-  const processNode = new ResponseProcessNode<C>();
-  const continuationNode = new ResponseContinuationNode<C>();
-  const finalizeNode = new ResponseCycleFinalizeNode<C>();
+  const processNode = new ResponseProcessNode();
+  const continuationNode = new ResponseContinuationNode();
+  const finalizeNode = new ResponseCycleFinalizeNode();
 
   prepNode.next(invokeNode);
   invokeNode.next(processNode);

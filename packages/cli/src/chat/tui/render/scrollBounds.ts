@@ -10,9 +10,8 @@ import { clamp } from '@utils/core';
 /**
  * Below this many content rows, a scrollable region degrades to a single
  * status/overflow row instead of scrolling (a compact layout). The single
- * source of truth for the threshold every scroll-bounds caller uses as its
- * `compactRows` — the modal text body, the external-inquiry question, and the
- * approval diff all share this one concept.
+ * threshold every scroll-bounds function applies: the modal text body, the
+ * external-inquiry question, and the approval diff all share this one concept.
  */
 export const COMPACT_SCROLLABLE_CONTENT_ROWS = 3;
 
@@ -32,27 +31,26 @@ function maxOffsetReservingOneRow(
 }
 
 export function maxScrollableRowOffset({
-  compactRows,
   maxDisplayLines,
   totalLines,
 }: {
-  readonly compactRows: number;
   readonly maxDisplayLines: number;
   readonly totalLines: number;
 }): number {
-  if (maxDisplayLines <= compactRows || totalLines <= maxDisplayLines) {
+  if (
+    maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS ||
+    totalLines <= maxDisplayLines
+  ) {
     return 0;
   }
   return maxOffsetReservingOneRow(maxDisplayLines, totalLines);
 }
 
 export function scrollBoundedRows<T>({
-  compactRows,
   maxDisplayLines,
   rows,
   scrollOffset = 0,
 }: {
-  readonly compactRows: number;
   readonly maxDisplayLines: number;
   readonly rows: readonly T[];
   readonly scrollOffset?: number;
@@ -61,7 +59,7 @@ export function scrollBoundedRows<T>({
     return { hiddenAfter: 0, hiddenBefore: 0, visibleRows: rows };
   }
 
-  if (maxDisplayLines <= compactRows) {
+  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     // maxDisplayLines > 0 here (the early return above rules out <= 0).
     const visibleRows = rows.slice(0, maxDisplayLines);
     return {
@@ -76,7 +74,6 @@ export function scrollBoundedRows<T>({
     Math.min(
       scrollOffset,
       maxScrollableRowOffset({
-        compactRows,
         maxDisplayLines,
         totalLines: rows.length,
       }),
@@ -104,35 +101,35 @@ export interface ScrollableDisplayLine<K extends string = string> {
 
 /**
  * Maximum scroll offset for a region that degrades to a single status row in
- * compact layouts: below `compactRows` the last visible row is reserved for
- * the overflow marker, so content scrolls within `maxDisplayLines - 1` rows.
+ * compact layouts: below the compact threshold the last visible row is
+ * reserved for the overflow marker, so content scrolls within
+ * `maxDisplayLines - 1` rows.
  */
 export function compactAwareMaxScrollOffset({
-  compactRows,
   maxDisplayLines,
   totalLines,
 }: {
-  readonly compactRows: number;
   readonly maxDisplayLines: number;
   readonly totalLines: number;
 }): number {
   if (maxDisplayLines <= 0) return 0;
-  if (maxDisplayLines <= compactRows && totalLines > maxDisplayLines) {
+  if (
+    maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS &&
+    totalLines > maxDisplayLines
+  ) {
     return maxOffsetReservingOneRow(maxDisplayLines, totalLines);
   }
 
-  return maxScrollableRowOffset({ compactRows, maxDisplayLines, totalLines });
+  return maxScrollableRowOffset({ maxDisplayLines, totalLines });
 }
 
 /** Rows advanced by PgUp/PgDn, leaving a row of context where space allows. */
 export function scrollPageRows({
-  compactRows,
   maxDisplayLines,
 }: {
-  readonly compactRows: number;
   readonly maxDisplayLines: number;
 }): number {
-  return maxDisplayLines <= compactRows
+  return maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS
     ? Math.max(1, maxDisplayLines - 1)
     : Math.max(1, maxDisplayLines - 2);
 }
@@ -166,14 +163,12 @@ function compactHiddenLineText({
  * "first line ... N {hiddenNoun} hidden" row.
  */
 export function boundedScrollableLines<K extends string>({
-  compactRows,
   hiddenNoun,
   lines,
   maxDisplayLines,
   scrollOffset = 0,
   width,
 }: {
-  readonly compactRows: number;
   /** Qualifies what is hidden in single-row markers (e.g. `prompt rows`). */
   readonly hiddenNoun?: string;
   readonly lines: readonly ScrollableDisplayLine<K>[];
@@ -186,12 +181,11 @@ export function boundedScrollableLines<K extends string>({
   }
 
   const maxOffset = compactAwareMaxScrollOffset({
-    compactRows,
     maxDisplayLines,
     totalLines: lines.length,
   });
 
-  if (maxDisplayLines <= compactRows) {
+  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
     const contentRows = Math.max(1, maxDisplayLines - 1);
     const offset = clamp(scrollOffset, 0, maxOffset);
 
@@ -222,7 +216,6 @@ export function boundedScrollableLines<K extends string>({
   }
 
   const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
-    compactRows,
     maxDisplayLines,
     rows: lines,
     scrollOffset,
