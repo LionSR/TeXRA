@@ -134,6 +134,7 @@ export class ModelSelectionList extends LitElement {
       <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
+        aria-label=${`Reasoning level for ${model.label}`}
         title="Reasoning level"
         ?disabled=${model.disabled}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
@@ -345,6 +346,7 @@ export class ModelSelectionList extends LitElement {
         <wa-select
           id="helper-model-select"
           class="helper-model-select form-control-fill"
+          aria-describedby="helper-model-help"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >
@@ -356,8 +358,8 @@ export class ModelSelectionList extends LitElement {
             `,
           )}
         </wa-select>
-        <span class="helper-model-help">
-          Used for quick background jobs (e.g. intelligent merge).
+        <span id="helper-model-help" class="helper-model-help">
+          Used for quick background tasks, such as intelligent merge.
         </span>
       </div>
     `;
@@ -371,12 +373,13 @@ export class ModelSelectionList extends LitElement {
         ${renderSettingsSectionHeading({
           title: 'Model selection',
           description:
-            'Choose the models exposed to agents, plus the cheaper model used for quick background tasks.',
+            'Choose which models agents can use and the model used for quick background tasks.',
           icon: 'server',
         })}
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <wa-switch
+            aria-describedby="short-names-description"
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
               const enabled = (e.target as WaSwitch).checked;
@@ -388,8 +391,8 @@ export class ModelSelectionList extends LitElement {
           >
             Use short model names
           </wa-switch>
-          <span class="short-names-description">
-            Send unpinned names (e.g. gpt-5.5 instead of gpt-5.5-2026-04-15)
+          <span id="short-names-description" class="short-names-description">
+            Use unpinned names, such as gpt-5.5 instead of gpt-5.5-2026-04-15.
           </span>
         </div>
         <div class="settings-disclosure-list">

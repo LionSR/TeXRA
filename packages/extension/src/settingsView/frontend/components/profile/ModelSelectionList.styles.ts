@@ -188,6 +188,20 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   @container settings (max-width: 520px) {
+    .helper-model-row,
+    .short-names-toggle {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .helper-model-row label {
+      white-space: normal;
+    }
+
+    .helper-model-select {
+      max-width: none;
+    }
+
     .model-row {
       flex-wrap: wrap;
     }

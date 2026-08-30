@@ -115,6 +115,7 @@ export class ProviderKeyList extends LitElement {
     const streamingToggle = html`
       <div class="provider-setting">
         <wa-switch
+          aria-label=${`Streaming for ${entry.displayName}`}
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
@@ -226,7 +227,7 @@ export class ProviderKeyList extends LitElement {
     const rows = resolveProviderKeyRows(this.providerKeyStatuses);
 
     const description =
-      "Except for Codex models through the ChatGPT subscription section above, chat subscriptions do not include API access. Use a key from the provider's developer console.";
+      "Chat subscriptions do not include API access. Codex models connected through ChatGPT are the exception. Add keys from each provider's developer console.";
 
     return html`
       <div class="provider-keys-section">
