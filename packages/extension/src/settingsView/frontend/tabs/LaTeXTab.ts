@@ -694,38 +694,36 @@ export class LaTeXTab extends LitElement {
     const isCustom = Object.keys(value).length > 0;
     const error = this.replacementJsonErrors[opts.field];
     const controlId = `latex-setting-${opts.field}`;
-    const descriptionId = `${controlId}-description`;
-    const errorId = `${controlId}-error`;
     return html`
       <div class="settings-row replacement-map-row">
         <div class="settings-row-text">
           <label class="settings-row-label" for=${controlId}
             >${opts.label}</label
           >
-          <span id=${descriptionId} class="settings-row-help"
-            >${opts.description}</span
-          >
+          <span class="settings-row-help">${opts.description}</span>
           <wa-textarea
             id=${controlId}
+            class="setting-control-metadata"
             rows="4"
             resize="auto"
             spellcheck="false"
-            aria-invalid=${error ? 'true' : 'false'}
-            aria-describedby=${
-              error ? `${descriptionId} ${errorId}` : descriptionId
-            }
             .value=${JSON.stringify(value, null, 2)}
             @change=${(event: Event) =>
               this.handleCustomReplacementChange(
                 opts.field,
-                (event.target as WaTextarea).value ?? '',
+                event.target as WaTextarea,
               )}
-          ></wa-textarea>
+          >
+            <span slot="label" class="visually-hidden">${opts.label}</span>
+            <span slot="hint" class="visually-hidden"
+              >${
+                error ? `${opts.description} ${error}` : opts.description
+              }</span
+            >
+          </wa-textarea>
           ${
             error
-              ? html`<span id=${errorId} class="replacement-json-error"
-                  >${error}</span
-                >`
+              ? html`<span class="replacement-json-error">${error}</span>`
               : nothing
           }
         </div>
@@ -739,15 +737,18 @@ export class LaTeXTab extends LitElement {
 
   private handleCustomReplacementChange(
     field: 'customReplacements' | 'customReplacementsRegex',
-    source: string,
+    control: WaTextarea,
   ): void {
+    const source = control.value ?? '';
     let parsed: unknown;
     try {
       parsed = JSON.parse(source);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid JSON.';
+      control.setCustomValidity(message);
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
-        [field]: error instanceof Error ? error.message : 'Invalid JSON.',
+        [field]: message,
       };
       return;
     }
@@ -760,12 +761,15 @@ export class LaTeXTab extends LitElement {
     }
     const result = entry.schema.safeParse(parsed);
     if (!result.success) {
+      const message = 'Enter a JSON object with string values.';
+      control.setCustomValidity(message);
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
-        [field]: 'Enter a JSON object with string values.',
+        [field]: message,
       };
       return;
     }
+    control.setCustomValidity('');
     this.replacementJsonErrors = {
       ...this.replacementJsonErrors,
       [field]: undefined,
@@ -884,16 +888,13 @@ export class LaTeXTab extends LitElement {
     control: TemplateResult;
     reset: TemplateResult | typeof nothing;
   }): TemplateResult {
-    const descriptionId = `${opts.controlId}-description`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
           <label class="settings-row-label" for=${opts.controlId}
             >${opts.label}</label
           >
-          <span id=${descriptionId} class="settings-row-help"
-            >${opts.description}</span
-          >
+          <span class="settings-row-help">${opts.description}</span>
         </div>
         <div class="settings-row-control">
           ${opts.statusIcon ?? nothing} ${opts.control} ${opts.reset}
@@ -927,13 +928,16 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-switch
           id=${controlId}
-          aria-describedby=${`${controlId}-description`}
+          class="setting-control-metadata"
           ?checked=${effective}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             this.dispatchSetConfigValue(opts.field, checked);
           }}
-        ></wa-switch>
+        >
+          <span class="visually-hidden">${opts.label}</span>
+          <span slot="hint" class="visually-hidden">${opts.description}</span>
+        </wa-switch>
       `,
       reset: isCustom
         ? this.renderResetButton(opts.field, opts.defaultValue ? 'On' : 'Off')
@@ -993,7 +997,7 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-input
           id=${controlId}
-          aria-describedby=${`${controlId}-description`}
+          class="setting-number-input setting-control-metadata"
           type="number"
           min=${opts.min}
           max=${opts.max ?? nothing}
@@ -1011,8 +1015,10 @@ export class LaTeXTab extends LitElement {
             const clamped = clampOptional(integer, opts.min, opts.max);
             this.dispatchSetConfigValue(opts.field, clamped);
           }}
-          class="setting-number-input"
-        ></wa-input>
+        >
+          <span slot="label" class="visually-hidden">${opts.label}</span>
+          <span slot="hint" class="visually-hidden">${opts.description}</span>
+        </wa-input>
       `,
       reset: isCustom
         ? this.renderResetButton(opts.field, String(opts.defaultValue))
@@ -1059,14 +1065,15 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-select
           id=${controlId}
-          aria-describedby=${`${controlId}-description`}
+          class="setting-enum-select setting-control-metadata"
           .value=${String(effective)}
           @change=${(e: Event) => {
             const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
             this.dispatchSetConfigValue(opts.field, v);
           }}
-          class="setting-enum-select"
         >
+          <span slot="label" class="visually-hidden">${opts.label}</span>
+          <span slot="hint" class="visually-hidden">${opts.description}</span>
           ${options.map(
             (o) =>
               html`<wa-option value=${String(o.value)}>${o.label}</wa-option>`,

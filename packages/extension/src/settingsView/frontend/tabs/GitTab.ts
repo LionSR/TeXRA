@@ -411,7 +411,6 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                       <wa-input
                         id="git-author-email"
                         class="form-control-fill"
-                        type="email"
                         name="git-author-email"
                         autocomplete="email"
                         spellcheck="false"
