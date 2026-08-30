@@ -10,6 +10,8 @@ function rowKey(row: CompactTodosPlanRow): string {
   switch (row.kind) {
     case 'todo':
       return `todo:${row.todo.content}`;
+    case 'completedSummary':
+      return `completed:${row.count}`;
     case 'planSummary':
       return 'plan:summary';
   }
@@ -97,10 +99,42 @@ describe('CLI TodosPlanPanel display model', () => {
       todos: [todos[0]],
     });
 
+    expectRows(display, ['completed:1'], 1);
+  });
+
+  it('collapses completed history and keeps the actionable tail visible', () => {
+    const completed = Array.from({ length: 7 }, (_, index): TodoItem => ({
+      content: `Completed optimization ${index + 1}`,
+      activeForm: `Completing optimization ${index + 1}`,
+      status: TODO_STATUS.COMPLETED,
+    }));
+    const display = compactTodosPlanRows({
+      maxRows: 8,
+      plan,
+      todos: [
+        ...completed,
+        {
+          content: 'Finish active CPSV16 pull request validation',
+          activeForm: 'Finishing active CPSV16 pull request validation',
+          status: TODO_STATUS.IN_PROGRESS,
+        },
+        {
+          content: 'Publish the validated result',
+          activeForm: 'Publishing the validated result',
+          status: TODO_STATUS.PENDING,
+        },
+      ],
+    });
+
     expectRows(
       display,
-      ['todo:Split theorem into algebraic and analytic checks'],
-      1,
+      [
+        'completed:7',
+        'todo:Finish active CPSV16 pull request validation',
+        'todo:Publish the validated result',
+        'plan:summary',
+      ],
+      0,
     );
   });
 });

@@ -195,9 +195,11 @@ describe('CLI workflow output resolution', () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runOutput = await writeRunFile(cwd, 'r1/stdin.tex', 'from stdin');
 
-    const expectedOutputFiles = expectedOutputFilesForOutputDir(undefined, [
+    const expectedOutputFiles = expectedOutputFilesForOutputDir(
+      undefined,
+      ['texra-stdin-123-abc123/stdin.tex'],
       'texra-stdin-123-abc123/stdin.tex',
-    ]);
+    );
 
     expect(expectedOutputFiles).toEqual(['stdin.tex']);
 

@@ -192,7 +192,7 @@ export class ModelInvocationNode<
     this._config = config;
   }
 
-  clone(): this {
+  override clone(): this {
     const cloned = super.clone();
     cloned._userCancelled = false;
     cloned._retryLifecycle = undefined;
@@ -360,7 +360,7 @@ export class ModelInvocationNode<
     return isProviderErrorAutoRetryable(error);
   }
 
-  async _exec(prepRes: unknown): Promise<unknown> {
+  override async _exec(prepRes: unknown): Promise<unknown> {
     this._userCancelled = false;
     let maxRetries = getNodeMaxRetries();
 
@@ -648,7 +648,7 @@ export class ModelInvocationNode<
     };
   }
 
-  async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
+  override async prep(shared: TShared): Promise<BaseInvocationPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       messages: shared.messages,
@@ -657,7 +657,9 @@ export class ModelInvocationNode<
     };
   }
 
-  async exec(prepRes: BaseInvocationPrepResult): Promise<InvocationResult> {
+  override async exec(
+    prepRes: BaseInvocationPrepResult,
+  ): Promise<InvocationResult> {
     if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
@@ -703,33 +705,35 @@ export class ModelInvocationNode<
         };
       };
 
+      // One wire route owns transport and server-failure cooling. The
+      // narrower model scope is acquired first, so model-specific limits do
+      // not block healthy sibling models on the same credential and endpoint.
       return gate.run(
-        wireRoute,
+        [
+          {
+            key: modelRetryRoute,
+            classifyFailure: (error) => {
+              const verdict = verdictFor(error);
+              return verdict.rateLimitScope === 'model'
+                ? { retryAfterMs: verdict.retryAfterMs }
+                : undefined;
+            },
+          },
+          {
+            key: wireRoute,
+            classifyFailure: (error) => {
+              const verdict = verdictFor(error);
+              return verdict.wireRouteFailure
+                ? { retryAfterMs: verdict.retryAfterMs }
+                : undefined;
+            },
+            isReachableFailure: (error) =>
+              verdictFor(error).rateLimitScope === 'model',
+          },
+        ],
         {
           signal,
           baseBackoffMs: RETRY_BACKOFF_MS,
-          // One wire route owns transport and server-failure cooling. A second
-          // ordered scope keeps model-specific limits from blocking healthy
-          // sibling models on the same credential and endpoint.
-          classifyFailure: (error) => {
-            const verdict = verdictFor(error);
-            return verdict.wireRouteFailure
-              ? { retryAfterMs: verdict.retryAfterMs }
-              : undefined;
-          },
-          isReachableFailure: (error) =>
-            verdictFor(error).rateLimitScope === 'model',
-          additionalRoutes: [
-            {
-              key: modelRetryRoute,
-              classifyFailure: (error) => {
-                const verdict = verdictFor(error);
-                return verdict.rateLimitScope === 'model'
-                  ? { retryAfterMs: verdict.retryAfterMs }
-                  : undefined;
-              },
-            },
-          ],
           onWait: (delayMs) =>
             services.logger.debug(
               `Waiting ${delayMs}ms for the model recovery probe.`,
@@ -740,14 +744,14 @@ export class ModelInvocationNode<
     });
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: BaseInvocationPrepResult,
     error: Error,
   ): Promise<InvocationResult> {
     return this.getFallbackResult(error);
   }
 
-  async post(
+  override async post(
     shared: TShared,
     _prepRes: BaseInvocationPrepResult,
     execRes: InvocationResult,

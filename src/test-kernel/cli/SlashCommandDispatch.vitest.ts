@@ -44,13 +44,13 @@ import {
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import { markWorkPlanArtifactHydrated } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import { SessionState } from '@controllers/session/SessionState';
 import * as codexPreference from '@model/codex/codexPreference';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -134,6 +134,7 @@ function mockModelAccessOverview(): void {
       },
       chatGptSignedIn: false,
       grokSignedIn: false,
+      texraSignedIn: false,
     },
     lines: ['model access: Your own API keys'],
   });
@@ -158,7 +159,6 @@ function createContext(
   return {
     cliContext: createCliContext(),
     session,
-    cwd: '/tmp/workspace',
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',
@@ -303,10 +303,7 @@ describe('handleTuiSlashCommand', () => {
 
     closeInfoPane();
     await handleTuiSlashCommand('/goal', context);
-    expect(infoPane.get()).toMatchObject({ title: '/goal' });
-    expect(infoPane.get()?.lines.join('\n')).toContain(
-      'Goal mode starts from an approved plan',
-    );
+    expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
     expect(localEntries()).toEqual([]);
   });
 
@@ -501,14 +498,7 @@ describe('handleTuiSlashCommand', () => {
         plan: { objective: 'Use the accepted live plan.' },
         todos: [],
       },
-      authority: {
-        outputFiles: false,
-        missingOutputs: false,
-        compileFailures: false,
-        usage: false,
-        todos: false,
-        plan: true,
-      },
+      authority: { complete: false, todos: false, plan: true },
     },
     {
       label: 'todos',
@@ -522,14 +512,7 @@ describe('handleTuiSlashCommand', () => {
           },
         ],
       },
-      authority: {
-        outputFiles: false,
-        missingOutputs: false,
-        compileFailures: false,
-        usage: false,
-        todos: true,
-        plan: false,
-      },
+      authority: { complete: false, todos: true, plan: false },
     },
   ] satisfies readonly {
     label: string;

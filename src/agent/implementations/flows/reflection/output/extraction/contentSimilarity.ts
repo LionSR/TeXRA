@@ -6,8 +6,7 @@
  * diff, so blocks can be routed to filenames without trusting response order.
  */
 
-import escapeRegExp from 'escape-string-regexp';
-
+import { SCRATCHPAD_TAG } from '@shared/schemas';
 import { diffTextLevenshtein } from '@utils/text/diff';
 import type { NamedDocument } from '@utils/text/xmlExtraction';
 
@@ -18,28 +17,20 @@ import type { NamedDocument } from '@utils/text/xmlExtraction';
 /**
  * Response-text preprocessing for fallback output extraction.
  *
- * Strips the model's thinking-tag XML blocks from a raw response and
+ * Strips the model's `<scratchpad>` XML blocks from a raw response and
  * normalizes the remainder into lines, so the header/fence recovery
  * heuristics only ever see candidate document text.
  */
 
-function stripXmlTagBlocks(content: string, tagName: string): string {
-  const trimmedTag = tagName.trim();
-  if (!trimmedTag) {
-    return content;
-  }
-  return content.replaceAll(
-    new RegExp(
-      `<${escapeRegExp(trimmedTag)}\\b[^>]*>[\\s\\S]*?<\\/${escapeRegExp(trimmedTag)}>`,
-      'gi',
-    ),
-    '',
-  );
-}
+const SCRATCHPAD_BLOCK_REGEX = new RegExp(
+  `<${SCRATCHPAD_TAG}\\b[^>]*>[\\s\\S]*?<\\/${SCRATCHPAD_TAG}>`,
+  'gi',
+);
 
-/** Strip `thinkingTag` blocks, normalize CRLF/CR to LF, and split into lines. */
-export function responseLines(content: string, thinkingTag: string): string[] {
-  return stripXmlTagBlocks(content, thinkingTag)
+/** Strip `<scratchpad>` blocks, normalize CRLF/CR to LF, and split into lines. */
+export function responseLines(content: string): string[] {
+  return content
+    .replaceAll(SCRATCHPAD_BLOCK_REGEX, '')
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n')
     .split('\n');
@@ -171,12 +162,11 @@ const LATEX_FENCE_OPEN_REGEX = /^(`{3,}|~{3,})\s*(?:latex|tex)\s*$/i;
 /** Collect the content of every ```latex/```tex fenced block, in document order. */
 export function collectLatexFencedBlocks(
   content: string,
-  thinkingTag: string,
   options: {
     onUnclosedFence?: (lineCount: number) => void;
   } = {},
 ): string[] {
-  const lines = responseLines(content, thinkingTag);
+  const lines = responseLines(content);
 
   const blocks: string[] = [];
   let openFence: MarkdownFence | null = null;

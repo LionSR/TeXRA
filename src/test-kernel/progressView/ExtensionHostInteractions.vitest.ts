@@ -807,7 +807,7 @@ describe('createExtensionHostInteractions', () => {
         allowBypass: false,
         streamId: STREAM_A,
       }),
-    ).resolves.toEqual({ threadId: 'thread-a' });
+    ).resolves.toBeUndefined();
 
     // The owning stream is revealed before the inquiry shows: the progress
     // view is ensured and the stream registered without yanking the active

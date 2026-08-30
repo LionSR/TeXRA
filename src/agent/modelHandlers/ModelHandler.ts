@@ -78,7 +78,12 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { AgentCategory, MESSAGE_TYPES, OUTPUT_END_TAG } from '@shared/schemas';
+import {
+  AgentCategory,
+  MESSAGE_TYPES,
+  OUTPUT_END_TAG,
+  SCRATCHPAD_TAG,
+} from '@shared/schemas';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   ModelCompactionThresholdPercentSchema,
@@ -1524,7 +1529,7 @@ export abstract class ModelHandler<
     const raw = await AbsoluteFS.read(outputLocation.absolutePath);
     const fileContent = this.postProcessResponse(raw);
 
-    const scratchpad = await extractScratchpad(fileContent, 'scratchpad');
+    const scratchpad = await extractScratchpad(fileContent, SCRATCHPAD_TAG);
     if (scratchpad) this.logger.domain({ key: 'scratchpad', text: scratchpad });
 
     await AbsoluteFS.write(outputLocation.absolutePath, fileContent);
@@ -1740,11 +1745,6 @@ export abstract class ModelHandler<
    */
   extractAssistantContent(_responseObject: Resp): unknown[] {
     return [];
-  }
-
-  /** Default: returns undefined. Concrete handlers override with typed extraction. */
-  extractAssistantText(_message: M): string | undefined {
-    return undefined;
   }
 
   // =========================================================================

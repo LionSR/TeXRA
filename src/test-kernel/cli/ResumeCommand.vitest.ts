@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initInteractiveCliPlatform: vi.fn(),
-  initializeHeadlessTranscriptSession: vi.fn(),
+  initializeCliTranscriptSession: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
   retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
@@ -51,8 +51,7 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
 }));
 
 vi.mock('@cli/runtime/transcriptSession', () => ({
-  initializeHeadlessTranscriptSession:
-    mocks.initializeHeadlessTranscriptSession,
+  initializeCliTranscriptSession: mocks.initializeCliTranscriptSession,
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -149,7 +148,7 @@ describe('runResumeExecution', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
-    mocks.initializeHeadlessTranscriptSession.mockResolvedValue({
+    mocks.initializeCliTranscriptSession.mockResolvedValue({
       session: {
         interactions: {},
         executions: { isActiveOrResuming: () => false },
@@ -234,13 +233,14 @@ describe('runResumeExecution', () => {
 
     await expect(run(cliContext())).resolves.toBe(0);
 
+    expect(mocks.assertOutputDirAvailable).toHaveBeenCalledWith(
+      outputDirectory,
+      expect.any(String),
+    );
     expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
       workflowConfig,
       expect.any(Object),
-      expect.objectContaining({
-        outputDir: outputDirectory,
-        expectedOutputFiles: ['paper.tex', 'appendix.tex'],
-      }),
+      expect.any(Object),
     );
   });
 
@@ -256,12 +256,14 @@ describe('runResumeExecution', () => {
 
     await expect(run(cliContext())).resolves.toBe(0);
 
+    expect(mocks.assertOutputDirAvailable).toHaveBeenCalledWith(
+      outputDirectory,
+      expect.any(String),
+    );
     expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
       workflowConfig,
       expect.any(Object),
-      expect.objectContaining({
-        outputDir: outputDirectory,
-      }),
+      expect.any(Object),
     );
   });
 
@@ -304,7 +306,7 @@ describe('runResumeExecution', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'Agent not found: correct.',
     );
-    expect(mocks.initializeHeadlessTranscriptSession).not.toHaveBeenCalled();
+    expect(mocks.initializeCliTranscriptSession).not.toHaveBeenCalled();
     expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
   });
 

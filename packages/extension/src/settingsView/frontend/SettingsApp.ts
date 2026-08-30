@@ -46,6 +46,7 @@ import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
+import './tabs/SkillsTab';
 import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
@@ -63,6 +64,7 @@ import {
   approvalPolicy,
   bashApprovalEnabled,
   chatgptAuth,
+  chatgptCodexContextWindow,
   grokAuth,
   childRunConcurrencyBudget,
   claudeAgentEffort,
@@ -78,6 +80,8 @@ import {
   customAgentScanIssues,
   customPresets,
   detachSubagentsOnStop,
+  disabledSkills,
+  disabledSkillSources,
   multiAgentSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
@@ -105,6 +109,8 @@ import {
   resetSettingsState,
   selectedPanel,
   sessionProblem,
+  skillLoadIssues,
+  skillsList,
   subscriptionUsage,
   telemetryEnabled,
   toolDashboardItems,
@@ -282,7 +288,11 @@ export class SettingsApp extends SettingsAppBase {
 
     return html`
       <nav class="settings-navigation" aria-label="Settings">
-        <div class="settings-category-nav" aria-label="Settings categories">
+        <div
+          class="settings-category-nav"
+          role="group"
+          aria-label="Settings categories"
+        >
           ${SETTINGS_NAV_GROUPS.map((group) => {
             const entries = this.entriesForGroup(group, goalSupported);
             if (entries.length === 0) return nothing;
@@ -310,6 +320,7 @@ export class SettingsApp extends SettingsAppBase {
              actual behavior — same pattern as the category nav above. -->
         <div
           class="settings-page-nav"
+          role="group"
           aria-label=${`${activeGroup.label} pages`}
         >
           ${activeEntries.map((entry) => {
@@ -358,7 +369,9 @@ export class SettingsApp extends SettingsAppBase {
       case 'subscriptions':
         return html`
           <subscriptions-tab
+            .ackGeneration=${multiAgentSettingsRevision.get()}
             .chatgptAuth=${chatgptAuth.get()}
+            .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
             .grokAuth=${grokAuth.get()}
             .usage=${subscriptionUsage.get()}
             .copilotModels=${copilotRouteInfos.get()}
@@ -420,8 +433,17 @@ export class SettingsApp extends SettingsAppBase {
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
-            .agentSkillsEnabled=${agentSkillsEnabled.get()}
           ></tools-tab>
+        `;
+      case 'skills':
+        return html`
+          <skills-tab
+            .masterEnabled=${agentSkillsEnabled.get()}
+            .disabledSkills=${disabledSkills.get()}
+            .disabledSources=${disabledSkillSources.get()}
+            .skills=${skillsList.get()}
+            .issues=${skillLoadIssues.get()}
+          ></skills-tab>
         `;
       case 'ai-agents':
         return html`

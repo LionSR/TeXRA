@@ -8,8 +8,7 @@
 import { createSubscriptionPreference } from '../subscriptionPreference';
 
 /** Config key for the "prefer my ChatGPT subscription" switch (off by default). */
-export const CODEX_PREFER_SUBSCRIPTION_KEY =
-  'texra.chatgptCodex.preferSubscription';
+const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 
 const preference = createSubscriptionPreference(CODEX_PREFER_SUBSCRIPTION_KEY);
 

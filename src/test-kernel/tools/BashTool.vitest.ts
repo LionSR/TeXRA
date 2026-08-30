@@ -85,7 +85,7 @@ const testModelConfig: ModelConfig = {
 class BashMockHandler extends ModelHandlerOpenAIResponse {
   private callCount = 0;
 
-  async getClient(): Promise<OpenAI> {
+  override async getClient(): Promise<OpenAI> {
     return {} as OpenAI;
   }
 
@@ -178,7 +178,7 @@ function roundServices(opts: {
       userPrefix: '',
       userRequest: '',
     } satisfies AgentPrompt,
-    userVarChannels: { input: {}, transient: {} },
+    userVarChannels: {},
     toolPolicy: createToolPolicy(),
     logger: opts.logger,
     fileService: new TaskRunFileService('deadbeef'),

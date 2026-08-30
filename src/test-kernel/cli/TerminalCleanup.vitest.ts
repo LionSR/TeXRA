@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
   bindChildStreamState,
+  invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 
@@ -22,8 +23,8 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import {
   installTerminalRestoreOnExit,
+  restoreTuiInputModes,
   supportsTerminalJobControl,
-  tuiInputModeRestoreSequence,
 } from '@cli/tui/terminalCleanup';
 import {
   installTerminalTitleUpdates,
@@ -31,7 +32,10 @@ import {
 } from '@cli/chat/tui/terminalTitle';
 import { SessionState } from '@controllers/session/SessionState';
 import { STREAM_PHASE } from '@shared/schemas';
-import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
+import {
+  clearAllStreamStatusesForTest,
+  seedStreamStatusForTest,
+} from '@test/support/streamStatusTestUtils';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 
 vi.mock('node:fs', async (importOriginal) => ({
@@ -246,6 +250,32 @@ describe('installTerminalTitleUpdates', () => {
     expectNoTitleWrites();
   });
 
+  it('returns to idle when only the canonical stream phase changes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    enableOscTitles();
+    const updates = installTerminalTitleUpdates('/work/coauthor');
+    setCliStreamPhase({
+      streamId: 'status-only-root',
+      status: STREAM_PHASE.RUNNING,
+    });
+    await flushTitleUpdate();
+    expectLastTitle('⠋ {T}·coauthor');
+
+    // Status is no longer mirrored into `streams`: production publishes this
+    // repaint revision after the machine changes, without rewriting the CLI
+    // slice. The title must subscribe to that same revision as the status bar.
+    seedStreamStatusForTest(defaultSession().status, 'status-only-root', {
+      phase: STREAM_PHASE.WAITING,
+    });
+    invalidateChildStreams();
+    await flushTitleUpdate();
+
+    expectLastTitle('{T}·coauthor');
+    expectNoTitleWrites();
+    updates.dispose();
+  });
+
   it('deduplicates unchanged title projections and resets an active title on teardown', async () => {
     enableOscTitles();
     const on = vi.spyOn(process, 'on');
@@ -331,15 +361,18 @@ describe('installTerminalTitleUpdates', () => {
   });
 });
 
-describe('tuiInputModeRestoreSequence', () => {
+describe('restoreTuiInputModes', () => {
   it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
-    expect(tuiInputModeRestoreSequence({ kittyKeyboard: false })).toBe(
-      '\x1b[?2004h\x1b[?25l',
-    );
+    restoreTuiInputModes({ kittyKeyboard: false });
+
+    expect(writeSync).toHaveBeenLastCalledWith(1, '\x1b[?2004h\x1b[?25l');
   });
 
   it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
-    expect(tuiInputModeRestoreSequence({ kittyKeyboard: true })).toBe(
+    restoreTuiInputModes({ kittyKeyboard: true });
+
+    expect(writeSync).toHaveBeenLastCalledWith(
+      1,
       '\x1b[>1u\x1b[?2004h\x1b[?25l',
     );
   });

@@ -7,7 +7,6 @@ import type {
   GettingStartedActionDetail,
   PermissionPayload,
   UserQuestionAnswers,
-  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
@@ -93,8 +92,6 @@ interface PermissionDecisionByKind {
         {
           model?: string;
           agent?: string;
-          /** Multi-agent workflow proposals: review issued calls by phase or one by one. */
-          callReview?: WorkflowCallReviewScope;
         }
       >
     | Decision<

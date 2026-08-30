@@ -32,7 +32,7 @@ export class ToolUseCycleNode extends BaseNode<
   ToolUseRunShared,
   ToolUseServices
 > {
-  async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
+  override async prep(shared: ToolUseRunShared): Promise<CyclePrepResult> {
     if (shared.stateSlices === null) {
       throw new Error('PrepareNode must run before CycleNode');
     }
@@ -53,7 +53,7 @@ export class ToolUseCycleNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
+  override async exec(prepRes: CyclePrepResult): Promise<ToolUseCycleOutcome> {
     const { runScope } = this.services;
     const modelHandler = this.services.modelCell.handler;
     const { streamId } = runScope;
@@ -82,7 +82,7 @@ export class ToolUseCycleNode extends BaseNode<
         ? this.services.finalTool
         : undefined;
 
-    const instruction = prepRes.userChannels.transient[USER_VAR_INSTRUCTION];
+    const instruction = prepRes.userChannels[USER_VAR_INSTRUCTION];
     const roundShared: ToolUseRoundShared = {
       messages: prepRes.messages,
       shouldStop: false,
@@ -169,14 +169,14 @@ export class ToolUseCycleNode extends BaseNode<
     } finally {
       sessionStage.end(sessionOutcome);
       if (roundShared.currentUserInstruction !== undefined) {
-        prepRes.userChannels.transient[USER_VAR_INSTRUCTION] =
+        prepRes.userChannels[USER_VAR_INSTRUCTION] =
           roundShared.currentUserInstruction;
       }
       prepRes.workspaceState.workPlan.clearOnUpdate();
     }
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: CyclePrepResult,
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
@@ -187,7 +187,7 @@ export class ToolUseCycleNode extends BaseNode<
     return { outcome: 'failed', lastError };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRunShared,
     prepRes: CyclePrepResult,
     execRes: ToolUseCycleOutcome,

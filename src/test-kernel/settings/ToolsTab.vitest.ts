@@ -10,7 +10,6 @@ vi.mock('@shared/hostBridge', () => ({
 
 import type { ToolsTab } from '@settingsView/frontend/tabs/ToolsTab';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import type { ToolDashboardItem } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -102,15 +101,6 @@ describe('tools-tab availability summary', () => {
       tool('second', 'available'),
     ]);
     expect(element.shadowRoot?.textContent).toContain('2/2 available');
-  });
-
-  it('renders and updates the shared agent-skills switch', async () => {
-    await expectTogglableSwitch({
-      id: 'settings-toggle-make-skills-available-to-tool-use-agents',
-      label: 'Make skills available to tool-use agents',
-      initialChecked: true,
-      stateKey: AGENT_SKILLS_CONFIG_KEY,
-    });
   });
 
   it('renders and updates working-directory path protection', async () => {

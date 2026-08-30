@@ -34,7 +34,9 @@ import {
   CodexSandboxModeSchema,
 } from '@shared/schemas/agentCliSettings';
 import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  ChatgptCodexContextWindowSchema,
   ChildRunConcurrencyBudgetSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -54,6 +56,8 @@ import {
   AgentSkillsEnabledSchema,
 } from '@shared/schemas/agentSkills';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { ActiveSkillSourceScopeSchema } from './activeSkills';
+import { SkillNameSchema } from './skillName';
 
 // ============================================================================
 // Git defaults
@@ -129,7 +133,6 @@ type SettingSlots = {
 };
 
 export type SettingsViewSnapshot =
-  | 'agent-skills'
   | 'approval'
   | 'git-author'
   | 'latex'
@@ -137,6 +140,7 @@ export type SettingsViewSnapshot =
   | 'models'
   | 'multi-agent'
   | 'profile'
+  | 'skills'
   | 'telemetry';
 
 interface CliRuntimeReachability {
@@ -339,6 +343,33 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
   return entry;
 }
 
+/**
+ * A Models-tab provider toggle: a globally-stored boolean that renders both as
+ * a profile row and as one per-provider control on the Models tab. These rows
+ * differ only in their default, copy, honoring reader, and Models-tab control,
+ * so the uniform `configTarget: 'global'` / `category: 'model'` /
+ * `settingsView: 'profile'` framing is written once here — the same tabulation
+ * the region toggles already use through `PROVIDER_ROUTING_SETTINGS`. Returns a
+ * `CORE_SETTING_ROWS` body (key and slot are added by the config-tree mapping).
+ */
+function modelProviderToggle(opts: {
+  readonly default: boolean;
+  readonly title: string;
+  readonly description: string;
+  readonly honoredBy: SettingHonoredBy;
+  readonly model: ModelsTabSurface;
+}): Omit<StateSettingEntry, 'key' | 'slots'> {
+  return {
+    schema: z.boolean().prefault(opts.default),
+    configTarget: 'global',
+    title: opts.title,
+    description: opts.description,
+    category: 'model',
+    honoredBy: opts.honoredBy,
+    surfaces: { settingsView: 'profile', models: [opts.model] },
+  };
+}
+
 // ============================================================================
 // Core (config-tree) rows
 // ============================================================================
@@ -384,8 +415,13 @@ const CORE_SETTING_ROWS: Record<
     title: 'Child-run concurrency budget',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'multi-agent',
-    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
-    surfaces: { settingsView: 'multi-agent' },
+    honoredBy: everyHost('src/agent/runtime/childRunBudget.ts', {
+      command:
+        'texra agents run <tool-use-agent> --instruction "dispatch two subagents"',
+      through:
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/delegation/detachedChildRun.ts -> src/agent/runtime/childRunLoop.ts -> src/agent/runtime/childRunBudget.ts',
+    }),
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
   'goal.enabled': {
     schema: z.boolean().prefault(true),
@@ -401,141 +437,99 @@ const CORE_SETTING_ROWS: Record<
   // while Models-tab and runtime reads both keep merged-config semantics. A
   // workspace override therefore remains visible and honored; cleanup of values
   // stranded by the regression window is tracked separately in #11173.
-  'model.gpt5ReasoningSummary': {
-    schema: z.boolean().prefault(false),
-    configTarget: 'global',
+  'model.gpt5ReasoningSummary': modelProviderToggle({
+    default: false,
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'GPT-5 reasoning summary',
-          description:
-            'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
-          warning:
-            'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
-          warningUrl:
-            'https://platform.openai.com/settings/organization/billing/overview',
-          warningUrlLabel: 'Check your tier',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'GPT-5 reasoning summary',
+      description:
+        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
+      warning:
+        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
+      warningUrl:
+        'https://platform.openai.com/settings/organization/billing/overview',
+      warningUrlLabel: 'Check your tier',
     },
-  },
-  'model.useOpenAIResponsesAPI': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.useOpenAIResponsesAPI': modelProviderToggle({
+    default: true,
     title: 'Use the Responses API',
     description:
       "Use OpenAI's newer Responses API for additional features like built-in tool use. Disable to fall back to the classic Chat Completions API.",
-    category: 'model',
     honoredBy: everyHost('src/agent/runtime/ModelFactory.ts'),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'Use the Responses API',
-          description:
-            'Use the OpenAI Responses API instead of Chat Completions when available.',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'Use the Responses API',
+      description:
+        'Use the OpenAI Responses API instead of Chat Completions when available.',
     },
-  },
-  'model.useGoogleInteractionsServerState': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.useGoogleInteractionsServerState': modelProviderToggle({
+    default: true,
     title: 'Server-side conversation state',
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'google',
-          label: 'Server-side conversation state',
-          description:
-            "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
-        },
-      ],
+    model: {
+      provider: 'google',
+      label: 'Server-side conversation state',
+      description:
+        "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     },
-  },
-  'model.useGoogleBackgroundResponses': {
-    schema: z.boolean().prefault(false),
-    configTarget: 'global',
+  }),
+  'model.useGoogleBackgroundResponses': modelProviderToggle({
+    default: false,
     title: 'Google background responses',
     description:
       'Run long-running Google workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'google',
-          label: 'Background responses',
-          description:
-            'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
-        },
-      ],
+    model: {
+      provider: 'google',
+      label: 'Background responses',
+      description:
+        'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
     },
-  },
-  'model.useBackgroundResponses': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.useBackgroundResponses': modelProviderToggle({
+    default: true,
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAIResponse.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'Background responses',
-          description:
-            'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'Background responses',
+      description:
+        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
     },
-  },
-  'model.openaiParallelToolCalls': {
-    schema: z.boolean().prefault(true),
-    configTarget: 'global',
+  }),
+  'model.openaiParallelToolCalls': modelProviderToggle({
+    default: true,
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool execution.',
-    category: 'model',
     honoredBy: everyHost(
       'src/agent/modelHandlers/openai/modelHandlerOpenAI.ts',
     ),
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'openai',
-          label: 'Parallel tool calls',
-          description:
-            'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
-        },
-      ],
+    model: {
+      provider: 'openai',
+      label: 'Parallel tool calls',
+      description:
+        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential execution.',
     },
-  },
+  }),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `getValidatedConfig`, so the row must not narrow itself to the
   // global scope — a workspace override the runtime honors would then be
@@ -571,8 +565,24 @@ const CORE_SETTING_ROWS: Record<
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
-      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
+      'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272,000-token input budget; use chatgptCodex.contextWindow to override it.',
     honoredBy: everyHost('src/model/codex/codexPreference.ts'),
+  },
+  'chatgptCodex.contextWindow': {
+    schema: ChatgptCodexContextWindowSchema,
+    title: 'Subscription input token budget',
+    description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
+    category: 'model',
+    honoredBy: everyHost('src/model/providerCapabilities.ts', {
+      command:
+        'texra agents run <tool-use-agent> --instruction "answer a short question"',
+      through:
+        'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
+    }),
+    // This bucket controls snapshot/rebroadcast routing, not tab placement;
+    // reuse it for the Subscriptions control because no subscriptions bucket exists.
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    onWrite: { invalidatesModelOptions: true },
   },
   'xaiGrok.preferSubscription': {
     schema: z.boolean().prefault(false),
@@ -736,9 +746,9 @@ const CORE_SETTING_ROWS: Record<
   },
   'skills.enabled': {
     schema: AgentSkillsEnabledSchema.prefault(AGENT_SKILLS_ENABLED_DEFAULT),
-    title: 'Make skills available to tool-use agents',
+    title: 'Enable skills for tool-use agents',
     description:
-      'Discover TeXRA and imported skills and expose them to tool-use agent prompts.',
+      'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
     honoredBy: everyHost('src/agent/prompt/userVars.ts', {
       command:
@@ -746,7 +756,7 @@ const CORE_SETTING_ROWS: Record<
       through:
         'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts',
     }),
-    surfaces: { settingsView: 'agent-skills', cliConfig: true },
+    surfaces: { settingsView: 'skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {
     schema: z.boolean().prefault(true),
@@ -889,7 +899,7 @@ const WORKFLOW_REJECT_RUNTIME_REACHABILITY = {
   command:
     'texra run <workflow-agent> --input paper.tex --instruction "revise the paper"',
   through:
-    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+    'packages/cli/src/commands/workflow.ts -> src/agent/implementations/flows/reflection/runReflectionFlow.ts -> src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
 } satisfies CliRuntimeReachability;
 const OPENAI_WEBSOCKET_RUNTIME_REACHABILITY = {
   command:
@@ -958,6 +968,19 @@ const GIT_AUTHOR_SLOTS: SettingSlots = {
   desktop: 'workspaceState',
   cli: 'config',
 };
+
+const SKILL_AVAILABILITY_SLOTS: SettingSlots = {
+  vscode: 'workspaceState',
+  desktop: 'workspaceState',
+  cli: 'config',
+};
+
+const SKILL_AVAILABILITY_REACHABILITY = {
+  command:
+    'texra agents run <tool-use-agent> --instruction "answer a short question"',
+  through:
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
+} satisfies CliRuntimeReachability;
 
 const GIT_AUTHOR_HONORED_BY: SettingHonoredBy = {
   vscode: { reader: 'packages/extension/src/frontend/git/gitAuthorSetup.ts' },
@@ -1327,7 +1350,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
     honoredBy: webviewHosts(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
     ),
     surfaces: { settingsView: 'latex' },
   }),
@@ -1342,7 +1365,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
+      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
       WORKFLOW_REJECT_RUNTIME_REACHABILITY,
     ),
     surfaces: { settingsView: 'latex', cliConfig: true },
@@ -1595,6 +1618,34 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     ),
     openForm: 'tools',
     surfaces: { cliConfig: true },
+  }),
+  surfacedSetting({
+    key: WorkspaceStateKey.DISABLED_SKILLS,
+    schema: z.array(SkillNameSchema).prefault([]),
+    title: 'Skills',
+    description: 'Enable or disable individual skills in this workspace.',
+    category: 'tools',
+    slots: SKILL_AVAILABILITY_SLOTS,
+    honoredBy: everyHost(
+      'src/skills/runtimeSkills.ts',
+      SKILL_AVAILABILITY_REACHABILITY,
+    ),
+    openForm: 'skills',
+    surfaces: { settingsView: 'skills', cliConfig: true },
+  }),
+  surfacedSetting({
+    key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    schema: z.array(ActiveSkillSourceScopeSchema).prefault([]),
+    title: 'Skill sources',
+    description: 'Enable or disable skill source groups in this workspace.',
+    category: 'tools',
+    slots: SKILL_AVAILABILITY_SLOTS,
+    honoredBy: everyHost(
+      'src/skills/runtimeSkills.ts',
+      SKILL_AVAILABILITY_REACHABILITY,
+    ),
+    openForm: 'skills',
+    surfaces: { settingsView: 'skills', cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,

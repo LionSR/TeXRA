@@ -107,10 +107,7 @@ async function observeWorkflowTools({
           prompt: PROMPT,
           logger,
           parentStage: noopTrace.openStage('Workflow tool resolution test'),
-          userVarChannels: {
-            input: Object.freeze({ MODEL: CONFIG.model }),
-            transient: {},
-          },
+          userVarChannels: { MODEL: CONFIG.model },
           modelCell,
           toolPolicy: createToolPolicy({
             approvalPromptsUnavailable,

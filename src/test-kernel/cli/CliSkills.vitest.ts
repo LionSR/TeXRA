@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   formatCliSkillList,
@@ -12,9 +12,18 @@ import {
 } from '@cli/runtime/skills';
 import { defaultSkillSources } from '@skills/skillSources';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
+const commandMocks = vi.hoisted(() => ({ initCliPlatform: vi.fn() }));
+
+vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
+  initCliPlatform: commandMocks.initCliPlatform,
+}));
+
+const { runCli } = await import('@cli/commands/root');
 
 async function writeSkill(
   root: string,
@@ -31,9 +40,33 @@ async function writeSkill(
 
 afterEach(() => {
   setRuntimeSkillSources([]);
+  commandMocks.initCliPlatform.mockReset();
 });
 
 describe('CLI skills runtime', () => {
+  it('initializes platform settings before listing skills', async () => {
+    commandMocks.initCliPlatform.mockResolvedValue(undefined);
+    const stdoutSpy = spyOnStreamWrite(process.stdout, () => undefined);
+
+    try {
+      const result = await runCli([
+        'skills',
+        'list',
+        '--print',
+        '--no-color',
+        '--output-format',
+        'json',
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(commandMocks.initCliPlatform).toHaveBeenCalledWith(
+        expect.objectContaining({ quietLogs: true }),
+      );
+    } finally {
+      stdoutSpy.mockRestore();
+    }
+  });
+
   it('resolves default, interop, and custom skill sources in precedence order', () => {
     const cwd = path.resolve(path.sep, 'tmp', 'project');
     const resourcesPath = path.resolve(

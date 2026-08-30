@@ -80,7 +80,7 @@ function createPrepResult(
     runState: AgentRunStateSnapshotSchema.parse({}),
     workspaceState,
     cycleStartLastResponse,
-    userChannels: { input: {}, transient: {} },
+    userChannels: {},
   };
 }
 

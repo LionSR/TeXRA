@@ -95,7 +95,7 @@ export class MainViewProvider
     DEBOUNCE_OPTIONS_MS,
   );
 
-  constructor(protected readonly context: vscode.ExtensionContext) {
+  constructor(protected override readonly context: vscode.ExtensionContext) {
     super(context);
     this.messageHandler = new MainViewMessageHandler(
       context,

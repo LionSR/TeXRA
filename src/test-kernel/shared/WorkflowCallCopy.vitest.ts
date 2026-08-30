@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkflowCallMetadataParts,
   formatWorkflowCallLine,
-  workflowCallFailureTally,
-  workflowPhaseCallProgress,
 } from '@shared/copy/workflowCall';
 
 describe('workflow call copy', () => {
@@ -56,53 +54,6 @@ describe('workflow call copy', () => {
     ).toBe(
       'Skipped: Audit later — The workflow ended before this call was reached.',
     );
-  });
-
-  it('counts an empty phase as no work rather than complete', () => {
-    expect(workflowPhaseCallProgress([])).toEqual({ done: 0, total: 0 });
-  });
-
-  it('tallys no failures for a clean or empty run', () => {
-    expect(workflowCallFailureTally([])).toEqual({ failed: 0 });
-    expect(
-      workflowCallFailureTally([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'running' },
-      ]),
-    ).toEqual({ failed: 0 });
-  });
-
-  it('tallys only failed calls across a mixed run', () => {
-    expect(
-      workflowCallFailureTally([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'failed', error: 'boom' },
-        { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
-        { id: 'd', label: 'D', status: 'failed', error: 'also boom' },
-      ]),
-    ).toEqual({ failed: 2 });
-  });
-
-  it('counts every terminal status as done, not just completions', () => {
-    expect(
-      workflowPhaseCallProgress([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'cached' },
-        { id: 'c', label: 'C', status: 'skipped', reason: 'not-reached' },
-        { id: 'd', label: 'D', status: 'cancelled' },
-        { id: 'e', label: 'E', status: 'failed', error: 'nope' },
-      ]),
-    ).toEqual({ done: 5, total: 5 });
-  });
-
-  it('leaves planned and running calls outstanding', () => {
-    expect(
-      workflowPhaseCallProgress([
-        { id: 'a', label: 'A', status: 'completed', durationMs: 1 },
-        { id: 'b', label: 'B', status: 'running' },
-        { id: 'c', label: 'C', status: 'planned' },
-      ]),
-    ).toEqual({ done: 1, total: 3 });
   });
 
   it('leaves a user skip without an explanatory clause', () => {

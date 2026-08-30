@@ -2,7 +2,7 @@ import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
-import { subscribeToSharedTick } from '@cli/tui/useLiveNowMs';
+import { subscribeToPolling } from '@cli/tui/usePollingInterval';
 import {
   formatSessionTitle,
   TERMINAL_TAB_TITLE,
@@ -13,6 +13,7 @@ import { isActivePhase } from '@shared/streams/streamStatus';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { approvalQueueStatus } from './state/approvalQueue';
+import { sessionStateRevision } from './state/childExecutions';
 import {
   rootRunPending,
   rootRunStreamId,
@@ -113,7 +114,7 @@ export function installTerminalTitleUpdates(
     if (stopSharedTick !== undefined) return;
     if (!terminalCapabilities.get().oscColorReports) return;
     updateTitle(runningTitle());
-    stopSharedTick = subscribeToSharedTick(() => {
+    stopSharedTick = subscribeToPolling(1000, () => {
       if (!terminalCapabilities.get().oscColorReports) {
         stopRunningAnimation();
         return;
@@ -136,7 +137,13 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [approvalQueueStatus, rootRunPending, rootRunStreamId, streams],
+    [
+      approvalQueueStatus,
+      rootRunPending,
+      rootRunStreamId,
+      sessionStateRevision,
+      streams,
+    ],
     synchronize,
   );
   synchronize();

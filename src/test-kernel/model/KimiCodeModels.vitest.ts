@@ -95,11 +95,7 @@ describe('Kimi Code routing', () => {
 
   it('uses the shared Kimi handler', () => {
     expect(
-      resolveModelHandlerCompatibilityKey(
-        MODEL_CONFIGS.kimiCoding,
-        false,
-        false,
-      ),
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimiCoding, false),
     ).toBe('ModelHandlerKimi');
   });
 
@@ -111,11 +107,11 @@ describe('Kimi Code routing', () => {
     // direct (non-OpenRouter) session, which is why the resume path's
     // useOpenRouter=false is correct.
     expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false, false),
+      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, false),
     ).toBe('ModelHandlerKimi');
-    expect(
-      resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true, false),
-    ).toBe('ModelHandlerOpenRouterNative');
+    expect(resolveModelHandlerCompatibilityKey(MODEL_CONFIGS.kimi3, true)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
   });
 
   it('does not divert other moonshot models off their normal routes', () => {

@@ -21,7 +21,7 @@ vi.mock('@agent/runtime/bundledPrompts', () => ({
 describe('text enhancement session ownership', () => {
   it('passes an explicit host session to helper-model creation', async () => {
     const session = {} as SessionHandle;
-    const kit = { handler: {}, client: {}, modelName: 'helper' };
+    const kit = { handler: {}, client: {} };
     mocks.createHelperModelKit.mockResolvedValue({ kit });
     mocks.runHelperModelCompletion.mockResolvedValue(
       '<corrected_text>polished</corrected_text>',

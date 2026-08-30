@@ -12,7 +12,6 @@ import {
 
 function createKit(createResponse: ReturnType<typeof vi.fn>): HelperModelKit {
   return {
-    modelName: 'openai:test',
     client: {},
     handler: {
       initializeMessages: vi.fn(async () => [

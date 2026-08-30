@@ -23,7 +23,10 @@ import {
   renderLabeledActionButtonParts,
 } from '@shared/wa/actionButtons';
 import { renderDotMeta, type MetaPart } from '@shared/wa/metaStrip';
-import { renderSplitButtonMenuParts } from '@shared/wa/splitButton';
+import {
+  renderSplitButtonMenuParts,
+  splitButtonTriggerStyles,
+} from '@shared/wa/splitButton';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -38,6 +41,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
     designTokens,
     commonViewStyles,
     requestPanelSharedStyles,
+    splitButtonTriggerStyles,
     toolEditRequestPanelStyles,
   ];
 
@@ -107,7 +111,7 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
     });
 
     return html`
-      <wa-button-group class="diff-dropdown" label="Diff actions">
+      <wa-button-group class="diff-dropdown split-group" label="Diff actions">
         ${diffButton.button} ${diffMenu.menu}
       </wa-button-group>
       ${diffButton.tooltip} ${diffMenu.tooltip}

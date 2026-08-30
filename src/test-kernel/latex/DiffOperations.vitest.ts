@@ -48,7 +48,7 @@ describe('diffOperations logger seam', () => {
       source: 'paper.tex',
       location: revised,
       round: 1,
-      lineage: { original: base, diffBase: null, diffFile: null },
+      lineage: { original: base, diffBase: null },
       diff: null,
     };
     const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});

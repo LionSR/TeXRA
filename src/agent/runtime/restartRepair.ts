@@ -29,10 +29,6 @@ import pMap from 'p-map';
 import { runWithInactiveExecutionLease } from '@agent/storage/executionLease';
 import { currentLeaseOwner } from '@agent/storage/leaseOwnerLiveness';
 import {
-  deriveResumability as defaultDeriveResumability,
-  type ResumabilityDecision,
-} from '@agent/storage/resumability';
-import {
   finalizeRun as defaultFinalizeRun,
   type FinalizeExecutionInput,
   type FinalizeExecutionResult,
@@ -55,6 +51,7 @@ import {
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   classifyRun as defaultClassifyRun,
+  classifyRunFacts as defaultClassifyRunFacts,
   type RunClassification,
   type RunFactsClassification,
 } from './runClassification';
@@ -80,9 +77,9 @@ export interface RestartRepairOptions {
   ): Promise<readonly StreamTabId[]>;
   classifyRun?: (executionId: ExecutionId) => Promise<RunClassification>;
   /** Durable facts re-read under the settlement lease. */
-  deriveResumability?: (
+  classifyRunFacts?: (
     executionId: ExecutionId,
-  ) => Promise<ResumabilityDecision>;
+  ) => Promise<RunFactsClassification>;
   finalizeRun?: (
     input: FinalizeExecutionInput,
   ) => Promise<FinalizeExecutionResult>;
@@ -163,8 +160,7 @@ export async function repairRestartedStreams(
 ): Promise<void> {
   const now = options.now ?? Date.now();
   const classifyRun = options.classifyRun ?? defaultClassifyRun;
-  const deriveResumability =
-    options.deriveResumability ?? defaultDeriveResumability;
+  const classifyRunFacts = options.classifyRunFacts ?? defaultClassifyRunFacts;
   const finalizeRun = options.finalizeRun ?? defaultFinalizeRun;
   const isCurrent = (streamId: StreamTabId, executionId?: ExecutionId) =>
     options.isRepairCandidateCurrent?.(streamId, executionId) ?? true;
@@ -315,14 +311,7 @@ export async function repairRestartedStreams(
         async () => {
           let current: RunFactsClassification;
           try {
-            const facts = await deriveResumability(executionId);
-            if (facts.kind === 'checkpoint') {
-              current = { kind: 'resumable', outcome: facts.outcome };
-            } else if (facts.kind === 'none') {
-              current = { kind: 'finished', outcome: facts.outcome };
-            } else {
-              current = { kind: 'unclassified', cause: facts.cause };
-            }
+            current = await classifyRunFacts(executionId);
           } catch (error) {
             current = { kind: 'unclassified', cause: toErrorMessage(error) };
           }

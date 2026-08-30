@@ -40,6 +40,7 @@ import {
 } from '@shared/styles';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderDotMeta } from '@shared/wa/metaStrip';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
@@ -437,19 +438,20 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           </div>
           <div class="external-inquiry-request__chat-links">
             Open:
-            <a
-              href="https://chatgpt.com/plans/pro/"
-              target="_blank"
-              rel="noopener noreferrer"
-              >ChatGPT Pro</a
-            >
-            &nbsp;·&nbsp;
-            <a
-              href="https://deepmind.google/models/gemini/deep-think/"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Gemini Deep Think</a
-            >
+            ${renderDotMeta([
+              html`<a
+                href="https://chatgpt.com/plans/pro/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >ChatGPT Pro</a
+              >`,
+              html`<a
+                href="https://deepmind.google/models/gemini/deep-think/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Gemini Deep Think</a
+              >`,
+            ])}
           </div>
           <wa-textarea
             class="external-inquiry-request__session-links-input"

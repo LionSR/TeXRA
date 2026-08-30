@@ -1,4 +1,8 @@
-import type { TaskState } from '@agent/core/state/TaskState';
+import type { agentConfigToTaskState } from '@agent/runtime';
+
+// Derived rather than deep-imported from '@agent/core/state/TaskState', so the
+// cli host does not pin @agent's internal module layout for one payload type.
+type TaskState = ReturnType<typeof agentConfigToTaskState>;
 import type {
   AddOutputFilesPayload,
   ExecutionId,

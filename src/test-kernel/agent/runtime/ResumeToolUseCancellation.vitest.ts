@@ -135,10 +135,7 @@ function buildResumeContext(
       signal: abortController.signal,
     },
     config: { agent: 'test-agent', model: 'test-model' },
-    userVarChannels: {
-      input: Object.freeze({ MODEL: 'test-model' }),
-      transient: { MODEL: 'test-model' },
-    },
+    userVarChannels: { MODEL: 'test-model' },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn() },
     interrupt: () => abortController.abort(),
@@ -433,7 +430,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     // variable read it directly, so the only remaining mirror is the
     // persisted AgentConfig schema field; the seeded transient stays as-is.
     expect(ctx.config.model).toBe('next-model');
-    expect(ctx.userVarChannels.transient.MODEL).toBe('test-model');
+    expect(ctx.userVarChannels.MODEL).toBe('test-model');
   });
 
   it('carries a failed resumed flow result, error included, to the lifecycle', async () => {

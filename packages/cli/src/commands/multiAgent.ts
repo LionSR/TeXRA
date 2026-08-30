@@ -21,8 +21,6 @@ import {
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
-  MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
-  MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import {
@@ -223,7 +221,7 @@ export async function runMultiAgentPreset(
       requireWorkspaceFiles: true,
       readStdinText: readCliStdinText,
     },
-    async ({ inputFiles, contextFiles, hasMaterializedStdinInput }) => {
+    async ({ inputFiles, contextFiles, stdinInputPath }) => {
       if (runContext.approvalPolicy === 'never') {
         writeTextStderr(
           `WARN preset ${plan.preset.id} may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
@@ -259,7 +257,7 @@ export async function runMultiAgentPreset(
       const execution = await executeCliToolUseConfig(config, runContext, {
         enforceCategory: true,
         stopAfterCycle: true,
-        recoveryInputIsDurable: hasMaterializedStdinInput !== true,
+        recoveryInputIsDurable: stdinInputPath === undefined,
         categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
       });
       if (!execution.ok) return execution.exitCode;
@@ -323,12 +321,13 @@ const multiAgentRunCommand = withUsageSections(
       },
       agent: {
         type: 'string',
-        description: MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
+        description:
+          'Root agent for the team run (defaults to the preset orchestrator)',
       },
       model: {
         type: 'string',
         alias: 'm',
-        description: MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
+        description: 'Model for the team root agent',
       },
       instruction: {
         type: 'string',

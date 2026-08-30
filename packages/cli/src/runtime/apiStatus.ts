@@ -18,9 +18,13 @@ import {
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
   cliCodingPlanStatus,
+  type CliAccountStatus,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
-import { readCliModelAccessStatus } from './modelAccessSelection';
+import {
+  mergeCliTexraAccountStatus,
+  readCliModelAccessStatus,
+} from './modelAccessSelection';
 import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 
 interface SubscriptionUsageReader {
@@ -31,14 +35,6 @@ interface SubscriptionUsageReader {
 }
 
 const SubscriptionUsage = new SubscriptionUsageService();
-
-/** Prefix of the signed-in auth status line — the TUI's launcher compacts the
- *  auth line by truncating the trailing segments behind this prefix. */
-export const AUTH_SIGNED_IN_LINE_PREFIX = 'auth: signed in';
-
-/** Separator between the segments that make up an auth status line (account,
- *  usage). The launcher truncates at this to keep the status line short. */
-export const AUTH_STATUS_SEGMENT_SEPARATOR = ' · ';
 
 export function formatCliAuthStatusLine(
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
@@ -64,8 +60,10 @@ function formatAccountStatusLine(
 }
 
 export interface CliModelAccessOverview {
-  readonly access: CliModelAccessStatus;
+  readonly access: CliAccountStatus;
   readonly lines: readonly string[];
+  /** Stale-metadata warning from the auth profile, when any. */
+  readonly note?: string;
 }
 
 /** Read both account sessions and the effective model-access route. */
@@ -90,8 +88,9 @@ export async function loadCliModelAccessOverview(): Promise<CliModelAccessOvervi
   ];
   if (profile.note) lines.push(profile.note);
   return {
-    access: { ...access, texraSignedIn: profile.authenticated },
+    access: mergeCliTexraAccountStatus(access, profile),
     lines,
+    note: profile.note,
   };
 }
 
@@ -112,11 +111,10 @@ async function personalKeyProviders(): Promise<string[]> {
 }
 
 /** Compact status lines used by the launcher. */
-export async function loadCliApiStatus(): Promise<readonly string[]> {
-  const [profile, configuredPersonalKeyProviders] = await Promise.all([
-    getCliAuthProfile(),
-    personalKeyProviders(),
-  ]);
+export async function loadCliApiStatus(
+  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel' | 'note'>,
+): Promise<readonly string[]> {
+  const configuredPersonalKeyProviders = await personalKeyProviders();
   const authLine = formatCliAuthStatusLine(profile);
 
   const personalKeysLine = formatPersonalApiKeysLine(

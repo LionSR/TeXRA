@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Features
+
+- **Use longer ChatGPT subscription context windows** — the TUI, extension,
+  and desktop app now let you raise the input token budget for supported GPT
+  models while keeping the standard limit by default.
+- **Choose skills per workspace** — the extension, desktop app, and CLI now let
+  you enable or disable individual skills and skill source groups from one
+  consolidated skills display. Skills are off by default until you enable the
+  master skills switch.
+
 ## [0.40.6] - 2026-08-28
 
 ### Shared (all surfaces)

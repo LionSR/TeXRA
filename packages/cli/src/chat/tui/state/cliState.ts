@@ -14,6 +14,7 @@ import type {
   StreamLogEntry,
   StreamTabId,
   TaskGroup,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -21,6 +22,7 @@ import type {
   CompactionActivityBlock,
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
+import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import type { StreamArtifactAuthority } from '@transcript';
 import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
 import type { PastedImageEntry } from '../input/draftAttachments';
@@ -99,10 +101,6 @@ export interface TranscriptFoldState {
   readonly indexById: Map<string, number>;
   /** First index the contiguous settled-prefix promotion has not covered. */
   finalizedFrontier: number;
-  /** Index of the last user row with text, or -1 (latest-line fallback). */
-  latestUserPos: number;
-  /** Index of the last finalized model-response row with text, or -1. */
-  latestResponsePos: number;
   /** Projection-mode bit `items` was built under; a flip forces a rebuild. */
   projectLifecycleToTaskGroups: boolean;
   /** Local rows reconciled into `items`, in slice order, by identity. */
@@ -113,6 +111,8 @@ export interface TranscriptFoldState {
    *  residency is released, and die with the slice like everything here. */
   taskGroupProjection?: TaskGroupProjectionState;
   compactionProjection?: CompactionProjectionState;
+  /** The newest `workflowPlan` marker folded so far (last wins). */
+  workflowPlan?: WorkflowPlanMarker;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
@@ -157,6 +157,10 @@ export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
+  /** The newest attempt's declared phases and tasks, from the transcript's
+   *  `workflowPlan` marker; undefined until a workflow-script run records
+   *  one. What the dashboard lists that the run has not reached yet. */
+  readonly workflowPlan: WorkflowPlanMarker | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
    *  until the runtime supplies a `description`. */
@@ -197,6 +201,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     streamId,
     latestLine: undefined,
     taskGroups: [],
+    workflowPlan: undefined,
     thinkingActive: false,
     compactingActive: false,
     entries: [],
@@ -370,6 +375,9 @@ export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
   ActiveSlashForm | undefined
 >(undefined);
 
+/** Session-local approval scope captured by the next Run as Goal action. */
+export const goalAutoApproveAll = signal(false);
+
 interface InfoPaneContent {
   readonly title: string;
   readonly lines: readonly string[];
@@ -402,6 +410,7 @@ interface WorkPlanReaderRequest {
 
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly streamId: StreamTabId }
+  | { readonly kind: 'workflow'; readonly streamId: StreamTabId }
   | {
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
@@ -423,6 +432,56 @@ export const foregroundReader: Signal.Computed<
 
 export function openTranscriptReader(streamId: StreamTabId): void {
   FOREGROUND_READER.set({ kind: 'transcript', streamId });
+}
+
+/** View state of the workflow popup — which phase tab is open, which row is
+ *  highlighted, which counted groups are unfolded, and the live filter. Held
+ *  here rather than in the component so a repaint or a foreground surface
+ *  taking over (an approval) hands the popup back exactly as it was. */
+export interface WorkflowPopupView {
+  readonly phaseIndex: number;
+  readonly selectedKey: string | undefined;
+  readonly expanded: ReadonlySet<WorkflowRowGroup>;
+  /** Live filter text; empty means none. */
+  readonly filter: string;
+  /** True while keystrokes edit the filter instead of moving the selection. */
+  readonly filterEditing: boolean;
+}
+
+const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
+  phaseIndex: 0,
+  selectedKey: undefined,
+  expanded: new Set(),
+  filter: '',
+  filterEditing: false,
+};
+
+/** The view belongs to the workflow stream, not to the mounted reader:
+ *  closing the popup to look at one of its agents and coming back lands
+ *  where the user left it; only a different workflow starts fresh. */
+const WORKFLOW_POPUP_VIEW = signal<{
+  readonly streamId: StreamTabId | undefined;
+  readonly view: WorkflowPopupView;
+}>({ streamId: undefined, view: INITIAL_WORKFLOW_POPUP_VIEW });
+export const workflowPopupView: Signal.Computed<WorkflowPopupView> = computed(
+  () => WORKFLOW_POPUP_VIEW.get().view,
+);
+
+/** Open the workflow popup on a workflow-script stream. A workflow is never
+ *  a viewport: this is the one way to look inside one (see
+ *  `presentStream`). */
+export function openWorkflowPopup(streamId: StreamTabId): void {
+  if (WORKFLOW_POPUP_VIEW.get().streamId !== streamId) {
+    WORKFLOW_POPUP_VIEW.set({ streamId, view: INITIAL_WORKFLOW_POPUP_VIEW });
+  }
+  FOREGROUND_READER.set({ kind: 'workflow', streamId });
+}
+
+export function updateWorkflowPopupView(
+  patch: Partial<WorkflowPopupView>,
+): void {
+  const current = WORKFLOW_POPUP_VIEW.get();
+  WORKFLOW_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
 }
 
 /** Capture one `/plan` invocation as the sole owner of async reader output. */
@@ -719,8 +778,13 @@ export function resetCliState(
   rootRunPending.set(false);
   rootRunStreamId.set(undefined);
   activeForm.set(undefined);
+  goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);
+  WORKFLOW_POPUP_VIEW.set({
+    streamId: undefined,
+    view: INITIAL_WORKFLOW_POPUP_VIEW,
+  });
   slashPaletteOpen.set(false);
   reverseSearchOpen.set(false);
   draftRestoreRequest.set([]);

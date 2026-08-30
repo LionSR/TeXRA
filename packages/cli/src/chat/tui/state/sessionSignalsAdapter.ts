@@ -27,7 +27,6 @@ import { assertNever } from '@utils/core';
 import {
   activeStreamId,
   cliStreamAcceptsStatus,
-  focusStream,
   patchStream,
   removeStream,
   streams,
@@ -38,6 +37,7 @@ import {
   isChildStreamRemoved,
   unbindChildStreamState,
 } from './childExecutions';
+import { presentStream } from './childControls';
 import {
   bumpStreamArtifactRevision,
   markWorkPlanArtifactHydrated,
@@ -124,7 +124,7 @@ class TuiSessionRenderer implements SessionRendererPort {
       return;
     }
     if (isChildStreamRemoved(streamId)) return;
-    focusStream(streamId);
+    presentStream(streamId);
   }
 
   onStreamDescriptionChanged(
@@ -176,8 +176,6 @@ class TuiSessionRenderer implements SessionRendererPort {
     _active: boolean,
     _details?: { status?: GoalStatus; objective?: string },
   ): void {}
-
-  syncStreamContent(_stream: PresentedStreamId): void {}
 }
 
 /** Attach the shared session view-model to CLI signals for one TUI session. */
@@ -226,7 +224,7 @@ export function attachSessionSignalsAdapter(
           fact.streamId,
         ).parentStreamId;
         if (ownerStreamId && !state.isStreamRemoved(ownerStreamId)) {
-          focusStream(ownerStreamId);
+          presentStream(ownerStreamId);
         }
       }
       // Roster phase-merge, tombstone gating, and eviction requests.

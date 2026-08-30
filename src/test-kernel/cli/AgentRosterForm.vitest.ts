@@ -4,10 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentEntry } from '@agent/index';
 import {
   AgentRosterForm,
-  agentRosterSelectWindow,
   buildChatDefaultAgentItems,
-  selectedAgentKeys,
-  setChatDefaultAgent,
 } from '@cli/chat/tui/forms/AgentRosterForm';
 import { formatCliAgentRoster } from '@cli/runtime/agentRoster';
 import {
@@ -74,21 +71,6 @@ describe('AgentRosterForm', () => {
         description: 'General assistant',
       },
     ]);
-  });
-
-  it('windows long roster lists to the available terminal rows', () => {
-    expect(
-      agentRosterSelectWindow({ availableRows: 10, itemCount: 20 }),
-    ).toEqual({ maxVisibleItems: 3, showOverflow: true });
-    expect(
-      agentRosterSelectWindow({ availableRows: undefined, itemCount: 20 }),
-    ).toEqual({ maxVisibleItems: undefined, showOverflow: false });
-  });
-
-  it('rejects default-chat selection when there is no workspace', async () => {
-    await expect(
-      setChatDefaultAgent(undefined, 'builtInToolUse:assistant'),
-    ).rejects.toThrow('Default chat-agent selection requires a workspace.');
   });
 
   it('reports open categories without materializing the current catalog', () => {

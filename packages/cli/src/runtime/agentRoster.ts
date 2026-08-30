@@ -8,35 +8,28 @@ import {
 } from '@shared/schemas';
 import { loadWorkspaceCliConfig, resolveConfiguredAgent } from './cliConfig';
 
-export interface CliAgentRosterRecord {
-  readonly selection: AgentRosterSelection;
-  readonly effectiveSelection: Exclude<
-    AgentRosterSelection,
-    { readonly kind: 'inherit' }
-  >;
-  readonly defaultTeamId?: string;
-  readonly missingTeamId?: string;
+/** The roster controller's own snapshot shape — derived, never restated. */
+type AgentRosterSnapshot = ReturnType<
+  ReturnType<typeof createWorkspaceAgentRosterController>['snapshot']
+>;
+
+/** The roster snapshot plus the two facts only the CLI resolves. */
+export type CliAgentRosterRecord = AgentRosterSnapshot & {
   readonly defaultChatAgent?: string;
   readonly agentKeys: ByCategory<AgentRosterCategorySelection>;
-  readonly unresolvedNames: readonly string[];
-}
+};
 
 export async function readCliAgentRoster(): Promise<CliAgentRosterRecord> {
   await loadAgents({ includeRemote: false });
   const roster = createWorkspaceAgentRosterController();
-  const snapshot = roster.snapshot();
   const cwd = platform().workspace.getWorkspacePath();
   const config = cwd ? await loadWorkspaceCliConfig(cwd) : undefined;
   return {
-    selection: snapshot.selection,
-    effectiveSelection: snapshot.effectiveSelection,
-    defaultTeamId: snapshot.defaultTeamId,
-    missingTeamId: snapshot.missingTeamId,
+    ...roster.snapshot(),
     defaultChatAgent: resolveConfiguredAgent(config?.values, 'chat'),
     agentKeys: byCategory(
       (category) => roster.getEnabledAgentKeys(category) ?? 'all',
     ),
-    unresolvedNames: snapshot.unresolvedNames,
   };
 }
 

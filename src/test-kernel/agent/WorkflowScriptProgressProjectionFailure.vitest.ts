@@ -98,4 +98,72 @@ describe('workflow-script projection failure recovery', () => {
       }),
     );
   });
+
+  it("retains a retried call's attempt number when the backstop terminalizes it", async () => {
+    const construction = snapshot('waiting', 'planned');
+    const issued = snapshot('active', 'planned');
+    const running = snapshot('active', 'running');
+    for (const state of [construction, issued, running]) {
+      const call = state.calls[0];
+      if (call) {
+        call.attempts = [
+          {
+            number: 1,
+            startedAt: '2026-08-15T20:00:00.000Z',
+          },
+          {
+            number: 2,
+            startedAt: '2026-08-15T20:00:01.000Z',
+          },
+        ];
+      }
+    }
+    mocks.runPersistedWorkflowScript.mockImplementationOnce(
+      async (options: PersistedWorkflowScriptRunOptions) => {
+        options.onTransition?.(construction);
+        options.onTransition?.(issued);
+        options.onTransition?.(running);
+        await options.onSnapshot?.(running);
+        return { snapshot: running } as never;
+      },
+    );
+
+    const emit = vi.fn();
+    const trace = {
+      activeStageId: vi.fn(),
+      emit,
+      info: vi.fn(),
+      warn: vi.fn(),
+      openStage: vi.fn().mockReturnValue({
+        id: 'trace-review',
+        end: vi.fn(),
+      }),
+    } as unknown as AgentTrace;
+
+    await runPersistedWorkflowScriptWithProgress(trace, {
+      store: {} as never,
+      checkpointId: 'attempt-number-backstop',
+      script: 'return await agent("Retry review")',
+      runAgent: vi.fn(),
+    });
+
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'workflow.call',
+        call: expect.objectContaining({
+          status: 'running',
+          attemptNumber: 2,
+        }),
+      }),
+    );
+    expect(emit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'workflow.call',
+        call: expect.objectContaining({
+          status: 'failed',
+          attemptNumber: 2,
+        }),
+      }),
+    );
+  });
 });

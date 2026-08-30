@@ -28,7 +28,6 @@ import {
   fileLocationDisplayPath,
   MESSAGE_TYPES,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
@@ -36,7 +35,6 @@ import {
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readPlatformSetting } from '@utils/config/platformSettings';
 import { LatexDiffManager } from './output/LatexDiffManager';
 import { XmlOutputManager } from './output/XmlOutputManager';
 import {
@@ -55,23 +53,7 @@ import {
   type ReflectionFlowShared,
 } from './ReflectionFlowState';
 import { RoundPersistedFlow } from './RoundPersistedFlow';
-import type {
-  ReflectionServices,
-  WorkflowOutputPolicy,
-} from './ReflectionServices';
-
-/**
- * Widen a round stage's `total` for a granted compile-repair round (#7077):
- * that round opens with `roundIndex === totalRounds` (one past the
- * configured last round), so without this the progress badge would render
- * an over-total "Round 3 of 2".
- */
-export function computeRoundStageTotal(
-  totalRounds: number,
-  roundIndex: number,
-): number {
-  return Math.max(totalRounds, roundIndex + 1);
-}
+import type { ReflectionServices } from './ReflectionServices';
 
 export interface RunReflectionFlowInput extends BaseFlowContextInit {
   setting: AgentWorkflowSetting;
@@ -90,7 +72,7 @@ async function resolveWorkflowSettingTools(
   logger: { warn: (msg: string) => void },
   supportsFunctionCalling: boolean,
 ): Promise<AgentWorkflowSetting> {
-  const { tools } = await resolveAgentTools({
+  const tools = await resolveAgentTools({
     tools: setting.tools,
     logger,
     approvalPromptsUnavailable: toolPolicy.approvalPromptsUnavailable,
@@ -170,19 +152,14 @@ export async function runReflectionFlow(
     streamId,
   );
   const diffManager = new LatexDiffManager(
-    setting,
+    setting.isRewrite,
     () => getOutputFilesByRound(outputState),
-    baseFiles,
     logger,
     streamId,
     fileService,
   );
 
-  const promptBuilder = new PromptBuilder(
-    prompt,
-    userVarChannels.transient,
-    logger,
-  );
+  const promptBuilder = new PromptBuilder(prompt, userVarChannels, logger);
 
   const latexMediaManager = new LatexMediaManager(logger, fileService);
 
@@ -198,15 +175,6 @@ export async function runReflectionFlow(
       workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
     ) as AgentFileLocation;
 
-  const workflowOutputPolicy: WorkflowOutputPolicy = {
-    shouldAutoOpenPdfOrLog: () =>
-      readPlatformSetting<boolean>(WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF),
-    shouldRejectOnCompileFailure: () =>
-      readPlatformSetting<boolean>(
-        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-      ),
-  };
-
   const services: ReflectionServices = {
     ...input,
     setting: resolvedSetting,
@@ -217,7 +185,6 @@ export async function runReflectionFlow(
     promptBuilder,
     fileService,
     getOutputFileLocation,
-    workflowOutputPolicy,
     baseFiles,
   };
 
@@ -311,31 +278,12 @@ export async function runReflectionFlow(
             parent: parent ?? undefined,
             kind: 'round',
             index: roundIndex,
-            total: computeRoundStageTotal(shared.totalRounds, roundIndex),
+            total: shared.totalRounds,
           }),
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
         },
         signal: runScope.signal,
-        // Bounded compile-repair round (#7077): a compile failure on what
-        // would otherwise be the final round gets exactly one extra round
-        // so the model sees the failure context via PrepareContextNode
-        // instead of the run silently ending on a broken output. Gated on
-        // the same setting that produced compileFailureContext in the
-        // first place, and on the one-shot `compileRepairRoundGranted`
-        // flag so a repair round that itself fails to compile doesn't
-        // chain a second one — even across resume.
-        grantExtraRound: (s) => {
-          if (
-            !s.compileFailureContext ||
-            s.compileRepairRoundGranted ||
-            !workflowOutputPolicy.shouldRejectOnCompileFailure()
-          ) {
-            return false;
-          }
-          s.compileRepairRoundGranted = true;
-          return true;
-        },
       },
     },
   );

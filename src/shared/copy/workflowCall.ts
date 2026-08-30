@@ -1,5 +1,4 @@
 import {
-  isTerminalWorkflowCallProgress,
   WORKFLOW_TASK_STATUS_LABEL,
   type TaskGroup,
   type WorkflowCallKind,
@@ -69,36 +68,6 @@ export function formatWorkflowCallMetadataParts(
   ].filter(filterNotNullish);
 }
 
-/**
- * Completion fold for one phase's calls, shared by every host so the terminal
- * and the progress view can never disagree on what "done" counts. The caller
- * selects the phase's calls — each host already holds them in its own
- * container, and matching them here would duplicate that ownership.
- */
-export function workflowPhaseCallProgress(
-  calls: readonly WorkflowCallProgress[],
-): { readonly done: number; readonly total: number } {
-  return {
-    done: calls.filter((call) => isTerminalWorkflowCallProgress(call)).length,
-    total: calls.length,
-  };
-}
-
-/**
- * Whole-run failure tally shared by every host, so the terminal and the
- * progress view can never disagree on whether a workflow had failed calls.
- * Mirrors `workflowPhaseCallProgress` in taking a caller-selected call list.
- *
- * Cancelled calls remain distinct from failures and do not contribute to this
- * tally. Snapshot consumers (`/executions`) derive their own per-status tallies
- * with `deriveWorkflowCounts` and do not need this helper.
- */
-export function workflowCallFailureTally(
-  calls: readonly WorkflowCallProgress[],
-): { readonly failed: number } {
-  return { failed: calls.filter((call) => call.status === 'failed').length };
-}
-
 /** One workflow phase as its emitter names and orders it. */
 export interface WorkflowPhaseHeading {
   readonly phaseLabel: string;
@@ -144,10 +113,11 @@ export function formatWorkflowPhaseHeading(
 }
 
 /**
- * What a run that ended first says about a call, written once here because two
- * channels report it: the execution snapshot the engine terminalizes and the
- * trace cards the run's progress projection settles. Two spellings of one
- * sentence is drift, not two facts.
+ * What a run that ended first says about a call. `NOT_REACHED` is the note
+ * on a declared call the run never issued (`workflowCallDetail` below);
+ * `UNFINISHED` has two writers — the engine's terminal sweep and the card
+ * projection's own backstop for a transition the writer never landed — so it
+ * is spelled once here. Two spellings of one sentence is drift, not two facts.
  */
 const WORKFLOW_CALL_NOT_REACHED_NOTE =
   'The workflow ended before this call was reached.';
@@ -178,4 +148,71 @@ export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
   const detail = workflowCallDetail(call);
   const explanation = detail ? ` — ${detail.text}` : '';
   return `${WORKFLOW_TASK_STATUS_LABEL[call.status]}: ${call.label}${suffix}${explanation}`;
+}
+
+/**
+ * One glyph per call status — the vocabulary every host paints, so a strip
+ * of cells reads the same on the terminal and on the board, and reads
+ * without colour: pending and running, done and failed, skipped and cached
+ * are all distinct shapes.
+ */
+export const WORKFLOW_CALL_STATUS_GLYPH = {
+  declared: '□',
+  planned: '□',
+  queued: '□',
+  running: '☐',
+  completed: '☑',
+  cached: '✓',
+  skipped: '⊘',
+  cancelled: '⊘',
+  failed: '✗',
+} as const satisfies Record<WorkflowCallProgress['status'], string>;
+
+/** Generated-token marker, prefixed to a compact token count (`↓1.2k`)
+ *  wherever a host shows what a run has produced so far. */
+export const TOKENS_GENERATED = '↓';
+
+/** A phase the run has opened, and its hollow twin for one it has only
+ *  declared. */
+export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;
+
+/**
+ * A run's or a phase's tally as the run model folds it: `done` counts every
+ * settled call (cancelled and skipped included — they are distinct from
+ * `failed`), `declared` how many plan tasks are still unissued. Snapshot
+ * consumers (`/executions`) derive their own per-status counts with
+ * `deriveWorkflowCounts` over the engine's vocabulary.
+ */
+export interface WorkflowTally {
+  readonly done: number;
+  readonly total: number;
+  readonly running: number;
+  readonly failed: number;
+  readonly declared: number;
+}
+
+/** `done/total · N running · N failed` — the one spelling of a tally. */
+export function formatWorkflowTally(tally: WorkflowTally): string {
+  return [
+    `${tally.done}/${tally.total}`,
+    tally.running > 0 ? `${tally.running} running` : undefined,
+    tally.failed > 0 ? `${tally.failed} failed` : undefined,
+  ]
+    .filter(filterNotNullish)
+    .join(' · ');
+}
+
+/** A phase's tally: an opened phase counts its calls and, while the plan
+ *  still holds tasks it has not issued, how many; a phase known only from the
+ *  plan has no calls to count, so its declared count is the whole story. */
+export function formatWorkflowPhaseTally(phase: {
+  readonly opened: boolean;
+  readonly tally: WorkflowTally;
+}): string {
+  const { declared } = phase.tally;
+  const declaredText = declared > 0 ? `${declared} declared` : undefined;
+  if (!phase.opened) return declaredText ?? 'declared';
+  return [formatWorkflowTally(phase.tally), declaredText]
+    .filter(filterNotNullish)
+    .join(' · ');
 }

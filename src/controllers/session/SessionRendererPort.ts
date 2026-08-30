@@ -70,8 +70,6 @@ export interface SessionRendererPort {
     substate?: StreamSubstate,
   ): void;
 
-  onActiveStreamChanged(streamId: PresentedStreamId): void;
-
   onStreamDescriptionChanged(streamId: StreamTabId, description: string): void;
 
   onConversationProgressChanged(
@@ -105,10 +103,4 @@ export interface SessionRendererPort {
 
   /** Drop buffered conversation-progress pushes for a stream (new RUNNING). */
   clearPendingConversationProgress(streamId: StreamTabId): void;
-
-  /**
-   * Full active-viewport rebuild. Lit owns bridge cursor sync + controls packing;
-   * TUI no-ops (transcript projection is separate).
-   */
-  syncStreamContent(stream: PresentedStreamId): void;
 }

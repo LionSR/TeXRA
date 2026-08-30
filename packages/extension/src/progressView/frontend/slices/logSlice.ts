@@ -19,6 +19,7 @@ import {
 } from '@shared/streams/compactionActivityProjection';
 import { isTranscriptSettlementPhase } from '@shared/streams/streamStatus';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import { workflowMarkerOf } from '@shared/streams/workflowRunModel';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 
 import { appState, subagentExecutionLabels } from '../progressState';
@@ -128,7 +129,21 @@ function applyEntry(
     streamLogs,
     applyCompactionActivityEntries(streamLogs.compactionProjection, [entry]),
   );
-  // Internal records remain diagnostic-only. Raw compaction lifecycle records
+  // The workflow plan marker is the one internal record this host reads: it
+  // is an input of the shared workflow run model the board paints. The newest
+  // marker is the live plan; an unreadable one is an unknown plan, not the
+  // previous attempt's.
+  const marker = workflowMarkerOf(entry);
+  if (marker) {
+    if (marker.kind === 'malformedPlan') {
+      console.warn(
+        `[logSlice] Ignoring malformed workflow plan marker ${entry.id}: ${marker.error}`,
+      );
+    }
+    streamLogs.workflowPlan = marker.kind === 'plan' ? marker.plan : undefined;
+    return { ...compactionResult, logChanged: true, stateChanged: false };
+  }
+  // Other internal records remain diagnostic-only. Raw compaction lifecycle records
   // are replaced by the correlated stable row projected above. An active-skills
   // snapshot projects no row either (`projectTranscriptRow`); this host has no
   // surface for it, so it is not retained here — the durable transcript is
@@ -282,6 +297,7 @@ export const logHandlers = {
               rowIndex: streamLogs.rowIndex,
               taskGroupIndex: streamLogs.taskGroupIndex,
               compactionProjection: streamLogs.compactionProjection,
+              workflowPlan: streamLogs.workflowPlan,
               updatedRowIndices: [...updatedRowIndices],
               updatedRowBaseGeneration,
               generation: streamLogs.generation + 1,

@@ -1,13 +1,9 @@
 import { BaseNode } from '@agent/node';
-import { ConversationRoundStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import { appendCompileFailureRoundContext } from '../output/compileFailureRoundContext';
 
-import type {
-  ReflectionFlowShared,
-  RoundContext,
-} from '../ReflectionFlowState';
+import type { ReflectionFlowShared } from '../ReflectionFlowState';
 import type { ReflectionServices } from '../ReflectionServices';
 
 interface PrepInput {
@@ -20,22 +16,19 @@ export class PrepareContextNode extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     return {
       currentRound: shared.currentRound,
-      conversation: shared.context?.messages ?? [],
+      conversation: shared.context ?? [],
       compileFailureContext: shared.compileFailureContext,
     };
   }
 
-  async exec(prepRes: PrepInput): Promise<RoundContext> {
+  override async exec(prepRes: PrepInput): Promise<ProviderMessage[]> {
     const { promptBuilder, logger } = this.services;
     const modelHandler = this.services.modelCell.handler;
     const { currentRound, conversation, compileFailureContext } = prepRes;
 
-    const stateRound = ConversationRoundStateSnapshotSchema.parse({
-      roundIndex: currentRound,
-    });
     const isFirstRound = currentRound === 0;
 
     let messages: ProviderMessage[];
@@ -68,16 +61,13 @@ export class PrepareContextNode extends BaseNode<
       },
     });
 
-    return {
-      messages,
-      stateRoundSnapshot: stateRound,
-    };
+    return messages;
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     _prepRes: PrepInput,
-    context: RoundContext,
+    context: ProviderMessage[],
   ): Promise<string | undefined> {
     shared.context = context;
     delete shared.compileFailureContext;

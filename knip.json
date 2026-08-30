@@ -4,7 +4,11 @@
   "ignoreBinaries": [".*"],
   "workspaces": {
     ".": {
-      "entry": ["src/test-kernel/**/*.vitest.ts", "scripts/**/*.mjs!"],
+      "entry": [
+        "src/test-kernel/**/*.vitest.ts",
+        "src/test-kernel/support/setupFakePlatform.ts",
+        "scripts/**/*.mjs!"
+      ],
       "project": ["src/**/*.ts!", "!src/**/*.js", "!src/test-kernel/**!"]
     },
     "packages/extension": {
@@ -34,6 +38,9 @@
       ],
       "project": ["src/**/*.{ts,tsx}!"],
       "ignore": ["src/renderer/vite-env.d.ts"]
+    },
+    "packages/trace-viewer": {
+      "entry": ["vite.standalone.config.ts"]
     }
   }
 }

@@ -147,7 +147,6 @@ export async function extractFilesFromXml(
             await xmlManager.splitScratchpadMultipleOutputXml(
               outputLocation,
               currRound,
-              'scratchpad',
               similarityBaseFiles(state, deps, currRound),
             );
 

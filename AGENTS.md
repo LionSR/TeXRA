@@ -499,8 +499,8 @@ Agent flows follow the PocketFlow pattern in `src/agent/implementations/flows/`:
 - **Flow transitions** - use named constants instead of magic values:
   - `FlowTransition.DEFAULT` - follow next() successor
   - `FlowTransition.CONTINUE` - loop back to flow entry
-  - `FlowTransition.FINALIZE` - exit flow after finalization
-  - `FlowTransition.COMPLETE` - return control to caller
+  - `FlowTransition.COMPLETE` - end the flow and return control to caller
+  - `FlowTransition.WAITING` - pause with the cursor kept for resume
 - **Node lifecycle**: `prep(shared) → exec(prepRes) → post(shared, prepRes, execRes)`. A failing `exec()` goes to `execFallback(prepRes, error)`, which by default rethrows; override it to convert the failure into something `post()` can route on. Retries are **not** a `BaseNode` feature: the manual-retry loop and its `shouldAutoRetry(error)` / `retryPrompt(prepRes, error)` / `signal` hooks live on `ModelInvocationNode` (`src/agent/core/flows/ModelInvocationNode.ts`), the only node that invokes a model. Do not re-add retry machinery to the kernel for a node that does not call a provider.
 - **Agent owns lifecycle**: Agents handle init/finalize; flows handle only execution logic. Nodes should throw errors directly (`runFlowWithLifecycle` / `executeAgent` catch).
 
@@ -684,3 +684,29 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 - `.github/PULL_REQUEST_TEMPLATE.md` requires `## Net elements (R6)` and
   `## Consumer counts (R8)` sections on any `refactor:` / `simplify:` /
   `consolidate` / `dedupe` / `extract` PR — see the review checklist § 14.
+
+<!-- effect-solutions:start -->
+
+## Effect Best Practices
+
+When the optional local `effect-solutions` tool is installed, consult it before
+writing non-trivial Effect code:
+
+1. Run `effect-solutions list` to see available guides
+2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
+3. Search `~/.local/share/effect-solutions/effect` for real implementations
+
+Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
+
+If the tool is unavailable, consult the pinned package sources and types in
+`node_modules` instead of guessing at Effect patterns.
+
+### Local Effect Source
+
+`effect-solutions` may clone the Effect repository to
+`~/.local/share/effect-solutions/effect` for reference. This optional checkout
+is not provisioned by the repository. When present, it should track
+`Effect-TS/effect` `main` (v4); Effect v3 lives on that repository's `v3`
+branch. Match the installed `effect` version when APIs differ.
+
+<!-- effect-solutions:end -->

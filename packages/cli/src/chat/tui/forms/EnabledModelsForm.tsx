@@ -53,12 +53,11 @@ export function EnabledModelsForm(
       }
       action="toggle"
       showTransientCloseHint={false}
-      onSelect={(id, { data: models, setData: setModels }) => {
+      onSelect={(id, { data: models, reload }) => {
         const row = models.find((candidate) => candidate.id === id);
         if (!row) return;
         void setCliModelEnabled(id, !row.enabled)
-          .then(() => listCliEnabledModelCatalog())
-          .then(setModels)
+          .then(reload)
           .catch((error: unknown) => {
             // e.g. disabling the last remaining model — keep the catalog as-is.
             setTransientNotice(toErrorMessage(error));

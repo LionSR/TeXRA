@@ -23,7 +23,6 @@ import {
   WorkPlanSnapshotShape,
   type CompileFailure,
   type OutputFileInfo,
-  type ParsedUsageData,
   type RoundIndexed,
   type StreamSnapshot,
   type StreamTabId,
@@ -193,6 +192,16 @@ function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
   });
 }
 
+/**
+ * Read only `workPlan.json` for a stream. Completed-run todo readers use this
+ * so a run that never created tasks reads one file instead of five, and an
+ * I/O error in an unrelated sidecar (e.g. `outputFiles.json`) cannot fail a
+ * todos lookup.
+ */
+export async function readWorkPlan(kv: KVStore): Promise<WorkPlanSnapshot> {
+  return readPersistedWorkPlan(await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN));
+}
+
 /** Read every per-stream sidecar file once. */
 export async function readStreamData(kv: KVStore): Promise<StreamData> {
   const meta = await readMeta(kv);
@@ -225,23 +234,6 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     usageUnparsed,
     workPlan,
   };
-}
-
-/**
- * Read only the per-stream usage sidecar for usage-only hydration paths.
- *
- * Unlike the tolerant full-stream read, this path must never turn a
- * corrupt-present `usageStats.json` into an authoritative zero map: genuine
- * I/O errors and JSON `SyntaxError` propagate, and a present non-object value
- * is rejected instead of being silently treated as empty.
- */
-export async function readUsageData(kv: KVStore): Promise<ParsedUsageData> {
-  const raw = await kv.read(STREAM_DATA_KEYS.USAGE_STATS);
-  if (raw === undefined) return parseUsageData(undefined);
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error('Invalid persisted usageStats.json');
-  }
-  return parseUsageData(raw);
 }
 
 /**

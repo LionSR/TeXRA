@@ -74,16 +74,6 @@ export function wrappedDiffDisplayLines(
   );
 }
 
-export function maxDiffScrollOffset(
-  totalLines: number,
-  maxDisplayLines: number,
-): number {
-  return maxScrollableRowOffset({
-    maxDisplayLines,
-    totalLines,
-  });
-}
-
 /**
  * Start a scrollable approval diff near its first changed visual row. Long
  * wrapped context lines can otherwise consume the whole initial viewport.
@@ -105,7 +95,10 @@ export function initialDiffScrollOffset(
 
   const initiallyVisibleContentRows = Math.max(1, maxDisplayLines - 1);
   const firstChange = lines.at(changedIndex);
-  const maxOffset = maxDiffScrollOffset(lines.length, maxDisplayLines);
+  const maxOffset = maxScrollableRowOffset({
+    maxDisplayLines,
+    totalLines: lines.length,
+  });
   const defaultOffset = clamp(changedIndex - 1, 0, maxOffset);
   if (firstChange?.kind !== 'removed') {
     return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
@@ -302,14 +295,16 @@ function DiffLine({
   readonly line: DiffDisplayLine;
   readonly width: number;
 }): React.JSX.Element {
-  const content = wrapAnsiToWidth(line.text, width);
+  // Every line reaching here already came through `wrappedDiffDisplayLines`
+  // (or the width-clipped overflow marker), and `clampModalWidth` is
+  // idempotent, so a second wrap could not split anything.
   const style = DIFF_LINE_STYLE[line.kind];
   if (style) {
     return (
       <Text color={style.color} backgroundColor={style.backgroundColor}>
-        {fillRows(content, width)}
+        {fillRows(line.text, width)}
       </Text>
     );
   }
-  return <Text dimColor>{content}</Text>;
+  return <Text dimColor>{line.text}</Text>;
 }

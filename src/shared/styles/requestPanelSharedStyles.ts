@@ -216,7 +216,7 @@ export const requestPanelSharedStyles: CSSResult = css`
     display: block;
     outline: var(--border-medium) solid var(--wa-color-focus);
     outline-offset: calc(-1 * ${sp.tiny});
-    border-radius: var(--border-radius-medium);
+    border-radius: var(--border-radius);
   }
 
   :is(${LISTS}) {

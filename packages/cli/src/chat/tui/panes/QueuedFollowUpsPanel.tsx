@@ -16,7 +16,7 @@ interface QueuedFollowUpPanelRow {
   readonly text: string;
 }
 
-export interface QueuedFollowUpPanelDisplay {
+interface QueuedFollowUpPanelDisplay {
   readonly title: string | undefined;
   readonly rows: readonly QueuedFollowUpPanelRow[];
   readonly hiddenCount: number;

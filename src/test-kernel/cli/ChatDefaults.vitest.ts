@@ -130,8 +130,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'builtin',
-        agentSource: 'builtin-default',
         modelSource: 'builtin-default',
       },
     );
@@ -146,8 +144,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'research',
         model: 'deepseekproT',
-        source: 'builtin',
-        agentSource: 'builtin-default',
       },
     );
   });
@@ -163,8 +159,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'mixed',
-        agentSource: 'workspace-config',
         modelSource: 'builtin-default',
       },
     );
@@ -178,8 +172,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'sonnet46T',
-        source: 'mixed',
-        agentSource: 'workspace-config',
         modelSource: 'environment',
       },
     );
@@ -195,8 +187,6 @@ describe('CLI chat defaults', () => {
         // default rather than the history row's agent.
         agent: 'assistant',
         model: 'sonnet46T',
-        source: 'mixed',
-        agentSource: 'builtin-default',
         modelSource: 'history',
       },
     );
@@ -212,7 +202,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'builtin',
         modelSource: 'builtin-default',
       },
     );
@@ -233,7 +222,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'builtin',
       },
     );
   });
@@ -255,7 +243,6 @@ describe('CLI chat defaults', () => {
         {
           agent: 'assistant',
           model: 'sonnet46T',
-          agentSource: 'builtin-default',
           modelSource: 'history',
         },
       );
@@ -279,7 +266,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'sonnet46T',
-        agentSource: 'builtin-default',
         modelSource: 'history',
       },
     );
@@ -295,7 +281,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'sonnet46T',
-        agentSource: 'builtin-default',
         modelSource: 'workspace-config',
       },
     );
@@ -309,7 +294,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'sonnet46T',
-        agentSource: 'builtin-default',
         modelSource: 'user-config',
       },
     );
@@ -320,7 +304,6 @@ describe('CLI chat defaults', () => {
       { cwd: NO_WORKSPACE, envAgent: 'simplifier' },
       {
         agent: 'assistant',
-        agentSource: 'builtin-default',
       },
     );
   });
@@ -334,7 +317,6 @@ describe('CLI chat defaults', () => {
       },
       {
         agent: 'simplifier',
-        agentSource: 'explicit-override',
       },
     );
   });
@@ -353,8 +335,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'simplifier',
         model: 'deepseekT',
-        source: 'mixed',
-        agentSource: 'explicit-override',
         modelSource: 'explicit-override',
       },
     );
@@ -373,7 +353,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekT',
-        agentSource: 'workspace-config',
         modelSource: 'explicit-override',
       },
     );
@@ -386,8 +365,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'sonnet46T',
-        source: 'mixed',
-        agentSource: 'environment',
         modelSource: 'environment',
       },
     );
@@ -403,7 +380,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'simplifier',
         model: 'sonnet46T',
-        agentSource: 'explicit-override',
         modelSource: 'history',
       },
     );
@@ -418,7 +394,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekT',
-        source: 'workspace',
       },
     );
   });
@@ -431,8 +406,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekT',
-        source: 'user',
-        agentSource: 'user-config',
         modelSource: 'user-config',
       },
     );
@@ -453,7 +426,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'builtin',
       },
     );
 
@@ -478,7 +450,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'builtin',
       },
     );
 
@@ -499,7 +470,6 @@ describe('CLI chat defaults', () => {
       {
         agent: 'assistant',
         model: 'deepseekproT',
-        source: 'builtin',
       },
     );
 
@@ -525,7 +495,6 @@ describe('CLI chat defaults', () => {
       { cwd: NO_WORKSPACE },
       {
         agent: 'assistant',
-        agentSource: 'user-config',
       },
     );
 
@@ -550,7 +519,6 @@ describe('CLI chat defaults', () => {
       { cwd: NO_WORKSPACE },
       {
         agent: 'assistant',
-        agentSource: 'user-config',
       },
     );
 
@@ -582,7 +550,6 @@ describe('CLI chat defaults', () => {
       { cwd: NO_WORKSPACE },
       {
         agent: 'assistant',
-        agentSource: 'user-config',
       },
     );
 

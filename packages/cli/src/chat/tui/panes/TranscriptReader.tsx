@@ -165,7 +165,6 @@ export function TranscriptReader({
     streamId: StreamTabId;
     paths: Set<string>;
   }>({ streamId, paths: new Set() });
-  const mounted = useRef(true);
 
   const spillPaths = useMemo(
     () => [
@@ -182,8 +181,7 @@ export function TranscriptReader({
       requestedSpills.current = { streamId, paths: new Set() };
       setSpillState({ streamId, values: new Map() });
     }
-    const paths = spillPathsKey ? spillPathsKey.split('\0') : [];
-    const pending = paths.filter(
+    const pending = spillPaths.filter(
       (spillPath) => !requestedSpills.current.paths.has(spillPath),
     );
     if (pending.length === 0) return;
@@ -205,8 +203,7 @@ export function TranscriptReader({
             [spillPath, await loadSpill(spillPath, flushError)] as const,
         ),
       );
-      if (!mounted.current || requestedSpills.current.streamId !== streamId)
-        return;
+      if (requestedSpills.current.streamId !== streamId) return;
       setSpillState((current) => {
         const values = new Map(
           current.streamId === streamId ? current.values : [],
@@ -217,14 +214,9 @@ export function TranscriptReader({
         return { streamId, values };
       });
     })();
+    // `spillPathsKey` stands in for `spillPaths`: the key changes exactly
+    // when the path list does.
   }, [spillPathsKey, streamId]);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
 
   const spills =
     spillState.streamId === streamId

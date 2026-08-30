@@ -34,7 +34,6 @@ import {
   parseSlashInput,
   prefixSlashCommands,
   shouldRedactSlashInput,
-  slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
 } from '../commands/slashRegistry';
@@ -245,26 +244,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   }, []);
   const onImagePaste = useCallback(
     async (attempt: ImagePasteAttempt): Promise<string | null> => {
-      try {
-        const result = await attachClipboardImage();
-        if (!attempt.isCurrent()) return null;
-        if (!result.ok) {
-          setTransientNotice(result.reason);
-          return null;
-        }
-        return attachmentsRef.current.addPastedImage({
-          path: result.path,
-          mediaType: result.mediaType,
-          displayName: result.displayName,
-        });
-      } catch (error) {
-        if (attempt.isCurrent()) {
-          setTransientNotice(`Image paste failed: ${toErrorMessage(error)}`, {
-            ttlMs: Number.POSITIVE_INFINITY,
-          });
-        }
+      const result = await attachClipboardImage();
+      if (!attempt.isCurrent()) return null;
+      if (!result.ok) {
+        setTransientNotice(result.reason);
         return null;
       }
+      return attachmentsRef.current.addPastedImage({
+        path: result.path,
+        mediaType: result.mediaType,
+        displayName: result.displayName,
+      });
     },
     [],
   );
@@ -370,12 +360,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // Unmatched input falls through to the unknown-command suggestion.
         const chosen = prefixSlashCommands(slash.name)[0];
         if (chosen !== undefined) {
-          acceptSlashCommand(
-            chosen,
-            slashPickIntent(chosen, 'enter'),
-            slash.name,
-            slash.remainder,
-          );
+          acceptSlashCommand(chosen, 'submit', slash.name, slash.remainder);
           return;
         }
       }

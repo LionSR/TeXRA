@@ -47,7 +47,6 @@ import {
   pendingApprovalIds$,
   streamById$,
   streamStates$,
-  streams$,
   topLevelStreams$,
 } from '@progressView/frontend/progressState';
 import { streamDisplayLabel } from '@progressView/frontend/utils';
@@ -829,9 +828,20 @@ function taskConversationTemplate(): TemplateResult {
   const activeId = activeStreamId$.get();
   const showConversation = activeId != null && hasAnyStreams$.get();
   const startupPanelVisible = startupTeamPanel.isVisible();
-  const sidebarToggleLabel = shellState.sidebarCollapsed
+  // The sidebar is the only home for the rail's per-stream pending-approval
+  // badge (StreamTabs.ts). Collapsing it removes that cue entirely, so a
+  // call held at the approval gate — often on a workflow's child stream, not
+  // the one on screen — can stall with zero visible affordance (#11511).
+  // Surface the same signal on the toggle that reopens the rail.
+  const hasPendingApproval = pendingApprovalIds$.get().size > 0;
+  const sidebarCollapsedWithPendingApproval =
+    shellState.sidebarCollapsed && hasPendingApproval;
+  let sidebarToggleLabel = shellState.sidebarCollapsed
     ? 'Show sidebar'
     : 'Hide sidebar';
+  if (sidebarCollapsedWithPendingApproval) {
+    sidebarToggleLabel = 'Show sidebar - approval pending';
+  }
   const workspacePath = window.texraDesktop?.workspacePath;
   // Names the button even when the ≤560px container query collapses it to the
   // icon: the shadow button then has no visible text, so only `title` reaches
@@ -840,19 +850,29 @@ function taskConversationTemplate(): TemplateResult {
   return html`
     <main class="task-conversation" aria-label="Task conversation">
       <header class="task-header">
-        <wa-button
-          type="button"
-          class="task-header-button icon-button is-size-l"
-          appearance="plain"
-          size="s"
-          aria-label=${sidebarToggleLabel}
-          title=${sidebarToggleLabel}
-          @click=${() => updateShell(toggleSidebar(shellState))}
-        >
-          ${waIcon(
-            shellState.sidebarCollapsed ? 'chevron-right' : 'chevron-left',
-          )}
-        </wa-button>
+        <span class="task-header-button-slot">
+          <wa-button
+            type="button"
+            class="task-header-button icon-button is-size-l"
+            appearance="plain"
+            size="s"
+            aria-label=${sidebarToggleLabel}
+            title=${sidebarToggleLabel}
+            @click=${() => updateShell(toggleSidebar(shellState))}
+          >
+            ${waIcon(
+              shellState.sidebarCollapsed ? 'chevron-right' : 'chevron-left',
+            )}
+          </wa-button>
+          ${
+            sidebarCollapsedWithPendingApproval
+              ? html`<span
+                  class="task-header-pending-approval-badge"
+                  aria-hidden="true"
+                ></span>`
+              : nothing
+          }
+        </span>
         <span class="task-header-title">${currentTaskTitle()}</span>
         <span class="task-header-spacer"></span>
         ${
@@ -1087,7 +1107,7 @@ function shellTemplate(): TemplateResult {
             initials: workspaceInitials(workspacePath),
             projectSectionPosition: shellState.projectSectionPosition,
             sessions: railTabs,
-            streamCount: streams$.get().length,
+            streamCount: topLevelStreams$.get().length,
             workspaceName: workspaceName(workspacePath),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
             workspacePath,
@@ -1131,8 +1151,44 @@ function observeSurfaceResizes(): void {
   }
 }
 
+/**
+ * Streams whose off-screen pending approval has already reopened the
+ * sidebar once. A user who re-collapses it mid-run must not be fought on
+ * every unrelated signal change — only a newly appearing off-screen
+ * approval (one not in this set) reopens it again.
+ */
+let sidebarRevealedForApprovalIds = new Set<string>();
+
+/**
+ * Auto-reveals a collapsed sidebar when a pending approval lands on a
+ * stream other than the one on screen. That is the dead-end case: the
+ * request card lives on the pending stream's own view (one home for the
+ * decision), so a collapsed, non-viewed rail leaves nothing to click
+ * (#11511 — per-call workflow review cards land on a child stream, not the
+ * one the user is watching). Mutates `shellState` directly rather than going
+ * through `updateShell` so this can run from inside `rerenderShell` without
+ * recursing into another render pass.
+ */
+function revealSidebarForOffScreenApproval(): void {
+  const offScreen = [...pendingApprovalIds$.get()].filter(
+    (id) => id !== displayedActiveStreamId$.get(),
+  );
+  if (offScreen.length === 0) {
+    sidebarRevealedForApprovalIds = new Set();
+    return;
+  }
+  const isNewApproval = offScreen.some(
+    (id) => !sidebarRevealedForApprovalIds.has(id),
+  );
+  sidebarRevealedForApprovalIds = new Set(offScreen);
+  if (isNewApproval && shellState.sidebarCollapsed) {
+    shellState = toggleSidebar(shellState);
+  }
+}
+
 function rerenderShell(): void {
   if (bootstrapFailed) return;
+  revealSidebarForOffScreenApproval();
   render(shellTemplate(), appRoot);
   logsController.setActive(
     activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
@@ -1325,7 +1381,7 @@ const shortcutBootstrap = createDesktopShortcutBootstrap({
     createDesktopCommandPalette({
       document,
       actions: desktopRendererCommandActions,
-      getStreams: () => streams$.get(),
+      getStreams: () => topLevelStreams$.get(),
       getShortcuts: () => registry.entries(),
     }),
   appendPalette: (element) => document.body.append(element),

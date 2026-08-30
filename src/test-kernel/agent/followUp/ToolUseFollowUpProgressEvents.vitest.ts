@@ -74,15 +74,15 @@ describe('tool-use follow-up progress events', () => {
       parentStreamId: stream,
       agent: 'search',
     });
+    const owner = session ?? defaultSession();
     handle.attachToolUseFlow({
-      ...(session ? { ownerSession: session } : {}),
+      ownerSession: owner,
       modelHandler: { supportsManualCompaction: true },
       requestImmediateCompaction: () => {},
       modelSwitchDisabledReason: () => undefined,
       switchModel: async () => {},
       interrupt: () => {},
     });
-    const owner = session ?? defaultSession();
     owner.executions.track(handle);
     trackedExecutions.push({ session: owner, executionId });
   }
@@ -140,25 +140,6 @@ describe('tool-use follow-up progress events', () => {
     try {
       withRunContext(createRunContext({ session }), () =>
         notifyFollowUpSent(streamId),
-      );
-
-      expect(recorded.events).toEqual([followUpSentEvent(streamId)]);
-      expect(run.events).toEqual([]);
-    } finally {
-      recorded.detach();
-    }
-  });
-
-  it('falls back to the default session when the active run has no event hub', () => {
-    const run = createRecordingHost();
-    const recorded = recordSessionEvents(defaultSession().events);
-
-    try {
-      withRunContext(
-        createRunContext({
-          session: {} as SessionHandle,
-        }),
-        () => notifyFollowUpSent(streamId),
       );
 
       expect(recorded.events).toEqual([followUpSentEvent(streamId)]);

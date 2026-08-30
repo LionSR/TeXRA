@@ -407,7 +407,7 @@ function toStreamPaletteEntry(stream: StreamTabInfo): CommandPaletteEntry {
       streamDisplayLabel(stream) ||
       'Stream',
     icon: 'terminal',
-    category: 'Streams',
+    category: 'Tasks',
   };
 }
 

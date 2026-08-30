@@ -2,7 +2,7 @@
  * The one builder for every catalog-derived settings-view snapshot.
  *
  * A snapshot is exactly "the catalog rows tagged for it", so this reads that
- * list rather than naming fields: the approval/safety, git-author, agent-skills,
+ * list rather than naming fields: the approval/safety, git-author, skills,
  * telemetry, multi-agent, and LaTeX snapshots all come from here. Per-row defaults,
  * validation, storage slot, and legacy normalization already live on the
  * catalog row and are applied by `readSetting`, so a snapshot builder has

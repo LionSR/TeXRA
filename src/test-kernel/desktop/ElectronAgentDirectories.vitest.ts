@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { setImmediate as nextTurn } from 'node:timers/promises';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,7 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
+import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 import { loadSourceModule } from './loadSourceModule.ts';
@@ -335,13 +336,33 @@ describe('desktop agent directory bootstrap', () => {
 
   it('registers runtime skills through the shared Node host defaults', async () => {
     const { resourcesPath } = await createHarness();
+    const projectPath = join(dirname(resourcesPath), 'project');
+    await Promise.all([
+      writeSkill(join(resourcesPath, 'skills'), 'bundled-skill', {
+        name: 'bundled-skill',
+        description: 'Bundled skill.',
+      }),
+      writeSkill(join(projectPath, '.texra', 'skills'), 'project-skill', {
+        name: 'project-skill',
+        description: 'Project skill.',
+      }),
+      writeSkill(join(projectPath, '.codex', 'skills'), 'interop-skill', {
+        name: 'interop-skill',
+        description: 'Interop skill.',
+      }),
+      writeSkill(join(projectPath, 'vendor', 'skills'), 'custom-skill', {
+        name: 'custom-skill',
+        description: 'Custom skill.',
+      }),
+    ]);
     const { initializeNodeRuntimeSkills } = await loadSourceModule(
       '@platform/defaults/nodeHost',
     );
-    const { listRuntimeSkillSources } = await import('@skills/runtimeSkills');
+    const { loadRuntimeSkillDisplay } = await import('@skills/runtimeSkills');
 
     initializeNodeRuntimeSkills({
-      cwd: resolve(sep, 'tmp', 'project'),
+      host: 'desktop',
+      cwd: projectPath,
       resourcesPath,
       skillSourceOptions: {
         includeInterop: true,
@@ -349,25 +370,24 @@ describe('desktop agent directory bootstrap', () => {
       },
     });
 
-    const sources = listRuntimeSkillSources();
-    expect(sources).toEqual(
+    const { skills } = await loadRuntimeSkillDisplay();
+    expect(skills).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          name: 'custom-skill',
           scope: 'custom',
-          path: resolve(sep, 'tmp', 'project', 'vendor', 'skills'),
-          required: true,
         }),
         expect.objectContaining({
+          name: 'project-skill',
           scope: 'project',
-          path: resolve(sep, 'tmp', 'project', '.texra', 'skills'),
         }),
         expect.objectContaining({
+          name: 'interop-skill',
           scope: 'interop',
-          path: resolve(sep, 'tmp', 'project', '.codex', 'skills'),
         }),
         expect.objectContaining({
+          name: 'bundled-skill',
           scope: 'bundled',
-          path: join(resourcesPath, 'skills'),
         }),
       ]),
     );

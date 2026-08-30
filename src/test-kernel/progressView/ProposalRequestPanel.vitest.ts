@@ -89,22 +89,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     ).toBe('Setup (s)');
   });
 
-  it('offers no Setup on a per-call workflow review card', async () => {
-    const permission = createPermission();
-    permission.data.workflowCall = {
-      workflowName: 'revise',
-      callId: 'call-1',
-      label: 'Revise the introduction',
-    };
-
-    const element = await mountPanel(permission);
-
-    expect(
-      element.shadowRoot?.querySelector('#proposal-setup-button'),
-    ).toBeNull();
-    expect(element.handleKeyboardShortcut('s')).toBe(false);
-  });
-
   it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);
@@ -204,6 +188,7 @@ describe('proposal-request-panel file-name keyboard activation', () => {
         { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
       ],
     };
+    permission.data.model = 'gpt56';
 
     const element = await mountPanel(permission);
     const summary = element.shadowRoot?.querySelector(
@@ -217,8 +202,13 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     expect(summary?.textContent).toContain('2 phases · 2 declared items');
     expect(summary?.textContent).not.toContain('tasks');
     expect(element.shadowRoot?.textContent).toContain('Multi-agent workflow');
+    expect(
+      element.shadowRoot
+        ?.querySelector('.workflow-proposal__model')
+        ?.textContent?.trim(),
+    ).toBe('GPT-5.6 Sol');
     expect(element.shadowRoot?.textContent).toContain(
-      'Defaults: writer (sonnet)',
+      'Defaults: writer (GPT-5.6 Sol)',
     );
     expect(element.shadowRoot?.textContent).toContain('high model cost');
     expect(details?.textContent).toContain('plan labels');

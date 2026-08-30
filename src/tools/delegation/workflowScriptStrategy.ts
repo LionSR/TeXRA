@@ -26,6 +26,7 @@ import type { ExecutionKVStore } from '@agent/storage';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { AgentFinalResultSchema } from '@agent/runtime/AgentFinalResult';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { createLog } from '@logger/logUtils';
 import type {
   ExecutionId,
@@ -129,8 +130,6 @@ export interface WorkflowScriptStrategyParams {
    * on while the run is in flight, so a host can target a focused grandchild.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  /** Per-call review gate chosen at proposal time; absent runs every call. */
-  readonly admitCall?: WorkflowScriptRunOptions['admitCall'];
   /** Snapshot read from the detached run metadata that receives subsequent writes. */
   readonly initialSnapshot?: WorkflowExecutionSnapshot;
   /** Persist the canonical snapshot on the detached run metadata. */
@@ -167,7 +166,7 @@ export function createWorkflowScriptStrategy(
    *
    * `taskDone` counts the tasks that produced a result (completed or cached),
    * which is deliberately narrower than the phase header's `done/total`
-   * (workflowPhaseCallProgress), where every settled call counts, failures and
+   * (the run model's tally), where every settled call counts, failures and
    * skips included. The two answer different questions, so the delivery line
    * labels its count "succeeded".
    *
@@ -275,8 +274,10 @@ export function createWorkflowScriptStrategy(
             files: params.files,
           }),
           signal: abortController.signal,
+          // The session's child-run budget is the one owner of "how many at
+          // once": the engine's own default is a library fallback only.
+          concurrency: resolveChildRunConcurrencyBudget(),
           runAgent,
-          ...(params.admitCall && { admitCall: params.admitCall }),
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           onActivity: runLog.add,

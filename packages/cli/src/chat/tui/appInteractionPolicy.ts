@@ -1,7 +1,7 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
 // Local imports - shared schemas and utilities
-import { type RunIdentity, type StreamTabId } from '@shared/schemas';
+import { type StreamTabId } from '@shared/schemas';
 import { assertNever, groupBy } from '@utils/core';
 
 // Local imports - TUI state
@@ -27,30 +27,6 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // commit to interrupting.
 export const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
 
-export function appFocusShortcutsActive({
-  foregroundOpen,
-  reverseSearchOpen,
-  slashPaletteOpen,
-}: {
-  readonly foregroundOpen: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return !foregroundOpen && !slashPaletteOpen && !reverseSearchOpen;
-}
-
-export function appEscapeInterruptActive({
-  inputDisabled,
-  reverseSearchOpen,
-  slashPaletteOpen,
-}: {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-}): boolean {
-  return !inputDisabled && !slashPaletteOpen && !reverseSearchOpen;
-}
-
 // Bare Esc must give a numbered stream-focus chord a chance to resolve while
 // that binding is on screen. `Alt`-chord platforms are unaffected: their
 // Esc+key sequences arrive as one burst, resolved synchronously by
@@ -66,19 +42,17 @@ export function shouldDeferEscapeInterruptForMetaChord({
 }
 
 export interface EscapeInterruptState {
-  readonly inputDisabled: boolean;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
+  /** The committed render's focus-shortcut gate: no foreground surface, child
+   *  list, reverse search, or slash palette owns the keyboard. Bare Escape's
+   *  deferred chord timer reads it through a ref so it sees that render. */
+  readonly shortcutsActive: boolean;
   readonly canInterruptStream: (streamId: StreamTabId) => boolean;
   readonly onInterruptStream: (streamId: StreamTabId) => void;
 }
 
 export interface AppCtrlCState {
   readonly discardDraft: () => boolean;
-  readonly canStopActiveRun: () => boolean;
-  readonly onInterruptActive: () => void;
-  readonly onExit: () => void;
-  readonly onCtrlC?: () => void;
+  readonly onCtrlC: () => void;
 }
 
 export function appDraftDiscardActive({
@@ -93,18 +67,12 @@ export function appDraftDiscardActive({
   return !inputDisabled && !reverseSearchOpen && !childListFocused;
 }
 
-/** Apply the root TUI's complete Ctrl+C policy from the latest composer state. */
+/** Apply the root TUI's complete Ctrl+C policy from the latest composer state:
+ *  the first Ctrl+C discards a draft, and anything past that is the host's
+ *  SIGINT policy. */
 export function triggerAppCtrlC(state: AppCtrlCState): void {
   if (state.discardDraft()) return;
-  if (state.onCtrlC) {
-    state.onCtrlC();
-    return;
-  }
-  if (state.canStopActiveRun()) {
-    state.onInterruptActive();
-    return;
-  }
-  state.onExit();
+  state.onCtrlC();
 }
 
 export function digitFromMetaShortcut(value: string): number | undefined {
@@ -112,7 +80,12 @@ export function digitFromMetaShortcut(value: string): number | undefined {
 }
 
 export type ForegroundSurfaceKind =
-  'form' | 'infoPane' | 'approval' | 'transcriptReader' | 'workPlanReader';
+  | 'form'
+  | 'infoPane'
+  | 'approval'
+  | 'transcriptReader'
+  | 'workPlanReader'
+  | 'workflowPopup';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
@@ -125,7 +98,7 @@ export function foregroundSurfaceKind({
   readonly formBusy: boolean;
   readonly infoPaneOpen: boolean;
   readonly pendingApproval: boolean;
-  readonly readerKind: 'transcript' | 'workPlan' | undefined;
+  readonly readerKind: 'transcript' | 'workPlan' | 'workflow' | undefined;
 }): ForegroundSurfaceKind | undefined {
   if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
@@ -135,6 +108,7 @@ export function foregroundSurfaceKind({
   // answer from the user takes the foreground away from it.
   if (readerKind === 'workPlan') return 'workPlanReader';
   if (readerKind === 'transcript') return 'transcriptReader';
+  if (readerKind === 'workflow') return 'workflowPopup';
   return undefined;
 }
 
@@ -167,6 +141,7 @@ export function foregroundEscapeAction({
     case 'infoPane':
     case 'transcriptReader':
     case 'workPlanReader':
+    case 'workflowPopup':
       return 'close';
     case 'approval':
       // Esc rejects (confirmCardKeyAction); label the consequence, not "cancel".
@@ -215,6 +190,7 @@ export function foregroundMaxRowsForKind({
     case 'infoPane':
     case 'transcriptReader':
     case 'workPlanReader':
+    case 'workflowPopup':
       return undefined;
     case 'approval':
       return approvalForegroundMaxRows(approvalKind);
@@ -244,30 +220,5 @@ export function groupPendingApprovalsByRow(
     keyed,
     (entry) => entry.key,
     (entry) => entry.summary.kind,
-  );
-}
-
-// A workflow-script grandchild `agent()` call is the only interactively
-// skip/retry-able row: a NATIVE agent run (no external CLI tool — those
-// children are driven by their own tool and would no-op here) whose parent
-// stream IS the workflow-script run — one identity hop, which excludes the
-// run stream itself so its row never shows a control that would silently
-// no-op. Callers read both identities from the shared metadata
-// (`streamMetadataFor`), resolving the parent edge themselves, so this
-// selector stays pure.
-export function selectedChildRowWorkflowControllable({
-  parentIdentity,
-  selectedChildIdentity,
-  selectedChildKillable,
-}: {
-  readonly parentIdentity: RunIdentity | undefined;
-  readonly selectedChildIdentity: RunIdentity | undefined;
-  readonly selectedChildKillable: boolean;
-}): boolean {
-  return (
-    selectedChildKillable &&
-    selectedChildIdentity?.kind === 'agent' &&
-    selectedChildIdentity.tool === undefined &&
-    parentIdentity?.kind === 'multiAgentWorkflow'
   );
 }

@@ -261,7 +261,7 @@ describe('CLI StatusBar display model', () => {
     const display = buildStatusBarDisplay(
       statusInput({
         isChildStream: true,
-        location: 'Survey (1/1) › Agent runtime',
+        location: { context: 'Survey (1/1)', label: 'Agent runtime' },
         width: 80,
       }),
     );
@@ -1571,6 +1571,7 @@ describe('CLI StatusBar display model', () => {
     {
       name: 'keeps queued-input discard warnings ahead of status details',
       width: 80,
+      bypass: NO_BYPASS,
       expected: [
         '◆',
         'run 45s',
@@ -1581,12 +1582,20 @@ describe('CLI StatusBar display model', () => {
     {
       name: 'bounds queued-input discard warnings in very narrow footers',
       width: 30,
+      bypass: NO_BYPASS,
       expected: ['◆', '1 queued follow-up will b…'],
     },
-  ])('$name', ({ width, expected }) => {
+    {
+      name: 'drops bypass badges before truncating queued-input discard warnings',
+      width: 30,
+      bypass: { bash: true, superYolo: true, toolEdit: true },
+      expected: ['◆', '1 queued follow-up will b…'],
+    },
+  ])('$name', ({ width, bypass, expected }) => {
     const display = buildStatusBarDisplay(
       statusInput({
         status: STREAM_PHASE.RUNNING,
+        bypass,
         runningFrame: '/',
         elapsedMs: 45_000,
         transientNotice: {

@@ -29,7 +29,7 @@ export function baseRoundServices(
     onRoundFinalized: () => {},
     prompt: { systemPrompt: '', userPrefix: '', userRequest: '' },
     run: AgentRunStateSnapshotSchema.parse({}),
-    userVarChannels: { input: {}, transient: {} },
+    userVarChannels: {},
     workspace: AgentWorkspaceState.create(),
   };
 }

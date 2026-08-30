@@ -6,7 +6,7 @@ interface SgrStripState {
   pending: string;
 }
 
-export function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
+function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
   const input = `${state.pending}${text}`;
   state.pending = '';
 
@@ -60,9 +60,7 @@ function writeCallback(args: readonly unknown[]): (() => void) | undefined {
   return typeof callback === 'function' ? (callback as () => void) : undefined;
 }
 
-export function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(
-  stream: T,
-): T {
+function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(stream: T): T {
   const state: SgrStripState = { pending: '' };
   const write = stream.write.bind(stream) as (
     chunk: string | Uint8Array,

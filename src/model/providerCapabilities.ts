@@ -5,7 +5,12 @@ import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
 import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
-import type { UsageRoute } from '@shared/schemas';
+import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  ChatgptCodexContextWindowSchema,
+  type UsageRoute,
+} from '@shared/schemas';
+import { getValidatedConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
@@ -37,12 +42,13 @@ interface ProviderCapabilityKey {
 }
 
 /**
- * ChatGPT-subscription Codex input budget. Matches Codex CLI 0.145.0's
- * `context_window` / `max_context_window` for GPT-5.5 and GPT-5.6 Sol /
- * Terra / Luna. Displayed context is this plus the registry `maxOutputTokens`
- * (128k → 400k), same split OpenCode uses.
+ * Default ChatGPT-subscription Codex input budget. The 272k default mirrors
+ * the Codex CLI default `context_window`; GPT-5.6 supports an 872k
+ * `max_context_window`, which users can select with
+ * `texra.chatgptCodex.contextWindow`.
  */
-export const CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT = 272_000;
+export const CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT =
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
@@ -98,7 +104,11 @@ export function resolveCodexSubscriptionProfile({
   if (model.openRouterOnly) return null;
   if (!isCodexSubscriptionEligible(model)) return null;
   const inputTokenLimit = Math.min(
-    CODEX_DEFAULT_SUBSCRIPTION_INPUT_LIMIT,
+    getValidatedConfig(
+      CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
+      ChatgptCodexContextWindowSchema,
+      CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue,
+    ),
     model.contextWindow,
   );
   const contextWindow = Math.min(

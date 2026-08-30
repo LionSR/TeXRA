@@ -105,7 +105,7 @@ export class ToolUseDispatchNode extends BaseNode<
   private _duplicateToPrimary = new Map<string, number>();
 
   /** Returns tool calls to execute, or empty array if skipped/interrupted. */
-  async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
+  override async prep(shared: ToolUseRoundShared): Promise<SdkToolCall[]> {
     this._duplicateToPrimary.clear();
     this._currentUserInstruction = shared.currentUserInstruction;
     const toolCalls = shared.toolCalls ?? [];
@@ -151,7 +151,9 @@ export class ToolUseDispatchNode extends BaseNode<
    * through the run's abort signal. Retry lives on `ModelInvocationNode`,
    * which this node does not extend.
    */
-  async _exec(calls: SdkToolCall[]): Promise<(ToolExecutionResult | null)[]> {
+  override async _exec(
+    calls: SdkToolCall[],
+  ): Promise<(ToolExecutionResult | null)[]> {
     if (calls.length === 0) return [];
 
     const results = new Array<ToolExecutionResult | null>(calls.length).fill(
@@ -229,7 +231,7 @@ export class ToolUseDispatchNode extends BaseNode<
   }
 
   /** Execute a single tool call, returning null if interrupted. */
-  async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
+  override async exec(call: SdkToolCall): Promise<ToolExecutionResult | null> {
     if (this.services.runScope.signal.aborted) {
       return null;
     }
@@ -264,13 +266,6 @@ export class ToolUseDispatchNode extends BaseNode<
         primary.extracted.sanitizedResult,
       );
     }
-  }
-
-  clone(): this {
-    const cloned = super.clone();
-    cloned._duplicateToPrimary = new Map();
-    cloned._currentUserInstruction = undefined;
-    return cloned;
   }
 
   /** Invoke a tool with error handling, returning an error result if the tool is missing. */
@@ -508,7 +503,7 @@ export class ToolUseDispatchNode extends BaseNode<
   }
 
   /** Process tool execution results and create follow-up messages. */
-  async post(
+  override async post(
     shared: ToolUseRoundShared,
     dispatchedCalls: SdkToolCall[],
     execResults: (ToolExecutionResult | null)[],

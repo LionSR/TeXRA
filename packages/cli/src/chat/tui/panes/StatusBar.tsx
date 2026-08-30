@@ -60,7 +60,6 @@ interface StatusBarProps {
   readonly chatInputAvailable: boolean;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
-  readonly childListSelectionWorkflowControllable?: boolean;
   readonly runningSessions?: number;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
@@ -289,7 +288,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     focusedStreamId === undefined
       ? undefined
       : ancestorWorkflowPhaseLabel({
-          categoryOf: (id) => streamMetadataFor(id)?.agentCategory,
           stageOf: (id) => streamStateFor(id)?.stage,
           parentStream,
           streamId: focusedStreamId,
@@ -322,9 +320,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: target.ctrlCAction,
     isChildStream: target.isChildStream,
-    location: focusedPhaseHeading
-      ? `${focusedPhaseHeading} › ${focusedLabel}`
-      : focusedLabel,
+    location:
+      focusedLabel === undefined
+        ? undefined
+        : { context: focusedPhaseHeading, label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
       escapeAction: props.foregroundEscapeAction,
@@ -332,8 +331,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     childList: {
       focused: props.childListFocused,
       selectionKillable: props.childListSelectionKillable,
-      selectionWorkflowControllable:
-        props.childListSelectionWorkflowControllable,
     },
     shortcuts: {
       agentSelectionAvailable: !rootRunPending,

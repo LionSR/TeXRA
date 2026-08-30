@@ -5,6 +5,7 @@ import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import {
   type CliLogoutTarget,
+  type LoginFormValue,
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
@@ -18,23 +19,24 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
-import { ModelAccessForm } from '../forms/ModelAccessForm';
+import {
+  AccountAccessForm,
+  type AccountAccessFormValue,
+} from '../forms/AccountAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
 import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
-import { LoginForm, type LoginFormValue } from '../forms/LoginForm';
-import { LogoutForm } from '../forms/LogoutForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
+import { GoalModeForm } from '../forms/GoalModeForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import {
-  activeForm,
   formProgress,
-  getCliStateGeneration,
+  goalAutoApproveAll,
   patchSessionMeta,
   sessionMeta,
   setTransientNotice,
@@ -102,7 +104,7 @@ function formSelectionHandler<T>({
   echoOnPersist = false,
   completion = 'afterAction',
   busyTitle,
-  abandonNotice = 'Operation abandoned; it may still complete.',
+  abandonNotice,
 }: {
   readonly action: (value: T, output: SlashCommandOutput) => FormActionResult;
   readonly onDone: (value: T) => void;
@@ -111,15 +113,16 @@ function formSelectionHandler<T>({
   readonly echoOnPersist?: boolean;
   readonly completion?: SelectionCompletion;
   readonly busyTitle?: (value: T) => string;
-  readonly abandonNotice?: string;
+  readonly abandonNotice?: (value: T) => string;
 }): (value: T) => void {
   return (value) => {
     if (completion === 'busy') {
-      const generation = getCliStateGeneration();
+      // The submission token is the single owner of "is this submission still
+      // live": resetCliState clears `formProgress`, so a stale token can never
+      // match the current progress.
       const token = Symbol('form submission');
       const actionController: { abort?: () => void } = {};
       const currentProgress = () => {
-        if (generation !== getCliStateGeneration()) return undefined;
         const current = formProgress.get();
         return current?.token === token ? current : undefined;
       };
@@ -138,8 +141,8 @@ function formSelectionHandler<T>({
         }
         formProgress.set(undefined);
         onDone(value);
-        if (!canAbort && generation === getCliStateGeneration()) {
-          setTransientNotice(abandonNotice);
+        if (!canAbort && abandonNotice !== undefined) {
+          setTransientNotice(abandonNotice(value));
         }
       };
       const title = busyTitle?.(value) ?? 'Working';
@@ -296,22 +299,6 @@ export function registerBuiltinSlashCommands(options?: {
   const canSelectAgent = options?.canSelectAgent ?? (() => true);
   const canSelectModel = options?.canSelectModel ?? (() => true);
 
-  // Picking the root agent and the root model is a single up-front choice
-  // before the first message, so advance straight from the agent picker into
-  // the model picker instead of closing — the user chooses both in one flow.
-  function openModelSelectionForm(): void {
-    activeForm.set({
-      commandName: 'model',
-      render: (close, availableRows) => (
-        <ModelListFormAdapter
-          remainder=""
-          availableRows={availableRows}
-          onDone={() => close()}
-        />
-      ),
-    });
-  }
-
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = sessionMeta.get().agent;
     const selectable = canSelectAgent();
@@ -322,12 +309,17 @@ export function registerBuiltinSlashCommands(options?: {
         selectable={selectable}
         onSelect={formSelectionHandler<string>({
           action: onAgentSelect,
-          // Chain into the model picker only while still choosing the root
+          // Picking the root agent and the root model is a single up-front
+          // choice before the first message, so chain straight into the model
+          // picker instead of closing — but only while still choosing the root
           // and model selection is available.
           onDone:
             selectable && canSelectModel()
-              ? () => openModelSelectionForm()
+              ? () => {
+                  openCliSlashCommandForm('model', '');
+                }
               : props.onDone,
+          onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
@@ -336,20 +328,48 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
-  function ModelAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
+  function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
     return (
-      <ModelAccessForm
+      <AccountAccessForm
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<CliModelAccessSelection>({
-          action: onModelAccessSelect,
+        onSelect={formSelectionHandler<AccountAccessFormValue>({
+          action: (value, output) => {
+            switch (value.kind) {
+              case 'access':
+                return onModelAccessSelect(value.selection, output);
+              case 'login':
+                return onLoginSelect(value.target, output);
+              case 'logout':
+                return onLogoutSelect(value.target, output);
+            }
+          },
           onDone: props.onDone,
           onError: options?.onError,
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
           completion: 'busy',
-          busyTitle: () => 'Updating model access',
-          abandonNotice:
-            'Model access update abandoned; it may still complete.',
+          busyTitle: (value) => {
+            switch (value.kind) {
+              case 'access':
+                return 'Updating model access';
+              case 'login': {
+                const args = parseChatLoginSlashArgs(value.target);
+                return args ? loginStartMessage(args) : 'Signing in';
+              }
+              case 'logout':
+                return 'Signing out';
+            }
+          },
+          abandonNotice: (value) => {
+            switch (value.kind) {
+              case 'access':
+                return 'Model access update abandoned; it may still complete.';
+              case 'login':
+                return 'Sign-in abandoned; the browser flow may still complete.';
+              case 'logout':
+                return 'Sign-out abandoned; it may still complete.';
+            }
+          },
         })}
         onCancel={() => props.onDone(undefined)}
       />
@@ -365,11 +385,26 @@ export function registerBuiltinSlashCommands(options?: {
         onSelect={formSelectionHandler<TexraApprovalPolicy>({
           action: (value) => options?.onApprovalPolicySelect?.(value),
           onDone: props.onDone,
+          onError: options?.onError,
           completion: 'beforeAction',
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
         onCancel={() => props.onDone(undefined)}
+      />
+    );
+  }
+
+  function GoalModeFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <GoalModeForm
+        autoApproveAll={goalAutoApproveAll.get()}
+        availableRows={props.availableRows}
+        onToggle={(enabled) => {
+          goalAutoApproveAll.set(enabled);
+          props.onDone(enabled);
+        }}
+        onClose={() => props.onDone(undefined)}
       />
     );
   }
@@ -389,48 +424,6 @@ export function registerBuiltinSlashCommands(options?: {
           );
           props.onDone(provider);
         }}
-        onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function LoginFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <LoginForm
-        availableRows={props.availableRows}
-        onSelect={formSelectionHandler<LoginFormValue>({
-          action: onLoginSelect,
-          onDone: props.onDone,
-          onError: options?.onError,
-          completion: 'busy',
-          busyTitle: (value) => {
-            const args = parseChatLoginSlashArgs(value);
-            return args ? loginStartMessage(args) : 'Signing in';
-          },
-          abandonNotice:
-            'Sign-in abandoned; the browser flow may still complete.',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
-        onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function LogoutFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <LogoutForm
-        availableRows={props.availableRows}
-        onSelect={formSelectionHandler<CliLogoutTarget>({
-          action: onLogoutSelect,
-          onDone: props.onDone,
-          onError: options?.onError,
-          completion: 'busy',
-          busyTitle: () => 'Signing out',
-          abandonNotice: 'Sign-out abandoned; it may still complete.',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -554,11 +547,11 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'api',
-    description: `Choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
-    category: 'configuration',
+    description: `Sign in, choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
+    category: 'account',
     echo: 'ifPersists',
     handler: applyCliModelAccessInput,
-    formComponent: ModelAccessFormAdapter,
+    formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'key',
@@ -591,18 +584,23 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'login',
     description: RESEARCHER_ACCESS_AUTH.slashLoginDescription,
     category: 'account',
-    echo: 'ifPersists',
+    // The form can complete a sign-out or a preference toggle too, so the
+    // typed command is not an accurate transcript row; outcomes are written
+    // by loginFromChat itself.
+    echo: 'never',
     handler: (remainder, context) =>
       loginFromChat(remainder, context.cliContext),
-    formComponent: LoginFormAdapter,
+    formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'logout',
     description: 'Sign out of one account or all accounts',
     category: 'account',
-    echo: 'ifPersists',
+    // Same merged-form mismatch as /login: the typed command does not
+    // describe what the form actually did.
+    echo: 'never',
     handler: (remainder) => logoutFromChat(remainder),
-    formComponent: LogoutFormAdapter,
+    formComponent: AccountAccessFormAdapter,
   });
   registerSlashCommand({
     name: 'approval',
@@ -638,11 +636,12 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'goal',
-    description: 'Explain autonomous goal mode',
+    description: 'Configure autonomous goal mode',
     aliases: ['goals'],
     category: 'session',
     echo: 'never',
     handler: showCliGoalModeHelp,
+    formComponent: GoalModeFormAdapter,
   });
   registerSlashCommand({
     name: 'resume',

@@ -24,6 +24,10 @@ import {
   transcriptRowHeadline,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
+  activeStreamId,
+  closeForegroundReader,
+  openTranscriptReader,
+  openWorkflowPopup,
   patchStream,
   resetCliState,
   streams,
@@ -33,7 +37,10 @@ import {
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
-import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
+import {
+  subscribeStreamLog,
+  syncStreamLog,
+} from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { SessionState } from '@controllers/session/SessionState';
 import {
@@ -48,6 +55,7 @@ import {
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
+import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUtils';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { splitTranscriptEntries } from '@test/support/transcriptRowFixtures';
@@ -216,6 +224,66 @@ afterEach(() => {
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
+  it('loads a complete workflow projection for its popup and Ctrl-T log', async () => {
+    const runTrace = openRunTrace(STREAM_ID);
+    for (let index = 0; index < 2_001; index++) {
+      runTrace.trace.emit({
+        type: 'workflow.call',
+        logId: `task-${index}`,
+        call: {
+          id: `call-${index}`,
+          label: `Call ${index}`,
+          status: 'planned',
+        },
+      });
+    }
+    runTrace.trace.info('Full workflow log detail', {
+      messageType: MESSAGE_TYPES.DEFAULT,
+    });
+    patchStream(PARENT_STREAM_ID, (slice) => ({ ...slice }));
+    activeStreamId.set(PARENT_STREAM_ID);
+
+    syncStreamLog(defaultSession(), STREAM_ID);
+    expect(streamEntries()).toHaveLength(2_000);
+    expect(streamEntries().some((row) => row.id === 'task-0')).toBe(false);
+
+    // Exercise the roster-first interval: the parent already classifies this
+    // child as a workflow, but the child's own run metadata has not landed.
+    seedStreamMeta(STREAM_ID, { agentCategory: AgentCategory.Workflow });
+    boundState.getOrCreateStreamState(PARENT_STREAM_ID, AgentCategory.ToolUse);
+    boundState.updateStreamState(PARENT_STREAM_ID, (state) => ({
+      ...state,
+      subagents: [
+        {
+          executionId: 'workflow-exec-1',
+          agentName: 'draft-sections',
+          identity: WORKFLOW_IDENTITY,
+          childStreamId: STREAM_ID,
+          status: STREAM_PHASE.RUNNING,
+        },
+      ],
+    }));
+    invalidateChildStreams();
+
+    const dispose = subscribeStreamLog(defaultSession());
+    try {
+      openWorkflowPopup(STREAM_ID);
+      await waitFor(() => streamEntries().length === 2_002);
+      expect(streamEntries().some((row) => row.id === 'task-0')).toBe(true);
+      expect(streamEntries().map(transcriptRowHeadline)).toContain(
+        'Full workflow log detail',
+      );
+
+      openTranscriptReader(STREAM_ID);
+      await waitFor(() => streamEntries().length === 2_002);
+
+      closeForegroundReader();
+      await waitFor(() => streamEntries().length === 2_000);
+    } finally {
+      dispose();
+    }
+  });
+
   it('keeps lifecycle headings for full-log SDK children', () => {
     const sdkStreamId = 'claude@agent-sdk#exec-1' as StreamTabId;
     // External-CLI agent sessions are full-log children too.
@@ -949,7 +1017,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     });
     expect(staticItems.items.at(0)).toMatchObject({
       identityLine:
-        'workflow script: draft-sections · Draft sections · parent: main · model: DeepSeek V4 Flash (Thinking)',
+        'workflow script: draft-sections · parent: main · model: DeepSeek V4 Flash (Thinking)',
       kind: 'header',
     });
 

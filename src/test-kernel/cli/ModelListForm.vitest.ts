@@ -1,22 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  modelListDescription,
-  modelSelectWindow,
-} from '@cli/chat/tui/forms/ModelListForm';
+import { modelListDescription } from '@cli/chat/tui/forms/ModelListForm';
 import {
   shouldBufferAsyncListFormInput,
   shouldCloseAsyncListFormOnInput,
 } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
-import {
-  COMPACT_FORM_MAX_ROWS,
-  isCompactFormRows,
-} from '@cli/tui/selectWindow';
+import { isCompactFormRows } from '@cli/tui/selectWindow';
 import {
   nextSelectHighlightIndex,
   selectInitialHighlightIndex,
   selectItemRenderKey,
-  visibleSelectRange,
 } from '@cli/tui/ui/Select';
 import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 
@@ -196,37 +189,6 @@ describe('Select render keys', () => {
   });
 });
 
-describe('CLI Select visible range', () => {
-  it.each<{
-    name: string;
-    args: Parameters<typeof visibleSelectRange>[0];
-    expected: { start: number; end: number };
-  }>([
-    {
-      name: 'keeps a contiguous window around the highlighted row',
-      args: { itemCount: 8, highlight: 5, maxVisibleItems: 5 },
-      expected: { start: 3, end: 8 },
-    },
-    {
-      name: 'clamps the visible window at the list start',
-      args: { itemCount: 8, highlight: 0, maxVisibleItems: 5 },
-      expected: { start: 0, end: 5 },
-    },
-    {
-      name: 'clamps the visible window at the list end',
-      args: { itemCount: 8, highlight: 7, maxVisibleItems: 5 },
-      expected: { start: 3, end: 8 },
-    },
-    {
-      name: 'allows callers to reserve zero visible rows',
-      args: { itemCount: 8, highlight: 3, maxVisibleItems: 0 },
-      expected: { start: 0, end: 0 },
-    },
-  ])('$name', ({ args, expected }) => {
-    expect(visibleSelectRange(args)).toEqual(expected);
-  });
-});
-
 describe('CLI Select inline overflow', () => {
   it.each<{
     name: string;
@@ -387,37 +349,7 @@ describe('CLI Select disabled-row focus', () => {
 
 describe('CLI ModelListForm row budget', () => {
   it('uses compact slash forms before bordered content clips titles', () => {
-    expect(COMPACT_FORM_MAX_ROWS).toBe(9);
     expect(isCompactFormRows(9)).toBe(true);
     expect(isCompactFormRows(10)).toBe(false);
   });
-
-  it.each<{
-    availableRows: number;
-    expected: ReturnType<typeof modelSelectWindow>;
-  }>([
-    {
-      availableRows: 6,
-      expected: { maxVisibleItems: 1, showOverflow: false },
-    },
-    {
-      availableRows: 7,
-      expected: { maxVisibleItems: 1, showOverflow: false },
-    },
-    {
-      availableRows: 8,
-      expected: { maxVisibleItems: 2, showOverflow: false },
-    },
-    {
-      availableRows: 12,
-      expected: { maxVisibleItems: 4, showOverflow: true },
-    },
-  ])(
-    'sizes the window for $availableRows available rows',
-    ({ availableRows, expected }) => {
-      expect(modelSelectWindow({ availableRows, itemCount: 8 })).toEqual(
-        expected,
-      );
-    },
-  );
 });

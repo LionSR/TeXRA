@@ -33,5 +33,5 @@ export interface ToolUseServices extends BaseFlowContextInit {
    * its terminal transcript. Never fires in subagent mode, which has its own
    * WAITING-suspend delivery path instead.
    */
-  readonly onIdle?: (lastResponse: string | undefined) => void;
+  readonly onIdle?: () => void;
 }

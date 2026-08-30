@@ -47,6 +47,12 @@ describe('shared CLI list-form row budget', () => {
       }),
     ).toEqual({ maxVisibleItems: 1, showOverflow: false });
   });
+
+  it('leaves the list unwindowed when the terminal height is unknown', () => {
+    expect(
+      listFormSelectWindow({ availableRows: undefined, itemCount: 20 }),
+    ).toEqual({ maxVisibleItems: undefined, showOverflow: false });
+  });
 });
 
 describe('shared CLI list-form buffered selection', () => {

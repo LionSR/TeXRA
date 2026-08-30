@@ -27,7 +27,6 @@ import {
   WorkflowAgentCallOptionsSchema,
   WorkflowScriptPhaseTitleSchema,
   type WorkflowAgentCallOptions,
-  type WorkflowCallAdmission,
   type WorkflowJournalEntry,
   type WorkflowScriptControl,
   type WorkflowScriptRunOptions,
@@ -60,6 +59,9 @@ function journalKey(
   return truncatedHexId(stableStringify(source), 16);
 }
 
+// Library fallback only: the TeXRA host passes the session's child-run budget
+// (`resolveChildRunConcurrencyBudget`) as `concurrency`, so this value
+// governs no product run.
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;
@@ -297,7 +299,6 @@ export async function runWorkflowScript(
     onEvent,
     onJournalEntry,
     onControl,
-    admitCall,
   } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   // This is the one total physical attempt bound. Cached replays are free.
@@ -653,50 +654,6 @@ export async function runWorkflowScript(
       });
       return payload;
     }
-    // Per-call admission sits here on purpose: after replay (a cached result
-    // costs nothing to return) and before `queue.add` (a pending review must
-    // hold no slot, charge no cap, and reserve no child attempt). The run
-    // abort ends the wait; a skip takes the same never-journaled path as an
-    // interactive skip. A host that cannot answer is a runner fault — the
-    // silent alternative would run work the user was asked about.
-    if (admitCall) {
-      executionState.awaitAdmission(progressId);
-      let admission: WorkflowCallAdmission;
-      try {
-        admission = await pTimeout(
-          admitCall(
-            {
-              index,
-              progressId,
-              label,
-              ...(callOptions.phase !== undefined && {
-                phase: callOptions.phase,
-              }),
-              prompt,
-              options: callOptions,
-            },
-            runAbort.signal,
-          ),
-          { milliseconds: Number.POSITIVE_INFINITY, signal: runAbort.signal },
-        );
-      } catch (error) {
-        if (runAbort.signal.aborted) throw runAbort.signal.reason;
-        const fault = failRun(
-          new WorkflowRunAbortError(
-            `Workflow call admission failed: ${toErrorMessage(error)}`,
-            { kind: 'runner', cause: error },
-          ),
-        );
-        failCall(fault);
-        throw fault;
-      }
-      if (admission === 'skip') {
-        executionState.settleCall(progressId, {
-          status: WORKFLOW_CALL_STATUS.SKIPPED,
-        });
-        return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
-      }
-    }
     // The execution snapshot solely owns the queued fact (QUEUED status); no
     // event duplicates it.
     executionState.queueCall(progressId, { model: callOptions.model });
@@ -704,7 +661,7 @@ export async function runWorkflowScript(
     // Attempt loop: retry() re-enters with a fresh AbortController and a fresh
     // runAgent call for this same index/key; skip() and normal settlement exit.
     // Every physical model attempt is charged against liveCallCounter; the
-    // logical call key and eventual journal entry remain index-scoped.
+    // logical call key stays stable while its current index records order.
     for (;;) {
       const callController = new AbortController();
       const call: InFlightAgentCall = { index, controller: callController };

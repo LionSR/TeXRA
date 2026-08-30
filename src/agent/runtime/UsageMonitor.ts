@@ -55,20 +55,9 @@ interface UsageMonitorMetadata {
 interface UsageMonitorModelInfo {
   capabilities: Pick<
     ModelCapabilities,
-    | 'supportsPromptCaching'
-    | 'supportsAutoPromptCaching'
-    | 'supportsReasoning'
-    | 'cacheDiscountFactor'
+    'supportsPromptCaching' | 'supportsAutoPromptCaching' | 'supportsReasoning'
   >;
-  config: Pick<
-    ModelConfig,
-    | 'provider'
-    | 'name'
-    | 'fullName'
-    | 'inputPrice'
-    | 'openRouterOnly'
-    | 'requiresResponsesAPI'
-  >;
+  config: Pick<ModelConfig, 'fullName'>;
 }
 
 /**
@@ -204,7 +193,7 @@ export class UsageMonitor {
       );
 
       // Log to backend for analytics/billing.
-      await this.logToBackend(
+      this.logToBackend(
         stateGlobal.totalResponseTimeMs,
         {
           inputTokens: roundInputTokens,
@@ -244,7 +233,7 @@ export class UsageMonitor {
    * Log per-round usage to backend for analytics/billing.
    * Errors are caught and logged, never thrown.
    */
-  private async logToBackend(
+  private logToBackend(
     totalResponseTimeMs: number,
     usage: Pick<
       UsageLogStats,
@@ -257,7 +246,7 @@ export class UsageMonitor {
     provider: NonNullable<
       AgentRunStateSnapshot['usageAccumulator']['latestUsage']
     >['provider'],
-  ): Promise<void> {
+  ): void {
     try {
       const { config } = this.modelInfo;
       const cachedInputTokens = usage.cachedInputTokens ?? 0;

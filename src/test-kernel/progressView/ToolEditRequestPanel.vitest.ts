@@ -179,22 +179,22 @@ describe('tool-edit-request-panel', () => {
   });
 
   it('keeps native caret state motion-safe and removes legacy split styles', () => {
+    const splitButtonSource = readFileSync(
+      'src/shared/wa/splitButton.ts',
+      'utf8',
+    );
     const toolEditStyles = readFileSync(
       'packages/extension/src/progressView/frontend/components/ToolEditRequestPanel.styles.ts',
       'utf8',
     );
-    const approveButton = readFileSync(
-      'packages/extension/src/progressView/frontend/components/ApproveSplitButton.ts',
-      'utf8',
+
+    expect(splitButtonSource).toContain('.split-menu[open]');
+    expect(splitButtonSource).toContain(
+      '@media (prefers-reduced-motion: reduce)',
     );
 
-    expect(toolEditStyles).toContain('.diff-dropdown-menu[open]');
-    expect(approveButton).toContain('.approve-split-menu[open]');
-    expect(toolEditStyles).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(approveButton).toContain('@media (prefers-reduced-motion: reduce)');
-
     for (const source of [
-      readFileSync('src/shared/wa/splitButton.ts', 'utf8'),
+      splitButtonSource,
       readFileSync('src/shared/styles/controlStyles.ts', 'utf8'),
       toolEditStyles,
     ]) {

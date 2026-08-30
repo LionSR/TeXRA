@@ -5,9 +5,12 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 // Local imports
-import type { ReportReviewIssueSink } from '@agent/runtime/HostInteractions';
+import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { ReportReviewIssueTool } from '@tools/ReportReviewIssueTool';
+
+/** The review sink a host attaches, derived from the port. */
+type ReportReviewIssueSink = NonNullable<HostInteractions['reportReviewIssue']>;
 
 const REPORT = {
   file: 'src/x.ts',

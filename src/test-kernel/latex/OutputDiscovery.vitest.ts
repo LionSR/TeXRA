@@ -20,7 +20,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 // r0/r1 outputs on disk (the same source the `--run-id` path scans).
 const mocks = vi.hoisted(() => ({
   findRunDir: vi.fn(),
-  readOutputFiles: vi.fn(),
+  read: vi.fn(),
 }));
 
 vi.mock('@utils/files/runStorageFs', async (importActual) => ({
@@ -31,7 +31,7 @@ vi.mock('@utils/files/runStorageFs', async (importActual) => ({
 vi.mock('@transcript', async (importActual) => {
   // A class (not an arrow) so `new StreamSnapshotStore()` is constructable.
   class FakeStreamSnapshotStore {
-    readOutputFiles = mocks.readOutputFiles;
+    read = mocks.read;
   }
   return {
     ...(await importActual<typeof import('@transcript')>()),
@@ -78,7 +78,7 @@ describe('discoverLatestExecutionOutputs', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await installPlatform({}, { fs: nodeFilesystem });
-    mocks.readOutputFiles.mockResolvedValue(undefined);
+    mocks.read.mockResolvedValue({ outputFilesByRound: {} });
   });
 
   afterEach(async () => {
@@ -120,7 +120,7 @@ describe('discoverLatestExecutionOutputs', () => {
     // Registered under a stream the agent/model config would NOT derive.
     readStreamId.mockResolvedValue('polish@earlierModel#exec-registered');
     const rounds = { 0: [] };
-    mocks.readOutputFiles.mockResolvedValue(rounds);
+    mocks.read.mockResolvedValue({ outputFilesByRound: rounds });
 
     const result = await discoverLatestExecutionOutputs(
       discovery,
@@ -129,7 +129,7 @@ describe('discoverLatestExecutionOutputs', () => {
     );
 
     expect(readStreamId).toHaveBeenCalledWith('exec-registered');
-    expect(mocks.readOutputFiles).toHaveBeenCalledWith(
+    expect(mocks.read).toHaveBeenCalledWith(
       'polish@earlierModel#exec-registered',
     );
     expect(result).toEqual({ executionId: 'exec-registered', rounds });

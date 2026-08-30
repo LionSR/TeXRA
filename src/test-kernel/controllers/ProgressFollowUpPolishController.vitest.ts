@@ -64,6 +64,8 @@ describe('ProgressFollowUpPolishController', () => {
         fileContext: {
           agent: 'writer',
           inputFiles: ['main.tex'],
+          contextFiles: [],
+          mediaFiles: [],
           outputFiles: ['answer.tex'],
         },
       },

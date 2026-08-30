@@ -1,5 +1,5 @@
 // Third-party imports
-import { html, type TemplateResult } from 'lit';
+import { css, html, type CSSResult, type TemplateResult } from 'lit';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -43,6 +43,39 @@ function selectedItemValue(event: WaSelectEvent): string {
 }
 
 /**
+ * Shared styling for the caret trigger `renderSplitButtonMenuParts` emits —
+ * the two call sites (ApproveSplitButton, ToolEditRequestPanel) rendered a
+ * verbatim copy of these rules under their own class prefix; keyed on the
+ * fixed `.split-trigger`/`.split-menu` classes the template below also
+ * emits, so one definition covers both.
+ */
+export const splitButtonTriggerStyles: CSSResult = css`
+  .split-trigger {
+    width: 1.5rem;
+    min-width: 1.5rem;
+  }
+
+  .split-trigger::part(base) {
+    padding-inline: 0;
+  }
+
+  .split-trigger wa-icon {
+    font-size: var(--font-size-sm);
+    transition: transform var(--transition-fast);
+  }
+
+  .split-menu[open] .split-trigger wa-icon {
+    transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .split-trigger wa-icon {
+      transition: none;
+    }
+  }
+`;
+
+/**
  * Returns the dropdown and tooltip separately for a native
  * `<wa-button-group>` caller, which must keep the tooltip outside the group so
  * the dropdown remains its trailing segment.
@@ -60,7 +93,7 @@ export function renderSplitButtonMenuParts({
   return {
     menu: html`
       <wa-dropdown
-        class="${classPrefix}-menu"
+        class="${classPrefix}-menu split-menu"
         placement="bottom-end"
         @wa-select=${(event: WaSelectEvent) =>
           onSelect(selectedItemValue(event))}
@@ -68,7 +101,7 @@ export function renderSplitButtonMenuParts({
         <wa-button
           id=${triggerId}
           slot="trigger"
-          class="${classPrefix}-trigger"
+          class="${classPrefix}-trigger split-trigger"
           appearance=${triggerAppearance}
           variant=${triggerVariant}
           size="s"

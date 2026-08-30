@@ -175,7 +175,6 @@ export async function scanRunDirForOutputs(
           lineage: {
             original: originalLocation,
             diffBase: null,
-            diffFile: null,
           },
           diff: null,
         });
@@ -241,8 +240,8 @@ export async function discoverLatestExecutionOutputs(
       // Records without one go straight to the run-directory scan below.
       const streamId = await discovery.readStreamId(candidate.id);
       if (streamId !== undefined) {
-        const rounds = await snapshots.readOutputFiles(streamId);
-        if (rounds && Object.keys(rounds).length > 0) {
+        const { outputFilesByRound: rounds } = await snapshots.read(streamId);
+        if (Object.keys(rounds).length > 0) {
           return { executionId: candidate.id, rounds };
         }
       }

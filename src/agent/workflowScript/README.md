@@ -86,15 +86,6 @@ return await parallel(
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
   validated object rather than edited files.
-- Admission (`WorkflowScriptRunOptions.admitCall`) — an optional per-call
-  gate the host installs when the user approved the workflow with call or
-  phase review. The engine awaits it after journal replay is ruled out and
-  before the call takes a concurrency slot, so a pending review holds no
-  slot, charges no cap, and reserves no child attempt; the run abort ends the
-  wait. `'skip'` takes the interactive-skip path (skipped sentinel, never
-  journaled — a resumed run asks again). The production host resolves the
-  call exactly as launch will and shows it through the ordinary delegation
-  proposal on the run's stream (`createWorkflowCallAdmission`).
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
 - Ordinary JavaScript loops and awaited `agent()` calls own sequential control
@@ -178,14 +169,14 @@ return await parallel(
   so editing a referenced path invalidates both its cached result and stable
   child identity. Display labels and phases do not participate in identity.
   Failed and cancelled calls are not journaled, so resume retries them; so
-  are a user's skip and a per-call admission denial — the journal records
-  outcomes of the script's calls, a human verdict belongs to the attempt
-  that asked for it, and a resume is a new attempt. The checkpoint identity
+  is a user's skip — the journal records outcomes of the script's calls, a
+  human verdict belongs to the attempt that asked for it, and a resume is a
+  new attempt. The checkpoint identity
   is `meta.name` plus the default agent: resuming under a different agent
   starts a new journal.
   Otherwise-identical calls must provide distinct `id` options; ambiguous
   duplicates fail before launch.
-- **Budgets**: one concurrency semaphore (default 4) across all `agent()`
+- **Budgets**: one concurrency semaphore (the host's child-run budget; library default 4) across all `agent()`
   calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
   `parallel()` call, and a wall-clock timeout. The cap and
   timeout raise `WorkflowRunAbortError`, which `parallel()` does

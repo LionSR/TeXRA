@@ -118,11 +118,11 @@ export type ToolUseFollowUpTarget =
       readonly streamStatus: StreamPhase | undefined;
     };
 
-export type ManualCompactionRequestResult =
+type ManualCompactionRequestResult =
   | {
       readonly kind: 'requested';
       readonly streamId: StreamTabId;
-      readonly session?: SessionHandle;
+      readonly session: SessionHandle;
     }
   | {
       readonly kind: 'unsupported';
@@ -141,8 +141,8 @@ export type ManualCompactionRequestResult =
 interface ExecutionRegistryInit {
   readonly streamStatus: StreamStatusMachine;
   readonly events: SessionEventHub;
-  readonly approvals?: SessionApprovals;
-  readonly publishResult?: (event: ResultEvent, streamId: StreamTabId) => void;
+  readonly approvals: SessionApprovals;
+  readonly publishResult: (event: ResultEvent, streamId: StreamTabId) => void;
   /**
    * The session's one exit choreography (`SessionHandle.releaseExecutionLease`)
    * — required so no construction path can silently release a lease without
@@ -171,7 +171,7 @@ export class ExecutionRegistry {
   private readonly disposeStatusSubscription: () => void;
   private readonly streamStatus: StreamStatusMachine;
   private readonly events: SessionEventHub;
-  private readonly approvals: SessionApprovals | undefined;
+  private readonly approvals: SessionApprovals;
   /**
    * Publishes a synthesized terminal `result` event to the owning session's
    * `onResult` channel — the same forwarding `SessionHandle.attachRunTrace`
@@ -179,8 +179,10 @@ export class ExecutionRegistry {
    * `terminateWaitingHandle` produces its `result` event *after* the
    * suspended run's own trace has already been disposed (see there).
    */
-  private readonly publishResult:
-    ((event: ResultEvent, streamId: StreamTabId) => void) | undefined;
+  private readonly publishResult: (
+    event: ResultEvent,
+    streamId: StreamTabId,
+  ) => void;
   private readonly releaseRootExecutionLease: (
     executionId: ExecutionId,
   ) => Promise<void>;
@@ -517,7 +519,7 @@ export class ExecutionRegistry {
     return {
       kind: 'requested',
       streamId,
-      ...(context.ownerSession && { session: context.ownerSession }),
+      session: context.ownerSession,
     };
   }
 
@@ -669,12 +671,12 @@ export class ExecutionRegistry {
     const detachedChildStreamIds: StreamTabId[] = [];
     for (const activation of this.activeChildActivations(parentStreamId)) {
       activation.detach();
-      this.approvals?.detachStreamFromParent(activation.childStreamId);
+      this.approvals.detachStreamFromParent(activation.childStreamId);
       detachedChildStreamIds.push(activation.childStreamId);
     }
     for (const handle of this.handles.values()) {
       if (!isChildExecution(handle, parentStreamId)) continue;
-      this.approvals?.detachStreamFromParent(handle.childStreamId);
+      this.approvals.detachStreamFromParent(handle.childStreamId);
       handle.detach();
       detachedChildStreamIds.push(handle.childStreamId);
     }
@@ -1013,7 +1015,7 @@ export class ExecutionRegistry {
     // observes one coherent cancellation boundary, and in one fixed order:
     // publish, settle the envelope, drop the handle, cancel the stream.
     handle.trace?.emit(cancelledResult);
-    this.publishResult?.(cancelledResult, handle.childStreamId);
+    this.publishResult(cancelledResult, handle.childStreamId);
     handle.settleResult(cancelledResult);
     this.untrackHandle(handle);
     this.cancelStreamStatus(handle.childStreamId);

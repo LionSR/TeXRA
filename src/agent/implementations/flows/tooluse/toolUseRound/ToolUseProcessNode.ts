@@ -83,7 +83,9 @@ export class ToolUseProcessNode extends BaseNode<
   ToolUseRoundShared,
   ToolUseRoundServices
 > {
-  async prep(shared: ToolUseRoundShared): Promise<ToolUseProcessPrepResult> {
+  override async prep(
+    shared: ToolUseRoundShared,
+  ): Promise<ToolUseProcessPrepResult> {
     return {
       shouldStop: shared.shouldStop,
       response: shared.response,
@@ -91,7 +93,7 @@ export class ToolUseProcessNode extends BaseNode<
     };
   }
 
-  async exec(
+  override async exec(
     prepRes: ToolUseProcessPrepResult,
   ): Promise<ToolUseProcessExecResult> {
     if (prepRes.shouldStop || !prepRes.response) {
@@ -165,7 +167,7 @@ export class ToolUseProcessNode extends BaseNode<
     };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRoundShared,
     prepRes: ToolUseProcessPrepResult,
     execRes: ToolUseProcessExecResult,

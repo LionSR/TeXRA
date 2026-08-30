@@ -1,5 +1,6 @@
 // Node imports
 import { createInterface } from 'node:readline/promises';
+import { Writable } from 'node:stream';
 
 // Third-party imports
 import PQueue from 'p-queue';
@@ -29,13 +30,11 @@ interface LogRecord {
 export interface LogSink {
   write(record: LogRecord): void;
   flush?(): Promise<void>;
-  close?(): Promise<void>;
 }
 
 export interface Logger {
   debug(message: string, fields?: LogFields): void;
   info(message: string, fields?: LogFields): void;
-  warn(message: string, fields?: LogFields): void;
   error(message: string, fields?: LogFields): void;
 }
 
@@ -50,7 +49,6 @@ export function createCliLogger(sink: LogSink): Logger {
   return {
     debug: (m, f) => write('debug', m, f),
     info: (m, f) => write('info', m, f),
-    warn: (m, f) => write('warn', m, f),
     error: (m, f) => write('error', m, f),
   };
 }
@@ -59,7 +57,7 @@ const closed = { stdout: false, stderr: false };
 
 type StreamKey = 'stdout' | 'stderr';
 
-export function isCliPipeClosureError(error: unknown): boolean {
+function isCliPipeClosureError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const code = (error as { code?: unknown }).code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
@@ -153,23 +151,47 @@ export function writeErrorStderr(error: unknown): void {
   writeTextStderr(toErrorMessage(error));
 }
 
+/** Swallows readline's echo so a typed secret never reaches the terminal. */
+class SilentWritable extends Writable {
+  override _write(
+    _chunk: unknown,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    callback();
+  }
+}
+
 export async function askCliQuestion(
   question: string,
-  input: NodeJS.ReadableStream & { ref?: () => void } = process.stdin,
-  output: NodeJS.WritableStream = process.stderr,
+  options: {
+    readonly input?: NodeJS.ReadableStream & { ref?: () => void };
+    readonly output?: NodeJS.WritableStream;
+    /** Hide the typed answer: readline's echo goes to a swallowing sink and
+     *  the question is written straight to stderr instead. */
+    readonly hidden?: boolean;
+  } = {},
 ): Promise<string> {
+  const input = options.input ?? process.stdin;
   // Ink releases its ownership of stdin with `unref()` when a TUI exits.
   // A following readline prompt must acquire its own live handle or Node can
   // terminate while the top-level command is still awaiting the answer.
   input.ref?.();
+  if (options.hidden) writeRawStderr(question);
   const prompt = createInterface({
     input,
-    output,
+    output: options.hidden
+      ? new SilentWritable()
+      : (options.output ?? process.stderr),
+    // A swallowing non-TTY output would otherwise leave stdin in canonical
+    // mode, where the TTY driver echoes the secret itself.
+    ...(options.hidden ? { terminal: true } : {}),
   });
   try {
-    return await prompt.question(question);
+    return await prompt.question(options.hidden ? '' : question);
   } finally {
     prompt.close();
+    if (options.hidden) writeRawStderr('\n');
   }
 }
 
@@ -219,10 +241,6 @@ export class NdjsonStdoutSink implements LogSink {
 
   flush(): Promise<void> {
     return this.queue.onIdle();
-  }
-
-  async close(): Promise<void> {
-    await this.flush();
   }
 
   /**

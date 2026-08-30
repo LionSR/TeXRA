@@ -114,7 +114,7 @@ export interface ChildRunPorts {
  */
 export type ChildRunOutcome =
   | { kind: 'completed' }
-  | { kind: 'failed'; error?: unknown; errorMessage?: string }
+  | { kind: 'failed'; error?: unknown }
   | { kind: 'cancelled' };
 
 /**
@@ -490,11 +490,12 @@ async function attemptTurn<TTurn>(
 
 /**
  * Mint the logical identity of one accepted child turn (#9531): a stable turn
- * token plus the delivery id the turn's single parent delivery is admitted
- * under. Stable within one child-run attempt and distinct across attempts,
- * even when a workflow deliberately reuses its execution ID. A producer
- * replaying the same accepted turn therefore presents the same id, while a
- * later workflow run cannot collide with its prior delivery.
+ * token, from which `turnDeliveryId` derives the delivery id the turn's
+ * single parent delivery is admitted under. Stable within one child-run
+ * attempt and distinct across attempts, even when a workflow deliberately
+ * reuses its execution ID. A producer replaying the same accepted turn
+ * therefore presents the same id, while a later workflow run cannot collide
+ * with its prior delivery.
  */
 function mintChildTurnRef(
   executionId: ExecutionId,
@@ -503,8 +504,17 @@ function mintChildTurnRef(
 ): ChildTurnRef {
   // The `:generation:` segment is the persisted spelling of this token and is
   // frozen: delivery ids minted by an earlier build must keep comparing equal.
-  const token = `${executionId}:generation:${attemptId}:turn:${turnIndex}`;
-  return { token, deliveryId: `${token}:delivery` };
+  return { token: `${executionId}:generation:${attemptId}:turn:${turnIndex}` };
+}
+
+/**
+ * The delivery id one accepted turn's single parent delivery is admitted
+ * under. Derived from the turn token rather than persisted beside it, so the
+ * two can never disagree; the `:delivery` suffix is frozen for the same reason
+ * the token's `:generation:` segment is.
+ */
+function turnDeliveryId(turnRef: ChildTurnRef): string {
+  return `${turnRef.token}:delivery`;
 }
 
 /**
@@ -550,9 +560,7 @@ function emitTurnDiagnostic(
   logger.debug(`childRunLoop ${event}`, {
     data: {
       executionId,
-      ...(turnRef
-        ? { turnToken: turnRef.token, deliveryId: turnRef.deliveryId }
-        : {}),
+      ...(turnRef ? { turnToken: turnRef.token } : {}),
       ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
       ...(interruptionCause ? { interruptionCause } : {}),
     },
@@ -709,7 +717,7 @@ async function deliverTurn<TTurn>(params: {
     followUp: {
       text: msg,
       origin: 'subagent_result',
-      deliveryId: turnRef.deliveryId,
+      deliveryId: turnDeliveryId(turnRef),
     },
   };
 }
@@ -938,9 +946,10 @@ export function startChildRunLoop<TTurn>(
     let releaseFailure: unknown;
     let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
       strategy.launch(ports, ac);
-    // Turn identity (#9531): each accepted turn mints a stable token/delivery
-    // id and records itself active before running; the latest completed turn
-    // is carried forward so an interrupted turn never overwrites it.
+    // Turn identity (#9531): each accepted turn mints a stable token (its
+    // delivery id is derived at the enqueue site) and records itself active
+    // before running; the latest completed turn is carried forward so an
+    // interrupted turn never overwrites it.
     let turnIndex = 0;
     let lastCompletedTurn: ChildTurnRef | undefined;
     // KVStore does not serialize per-key writes: queue turn-state writes so

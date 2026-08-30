@@ -17,10 +17,7 @@ import {
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
@@ -37,7 +34,7 @@ import {
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
-import { initializeHeadlessTranscriptSession } from './transcriptSession';
+import { initializeCliTranscriptSession } from './transcriptSession';
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
@@ -62,8 +59,6 @@ interface CliExecuteOptions {
   readonly enforceCategory?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
-  /** Additional tools unavailable in this CLI runtime. */
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Workflow output handler extended with the CLI publication gate; attempt
    *  the commit synchronously once before destination validation or I/O. */
   readonly openWorkflowOutput?: CliWorkflowOutputHandler;
@@ -250,7 +245,7 @@ export async function executeCliRequest(
 > {
   // Transcript persistence is a launch prerequisite for every headless run.
   // This executes before runtime-host construction and before runAgent.
-  const { session } = await initializeHeadlessTranscriptSession();
+  const { session } = await initializeCliTranscriptSession();
   session.setApprovalPolicy(runContext.approvalPolicy);
   const presentationHost = createCliRuntimeHost(runContext);
   let failurePresented = false;
@@ -489,10 +484,7 @@ export async function executeCliRequest(
         ),
         onApprovalPolicyDenial: () =>
           warnApprovalDenied(runContext, 'Tool or edit approval'),
-        runtimeUnavailableTools: [
-          ...getDefaultUnavailableToolNames('cli'),
-          ...(options.runtimeUnavailableTools ?? []),
-        ],
+        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
       });
     } finally {
       // Unblock an in-flight shutdown when acquisition failed before a scope
@@ -530,11 +522,7 @@ export async function executeCliRequest(
       shutdownLaunchAborted = true;
     } else if (!(err instanceof AgentError)) {
       primaryRunFailure = { error: err };
-    } else if (
-      !failurePresented &&
-      !hasErrorPresentedMarker(err) &&
-      !hasErrorPresentationPending(err)
-    ) {
+    } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
       // A failure before lifecycle startup has no `result` event. Preserve the
       // ordinary toast path when it ran, and provide the missing direct fallback
       // while the presentation host is still attached. A launch failure that

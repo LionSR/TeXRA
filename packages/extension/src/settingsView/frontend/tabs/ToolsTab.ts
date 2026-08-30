@@ -18,7 +18,6 @@ import {
 import {
   type ToolCategory,
   type ToolDashboardItem,
-  AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
@@ -166,7 +165,6 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
-  @property({ type: Boolean }) agentSkillsEnabled = true;
 
   private handleRecheck(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
@@ -211,24 +209,6 @@ export class ToolsTab extends LitElement {
           ${renderStateSettingToggleRow({
             key: BASH_APPROVAL_CONFIG_KEY,
             checked: this.bashApprovalEnabled,
-          })}
-        </div>
-      </div>
-    `;
-  }
-
-  private renderAgentSkillsSettings(): TemplateResult {
-    return html`
-      <div class="category-section">
-        ${renderSettingsSectionHeading({
-          icon: 'robot',
-          title: 'Agent skills',
-          description: 'Extend tool-use agents with reusable skill packages.',
-        })}
-        <div class="settings-section">
-          ${renderStateSettingToggleRow({
-            key: AGENT_SKILLS_CONFIG_KEY,
-            checked: this.agentSkillsEnabled,
           })}
         </div>
       </div>
@@ -315,7 +295,7 @@ export class ToolsTab extends LitElement {
             onClick: () => this.handleRecheck(),
           })}
         </div>
-        ${this.renderAgentSkillsSettings()} ${this.renderApprovalSettings()}
+        ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.flatMap((cat) => {
           const catItems = groups.get(cat);
           return catItems ? [this.renderCategory(cat, catItems)] : [];

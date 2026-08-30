@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   initialDiffScrollOffset,
-  maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
+import { maxScrollableRowOffset } from '@cli/chat/tui/render/scrollBounds';
 import { fillRows } from '@cli/runtime/terminalText';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
@@ -58,13 +58,17 @@ describe('CLI diff display', () => {
   });
 
   it('clamps the bottom scroll offset so the last rows remain visible', () => {
-    expect(maxDiffScrollOffset(10, 4)).toBe(7);
+    expect(maxScrollableRowOffset({ maxDisplayLines: 4, totalLines: 10 })).toBe(
+      7,
+    );
   });
 
   it.each([1, 2, 3])(
     'keeps cramped diff windows static at a budget of %i rows',
     (budget) => {
-      expect(maxDiffScrollOffset(10, budget)).toBe(0);
+      expect(
+        maxScrollableRowOffset({ maxDisplayLines: budget, totalLines: 10 }),
+      ).toBe(0);
     },
   );
 

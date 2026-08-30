@@ -295,7 +295,6 @@ function outputFileInfo(source, relativePath, round, added, removed) {
     lineage: {
       original: outputLocation('paper/main.tex'),
       diffBase: outputLocation('paper/main.tex'),
-      diffFile: outputLocation(`History/diff-r${round}.tex`),
     },
     diff: {
       added,

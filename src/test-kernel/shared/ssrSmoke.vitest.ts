@@ -19,7 +19,7 @@ class SmokeBubble extends LitElement {
     }
   `;
 
-  role = 'user';
+  override role = 'user';
 
   override render() {
     return html`

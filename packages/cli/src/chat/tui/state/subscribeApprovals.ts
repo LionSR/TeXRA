@@ -35,8 +35,7 @@ import {
   toToolEditResult,
 } from '@cli/runtime/approvalAdapter';
 import {
-  classifyCliRetryAction,
-  cliRetryApiSwitchDecision,
+  cliRetryQuotaRoute,
   isCliApiSwitchableRetry,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
@@ -83,7 +82,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { notify } from '../notifications/terminalNotifier';
-import { patchStream } from './cliState';
+import { foregroundReader, patchStream } from './cliState';
+import { directChildStreamIds, isWorkflowScriptStream } from './childControls';
+import { childRosters, parentStream } from './childExecutions';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
@@ -125,26 +126,15 @@ import {
 function maybeAutoSwitchRetry(
   payload: RetryApprovalPayload,
 ): ApprovalDecision | undefined {
-  const action = classifyCliRetryAction(payload.data);
-
   // Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route that
   // re-uses an already-stored key, so auto-switch when that key exists.
   // OAuth subscriptions (ChatGPT, Grok) stay explicit: the user must confirm.
-  // Kimi Code-exclusive models never reach this branch: the classifier above
-  // gates them to 'none', keeping the modal without an API-key switch.
-  if (action.startsWith('disable-quota-route:')) {
-    const decision = cliRetryApiSwitchDecision(payload.data);
-    if (
-      decision.disableQuotaRoute === undefined ||
-      !isCodingPlanQuotaRoute(decision.disableQuotaRoute)
-    ) {
-      return undefined;
-    }
-    if (payload.tui.personalApiKeyAvailable !== true) return undefined;
-    return decision;
-  }
-
-  return undefined;
+  // Kimi Code-exclusive models never reach this branch: the classifier gates
+  // them to no route, keeping the modal without an API-key switch.
+  const route = cliRetryQuotaRoute(payload.data);
+  if (!route || !isCodingPlanQuotaRoute(route.id)) return undefined;
+  if (payload.tui.personalApiKeyAvailable !== true) return undefined;
+  return { accepted: true, disableQuotaRoute: route.id };
 }
 
 /**
@@ -207,7 +197,6 @@ export function createTuiHostInteractions(
     },
     async openExternalInquiry(request) {
       handleExternalInquiry(request, context);
-      return { threadId: request.threadId };
     },
     setApprovalBypassState(update) {
       setTuiApprovalBypassState(update);
@@ -328,7 +317,10 @@ async function requestPlanInteraction(
   // `approve_and_goal` is a TUI-only plan action; every other outcome is the
   // shared approve/reject settlement.
   if (decision.accepted && decision.planAction) {
-    return { action: decision.planAction };
+    return {
+      action: decision.planAction,
+      ...(decision.goalAutoApproveAll ? { autoApproveAll: true } : {}),
+    };
   }
   return toApprovalSettlement(decision);
 }
@@ -348,11 +340,6 @@ async function requestProposalInteraction(
   ) {
     currentSession().approvals.setDelegatedWorkBypasses(request.streamId, true);
     approveQueuedDelegatedWorkForStream(request.streamId);
-  }
-  // A workflow-script proposal approved with call review is a TUI-only
-  // refinement of approve; every other outcome is the shared settlement.
-  if (decision.accepted && decision.callReview) {
-    return { action: 'approve', callReview: decision.callReview };
   }
   return toApprovalSettlement(decision);
 }
@@ -542,7 +529,17 @@ export function enqueueTuiApproval(
 /** Focus the asking stream and ring the terminal when a modal appears. */
 function announceApproval(payload: ApprovalPayload): void {
   const streamId = approvalPayloadStreamId(payload);
-  if (streamId) {
+  const reader = foregroundReader.get();
+  const workflowOwnsApproval =
+    streamId !== undefined &&
+    reader !== undefined &&
+    isWorkflowScriptStream(reader.streamId) &&
+    directChildStreamIds({
+      parentStreamId: reader.streamId,
+      childRosters: childRosters.get(),
+      parentStream: parentStream.get(),
+    }).has(streamId);
+  if (streamId && !workflowOwnsApproval) {
     defaultSession().events.emit({
       scope: 'session',
       event: {
@@ -621,14 +618,16 @@ async function rollbackChangedSettings(
  * Rollback config for one coding-plan preference, shared by the pre-commit
  * restore (a switch that failed before or during client preparation) and the
  * commit task's rollback (a later access-settings write failed).
+ *
+ * Both callers sit past the point where the plan write was attempted, so
+ * `writeStarted` is always true here.
  */
 function codingPlanRollbackConfig(
   runtime: CodingPlanSubscriptionRuntime,
   previous: boolean,
-  writeStarted: boolean,
 ): RetrySettingRollbackConfig {
   return {
-    writeStarted,
+    writeStarted: true,
     needsRollback: () => runtime.getEnabled() !== previous,
     restore: async () => {
       await runtime.restoreEnabled(previous);
@@ -807,9 +806,7 @@ async function switchRetryToPersonalCredentials(
         options.commitQueue.add(async () => {
           signal.throwIfAborted();
           const previousCodingPlanEnabled = runtime.getEnabled();
-          let codingPlanWriteStarted = false;
           try {
-            codingPlanWriteStarted = true;
             await runRetryTask(
               () => setCliCodingPlanSubscription(codingPlanId, false),
               signal,
@@ -820,22 +817,14 @@ async function switchRetryToPersonalCredentials(
             throwWithRollbackFailures(
               error,
               await rollbackChangedSettings([
-                codingPlanRollbackConfig(
-                  runtime,
-                  previousCodingPlanEnabled,
-                  codingPlanWriteStarted,
-                ),
+                codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
               ]),
             );
           }
           await applyRetryCredentialCommit(
             decision,
             signal,
-            codingPlanRollbackConfig(
-              runtime,
-              previousCodingPlanEnabled,
-              codingPlanWriteStarted,
-            ),
+            codingPlanRollbackConfig(runtime, previousCodingPlanEnabled),
           );
         }),
       signal,

@@ -11,6 +11,7 @@ import {
   toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionCoordinator,
+  type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { platform } from '@platform/platform';
@@ -24,19 +25,6 @@ import {
   requestDeviceAuthorization,
   type DeviceAuthorization,
 } from './supabaseAuthDeviceCode';
-
-/**
- * Channel-logger contract used by the CLI auth coordinator. Shape-compatible
- * with `* as logger from '@logger/logUtils'` so callers can pass that module
- * directly, but also allows a custom object literal (e.g. the deferred
- * forwarder below) without depending on the platform layer.
- */
-export interface LogBackend {
-  debug(channel: string, message: string): void;
-  info(channel: string, message: string): void;
-  warn(channel: string, message: string): void;
-  error(channel: string, message: string): void;
-}
 
 export interface CliAuthProfile {
   authenticated: boolean;
@@ -76,16 +64,16 @@ export function formatCliManualAuthUrlMessage(url: string): string {
 
 let coordinator: SupabaseSessionCoordinator | undefined;
 let coordinatorSecrets: PlatformSecrets | undefined;
-let activeAuthLog: LogBackend | undefined;
-const deferredAuthLog: LogBackend = {
-  debug: (channel, message) => activeAuthLog?.debug(channel, message),
-  info: (channel, message) => activeAuthLog?.info(channel, message),
-  warn: (channel, message) => activeAuthLog?.warn(channel, message),
-  error: (channel, message) => activeAuthLog?.error(channel, message),
+let activeAuthLog: SupabaseSessionLog | undefined;
+const deferredAuthLog: SupabaseSessionLog = {
+  debug: (channel, message) => activeAuthLog?.debug?.(channel, message),
+  info: (channel, message) => activeAuthLog?.info?.(channel, message),
+  warn: (channel, message) => activeAuthLog?.warn?.(channel, message),
+  error: (channel, message) => activeAuthLog?.error?.(channel, message),
 };
 
 export function initializeCliSupabaseAuth(
-  log?: LogBackend,
+  log?: SupabaseSessionLog,
 ): SupabaseSessionCoordinator {
   activeAuthLog = log ?? activeAuthLog;
   const secrets = platform().secrets;
@@ -192,7 +180,7 @@ export async function signOutCliSupabase(): Promise<void> {
   await authCoordinator.clearSession();
   await refreshRemoteAgentCatalogAfterSignOut(
     invalidateRemoteAgentsAfterSignOut,
-    (message) => activeAuthLog?.warn('cli-auth', message),
+    (message) => activeAuthLog?.warn?.('cli-auth', message),
   );
 }
 

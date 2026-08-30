@@ -166,7 +166,7 @@ describe('LaTeXdiffService shadow output', () => {
       source,
       location,
       round,
-      lineage: { original: base, diffBase: null, diffFile: null },
+      lineage: { original: base, diffBase: null },
       diff: null,
     });
     const { runLatexdiffFromMetadata } =

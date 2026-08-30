@@ -38,10 +38,7 @@ import {
   runOutcomeExitCode,
   type TurnOutcome,
 } from '@cli/runtime/terminalStatus';
-import {
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import type { DisposableStore } from '@platform/disposable';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -64,10 +61,7 @@ import {
   patchSessionMeta,
   patchStream,
 } from './tui/state/cliState';
-import {
-  chatTuiCanStartRootRun,
-  type TuiSession,
-} from './tui/state/sessionRunState';
+import { type TuiSession } from './tui/state/sessionRunState';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import { attachSessionSignalsAdapter } from './tui/state/sessionSignalsAdapter';
 import { notify } from './tui/notifications/terminalNotifier';
@@ -159,9 +153,6 @@ export interface ChatSessionController {
     streamId: StreamTabId,
     recovery?: RecoveryContinuation,
   ): Promise<boolean>;
-
-  /** Whether a new root run can be started right now. */
-  canStartRootRun(): boolean;
 }
 
 export interface ChatSessionControllerInit {
@@ -171,8 +162,9 @@ export interface ChatSessionControllerInit {
   /** Runtime session that owns executions, storage, and interactions. */
   readonly runtimeSession: SessionHandle;
 
-  /** Build a {@link CliContext} keyed on the current model. */
-  readonly getSessionContext: (model: string) => CliContext;
+  /** Mint a fresh {@link CliContext} for one run (see the identity-keyed
+   *  approval-denial dedupe in `warnApprovalDenied`). */
+  readonly getSessionContext: () => CliContext;
 
   /** Disposable owner shared with the TUI session lifecycle. */
   readonly disposables: DisposableStore;
@@ -215,7 +207,7 @@ export function createChatSessionController(
     >,
     modelSource?: 'history',
   ): CliContext => {
-    const sessionContext = getSessionContext(config.model);
+    const sessionContext = getSessionContext();
     const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
     patchSessionMeta({
       agent: config.agent,
@@ -255,6 +247,23 @@ export function createChatSessionController(
       ...(recovery?.followUps ?? []),
       ...pendingInterruptedFollowUps,
     ];
+  };
+
+  /** One owner of the "claimed but never handed off" invariant: a recovery
+   *  lease this controller took and never passed to a run must go back as
+   *  `'recoverable'`, or the follow-ups typed during the interruption are
+   *  lost. Every resume path calls this on its way out. */
+  const handBackUnusedRecovery = (
+    recovery: FollowUpRecoveryLease | undefined,
+    handedOff: boolean,
+  ): void => {
+    if (
+      recovery &&
+      !handedOff &&
+      runtimeSession.followUps.useRecovery(recovery)
+    ) {
+      runtimeSession.followUps.release(recovery, 'recoverable');
+    }
   };
 
   // A cancelled root can publish completion just before its run promise
@@ -316,9 +325,7 @@ export function createChatSessionController(
     // A launch failure already rendered through a targeted presentation
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
-    const alreadyPresented =
-      hasErrorPresentedMarker(error) || hasErrorPresentationPending(error);
-    if (!session.stopRequested && !alreadyPresented) {
+    if (!session.stopRequested && !hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
     if (session.stopRequested) {
@@ -627,13 +634,7 @@ export function createChatSessionController(
         })
         .catch(reportRunFailure)
         .finally(() => {
-          if (
-            recovery &&
-            !recoveryHandedOff &&
-            runtimeSession.followUps.useRecovery(recovery)
-          ) {
-            runtimeSession.followUps.release(recovery, 'recoverable');
-          }
+          handBackUnusedRecovery(recovery, recoveryHandedOff);
           if (!followUpQueueReady) {
             restoreInterruptedRecovery(supersededRecovery);
           }
@@ -648,13 +649,7 @@ export function createChatSessionController(
       // interface contract.
       runChain.then(resolveRunPromise, rejectRunPromise);
     } catch (error: unknown) {
-      if (
-        recovery &&
-        !recoveryHandedOff &&
-        runtimeSession.followUps.useRecovery(recovery)
-      ) {
-        runtimeSession.followUps.release(recovery, 'recoverable');
-      }
+      handBackUnusedRecovery(recovery, recoveryHandedOff);
       restoreInterruptedRecovery(supersededRecovery);
       reportRunFailure(error);
       session.markRunCompleted();
@@ -797,13 +792,7 @@ export function createChatSessionController(
         reportRunFailure(error);
         return false;
       } finally {
-        if (
-          recovery &&
-          !recoveryHandedOff &&
-          runtimeSession.followUps.useRecovery(recovery)
-        ) {
-          runtimeSession.followUps.release(recovery, 'recoverable');
-        }
+        handBackUnusedRecovery(recovery, recoveryHandedOff);
         finalize();
         if (activeAutoResumeCancellation === attemptCancellation) {
           activeAutoResumeCancellation = undefined;
@@ -912,6 +901,5 @@ export function createChatSessionController(
     },
     tryResumeStream: (streamId, recovery) =>
       tryResumeStream(streamId, recovery ? { recovery } : {}),
-    canStartRootRun: () => chatTuiCanStartRootRun(session),
   };
 }

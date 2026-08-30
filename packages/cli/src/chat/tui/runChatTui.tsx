@@ -31,7 +31,7 @@ import {
 } from '@cli/runtime/modelAccess';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
-import { initializeInteractiveTranscriptSession } from '@cli/runtime/transcriptSession';
+import { initializeCliTranscriptSession } from '@cli/runtime/transcriptSession';
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
 import {
   formatInteractiveTerminalFailure,
@@ -152,7 +152,6 @@ export async function runChat(
   // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
   // mount and emit garbled output instead of a usable session).
   const terminalFailure = interactiveTerminalFailure(context);
-  const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
   if (terminalFailure) {
     // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
     // actionable advice is "use `texra run`", not "fix your TERM".
@@ -175,7 +174,7 @@ export async function runChat(
   // initInteractiveCliPlatform's doc comment for the full handoff design.
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
   const initialResume = init.initialResume;
-  const transcriptLifecycle = await initializeInteractiveTranscriptSession(
+  const transcriptLifecycle = await initializeCliTranscriptSession(
     initialResume
       ? { onPersistentOpenFailure: 'fail' }
       : {
@@ -247,9 +246,11 @@ export async function runChat(
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
     runtimeSession.approvalPolicy;
-  const currentSessionContext = (helperModel: string): CliContext => ({
+  // A fresh context object per run: warnApprovalDenied dedupes the denied-gate
+  // operator warning on context identity, so each run start/resume must get
+  // its own.
+  const currentSessionContext = (): CliContext => ({
     ...context,
-    helperModel,
     quietLogs: true,
   });
   const setApprovalPolicy = (policy: TexraApprovalPolicy): void => {
@@ -262,8 +263,6 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
-    commandName: context.commandName,
-    cwd: context.cwd,
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,
@@ -275,9 +274,8 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeExecution: chatController.resume,
   });
-  const initialPresetId = initialResume
-    ? (initialResume.config.cli?.multiAgentPresetId ?? undefined)
-    : init.cliMultiAgentPresetId;
+  const initialPresetId =
+    initialResume?.config.cli?.multiAgentPresetId ?? init.cliMultiAgentPresetId;
   sessionMetaSignal.set({
     agent,
     category: AgentCategory.ToolUse,
@@ -287,13 +285,10 @@ export async function runChat(
     approvalPolicy: runtimeSession.approvalPolicy,
     canDelegate: chatAgentSupportsDelegation(agent),
     transcriptMode: transcriptLifecycle.canResume ? 'persistent' : 'ephemeral',
-    teamName: initialResume
-      ? readCliMultiAgentPresetName(initialPresetId)
-      : (init.teamName ?? readCliMultiAgentPresetName(initialPresetId)),
+    teamName: init.teamName ?? readCliMultiAgentPresetName(initialPresetId),
     cliMultiAgentPresetId: initialPresetId,
-    delegationAgentScope: initialResume
-      ? (initialResume.config.delegationAgentScope ?? undefined)
-      : init.delegationAgentScope,
+    delegationAgentScope:
+      initialResume?.config.delegationAgentScope ?? init.delegationAgentScope,
     version,
   });
   if (transcriptLifecycle.warning) {
@@ -328,9 +323,7 @@ export async function runChat(
   // Crash safety stays armed until graceful teardown has restored the terminal;
   // it outlives session subscriptions so a later teardown failure cannot leave
   // the user's shell in raw/kitty/mouse mode with a hidden cursor.
-  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit({
-    clearItermProgress,
-  });
+  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit();
   // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
   // shell prompt in every tab makes a multi-session workflow hard to
   // navigate. Keep the project name while surfacing live attention state.
@@ -501,10 +494,8 @@ export async function runChat(
         (streamId === session.streamId && canInterruptActiveRun()) ||
         runtimeSession.status.isInFlight(streamId)
       }
-      canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
-      onInterruptActive={interruptActive}
       onInterruptStream={chatController.stopStream}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
@@ -556,8 +547,6 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     canResume: transcriptLifecycle.canResume,
-    clearItermProgress,
-    kittyKeyboardEnabled: terminalCaps.kittyKeyboard,
     disposables,
     disposeTerminalRestoreOnExit,
     followUpQueue,

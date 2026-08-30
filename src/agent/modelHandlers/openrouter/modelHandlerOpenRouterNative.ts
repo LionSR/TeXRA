@@ -54,7 +54,6 @@ import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
   createChatUserFollowUpMessages,
-  extractChatAssistantText,
   initializeChatMessages,
   insertMediaIntoChatUserMessage,
   prependTextToChatUserMessage,
@@ -475,15 +474,11 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return { role: 'assistant', content: text };
   }
 
-  extractAssistantText(message: ChatMessages): string | undefined {
-    return extractChatAssistantText(message);
-  }
-
   // ---------------------------------------------------------------------------
   // Media
   // ---------------------------------------------------------------------------
 
-  createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
+  override createMediaContent(mediaMessage: MediaEntry[]): ChatContentItems[] {
     return mediaMessage.flatMap((media): ChatContentItems[] => {
       const classification = classifyMediaEntry(media);
 

@@ -662,8 +662,8 @@ export class InstructionPanel extends LitElement {
                     ${renderIconActionButton({
                       id: 'cleanButton',
                       icon: 'trash',
-                      label: 'Clean output',
-                      tooltip: 'Clean the output for this agent',
+                      label: 'Delete output files',
+                      tooltip: 'Delete generated output files for this agent',
                       action: 'clean',
                     })}
                   `
@@ -764,7 +764,12 @@ export class InstructionPanel extends LitElement {
             onClick: this.handleExecute,
           })}
         </div>
-        <div class="visually-hidden" aria-live="polite">
+        <div
+          class="visually-hidden"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           ${session.statusAnnouncement}
         </div>
       </div>

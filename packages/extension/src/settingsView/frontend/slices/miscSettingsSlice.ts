@@ -1,6 +1,6 @@
 /**
  * Single-command, single-toggle handlers with no state section of their own:
- * agent skills, telemetry, goals, agent teams, tool dashboard, multi-agent
+ * telemetry, goals, agent teams, tool dashboard, and multi-agent
  * coordination. Bundled here rather than split one-file-per-command; see
  * ../messageDispatcher.ts for why modelSelectionSlice.ts and
  * approvalSettingsSlice.ts (also single-command) stay separate.
@@ -18,12 +18,6 @@ import {
   toolDashboardItems,
   toolDashboardLoaded,
 } from '../settingsState';
-
-export const agentSkillsSettingsHandlers = {
-  [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SKILLS_SETTINGS]: (data) => {
-    applySettingsSnapshot(data.values);
-  },
-} satisfies Partial<SettingsViewOutboundHandlerRegistry>;
 
 export const telemetrySettingsHandlers = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_TELEMETRY_SETTINGS]: (data) => {

@@ -642,7 +642,10 @@ describe('child stream progress events', () => {
 
     await withSessionEventRecording(() =>
       childStream.finalize({
-        outcome: { kind: 'failed', errorMessage: 'child process exited 1' },
+        outcome: {
+          kind: 'failed',
+          error: new Error('child process exited 1'),
+        },
       }),
     );
 

@@ -124,6 +124,8 @@ function createRegistry(
   const registry = new ExecutionRegistry({
     streamStatus,
     events,
+    approvals: createSessionApprovals({ setApprovalBypassState() {} }),
+    publishResult: () => {},
     releaseRootExecutionLease: async () => {},
     ...options,
   });
@@ -157,6 +159,7 @@ function createLiveToolUseFlowContext(
   overrides: Partial<LiveToolUseFlowContext> = {},
 ): LiveToolUseFlowContext {
   return {
+    ownerSession: {} as SessionHandle,
     modelHandler: { supportsManualCompaction: true },
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(),

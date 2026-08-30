@@ -37,6 +37,7 @@ import {
   type ProviderApiKeyStatusView,
 } from './ProviderApiKeyForm';
 import { ToolsListForm } from './ToolsListForm';
+import { SkillsSettingsForm } from './SkillsSettingsForm';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
@@ -255,6 +256,13 @@ export function createCliConfigFormProps(
       ),
       tools: (onBack) => (
         <ToolsListForm availableRows={props.availableRows} onClose={onBack} />
+      ),
+      skills: (onBack) => (
+        <SkillsSettingsForm
+          availableRows={props.availableRows}
+          stores={stores}
+          onClose={onBack}
+        />
       ),
     },
     onClose: props.onClose,

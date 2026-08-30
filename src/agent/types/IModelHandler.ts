@@ -69,7 +69,6 @@ export type IModelHandler<
   | 'createAssistantMessageFromResponse'
   | 'isEndTurnStop'
   | 'extractAssistantContent'
-  | 'extractAssistantText'
   | 'prependTextToUserMessage'
   | 'addMediaToUserMessage'
   | 'consumeInsertedAttachmentKinds'

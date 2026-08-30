@@ -377,9 +377,6 @@ const HISTORY_SUBCOMMANDS = {
   delete: historyDeleteCommand,
 } as const;
 
-export const HISTORY_SUBCOMMAND_NAMES: readonly string[] =
-  Object.keys(HISTORY_SUBCOMMANDS);
-
 export const historyCommand = defineCommand({
   meta: { name: 'history', description: 'Inspect stored executions' },
   args: {

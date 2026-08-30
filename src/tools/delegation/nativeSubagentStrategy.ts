@@ -17,7 +17,7 @@
  * a workflow flow never produces a WAITING result, so `isTerminal` is always
  * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
  * terminal turn before ever consulting `runTurn`.
- * `allowWaitingResult: true` is likewise inert for workflow —
+ * The subagent WAITING admission is likewise inert for workflow —
  * `isWaitingFlowResult` requires `category === 'toolUse'`, so a workflow
  * result can never satisfy it. Delivery choreography (format/persist/
  * manifest/deliver), duplicate-delivery prevention (there is exactly one
@@ -292,10 +292,6 @@ export function createNativeSubagentStrategy(
       runNative(ports, abortController, async (onRun) => {
         const executeOptions = {
           session: params.session,
-          // True by construction: this strategy only ever launches child runs
-          // (`parentStreamId` is required), matching `handle.isChildExecution`
-          // once the run handle exists.
-          isSubagent: true,
           enforceCategory: params.agentCategoryExplicit,
           parentStreamId: params.parentStreamId,
           approvalPromptsUnavailable: params.approvalPromptsUnavailable,
@@ -315,7 +311,12 @@ export function createNativeSubagentStrategy(
           params.executionId,
           {
             ...executeOptions,
-            allowWaitingResult: true,
+            // True by construction: this strategy only ever launches child
+            // runs (`parentStreamId` is required), matching
+            // `handle.isChildExecution` once the run handle exists. Written
+            // inline as a literal `true` so overload resolution admits the
+            // WAITING result this strategy consumes as a loop turn.
+            isSubagent: true,
             userFollowUpSupport: params.userFollowUpSupport,
             ...(params.executionMode === 'single-cycle'
               ? { stopAfterCycle: true }

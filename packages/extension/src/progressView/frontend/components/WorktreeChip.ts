@@ -25,7 +25,7 @@ export class WorktreeChip extends LitElement {
         align-items: center;
         gap: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
-        line-height: 1.4;
+        line-height: var(--line-height-normal);
         min-width: 0;
         max-width: 100%;
       }

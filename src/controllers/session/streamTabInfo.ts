@@ -1,13 +1,13 @@
 import { isRemoteAgent } from '@agent/index/agentRegistry';
 import { getStreamTabDisplayName } from '@agent/runtime/streamTab';
 import type { SessionStreamMetadata } from '@controllers/session/SessionState';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
 import {
   getCleanAgentName,
   projectStreamIdentityFields,
   runIdentityDisplayName,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 
 interface StreamTabInfoInputs {
   streamId: string;
@@ -82,7 +82,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
     name: streamId,
     label: identityName,
     model,
-    modelLabel: model ? getRuntimeModelLabel(model) : undefined,
+    modelLabel: model ? getModelLabel(model) : undefined,
     command,
     isRemote,
     worktree,

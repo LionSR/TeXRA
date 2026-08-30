@@ -59,7 +59,6 @@ import {
   appendUserTextToChatMessages,
   createChatRoundMessages,
   createChatUserFollowUpMessages,
-  extractChatAssistantText,
   initializeChatMessages,
   insertMediaIntoChatUserMessage,
   normalizeOpenAIMessageContent,
@@ -743,12 +742,6 @@ export class ModelHandlerOpenAI<
     return message;
   }
 
-  override extractAssistantText(
-    message: ChatCompletionMessageParam,
-  ): string | undefined {
-    return extractChatAssistantText(message);
-  }
-
   /** Builds the default content parts for inline vision requests. */
   protected buildStandardVisionParts(
     media: MediaEntry,
@@ -766,7 +759,9 @@ export class ModelHandlerOpenAI<
   }
 
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
-  createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
+  override createMediaContent(
+    mediaMessage: MediaEntry[],
+  ): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
       const classification = classifyMediaEntry(media);
 
