@@ -86,17 +86,20 @@ logic exists outside those shared points; remaining per-tree code (manager
 classes, domain-specific validation) is genuinely distinct, not copy-paste.
 
 **Compatibility/migration machinery:** every dated compat reader found is
-either less than a week old (#11568/#9705, 2026-08-28/29), has an explicit
-future retirement date (`executionLease.ts:104`, retire after 2026-11-24),
-is already tracked by an open issue (#10921, #10300), was already
-adjudicated and rejected for removal with a live-data-loss risk
+either less than a week old (#11568, 2026-08-29), has an explicit future
+retirement date (`executionLease.ts:104`, retire after 2026-11-24), is
+already tracked by an open issue (#10921, #10300), was already adjudicated
+and rejected for removal with a live-data-loss risk
 (`migrateLegacyWorkspaceStorage`, `docs/proposals/2026-08-25-simplification-survey-49-candidates.md:2447`),
 still has a live producer (`workflowOutputCopyStem`'s legacy filename
 grammar — the extension's "Save as copy" action still writes it), or is a
 permanent reader over immutable historical data that the code's own
-comments already exclude from the retirement policy. `packages/desktop/`
-has zero `legacy`/`migrat` hits — already compliant with the "no migration
-machinery" rule by having none to remove.
+comments already exclude from the retirement policy — for example
+`agentRoster.ts:54`'s `AgentDelegationScopeLegacySchema`, introduced
+2026-08-04 (#9705) but self-documented as "a permanent parse-side reader,
+not a dated migration," so it doesn't belong in a retirement-window bucket
+at all. `packages/desktop/` has zero `legacy`/`migrat` hits — already
+compliant with the "no migration machinery" rule by having none to remove.
 
 ## 3. Verdict
 
