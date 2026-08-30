@@ -38,10 +38,7 @@ import {
   unbindChildStreamState,
 } from './childExecutions';
 import { presentStream } from './childControls';
-import {
-  bumpStreamArtifactRevision,
-  markWorkPlanArtifactHydrated,
-} from './subscribeStreamArtifacts';
+import { bumpStreamArtifactRevision } from './subscribeStreamArtifacts';
 import {
   releaseInactiveStreamTranscript,
   syncStreamLog,
@@ -159,14 +156,15 @@ class TuiSessionRenderer implements SessionRendererPort {
 
   // Live todos/plan are readable from the snapshot store synchronously: a
   // live update is applied to `getWorkPlan` before the stream seeds
-  // (StreamSnapshotStore eager-apply overlay), so renderers read the store.
-  // The reader-authority promotion is the CLI's own `/plan` modality.
-  onTodosChanged(streamId: StreamTabId, _todos: TodoItem[]): void {
-    markWorkPlanArtifactHydrated(streamId, 'todos');
+  // (StreamSnapshotStore eager-apply overlay), so renderers read the store —
+  // including `workPlanProvenance`, which the same overlay establishes. Only
+  // the repaint is owed here.
+  onTodosChanged(_streamId: StreamTabId, _todos: TodoItem[]): void {
+    bumpStreamArtifactRevision();
   }
 
-  onPlanChanged(streamId: StreamTabId, _plan: Plan | null): void {
-    markWorkPlanArtifactHydrated(streamId, 'plan');
+  onPlanChanged(_streamId: StreamTabId, _plan: Plan | null): void {
+    bumpStreamArtifactRevision();
   }
 
   onInquiryThreadUpdated(_thread: InquiryThreadUpdatedEvent): void {}

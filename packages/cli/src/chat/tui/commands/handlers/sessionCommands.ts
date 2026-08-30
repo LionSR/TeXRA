@@ -81,18 +81,19 @@ export async function showCliWorkPlan(
     return;
   }
   const workPlan = snapshots.getWorkPlan(streamId);
-  const authority = {
-    plan: outcome.kind === 'complete' || outcome.authoritativeFields.plan,
-    todos: outcome.kind === 'complete' || outcome.authoritativeFields.todos,
-  };
-  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } = authority;
+  const provenance =
+    outcome.kind === 'complete'
+      ? { plan: true, todos: true }
+      : outcome.workPlanProvenance;
+  const { plan: planIsAuthoritative, todos: todosAreAuthoritative } =
+    provenance;
   if (
     (planIsAuthoritative && workPlan.plan !== null) ||
     (todosAreAuthoritative && workPlan.todos.length > 0)
   ) {
     finishWorkPlanReaderRequest(
       request,
-      outcome.kind === 'partial' ? authority : undefined,
+      outcome.kind === 'partial' ? provenance : undefined,
     );
     return;
   }

@@ -55,7 +55,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { clearApprovals } from './tui/state/approvalQueue';
 import {
-  establishWorkPlanReaderAuthority,
   focusStream,
   rootStreamId,
   patchSessionMeta,
@@ -567,10 +566,10 @@ export function createChatSessionController(
       // this keeps its canonical pre-resume projection visible at the cost of
       // bounded warnIfUnseeded notices until the seed completes.
       await snapshotStore.load([streamId]);
-      // Promote an open `/plan` reader's failure-time mask for the retained
-      // root and drop the projection memo before the log sync below can
-      // render a stale pre-resume projection.
-      establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
+      // Drop the projection memo before the log sync below can render a stale
+      // pre-resume projection. The load also re-establishes this stream's
+      // work-plan provenance in the store, which is what an open `/plan`
+      // reader re-reads to clear its failure-time mask.
       bumpStreamArtifactRevision();
       // A resumed stream may be one the user /clear-ed; the empty patch mints
       // the slice and drops the retired mark so `syncStreamLog` and

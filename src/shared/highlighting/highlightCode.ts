@@ -5,6 +5,8 @@
  * Falls back to empty string for unknown languages (markdown-it escapes).
  */
 
+import { logWarn } from '@shared/log';
+
 import { hljs } from './hljs';
 
 export function highlightCode(code: string, lang: string): string {
@@ -23,7 +25,10 @@ export function highlightCode(code: string, lang: string): string {
       // Fall through to plain text, but surface genuine highlight failures so
       // a throwing renderer is not indistinguishable from an unknown-language
       // case.
-      console.warn(`highlight.js failed for language "${lang}":`, error);
+      logWarn(
+        `[highlightCode] highlight.js failed for language "${lang}":`,
+        error,
+      );
     }
   }
   // Return empty string — markdown-it will escape and wrap in its own <pre><code>

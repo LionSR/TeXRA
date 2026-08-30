@@ -43,7 +43,6 @@ import {
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
-import { markWorkPlanArtifactHydrated } from '@cli/chat/tui/state/subscribeStreamArtifacts';
 import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
@@ -72,7 +71,7 @@ import { snapshotFacts } from '@test/support/storeTestDrivers';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import {
   StreamSnapshotPreloadError,
-  type StreamArtifactAuthority,
+  type WorkPlanProvenance,
 } from '@transcript';
 
 // Child rosters and parent edges live on the adapter-bound `SessionState`;
@@ -498,7 +497,7 @@ describe('handleTuiSlashCommand', () => {
         plan: { objective: 'Use the accepted live plan.' },
         todos: [],
       },
-      authority: { complete: false, todos: false, plan: true },
+      provenance: { todos: false, plan: true },
     },
     {
       label: 'todos',
@@ -512,7 +511,7 @@ describe('handleTuiSlashCommand', () => {
           },
         ],
       },
-      authority: { complete: false, todos: true, plan: false },
+      provenance: { todos: true, plan: false },
     },
   ] satisfies readonly {
     label: string;
@@ -520,10 +519,10 @@ describe('handleTuiSlashCommand', () => {
       readonly plan: Plan | null;
       readonly todos: readonly TodoItem[];
     };
-    authority: StreamArtifactAuthority;
+    provenance: WorkPlanProvenance;
   }[])(
     'opens accepted in-memory $label state when historical preload fails',
-    async ({ workPlan, authority }) => {
+    async ({ workPlan, provenance }) => {
       const { promise: preload, reject: rejectPreload } = deferred<void>();
       const streamId = 'live-plan-after-load-error' as StreamTabId;
       registerBuiltinSlashCommands({
@@ -540,20 +539,21 @@ describe('handleTuiSlashCommand', () => {
         new StreamSnapshotPreloadError(
           new Error('historical sidecar unreadable'),
           streamId,
-          authority,
+          false,
+          provenance,
         ),
       );
       await dispatched;
 
+      // The reader records only what this load could vouch for; the fields it
+      // could not are re-asked of the store on every repaint, so nothing
+      // promotes this snapshot afterwards.
       expect(foregroundReader.get()).toEqual({
         kind: 'workPlan',
         streamId,
-        authority: { plan: authority.plan, todos: authority.todos },
+        provenanceAtOpen: provenance,
       });
       expect(transientNotice.get()).toBeUndefined();
-
-      markWorkPlanArtifactHydrated(streamId, authority.plan ? 'todos' : 'plan');
-      expect(foregroundReader.get()).toEqual({ kind: 'workPlan', streamId });
     },
   );
 

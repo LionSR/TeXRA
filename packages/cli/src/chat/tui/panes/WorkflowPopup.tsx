@@ -15,12 +15,7 @@ import { useMemo } from 'react';
 // Local imports - TUI primitives
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import {
-  KEY_HINT_SEPARATOR,
-  KeyHints,
-  keyHintText,
-  type KeyHint,
-} from '@cli/tui/ui/KeyHints';
+import { KeyHints, keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
@@ -386,10 +381,7 @@ export function WorkflowPopup({
   // they measure at this width.
   const hintRows = Math.max(
     1,
-    wrapAnsiToWidth(
-      hints.map(keyHintText).join(KEY_HINT_SEPARATOR),
-      Math.max(1, width),
-    ).split('\n').length,
+    wrapAnsiToWidth(keyHintsText(hints), Math.max(1, width)).split('\n').length,
   );
   const filterShown = view.filterEditing || view.filter.length > 0;
   const listRows = Math.max(

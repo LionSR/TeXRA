@@ -36,6 +36,7 @@ import {
 import { prRef, withSince } from './githubPaths';
 import {
   ghGet,
+  type ConditionalResponse,
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
@@ -196,6 +197,26 @@ export interface PRCurrentShaState {
   pendingAnnotationRuns: GhCheckRun[];
 }
 
+/**
+ * One tick's conditional GETs for everything except the PR detail itself,
+ * issued in parallel by `fetchTickResources`.
+ *
+ * `stagedCheckRunsCache` is deliberately carried alongside `checksRes` rather
+ * than committed by the fetch: the caller writes it to
+ * `currentShaState.checkRunsCache` only after consuming `checksRes`. See
+ * `fetchAllCheckRuns` and `commitStagedCheckRunsCache` for why.
+ */
+interface PRTickResources {
+  commentsRes: ConditionalResponse<GhIssueComment[]>;
+  reviewCommentsRes: ConditionalResponse<GhReviewComment[]>;
+  reviewsRes: ConditionalResponse<GhReview[]>;
+  checksRes: ConditionalResponse<{
+    total_count: number;
+    check_runs: GhCheckRun[];
+  }>;
+  stagedCheckRunsCache: CheckRunsCache | undefined;
+}
+
 export class PRPollingSource extends PollingSourceBase<
   string,
   PRSubscriptionState
@@ -285,95 +306,14 @@ export class PRPollingSource extends PollingSourceBase<
     const prPath = `/repos/${pr.owner}/${pr.repo}/pulls/${pr.pullNumber}`;
     const issuePath = `/repos/${pr.owner}/${pr.repo}/issues/${pr.pullNumber}`;
 
-    const prRes = await ghGet<GhPullRequest>(prPath, state.etags.pr);
-    if (prRes.status === 200) {
-      // Validate the state-driving PR payload. A parse failure must NOT throw:
-      // pollOne runs inside pollEntry's try/catch, and a throw here would bump
-      // consecutiveFailures every tick without advancing lastSuccessAt, so a
-      // persistently-odd-but-200 payload would detach this live subscription
-      // after the 24 h failure window. Log + return instead: returning lets
-      // pollEntry reset lastSuccessAt/consecutiveFailures, so the detach gate
-      // never trips. We skip BEFORE writing state.etags.pr, so the PR-detail
-      // ETag is not advanced on a bad body — the next tick re-fetches the same
-      // resource and re-validates (no strand).
-      const parsed = this.validateOrSkip(
-        prRes,
-        GhPullRequestSchema,
-        `Skipping PR poll for ${key}: malformed pull-request payload`,
-      );
-      if (!parsed) return;
-      const prData = parsed.data;
-      state.etags.pr = prRes.etag;
-      const newHead = prData.head.sha;
-      const newState = prData.state;
-      const newMerged = prData.merged;
-      const newMergeable = prData.mergeable_state;
-
-      // Detect close/merge on initialized subscriptions.
-      if (
-        state.initialized &&
-        state.state === 'open' &&
-        newState === 'closed'
-      ) {
-        this.emit(state, formatPRClosed(state.slug, pr.pullNumber, newMerged));
-        this.detach(key);
-        return;
-      }
-      state.state = newState;
-      state.merged = newMerged;
-      // New push invalidates prior CI terminal state — the next completion
-      // on the new SHA should re-emit CI progress events. Also drop the
-      // per-page check-runs cache: it's keyed only by page number, and the
-      // ETags from the previous SHA can never match the new SHA's responses.
-      // Letting it linger would cost one wasted If-None-Match per page on
-      // the first post-push tick before the cache naturally refreshes. Old
-      // SHA's deferred annotations are no longer the user's focus; the new
-      // SHA's runs will re-enqueue from the next 200 tick. Replacing the
-      // whole per-SHA object (rather than clearing fields one by one) means
-      // a future per-SHA field can't be left stale across a push.
-      if (state.currentShaState?.sha !== newHead) {
-        state.currentShaState = {
-          sha: newHead,
-          ciStarted: false,
-          ciComplete: false,
-          ciPassed: false,
-          checkRunsCache: undefined,
-          pendingAnnotationRuns: [],
-        };
-      }
-
-      // Mergeable-state transitions: only definite-to-definite reads count,
-      // so the seeding tick (and any tick where GitHub returns `'unknown'`)
-      // is silent. See `isDefiniteMergeableState` for the rationale.
-      if (isDefiniteMergeableState(newMergeable)) {
-        const prev = state.mergeableState;
-        state.mergeableState = newMergeable;
-        if (isDefiniteMergeableState(prev) && prev !== newMergeable) {
-          if (newMergeable === 'dirty') {
-            this.emit(
-              state,
-              formatMergeConflictDetected(state.slug, pr.pullNumber, prev),
-            );
-          } else if (prev === 'dirty') {
-            this.emit(
-              state,
-              formatMergeConflictResolved(
-                state.slug,
-                pr.pullNumber,
-                newMergeable,
-              ),
-            );
-          }
-        }
-      }
-    }
+    if (!(await this.refreshPrMetadata(key, state, prPath))) return;
 
     // Bail cleanly if the PR is already closed. On the first (initialization)
     // tick this prevents a zombie subscription: without this branch the
     // subscription would stay in the map forever, burning an API call every
     // 30s and a slot in the concurrent-subscription cap, because the
-    // open→closed auto-unsubscribe transition above never fires for a PR
-    // that was closed before we started watching.
+    // open→closed auto-unsubscribe transition in `refreshPrMetadata` never
+    // fires for a PR that was closed before we started watching.
     if (state.state === 'closed') {
       // Defense-in-depth: auto-unsubscribe whenever we land here while
       // still tracked, not only on `!initialized`. The open→closed
@@ -391,42 +331,18 @@ export class PRPollingSource extends PollingSourceBase<
       return;
     }
 
-    const issueCommentsUrl = withSince(
-      `${issuePath}/comments?per_page=100`,
-      state.issueComments.sinceCursor,
-    );
-    const reviewCommentsUrl = withSince(
-      `${prPath}/comments?per_page=100`,
-      state.reviewComments.sinceCursor,
-    );
-    const [commentsRes, reviewCommentsRes, reviewsRes, checksOutcome] =
-      await Promise.all([
-        ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
-        ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
-        ghGet<GhReview[]>(
-          `${prPath}/reviews?per_page=100`,
-          state.etags.reviews,
-        ),
-        state.currentShaState?.sha
-          ? fetchAllCheckRunsClient(
-              pr.owner,
-              pr.repo,
-              state.currentShaState.sha,
-              state.currentShaState.checkRunsCache,
-              this.logger,
-            )
-          : Promise.resolve({
-              response: { status: 304 as const },
-              stagedCache: undefined,
-            }),
-      ]);
-    // Destructure separately so we can commit `stagedCache` only at the end
-    // of the success path (after the diff branch). If a sibling rejection
-    // had thrown above, the cache would not have been advanced — preventing
-    // a stale cache + 304 next tick from silently swallowing check-run
-    // transitions.
-    const checksRes = checksOutcome.response;
-    const stagedCheckRunsCache = checksOutcome.stagedCache;
+    // `stagedCheckRunsCache` stays uncommitted here on purpose: it is written
+    // to `currentShaState.checkRunsCache` only at the end of the success path
+    // (after the diff branch), so a sibling rejection in the parallel fetch
+    // can never advance the cache while the diff never ran — a stale cache +
+    // 304 next tick would silently swallow check-run transitions.
+    const {
+      commentsRes,
+      reviewCommentsRes,
+      reviewsRes,
+      checksRes,
+      stagedCheckRunsCache,
+    } = await this.fetchTickResources(state, prPath, issuePath);
 
     // Issue/review comment lists: seed on the first tick (nothing emitted),
     // diff + emit on later ticks. consumeCommentList branches on
@@ -457,58 +373,7 @@ export class PRPollingSource extends PollingSourceBase<
 
     // First tick only seeds cursors so we never replay history.
     if (!state.initialized) {
-      if (reviewsRes.status === 200) {
-        state.etags.reviews = reviewsRes.etag;
-        // Skip PENDING: these are the authenticated user's own drafts
-        // (only visible via their own token). A review keeps the same ID
-        // when it transitions PENDING → APPROVED/CHANGES_REQUESTED/COMMENTED,
-        // so if we seed the pending id here the actual submission will be
-        // silently deduped later.
-        state.reviews.seed(reviewsRes.data.filter(isSubmittedReview));
-      }
-      if (checksRes.status === 200) {
-        // ETag/page caching is owned by `fetchAllCheckRuns` via
-        // `state.currentShaState.checkRunsCache`; nothing to record on
-        // `state.etags` here.
-        const runs = checksRes.data.check_runs;
-        for (const r of runs) {
-          if (isCheckFailure(r)) {
-            state.lastFailedCheckKeys.add(checkKey(r));
-          }
-          // Seed annotation keys so pre-subscription annotations don't
-          // replay; the timestamp in the key lets re-runs re-emit.
-          if (
-            r.status === 'completed' &&
-            (r.output?.annotations_count ?? 0) > 0
-          ) {
-            state.lastAnnotationKeys.add(checkKey(r));
-          }
-        }
-        if (state.currentShaState?.sha && runs.length > 0) {
-          state.currentShaState.ciStarted = true;
-        }
-        // Seed so pre-existing terminal CI doesn't fire on the next tick —
-        // we only surface transitions that happen after subscribe. See
-        // `ciTerminalStatus` for the gating rationale (empty/partial run sets,
-        // page-shift safety).
-        const { complete, passed } = ciTerminalStatus(
-          state.currentShaState?.sha,
-          runs,
-          checksRes.data.total_count,
-        );
-        if (complete && state.currentShaState) {
-          state.currentShaState.ciComplete = true;
-          if (passed) {
-            state.currentShaState.ciPassed = true;
-          }
-        }
-      }
-      // Commit the deferred check-runs cache only after successfully
-      // consuming the response. See `fetchAllCheckRuns` for why we defer.
-      if (stagedCheckRunsCache !== undefined && state.currentShaState) {
-        state.currentShaState.checkRunsCache = stagedCheckRunsCache;
-      }
-      state.initialized = true;
+      this.seedFirstTick(state, reviewsRes, checksRes, stagedCheckRunsCache);
       return;
     }
 
@@ -530,87 +395,317 @@ export class PRPollingSource extends PollingSourceBase<
       // ETag/page caching is owned by `fetchAllCheckRuns` via
       // `state.currentShaState.checkRunsCache`; nothing to record on
       // `state.etags` here.
-      const runs = checksRes.data.check_runs;
-
-      const currentShaState = state.currentShaState;
-      const headSha = currentShaState?.sha;
-      if (
-        currentShaState &&
-        headSha &&
-        runs.length > 0 &&
-        !currentShaState.ciStarted
-      ) {
-        currentShaState.ciStarted = true;
-        this.emit(
-          state,
-          formatCIStarted(
-            state.slug,
-            pr.pullNumber,
-            headSha,
-            runs,
-            checksRes.data.total_count,
-          ),
-        );
-      }
-
-      const { newFailures, currentFailureKeys } = computeNewCheckFailures(
-        runs,
-        state.lastFailedCheckKeys,
-      );
-      state.lastFailedCheckKeys = currentFailureKeys;
-      if (newFailures.length >= COALESCE_THRESHOLD) {
-        this.emit(
-          state,
-          formatCheckFailureSummary(state.slug, pr.pullNumber, newFailures),
-        );
-      } else {
-        for (const r of newFailures) {
-          this.emit(state, formatCheckFailure(state.slug, pr.pullNumber, r));
-        }
-      }
-
-      // Emit two one-shot events per head SHA: "CI complete" on first
-      // terminal state (any conclusion), then "CI passed" the first time
-      // all checks pass (which may happen via a later rerun). Each is
-      // deduped against its own marker so a rerun turning red→green still
-      // emits "CI passed" even after "CI complete" already fired.
-      //
-      // See `ciTerminalStatus` for the gating rationale (empty/partial run
-      // sets, page-shift safety).
-      const { complete, passed } = ciTerminalStatus(
-        headSha,
-        runs,
+      this.consumeCheckRuns(
+        state,
+        checksRes.data.check_runs,
         checksRes.data.total_count,
       );
-      if (complete && currentShaState && headSha) {
-        if (!currentShaState.ciComplete) {
-          currentShaState.ciComplete = true;
-          this.emit(
-            state,
-            formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
-          );
-        }
-        if (!currentShaState.ciPassed && passed) {
-          currentShaState.ciPassed = true;
-          this.emit(
-            state,
-            formatCIPassed(state.slug, pr.pullNumber, headSha, runs),
-          );
-        }
-      }
-
-      // Annotations are emitted independently of failures: they also surface
-      // on passing checks (lint suggestions, custom workflow advisories).
-      // Enqueue here, drain below — the drain runs on every tick (including
-      // 304) so excess candidates aren't stranded once check-runs settle.
-      this.enqueueAnnotationCandidates(state, runs);
     }
 
     // Commit the deferred check-runs cache only after successfully consuming
-    // the response (including the diff branch above). See `fetchAllCheckRuns`
-    // for why we defer: this prevents a sibling rejection in the `Promise.all`
-    // from advancing the cache while the diff never ran, which would cause
-    // the next tick to get 304 and silently skip the missed transitions.
+    // the response (including the diff branch above).
+    this.commitStagedCheckRunsCache(state, stagedCheckRunsCache);
+  }
+
+  /**
+   * Conditional GET of the PR detail, applying every subscription-state
+   * transition it drives: close/merge auto-unsubscribe, the per-head-SHA state
+   * reset, and mergeable-state transitions.
+   *
+   * Returns `false` when the rest of the tick must be skipped — either a
+   * malformed payload or the open→closed transition that already detached the
+   * subscription. A 304 (or any non-200) leaves state untouched and continues.
+   */
+  private async refreshPrMetadata(
+    key: string,
+    state: PRSubscriptionState,
+    prPath: string,
+  ): Promise<boolean> {
+    const { pr } = state;
+    const prRes = await ghGet<GhPullRequest>(prPath, state.etags.pr);
+    if (prRes.status !== 200) return true;
+
+    // Validate the state-driving PR payload. A parse failure must NOT throw:
+    // pollOne runs inside pollEntry's try/catch, and a throw here would bump
+    // consecutiveFailures every tick without advancing lastSuccessAt, so a
+    // persistently-odd-but-200 payload would detach this live subscription
+    // after the 24 h failure window. Log + skip the tick instead: returning
+    // normally lets pollEntry reset lastSuccessAt/consecutiveFailures, so the
+    // detach gate never trips. We skip BEFORE writing state.etags.pr, so the
+    // PR-detail ETag is not advanced on a bad body — the next tick re-fetches
+    // the same resource and re-validates (no strand).
+    const parsed = this.validateOrSkip(
+      prRes,
+      GhPullRequestSchema,
+      `Skipping PR poll for ${key}: malformed pull-request payload`,
+    );
+    if (!parsed) return false;
+    const prData = parsed.data;
+    state.etags.pr = prRes.etag;
+    const newHead = prData.head.sha;
+    const newState = prData.state;
+    const newMerged = prData.merged;
+    const newMergeable = prData.mergeable_state;
+
+    // Detect close/merge on initialized subscriptions.
+    if (state.initialized && state.state === 'open' && newState === 'closed') {
+      this.emit(state, formatPRClosed(state.slug, pr.pullNumber, newMerged));
+      this.detach(key);
+      return false;
+    }
+    state.state = newState;
+    state.merged = newMerged;
+    // New push invalidates prior CI terminal state — the next completion
+    // on the new SHA should re-emit CI progress events. Also drop the
+    // per-page check-runs cache: it's keyed only by page number, and the
+    // ETags from the previous SHA can never match the new SHA's responses.
+    // Letting it linger would cost one wasted If-None-Match per page on
+    // the first post-push tick before the cache naturally refreshes. Old
+    // SHA's deferred annotations are no longer the user's focus; the new
+    // SHA's runs will re-enqueue from the next 200 tick. Replacing the
+    // whole per-SHA object (rather than clearing fields one by one) means
+    // a future per-SHA field can't be left stale across a push.
+    if (state.currentShaState?.sha !== newHead) {
+      state.currentShaState = {
+        sha: newHead,
+        ciStarted: false,
+        ciComplete: false,
+        ciPassed: false,
+        checkRunsCache: undefined,
+        pendingAnnotationRuns: [],
+      };
+    }
+
+    // Mergeable-state transitions: only definite-to-definite reads count,
+    // so the seeding tick (and any tick where GitHub returns `'unknown'`)
+    // is silent. See `isDefiniteMergeableState` for the rationale.
+    if (isDefiniteMergeableState(newMergeable)) {
+      const prev = state.mergeableState;
+      state.mergeableState = newMergeable;
+      if (isDefiniteMergeableState(prev) && prev !== newMergeable) {
+        if (newMergeable === 'dirty') {
+          this.emit(
+            state,
+            formatMergeConflictDetected(state.slug, pr.pullNumber, prev),
+          );
+        } else if (prev === 'dirty') {
+          this.emit(
+            state,
+            formatMergeConflictResolved(
+              state.slug,
+              pr.pullNumber,
+              newMergeable,
+            ),
+          );
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Issue every non-PR-detail conditional GET for one tick in parallel. The
+   * check-runs leg is skipped (synthesized as a 304) until a head SHA is
+   * known, and its cache replacement is returned staged rather than committed
+   * — see {@link PRTickResources}.
+   */
+  private async fetchTickResources(
+    state: PRSubscriptionState,
+    prPath: string,
+    issuePath: string,
+  ): Promise<PRTickResources> {
+    const { pr } = state;
+    const issueCommentsUrl = withSince(
+      `${issuePath}/comments?per_page=100`,
+      state.issueComments.sinceCursor,
+    );
+    const reviewCommentsUrl = withSince(
+      `${prPath}/comments?per_page=100`,
+      state.reviewComments.sinceCursor,
+    );
+    const [commentsRes, reviewCommentsRes, reviewsRes, checksOutcome] =
+      await Promise.all([
+        ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
+        ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
+        ghGet<GhReview[]>(
+          `${prPath}/reviews?per_page=100`,
+          state.etags.reviews,
+        ),
+        state.currentShaState?.sha
+          ? fetchAllCheckRunsClient(
+              pr.owner,
+              pr.repo,
+              state.currentShaState.sha,
+              state.currentShaState.checkRunsCache,
+              this.logger,
+            )
+          : Promise.resolve({
+              response: { status: 304 as const },
+              stagedCache: undefined,
+            }),
+      ]);
+    return {
+      commentsRes,
+      reviewCommentsRes,
+      reviewsRes,
+      checksRes: checksOutcome.response,
+      stagedCheckRunsCache: checksOutcome.stagedCache,
+    };
+  }
+
+  /**
+   * First tick for a subscription: seed the review and check-run cursors so
+   * pre-subscription history is never replayed, then mark the subscription
+   * initialized. Emits nothing. Comment lists are seeded by the shared
+   * `consumeCommentList` calls that run before this, on every tick.
+   */
+  private seedFirstTick(
+    state: PRSubscriptionState,
+    reviewsRes: PRTickResources['reviewsRes'],
+    checksRes: PRTickResources['checksRes'],
+    stagedCheckRunsCache: CheckRunsCache | undefined,
+  ): void {
+    if (reviewsRes.status === 200) {
+      state.etags.reviews = reviewsRes.etag;
+      // Skip PENDING: these are the authenticated user's own drafts
+      // (only visible via their own token). A review keeps the same ID
+      // when it transitions PENDING → APPROVED/CHANGES_REQUESTED/COMMENTED,
+      // so if we seed the pending id here the actual submission will be
+      // silently deduped later.
+      state.reviews.seed(reviewsRes.data.filter(isSubmittedReview));
+    }
+    if (checksRes.status === 200) {
+      // ETag/page caching is owned by `fetchAllCheckRuns` via
+      // `state.currentShaState.checkRunsCache`; nothing to record on
+      // `state.etags` here.
+      const runs = checksRes.data.check_runs;
+      for (const r of runs) {
+        if (isCheckFailure(r)) {
+          state.lastFailedCheckKeys.add(checkKey(r));
+        }
+        // Seed annotation keys so pre-subscription annotations don't
+        // replay; the timestamp in the key lets re-runs re-emit.
+        if (
+          r.status === 'completed' &&
+          (r.output?.annotations_count ?? 0) > 0
+        ) {
+          state.lastAnnotationKeys.add(checkKey(r));
+        }
+      }
+      if (state.currentShaState?.sha && runs.length > 0) {
+        state.currentShaState.ciStarted = true;
+      }
+      // Seed so pre-existing terminal CI doesn't fire on the next tick —
+      // we only surface transitions that happen after subscribe. See
+      // `ciTerminalStatus` for the gating rationale (empty/partial run sets,
+      // page-shift safety).
+      const { complete, passed } = ciTerminalStatus(
+        state.currentShaState?.sha,
+        runs,
+        checksRes.data.total_count,
+      );
+      if (complete && state.currentShaState) {
+        state.currentShaState.ciComplete = true;
+        if (passed) {
+          state.currentShaState.ciPassed = true;
+        }
+      }
+    }
+    // Commit the deferred check-runs cache only after successfully consuming
+    // the response.
+    this.commitStagedCheckRunsCache(state, stagedCheckRunsCache);
+    state.initialized = true;
+  }
+
+  /**
+   * Diff one tick's check runs against the per-SHA markers and emit the
+   * resulting events: the one-shot "CI triggered", new failures (coalesced
+   * past {@link COALESCE_THRESHOLD}), the one-shot "CI complete"/"CI passed",
+   * and the annotation candidates queued for the post-tick drain.
+   */
+  private consumeCheckRuns(
+    state: PRSubscriptionState,
+    runs: GhCheckRun[],
+    totalCount: number,
+  ): void {
+    const { pr } = state;
+    const currentShaState = state.currentShaState;
+    const headSha = currentShaState?.sha;
+    if (
+      currentShaState &&
+      headSha &&
+      runs.length > 0 &&
+      !currentShaState.ciStarted
+    ) {
+      currentShaState.ciStarted = true;
+      this.emit(
+        state,
+        formatCIStarted(state.slug, pr.pullNumber, headSha, runs, totalCount),
+      );
+    }
+
+    const { newFailures, currentFailureKeys } = computeNewCheckFailures(
+      runs,
+      state.lastFailedCheckKeys,
+    );
+    state.lastFailedCheckKeys = currentFailureKeys;
+    if (newFailures.length >= COALESCE_THRESHOLD) {
+      this.emit(
+        state,
+        formatCheckFailureSummary(state.slug, pr.pullNumber, newFailures),
+      );
+    } else {
+      for (const r of newFailures) {
+        this.emit(state, formatCheckFailure(state.slug, pr.pullNumber, r));
+      }
+    }
+
+    // Emit two one-shot events per head SHA: "CI complete" on first
+    // terminal state (any conclusion), then "CI passed" the first time
+    // all checks pass (which may happen via a later rerun). Each is
+    // deduped against its own marker so a rerun turning red→green still
+    // emits "CI passed" even after "CI complete" already fired.
+    //
+    // See `ciTerminalStatus` for the gating rationale (empty/partial run
+    // sets, page-shift safety).
+    const { complete, passed } = ciTerminalStatus(headSha, runs, totalCount);
+    if (complete && currentShaState && headSha) {
+      if (!currentShaState.ciComplete) {
+        currentShaState.ciComplete = true;
+        this.emit(
+          state,
+          formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
+        );
+      }
+      if (!currentShaState.ciPassed && passed) {
+        currentShaState.ciPassed = true;
+        this.emit(
+          state,
+          formatCIPassed(state.slug, pr.pullNumber, headSha, runs),
+        );
+      }
+    }
+
+    // Annotations are emitted independently of failures: they also surface
+    // on passing checks (lint suggestions, custom workflow advisories).
+    // Enqueue here, drain in `afterTick` — the drain runs on every tick
+    // (including 304) so excess candidates aren't stranded once check-runs
+    // settle.
+    this.enqueueAnnotationCandidates(state, runs);
+  }
+
+  /**
+   * Commit the check-runs page cache staged by `fetchAllCheckRuns`. The single
+   * owner of that write, called from both tick shapes (seeding and diffing) at
+   * the same point: only after the response has been fully consumed. See
+   * `fetchAllCheckRuns` for why the commit is deferred — advancing the cache
+   * while the consume step never ran would make the next tick 304 and silently
+   * skip the missed transitions.
+   */
+  private commitStagedCheckRunsCache(
+    state: PRSubscriptionState,
+    stagedCheckRunsCache: CheckRunsCache | undefined,
+  ): void {
     if (stagedCheckRunsCache !== undefined && state.currentShaState) {
       state.currentShaState.checkRunsCache = stagedCheckRunsCache;
     }

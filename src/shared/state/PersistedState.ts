@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { StateStore } from '@platform/interfaces';
+import { logWarn } from '@shared/log';
 
 /**
  * Create a {@link StateStore} over webview host state. All keys share a single
@@ -98,7 +99,7 @@ export class PersistedState<T extends Record<string, unknown>> {
     // PersistedState key must never block webview activation or extension
     // startup. Also persist the reset so the bad value is replaced and the next
     // load doesn't keep hitting this path.
-    console.warn(
+    logWarn(
       `[PersistedState] Invalid stored data for ${this.key}, resetting.`,
       {
         storedType: describeStored(stored),
@@ -119,7 +120,7 @@ export class PersistedState<T extends Record<string, unknown>> {
   private persist(value: T): void {
     void Promise.resolve(this.storage.update(this.key, value)).catch(
       (error: unknown) => {
-        console.warn(
+        logWarn(
           `[PersistedState] Failed to persist ${this.key}; the in-memory value is now ahead of storage.`,
           error,
         );
@@ -137,7 +138,7 @@ export class PersistedState<T extends Record<string, unknown>> {
     if (defaultResult.success) {
       return defaultResult.data;
     }
-    console.warn(
+    logWarn(
       `[PersistedState] No schema defaults for ${this.key}; using empty object.`,
       { issues: summarizeIssues(defaultResult.error) },
     );

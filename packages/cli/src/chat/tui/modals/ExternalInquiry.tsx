@@ -9,12 +9,7 @@ import {
   scrollStatusText,
 } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import {
-  KEY_HINT_SEPARATOR,
-  KeyHints,
-  keyHintText,
-  type KeyHint,
-} from '@cli/tui/ui/KeyHints';
+import { KeyHints, keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { COLOR_ERROR, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import {
@@ -57,16 +52,6 @@ const COPY_STATUS_LABELS: Readonly<
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
 
-// Measured through the canonical `keyHintText` projection so the fit check
-// sees exactly what `KeyHints` renders. Strictly narrower than the budget:
-// the footer sits inside the card decoration and must not touch its edge.
-function keyHintsFit(hints: readonly KeyHint[], maxColumns: number): boolean {
-  return (
-    textDisplayWidth(hints.map(keyHintText).join(KEY_HINT_SEPARATOR)) <
-    maxColumns
-  );
-}
-
 export function externalInquiryKeyHintsForWidth({
   maxColumns,
   questionScrollable,
@@ -105,10 +90,12 @@ export function externalInquiryKeyHintsForWidth({
     compactTailHints,
     compactTailHints.filter((h) => h.key !== 'Ctrl-R'),
   ];
+  // Strictly narrower than the budget: the footer sits inside the card
+  // decoration and must not touch its edge.
   return (
-    candidates.find((hints) => keyHintsFit(hints, maxColumns)) ?? [
-      { key: 'Esc', action: 'skip' },
-    ]
+    candidates.find(
+      (hints) => textDisplayWidth(keyHintsText(hints)) < maxColumns,
+    ) ?? [{ key: 'Esc', action: 'skip' }]
   );
 }
 

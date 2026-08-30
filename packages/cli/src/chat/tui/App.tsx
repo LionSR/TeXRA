@@ -584,10 +584,10 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <WorkPlanReader
             availableRows={availableRows}
-            authority={
+            provenanceAtOpen={
               foregroundReader.loading === true
                 ? undefined
-                : foregroundReader.authority
+                : foregroundReader.provenanceAtOpen
             }
             loading={foregroundReader.loading === true}
             onClose={closeForegroundReader}

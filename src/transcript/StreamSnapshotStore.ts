@@ -101,26 +101,33 @@ const MAX_DIRTY_WRITE_RETRIES = 3;
 
 class DirtySidecarWritesError extends Error {}
 
-/** Artifact state whose in-memory values remain authoritative after preload fails. */
-export interface StreamArtifactAuthority {
-  /**
-   * The whole in-memory record is authoritative: a prior seed or an existence
-   * probe already established this stream's disk baseline, so every
-   * accumulator holds the complete field value and not just a delta.
-   */
-  readonly complete: boolean;
-  readonly todos: boolean;
+/**
+ * Per-field provenance of one stream's work plan: whether the in-memory value
+ * for that field has an established origin — a seeded disk baseline, or a live
+ * replacement applied ahead of one — rather than an unread default. Todos and
+ * plan are whole-value replacements, so a live overlay for either establishes
+ * that field on its own; every other accumulator is a delta over a base only a
+ * baseline can supply. Read live via {@link StreamSnapshotStore.workPlanProvenance}.
+ */
+export interface WorkPlanProvenance {
   readonly plan: boolean;
+  readonly todos: boolean;
 }
 
-/** A failed preload together with the in-memory fields that remain usable. */
+/** A failed preload together with the in-memory state that remains usable. */
 export class StreamSnapshotPreloadError extends Error {
   override readonly name = 'StreamSnapshotPreloadError';
 
   constructor(
     cause: unknown,
     readonly streamId: StreamTabId,
-    readonly authoritativeFields: StreamArtifactAuthority,
+    /**
+     * The whole in-memory record is authoritative: a prior seed or an
+     * existence probe already established this stream's disk baseline, so
+     * every accumulator holds the complete field value and not just a delta.
+     */
+    readonly baselineEstablished: boolean,
+    readonly workPlanProvenance: WorkPlanProvenance,
   ) {
     super(cause instanceof Error ? cause.message : String(cause), { cause });
   }
@@ -349,17 +356,16 @@ function mergeUsagePatch(
  */
 type DiskState = 'unknown' | 'verified-absent' | 'loaded';
 
-function artifactAuthorityAfterPreloadFailure(
+function workPlanProvenanceOf(
   baseline: DiskState,
   overlays: Partial<OverlayPatches>,
-): StreamArtifactAuthority {
+): WorkPlanProvenance {
   // Without an established baseline the output-file / missing-output /
   // compile-failure / usage overlays are deltas over an unread disk state, so
   // they establish nothing. Plan and todos are replacements, so a live overlay
   // for either is authoritative on its own.
   const complete = baseline !== 'unknown';
   return {
-    complete,
     todos: complete || overlays.workPlan?.todos !== undefined,
     plan: complete || overlays.workPlan?.plan !== undefined,
   };
@@ -1430,6 +1436,28 @@ export class StreamSnapshotStore {
     return Object.values(record.overlays).some((patch) => patch !== undefined);
   }
 
+  /**
+   * Which work-plan fields this record can vouch for right now — the same
+   * question {@link StreamSnapshotPreloadError.workPlanProvenance} answers at
+   * one failure instant, asked live. A reader that could not vouch for a field
+   * when its load failed re-reads this instead of tracking promotions of its
+   * own: a later live todos/plan write or a completed seed establishes the
+   * field here, and this store is the only owner of that fact.
+   *
+   * An in-flight refresh does not retract it. `refreshSeed` parks the record at
+   * 'unknown' so mutations queue behind the new read, but the accumulators it
+   * is about to refresh still hold their established values, so the captured
+   * `seedRefreshBaseline` — not the parked state — answers for readers.
+   */
+  workPlanProvenance(stream: StreamTabId): WorkPlanProvenance {
+    const record = this.records.get(stream);
+    if (!record) return { plan: false, todos: false };
+    return workPlanProvenanceOf(
+      record.seedRefreshBaseline ?? record.diskState,
+      record.overlays,
+    );
+  }
+
   /** Streams with persisted sidecars under `streamData/`. */
   async listPersistedStreams(): Promise<StreamTabId[]> {
     return this.listStreamsUnder(STREAM_DATA_DIR);
@@ -1823,14 +1851,19 @@ export class StreamSnapshotStore {
         (error: unknown) => {
           const current = this.records.get(stream);
           const versionIsCurrent = this.streamVersion(stream) === version;
-          const authoritativeFields =
+          // Snapshot the surviving state BEFORE the restore below, whose
+          // `persistEagerOverlays` drains the very overlays it reads.
+          const resolvedRefreshBaseline =
+            refreshBaseline === 'unknown'
+              ? current?.diskState
+              : refreshBaseline;
+          const failureBaseline: DiskState | undefined =
             reportArtifactAuthority && current && versionIsCurrent
-              ? artifactAuthorityAfterPreloadFailure(
-                  refreshBaseline === 'unknown'
-                    ? current.diskState
-                    : refreshBaseline,
-                  current.overlays,
-                )
+              ? resolvedRefreshBaseline
+              : undefined;
+          const failureWorkPlanProvenance =
+            failureBaseline !== undefined && current
+              ? workPlanProvenanceOf(failureBaseline, current.overlays)
               : undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
@@ -1843,11 +1876,12 @@ export class StreamSnapshotStore {
             }
             if (current.seedChain === next) current.seedChain = undefined;
           }
-          if (authoritativeFields) {
+          if (failureBaseline !== undefined && failureWorkPlanProvenance) {
             throw new StreamSnapshotPreloadError(
               error,
               stream,
-              authoritativeFields,
+              failureBaseline !== 'unknown',
+              failureWorkPlanProvenance,
             );
           }
           throw error;
