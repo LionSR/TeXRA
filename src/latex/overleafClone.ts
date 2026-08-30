@@ -1,10 +1,11 @@
 /**
  * Host-neutral Overleaf / ShareLaTeX clone workflow: token caching and
  * validation, clone-precondition checks, and clone execution with
- * auth-failure retry. Reaches every side effect (secret storage, prompts,
- * the actual `git clone`, and user-facing messages) through `ports`, so the
- * decision logic is unit-testable and reusable by any host — not just the
- * VS Code command it was extracted from.
+ * auth-failure handling (clears the bad token and reports the failure; does
+ * not retry the clone itself). Reaches every side effect (secret storage,
+ * prompts, the actual `git clone`, and user-facing messages) through
+ * `ports`, so the decision logic is unit-testable and reusable by any host —
+ * not just the VS Code command it was extracted from.
  */
 
 import {
