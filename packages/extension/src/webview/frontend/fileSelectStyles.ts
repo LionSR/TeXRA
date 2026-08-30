@@ -96,10 +96,10 @@ export const fileSelectLayoutStyles = css`
     width: 100%;
   }
 
-  /* The action cluster has three fixed-size icon buttons. Stack it below the
-     label only once the component itself can no longer hold both groups; the
-     breakpoint follows this component in sidebars and desktop panes rather
-     than the viewport. */
+  /* FileSelectGroup and LatexDiffsSection both render this shared header and
+     action structure. Stack their action clusters once each .file-select
+     container can no longer hold both groups, so sidebars and desktop panes
+     adapt independently of the viewport. */
   @container (max-width: 18rem) {
     .file-select-header {
       align-items: flex-start;
