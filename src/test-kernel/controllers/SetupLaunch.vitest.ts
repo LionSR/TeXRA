@@ -103,6 +103,17 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
     );
   });
 
+  it('continues to a later provider when an earlier API key read fails', async () => {
+    mocks.lookupApiKey.mockImplementation(async (_secrets, provider) => {
+      if (provider === 'openai') throw new Error('openai key read failed');
+      return provider === 'anthropic' ? 'sk-ant-test' : undefined;
+    });
+
+    await expect(selectCredentialModel()).resolves.toBe(
+      SETUP_MODEL_BY_PROVIDER.anthropic,
+    );
+  });
+
   it.each([
     {
       subscription: 'ChatGPT',
@@ -195,6 +206,29 @@ describe('selectDesktopSetupModel', () => {
  * actually diverge where intended.
  */
 describe('resolveSetupLaunchModel', () => {
+  it.each([
+    {
+      subscription: 'ChatGPT',
+      model: CHATGPT_SETUP_MODEL,
+      activate: () => mocks.isCodexSubscriptionActive.mockResolvedValue(true),
+    },
+    {
+      subscription: 'Grok',
+      model: XAI_SETUP_MODEL,
+      activate: () => mocks.isXaiSubscriptionActive.mockResolvedValue(true),
+    },
+  ])(
+    'continues to an active $subscription subscription when the OpenRouter key read fails',
+    async ({ model, activate }) => {
+      mocks.lookupApiKey.mockRejectedValueOnce(new Error('keychain locked'));
+      activate();
+
+      await expect(
+        resolveSetupLaunchModel({} as never, false),
+      ).resolves.toEqual({ model, reason: 'credential' });
+    },
+  );
+
   it('falls back to the OpenRouter access-list model when no credential is available and the caller opts in', async () => {
     mockDirectApiKey('openRouter', 'or-test');
 

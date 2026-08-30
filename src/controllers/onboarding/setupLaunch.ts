@@ -69,9 +69,12 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
     if (!config || shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
       continue;
     }
-    if (isNonEmptyString(await lookupApiKey(secrets, provider))) {
-      return model;
-    }
+    const hasApiKey = await probeSetupCredential(
+      `${provider} API key`,
+      async () => isNonEmptyString(await lookupApiKey(secrets, provider)),
+      credentialLog.warn,
+    );
+    if (hasApiKey) return model;
   }
 
   return null;
@@ -95,9 +98,12 @@ export async function resolveSetupLaunchModel(
   includeAccessListFallback: boolean,
 ): Promise<SetupModelResolution | null> {
   const useOpenRouter = getUseOpenRouter();
-  const openRouterModel = isNonEmptyString(
-    await lookupApiKey(secrets, 'openRouter'),
-  )
+  const hasOpenRouterKey = await probeSetupCredential(
+    'OpenRouter API key',
+    async () => isNonEmptyString(await lookupApiKey(secrets, 'openRouter')),
+    credentialLog.warn,
+  );
+  const openRouterModel = hasOpenRouterKey
     ? SETUP_MODEL_BY_PROVIDER.openRouter
     : null;
   const credentialModel =
