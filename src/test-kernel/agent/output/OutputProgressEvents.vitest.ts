@@ -173,16 +173,23 @@ class FinalCompileOutputNode extends OutputNode {
   }
 
   override async exec(): ReturnType<OutputNode['exec']> {
-    const result = {
+    return {
       summary: this.fixture.summary,
       compileResult: this.fixture.compileResult,
       compiledArtifacts: [],
       emitCompileFailures: false,
     };
-    // Model an interrupt arriving after compile completes but before post()
+  }
+
+  override async post(
+    shared: ReflectionFlowShared,
+    prepRes: Parameters<OutputNode['post']>[1],
+    execRes: Parameters<OutputNode['post']>[2],
+  ): ReturnType<OutputNode['post']> {
+    // Model an interrupt arriving after compile completes but before OutputNode
     // projects its result into the flow's terminal state.
     this.abortController?.abort();
-    return result;
+    return super.post(shared, prepRes, execRes);
   }
 }
 
