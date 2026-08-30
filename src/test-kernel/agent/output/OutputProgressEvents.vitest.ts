@@ -95,10 +95,11 @@ function createOutputNode(
   host: ReturnType<typeof createRecordingHost>['host'],
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
+  signal?: AbortSignal,
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
-    runScope: testRunScope(streamId, { interactions: host }),
+    runScope: testRunScope(streamId, { interactions: host, signal }),
     logger,
     outputState,
   } as unknown as ReflectionServices);
@@ -138,14 +139,23 @@ function runOutputPost(
   );
 }
 
-function compileContextCase(streamId: string): {
+function compileContextCase(
+  streamId: string,
+  signal?: AbortSignal,
+): {
   outputNode: OutputNode;
   fixture: ReturnType<typeof createCompileFailureFixture>;
   shared: ReflectionFlowShared;
 } {
   const { host } = createRecordingHost();
   return {
-    outputNode: createOutputNode(streamId, host),
+    outputNode: createOutputNode(
+      streamId,
+      host,
+      noopTrace,
+      createOutputState(),
+      signal,
+    ),
     fixture: createCompileFailureFixture(),
     shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
   };
@@ -295,6 +305,62 @@ describe('output progress events', () => {
     );
 
     expect(shared.compileFailureContext).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: 'sets the final compile failure when the run is active',
+      aborted: false,
+      expectedLastError: {
+        message:
+          'Automatic LaTeX compilation failed after the final workflow round.',
+        userRetryable: false,
+      },
+    },
+    {
+      name: 'does not overwrite cancellation with the final compile failure',
+      aborted: true,
+      expectedLastError: undefined,
+    },
+  ])('$name', async ({ aborted, expectedLastError }) => {
+    await installPlatform({
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+      },
+    });
+    const controller = new AbortController();
+    const { outputNode, fixture } = compileContextCase(
+      `stream:final-compile-failure-${aborted ? 'aborted' : 'active'}`,
+      controller.signal,
+    );
+    const shared = {
+      roundOutputs: [],
+      currentRound: 1,
+      totalRounds: 2,
+      continueRounds: true,
+    } as unknown as ReflectionFlowShared;
+    if (aborted) controller.abort();
+
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastError).toEqual(expectedLastError);
+    expect(shared.compileFailureContext).toContain(
+      'previous workflow round was rejected',
+    );
   });
 
   it.each([
