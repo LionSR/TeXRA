@@ -47,7 +47,8 @@
       "preload",
       "read",
       "reconcileStagedDeletions",
-      "stageDeleteStream"
+      "stageDeleteStream",
+      "workPlanProvenance"
     ]
   },
   "aggregateContracts": {
