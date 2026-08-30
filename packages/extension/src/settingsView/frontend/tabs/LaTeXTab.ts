@@ -9,7 +9,13 @@ import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared webview
@@ -237,6 +243,21 @@ export class LaTeXTab extends LitElement {
   private replacementJsonErrors: Partial<
     Record<'customReplacements' | 'customReplacementsRegex', string>
   > = {};
+
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    super.willUpdate(changed);
+    if (changed.has('configValues')) {
+      this.replacementJsonErrors = {};
+    }
+  }
+
+  protected override updated(changed: PropertyValues<this>): void {
+    super.updated(changed);
+    if (!changed.has('configValues')) return;
+
+    this.syncCustomReplacementControl('customReplacements');
+    this.syncCustomReplacementControl('customReplacementsRegex');
+  }
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
@@ -732,13 +753,44 @@ export class LaTeXTab extends LitElement {
           ${
             isCustom
               ? this.renderResetButton(opts.field, '{}', () =>
-                  this.resetCustomReplacement(opts.field, controlId),
+                  this.clearCustomReplacementError(opts.field, '{}'),
                 )
               : nothing
           }
         </div>
       </div>
     `;
+  }
+
+  private syncCustomReplacementControl(
+    field: 'customReplacements' | 'customReplacementsRegex',
+  ): void {
+    const control = this.shadowRoot?.querySelector<WaTextarea>(
+      `#latex-setting-${field}`,
+    );
+    if (!control) return;
+
+    control.value = JSON.stringify(this.configValues[field] ?? {}, null, 2);
+    control.setCustomValidity('');
+  }
+
+  private clearCustomReplacementError(
+    field: 'customReplacements' | 'customReplacementsRegex',
+    source?: string,
+  ): void {
+    const control = this.shadowRoot?.querySelector<WaTextarea>(
+      `#latex-setting-${field}`,
+    );
+    if (control) {
+      if (source !== undefined) control.value = source;
+      control.setCustomValidity('');
+    }
+    if (this.replacementJsonErrors[field] === undefined) return;
+
+    this.replacementJsonErrors = {
+      ...this.replacementJsonErrors,
+      [field]: undefined,
+    };
   }
 
   private handleCustomReplacementChange(
@@ -784,20 +836,6 @@ export class LaTeXTab extends LitElement {
       field,
       result.data as LatexConfigValueFor<typeof field>,
     );
-  }
-
-  private resetCustomReplacement(
-    field: 'customReplacements' | 'customReplacementsRegex',
-    controlId: string,
-  ): void {
-    this.renderRoot
-      .querySelector<WaTextarea>(`#${controlId}`)
-      ?.setCustomValidity('');
-    this.replacementJsonErrors = {
-      ...this.replacementJsonErrors,
-      [field]: undefined,
-    };
-    this.dispatchSetConfigValue(field, undefined);
   }
 
   private dispatchSetConfigValue<F extends LatexConfigField>(
@@ -985,7 +1023,7 @@ export class LaTeXTab extends LitElement {
   private renderResetButton(
     field: LatexConfigField,
     defaultDisplay: string,
-    onReset = (): void => this.dispatchSetConfigValue(field, undefined),
+    beforeReset?: () => void,
   ): TemplateResult {
     return renderLabeledActionButton({
       icon: 'arrow-rotate-left',
@@ -994,7 +1032,10 @@ export class LaTeXTab extends LitElement {
       appearance: 'outlined',
       label: 'Reset to default',
       title: `Reset to default (${defaultDisplay})`,
-      onClick: onReset,
+      onClick: () => {
+        beforeReset?.();
+        this.dispatchSetConfigValue(field, undefined);
+      },
     });
   }
 

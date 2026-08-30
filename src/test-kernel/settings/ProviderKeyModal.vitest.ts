@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { delay } from '@utils/core';
 import {
@@ -101,6 +101,31 @@ describe('ProviderKeyModal', () => {
 
     expect(counts).toEqual({ cancelled: 1, submitted: 0 });
     expect(input.value).toBe('');
+  });
+
+  it('sets and clears the input custom validity with the visible error', async () => {
+    const modal = await mountModal();
+    const input = modal.shadowRoot!.querySelector('wa-input') as HTMLElement & {
+      setCustomValidity: (message: string) => void;
+    };
+    const setCustomValidity = vi.spyOn(input, 'setCustomValidity');
+
+    submitForm(modal);
+    await modal.updateComplete;
+
+    expect(setCustomValidity).toHaveBeenCalledWith(
+      'Enter an API key before saving.',
+    );
+    expect(input.querySelector('[slot="hint"]')?.textContent?.trim()).toBe(
+      'Enter an API key before saving.',
+    );
+    expect(input.hasAttribute('aria-invalid')).toBe(false);
+
+    setKey(modal, 'sk-corrected');
+    await modal.updateComplete;
+
+    expect(setCustomValidity).toHaveBeenLastCalledWith('');
+    expect(input.querySelector('[slot="hint"]')?.textContent?.trim()).toBe('');
   });
 
   it('opens the wa-dialog when mounted and closes it after submit', async () => {

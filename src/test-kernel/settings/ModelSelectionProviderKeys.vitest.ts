@@ -83,6 +83,45 @@ describe('ModelSelectionList provider key status', () => {
     );
   });
 
+  it('slots labels and hints into the focused Web Awesome controls', async () => {
+    const list = await renderModelSelectionList({
+      models: [{ ...deepseekModel, supportsReasoningLevel: true }],
+      helperModel: 'deepseek',
+    });
+
+    const helperSelect = list.shadowRoot!.querySelector(
+      '.helper-model-select',
+    )!;
+    expect(helperSelect.querySelector('[slot="label"]')?.textContent).toContain(
+      'Model for quick fixes',
+    );
+    expect(helperSelect.querySelector('[slot="hint"]')?.textContent).toContain(
+      'quick background tasks',
+    );
+    expect(helperSelect.hasAttribute('aria-describedby')).toBe(false);
+
+    const shortNamesSwitch = list.shadowRoot!.querySelector(
+      '.short-names-toggle wa-switch',
+    )!;
+    expect(shortNamesSwitch.textContent).toContain('Use short model names');
+    expect(
+      shortNamesSwitch.querySelector('[slot="hint"]')?.textContent,
+    ).toContain('Use unpinned names');
+    expect(shortNamesSwitch.hasAttribute('aria-describedby')).toBe(false);
+
+    list
+      .shadowRoot!.querySelector<HTMLElement>('.provider-group-toggle')
+      ?.click();
+    await list.updateComplete;
+    const reasoningSelect = list.shadowRoot!.querySelector(
+      '.reasoning-level-select',
+    )!;
+    expect(
+      reasoningSelect.querySelector('[slot="label"]')?.textContent,
+    ).toContain('Reasoning level for DeepSeek V4 Flash');
+    expect(reasoningSelect.hasAttribute('aria-label')).toBe(false);
+  });
+
   it('keeps the pinned helper visible when it is not enabled', async () => {
     const list = await renderModelSelectionList({
       models: [

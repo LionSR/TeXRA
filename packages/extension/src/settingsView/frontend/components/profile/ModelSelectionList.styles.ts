@@ -22,7 +22,7 @@ export const modelSelectionListStyles: CSSResult = css`
     margin-bottom: var(--wa-space-s);
   }
 
-  .helper-model-row label {
+  .helper-model-label {
     font-weight: var(--font-weight-medium);
     color: var(--wa-color-text-normal);
     white-space: nowrap;
@@ -194,7 +194,7 @@ export const modelSelectionListStyles: CSSResult = css`
       flex-direction: column;
     }
 
-    .helper-model-row label {
+    .helper-model-label {
       white-space: normal;
     }
 

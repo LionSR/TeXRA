@@ -134,11 +134,13 @@ export class ModelSelectionList extends LitElement {
       <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
-        aria-label=${`Reasoning level for ${model.label}`}
         title="Reasoning level"
         ?disabled=${model.disabled}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
+        <span slot="label" class="visually-hidden"
+          >Reasoning level for ${model.label}</span
+        >
         <wa-option value=""> ${defaultLabel} </wa-option>
         ${REASONING_LEVEL_OPTIONS.filter(
           (option) =>
@@ -342,14 +344,21 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="helper-model-row">
-        <label for="helper-model-select">Model for quick fixes</label>
+        <span class="helper-model-label" aria-hidden="true"
+          >Model for quick fixes</span
+        >
         <wa-select
           id="helper-model-select"
           class="helper-model-select form-control-fill"
-          aria-describedby="helper-model-help"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >
+          <span slot="label" class="visually-hidden"
+            >Model for quick fixes</span
+          >
+          <span slot="hint" class="visually-hidden"
+            >Used for quick background tasks, such as intelligent merge.</span
+          >
           ${helperOptions.map(
             (m) => html`
               <wa-option value=${m.name}>
@@ -358,7 +367,7 @@ export class ModelSelectionList extends LitElement {
             `,
           )}
         </wa-select>
-        <span id="helper-model-help" class="helper-model-help">
+        <span class="helper-model-help" aria-hidden="true">
           Used for quick background tasks, such as intelligent merge.
         </span>
       </div>
@@ -379,7 +388,6 @@ export class ModelSelectionList extends LitElement {
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <wa-switch
-            aria-describedby="short-names-description"
             ?checked=${this.preferShortModelNames}
             @change=${(e: Event) => {
               const enabled = (e.target as WaSwitch).checked;
@@ -390,8 +398,12 @@ export class ModelSelectionList extends LitElement {
             }}
           >
             Use short model names
+            <span slot="hint" class="visually-hidden"
+              >Use unpinned names, such as gpt-5.5 instead of
+              gpt-5.5-2026-04-15.</span
+            >
           </wa-switch>
-          <span id="short-names-description" class="short-names-description">
+          <span class="short-names-description" aria-hidden="true">
             Use unpinned names, such as gpt-5.5 instead of gpt-5.5-2026-04-15.
           </span>
         </div>

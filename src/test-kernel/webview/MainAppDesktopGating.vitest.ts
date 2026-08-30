@@ -59,7 +59,10 @@ function hasSection(element: MainApp, tag: string): boolean {
  * skeleton with no launcher body, so every gated section would read as absent
  * and the assertions would pass for the wrong reason.
  */
-async function mountMainApp(options: { desktop: boolean }): Promise<MainApp> {
+async function mountMainApp(options: {
+  desktop: boolean;
+  onboarding?: 'done' | 'setup';
+}): Promise<MainApp> {
   const element = document.createElement('main-app') as unknown as MainApp;
   if (options.desktop) {
     (element as unknown as HTMLElement).setAttribute(
@@ -69,13 +72,13 @@ async function mountMainApp(options: { desktop: boolean }): Promise<MainApp> {
   }
   document.body.append(element as unknown as HTMLElement);
   await element.updateComplete;
-  mainViewState.onboardingFunnelState$.set('done');
+  mainViewState.onboardingFunnelState$.set(options.onboarding ?? 'done');
   await element.updateComplete;
   return element;
 }
 
 describe('MainApp desktop host gating', () => {
-  useLitComponentTestDom(() => import('@webview/frontend/MainApp'));
+  useLitComponentTestDom(() => import('@webview/frontend/MainApp'), 30_000);
 
   beforeAll(async () => {
     mainViewState = await import('@webview/frontend/mainViewState');
@@ -91,6 +94,27 @@ describe('MainApp desktop host gating', () => {
 
       expect(hasSection(element, 'latexdiffs-section')).toBe(visible);
       expect(hasSection(element, '.view-header')).toBe(visible);
+    },
+  );
+
+  it.each([
+    { host: 'extension', desktop: false, heading: 'h1' },
+    { host: 'desktop', desktop: true, heading: 'h2' },
+  ])(
+    'uses the setup-card heading below the $host host heading: $heading',
+    async ({ desktop, heading }) => {
+      const element = await mountMainApp({ desktop, onboarding: 'setup' });
+      const card = element.shadowRoot!.querySelector(
+        'onboarding-setup-card',
+      ) as HTMLElement & { updateComplete: Promise<boolean> };
+      await card.updateComplete;
+
+      expect(card.shadowRoot!.querySelector(heading)?.textContent).toContain(
+        'Credential ready',
+      );
+      expect(
+        card.shadowRoot!.querySelector(heading === 'h1' ? 'h2' : 'h1'),
+      ).toBeNull();
     },
   );
 });

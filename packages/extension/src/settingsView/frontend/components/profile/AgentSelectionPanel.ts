@@ -406,7 +406,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
     return html`
       <div class="agent-detail-pane">
         <div class="agent-detail-header">
-          <h2 class="agent-detail-name">${agent.name}</h2>
+          <h3 class="agent-detail-name">${agent.name}</h3>
           <wa-tag variant="neutral" size="s" title="${displayName} agent"
             >${badge ? html`${waIcon(badge.icon)} ` : nothing}${displayName}</wa-tag
           >

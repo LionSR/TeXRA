@@ -115,7 +115,6 @@ export class ProviderKeyList extends LitElement {
     const streamingToggle = html`
       <div class="provider-setting">
         <wa-switch
-          aria-label=${`Streaming for ${entry.displayName}`}
           ?checked=${entry.streaming}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
@@ -124,6 +123,7 @@ export class ProviderKeyList extends LitElement {
           }}
         >
           Streaming
+          <span class="visually-hidden">for ${entry.displayName}</span>
         </wa-switch>
       </div>
     `;

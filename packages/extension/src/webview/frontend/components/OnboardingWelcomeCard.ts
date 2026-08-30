@@ -294,16 +294,15 @@ export class OnboardingWelcomeCard extends LitElement {
                 variant="brand"
                 appearance="filled"
                 size="m"
-                aria-describedby="onboardingChatGptDescription"
                 @click=${this.handleChatGpt}
               >
                 ${waIcon('comments', { slot: 'start' })}
                 ${ONBOARDING_CHOICE_CHATGPT.label}
+                <span class="visually-hidden"
+                  >. ${ONBOARDING_CHOICE_CHATGPT.description}</span
+                >
               </wa-button>
-              <span
-                id="onboardingChatGptDescription"
-                class="choice-description"
-              >
+              <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_CHATGPT.description}
               </span>
             </div>
@@ -313,13 +312,15 @@ export class OnboardingWelcomeCard extends LitElement {
                 class="btn-secondary"
                 appearance="outlined"
                 size="m"
-                aria-describedby="onboardingApiKeyDescription"
                 @click=${this.handleApiKey}
               >
                 ${waIcon('key', { slot: 'start' })}
                 ${ONBOARDING_CHOICE_API_KEY.label}
+                <span class="visually-hidden"
+                  >. ${ONBOARDING_CHOICE_API_KEY.description}</span
+                >
               </wa-button>
-              <span id="onboardingApiKeyDescription" class="choice-description">
+              <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_API_KEY.description}
               </span>
             </div>
