@@ -630,15 +630,24 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const enabled = new Set(effective);
+    const labelId = `latex-setting-${opts.field}-label`;
+    const descriptionId = `latex-setting-${opts.field}-description`;
     const isCustom =
       effective.length !== opts.defaultValue.length ||
       effective.some((value) => !opts.defaultValue.includes(value));
     return html`
       <div class="settings-row replacement-groups-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
-          <div class="replacement-category-grid">
+          <span id=${labelId} class="settings-row-label">${opts.label}</span>
+          <span id=${descriptionId} class="settings-row-help"
+            >${opts.description}</span
+          >
+          <div
+            class="replacement-category-grid"
+            role="group"
+            aria-labelledby=${labelId}
+            aria-describedby=${descriptionId}
+          >
             ${opts.categories.map(
               (category) => html`
                 <wa-checkbox
@@ -685,18 +694,26 @@ export class LaTeXTab extends LitElement {
     const isCustom = Object.keys(value).length > 0;
     const error = this.replacementJsonErrors[opts.field];
     const controlId = `latex-setting-${opts.field}`;
+    const descriptionId = `${controlId}-description`;
+    const errorId = `${controlId}-error`;
     return html`
       <div class="settings-row replacement-map-row">
         <div class="settings-row-text">
           <label class="settings-row-label" for=${controlId}
             >${opts.label}</label
           >
-          <span class="settings-row-help">${opts.description}</span>
+          <span id=${descriptionId} class="settings-row-help"
+            >${opts.description}</span
+          >
           <wa-textarea
             id=${controlId}
             rows="4"
             resize="auto"
             spellcheck="false"
+            aria-invalid=${error ? 'true' : 'false'}
+            aria-describedby=${
+              error ? `${descriptionId} ${errorId}` : descriptionId
+            }
             .value=${JSON.stringify(value, null, 2)}
             @change=${(event: Event) =>
               this.handleCustomReplacementChange(
@@ -706,7 +723,9 @@ export class LaTeXTab extends LitElement {
           ></wa-textarea>
           ${
             error
-              ? html`<span class="replacement-json-error">${error}</span>`
+              ? html`<span id=${errorId} class="replacement-json-error"
+                  >${error}</span
+                >`
               : nothing
           }
         </div>
@@ -865,13 +884,16 @@ export class LaTeXTab extends LitElement {
     control: TemplateResult;
     reset: TemplateResult | typeof nothing;
   }): TemplateResult {
+    const descriptionId = `${opts.controlId}-description`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
           <label class="settings-row-label" for=${opts.controlId}
             >${opts.label}</label
           >
-          <span class="settings-row-help">${opts.description}</span>
+          <span id=${descriptionId} class="settings-row-help"
+            >${opts.description}</span
+          >
         </div>
         <div class="settings-row-control">
           ${opts.statusIcon ?? nothing} ${opts.control} ${opts.reset}
@@ -905,6 +927,7 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-switch
           id=${controlId}
+          aria-describedby=${`${controlId}-description`}
           ?checked=${effective}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
@@ -970,6 +993,7 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-input
           id=${controlId}
+          aria-describedby=${`${controlId}-description`}
           type="number"
           min=${opts.min}
           max=${opts.max ?? nothing}
@@ -1035,6 +1059,7 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-select
           id=${controlId}
+          aria-describedby=${`${controlId}-description`}
           .value=${String(effective)}
           @change=${(e: Event) => {
             const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
