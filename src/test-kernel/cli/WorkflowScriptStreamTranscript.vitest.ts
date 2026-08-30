@@ -247,6 +247,24 @@ describe('CLI workflow-script child-stream transcript', () => {
     expect(streamEntries()).toHaveLength(2_000);
     expect(streamEntries().some((row) => row.id === 'task-0')).toBe(false);
 
+    // Exercise the roster-first interval: the parent already classifies this
+    // child as a workflow, but the child's own run metadata has not landed.
+    seedStreamMeta(STREAM_ID, { agentCategory: AgentCategory.Workflow });
+    boundState.getOrCreateStreamState(PARENT_STREAM_ID, AgentCategory.ToolUse);
+    boundState.updateStreamState(PARENT_STREAM_ID, (state) => ({
+      ...state,
+      subagents: [
+        {
+          executionId: 'workflow-exec-1',
+          agentName: 'draft-sections',
+          identity: WORKFLOW_IDENTITY,
+          childStreamId: STREAM_ID,
+          status: STREAM_PHASE.RUNNING,
+        },
+      ],
+    }));
+    invalidateChildStreams();
+
     const dispose = subscribeStreamLog(defaultSession());
     try {
       openWorkflowPopup(STREAM_ID);

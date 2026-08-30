@@ -66,6 +66,7 @@ import {
   createActiveDraftRegistry,
 } from './input/activeDraft';
 import {
+  directChildStreamIds,
   isWorkflowScriptStream,
   numericFocusTargetForActiveStream,
   presentStream,
@@ -131,7 +132,13 @@ function focusStreamAndPromoteApprovals(streamId: StreamTabId): void {
   // lives in `presentStream`); the popup's own stream owns the approvals
   // that surface.
   if (presentStream(streamId) === 'workflowPopup') {
-    promoteApprovalsForStream(streamId, { includeSessionWide: false });
+    promoteApprovalsForStream(streamId, {
+      includeStreamIds: directChildStreamIds({
+        parentStreamId: streamId,
+        childRosters: childRostersSignal.get(),
+        parentStream: parentStreamSignal.get(),
+      }),
+    });
     return;
   }
   const visibleListRootStreamId = resolveChildListTarget({
@@ -213,16 +220,20 @@ export function App(props: AppProps): React.JSX.Element {
     isWorkflowScriptStream(foregroundReader.streamId)
       ? foregroundReader.streamId
       : undefined;
+  const foregroundWorkflowChildStreamIds =
+    foregroundWorkflowStreamId === undefined
+      ? undefined
+      : directChildStreamIds({
+          parentStreamId: foregroundWorkflowStreamId,
+          childRosters,
+          parentStream,
+        });
   const pendingApprovalStreamId = pending
     ? approvalPayloadStreamId(pending.payload)
     : undefined;
   const foregroundApprovalStreamId =
-    foregroundWorkflowStreamId !== undefined &&
     pendingApprovalStreamId !== undefined &&
-    (parentStream.get(pendingApprovalStreamId) === foregroundWorkflowStreamId ||
-      childRosters
-        .get(foregroundWorkflowStreamId)
-        ?.some((child) => child.childStreamId === pendingApprovalStreamId))
+    foregroundWorkflowChildStreamIds?.has(pendingApprovalStreamId) === true
       ? pendingApprovalStreamId
       : foregroundWorkflowStreamId;
   const activeApprovalVisible = approvalVisibleForActiveStream({

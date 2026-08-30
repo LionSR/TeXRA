@@ -508,10 +508,11 @@ export function syncStreamLog(
 
 /**
  * Release a background stream's transcript residency at a lifecycle
- * boundary. Two owners call this — the status subscriber when a stream
- * leaves its active phase, and the focus subscriber when focus moves off a
- * stream — never the render/sync path, so a terminal stream always
- * releases rather than only when a sync happens to run for it. A no-op for
+ * boundary. Three owners call this — the status subscriber when a stream
+ * leaves its active phase, the focus subscriber when focus moves off a
+ * stream, and the foreground workflow reader when it closes or changes —
+ * never the render/sync path, so a terminal stream always releases rather
+ * than only when a sync happens to run for it. A no-op for
  * the active stream, for a stream whose status is unknown or active, and
  * while no stream is focused (every stream then projects the full
  * transcript, exactly the states the old in-sync release also skipped).

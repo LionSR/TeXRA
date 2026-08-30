@@ -344,10 +344,15 @@ export function approvalPayloadStreamId(
  * focusing a session surfaces that session's approval immediately.
  * `includeSessionWide` also promotes stream-less (session-wide) items — pass
  * it when promoting the root stream, whose row those items fold onto.
+ * `includeStreamIds` lets a composite surface promote requests owned by the
+ * streams it presents, such as a workflow popup's direct children.
  */
 export function promoteApprovalsForStream(
   streamId: StreamTabId,
-  options: { readonly includeSessionWide?: boolean } = {},
+  options: {
+    readonly includeSessionWide?: boolean;
+    readonly includeStreamIds?: ReadonlySet<StreamTabId>;
+  } = {},
 ): void {
   const items = QUEUE.get();
   if (items.length < 2) return;
@@ -355,6 +360,8 @@ export function promoteApprovalsForStream(
     const itemStreamId = approvalPayloadStreamId(item.payload);
     return (
       itemStreamId === streamId ||
+      (itemStreamId !== undefined &&
+        options.includeStreamIds?.has(itemStreamId) === true) ||
       (options.includeSessionWide === true && itemStreamId === undefined)
     );
   };
