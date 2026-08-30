@@ -72,11 +72,10 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Pre-flight uses the shared host-neutral predicate (adapter-level checks, so
- * blank env keys do not count as credentials and then fail later as "No model
- * is available") so this host can't drift from desktop's credential gate. The
- * CLI has its own apiMode-aware policy and doesn't call this predicate — see
- * the note on `hasUsableSetupCredential`.
+ * Pre-flight uses the credential predicate shared by CLI, extension, and
+ * desktop (adapter-level checks, so blank env keys do not count as credentials
+ * and then fail later as "No model is available"). Host-specific setup launch
+ * routing belongs to `resolveSetupLaunchModel`.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
   return hasUsableSetupCredential(platform().secrets);
