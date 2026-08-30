@@ -156,11 +156,20 @@ export class ProviderKeyModal extends LitElement {
               type="password"
               autocomplete="off"
               spellcheck="false"
+              aria-invalid=${String(Boolean(this.error))}
+              aria-describedby="provider-key-error"
               .value=${this.value}
               @input=${this.handleInput}
             ></wa-input>
           </label>
-          <p class="provider-key-error" aria-live="polite">${this.error}</p>
+          <p
+            id="provider-key-error"
+            class="provider-key-error"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            ${this.error}
+          </p>
         </form>
         <div slot="footer" class="provider-key-actions">
           <wa-button
