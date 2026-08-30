@@ -240,12 +240,13 @@ export class ProgressApp extends ProgressAppBase {
 
   private renderEmptyState(): TemplateResult {
     return html`
-      <section class="progress-empty-state">
+      <div class="progress-empty-state">
         <div class="progress-empty-panel">
           ${renderEmptyState({
             icon: 'robot',
             kicker: 'Sessions',
             title: 'No runs yet',
+            headingTag: 'h1',
             body: 'Start an agent from the New tab or Commands. Runs, streamed logs, approvals, and follow-up controls will appear here.',
             actions: [
               {
@@ -265,7 +266,7 @@ export class ProgressApp extends ProgressAppBase {
             ],
           })}
         </div>
-      </section>
+      </div>
     `;
   }
 
