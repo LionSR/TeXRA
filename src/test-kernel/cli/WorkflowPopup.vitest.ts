@@ -32,17 +32,18 @@ const VIEW: WorkflowPopupView = {
 function taskRow(
   id: string,
   status: WorkflowCallProgress['status'],
+  phase = 'Derive',
 ): WorkflowTaskRow {
   const call =
     status === 'failed'
-      ? { id, label: id, phase: 'Derive', status, error: 'boom' }
-      : ({ id, label: id, phase: 'Derive', status } as WorkflowCallProgress);
+      ? { id, label: id, phase, status, error: 'boom' }
+      : ({ id, label: id, phase, status } as WorkflowCallProgress);
   return {
     kind: 'workflowTask',
     id: `task-${id}`,
     timestamp: 0,
     level: 'info',
-    groupId: 'phase-Derive',
+    groupId: `phase-${phase}`,
     call,
     line: `${status}: ${id}`,
     statusLabel: status === 'failed' ? 'Failed' : 'Running',
@@ -64,7 +65,8 @@ async function renderPopup(
     childProgress: new Map(),
   });
   const { ink, React } = await loadInk();
-  return renderInteractive(
+  const onViewChange = vi.fn();
+  const rendered = renderInteractive(
     ink,
     React.createElement(WorkflowPopup, {
       activeSubagentExecutionIds: new Map(),
@@ -74,7 +76,7 @@ async function renderPopup(
       onFocusStream: vi.fn(),
       onKillExecution: vi.fn(),
       onOpenTranscript: vi.fn(),
-      onViewChange: vi.fn(),
+      onViewChange,
       onWorkflowControl: vi.fn(),
       pendingApprovals: new Map(),
       streamId: ROOT,
@@ -83,6 +85,7 @@ async function renderPopup(
     }),
     { columns: 100 },
   );
+  return { ...rendered, onViewChange };
 }
 
 describe('workflow popup', () => {
@@ -143,6 +146,44 @@ describe('workflow popup', () => {
       expect(firstRunning).toBeGreaterThan(failedLine);
       // 13 attention rows cannot all fit; the list says how many are below.
       expect(stdout.output).toMatch(/… \d+ more/);
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('moves next-failed selection across phase tabs', async () => {
+    const { instance, stdin, onViewChange, stdout } = await renderPopup(
+      [
+        {
+          id: 'phase-Derive',
+          name: 'Derive',
+          startTime: 0,
+          status: 'completed',
+          kind: 'phase',
+          index: 0,
+          total: 2,
+        },
+        {
+          id: 'phase-Check',
+          name: 'Check',
+          startTime: 1,
+          status: 'running',
+          kind: 'phase',
+          index: 1,
+          total: 2,
+        },
+      ],
+      [taskRow('done', 'completed'), taskRow('bad', 'failed', 'Check')],
+      20,
+    );
+    try {
+      await waitFor(() => stdout.output.includes('done'));
+      stdin.write('f');
+      await waitFor(() => onViewChange.mock.calls.length > 0);
+      expect(onViewChange).toHaveBeenLastCalledWith({
+        phaseIndex: 1,
+        selectedKey: 'task:task-bad',
+      });
     } finally {
       instance.unmount();
     }

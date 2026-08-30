@@ -203,15 +203,15 @@ const SCENARIOS = [
       HARNESS_WORKFLOW_RUNNING: '1',
     },
     // Tab to the session list, down to the workflow row, Enter opens the
-    // popup over main instead of focusing the workflow stream.
+    // popup over main. The direct child's queued approval must then surface
+    // over that foreground reader instead of waiting invisibly.
     bootExpect: 'Tab sessions',
     keys: ['\t', DOWN, '\r'],
     expect: [
-      'live-workflow-validation · 0/2 · 2 running',
-      '◆ Proofread (1/1) · 0/2 · 2 running',
-      'Proofread paper A · Running · bash',
-      'Proofread paper B · Running',
-      'Esc close',
+      'Run command?',
+      '$ npm run compile:safe',
+      'y approve',
+      'Keys go to the panel above',
     ],
     unexpect: ['Proofread paper B · Running · bash', 'Esc parent'],
   },

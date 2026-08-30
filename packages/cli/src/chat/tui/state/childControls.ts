@@ -45,6 +45,25 @@ function hasChildListItems(
   return visibleSubagentRows(parentStreamId, childRosters).length > 0;
 }
 
+/** Direct children known through either side of the roster-first edge race. */
+export function directChildStreamIds({
+  parentStreamId,
+  childRosters,
+  parentStream,
+}: {
+  readonly parentStreamId: StreamTabId;
+  readonly childRosters: ChildRosters;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+}): ReadonlySet<StreamTabId> {
+  const streamIds = new Set(
+    childRosters.get(parentStreamId)?.map((child) => child.childStreamId) ?? [],
+  );
+  for (const [streamId, parentId] of parentStream) {
+    if (parentId === parentStreamId) streamIds.add(streamId);
+  }
+  return streamIds;
+}
+
 /** Resolve the nearest stream whose child sessions populate the persistent
  * child list. */
 export function resolveChildListTarget({

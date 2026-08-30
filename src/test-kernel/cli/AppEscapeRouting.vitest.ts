@@ -17,10 +17,12 @@ import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   activeStreamId,
+  closeForegroundReader,
   focusStream,
   foregroundReader,
   infoPane,
   openInfoPane,
+  openWorkflowPopup,
   patchStream,
   resetCliState,
   rootRunPending,
@@ -34,6 +36,7 @@ import {
   invalidateChildStreams,
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
+import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { SessionState } from '@controllers/session/SessionState';
 import {
@@ -325,16 +328,44 @@ describe('App foreground Escape ownership', () => {
     ]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
+    void enqueueApproval({
+      kind: 'planApproval',
+      data: {
+        requestId: 'plan-unrelated',
+        streamId: GRANDCHILD,
+        plan: { objective: 'Keep this unrelated request queued.' },
+        goalEnabled: false,
+      },
+    });
+    void enqueueApproval({
+      kind: 'planApproval',
+      data: {
+        requestId: 'plan-queued-workflow-child',
+        streamId: CHILD,
+        plan: { objective: 'Promote the queued workflow child.' },
+        goalEnabled: false,
+      },
+    });
     const { instance, stdin, stdout, onInterruptStream } =
       await renderWithInterrupt();
+    const emit = vi.spyOn(defaultSession().events, 'emit');
 
     try {
       stdin.write('\t');
       await waitFor(() => stdout.output.includes('workflow running'));
       stdin.write(ARROW_KEYS.Down);
       stdin.write('\r');
-      // The workflow row opens the popup over main; main stays the viewport.
+      // The workflow row opens the popup over main, promotes direct-child
+      // approvals, and keeps main as the underlying viewport.
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
+      await waitFor(() =>
+        stdout.output.includes('Promote the queued workflow child.'),
+      );
+      expect(stdout.output).not.toContain(
+        'Keep this unrelated request queued.',
+      );
+      clearApprovals();
+      await waitFor(() => currentApproval.get() === undefined);
       await waitFor(() => stdout.output.includes('Inspect · Running'));
       expect(activeStreamId.get()).toBe(ROOT);
       // View state the user set inside the popup survives the round trips
@@ -357,6 +388,27 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
 
+      // A real announcement from one of the workflow's own agent calls takes
+      // the same foreground modal without moving the viewport underneath it.
+      void enqueueTuiApproval({
+        kind: 'planApproval',
+        data: {
+          requestId: 'plan-workflow-child',
+          streamId: CHILD,
+          plan: { objective: 'Verify the child result.' },
+          goalEnabled: false,
+        },
+      });
+      await waitFor(() => stdout.output.includes('Verify the child result.'));
+      expect(activeStreamId.get()).toBe(ROOT);
+      expect(emit).not.toHaveBeenCalled();
+      clearApprovals();
+      await waitFor(() => currentApproval.get() === undefined);
+      expect(foregroundReader.get()?.kind).toBe('workflow');
+      closeForegroundReader();
+      expect(activeStreamId.get()).toBe(ROOT);
+      openWorkflowPopup(WORKFLOW);
+
       // Enter on the task focuses that agent; Esc returns to main with the
       // popup back where it was.
       stdin.write('\r');
@@ -370,6 +422,7 @@ describe('App foreground Escape ownership', () => {
       expect(workflowPopupView.get().expanded.has('queued')).toBe(true);
       expect(onInterruptStream).not.toHaveBeenCalled();
     } finally {
+      emit.mockRestore();
       instance.unmount();
     }
   });

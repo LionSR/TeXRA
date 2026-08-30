@@ -82,7 +82,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { notify } from '../notifications/terminalNotifier';
-import { patchStream } from './cliState';
+import { foregroundReader, patchStream } from './cliState';
+import { directChildStreamIds, isWorkflowScriptStream } from './childControls';
+import { childRosters, parentStream } from './childExecutions';
 import {
   refreshSubscriptionPreferenceViews,
   setCliCodingPlanSubscription,
@@ -527,7 +529,17 @@ export function enqueueTuiApproval(
 /** Focus the asking stream and ring the terminal when a modal appears. */
 function announceApproval(payload: ApprovalPayload): void {
   const streamId = approvalPayloadStreamId(payload);
-  if (streamId) {
+  const reader = foregroundReader.get();
+  const workflowOwnsApproval =
+    streamId !== undefined &&
+    reader !== undefined &&
+    isWorkflowScriptStream(reader.streamId) &&
+    directChildStreamIds({
+      parentStreamId: reader.streamId,
+      childRosters: childRosters.get(),
+      parentStream: parentStream.get(),
+    }).has(streamId);
+  if (streamId && !workflowOwnsApproval) {
     defaultSession().events.emit({
       scope: 'session',
       event: {
