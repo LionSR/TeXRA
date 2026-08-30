@@ -447,7 +447,7 @@ export function incrementalStaticTranscriptEntries(
       scannedIndex = start + index + 1;
       continue;
     }
-    if (userPromptAwaitsLiveContinuation(source, start + index, status)) {
+    if (userPromptAwaitsLiveContinuation(suffix, index, status)) {
       break;
     }
     scannedIndex = start + index + 1;

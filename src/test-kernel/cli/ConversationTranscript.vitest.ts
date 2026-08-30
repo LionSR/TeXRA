@@ -1637,6 +1637,43 @@ describe('CLI conversation transcript', () => {
     expect(third.cursor.scannedIndex).toBe(2);
   });
 
+  it('checks live-prompt continuation only in the incremental suffix', () => {
+    const prefix = Array.from({ length: 100 }, (_, index) =>
+      entry(`a${index}`, 'assistant', `settled ${index}`, true),
+    );
+    const user = entry('u-new', 'user', 'continue', true);
+    const assistant = entry('a-new', 'assistant', 'done', true);
+    const inspectedPrefixIndexes: number[] = [];
+    const source = new Proxy([...prefix, user, assistant], {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          const index = Number.parseInt(property, 10);
+          if (index < prefix.length) inspectedPrefixIndexes.push(index);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const previous = {
+      entriesRef: prefix,
+      scannedIndex: prefix.length,
+      lastScannedEntry: prefix.at(-1),
+      status: STREAM_PHASE.RUNNING,
+      lastAppendedKey: [prefix.length, 0] as const,
+    };
+
+    const result = incrementalStaticTranscriptEntries(
+      source,
+      0,
+      STREAM_PHASE.RUNNING,
+      previous,
+    );
+
+    expect(result.rebuild).toBe(false);
+    expect(result.appended.map((item) => item.id)).toEqual(['u-new', 'a-new']);
+    expect(result.cursor.scannedIndex).toBe(source.length);
+    expect(inspectedPrefixIndexes).toEqual([prefix.length - 1]);
+  });
+
   it('appends an incremental suffix in the same settlement order a repaint uses', () => {
     // Wire order is [t1, a1] but a1 settled first. The live path prints the
     // suffix once; a repaint rebuilds from `orderedStaticTranscriptEntries`,
