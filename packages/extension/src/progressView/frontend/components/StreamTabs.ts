@@ -240,7 +240,7 @@ class StreamTab extends LitElement {
         >
           <button
             id="stream-tab-select-button"
-            class="tab"
+            class="tab focus-ring-inset"
             data-stream=${stream.name}
             data-action="select"
             aria-label=${compactSelectLabel}
