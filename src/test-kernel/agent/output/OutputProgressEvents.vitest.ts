@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
+import { RoundPersistedFlow } from '@agent/implementations/flows/reflection/RoundPersistedFlow';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import {
@@ -14,15 +15,17 @@ import { extractFilesFromXml } from '@agent/implementations/flows/reflection/out
 import type { OutputDependencies } from '@agent/implementations/flows/reflection/output/outputState';
 import type { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
-import type {
-  AgentFileLocation,
-  CompileFailure,
-  CompileResult,
-  FileLocation,
-  OutputFileInfo,
-  StreamTabId,
+import {
+  RUN_OUTCOME,
+  type AgentFileLocation,
+  type CompileFailure,
+  type CompileResult,
+  type FileLocation,
+  type OutputFileInfo,
+  type StreamTabId,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
@@ -95,11 +98,10 @@ function createOutputNode(
   host: ReturnType<typeof createRecordingHost>['host'],
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
-  signal?: AbortSignal,
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
-    runScope: testRunScope(streamId, { interactions: host, signal }),
+    runScope: testRunScope(streamId, { interactions: host }),
     logger,
     outputState,
   } as unknown as ReflectionServices);
@@ -139,26 +141,49 @@ function runOutputPost(
   );
 }
 
-function compileContextCase(
-  streamId: string,
-  signal?: AbortSignal,
-): {
+function compileContextCase(streamId: string): {
   outputNode: OutputNode;
   fixture: ReturnType<typeof createCompileFailureFixture>;
   shared: ReflectionFlowShared;
 } {
   const { host } = createRecordingHost();
   return {
-    outputNode: createOutputNode(
-      streamId,
-      host,
-      noopTrace,
-      createOutputState(),
-      signal,
-    ),
+    outputNode: createOutputNode(streamId, host),
     fixture: createCompileFailureFixture(),
     shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
   };
+}
+
+class FinalCompileOutputNode extends OutputNode {
+  constructor(
+    private readonly fixture: ReturnType<typeof createCompileFailureFixture>,
+    private readonly abortController?: AbortController,
+  ) {
+    super();
+  }
+
+  override async prep(
+    shared: ReflectionFlowShared,
+  ): ReturnType<OutputNode['prep']> {
+    return {
+      outputLocation: this.fixture.outputLocation,
+      currentRound: shared.currentRound,
+      endTurn: false,
+    };
+  }
+
+  override async exec(): ReturnType<OutputNode['exec']> {
+    const result = {
+      summary: this.fixture.summary,
+      compileResult: this.fixture.compileResult,
+      compiledArtifacts: [],
+      emitCompileFailures: false,
+    };
+    // Model an interrupt arriving after compile completes but before post()
+    // projects its result into the flow's terminal state.
+    this.abortController?.abort();
+    return result;
+  }
 }
 
 describe('output progress events', () => {
@@ -307,82 +332,74 @@ describe('output progress events', () => {
     expect(shared.compileFailureContext).toBeUndefined();
   });
 
-  it('fails the run when the final configured round fails compilation', async () => {
-    await installPlatform({
-      workspaceState: {
-        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+  it.each([
+    {
+      name: 'fails after a final-round compile failure',
+      abortAfterCompile: false,
+      expectedOutcome: RUN_OUTCOME.FAILED,
+      expectedLastError: {
+        message:
+          'Automatic LaTeX compilation failed after the final workflow round.',
+        userRetryable: false,
       },
-    });
-    const { outputNode, fixture } = compileContextCase(
-      'stream:final-compile-failure',
-    );
-    const shared = {
-      roundOutputs: [],
-      currentRound: 1,
-      totalRounds: 2,
-      continueRounds: true,
-    } as unknown as ReflectionFlowShared;
-
-    await runOutputPost(
-      outputNode,
-      shared,
-      {
-        outputLocation: fixture.outputLocation,
+    },
+    {
+      name: 'stays cancelled when aborted after final-round compile',
+      abortAfterCompile: true,
+      expectedOutcome: RUN_OUTCOME.CANCELLED,
+      expectedLastError: undefined,
+    },
+  ])(
+    '$name',
+    async ({ abortAfterCompile, expectedOutcome, expectedLastError }) => {
+      await installPlatform({
+        workspaceState: {
+          [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+        },
+      });
+      const streamId = `stream:final-compile-failure-${expectedOutcome}`;
+      const controller = new AbortController();
+      const fixture = createCompileFailureFixture();
+      const node = new FinalCompileOutputNode(
+        fixture,
+        abortAfterCompile ? controller : undefined,
+      );
+      const { host } = createRecordingHost();
+      const runScope = testRunScope(streamId, {
+        interactions: host,
+        signal: controller.signal,
+      });
+      const services = {
+        streamId,
+        runScope,
+        logger: noopTrace,
+        outputState: createOutputState(),
+      } as unknown as ReflectionServices;
+      const flow = new RoundPersistedFlow<
+        ReflectionFlowShared,
+        ReflectionServices
+      >(node, createFakeKv(), {
+        callbacks: { signal: controller.signal },
+      }).setServices(services);
+      const shared = {
+        roundOutputs: [],
         currentRound: 1,
-        endTurn: false,
-      },
-      {
-        summary: fixture.summary,
-        compileResult: fixture.compileResult,
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
-    );
+        totalRounds: 2,
+        continueRounds: true,
+      } as unknown as ReflectionFlowShared;
 
-    expect(shared.lastError).toEqual({
-      message:
-        'Automatic LaTeX compilation failed after the final workflow round.',
-      userRetryable: false,
-    });
-  });
+      const outcome = await withTestRunContext(runScope, () =>
+        flow.run(shared),
+      );
+      const finalShared = await flow.getShared();
 
-  it('keeps a final-round compile failure cancelled after user abort', async () => {
-    await installPlatform({
-      workspaceState: {
-        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
-      },
-    });
-    const controller = new AbortController();
-    const { outputNode, fixture } = compileContextCase(
-      'stream:aborted-final-compile-failure',
-      controller.signal,
-    );
-    const shared = {
-      roundOutputs: [],
-      currentRound: 1,
-      totalRounds: 2,
-      continueRounds: true,
-    } as unknown as ReflectionFlowShared;
-    controller.abort();
-
-    await runOutputPost(
-      outputNode,
-      shared,
-      {
-        outputLocation: fixture.outputLocation,
-        currentRound: 1,
-        endTurn: false,
-      },
-      {
-        summary: fixture.summary,
-        compileResult: fixture.compileResult,
-        compiledArtifacts: [],
-        emitCompileFailures: false,
-      },
-    );
-
-    expect(shared.lastError).toBeUndefined();
-  });
+      expect(outcome).toBe(expectedOutcome);
+      expect(finalShared?.lastError).toEqual(expectedLastError);
+      expect(finalShared?.compileFailureContext).toContain(
+        'previous workflow round was rejected',
+      );
+    },
+  );
 
   it.each([
     {
