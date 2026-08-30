@@ -36,10 +36,13 @@ export interface StreamPhaseState {
    * it resets on every WAITING→RUNNING transition. The one owner of
    * "when did the active window now in progress start"; hosts render
    * elapsed-while-active time from it instead of each stamping a clock read
-   * of their own. Not the run's creation time: that fact, stable across
-   * WAITING and never cleared, is owned separately by
-   * `AgentExecutionHandle.startedAt` (`ExecutionHandle.ts`), which feeds the
-   * roster's `Started:` display and survives phases this field does not.
+   * of their own. `AgentExecutionHandle.startedAt` (`ExecutionHandle.ts`)
+   * tracks a related but distinct fact — the current handle generation's
+   * start, feeding the roster's `Started:` display — and differs only in
+   * when it resets: it lingers through a WAITING interval where this field
+   * clears immediately, but like this field it is replaced by a fresh
+   * timestamp once a resume installs a new handle generation. Neither field
+   * is the run's original creation time.
    */
   readonly runStartedAt?: number;
 }
