@@ -103,6 +103,33 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
     );
   });
 
+  it.each([
+    {
+      subscription: 'ChatGPT',
+      fail: () =>
+        mocks.isCodexSubscriptionActive.mockRejectedValueOnce(
+          new Error('chatgpt offline'),
+        ),
+    },
+    {
+      subscription: 'Grok',
+      fail: () =>
+        mocks.isXaiSubscriptionActive.mockRejectedValueOnce(
+          new Error('grok offline'),
+        ),
+    },
+  ])(
+    'falls back to a provider key when the $subscription probe fails',
+    async ({ fail }) => {
+      fail();
+      mockDirectApiKey('anthropic', 'sk-ant-test');
+
+      await expect(selectCredentialModel()).resolves.toBe(
+        SETUP_MODEL_BY_PROVIDER.anthropic,
+      );
+    },
+  );
+
   it('keeps managed direct credentials available when OpenRouter is enabled', async () => {
     mockDirectApiKey('kimiCode', 'kimi-code-test');
 

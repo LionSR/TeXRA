@@ -1,3 +1,4 @@
+import { createLog } from '@logger/logUtils';
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
 import {
   isCodexSubscriptionActive,
@@ -15,12 +16,15 @@ import {
 } from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import { probeSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
 import { AgentCategory, type MainViewExecuteMessage } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { isNonEmptyString } from '@utils/core';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
+
+const credentialLog = createLog('Setup Credentials');
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =
@@ -38,11 +42,22 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
   // When it is enabled, only managed direct credentials can bypass it.
   if (
     !useOpenRouter &&
-    (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL))
+    (await probeSetupCredential(
+      'ChatGPT subscription',
+      () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+      credentialLog.warn,
+    ))
   ) {
     return CHATGPT_SETUP_MODEL;
   }
-  if (!useOpenRouter && (await isXaiSubscriptionActive(XAI_SETUP_MODEL))) {
+  if (
+    !useOpenRouter &&
+    (await probeSetupCredential(
+      'Grok subscription',
+      () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+      credentialLog.warn,
+    ))
+  ) {
     return XAI_SETUP_MODEL;
   }
 

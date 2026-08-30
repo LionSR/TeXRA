@@ -1,4 +1,3 @@
-import { warn as logWarning } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKey } from '@model/apiProviders';
 import {
   isCodexSubscriptionActive,
@@ -12,10 +11,8 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { isNonEmptyString } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const LOG_CHANNEL = 'Setup Credentials';
-
 /** True when any provider has a usable API key in secret storage or the environment. */
-export async function hasAnyUsableProviderApiKey(
+async function hasAnyUsableProviderApiKey(
   secrets: PlatformSecrets,
 ): Promise<boolean> {
   for (const provider of API_PROVIDERS) {
@@ -26,36 +23,42 @@ export async function hasAnyUsableProviderApiKey(
 }
 
 /**
- * A probe failure is treated as no credential of that kind and logged so
- * broken secret storage or an offline subscription check remains diagnosable.
+ * A probe failure is treated as no credential of that kind. The caller owns
+ * reporting so this model-layer policy stays free of logging side effects.
  */
-async function probeCredential(
+export async function probeSetupCredential(
   kind: string,
   check: () => Promise<boolean>,
+  onProbeFailure: (message: string) => void,
 ): Promise<boolean> {
   return check().catch((error: unknown) => {
-    logWarning(
-      LOG_CHANNEL,
+    onProbeFailure(
       `${kind} check failed; treating it as no credential: ${toErrorMessage(error)}`,
     );
     return false;
   });
 }
 
-/** Never rejects: every probe resolves to false with a logged reason. */
+/** Each failed credential probe resolves to false after being reported. */
 export async function hasUsableSetupCredential(
   secrets: PlatformSecrets,
+  onProbeFailure: (message: string) => void,
 ): Promise<boolean> {
-  const hasChatGptSubscription = await probeCredential(
+  const hasChatGptSubscription = await probeSetupCredential(
     'ChatGPT subscription',
     () => isCodexSubscriptionActive(CHATGPT_SETUP_MODEL),
+    onProbeFailure,
   );
   if (hasChatGptSubscription) return true;
-  const hasGrokSubscription = await probeCredential('Grok subscription', () =>
-    isXaiSubscriptionActive(XAI_SETUP_MODEL),
+  const hasGrokSubscription = await probeSetupCredential(
+    'Grok subscription',
+    () => isXaiSubscriptionActive(XAI_SETUP_MODEL),
+    onProbeFailure,
   );
   if (hasGrokSubscription) return true;
-  return probeCredential('Provider API key', () =>
-    hasAnyUsableProviderApiKey(secrets),
+  return probeSetupCredential(
+    'Provider API key',
+    () => hasAnyUsableProviderApiKey(secrets),
+    onProbeFailure,
   );
 }

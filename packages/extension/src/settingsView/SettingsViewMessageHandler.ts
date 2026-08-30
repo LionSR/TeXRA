@@ -661,7 +661,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     const mainView = await getMainWebview(this.viewName);
     if (mainView) {
-      const setupComplete = await hasUsableSetupCredential(platform().secrets);
+      const setupComplete = await hasUsableSetupCredential(
+        platform().secrets,
+        this.log.warn,
+      );
       mainView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_BANNER,
         banner: 'apiKey',

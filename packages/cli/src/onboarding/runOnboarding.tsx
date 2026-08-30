@@ -27,7 +27,7 @@ import {
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { warn as logWarning } from '@logger/logUtils';
+import { createLog, warn as logWarning } from '@logger/logUtils';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
@@ -92,6 +92,7 @@ interface OnboardingGateContext {
 }
 
 const LOG_CHANNEL = 'CLI Onboarding';
+const credentialLog = createLog('Setup Credentials');
 
 /**
  * The gate degrades to "not configured yet" when a state read or write fails,
@@ -137,7 +138,10 @@ export async function maybeRunCliOnboarding(
     return NO_ONBOARDING_RESULT;
   }
   const globalState = platform().globalState;
-  const hasCredential = await hasUsableSetupCredential(platform().secrets);
+  const hasCredential = await hasUsableSetupCredential(
+    platform().secrets,
+    credentialLog.warn,
+  );
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
   // with execution history never enters State 0/1. Credential presence alone
   // does not prove this is an upgrader: fresh installs can inherit env keys.

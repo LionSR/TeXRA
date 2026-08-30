@@ -8,7 +8,7 @@ const events: string[] = [];
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn<(model: string) => Promise<boolean>>(),
   isXaiSubscriptionActive: vi.fn<(model: string) => Promise<boolean>>(),
-  logWarning: vi.fn(),
+  reportProbeFailure: vi.fn(),
   lookupApiKey:
     vi.fn<
       (
@@ -19,11 +19,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const secrets = {} as PlatformSecrets;
-
-vi.mock('@logger/logUtils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@logger/logUtils')>();
-  return { ...actual, warn: mocks.logWarning };
-});
 
 vi.mock('@model/providerCapabilities', async (importOriginal) => {
   const actual =
@@ -43,6 +38,10 @@ vi.mock('@model/apiProviders', () => ({
 const { hasUsableSetupCredential } =
   await import('@model/setupCredentialAccess');
 
+function hasCredential(): ReturnType<typeof hasUsableSetupCredential> {
+  return hasUsableSetupCredential(secrets, mocks.reportProbeFailure);
+}
+
 describe('setup credential access', () => {
   // Outcomes the mocked access paths return; the mocks record their call
   // order in `events` so tests assert the probing sequence.
@@ -57,7 +56,7 @@ describe('setup credential access', () => {
     access.chatGptSubscription = false;
     access.grokSubscription = false;
     access.keys = {};
-    mocks.logWarning.mockReset();
+    mocks.reportProbeFailure.mockReset();
     mocks.isCodexSubscriptionActive.mockReset().mockImplementation(async () => {
       events.push('subscription:chatgpt');
       return access.chatGptSubscription;
@@ -75,21 +74,21 @@ describe('setup credential access', () => {
   it('stops after an active ChatGPT subscription', async () => {
     access.chatGptSubscription = true;
 
-    await expect(hasUsableSetupCredential(secrets)).resolves.toBe(true);
+    await expect(hasCredential()).resolves.toBe(true);
     expect(events).toEqual(['subscription:chatgpt']);
   });
 
   it('counts an active Grok subscription before checking provider keys', async () => {
     access.grokSubscription = true;
 
-    await expect(hasUsableSetupCredential(secrets)).resolves.toBe(true);
+    await expect(hasCredential()).resolves.toBe(true);
     expect(events).toEqual(['subscription:chatgpt', 'subscription:grok']);
   });
 
   it('checks provider keys sequentially after both subscriptions', async () => {
     access.keys = { openai: '   ', anthropic: 'sk-ant-test' };
 
-    await expect(hasUsableSetupCredential(secrets)).resolves.toBe(true);
+    await expect(hasCredential()).resolves.toBe(true);
     expect(events).toEqual([
       'subscription:chatgpt',
       'subscription:grok',
@@ -99,7 +98,7 @@ describe('setup credential access', () => {
   });
 
   it('returns false when no access path is usable', async () => {
-    await expect(hasUsableSetupCredential(secrets)).resolves.toBe(false);
+    await expect(hasCredential()).resolves.toBe(false);
   });
 
   it.each([
@@ -128,12 +127,11 @@ describe('setup credential access', () => {
       message: 'keychain locked',
       expectedEvents: ['subscription:chatgpt', 'subscription:grok'],
     },
-  ])('logs a failed $kind probe and continues safely', async (testCase) => {
+  ])('reports a failed $kind probe and continues safely', async (testCase) => {
     testCase.fail();
 
-    await expect(hasUsableSetupCredential(secrets)).resolves.toBe(false);
-    expect(mocks.logWarning).toHaveBeenCalledWith(
-      'Setup Credentials',
+    await expect(hasCredential()).resolves.toBe(false);
+    expect(mocks.reportProbeFailure).toHaveBeenCalledWith(
       `${testCase.kind} check failed; treating it as no credential: ${testCase.message}`,
     );
     expect(events).toEqual(testCase.expectedEvents);

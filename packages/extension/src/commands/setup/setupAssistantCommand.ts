@@ -25,6 +25,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
 const log = createLog(CHANNEL);
+const credentialLog = createLog('Setup Credentials');
 
 interface LaunchModelResolution {
   model: string;
@@ -78,7 +79,7 @@ async function withOpenRouterFlagOn<T>(fn: () => Promise<T>): Promise<T> {
  * routing belongs to `resolveSetupLaunchModel`.
  */
 export async function hasAnyUsableSetupCredential(): Promise<boolean> {
-  return hasUsableSetupCredential(platform().secrets);
+  return hasUsableSetupCredential(platform().secrets, credentialLog.warn);
 }
 
 async function ensureCredentialOrPrompt(): Promise<boolean> {
