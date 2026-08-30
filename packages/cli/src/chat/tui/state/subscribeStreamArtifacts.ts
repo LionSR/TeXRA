@@ -18,7 +18,7 @@ import { type StreamTabId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import {
   StreamSnapshotPreloadError,
-  type StreamArtifactAuthority,
+  type WorkPlanProvenance,
 } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -29,7 +29,6 @@ import {
 } from './streamArtifactProjection';
 import {
   activeStreamId,
-  establishWorkPlanReaderAuthority,
   getCliStateGeneration,
   isCliStreamRetired,
   registerCliStateResetHook,
@@ -62,16 +61,6 @@ registerCliStateResetHook(() => {
 export function bumpStreamArtifactRevision(): void {
   artifactProjectionMemo.clear();
   streamArtifactRevision.set(streamArtifactRevision.get() + 1);
-}
-
-/** Record a live plan/todo write as authority for an already-open partial
- * reader, then invalidate the canonical projection like any artifact write. */
-export function markWorkPlanArtifactHydrated(
-  streamId: StreamTabId,
-  field: 'plan' | 'todos',
-): void {
-  establishWorkPlanReaderAuthority(streamId, [field]);
-  bumpStreamArtifactRevision();
 }
 
 /** Read the canonical artifact projection for one stream from the live session.
@@ -113,7 +102,7 @@ type StreamArtifactHydrationOutcome =
   | { readonly kind: 'complete' }
   | {
       readonly kind: 'partial';
-      readonly authoritativeFields: StreamArtifactAuthority;
+      readonly workPlanProvenance: WorkPlanProvenance;
       readonly error: unknown;
     }
   | { readonly kind: 'failed'; readonly error: unknown };
@@ -122,7 +111,9 @@ type StreamArtifactHydrationOutcome =
  * Preload one stream from the canonical artifact accumulator and invalidate
  * the artifact projection. Callers own request currentness and error
  * presentation. `undefined` means the request was superseded; a partial
- * outcome is usable only for fields selected by `authoritativeFields`.
+ * outcome's work plan is usable only for the fields `workPlanProvenance`
+ * vouches for at that instant — the store keeps answering that question live
+ * (`snapshots.workPlanProvenance`) as later writes and seeds establish more.
  */
 export async function hydrateStreamArtifacts(
   store: StreamArtifactReader,
@@ -142,18 +133,12 @@ export async function hydrateStreamArtifacts(
       error instanceof StreamSnapshotPreloadError &&
       error.streamId === streamId
     ) {
-      establishWorkPlanReaderAuthority(
-        streamId,
-        (['plan', 'todos'] as const).filter(
-          (field) => error.authoritativeFields[field],
-        ),
-      );
-      if (error.authoritativeFields.complete) {
+      if (error.baselineEstablished) {
         bumpStreamArtifactRevision();
       }
       return {
         kind: 'partial',
-        authoritativeFields: error.authoritativeFields,
+        workPlanProvenance: error.workPlanProvenance,
         error,
       };
     }
@@ -162,7 +147,6 @@ export async function hydrateStreamArtifacts(
   if (!streamCanReceiveArtifacts(streamId, generation, requestIsCurrent)) {
     return undefined;
   }
-  establishWorkPlanReaderAuthority(streamId, ['plan', 'todos']);
   bumpStreamArtifactRevision();
   return { kind: 'complete' };
 }

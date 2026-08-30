@@ -26,7 +26,7 @@ export {
 export {
   StreamSnapshotPreloadError,
   StreamSnapshotStore,
-  type StreamArtifactAuthority,
+  type WorkPlanProvenance,
 } from './StreamSnapshotStore';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';

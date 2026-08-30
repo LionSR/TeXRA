@@ -2385,9 +2385,19 @@ describe('StreamSnapshotStore', () => {
     expect(error).toMatchObject({
       message: expect.stringContaining('snapshot disk is unreadable'),
       streamId: STREAM,
-      authoritativeFields: { complete: false, todos: true, plan: true },
+      baselineEstablished: false,
+      workPlanProvenance: { todos: true, plan: true },
+    });
+    // The same question asked live keeps answering as the record changes.
+    expect(store.workPlanProvenance(STREAM)).toEqual({
+      todos: true,
+      plan: true,
     });
     await newerRefresh;
+    expect(store.workPlanProvenance(STREAM)).toEqual({
+      todos: true,
+      plan: true,
+    });
 
     readSpy.mockRestore();
     await store.flush();

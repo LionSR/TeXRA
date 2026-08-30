@@ -23,7 +23,7 @@ import type {
   CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
-import type { StreamArtifactAuthority } from '@transcript';
+import type { WorkPlanProvenance } from '@transcript';
 import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
 import type { PastedImageEntry } from '../input/draftAttachments';
 
@@ -415,7 +415,14 @@ type ForegroundReaderTarget =
       readonly kind: 'workPlan';
       readonly streamId: StreamTabId;
       readonly loading?: false;
-      readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
+      /**
+       * Set only when this reader opened from a partially failed load: the
+       * work-plan fields the store could vouch for at that instant. The reader
+       * masks the rest until `snapshots.workPlanProvenance` establishes them,
+       * so nothing promotes this snapshot — it records one load's outcome and
+       * the store answers for everything after it.
+       */
+      readonly provenanceAtOpen?: WorkPlanProvenance;
     }
   | {
       readonly kind: 'workPlan';
@@ -513,47 +520,15 @@ export function workPlanReaderRequestIsCurrent(
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
-  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
+  provenanceAtOpen?: WorkPlanProvenance,
 ): boolean {
   if (!workPlanReaderRequestIsCurrent(request)) return false;
   FOREGROUND_READER.set({
     kind: 'workPlan',
     streamId: request.streamId,
-    ...(authority ? { authority } : {}),
+    ...(provenanceAtOpen ? { provenanceAtOpen } : {}),
   });
   return true;
-}
-
-/** Promote fields whose provenance was established after a partial `/plan`
- * load. Live writes and later successful preloads must replace the reader's
- * failure-time mask rather than leaving a now-current field unavailable. */
-export function establishWorkPlanReaderAuthority(
-  streamId: StreamTabId,
-  fields: readonly (keyof Pick<StreamArtifactAuthority, 'plan' | 'todos'>)[],
-): void {
-  const target = FOREGROUND_READER.get();
-  if (
-    target?.kind !== 'workPlan' ||
-    target.loading === true ||
-    target.streamId !== streamId ||
-    target.authority === undefined
-  ) {
-    return;
-  }
-  const authority = { ...target.authority };
-  let changed = false;
-  for (const field of fields) {
-    if (!authority[field]) {
-      authority[field] = true;
-      changed = true;
-    }
-  }
-  if (!changed) return;
-  FOREGROUND_READER.set(
-    authority.plan && authority.todos
-      ? { kind: 'workPlan', streamId }
-      : { ...target, authority },
-  );
 }
 
 export function cancelPendingWorkPlanReaderRequest(): void {

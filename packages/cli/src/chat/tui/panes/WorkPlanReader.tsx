@@ -8,8 +8,7 @@ import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
   KeyHints,
-  KEY_HINT_SEPARATOR,
-  keyHintText,
+  keyHintsText,
   READER_SCROLL_HINTS,
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
@@ -22,7 +21,7 @@ import {
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
-import type { StreamArtifactAuthority } from '@transcript';
+import type { WorkPlanProvenance } from '@transcript';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
@@ -73,10 +72,7 @@ export function workPlanReaderLayout({
       showTitle: true,
     };
   }
-  const footerRows = wrappedRows(
-    hints.map(keyHintText).join(KEY_HINT_SEPARATOR),
-    width,
-  );
+  const footerRows = wrappedRows(keyHintsText(hints), width);
   const showFooter = rows >= BORDER_ROWS + 1 + FOOTER_MARGIN_ROWS + footerRows;
   const titleRows = wrappedRows(title, width);
   const footerFixedRows = showFooter ? FOOTER_MARGIN_ROWS + footerRows : 0;
@@ -96,17 +92,19 @@ export function workPlanReaderTitle(label: string | undefined): string {
   return label ? `Work plan: ${label}` : 'Work plan';
 }
 
+/** `available` marks the fields this reader may present as facts; a field it
+ *  omits is presented, an unavailable one is masked. */
 export function formatWorkPlanReaderText(
   plan: Plan | null,
   todos: readonly TodoItem[],
-  authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>,
+  available?: WorkPlanProvenance,
 ): string {
   const objective =
-    authority?.plan === false
+    available?.plan === false
       ? '(objective unavailable)'
       : (plan?.objective ?? '(no objective)');
   let todoLines: string[];
-  if (authority?.todos === false) {
+  if (available?.todos === false) {
     todoLines = ['(todos unavailable)'];
   } else if (todos.length === 0) {
     todoLines = ['(no todos)'];
@@ -121,14 +119,17 @@ export function formatWorkPlanReaderText(
 
 export function WorkPlanReader({
   availableRows,
-  authority,
+  provenanceAtOpen,
   loading = false,
   onClose,
   streamId,
   title,
 }: {
   readonly availableRows: number;
-  readonly authority?: Pick<StreamArtifactAuthority, 'plan' | 'todos'>;
+  /** Present only when this reader opened from a partially failed load: the
+   *  fields vouched for at that instant. Fields it excludes stay masked until
+   *  the store establishes them — no promotion is pushed in from outside. */
+  readonly provenanceAtOpen?: WorkPlanProvenance;
   readonly loading?: boolean;
   readonly onClose: () => void;
   readonly streamId: StreamTabId;
@@ -136,9 +137,17 @@ export function WorkPlanReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   useSignal(streamArtifactRevision);
-  const workPlan = loading
-    ? undefined
-    : tryDefaultSession()?.snapshots.getWorkPlan(streamId);
+  const snapshots = loading ? undefined : tryDefaultSession()?.snapshots;
+  const workPlan = snapshots?.getWorkPlan(streamId);
+  // A field this reader's own load could not vouch for stays masked only while
+  // the store still cannot vouch for it. Every event that establishes one — a
+  // live todos/plan write, a completed preload, a resume load — bumps
+  // `streamArtifactRevision`, so this re-read repaints with it.
+  const established = snapshots?.workPlanProvenance(streamId);
+  const available: WorkPlanProvenance | undefined = provenanceAtOpen && {
+    plan: provenanceAtOpen.plan || established?.plan === true,
+    todos: provenanceAtOpen.todos || established?.todos === true,
+  };
   const frameWidth = formFrameWidth(columns);
   const width = Math.max(1, frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION);
   const hints = loading ? WORK_PLAN_LOADING_HINTS : READER_SCROLL_HINTS;
@@ -153,7 +162,7 @@ export function WorkPlanReader({
     : formatWorkPlanReaderText(
         workPlan?.plan ?? null,
         workPlan?.todos ?? [],
-        authority,
+        available,
       );
 
   useInput((input, key) => {
