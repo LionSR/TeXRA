@@ -103,10 +103,7 @@ export class SkillsTab extends LitElement {
 
   private renderSkill(item: SkillDisplayItem): TemplateResult {
     const sourceEnabled = !this.disabledSources.includes(item.scope);
-    const id = `skill-${item.scope}-${item.name
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, '-')
-      .replaceAll(/^-|-$/g, '')}`;
+    const id = `skill-${item.scope}-${item.name}`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
