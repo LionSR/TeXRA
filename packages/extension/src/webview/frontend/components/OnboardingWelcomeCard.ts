@@ -244,7 +244,7 @@ export class OnboardingWelcomeCard extends LitElement {
               ${waIcon('wand-magic-sparkles')}
             </span>
             <div class="welcome-heading">
-              <span class="card-title">${ONBOARDING_CARD_TITLE}</span>
+              <h1 class="card-title">${ONBOARDING_CARD_TITLE}</h1>
               <p class="card-copy">
                 Start with one credential. TeXRA then checks this project, picks
                 the right agent team, and starts your first useful edit.
@@ -294,12 +294,16 @@ export class OnboardingWelcomeCard extends LitElement {
                 variant="brand"
                 appearance="filled"
                 size="m"
+                aria-describedby="onboardingChatGptDescription"
                 @click=${this.handleChatGpt}
               >
                 ${waIcon('comments', { slot: 'start' })}
                 ${ONBOARDING_CHOICE_CHATGPT.label}
               </wa-button>
-              <span class="choice-description">
+              <span
+                id="onboardingChatGptDescription"
+                class="choice-description"
+              >
                 ${ONBOARDING_CHOICE_CHATGPT.description}
               </span>
             </div>
@@ -309,12 +313,13 @@ export class OnboardingWelcomeCard extends LitElement {
                 class="btn-secondary"
                 appearance="outlined"
                 size="m"
+                aria-describedby="onboardingApiKeyDescription"
                 @click=${this.handleApiKey}
               >
                 ${waIcon('key', { slot: 'start' })}
                 ${ONBOARDING_CHOICE_API_KEY.label}
               </wa-button>
-              <span class="choice-description">
+              <span id="onboardingApiKeyDescription" class="choice-description">
                 ${ONBOARDING_CHOICE_API_KEY.description}
               </span>
             </div>
