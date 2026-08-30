@@ -16,6 +16,7 @@ import { buttonStyles } from '@shared/styles/controlStyles';
 export const fileSelectLayoutStyles = css`
   .file-select {
     margin-bottom: var(--wa-space-xs);
+    container-type: inline-size;
   }
 
   .file-select-header {
@@ -93,6 +94,22 @@ export const fileSelectLayoutStyles = css`
   .file-select select,
   .file-select wa-select {
     width: 100%;
+  }
+
+  /* The action cluster has three fixed-size icon buttons. Stack it below the
+     label only once the component itself can no longer hold both groups; the
+     breakpoint follows this component in sidebars and desktop panes rather
+     than the viewport. */
+  @container (max-width: 18rem) {
+    .file-select-header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .file-select-actions {
+      align-self: flex-end;
+      margin-inline-start: 0;
+    }
   }
 `;
 
