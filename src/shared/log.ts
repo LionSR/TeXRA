@@ -24,8 +24,3 @@
 export function logWarn(message: string, ...details: unknown[]): void {
   console.warn(message, ...details);
 }
-
-/** Report a failure that a caller could not recover from. */
-export function logError(message: string, ...details: unknown[]): void {
-  console.error(message, ...details);
-}

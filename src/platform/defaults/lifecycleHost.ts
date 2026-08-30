@@ -1,10 +1,12 @@
-import { logError } from '@shared/log';
+import { createLog } from '@logger/logUtils';
 import { onAbort } from '@utils/core';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
   type ShutdownPhase,
 } from '../interfaces';
+
+const log = createLog('LifecycleHost');
 
 type Callback = (signal: AbortSignal) => void | Promise<void>;
 
@@ -41,7 +43,7 @@ export function createLifecycleHost(
   const onError =
     options.onError ??
     ((phase, error) => {
-      logError(`[lifecycle] ${phase} handler failed:`, error);
+      log.error(`[lifecycle] ${phase} handler failed`, { data: error });
     });
 
   // Abort-then-advance: wait for settlement, or for the deadline signal plus
