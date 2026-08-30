@@ -1,5 +1,8 @@
 import { lookupApiKey, API_PROVIDERS } from '@model/apiProviders';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import {
+  isCodexSubscriptionActive,
+  isXaiSubscriptionActive,
+} from '@model/providerCapabilities';
 import {
   decideRunModel,
   type RunModelCandidate,
@@ -8,6 +11,7 @@ import {
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
+  XAI_SETUP_MODEL,
 } from '@model/setupModelDefaults';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -24,7 +28,7 @@ export const SETUP_INSTRUCTION =
 
 /**
  * Scan non-OpenRouter setup credentials in host-shared priority order:
- * ChatGPT/Codex subscription, then direct provider key.
+ * ChatGPT/Codex subscription, Grok subscription, then direct provider key.
  */
 export async function selectSetupCredentialModelExcludingOpenRouter(
   secrets: PlatformSecrets,
@@ -37,6 +41,9 @@ export async function selectSetupCredentialModelExcludingOpenRouter(
     (await isCodexSubscriptionActive(CHATGPT_SETUP_MODEL))
   ) {
     return CHATGPT_SETUP_MODEL;
+  }
+  if (!useOpenRouter && (await isXaiSubscriptionActive(XAI_SETUP_MODEL))) {
+    return XAI_SETUP_MODEL;
   }
 
   for (const provider of API_PROVIDERS) {

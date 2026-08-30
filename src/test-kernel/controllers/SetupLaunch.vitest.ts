@@ -3,18 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHATGPT_SETUP_MODEL,
   SETUP_MODEL_BY_PROVIDER,
+  XAI_SETUP_MODEL,
 } from '@model/setupModelDefaults';
 
 /**
  * `selectSetupCredentialModelExcludingOpenRouter` is the credential-priority core
  * shared by the VS Code extension (`selectLaunchModel`) and desktop
  * (`selectDesktopSetupModel`) setup-launch paths. Exercising it directly
- * guards the priority order (ChatGPT subscription > direct provider key)
+ * guards the priority order (ChatGPT subscription > Grok subscription > direct key)
  * against silently drifting between hosts again.
  */
 
 const mocks = vi.hoisted(() => ({
   isCodexSubscriptionActive: vi.fn<() => Promise<boolean>>(),
+  isXaiSubscriptionActive: vi.fn<() => Promise<boolean>>(),
   lookupApiKey:
     vi.fn<
       (secrets: unknown, provider: string) => Promise<string | undefined>
@@ -28,6 +30,7 @@ vi.mock('@model/providerCapabilities', async (importOriginal) => {
   return {
     ...actual,
     isCodexSubscriptionActive: mocks.isCodexSubscriptionActive,
+    isXaiSubscriptionActive: mocks.isXaiSubscriptionActive,
   };
 });
 
@@ -52,6 +55,7 @@ const {
 
 beforeEach(() => {
   mocks.isCodexSubscriptionActive.mockReset().mockResolvedValue(false);
+  mocks.isXaiSubscriptionActive.mockReset().mockResolvedValue(false);
   mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
 });
@@ -79,6 +83,14 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
     await expect(selectCredentialModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
   });
 
+  it('uses an active Grok subscription before provider keys', async () => {
+    mocks.isXaiSubscriptionActive.mockResolvedValue(true);
+    mocks.lookupApiKey.mockResolvedValue('sk-test');
+
+    await expect(selectCredentialModel()).resolves.toBe(XAI_SETUP_MODEL);
+    expect(mocks.lookupApiKey).not.toHaveBeenCalled();
+  });
+
   it('falls back to a direct provider API key, skipping openRouter', async () => {
     mockDirectApiKey('anthropic', 'sk-ant-test');
 
@@ -98,6 +110,7 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
       SETUP_MODEL_BY_PROVIDER.kimiCode,
     );
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
+    expect(mocks.isXaiSubscriptionActive).not.toHaveBeenCalled();
   });
 
   it('returns null when no credential resolves to a runnable model', async () => {
@@ -121,6 +134,7 @@ describe('selectDesktopSetupModel', () => {
 
     await expect(selectDesktopSetupModel()).resolves.toBeNull();
     expect(mocks.isCodexSubscriptionActive).not.toHaveBeenCalled();
+    expect(mocks.isXaiSubscriptionActive).not.toHaveBeenCalled();
   });
 
   it('uses a managed direct key when the OpenRouter flag is on without a key', async () => {
@@ -136,6 +150,12 @@ describe('selectDesktopSetupModel', () => {
     mocks.isCodexSubscriptionActive.mockResolvedValue(true);
 
     await expect(selectDesktopSetupModel()).resolves.toBe(CHATGPT_SETUP_MODEL);
+  });
+
+  it('launches with Grok for a Grok-only user when the flag is off', async () => {
+    mocks.isXaiSubscriptionActive.mockResolvedValue(true);
+
+    await expect(selectDesktopSetupModel()).resolves.toBe(XAI_SETUP_MODEL);
   });
 });
 
