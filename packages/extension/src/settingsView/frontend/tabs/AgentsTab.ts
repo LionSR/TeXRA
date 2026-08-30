@@ -181,7 +181,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
       ? html`
           ${renderLabeledActionButton({
             icon: 'file-circle-plus',
-            text: 'From template',
+            text: 'Create from template',
             kind: 'secondary',
             appearance: 'outlined',
             onClick: () => this.handleCreateAgent(category, true),
@@ -257,6 +257,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
               })}
               ${renderLabeledActionButton({
                 text: 'Change',
+                label: 'Change custom agents folder',
                 kind: 'secondary',
                 appearance: 'outlined',
                 onClick: () => this.handleChangeCustomDir(),
@@ -267,6 +268,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
                   : renderLabeledActionButton({
                       icon: 'arrow-rotate-left',
                       text: 'Reset',
+                      label: 'Reset custom agents folder',
                       kind: 'secondary',
                       appearance: 'outlined',
                       onClick: () => this.handleResetCustomDir(),
