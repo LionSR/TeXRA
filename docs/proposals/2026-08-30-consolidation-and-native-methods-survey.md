@@ -52,15 +52,21 @@ count at current HEAD:
 
 **Native-method opportunities (repo-wide production code):** zero hand-rolled
 dedup loops, deep-clone helpers (`structuredClone` is already the established
-pattern, 28+ call sites), debounce/throttle implementations (`p-throttle` is
-already used where needed), `hasOwnProperty.call` calls, `setTimeout`-based
-sleeps, or chunking/grouping/padding reimplementations. The only
-attempt-counter loops (`StreamSnapshotStore.ts:1657`,
-`inBandSubagentExecution.ts:628`) are durable execution-lease reconciliation,
-not error-driven retry — not a `p-retry` shape, same conclusion as
-2026-08-29. `p-queue` is already used correctly wherever a sequential-await
-queue shape exists (`packages/desktop/src/main/index.ts`,
-`desktopSupabaseAuth.ts`); no unmanaged promise-chain queue found elsewhere.
+pattern, 23 call sites: 6 production, 17 test-kernel), debounce/throttle
+implementations (`p-throttle` is already used where needed),
+`hasOwnProperty.call` calls, `setTimeout`-based sleeps, or
+chunking/grouping/padding reimplementations. Two attempt-counter loops exist:
+`inBandSubagentExecution.ts:628` is durable execution-lease reconciliation,
+not error-driven retry; `StreamSnapshotStore.ts:1617`
+(`retryDirtyWrites`) bounds `MAX_DIRTY_WRITE_RETRIES` blanket
+re-persist attempts over all still-dirty sidecar writes rather than reacting
+to a specific error, so it is a bounded durability flush, not a `p-retry`
+shape either. (2026-08-29's doc cited this same loop at a stale line number,
+`StreamSnapshotStore.ts:1657`, which now lands inside the unrelated
+`drainSeedChains` loop — corrected here.) `p-queue` is already used
+correctly wherever a sequential-await queue shape exists
+(`packages/desktop/src/main/index.ts`, `desktopSupabaseAuth.ts`); no
+unmanaged promise-chain queue found elsewhere.
 
 **Model handlers and tools:** SDK error mapping is already fully
 consolidated through `support/sdkErrorMetadata.ts`; per-provider
@@ -68,7 +74,7 @@ OpenAI-compatible handlers (DeepSeek, Kimi, GLM, MiniMax, DashScope, XAI)
 share `ReasoningModelHandlerOpenAI`/`OpenAICompatibleModelHandler` and only
 override genuinely provider-specific quirks; streaming loops iterate
 different SDKs' native async-iterable shapes, not hand-rolled SSE parsing.
-`src/tools/core/inputSchema.ts` (`nullishWithDefault`, 28 call sites) and
+`src/tools/core/inputSchema.ts` (`nullishWithDefault`, 17 call sites) and
 `src/tools/delegation/inputFields.ts` already centralize shared schema
 fragments.
 
