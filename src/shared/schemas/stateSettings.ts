@@ -579,7 +579,8 @@ const CORE_SETTING_ROWS: Record<
       through:
         'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
     }),
-    surfaces: { cliConfig: true },
+    surfaces: { settingsView: 'multi-agent', cliConfig: true },
+    onWrite: { invalidatesModelOptions: true },
   },
   'xaiGrok.preferSubscription': {
     schema: z.boolean().prefault(false),

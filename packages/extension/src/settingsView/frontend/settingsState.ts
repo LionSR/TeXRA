@@ -29,6 +29,7 @@ import {
   AGENT_SKILLS_CONFIG_KEY,
   BASH_APPROVAL_CONFIG_KEY,
   byCategory,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEFAULT_GLOBAL_STREAMING,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -207,6 +208,9 @@ export const activePresetId = trackedSignal<string | null>(() => null);
 // ---------------------------------------------------------------------------
 export const compactionThresholdPercent = settingSignal<number>(
   MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+);
+export const chatgptCodexContextWindow = settingSignal<number>(
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
 );
 export const modelRetryMaxAttempts = settingSignal<number>(
   MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
