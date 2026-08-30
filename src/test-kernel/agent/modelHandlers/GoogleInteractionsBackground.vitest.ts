@@ -825,6 +825,19 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
   });
 
+  it('rejects the ambiguous retrieval 400 before a recognized 403', async () => {
+    useBackgroundTimers();
+    const handler = createHandler();
+    const invalidArgument = transientRetrieval400();
+    const { client, calls } = bgClient({
+      submit: () => ({ id: 'int_unarmed', status: 'in_progress' }),
+      getSequence: [invalidArgument],
+    });
+
+    expect(await failFirstRetrieval(handler, client)).toBe(invalidArgument);
+    expectLedger(calls, 1, ['int_unarmed']);
+  });
+
   it('tolerates the Google retrieval fingerprint across retry and preserves timeout diagnostics', async () => {
     mockConfig();
     const startedAt = new Date('2026-08-01T00:00:00.000Z');
@@ -872,6 +885,34 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     expect(calls.get.every((id) => id === 'int_slow')).toBe(true);
     expect(calls.cancel).toEqual(['int_slow']);
   });
+
+  it.each([
+    { label: 'success', terminal: completedInteraction('int_reused') },
+    { label: 'failure', terminal: { id: 'int_reused', status: 'failed' } },
+  ])(
+    'clears transient retrieval state after terminal $label',
+    async ({ terminal }) => {
+      useBackgroundTimers();
+      const handler = createHandler();
+      const invalidArgument = transientRetrieval400();
+      const { client, calls } = bgClient({
+        submit: () => ({ id: 'int_reused', status: 'in_progress' }),
+        getSequence: [transientRetrieval403(), terminal, invalidArgument],
+      });
+
+      const first = respond(handler, client, [userStep('a')]);
+      if (terminal.status === 'completed') {
+        await runWithPolls(first, 2);
+      } else {
+        await runWithPolls(captureRejection(first), 2);
+      }
+
+      expect(
+        await failFirstRetrieval(handler, client, undefined, [userStep('b')]),
+      ).toBe(invalidArgument);
+      expectLedger(calls, 2, ['int_reused', 'int_reused', 'int_reused']);
+    },
+  );
 
   it.each([404, 410])(
     'clears a definitively missing interaction on HTTP %i and requires manual retry',
