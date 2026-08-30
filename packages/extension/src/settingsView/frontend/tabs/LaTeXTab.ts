@@ -9,7 +9,13 @@ import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared webview
@@ -237,6 +243,21 @@ export class LaTeXTab extends LitElement {
   private replacementJsonErrors: Partial<
     Record<'customReplacements' | 'customReplacementsRegex', string>
   > = {};
+
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    super.willUpdate(changed);
+    if (changed.has('configValues')) {
+      this.replacementJsonErrors = {};
+    }
+  }
+
+  protected override updated(changed: PropertyValues<this>): void {
+    super.updated(changed);
+    if (!changed.has('configValues')) return;
+
+    this.syncCustomReplacementControl('customReplacements');
+    this.syncCustomReplacementControl('customReplacementsRegex');
+  }
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
@@ -630,15 +651,24 @@ export class LaTeXTab extends LitElement {
   }): TemplateResult {
     const effective = opts.currentValue ?? opts.defaultValue;
     const enabled = new Set(effective);
+    const labelId = `latex-setting-${opts.field}-label`;
+    const descriptionId = `latex-setting-${opts.field}-description`;
     const isCustom =
       effective.length !== opts.defaultValue.length ||
       effective.some((value) => !opts.defaultValue.includes(value));
     return html`
       <div class="settings-row replacement-groups-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${opts.label}</span>
-          <span class="settings-row-help">${opts.description}</span>
-          <div class="replacement-category-grid">
+          <span id=${labelId} class="settings-row-label">${opts.label}</span>
+          <span id=${descriptionId} class="settings-row-help"
+            >${opts.description}</span
+          >
+          <div
+            class="replacement-category-grid"
+            role="group"
+            aria-labelledby=${labelId}
+            aria-describedby=${descriptionId}
+          >
             ${opts.categories.map(
               (category) => html`
                 <wa-checkbox
@@ -694,6 +724,7 @@ export class LaTeXTab extends LitElement {
           <span class="settings-row-help">${opts.description}</span>
           <wa-textarea
             id=${controlId}
+            class="setting-control-metadata"
             rows="4"
             resize="auto"
             spellcheck="false"
@@ -701,9 +732,16 @@ export class LaTeXTab extends LitElement {
             @change=${(event: Event) =>
               this.handleCustomReplacementChange(
                 opts.field,
-                (event.target as WaTextarea).value ?? '',
+                event.target as WaTextarea,
               )}
-          ></wa-textarea>
+          >
+            <span slot="label" class="visually-hidden">${opts.label}</span>
+            <span slot="hint" class="visually-hidden"
+              >${
+                error ? `${opts.description} ${error}` : opts.description
+              }</span
+            >
+          </wa-textarea>
           ${
             error
               ? html`<span class="replacement-json-error">${error}</span>`
@@ -712,23 +750,63 @@ export class LaTeXTab extends LitElement {
         </div>
         <div class="settings-row-control">
           ${this.renderSettingStatusIcon(isCustom)}
-          ${isCustom ? this.renderResetButton(opts.field, '{}') : nothing}
+          ${
+            isCustom
+              ? this.renderResetButton(opts.field, '{}', () =>
+                  this.clearCustomReplacementError(opts.field, '{}'),
+                )
+              : nothing
+          }
         </div>
       </div>
     `;
   }
 
+  private syncCustomReplacementControl(
+    field: 'customReplacements' | 'customReplacementsRegex',
+  ): void {
+    const control = this.shadowRoot?.querySelector<WaTextarea>(
+      `#latex-setting-${field}`,
+    );
+    if (!control) return;
+
+    control.value = JSON.stringify(this.configValues[field] ?? {}, null, 2);
+    control.setCustomValidity('');
+  }
+
+  private clearCustomReplacementError(
+    field: 'customReplacements' | 'customReplacementsRegex',
+    source?: string,
+  ): void {
+    const control = this.shadowRoot?.querySelector<WaTextarea>(
+      `#latex-setting-${field}`,
+    );
+    if (control) {
+      if (source !== undefined) control.value = source;
+      control.setCustomValidity('');
+    }
+    if (this.replacementJsonErrors[field] === undefined) return;
+
+    this.replacementJsonErrors = {
+      ...this.replacementJsonErrors,
+      [field]: undefined,
+    };
+  }
+
   private handleCustomReplacementChange(
     field: 'customReplacements' | 'customReplacementsRegex',
-    source: string,
+    control: WaTextarea,
   ): void {
+    const source = control.value ?? '';
     let parsed: unknown;
     try {
       parsed = JSON.parse(source);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid JSON.';
+      control.setCustomValidity(message);
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
-        [field]: error instanceof Error ? error.message : 'Invalid JSON.',
+        [field]: message,
       };
       return;
     }
@@ -741,12 +819,15 @@ export class LaTeXTab extends LitElement {
     }
     const result = entry.schema.safeParse(parsed);
     if (!result.success) {
+      const message = 'Enter a JSON object with string values.';
+      control.setCustomValidity(message);
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
-        [field]: 'Enter a JSON object with string values.',
+        [field]: message,
       };
       return;
     }
+    control.setCustomValidity('');
     this.replacementJsonErrors = {
       ...this.replacementJsonErrors,
       [field]: undefined,
@@ -905,12 +986,16 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-switch
           id=${controlId}
+          class="setting-control-metadata"
           ?checked=${effective}
           @change=${(e: Event) => {
             const checked = (e.target as WaSwitch).checked;
             this.dispatchSetConfigValue(opts.field, checked);
           }}
-        ></wa-switch>
+        >
+          <span class="visually-hidden">${opts.label}</span>
+          <span slot="hint" class="visually-hidden">${opts.description}</span>
+        </wa-switch>
       `,
       reset: isCustom
         ? this.renderResetButton(opts.field, opts.defaultValue ? 'On' : 'Off')
@@ -938,6 +1023,7 @@ export class LaTeXTab extends LitElement {
   private renderResetButton(
     field: LatexConfigField,
     defaultDisplay: string,
+    beforeReset?: () => void,
   ): TemplateResult {
     return renderLabeledActionButton({
       icon: 'arrow-rotate-left',
@@ -946,7 +1032,10 @@ export class LaTeXTab extends LitElement {
       appearance: 'outlined',
       label: 'Reset to default',
       title: `Reset to default (${defaultDisplay})`,
-      onClick: () => this.dispatchSetConfigValue(field, undefined),
+      onClick: () => {
+        beforeReset?.();
+        this.dispatchSetConfigValue(field, undefined);
+      },
     });
   }
 
@@ -970,6 +1059,7 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-input
           id=${controlId}
+          class="setting-number-input setting-control-metadata"
           type="number"
           min=${opts.min}
           max=${opts.max ?? nothing}
@@ -987,8 +1077,10 @@ export class LaTeXTab extends LitElement {
             const clamped = clampOptional(integer, opts.min, opts.max);
             this.dispatchSetConfigValue(opts.field, clamped);
           }}
-          class="setting-number-input"
-        ></wa-input>
+        >
+          <span slot="label" class="visually-hidden">${opts.label}</span>
+          <span slot="hint" class="visually-hidden">${opts.description}</span>
+        </wa-input>
       `,
       reset: isCustom
         ? this.renderResetButton(opts.field, String(opts.defaultValue))
@@ -1035,13 +1127,15 @@ export class LaTeXTab extends LitElement {
       control: html`
         <wa-select
           id=${controlId}
+          class="setting-enum-select setting-control-metadata"
           .value=${String(effective)}
           @change=${(e: Event) => {
             const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
             this.dispatchSetConfigValue(opts.field, v);
           }}
-          class="setting-enum-select"
         >
+          <span slot="label" class="visually-hidden">${opts.label}</span>
+          <span slot="hint" class="visually-hidden">${opts.description}</span>
           ${options.map(
             (o) =>
               html`<wa-option value=${String(o.value)}>${o.label}</wa-option>`,

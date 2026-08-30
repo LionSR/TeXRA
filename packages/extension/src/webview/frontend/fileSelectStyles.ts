@@ -16,6 +16,7 @@ import { buttonStyles } from '@shared/styles/controlStyles';
 export const fileSelectLayoutStyles = css`
   .file-select {
     margin-bottom: var(--wa-space-xs);
+    container-type: inline-size;
   }
 
   .file-select-header {
@@ -93,6 +94,22 @@ export const fileSelectLayoutStyles = css`
   .file-select select,
   .file-select wa-select {
     width: 100%;
+  }
+
+  /* FileSelectGroup and LatexDiffsSection both render this shared header and
+     action structure. Stack their action clusters once each .file-select
+     container can no longer hold both groups, so sidebars and desktop panes
+     adapt independently of the viewport. */
+  @container (max-width: 18rem) {
+    .file-select-header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .file-select-actions {
+      align-self: flex-end;
+      margin-inline-start: 0;
+    }
   }
 `;
 

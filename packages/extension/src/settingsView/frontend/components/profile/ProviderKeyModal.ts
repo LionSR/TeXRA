@@ -50,10 +50,12 @@ export class ProviderKeyModal extends LitElement {
       }
 
       .provider-key-error {
+        display: block;
         min-height: 1.4em;
         margin: var(--wa-space-2xs) 0 0;
         color: var(--wa-color-danger-on-quiet, var(--color-error));
         font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-normal, 400);
       }
 
       .provider-key-actions {
@@ -88,6 +90,11 @@ export class ProviderKeyModal extends LitElement {
     }
   }
 
+  private setError(message: string, input = this.keyInput): void {
+    this.error = message;
+    input?.setCustomValidity(message);
+  }
+
   private close(): void {
     this.dialogOpen = false;
   }
@@ -102,14 +109,15 @@ export class ProviderKeyModal extends LitElement {
       return;
     }
     this.clearSecretValue();
-    this.error = '';
+    this.setError('');
     this.dispatchEvent(createEvent('provider-key-cancel'));
   }
 
   private handleInput(event: Event): void {
-    this.value = (event.target as WaInput).value ?? '';
+    const input = event.target as WaInput;
+    this.value = input.value ?? '';
     if (this.error) {
-      this.error = '';
+      this.setError('', input);
     }
   }
 
@@ -117,13 +125,13 @@ export class ProviderKeyModal extends LitElement {
     event.preventDefault();
     const apiKey = this.value.trim();
     if (!apiKey) {
-      this.error = 'Enter an API key before saving.';
+      this.setError('Enter an API key before saving.');
       this.keyInput?.focus();
       return;
     }
 
     this.clearSecretValue();
-    this.error = '';
+    this.setError('');
     this.suppressCancel = true;
     this.dispatchEvent(
       createEvent('provider-key-submit', {
@@ -149,8 +157,7 @@ export class ProviderKeyModal extends LitElement {
             The key is stored by TeXRA on this device and is not shown again
             after saving.
           </p>
-          <label class="provider-key-label">
-            ${displayName} API key
+          <div class="provider-key-label">
             <wa-input
               class="provider-key-input"
               type="password"
@@ -158,9 +165,17 @@ export class ProviderKeyModal extends LitElement {
               spellcheck="false"
               .value=${this.value}
               @input=${this.handleInput}
-            ></wa-input>
-          </label>
-          <p class="provider-key-error" aria-live="polite">${this.error}</p>
+            >
+              <span slot="label">${displayName} API key</span>
+              <span
+                slot="hint"
+                class="provider-key-error"
+                aria-live="polite"
+                aria-atomic="true"
+                >${this.error}</span
+              >
+            </wa-input>
+          </div>
         </form>
         <div slot="footer" class="provider-key-actions">
           <wa-button

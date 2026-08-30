@@ -257,6 +257,7 @@ function installElementInternalsPolyfill(window: TestDomWindow): void {
  */
 export function useLitComponentTestDom(
   importComponents?: () => Promise<unknown>,
+  hookTimeout?: number,
 ): void {
   let dom: JSDOM;
   const previousGlobals = new Map<
@@ -336,7 +337,7 @@ export function useLitComponentTestDom(
     installAnimationPolyfill(dom.window);
     installXtermBrowserPolyfill(dom.window);
     await importComponents?.();
-  });
+  }, hookTimeout);
 
   beforeEach(() => {
     document.body.replaceChildren();

@@ -19,7 +19,7 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { getBasename, normalizeFilePath } from '@utils/core';
-import { capitalize } from '@utils/text/stringUtils';
+import { capitalize, formatResultCount } from '@utils/text/stringUtils';
 import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
@@ -41,6 +41,10 @@ export class FileSelectGroup extends LitElement {
         display: block;
       }
 
+      .file-select {
+        position: relative;
+      }
+
       .file-select.drop-active {
         outline: 1px dashed var(--wa-color-brand-fill-loud);
         outline-offset: 2px;
@@ -49,6 +53,26 @@ export class FileSelectGroup extends LitElement {
           var(--wa-color-brand-fill-quiet) 22%,
           transparent
         );
+      }
+
+      .drop-cue {
+        position: absolute;
+        inset: var(--wa-space-3xs);
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: var(--border-thin) dashed var(--wa-color-brand-fill-loud);
+        border-radius: var(--border-radius);
+        background: color-mix(
+          in srgb,
+          var(--wa-color-surface-default) 78%,
+          transparent
+        );
+        color: var(--wa-color-text-normal);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        pointer-events: none;
       }
     `,
   ];
@@ -263,7 +287,9 @@ export class FileSelectGroup extends LitElement {
 
   private renderFileList(): TemplateResult {
     if (this.currentFiles.length === 0) {
-      return html`<div class="file-list-placeholder">No files selected.</div>`;
+      return html`<div class="file-list-placeholder">
+        No files selected. Add or drop files here.
+      </div>`;
     }
 
     const movable = this.currentFiles.length > 1;
@@ -389,13 +415,13 @@ export class FileSelectGroup extends LitElement {
               ${waIcon(config.icon)}
             </span>
             <span class="file-select-label">${config.label}</span>
-            ${
-              this.currentFiles.length > 1
-                ? html`<span class="file-select-count">
-                    ${this.currentFiles.length} files
-                  </span>`
-                : nothing
-            }
+            <span class="file-select-count" role="status" aria-atomic="true">
+              ${
+                this.currentFiles.length === 0
+                  ? nothing
+                  : formatResultCount(this.currentFiles.length, 'file')
+              }
+            </span>
             ${
               config.toolConfig === 'tool'
                 ? this.renderToolConfigMenu()
@@ -438,6 +464,13 @@ export class FileSelectGroup extends LitElement {
             </div>
           </div>
         </div>
+        ${
+          this.fileDrop.isDragActive
+            ? html`<div class="drop-cue" aria-hidden="true">
+                Drop ${config.label.toLowerCase()} files here
+              </div>`
+            : nothing
+        }
       </div>
     `;
   }
