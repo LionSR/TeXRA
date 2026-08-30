@@ -113,6 +113,15 @@ export type LiveToolUseFlowContext = {
  * a subagent whose parent is an orchestrator.
  */
 export class AgentExecutionHandle {
+  /**
+   * Epoch ms when this handle was created — the run's creation time, stable
+   * for the handle's whole lifetime including any WAITING interval. The one
+   * owner of that fact: it feeds `executionRegistry.getStatus`'s elapsed,
+   * the roster's `ActiveChildInfo.startedAt`, and the `executions` tool's
+   * `Started:` line. Distinct from `StreamPhaseState.runStartedAt`
+   * (`StreamStatusService.ts`), which tracks only the current active-phase
+   * window and resets on every WAITING→RUNNING transition.
+   */
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
   private interruptHandler?: ExecutionInterruptHandler;

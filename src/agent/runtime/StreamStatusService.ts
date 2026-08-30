@@ -31,10 +31,15 @@ export interface StreamPhaseState {
   readonly phase: StreamPhase;
   readonly substate?: StreamSubstate;
   /**
-   * Epoch ms when the stream entered its current active phase, held across
-   * substate changes and cleared the moment the phase stops being active.
-   * The one owner of "when did this run start" — hosts render elapsed time
-   * from it instead of each stamping a clock read of their own.
+   * Epoch ms when the stream entered its CURRENT active phase, held across
+   * substate changes and cleared the moment the phase stops being active —
+   * it resets on every WAITING→RUNNING transition. The one owner of
+   * "when did the active window now in progress start"; hosts render
+   * elapsed-while-active time from it instead of each stamping a clock read
+   * of their own. Not the run's creation time: that fact, stable across
+   * WAITING and never cleared, is owned separately by
+   * `AgentExecutionHandle.startedAt` (`ExecutionHandle.ts`), which feeds the
+   * roster's `Started:` display and survives phases this field does not.
    */
   readonly runStartedAt?: number;
 }
