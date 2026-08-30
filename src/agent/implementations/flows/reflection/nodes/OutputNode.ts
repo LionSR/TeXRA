@@ -286,7 +286,7 @@ export class OutputNode extends BaseNode<
         : undefined;
     if (compileFailureContext) {
       shared.compileFailureContext = compileFailureContext;
-      if (currentRound + 1 >= shared.totalRounds) {
+      if (!runScope.signal.aborted && currentRound + 1 >= shared.totalRounds) {
         shared.lastError = {
           message:
             'Automatic LaTeX compilation failed after the final workflow round.',

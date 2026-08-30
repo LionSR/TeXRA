@@ -95,10 +95,11 @@ function createOutputNode(
   host: ReturnType<typeof createRecordingHost>['host'],
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
+  signal?: AbortSignal,
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
-    runScope: testRunScope(streamId, { interactions: host }),
+    runScope: testRunScope(streamId, { interactions: host, signal }),
     logger,
     outputState,
   } as unknown as ReflectionServices);
@@ -138,14 +139,23 @@ function runOutputPost(
   );
 }
 
-function compileContextCase(streamId: string): {
+function compileContextCase(
+  streamId: string,
+  signal?: AbortSignal,
+): {
   outputNode: OutputNode;
   fixture: ReturnType<typeof createCompileFailureFixture>;
   shared: ReflectionFlowShared;
 } {
   const { host } = createRecordingHost();
   return {
-    outputNode: createOutputNode(streamId, host),
+    outputNode: createOutputNode(
+      streamId,
+      host,
+      noopTrace,
+      createOutputState(),
+      signal,
+    ),
     fixture: createCompileFailureFixture(),
     shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
   };
@@ -334,6 +344,44 @@ describe('output progress events', () => {
         'Automatic LaTeX compilation failed after the final workflow round.',
       userRetryable: false,
     });
+  });
+
+  it('keeps a final-round compile failure cancelled after user abort', async () => {
+    await installPlatform({
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+      },
+    });
+    const controller = new AbortController();
+    const { outputNode, fixture } = compileContextCase(
+      'stream:aborted-final-compile-failure',
+      controller.signal,
+    );
+    const shared = {
+      roundOutputs: [],
+      currentRound: 1,
+      totalRounds: 2,
+      continueRounds: true,
+    } as unknown as ReflectionFlowShared;
+    controller.abort();
+
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastError).toBeUndefined();
   });
 
   it.each([
