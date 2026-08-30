@@ -273,7 +273,7 @@ export class ToolCard extends LitElement {
     if (!hasGuide) return nothing;
 
     // When a primary install action exists (terminal command or extension
-    // marketplace), demote auxiliary buttons (Sign in, Open Install Page)
+    // marketplace), demote auxiliary buttons (Sign in, Open install page)
     // to secondary styling.
     const hasPrimaryInstallAction = Boolean(
       this.item.installCommand || this.item.installExtensionId,
@@ -305,7 +305,7 @@ export class ToolCard extends LitElement {
                     size="s"
                     @click=${() => this.runCommand('install')}
                   >
-                    ${waIcon('terminal', { slot: 'start' })} Install in Terminal
+                    ${waIcon('terminal', { slot: 'start' })} Install in terminal
                   </wa-button>
                   <wa-tooltip for="tool-install-btn-${this.item.id}"
                     >${this.item.installCommand}</wa-tooltip
@@ -341,7 +341,7 @@ export class ToolCard extends LitElement {
                     @click=${this.handleInstallExtension}
                   >
                     ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
-                    Extension
+                    extension
                   </wa-button>
                 `
               : nothing
@@ -356,7 +356,7 @@ export class ToolCard extends LitElement {
                     @click=${this.handleInstallUrl}
                   >
                     ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
-                    Open Install Page
+                    Open install page
                   </wa-button>
                 `
               : nothing
