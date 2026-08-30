@@ -1,3 +1,4 @@
+import { logError } from '@shared/log';
 import { onAbort } from '@utils/core';
 import {
   SHUTDOWN_PHASE,
@@ -40,7 +41,7 @@ export function createLifecycleHost(
   const onError =
     options.onError ??
     ((phase, error) => {
-      console.error(`[lifecycle] ${phase} handler failed:`, error);
+      logError(`[lifecycle] ${phase} handler failed:`, error);
     });
 
   // Abort-then-advance: wait for settlement, or for the deadline signal plus

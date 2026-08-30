@@ -16,6 +16,8 @@
 
 import { z } from 'zod';
 
+import { logWarn } from '@shared/log';
+
 import { formatZodIssuesMessage } from './toolResult';
 
 /**
@@ -151,7 +153,7 @@ function warnDroppedItem(
   kind: string,
   error: { issues: readonly { path: PropertyKey[]; message: string }[] },
 ): void {
-  console.warn(
+  logWarn(
     `[roundIndexed] Dropping malformed ${kind} entry: ${formatZodIssuesMessage(error.issues)}`,
   );
 }
@@ -181,9 +183,7 @@ export function parsePersistedRoundIndexed<T>(
       const round = RoundKeySchema.safeParse(key);
       if (!round.success) continue;
       if (!Array.isArray(value)) {
-        console.warn(
-          `[roundIndexed] Dropping non-array round "${key}" in ${kind}.`,
-        );
+        logWarn(`[roundIndexed] Dropping non-array round "${key}" in ${kind}.`);
         continue;
       }
       const items = value.flatMap((item) => {
@@ -199,7 +199,7 @@ export function parsePersistedRoundIndexed<T>(
 
   const result = z.record(z.string(), z.unknown()).safeParse(raw);
   if (!result.success) {
-    console.warn(
+    logWarn(
       `[roundIndexed] Ignoring malformed ${kind} (not a round-keyed record); treating as empty.`,
     );
     return {};

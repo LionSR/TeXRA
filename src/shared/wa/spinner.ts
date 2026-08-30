@@ -8,6 +8,8 @@ import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import { nothing } from 'lit';
 import { Directive, directive, type ElementPart } from 'lit/directive.js';
 
+import { logWarn } from '@shared/log';
+
 const REDUCED_MOTION_STYLE_ATTR = 'data-texra-reduced-motion';
 const REDUCED_MOTION_CSS = `@media (prefers-reduced-motion: reduce) {
   svg,
@@ -41,8 +43,8 @@ function scheduleAdopt(host: Element): void {
     void pending.then(
       () => adoptReducedMotion(host),
       (error: unknown) => {
-        console.warn(
-          'Failed to adopt reduced-motion style for wa-spinner',
+        logWarn(
+          '[spinner] Failed to adopt reduced-motion style for wa-spinner',
           error,
         );
       },

@@ -11,6 +11,8 @@
  * broken mapping.
  */
 
+import { logWarn } from '@shared/log';
+
 const XTERM_THEME_FALLBACKS = {
   background: '#1e1e1e',
   foreground: '#cccccc',
@@ -60,7 +62,7 @@ export function resolveXtermTheme(target: Element): ResolvedXtermTheme {
     .filter(([value]) => !value)
     .map(([, name]) => name);
   if (unresolved.length > 0) {
-    console.warn(
+    logWarn(
       `[xtermTheme] ${unresolved.join(', ')} did not resolve; falling back to the surface palette or built-in defaults.`,
     );
   }
