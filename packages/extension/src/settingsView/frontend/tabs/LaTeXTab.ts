@@ -729,7 +729,13 @@ export class LaTeXTab extends LitElement {
         </div>
         <div class="settings-row-control">
           ${this.renderSettingStatusIcon(isCustom)}
-          ${isCustom ? this.renderResetButton(opts.field, '{}') : nothing}
+          ${
+            isCustom
+              ? this.renderResetButton(opts.field, '{}', () =>
+                  this.resetCustomReplacement(opts.field, controlId),
+                )
+              : nothing
+          }
         </div>
       </div>
     `;
@@ -778,6 +784,20 @@ export class LaTeXTab extends LitElement {
       field,
       result.data as LatexConfigValueFor<typeof field>,
     );
+  }
+
+  private resetCustomReplacement(
+    field: 'customReplacements' | 'customReplacementsRegex',
+    controlId: string,
+  ): void {
+    this.renderRoot
+      .querySelector<WaTextarea>(`#${controlId}`)
+      ?.setCustomValidity('');
+    this.replacementJsonErrors = {
+      ...this.replacementJsonErrors,
+      [field]: undefined,
+    };
+    this.dispatchSetConfigValue(field, undefined);
   }
 
   private dispatchSetConfigValue<F extends LatexConfigField>(
@@ -965,6 +985,7 @@ export class LaTeXTab extends LitElement {
   private renderResetButton(
     field: LatexConfigField,
     defaultDisplay: string,
+    onReset = (): void => this.dispatchSetConfigValue(field, undefined),
   ): TemplateResult {
     return renderLabeledActionButton({
       icon: 'arrow-rotate-left',
@@ -973,7 +994,7 @@ export class LaTeXTab extends LitElement {
       appearance: 'outlined',
       label: 'Reset to default',
       title: `Reset to default (${defaultDisplay})`,
-      onClick: () => this.dispatchSetConfigValue(field, undefined),
+      onClick: onReset,
     });
   }
 
