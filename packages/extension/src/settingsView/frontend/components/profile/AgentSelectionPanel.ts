@@ -264,7 +264,10 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
                         @click=${() => this.handleSetAllEnabled(source, true)}
                         title="Show all ${sourceName} agents"
                       >
-                        All
+                        Show all
+                        <span class="visually-hidden"
+                          >${sourceName} agents</span
+                        >
                       </wa-button>`
                     : nothing
                 }
@@ -277,7 +280,10 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
                         @click=${() => this.handleSetAllEnabled(source, false)}
                         title="Hide all ${sourceName} agents"
                       >
-                        None
+                        Hide all
+                        <span class="visually-hidden"
+                          >${sourceName} agents</span
+                        >
                       </wa-button>`
                     : nothing
                 }
@@ -400,7 +406,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
     return html`
       <div class="agent-detail-pane">
         <div class="agent-detail-header">
-          <span class="agent-detail-name">${agent.name}</span>
+          <h3 class="agent-detail-name">${agent.name}</h3>
           <wa-tag variant="neutral" size="s" title="${displayName} agent"
             >${badge ? html`${waIcon(badge.icon)} ` : nothing}${displayName}</wa-tag
           >
@@ -422,7 +428,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         }
 
         <div class="agent-detail-meta">
-          <span class="agent-detail-meta-label">Available</span>
+          <span class="agent-detail-meta-label">Shown in agent selector</span>
           <span class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
           </span>

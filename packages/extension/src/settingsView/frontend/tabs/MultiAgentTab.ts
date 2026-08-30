@@ -247,6 +247,7 @@ export class MultiAgentTab extends LitElement {
         class=${classMap({ 'preset-card': true, active: isActive })}
         role="button"
         tabindex="0"
+        aria-current=${isActive ? 'true' : nothing}
         @click=${() => this.handlePresetClick(preset)}
         @keydown=${(e: KeyboardEvent) => this.handlePresetKey(e, preset)}
         title="Apply ${preset.name} team"
@@ -304,7 +305,7 @@ export class MultiAgentTab extends LitElement {
           deletable
             ? renderIconActionButton({
                 icon: 'trash',
-                label: 'Delete team',
+                label: `Delete ${preset.name} team`,
                 className: 'preset-delete-btn',
                 onClick: (e) => this.handleDeletePreset(e, preset),
               })

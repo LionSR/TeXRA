@@ -72,6 +72,7 @@ export class AIAgentsTab extends LitElement {
         align-items: center;
         gap: var(--wa-space-2xs);
         white-space: nowrap;
+        font-variant-numeric: tabular-nums;
       }
 
       .ai-agents-status-stat wa-icon {
@@ -230,8 +231,8 @@ export class AIAgentsTab extends LitElement {
           counts['not-found'] > 0
             ? html`
                 <span class="ai-agents-status-stat ai-agents-status-missing">
-                  ${waIcon('triangle-exclamation')} ${counts['not-found']} need
-                  setup
+                  ${waIcon('triangle-exclamation')} ${counts['not-found']}
+                  ${counts['not-found'] === 1 ? 'needs' : 'need'} setup
                 </span>
               `
             : nothing

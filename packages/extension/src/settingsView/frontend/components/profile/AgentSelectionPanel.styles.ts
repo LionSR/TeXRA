@@ -146,10 +146,12 @@ export const agentSelectionPanelStyles: CSSResult = css`
   }
 
   .agent-detail-name {
+    margin: 0;
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
     font-family: var(--wa-font-family-mono);
     color: var(--wa-color-text-normal);
+    line-height: var(--line-height-tight);
   }
 
   .agent-detail-description {
@@ -202,6 +204,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
     justify-content: space-between;
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
     color: var(--color-text-secondary);
     background: var(--wa-color-surface-default);
   }
