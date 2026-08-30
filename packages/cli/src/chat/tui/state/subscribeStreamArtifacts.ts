@@ -21,12 +21,12 @@ import {
   type StreamArtifactAuthority,
 } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
 import {
   projectStreamArtifacts,
   type StreamArtifactProjection,
   type StreamArtifactReader,
 } from './streamArtifactProjection';
-
 import {
   activeStreamId,
   establishWorkPlanReaderAuthority,
@@ -148,7 +148,7 @@ export async function hydrateStreamArtifacts(
           (field) => error.authoritativeFields[field],
         ),
       );
-      if (Object.values(error.authoritativeFields).every(Boolean)) {
+      if (error.authoritativeFields.complete) {
         bumpStreamArtifactRevision();
       }
       return {

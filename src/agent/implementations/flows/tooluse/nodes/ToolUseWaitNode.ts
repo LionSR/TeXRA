@@ -9,14 +9,12 @@ import {
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
 import { USER_VAR_INSTRUCTION } from '@agent/prompt/userVars';
 import { STREAM_PHASE } from '@shared/schemas';
-import { GoalStore, setGoalSessionBashAutoApproval } from '@tools/goal';
+import { GoalStore, setGoalSessionAutoApproval } from '@tools/goal';
 
 import type { ToolUseServices } from '../ToolUseServices';
 import type { ToolUseRunShared, WaitExecResult } from './types';
 
 interface WaitPrepResult {
-  /** Latest assistant text, read only by the root-mode `onIdle` notification. */
-  lastResponse: string | undefined;
   /** True when entering after a failed/cancelled cycle. */
   afterError: boolean;
 }
@@ -29,30 +27,13 @@ export class ToolUseWaitNode extends BaseNode<
     super();
   }
 
-  async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
-    const { onIdle } = this.services;
-    const modelHandler = this.services.modelCell.handler;
-
-    // Only a wired `onIdle` reads the response text (a host projecting the
-    // transcript before the flow blocks). A suspended subagent turn's facts
-    // are read off the flow result by the child-run loop, not from here.
-    let lastResponse: string | undefined;
-    if (onIdle) {
-      for (const message of shared.messages.toReversed()) {
-        const text = modelHandler.extractAssistantText(message);
-        if (text !== undefined) {
-          lastResponse = text;
-          break;
-        }
-      }
-    }
+  override async prep(shared: ToolUseRunShared): Promise<WaitPrepResult> {
     return {
       afterError: !!(shared.lastError || shared.userCancelledRetry),
-      lastResponse,
     };
   }
 
-  async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
+  override async exec(prepRes: WaitPrepResult): Promise<WaitExecResult> {
     const { session, isSubagent, runScope, toolPolicy } = this.services;
     const { streamId, session: ownerSession, signal } = runScope;
     const { stopAfterCycle } = toolPolicy;
@@ -90,7 +71,7 @@ export class ToolUseWaitNode extends BaseNode<
       // block) so a host can project each round's response as it happens —
       // e.g. the CLI syncing its terminal transcript live. Distinct from
       // subagent delivery below, which suspends the flow; this never does.
-      this.services.onIdle?.(prepRes.lastResponse);
+      this.services.onIdle?.();
     }
 
     if (stopAfterCycle) {
@@ -158,7 +139,7 @@ export class ToolUseWaitNode extends BaseNode<
     };
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: WaitPrepResult,
     error: Error,
   ): Promise<WaitExecResult> {
@@ -166,7 +147,7 @@ export class ToolUseWaitNode extends BaseNode<
     return { kind: 'stop' };
   }
 
-  async post(
+  override async post(
     shared: ToolUseRunShared,
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,
@@ -191,8 +172,7 @@ export class ToolUseWaitNode extends BaseNode<
     if (!execRes.synthetic) {
       const instruction = userFollowUpInstruction(execRes.followUps);
       if (instruction && shared.stateSlices) {
-        shared.stateSlices.userChannels.transient[USER_VAR_INSTRUCTION] =
-          instruction;
+        shared.stateSlices.userChannels[USER_VAR_INSTRUCTION] = instruction;
       }
     }
 
@@ -230,7 +210,7 @@ export class ToolUseWaitNode extends BaseNode<
     // Route the bypass mutation through the session this flow already owns
     // (`runScope.session`) rather than `currentSession()`, so the goal-pause
     // path stays drivable without an ambient RunContext/ALS frame.
-    await setGoalSessionBashAutoApproval(streamId, false, {
+    await setGoalSessionAutoApproval(streamId, false, {
       session: this.services.runScope.session,
     });
     emitRunFact(this.services.logger, 'goalPaused', { streamId });

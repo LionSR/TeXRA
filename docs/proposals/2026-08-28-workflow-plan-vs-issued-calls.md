@@ -1,5 +1,7 @@
 # Multi-agent workflow UI: declared plan vs. issued calls
 
+> **Status (2026-08-29):** the per-call / per-phase review scope described below was retired the day after it shipped — the owner chose plain approve plus the existing "approve all delegated work" bypass. The declared-vs-issued distinction, the plan marker, and the card projection stand.
+
 Status: slice 1 implemented 2026-08-28 (PR #11498); slice 2 implemented
 2026-08-28 on top of it (engine `admitCall` gate, `awaitingApproval` status,
 `callReview` on the proposal approve action, per-call review through the
@@ -180,7 +182,7 @@ verification:
 
 - Ultracode replays the longest unchanged _prefix_; one dead agent at p85 forced
   16 re-runs in one record, an inserted call re-ran the 5 after it. TeXRA
-  replays per call (same index, same key) and its key already covers prompt,
+  replays per call (same key, regardless of index) and its key covers prompt,
   id, agentName, model, schema, file paths and file bytes — broader than
   anything the ultracode evidence can show. Keep per-call replay; do NOT
   adopt the prefix rule or the append-only started/result protocol (it cannot

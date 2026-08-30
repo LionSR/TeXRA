@@ -155,15 +155,6 @@ export function withRunContext<T>(
   return runContextScope.run(context, fn);
 }
 
-/** Return the active run context, or throw if none is installed. */
-export function useRunContext(): RunContext {
-  const context = runContextScope.getStore();
-  if (!context) {
-    throw new Error('useRunContext() called outside withRunContext()');
-  }
-  return context;
-}
-
 /** Return the active run context when called from a run, otherwise undefined. */
 export function tryUseRunContext(): RunContext | undefined {
   return runContextScope.getStore();

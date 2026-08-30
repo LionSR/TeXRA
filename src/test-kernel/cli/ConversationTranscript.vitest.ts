@@ -32,7 +32,7 @@ import {
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   createTuiViewportController,
   type TuiRepaintOptions,
@@ -1637,6 +1637,43 @@ describe('CLI conversation transcript', () => {
     expect(third.cursor.scannedIndex).toBe(2);
   });
 
+  it('checks live-prompt continuation only in the incremental suffix', () => {
+    const prefix = Array.from({ length: 100 }, (_, index) =>
+      entry(`a${index}`, 'assistant', `settled ${index}`, true),
+    );
+    const user = entry('u-new', 'user', 'continue', true);
+    const assistant = entry('a-new', 'assistant', 'done', true);
+    const inspectedPrefixIndexes: number[] = [];
+    const source = new Proxy([...prefix, user, assistant], {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          const index = Number.parseInt(property, 10);
+          if (index < prefix.length) inspectedPrefixIndexes.push(index);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const previous = {
+      entriesRef: prefix,
+      scannedIndex: prefix.length,
+      lastScannedEntry: prefix.at(-1),
+      status: STREAM_PHASE.RUNNING,
+      lastAppendedKey: [prefix.length, 0] as const,
+    };
+
+    const result = incrementalStaticTranscriptEntries(
+      source,
+      0,
+      STREAM_PHASE.RUNNING,
+      previous,
+    );
+
+    expect(result.rebuild).toBe(false);
+    expect(result.appended.map((item) => item.id)).toEqual(['u-new', 'a-new']);
+    expect(result.cursor.scannedIndex).toBe(source.length);
+    expect(inspectedPrefixIndexes).toEqual([prefix.length - 1]);
+  });
+
   it('appends an incremental suffix in the same settlement order a repaint uses', () => {
     // Wire order is [t1, a1] but a1 settled first. The live path prints the
     // suffix once; a repaint rebuilds from `orderedStaticTranscriptEntries`,
@@ -1981,17 +2018,12 @@ describe('CLI conversation transcript', () => {
     const parentStream = new Map<StreamTabId, StreamTabId>([
       [CHILD_STREAM, ROOT_STREAM],
     ]);
-    const rootViewportKey = transcriptViewportKey({
-      activeStreamId: ROOT_STREAM,
-      parentStream,
-    });
-    const childViewportKey = transcriptViewportKey({
-      activeStreamId: CHILD_STREAM,
-      parentStream,
-    });
-
-    expect(rootViewportKey).toBe('root-scrollback');
-    expect(childViewportKey).toBe(`scoped:${CHILD_STREAM}`);
+    expect(
+      activeTranscriptViewport({ activeStreamId: ROOT_STREAM, parentStream }),
+    ).toEqual({ key: 'root-scrollback', scoped: false });
+    expect(
+      activeTranscriptViewport({ activeStreamId: CHILD_STREAM, parentStream }),
+    ).toEqual({ key: `scoped:${CHILD_STREAM}`, scoped: true });
   });
 
   it('repaints static transcript invalidations from a clean origin', () => {

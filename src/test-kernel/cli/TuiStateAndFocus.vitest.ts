@@ -51,13 +51,14 @@ import {
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
 import { advanceSettledPrefixIndex } from '@cli/chat/tui/state/transcriptFold';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
   bumpStreamArtifactRevision,
   readStreamArtifacts,
   streamArtifactRevision,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   isFinalizedTranscriptRow,
@@ -88,7 +89,6 @@ import {
   moveLocalTranscriptToStream,
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
-import { projectStreamArtifacts } from '@cli/chat/tui/state/streamArtifactProjection';
 import { SessionState } from '@controllers/session/SessionState';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 import {
@@ -779,17 +779,17 @@ describe('cliState stream, focus, and child-edge fields', () => {
       expect(parentStream.get().get(child1)).toBe(root);
       expect(orderedSessionDescendants(root)[0]).toBe(child1);
       expect(
-        transcriptViewportKey({
+        activeTranscriptViewport({
           activeStreamId: child1,
           parentStream: parentStream.get(),
         }),
-      ).toBe(`scoped:${child1}`);
+      ).toEqual({ key: `scoped:${child1}`, scoped: true });
       expect(
-        transcriptViewportKey({
+        activeTranscriptViewport({
           activeStreamId: root,
           parentStream: parentStream.get(),
         }),
-      ).toBe('root-scrollback');
+      ).toEqual({ key: 'root-scrollback', scoped: false });
     });
   });
 });
@@ -1665,7 +1665,6 @@ describe('CLI TUI row allocation', () => {
           agentCategory: fixture.category,
           creationTimestamp: 0,
         },
-        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: fixture.expected, streamId: child1 });
   });
@@ -1700,7 +1699,6 @@ describe('CLI TUI row allocation', () => {
         activeStreamId: child1,
         parentStream: new Map([[child1, root]]),
         metadata: { creationTimestamp: 0, ...metadata },
-        phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
       }),
     ).toEqual({ kind: 'reject', streamId: child1 });
   });

@@ -44,6 +44,25 @@ export type RunFactsClassification = Exclude<
   { kind: 'held_elsewhere' | 'owned_here' }
 >;
 
+/**
+ * The one mapping from durable resumability facts to this vocabulary. Callers
+ * that have already settled ownership (a settlement lease held) use this
+ * directly instead of re-deriving the same three branches.
+ */
+export async function classifyRunFacts(
+  executionId: ExecutionId,
+): Promise<RunFactsClassification> {
+  const facts = await deriveResumability(executionId);
+  if (facts.kind === 'checkpoint') {
+    return { kind: 'resumable', outcome: facts.outcome };
+  }
+  if (facts.kind === 'none') {
+    return { kind: 'finished', outcome: facts.outcome };
+  }
+  log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
+  return { kind: 'unclassified', cause: facts.cause };
+}
+
 /** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
 export async function classifyRun(
   executionId: ExecutionId,
@@ -59,13 +78,5 @@ export async function classifyRun(
     log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
     return { kind: 'unclassified', cause };
   }
-  const facts = await deriveResumability(executionId);
-  if (facts.kind === 'checkpoint') {
-    return { kind: 'resumable', outcome: facts.outcome };
-  }
-  if (facts.kind === 'none') {
-    return { kind: 'finished', outcome: facts.outcome };
-  }
-  log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
-  return { kind: 'unclassified', cause: facts.cause };
+  return classifyRunFacts(executionId);
 }

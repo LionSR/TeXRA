@@ -317,7 +317,8 @@ export const SETTINGS_VIEW_COMMANDS = {
   // Stable outbound name for the broader execution-permissions-and-safety
   // snapshot (bash approval, coding-agent controls, and tool path protection).
   UPDATE_APPROVAL_SETTINGS: 'updateApprovalSettings',
-  UPDATE_AGENT_SKILLS_SETTINGS: 'updateAgentSkillsSettings',
+  UPDATE_SKILLS_SETTINGS: 'updateSkillsSettings',
+  UPDATE_SKILLS_LIST: 'updateSkillsList',
   UPDATE_TELEMETRY_SETTINGS: 'updateTelemetrySettings',
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_GIT_AUTHOR_SETTINGS: 'updateGitAuthorSettings',

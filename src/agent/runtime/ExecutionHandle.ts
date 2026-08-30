@@ -9,7 +9,6 @@
 import pDefer from 'p-defer';
 
 import type { AgentTrace, ResultEvent } from '@agent/trace';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import type {
   AgentCategory,
@@ -95,13 +94,13 @@ type TerminalState = 'open' | 'claimed' | 'settled';
  * turn and knows how to cancel the in-progress model/tool round.
  */
 export type LiveToolUseFlowContext = {
-  readonly ownerSession?: SessionHandle;
   readonly modelHandler: Pick<
     ToolUseFlowContext['modelHandler'],
     'supportsManualCompaction'
   >;
 } & Pick<
   ToolUseFlowContext,
+  | 'ownerSession'
   | 'requestImmediateCompaction'
   | 'modelSwitchDisabledReason'
   | 'switchModel'
@@ -114,6 +113,14 @@ export type LiveToolUseFlowContext = {
  * a subagent whose parent is an orchestrator.
  */
 export class AgentExecutionHandle {
+  /**
+   * Epoch ms when this handle generation was created. The value remains on a
+   * handle while it is parked at WAITING. Resume constructs and tracks a
+   * replacement handle, whose `startedAt` is stamped anew. This feeds
+   * `executionRegistry.getStatus`'s elapsed, the roster's
+   * `ActiveChildInfo.startedAt`, and the `executions` tool's `Started:` line.
+   * Durable execution creation time is `ExecutionMeta.timestamp`.
+   */
   readonly startedAt = Date.now();
   private _parentStreamId: StreamTabId;
   private interruptHandler?: ExecutionInterruptHandler;

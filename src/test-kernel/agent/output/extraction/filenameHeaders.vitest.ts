@@ -16,12 +16,10 @@ import { extractFilenameHeaderDocuments } from '@agent/implementations/flows/ref
  */
 function extract(content: string) {
   return extractFilenameHeaderDocuments(content, {
-    thinkingTag: 'scratchpad',
     roundDir: '/round',
     labelFiles: ['output.tex'],
     synthesisName: 'output.tex',
     coalesceRepeatedName: 'output.tex',
-    wrapperTag: 'documents',
   });
 }
 

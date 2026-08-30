@@ -5,6 +5,7 @@ import {
   apiKeyExistsUncached,
   apiKeySecretName,
   configuredApiKeyProviders,
+  getApiKey,
   hasUsableApiKey,
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
@@ -166,6 +167,17 @@ describe('API provider key caches', () => {
 
     await expect(lookupApiKeyOrigin(secrets, 'openai')).resolves.toBe('none');
     await expect(hasUsableApiKey(secrets, 'openai')).resolves.toBe(false);
+  });
+
+  it('propagates credential-store read failures to execution callers', async () => {
+    const readError = new Error('credential store unavailable');
+    const { secrets: backing } = createSecrets();
+    const secrets: PlatformSecrets = {
+      ...backing,
+      get: vi.fn().mockRejectedValue(readError),
+    };
+
+    await expect(getApiKey(secrets, 'openai')).rejects.toBe(readError);
   });
 
   it('does not let in-flight stale lookups repopulate the cache after invalidation', async () => {

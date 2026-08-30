@@ -22,7 +22,7 @@ describe('BaseNode.getNextNode', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['complete', 'finalize'] as const)(
+  it.each(['complete'] as const)(
     "returns undefined silently for the terminal action '%s' when unregistered",
     (action) => {
       const node = new TestNode();

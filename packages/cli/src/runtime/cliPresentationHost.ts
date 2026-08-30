@@ -15,6 +15,7 @@ import { formatInstructionActionHint } from '@shared/copy/instructionActionHint'
 import {
   createCliLogger,
   createCliLogSink,
+  flushNdjsonStdout,
   writeNdjsonStdout,
   type Logger,
   type LogSink,
@@ -93,9 +94,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         // actions as fields instead, and `StderrTextSink` drops `fields`, so
         // one call serves both.
         runProgress?.preserve();
-        const hint = ndjson
-          ? ''
-          : formatInstructionActionHint(payload.actions, 'cli');
+        const hint = ndjson ? '' : formatInstructionActionHint(payload.actions);
         ensureLogger().info(`${payload.message}${hint}`, {
           key: payload.key,
           actions: payload.actions,
@@ -143,7 +142,9 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       closed = true;
       runProgress?.clear();
       await sink?.flush?.();
-      await sink?.close?.();
+      // Approval-bypass records go through the module-level NDJSON queue via
+      // `writeNdjsonStdout`, which the lazily created `sink` may never cover.
+      if (ndjson) await flushNdjsonStdout();
     },
   };
 }

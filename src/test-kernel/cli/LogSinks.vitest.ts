@@ -5,11 +5,7 @@ import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import {
-  askCliQuestion,
-  isCliPipeClosureError,
-  NdjsonStdoutSink,
-} from '@cli/runtime/logSinks';
+import { askCliQuestion, NdjsonStdoutSink } from '@cli/runtime/logSinks';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 
 function createStdoutStub(writeResults: boolean[] = [true]) {
@@ -120,30 +116,12 @@ describe('NdjsonStdoutSink', () => {
   });
 });
 
-describe('CLI pipe errors', () => {
-  function errorWithCode(message: string, code: string): Error {
-    return Object.assign(new Error(message), { code });
-  }
-
-  it('recognizes pipe closure errors as non-fatal output events', () => {
-    expect(isCliPipeClosureError(errorWithCode('write EPIPE', 'EPIPE'))).toBe(
-      true,
-    );
-    expect(
-      isCliPipeClosureError(
-        errorWithCode('stream destroyed', 'ERR_STREAM_DESTROYED'),
-      ),
-    ).toBe(true);
-    expect(isCliPipeClosureError(new Error('disk full'))).toBe(false);
-  });
-});
-
 describe('CLI questions', () => {
   it('acquires stdin ownership before waiting for an answer', async () => {
     const input = Object.assign(new PassThrough(), { ref: vi.fn() });
     const output = new PassThrough();
 
-    const answer = askCliQuestion('Choose: ', input, output);
+    const answer = askCliQuestion('Choose: ', { input, output });
     input.end('continue\n');
 
     await expect(answer).resolves.toBe('continue');

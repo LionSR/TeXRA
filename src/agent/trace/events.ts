@@ -32,6 +32,7 @@ import type {
   UpdateStreamUsagePayload,
   UpdateTodosPayload,
   WorkflowCallProgress,
+  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { StreamTransitionCause } from '@shared/streams/streamStatus';
 
@@ -84,7 +85,6 @@ export interface StageStartEvent extends StageStamp {
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   readonly index?: number;
   readonly total?: number;
-  readonly attemptId?: string;
 }
 
 /** Immutable run identity emitted once when a stream enters RUNNING. */
@@ -146,10 +146,13 @@ interface WorkflowCallEvent extends StageStamp {
   readonly call: WorkflowCallProgress;
 }
 
-/** A physical workflow-script projection began, before any optional work. */
-interface WorkflowAttemptEvent extends StageStamp {
-  readonly type: 'workflow.attempt';
+/** The attempt's declared phases and tasks, emitted once before any of them
+ *  opens — see `WorkflowPlanMarker`. */
+interface WorkflowPlanEvent extends StageStamp {
+  readonly type: 'workflow.plan';
   readonly attemptId: string;
+  readonly phases: WorkflowPlanMarker['phases'];
+  readonly tasks: WorkflowPlanMarker['tasks'];
 }
 
 /** Exact raw skill catalog accepted for this run's initial prompt. */
@@ -377,7 +380,7 @@ export type AgentEvent =
   | StageEndEvent
   | ToolStartEvent
   | ToolEndEvent
-  | WorkflowAttemptEvent
+  | WorkflowPlanEvent
   | WorkflowCallEvent
   | ActiveSkillsEvent
   | UsageEvent

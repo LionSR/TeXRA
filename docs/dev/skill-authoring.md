@@ -26,3 +26,11 @@ A user or agent opening a skill package in isolation should be able to answer:
 - What workflow should I follow?
 - What quality bar am I aiming for?
 - Where do I look if I need the deeper checklist?
+
+## Workspace availability
+
+The Skills tab in the extension and desktop settings lets you disable an
+individual skill or an entire source group for the current workspace. The CLI
+offers the same project-scoped controls under `/config`; `/skills` continues to
+list only skills that are available for activation. Skills are off by default.
+The master switch controls prompt injection without changing these selections.

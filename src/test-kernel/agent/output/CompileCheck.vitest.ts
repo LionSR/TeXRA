@@ -5,7 +5,10 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
+import {
+  compileFailuresOf,
+  runCompileCheck,
+} from '@agent/implementations/flows/reflection/output/compileCheck';
 import {
   createOutputState,
   ensureRoundData,
@@ -98,19 +101,18 @@ describe('runCompileCheck', () => {
       0,
     );
 
+    const failures = compileFailuresOf(result.compileResult);
     expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
     expect(result.compileResult?.status).toBe('failed');
-    expect(result.failures).toHaveLength(1);
-    expect(result.failures[0].displayName).toBe('main.tex');
+    expect(failures).toHaveLength(1);
+    expect(failures[0].displayName).toBe('main.tex');
     expect(failedExcerpt(result)).toContain(
       'Compile check errored for main.tex',
     );
 
     // The synthetic excerpt is persisted like a real failure so it stays
     // discoverable on disk, not just in-memory.
-    const persisted = await AbsoluteFS.read(
-      result.failures[0].log.absolutePath,
-    );
+    const persisted = await AbsoluteFS.read(failures[0].log.absolutePath);
     expect(persisted).toContain('Compile check errored for main.tex');
   });
 
@@ -132,7 +134,7 @@ describe('runCompileCheck', () => {
     );
 
     expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
-    expect(result.failures).toHaveLength(0);
+    expect(compileFailuresOf(result.compileResult)).toHaveLength(0);
     expect(result.compileResult?.status).toBe('ok');
   });
 
@@ -210,7 +212,7 @@ describe('runCompileCheck', () => {
 
     const firstResult = await runCompileCheck(ctx, 0);
     expect(firstResult.compileResult?.status).toBe('failed');
-    const logLocation = firstResult.failures[0].log;
+    const logLocation = compileFailuresOf(firstResult.compileResult)[0].log;
     await expect(AbsoluteFS.read(logLocation.absolutePath)).resolves.toContain(
       'Compile check failed for main.tex',
     );
@@ -260,8 +262,8 @@ describe('runCompileCheck', () => {
       0,
     );
 
-    expect(result.failures).toHaveLength(2);
-    const [failureA, failureB] = result.failures;
+    expect(compileFailuresOf(result.compileResult)).toHaveLength(2);
+    const [failureA, failureB] = compileFailuresOf(result.compileResult);
     // Distinct log slots despite the identical sanitized basename.
     expect(failureA.logRelativePath).not.toBe(failureB.logRelativePath);
     expect(failureA.log.absolutePath).not.toBe(failureB.log.absolutePath);
@@ -297,14 +299,15 @@ describe('runCompileCheck', () => {
         0,
       );
 
+      const failures = compileFailuresOf(result.compileResult);
       expect(mocks.compileLatex2Pdf).not.toHaveBeenCalled();
       expect(result.compileResult?.status).toBe('failed');
-      expect(result.failures).toHaveLength(1);
+      expect(failures).toHaveLength(1);
       // The second (uninstrumented) call to fileLocationDisplayPath, made from the
       // backstop itself, resolves normally -- so the failure gets a real,
       // resolvable path instead of a broken placeholder string.
-      expect(result.failures[0].logRelativePath).toBe(relativePath);
-      expect(result.failures[0].log).toEqual(
+      expect(failures[0].logRelativePath).toBe(relativePath);
+      expect(failures[0].log).toEqual(
         outputFile(executionId, relativePath, 'main.tex', 0).location,
       );
     } finally {

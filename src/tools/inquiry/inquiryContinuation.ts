@@ -19,8 +19,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import {
   currentSession,
-  defaultSession,
-  resolveEmitSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
@@ -119,7 +117,7 @@ async function emitInquiryThreadUpdate(
   const summary = await getThreadSummary(threadId);
   if (!summary) return;
   const payload: InquiryThreadUpdatedEvent = { ...summary, ...extra };
-  (resolveEmitSession(session) ?? defaultSession()).events.emit({
+  (session ?? currentSession()).events.emit({
     scope: 'session',
     event: { type: 'inquiryThreadUpdated', payload },
   });

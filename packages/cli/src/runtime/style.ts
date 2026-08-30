@@ -16,8 +16,6 @@ import pico from 'picocolors';
  * renderer.
  */
 export interface CliStyle {
-  /** Whether styling actually emits color (false ⇒ every method is identity). */
-  readonly enabled: boolean;
   /** Passing/healthy state — green. */
   success(text: string): string;
   /** Cautionary state — yellow. */
@@ -35,7 +33,6 @@ export interface CliStyle {
 export function createCliStyle(colorEnabled: boolean): CliStyle {
   const c = pico.createColors(colorEnabled);
   return {
-    enabled: colorEnabled,
     success: (text) => c.green(text),
     warn: (text) => c.yellow(text),
     error: (text) => c.red(text),

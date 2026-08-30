@@ -30,7 +30,9 @@ import {
   transcriptText,
   type ToolRow,
   type TranscriptRow,
-  type TranscriptRowOf,
+  type CompactionActivityRow,
+  type FileListRow,
+  type PhaseRow,
 } from '@shared/transcript';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/streams/compactionActivityProjection';
@@ -125,7 +127,7 @@ export function textRowFixture(
 export function compactionRowFixture(
   status: CompactionActivityStatus,
   finalized = status === 'completed',
-): TranscriptRowOf<'compactionActivity'> {
+): CompactionActivityRow {
   return {
     kind: 'compactionActivity',
     id: 'compaction:operation-1',
@@ -149,7 +151,7 @@ export function compactionRowFixture(
 export function fileListRowFixture(
   id: string,
   files: readonly FileListEntry[],
-): TranscriptRowOf<'fileList'> {
+): FileListRow {
   const row = projectTranscriptRow({
     id,
     type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -192,7 +194,7 @@ export function workflowPhaseGrouping(rows: readonly TranscriptRow[]): {
   readonly entries: TranscriptRow[];
 } {
   const taskGroups: TaskGroup[] = [];
-  let openPhase: TranscriptRowOf<'phase'> | undefined;
+  let openPhase: PhaseRow | undefined;
   const entries = rows.map((row) => {
     if (row.kind === 'phase') {
       openPhase = row;

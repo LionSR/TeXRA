@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CodexAuthError, type CodexSessionCoordinator } from '@auth/codex';
+import { CodexAuthError } from '@auth/codex';
+import type { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
 
 const mocks = vi.hoisted(() => ({
   pollDeviceToken: vi.fn(),

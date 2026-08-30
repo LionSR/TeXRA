@@ -2,11 +2,11 @@
  * Canonical user-facing copy for account sign-in and sign-out surfaces.
  *
  * Account brand names and the outcome sentences that mention them live here so
- * the CLI login form, logout form, slash-command descriptions, login handlers,
- * the extension's subscription settings section, and the auth-failure hints
- * that quote a toggle by name cannot paraphrase each other. "Researcher Access"
- * itself is owned by `onboarding.ts` — this module imports it rather than
- * restating the name.
+ * the CLI account & access surfaces, slash-command descriptions, login
+ * handlers, the extension's subscription settings section, and the
+ * auth-failure hints that quote a toggle by name cannot paraphrase each
+ * other. "Researcher Access" itself is owned by `onboarding.ts` — this module
+ * imports it rather than restating the name.
  *
  * Wire identifiers (`texra`, `chatgpt`, `grok`) stay internal.
  */
@@ -21,12 +21,10 @@ export const DEVICE_CODE_DESCRIPTION =
 export const CHATGPT_AUTH = {
   label: 'ChatGPT',
   subscriptionLabel: 'ChatGPT subscription',
-  subscriptionDescription: 'Codex via ChatGPT Plus/Pro/Team',
   signInLabel: 'Sign in with ChatGPT',
   signOutLabel: 'Sign out of ChatGPT',
   preferLabel: 'Prefer ChatGPT subscription',
   deviceCodeLabel: 'ChatGPT device code',
-  logoutDescription: 'Sign out and disable subscription preference',
   startingDevice: 'Starting ChatGPT device-code sign-in.',
   startingNoBrowser: 'Starting ChatGPT sign-in.',
   startingBrowser: 'Opening browser for ChatGPT sign-in...',
@@ -40,12 +38,10 @@ export const CHATGPT_AUTH = {
 export const GROK_AUTH = {
   label: 'Grok',
   subscriptionLabel: 'Grok subscription',
-  subscriptionDescription: 'xAI models via Grok/SuperGrok',
   signInLabel: 'Sign in with Grok',
   signOutLabel: 'Sign out of Grok',
   preferLabel: 'Prefer Grok subscription',
   deviceCodeLabel: 'Grok device code',
-  logoutDescription: 'Sign out and disable subscription preference',
   startingDevice: 'Starting Grok device-code sign-in.',
   startingNoBrowser: 'Starting Grok sign-in.',
   startingBrowser: 'Opening browser for Grok sign-in...',
@@ -85,11 +81,15 @@ export const ACCOUNT_OUTCOME = {
  * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
  */
 export const RESEARCHER_ACCESS_AUTH = {
-  loginDescription: 'Remote agents and your TeXRA account',
-  deviceCodeLabel: 'Researcher device code',
-  logoutDescription: `Sign out of your ${RESEARCHER_ACCESS.label} account`,
+  signInLabel: `Sign in with ${RESEARCHER_ACCESS.label}`,
+  loginDescription: `Remote agents through ${RESEARCHER_ACCESS.label}`,
+  deviceCodeLabel: `${RESEARCHER_ACCESS.label} device code`,
+  signOutDescription: `Sign out of ${RESEARCHER_ACCESS.label}`,
+  statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,
+  statusExample: `show ${RESEARCHER_ACCESS.label} sign-in status`,
+  authDescription: `Sign in with ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, or ${RESEARCHER_ACCESS.label}; check status`,
   /** `/login` slash-command description. */
-  slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label} or ${RESEARCHER_ACCESS.label}`,
+  slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, or ${RESEARCHER_ACCESS.label}`,
   startingDevice: `Starting ${RESEARCHER_ACCESS.label} device-code sign-in.`,
   startingNoBrowser: (provider: string): string =>
     `Starting ${RESEARCHER_ACCESS.label} ${provider} sign-in.`,

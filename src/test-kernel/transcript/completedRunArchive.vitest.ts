@@ -351,9 +351,7 @@ describe('completedRunArchive facade', () => {
       conversationResult.conversation,
     );
 
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult.source).toBe('streamData');
-    expect(todosResult.todos).toEqual([
+    expect(await readCompletedRunTodos(executionId)).toEqual([
       { content: 'Fix the bug', status: 'completed' },
     ]);
   });
@@ -526,14 +524,13 @@ describe('completedRunArchive facade', () => {
     );
   });
 
-  it('treats a present empty work plan as authoritative', async () => {
+  it('reads an empty task list from a present empty work plan', async () => {
     const executionId = '0aa2220aa222' as ExecutionId;
     const streamId = 'orchestrator@deepseekproT#0aa2220aa222' as StreamTabId;
     await seedStreams(executionId, [{ streamId, todos: [] }]);
     await stampStreamId(executionId, streamId);
-    const result = await readCompletedRunTodos(executionId);
 
-    expect(result).toEqual({ todos: [], source: 'streamData', streamId });
+    expect(await readCompletedRunTodos(executionId)).toEqual([]);
   });
 
   it('reports none, with no conversation evidence, when metadata has no stamped stream', async () => {
@@ -543,8 +540,7 @@ describe('completedRunArchive facade', () => {
     expect(conversationResult).toEqual({ conversation: null, source: 'none' });
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
 
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult).toEqual({ todos: [], source: 'none' });
+    expect(await readCompletedRunTodos(executionId)).toEqual([]);
 
     await getExecutionStore(executionId).writeMeta({
       timestamp: '2026-07-07T00:00:00.000Z',
@@ -596,8 +592,7 @@ describe('completedRunArchive facade', () => {
     // The stamped stream id alone is association evidence.
     expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(true);
 
-    const todosResult = await readCompletedRunTodos(executionId);
-    expect(todosResult).toEqual({ todos: [], source: 'none' });
+    expect(await readCompletedRunTodos(executionId)).toEqual([]);
 
     expect(scan).not.toHaveBeenCalled();
   });

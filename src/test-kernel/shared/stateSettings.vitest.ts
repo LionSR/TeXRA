@@ -36,6 +36,8 @@ import {
   CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_REASONING_EFFORT_DEFAULT,
   CODEX_SANDBOX_MODE_DEFAULT,
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelCompactionThresholdPercentSchema,
@@ -152,6 +154,8 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.GLM_USE_CHINA]: true,
   [GlobalStateKey.GLM_CODING_PLAN]: false,
   [GlobalStateKey.DISABLED_TOOLS]: [],
+  [WorkspaceStateKey.DISABLED_SKILLS]: [],
+  [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
 };
 
 /** Every canonical `texra.*` key in the state-backed catalog. */
@@ -438,6 +442,8 @@ describe('state settings catalog', () => {
     //    dual-backend Kimi models in CLI runs.
     //  - agent skills is read by buildUserVars (userVars) when assembling
     //    tool-use agent prompts, skipping skill discovery when disabled.
+    //  - skill and source exclusions are read by runtimeSkills before prompt
+    //    injection and explicit `/skills` activation.
     //  - texra.approvalPolicy is read by cliConfig / cliContext and seeded onto
     //    SessionHandle before bash/edit approval boundaries decide.
     //  - detach-subagents-on-stop is read by detachSubagentsOnStop() when the
@@ -446,6 +452,9 @@ describe('state settings catalog', () => {
     //    orchestrator asks to kill one of its own child executions.
     //  - compaction threshold and retry attempts are read by the shared model
     //    handler and invocation node used by headless CLI runs.
+    //  - the child-run concurrency budget is read by childRunBudget (via the
+    //    child-run loop every detached subagent and workflow script launches
+    //    through) and passed to the workflow engine's semaphore.
     // auto-open-pdf (no CLI opener), latexdiff, and the formatter are
     // intentionally excluded. Changing the CLI roster must be a deliberate edit
     // here, not an accident of flipping `honoredBy.cli` or `surfaces.cliConfig`.
@@ -480,9 +489,13 @@ describe('state settings catalog', () => {
         GlobalStateKey.GLM_USE_CHINA,
         GlobalStateKey.GLM_CODING_PLAN,
         GlobalStateKey.DISABLED_TOOLS,
+        WorkspaceStateKey.DISABLED_SKILLS,
+        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
         AGENT_SKILLS_CONFIG_KEY,
+        CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
         MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
         MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+        CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
         TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ].sort(),
     );

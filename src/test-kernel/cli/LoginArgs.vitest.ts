@@ -52,24 +52,6 @@ describe('CLI login arguments (texra login)', () => {
     });
   });
 
-  it('reads login flags from camelCase argument keys', () => {
-    expect(
-      loginInitFromArgs({
-        providerArg: 'google',
-        noBrowser: true,
-        selectAccount: true,
-        loginHint: 'person@example.com',
-      }),
-    ).toEqual({
-      provider: 'google',
-      providerExplicit: true,
-      noBrowser: true,
-      device: false,
-      selectAccount: true,
-      loginHint: 'person@example.com',
-    });
-  });
-
   it('reads the --device flag', () => {
     expect(loginInitFromArgs({ device: true })).toMatchObject({
       device: true,

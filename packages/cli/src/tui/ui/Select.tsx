@@ -179,7 +179,7 @@ export function nextWrappingHighlightIndex({
   return clampedHighlight <= 0 ? itemCount - 1 : clampedHighlight - 1;
 }
 
-export function visibleSelectRange({
+function visibleSelectRange({
   itemCount,
   highlight,
   maxVisibleItems,

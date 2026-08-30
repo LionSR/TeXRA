@@ -19,7 +19,7 @@ export class MediaExtractionNode extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
+  override async prep(shared: ReflectionFlowShared): Promise<PrepInput> {
     const { config, fileService } = this.services;
     const modelHandler = this.services.modelCell.handler;
     const { currentRound, roundOutputs } = shared;
@@ -43,7 +43,7 @@ export class MediaExtractionNode extends BaseNode<
     };
   }
 
-  async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
+  override async exec(prepRes: PrepInput): Promise<FileLocation[] | null> {
     const modelHandler = this.services.modelCell.handler;
     const { latexMediaManager, config, fileService } = this.services;
 
@@ -78,7 +78,7 @@ export class MediaExtractionNode extends BaseNode<
     return [...prepRes.workspaceState.media.files];
   }
 
-  async execFallback(
+  override async execFallback(
     _prepRes: PrepInput,
     error: Error,
   ): Promise<FileLocation[] | null> {
@@ -87,7 +87,7 @@ export class MediaExtractionNode extends BaseNode<
     return null;
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     prepRes: PrepInput,
     mediaFiles: FileLocation[] | null,
@@ -105,7 +105,7 @@ export class MediaExtractionNode extends BaseNode<
       if (mediaFiles?.length && shared.context) {
         attachmentKinds =
           await this.services.modelCell.handler.addMediaToUserMessage(
-            shared.context.messages,
+            shared.context,
             mediaFiles,
           );
       }

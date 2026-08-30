@@ -28,12 +28,12 @@ import {
 } from '@agent/runtime/ModelFactory';
 import {
   CODEX_BACKEND_BASE_URL,
-  CODEX_SESSION_SECRET_KEY,
   CodexAuthError,
   codexCoordinator,
   resetCodexCoordinator,
-  type CodexSession,
 } from '@auth/codex';
+import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
+import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   invalidateRuntimeModelRegistry,
@@ -111,9 +111,9 @@ describe('Copilot model handler routing', () => {
   });
 
   it('takes precedence over the global OpenRouter route', () => {
-    expect(
-      resolveModelHandlerCompatibilityKey(copilotConfig, true, false),
-    ).toBe('ModelHandlerVscodeLm');
+    expect(resolveModelHandlerCompatibilityKey(copilotConfig, true)).toBe(
+      'ModelHandlerVscodeLm',
+    );
   });
 
   it('fails clearly when the host language-model port is unavailable', async () => {
@@ -183,7 +183,7 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini31p;
-    expect(resolveModelHandlerCompatibilityKey(config, true, false)).toBe(
+    expect(resolveModelHandlerCompatibilityKey(config, true)).toBe(
       'ModelHandlerVscodeLm',
     );
 
@@ -207,10 +207,10 @@ describe('Copilot route preference on a canonical base model', () => {
     });
 
     const config = MODEL_CONFIGS.gemini31p;
-    expect(
-      resolveModelHandlerCompatibilityKey(config, false, false, 'direct'),
-    ).toBe('ModelHandlerGoogleInteractions');
-    expect(resolveModelHandlerCompatibilityKey(config, false, false)).toBe(
+    expect(resolveModelHandlerCompatibilityKey(config, false, 'direct')).toBe(
+      'ModelHandlerGoogleInteractions',
+    );
+    expect(resolveModelHandlerCompatibilityKey(config, false)).toBe(
       'ModelHandlerVscodeLm',
     );
 
@@ -459,7 +459,6 @@ describe('OpenAI model handler routing', () => {
         resolveModelHandlerCompatibilityKey(
           MODEL_CONFIGS[model],
           useOpenRouter,
-          false,
         ),
       ).toBe(expected);
     },
@@ -468,6 +467,7 @@ describe('OpenAI model handler routing', () => {
   it('uses short-name routing when computing compatibility keys', async () => {
     await installPlatform({
       config: { 'texra.model.useOpenAIResponsesAPI': false },
+      globalState: { 'texra.preferShortModelNames': true },
     });
 
     expect(
@@ -481,7 +481,6 @@ describe('OpenAI model handler routing', () => {
           shortName: 'legacy-chat-test',
         },
         false,
-        true,
       ),
     ).toBe('ModelHandlerOpenAI');
   });
@@ -553,7 +552,7 @@ describe('OpenAI model handler routing', () => {
     });
 
     expect(
-      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false),
     ).toBe('ModelHandlerOpenAIResponse');
     // The active OpenRouter proxy disables the subscription path entirely.
     expect(shouldUseResponsesAPI(codexEligibleConfig, true)).toBe(true);
@@ -564,7 +563,7 @@ describe('OpenAI model handler routing', () => {
     await installPlatform();
 
     expect(
-      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false, false),
+      resolveModelHandlerCompatibilityKey(codexEligibleConfig, false),
     ).toBe('ModelHandlerOpenAIResponse');
   });
 
@@ -759,7 +758,6 @@ describe('OpenAI model handler routing', () => {
       passingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
         false,
-        false,
       ),
     ).toBe('ModelHandlerValidation');
 
@@ -777,7 +775,6 @@ describe('OpenAI model handler routing', () => {
     expect(() =>
       failingFactory.resolveModelHandlerCompatibilityKey(
         MODEL_CONFIGS.gpt54,
-        false,
         false,
       ),
     ).toThrow(/restricted to package validation/);
@@ -808,7 +805,7 @@ describe('Google Interactions API routing', () => {
   it('routes direct Google models to Interactions', async () => {
     const factory = await initGoogleRouting();
     expect(
-      factory.resolveModelHandlerCompatibilityKey(googleConfig(), false, false),
+      factory.resolveModelHandlerCompatibilityKey(googleConfig(), false),
     ).toBe('ModelHandlerGoogleInteractions');
   });
 

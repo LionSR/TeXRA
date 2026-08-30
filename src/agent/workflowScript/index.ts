@@ -26,6 +26,5 @@ export type {
   WorkflowScriptControl,
   WorkflowScriptEvent,
   WorkflowScriptRunResult,
-  WorkflowCallAdmission,
   WorkflowScriptRunOptions,
 } from './types';

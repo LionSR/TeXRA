@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // branches we stub stdout.isTTY = true and mock the gate's collaborators.
 
 const mocks = vi.hoisted(() => ({
-  hasCliRunCredential: vi.fn(),
+  hasUsableSetupCredential: vi.fn(),
   listExecutions: vi.fn(),
   state: new Map<string, unknown>(),
 }));
 
-vi.mock('@cli/runtime/credentialStatus', () => ({
-  hasCliRunCredential: mocks.hasCliRunCredential,
+vi.mock('@model/setupCredentialAccess', () => ({
+  hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -50,7 +50,7 @@ describe('maybeRunCliOnboarding gate', () => {
   let originalIsTty: unknown;
 
   beforeEach(() => {
-    mocks.hasCliRunCredential.mockReset().mockResolvedValue(false);
+    mocks.hasUsableSetupCredential.mockReset().mockResolvedValue(false);
     mocks.listExecutions.mockReset().mockResolvedValue([]);
     mocks.state.clear();
     originalIsTty = process.stdout.isTTY;
@@ -68,14 +68,14 @@ describe('maybeRunCliOnboarding gate', () => {
   });
 
   it('skips (configured:false) when the user already has a credential', async () => {
-    mocks.hasCliRunCredential.mockResolvedValue(true);
+    mocks.hasUsableSetupCredential.mockResolvedValue(true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliRunCredential).toHaveBeenCalled();
+    expect(mocks.hasUsableSetupCredential).toHaveBeenCalled();
   });
 
   it('marks prior installs with credentials as first-run done', async () => {
     mocks.state.set(GlobalStateKey.LAST_KNOWN_VERSION, '1.2.3');
-    mocks.hasCliRunCredential.mockResolvedValue(true);
+    mocks.hasUsableSetupCredential.mockResolvedValue(true);
 
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
@@ -85,7 +85,7 @@ describe('maybeRunCliOnboarding gate', () => {
 
   it('backfills a credentialed fresh install as NOT done (env keys)', async () => {
     // Credential alone proves nothing — fresh installs can inherit env keys.
-    mocks.hasCliRunCredential.mockResolvedValue(true);
+    mocks.hasUsableSetupCredential.mockResolvedValue(true);
 
     await maybeRunCliOnboarding(INTERACTIVE);
     expect(mocks.state.get(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE)).toBe(
@@ -96,13 +96,13 @@ describe('maybeRunCliOnboarding gate', () => {
   it('skips when onboarding was previously declined', async () => {
     mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliRunCredential).toHaveBeenCalled();
+    expect(mocks.hasUsableSetupCredential).toHaveBeenCalled();
   });
 
   it('clears a stale declined flag when credentials now exist', async () => {
     mocks.state.set(GlobalStateKey.ONBOARDING_DECLINED, true);
     mocks.state.set(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false);
-    mocks.hasCliRunCredential.mockResolvedValue(true);
+    mocks.hasUsableSetupCredential.mockResolvedValue(true);
 
     // `configured` stays false: only the picker actually configuring a
     // credential in this process is a post-picker continuation. A pre-existing
@@ -131,7 +131,7 @@ describe('maybeRunCliOnboarding gate', () => {
     },
   ])('skips $scenario before checking credentials', async ({ options }) => {
     await expect(maybeRunCliOnboarding(options)).resolves.toEqual(SKIPPED);
-    expect(mocks.hasCliRunCredential).not.toHaveBeenCalled();
+    expect(mocks.hasUsableSetupCredential).not.toHaveBeenCalled();
   });
 });
 

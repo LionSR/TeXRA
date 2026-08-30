@@ -26,11 +26,30 @@ export const WorkflowCallIdentitySchema = z.strictObject({
 });
 export type WorkflowCallIdentity = z.infer<typeof WorkflowCallIdentitySchema>;
 
-/** Durable boundary emitted by the controlled workflow transcript writer. */
-export type WorkflowAttemptMarker = {
-  readonly kind: 'workflowAttempt';
-  readonly attemptId: string;
-};
+/**
+ * The declared shape of a workflow script — `meta.phases` in order and
+ * `meta.tasks` — as both the approval proposal and the plan marker carry it.
+ * A phase's position is its index in the array.
+ */
+export const WorkflowDeclaredPlanSchema = z.strictObject({
+  phases: z.array(z.strictObject({ title: z.string().min(1) })),
+  tasks: z.array(WorkflowCallIdentitySchema),
+});
+export type WorkflowDeclaredPlan = z.infer<typeof WorkflowDeclaredPlanSchema>;
+
+/**
+ * The declared plan of one workflow-script attempt — every `meta.phases`
+ * entry and every `meta.tasks` entry, in script order — recorded once on the
+ * transcript when the attempt's execution state is constructed. Phases and
+ * calls the run has reached are projected as stages and cards; this marker is
+ * what lets a host list the ones it has not reached yet without opening their
+ * stage (a `stage.start` prints the phase divider into scrollback).
+ */
+export const WorkflowPlanMarkerSchema = WorkflowDeclaredPlanSchema.extend({
+  kind: z.literal('workflowPlan'),
+  attemptId: z.string().min(1),
+});
+export type WorkflowPlanMarker = z.infer<typeof WorkflowPlanMarkerSchema>;
 
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
   durationMs: z.number().nonnegative().optional(),
@@ -95,10 +114,6 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('planned'),
   }),
-  /** Issued and held for the user's review before it may queue. */
-  WorkflowCallProgressBaseSchema.extend({
-    status: z.literal('awaitingApproval'),
-  }),
   /** Issued and waiting for one of the run's concurrency slots. */
   WorkflowCallProgressBaseSchema.extend({
     status: z.literal('queued'),
@@ -129,8 +144,7 @@ export const WorkflowCallProgressSchema = z.discriminatedUnion('status', [
 ]);
 
 export type WorkflowCallProgress = z.infer<typeof WorkflowCallProgressSchema>;
-type WorkflowCallLiveStatus =
-  'declared' | 'planned' | 'awaitingApproval' | 'queued' | 'running';
+type WorkflowCallLiveStatus = 'declared' | 'planned' | 'queued' | 'running';
 export type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
   { readonly status: WorkflowCallLiveStatus }
@@ -143,7 +157,6 @@ export function isTerminalWorkflowCallStatus(
   switch (status) {
     case 'declared':
     case 'planned':
-    case 'awaitingApproval':
     case 'queued':
     case 'running':
       return false;
@@ -165,7 +178,6 @@ export function isTerminalWorkflowCallProgress(
 export const WORKFLOW_TASK_STATUS_LABEL = {
   declared: 'Declared',
   planned: 'Planned',
-  awaitingApproval: 'Waiting for approval',
   queued: 'Queued',
   running: 'Running',
   completed: 'Finished',

@@ -28,6 +28,7 @@ import {
   type TaskGroup,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
+import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { groupBy, toNewestFirstByTimestamp } from '@utils/core';
@@ -123,9 +124,11 @@ const inquiries$ = select(appState, (s) => s.inquiries);
 // Derived computeds: only re-evaluate when selector inputs propagate.
 // ---------------------------------------------------------------------------
 
-export const streams$ = new Signal.Computed(() => [
-  ...streamById$.get().values(),
-]);
+// Not exported: every consumer now reads topLevelStreams$ (rail, palette,
+// sidebar count) so a child call/edit-approval stream is never mistaken for
+// a top-level task (#11511 family). Kept as topLevelStreams$'s own
+// intermediate step below.
+const streams$ = new Signal.Computed(() => [...streamById$.get().values()]);
 
 /** Top-level streams: the tab list, with child streams excluded. */
 export const topLevelStreams$ = new Signal.Computed(() =>
@@ -313,6 +316,41 @@ const activeStreamState$ = new Signal.Computed(() => {
   return info.agentCategory ? createStreamState(info.agentCategory) : null;
 });
 
+/**
+ * Live progress of the active stream's children, by child stream, for the
+ * workflow run model: the elapsed origin and tool-call count each child's own
+ * state carries. Compared by value so a tick on an unrelated stream — or a
+ * child update that changed neither — leaves the log alone.
+ */
+const activeChildProgress$ = new Signal.Computed(
+  (): ReadonlyMap<StreamTabId, ChildRunProgress> => {
+    const state = activeStreamState$.get();
+    const states = streamStates$.get();
+    const progress = new Map<StreamTabId, ChildRunProgress>();
+    for (const child of state?.subagents ?? []) {
+      const childState = states.get(child.childStreamId);
+      if (!childState) continue;
+      progress.set(child.childStreamId, {
+        runStartedAt: childState.runStartedAt,
+        toolCallCount: childState.conversationProgress.toolCallCount,
+      });
+    }
+    return progress;
+  },
+  {
+    equals: (a, b) =>
+      a.size === b.size &&
+      [...a].every(([id, live]) => {
+        const other = b.get(id);
+        return (
+          other !== undefined &&
+          other.runStartedAt === live.runStartedAt &&
+          other.toolCallCount === live.toolCallCount
+        );
+      }),
+  },
+);
+
 /** Only changes when the ACTIVE stream's logs change, not any stream. */
 const activeStreamLogs$ = new Signal.Computed(() => {
   const info = activeStreamInfo$.get();
@@ -451,6 +489,8 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     updatedRowBaseGeneration: streamLogs.updatedRowBaseGeneration,
     rowGeneration: streamLogs.generation,
     taskGroups: activeTaskGroups$.get(),
+    workflowPlan: streamLogs.workflowPlan,
+    childProgress: activeChildProgress$.get(),
     isToolUse: activeIsToolUse$.get(),
     hasStreams,
     streamName: activeStreamInfo.name,

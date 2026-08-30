@@ -25,7 +25,7 @@ describe('CLI transcript session policy', () => {
     const runAgent = vi.fn();
     const createCliRuntimeHost = vi.fn();
     vi.doMock('@cli/runtime/transcriptSession', () => ({
-      initializeHeadlessTranscriptSession: vi.fn(async () => {
+      initializeCliTranscriptSession: vi.fn(async () => {
         throw failure;
       }),
     }));
@@ -53,11 +53,11 @@ describe('CLI transcript session policy', () => {
 
   it('selects ephemeral mode only through the explicit interactive policy', async () => {
     vi.resetModules();
-    const { initializeInteractiveTranscriptSession } =
+    const { initializeCliTranscriptSession } =
       await import('@cli/runtime/transcriptSession');
     const warning = vi.fn();
 
-    const result = await initializeInteractiveTranscriptSession(
+    const result = await initializeCliTranscriptSession(
       {
         onPersistentOpenFailure: 'use-ephemeral',
         showPersistentWarning: warning,
@@ -82,12 +82,12 @@ describe('CLI transcript session policy', () => {
 
   it('does not fall back when the interactive policy requires persistence', async () => {
     vi.resetModules();
-    const { initializeInteractiveTranscriptSession } =
+    const { initializeCliTranscriptSession } =
       await import('@cli/runtime/transcriptSession');
     const failure = new Error('permission denied');
 
     await expect(
-      initializeInteractiveTranscriptSession(
+      initializeCliTranscriptSession(
         { onPersistentOpenFailure: 'fail' },
         async () => {
           throw failure;
@@ -104,7 +104,7 @@ describe('CLI transcript session policy', () => {
       { StreamLogStore, StreamSnapshotStore },
       { initializeDefaultSession, teardownDefaultSession },
       { GoalStore },
-      { initializeHeadlessTranscriptSession },
+      { initializeCliTranscriptSession },
     ] = await Promise.all([
       import('@platform/platform'),
       import('@test/support/tempDirPlatform'),
@@ -135,7 +135,8 @@ describe('CLI transcript session policy', () => {
     teardownDefaultSession();
 
     const transcripts = await StreamLogStore.open();
-    const result = await initializeHeadlessTranscriptSession(
+    const result = await initializeCliTranscriptSession(
+      { onPersistentOpenFailure: 'fail' },
       async () => transcripts,
     );
 

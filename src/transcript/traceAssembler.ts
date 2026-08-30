@@ -11,7 +11,6 @@
  */
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionId } from '@shared/schemas';
-import { runOutcomeToExecutionStatus } from '@shared/streams/streamStatus';
 
 import { resolveStreamForExecution } from './completedRunArchive';
 import { StreamLogStore } from './StreamLogStore';
@@ -37,7 +36,7 @@ export async function assembleTrace(
   ]);
   const snapshotStore = new StreamSnapshotStore();
   if (!config) return { status: 'config_missing' };
-  if ('reason' in resolution) return { status: 'streamLogs_missing' };
+  if (!resolution) return { status: 'streamLogs_missing' };
   const { streamId, meta } = resolution;
 
   // A call-scoped read-only store seeded with just this stream avoids
@@ -50,20 +49,8 @@ export async function assembleTrace(
     snapshotStore.read(streamId),
   ]);
 
-  const terminalStatus = meta.outcome
-    ? runOutcomeToExecutionStatus(meta.outcome)
-    : null;
-
   return {
     status: 'ok',
-    trace: {
-      executionId,
-      streamId,
-      config,
-      meta,
-      entries,
-      snapshot,
-      terminalStatus,
-    },
+    trace: { executionId, streamId, config, meta, entries, snapshot },
   };
 }

@@ -32,20 +32,12 @@ interface InitAgentOption {
   readonly name: string;
 }
 
-export function defaultInitAgentOptions(
-  agents: readonly InitAgentOption[],
-): InitAgentOption[] {
-  return implicitDefaultToolUseAgents(agents).map((agent) => ({
-    name: agent.name,
-  }));
-}
-
 async function gatherOptions(): Promise<{
-  agents: InitAgentOption[];
+  agents: readonly InitAgentOption[];
   models: CliModelAccess[];
 }> {
   await loadAgents({ includeRemote: false });
-  const agents = defaultInitAgentOptions(
+  const agents = implicitDefaultToolUseAgents(
     getVisibleAgents(AgentCategory.ToolUse),
   );
   const models = await getCliModelAccessList();

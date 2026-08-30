@@ -340,9 +340,6 @@ export function handlePermissionAction(
           action: 'approve',
           ...(decision.model ? { model: decision.model } : {}),
           ...(decision.agent ? { agent: decision.agent } : {}),
-          ...(decision.action === 'approve' && decision.callReview
-            ? { callReview: decision.callReview }
-            : {}),
         };
       } else if (decision.action === 'reject') {
         message = {

@@ -18,18 +18,24 @@ import { xaiAccountLabel } from '@auth/xai/xaiSessionTypes';
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type {
-  ChatGptAuthStatus,
-  GrokAuthStatus,
-  SubscriptionUsageSnapshot,
+import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  type ChatGptAuthStatus,
+  type GrokAuthStatus,
+  type SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import {
+  renderSettingsNumberRow,
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
 } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
+
+// Local imports - settings view components
+import './SubscriptionUsageRow';
+import { postStateSetting } from '../shared/stateSettingRows';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -37,8 +43,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-
-import './SubscriptionUsageRow';
 
 /** Sign-in status shared by every subscription provider. */
 export type SubscriptionAuthStatus = ChatGptAuthStatus | GrokAuthStatus;
@@ -65,6 +69,8 @@ export interface SubscriptionSectionProvider {
   };
   /** Human-readable account name for the signed-in row. */
   readonly accountLabel: (auth: SubscriptionAuthStatus | null) => string;
+  /** Optional advanced input-budget control for this subscription route. */
+  readonly contextWindowSetting?: typeof CHATGPT_CODEX_CONTEXT_WINDOW_SETTING;
 }
 
 @customElement('subscription-section')
@@ -80,7 +86,11 @@ export class SubscriptionSection extends LitElement {
   ];
 
   @property({ attribute: false }) provider!: SubscriptionSectionProvider;
+  /** Parent-owned acknowledgement generation for restoring rejected edits. */
+  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
+  @property({ attribute: false }) contextWindow =
+    CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshot | null =
     null;
   @property({ attribute: false }) now = 0;
@@ -92,9 +102,12 @@ export class SubscriptionSection extends LitElement {
 
   override render(): TemplateResult {
     const provider = this.provider;
+    const contextWindowSetting = provider.contextWindowSetting;
     const signedIn = this.auth?.signedIn ?? false;
     const preferSubscription = this.auth?.preferSubscription ?? false;
     const account = provider.accountLabel(this.auth);
+    // A same-value settings rebroadcast must repaint a rejected number edit.
+    void this.ackGeneration;
     return html`
       <section id=${provider.sectionId}>
         ${renderSettingsSectionHeading({
@@ -116,6 +129,20 @@ export class SubscriptionSection extends LitElement {
             checked: preferSubscription,
             onChange: this.handlePreferSubscriptionChange,
           })}
+          ${
+            contextWindowSetting
+              ? renderSettingsNumberRow({
+                  label: 'Subscription input token budget',
+                  description: contextWindowSetting.description,
+                  value: this.contextWindow,
+                  min: contextWindowSetting.min,
+                  max: contextWindowSetting.max,
+                  unit: 'tokens',
+                  onChange: (value) =>
+                    postStateSetting(contextWindowSetting.configKey, value),
+                })
+              : ''
+          }
           <div class="settings-row">
             <div class="settings-row-text">
               <span class="settings-row-label">
@@ -173,7 +200,8 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     title: CHATGPT_AUTH.subscriptionLabel,
     description:
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
-    note: 'The subscription currently uses a 272,000-token Codex context cap, not the full 1,000,000-token API context.',
+    note: 'Subscription routing uses a 272,000-token input budget by default. GPT-5.6 models support up to 872,000 input tokens; the displayed context also includes the output budget.',
+    contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.preferLabel,
     preferDescription: 'Use the subscription for eligible Codex models.',
     accountTitle: 'ChatGPT account',

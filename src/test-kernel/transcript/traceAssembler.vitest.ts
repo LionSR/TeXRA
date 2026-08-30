@@ -9,7 +9,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import {
-  EXECUTION_STATUS,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -140,7 +139,7 @@ describe('assembleTrace', () => {
       id: 'entry-1',
       text: 'hello',
     });
-    expect(trace.terminalStatus).toBe(EXECUTION_STATUS.COMPLETED);
+    expect(trace.meta?.outcome).toBe('completed');
     expect(trace.snapshot.streamId).toBe(streamId);
   });
 
@@ -215,18 +214,5 @@ describe('assembleTrace', () => {
 
     expect(trace.streamId).toBe(actualChildStreamId);
     expect(trace.entries).toHaveLength(1);
-  });
-
-  it('returns a null terminalStatus when meta has no recorded outcome', async () => {
-    const executionId = 'exec-no-outcome' as ExecutionId;
-    const executionConfig = config();
-    const streamId = getStreamTabId(executionConfig.agent, { executionId });
-    await writeExecution(executionId, { streamId }, executionConfig);
-    await appendLogEntry(streamId, 'hello');
-
-    const trace = unwrapOkTrace(await assembleTrace(executionId));
-
-    expect(trace.meta).not.toBeNull();
-    expect(trace.terminalStatus).toBeNull();
   });
 });

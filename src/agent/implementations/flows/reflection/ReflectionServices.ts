@@ -8,11 +8,6 @@ import type { OutputState } from './output/outputState';
 import type { LatexDiffManager } from './output/LatexDiffManager';
 import type { XmlOutputManager } from './output/XmlOutputManager';
 
-export interface WorkflowOutputPolicy {
-  readonly shouldAutoOpenPdfOrLog: () => boolean;
-  readonly shouldRejectOnCompileFailure: () => boolean;
-}
-
 export interface ReflectionServices extends BaseFlowContextInit {
   readonly setting: AgentWorkflowSetting;
   readonly outputState: OutputState;
@@ -24,6 +19,5 @@ export interface ReflectionServices extends BaseFlowContextInit {
   readonly getOutputFileLocation: (
     round: number,
   ) => AgentFileLocation | Promise<AgentFileLocation>;
-  readonly workflowOutputPolicy: WorkflowOutputPolicy;
   readonly baseFiles: FileLocation[];
 }

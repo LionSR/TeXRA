@@ -30,7 +30,6 @@ function outputFile(): OutputFileInfo {
         relativePath: 'paper.tex',
       },
       diffBase: null,
-      diffFile: null,
     },
     diff: { added: 2, removed: 1 },
   };

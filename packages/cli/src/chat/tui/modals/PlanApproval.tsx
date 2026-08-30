@@ -21,6 +21,7 @@ import { confirmCardCompactChromeRows } from './ConfirmCardState';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface PlanApprovalProps {
+  readonly autoApproveAll: boolean;
   readonly availableRows?: number;
   readonly payload: PlanApprovalPermission;
   readonly onDecide: (decision: ApprovalDecision) => void;
@@ -49,10 +50,18 @@ export function isCompactPlanApprovalRows(
   );
 }
 
-export function planApprovalGoalNoticeLine(width: number): string {
+export function planApprovalGoalNoticeLine(
+  width: number,
+  autoApproveAll = false,
+): string {
   const lineWidth = Math.max(1, width);
   return fillRows(
-    truncateToWidth(PLAN_GOAL_COPY.cliNotice, lineWidth),
+    truncateToWidth(
+      autoApproveAll
+        ? PLAN_GOAL_COPY.cliAutoApproveAllNotice
+        : PLAN_GOAL_COPY.cliNotice,
+      lineWidth,
+    ),
     lineWidth,
   );
 }
@@ -93,7 +102,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedbackValue, setFeedbackValue] = useState('');
-  const { availableRows, onDecide, payload } = props;
+  const { autoApproveAll, availableRows, onDecide, payload } = props;
   const { goalEnabled, plan } = payload;
   const compact = isCompactPlanApprovalRows(availableRows, goalEnabled);
   const contentWidth = clampModalWidth(
@@ -147,6 +156,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
                 label: PLAN_APPROVAL_GOAL_ACTION.action,
                 decision: {
                   accepted: true,
+                  ...(autoApproveAll ? { goalAutoApproveAll: true } : {}),
                   planAction: 'approve_and_goal',
                 },
               },
@@ -159,7 +169,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       onDecide={onDecide}
     >
       {compact && goalNoticeVisible && (
-        <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
+        <Text>{planApprovalGoalNoticeLine(contentWidth, autoApproveAll)}</Text>
       )}
       <ScrollableModalText
         hiddenNoun={PLAN_APPROVAL_HIDDEN_NOUN}
@@ -175,7 +185,9 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       {!compact && goalNoticeVisible && (
         <Box flexDirection="column">
           <Text> </Text>
-          <Text>{planApprovalGoalNoticeLine(contentWidth)}</Text>
+          <Text>
+            {planApprovalGoalNoticeLine(contentWidth, autoApproveAll)}
+          </Text>
         </Box>
       )}
     </ConfirmCard>

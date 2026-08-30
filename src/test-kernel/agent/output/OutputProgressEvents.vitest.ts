@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -22,6 +22,8 @@ import type {
   OutputFileInfo,
   StreamTabId,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { installPlatform } from '@test/support/setupPlatform';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import {
   createExternalLocation,
@@ -42,11 +44,6 @@ function createLocation(path: string): FileLocation {
 function createAgentLocation(path: string): AgentFileLocation {
   return createWorkspaceLocation(path, path);
 }
-
-const defaultWorkflowOutputPolicy = {
-  shouldAutoOpenPdfOrLog: () => true,
-  shouldRejectOnCompileFailure: () => true,
-};
 
 /**
  * Minimal OutputDependencies for the output-extraction tests: the code under
@@ -96,16 +93,15 @@ function createCompileFailureFixture() {
 function createOutputNode(
   streamId: string,
   host: ReturnType<typeof createRecordingHost>['host'],
-  workflowOutputPolicy: typeof defaultWorkflowOutputPolicy = defaultWorkflowOutputPolicy,
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
+  signal?: AbortSignal,
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
-    runScope: testRunScope(streamId, { interactions: host }),
+    runScope: testRunScope(streamId, { interactions: host, signal }),
     logger,
     outputState,
-    workflowOutputPolicy,
   } as unknown as ReflectionServices);
 }
 
@@ -145,7 +141,7 @@ function runOutputPost(
 
 function compileContextCase(
   streamId: string,
-  workflowOutputPolicy = defaultWorkflowOutputPolicy,
+  signal?: AbortSignal,
 ): {
   outputNode: OutputNode;
   fixture: ReturnType<typeof createCompileFailureFixture>;
@@ -153,13 +149,25 @@ function compileContextCase(
 } {
   const { host } = createRecordingHost();
   return {
-    outputNode: createOutputNode(streamId, host, workflowOutputPolicy),
+    outputNode: createOutputNode(
+      streamId,
+      host,
+      noopTrace,
+      createOutputState(),
+      signal,
+    ),
     fixture: createCompileFailureFixture(),
     shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
   };
 }
 
 describe('output progress events', () => {
+  // OutputNode reads the workflow-output settings straight from the platform,
+  // so a case that seeds them must hand the suite default back afterwards.
+  afterEach(async () => {
+    await installPlatform();
+  });
+
   it('publishes output events and projects restored rounds', async () => {
     const projected = createRecordedRuntime('stream:output-node');
     const { events, host, hostEvents, logger } = projected;
@@ -179,7 +187,6 @@ describe('output progress events', () => {
     const outputNode = createOutputNode(
       'stream:output-node',
       host,
-      defaultWorkflowOutputPolicy,
       logger,
       outputState,
     );
@@ -198,7 +205,6 @@ describe('output progress events', () => {
             fileInfos: [fileInfo],
             filesToOpen: [openedLocation],
           },
-          compileFailures: [],
           compiledArtifacts: [],
           emitCompileFailures: false,
         },
@@ -238,10 +244,13 @@ describe('output progress events', () => {
       rejectOnCompileFailure: false,
     },
   ])('$name', async ({ streamId, rejectOnCompileFailure }) => {
-    const { outputNode, fixture, shared } = compileContextCase(streamId, {
-      ...defaultWorkflowOutputPolicy,
-      shouldRejectOnCompileFailure: () => rejectOnCompileFailure,
+    await installPlatform({
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]:
+          rejectOnCompileFailure,
+      },
     });
+    const { outputNode, fixture, shared } = compileContextCase(streamId);
 
     await runOutputPost(
       outputNode,
@@ -253,7 +262,6 @@ describe('output progress events', () => {
       },
       {
         summary: fixture.summary,
-        compileFailures: [fixture.compileFailure],
         compileResult: fixture.compileResult,
         compiledArtifacts: [],
         emitCompileFailures: false,
@@ -290,7 +298,6 @@ describe('output progress events', () => {
       },
       {
         summary: fixture.summary,
-        compileFailures: [],
         compileResult,
         compiledArtifacts: [],
         emitCompileFailures: false,
@@ -298,6 +305,62 @@ describe('output progress events', () => {
     );
 
     expect(shared.compileFailureContext).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: 'sets the final compile failure when the run is active',
+      aborted: false,
+      expectedLastError: {
+        message:
+          'Automatic LaTeX compilation failed after the final workflow round.',
+        userRetryable: false,
+      },
+    },
+    {
+      name: 'does not overwrite cancellation with the final compile failure',
+      aborted: true,
+      expectedLastError: undefined,
+    },
+  ])('$name', async ({ aborted, expectedLastError }) => {
+    await installPlatform({
+      workspaceState: {
+        [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
+      },
+    });
+    const controller = new AbortController();
+    const { outputNode, fixture } = compileContextCase(
+      `stream:final-compile-failure-${aborted ? 'aborted' : 'active'}`,
+      controller.signal,
+    );
+    const shared = {
+      roundOutputs: [],
+      currentRound: 1,
+      totalRounds: 2,
+      continueRounds: true,
+    } as unknown as ReflectionFlowShared;
+    if (aborted) controller.abort();
+
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastError).toEqual(expectedLastError);
+    expect(shared.compileFailureContext).toContain(
+      'previous workflow round was rejected',
+    );
   });
 
   it.each([

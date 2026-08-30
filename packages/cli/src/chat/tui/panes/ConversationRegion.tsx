@@ -8,7 +8,7 @@ import { useLayoutEffect, type ReactNode } from 'react';
 
 // Local imports - shared constants and schemas
 import { clampModalWidth } from '@cli/tui/ui/theme';
-import type { StreamTabId, WorkflowControlAction } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
@@ -21,10 +21,7 @@ import {
   staticScrollbackTarget,
   staticTranscriptRowBudget,
 } from '../appLayout';
-import {
-  isScopedTranscriptViewport,
-  transcriptViewportKey,
-} from '../state/transcriptViewportMode';
+import { activeTranscriptViewport } from '../state/transcriptViewportMode';
 import { ConversationPane } from './ConversationPane';
 import {
   QueuedFollowUpsPanel,
@@ -44,14 +41,9 @@ import {
   streamArtifactRevision,
 } from '../state/subscribeStreamArtifacts';
 import { staticTranscriptRepaintEpoch } from '../state/staticTranscriptRepaint';
-import {
-  workflowDashboardPanelItemCount,
-  type WorkflowDashboardModel,
-} from '../state/workflowDashboardModel';
 import { useSignal } from '../state/useSignal';
 import type { ForegroundSurfaceKind } from '../appInteractionPolicy';
 import type { PendingApprovalKind } from '../state/approvalQueue';
-import type { ChildListTarget } from '../state/childControls';
 import type { StreamSlice } from '../state/cliState';
 import type { StreamView } from '../state/streamViews';
 
@@ -69,18 +61,12 @@ interface ConversationRegionSnapshot {
   readonly selectedChildValue: ChildListValue | undefined;
   /** Stream `selectedChildValue` points at, resolved once by `App`. */
   readonly selectedChildStreamId: StreamTabId | undefined;
-  /** Whether that stream is a skip/retry-able workflow-script grandchild —
-   *  the fact the status bar's `s`/`r` hint reads. */
-  readonly selectedChildWorkflowControllable: boolean;
-  /** Dashboard rows for a workflow-script list root, derived once by `App`. */
-  readonly workflowDashboard: WorkflowDashboardModel | undefined;
-  readonly workflowDashboardRootHasApproval: boolean;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly subagentExecutionLabels: ExecutionLabels;
   readonly activeSubagentExecutionIds: ReadonlyMap<StreamTabId, string>;
-  readonly childListTarget: ChildListTarget;
+  readonly listRootStreamId: StreamTabId | undefined;
   readonly pendingApprovals: ReadonlyMap<
     string,
     readonly PendingApprovalKind[]
@@ -100,10 +86,6 @@ interface ConversationRegionProps {
   readonly onChildSelectionChange: (value: ChildListValue) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
-  readonly onWorkflowControl: (
-    executionId: string,
-    action: WorkflowControlAction,
-  ) => void;
 }
 
 export function ConversationRegion({
@@ -114,7 +96,6 @@ export function ConversationRegion({
   onChildSelectionChange,
   onFocusSession,
   onKillExecution,
-  onWorkflowControl,
   onStaticTranscriptChange,
   renderFooterChrome,
   renderForegroundSurface,
@@ -122,11 +103,11 @@ export function ConversationRegion({
   snapshot,
 }: ConversationRegionProps): React.JSX.Element {
   const foregroundOpen = snapshot.foregroundKind !== undefined;
-  const viewportKey = transcriptViewportKey({
-    activeStreamId: snapshot.activeStreamId,
-    parentStream: snapshot.parentStream,
-  });
-  const scopedTranscript = isScopedTranscriptViewport(viewportKey);
+  const { key: viewportKey, scoped: scopedTranscript } =
+    activeTranscriptViewport({
+      activeStreamId: snapshot.activeStreamId,
+      parentStream: snapshot.parentStream,
+    });
   const scrollbackTarget = staticScrollbackTarget({
     activeStreamId: snapshot.activeStreamId,
     rootStreamId: snapshot.rootStreamId,
@@ -198,16 +179,8 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeSlice
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
-  const workflowDashboardItemCount = workflowDashboardPanelItemCount(
-    snapshot.workflowDashboard,
-    snapshot.selectedChildValue,
-    snapshot.workflowDashboardRootHasApproval,
-  );
-  const sessionPanelItemCount =
-    workflowDashboardItemCount > 0
-      ? workflowDashboardItemCount
-      : snapshot.sessionViews.length;
-  const minimumSessionPanelRows = workflowDashboardItemCount > 1 ? 3 : 2;
+  const sessionPanelItemCount = snapshot.sessionViews.length;
+  const minimumSessionPanelRows = 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,
@@ -289,18 +262,12 @@ export function ConversationRegion({
               onCancel={onCancelChildList}
               onFocusStream={onFocusSession}
               onKillExecution={onKillExecution}
-              onWorkflowControl={onWorkflowControl}
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
-              listRootStreamId={snapshot.childListTarget.streamId}
-              dashboard={snapshot.workflowDashboard}
+              listRootStreamId={snapshot.listRootStreamId}
               selectedChildStreamId={snapshot.selectedChildStreamId}
-              selectedChildWorkflowControllable={
-                snapshot.selectedChildWorkflowControllable
-              }
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
-              streams={snapshot.streams}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
             />
             <TodosPlanPanel

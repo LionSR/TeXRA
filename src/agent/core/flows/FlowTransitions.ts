@@ -2,7 +2,6 @@ export const FlowTransition = {
   DEFAULT: 'default',
   COMPLETE: 'complete',
   CONTINUE: 'continue',
-  FINALIZE: 'finalize',
   WAITING: 'waiting',
 } as const;
 

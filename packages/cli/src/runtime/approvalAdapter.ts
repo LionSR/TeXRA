@@ -289,7 +289,6 @@ export function createHeadlessCliHostInteractions(
         cause:
           'External inquiry is not available in non-TUI CLI runs: inquiry answers are delivered as asynchronous continuations, and this process cannot resume them after the run finalizes. Use texra chat for the inquiry panel, or ask_user_question for synchronous CLI input.',
       });
-      return { threadId: request.threadId };
     },
     // Headless requests decide inline (policy or prompt hooks) — there is no
     // pending registry to cancel into.

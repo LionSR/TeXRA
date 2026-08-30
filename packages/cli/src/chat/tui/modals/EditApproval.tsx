@@ -20,10 +20,12 @@ import {
 import {
   DiffView,
   initialDiffScrollOffset,
-  maxDiffScrollOffset,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
-import { COMPACT_SCROLLABLE_CONTENT_ROWS } from '../render/scrollBounds';
+import {
+  COMPACT_SCROLLABLE_CONTENT_ROWS,
+  maxScrollableRowOffset,
+} from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type {
   ApprovalDecision,
@@ -103,7 +105,10 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],
   );
-  const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
+  const maxScrollOffset = maxScrollableRowOffset({
+    maxDisplayLines: maxDiffLines,
+    totalLines: diffRows,
+  });
   const initialScrollOffset = useMemo(
     () => initialDiffScrollOffset(hunks, diffWidth, maxDiffLines),
     [diffWidth, hunks, maxDiffLines],

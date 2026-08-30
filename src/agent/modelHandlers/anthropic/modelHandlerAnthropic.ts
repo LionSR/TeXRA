@@ -53,7 +53,6 @@ import type {
   ToolFileAttachment,
   ToolResult,
 } from '@shared/schemas';
-import { joinNonEmpty } from '@utils/text/stringUtils';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
@@ -1188,17 +1187,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
   }
 
-  override extractAssistantText(message: MessageParam): string | undefined {
-    if (message.role !== 'assistant') return undefined;
-    if (typeof message.content === 'string') return message.content;
-    if (!Array.isArray(message.content)) return undefined;
-    return joinNonEmpty(
-      message.content.filter(isTextBlockParam).map((b) => b.text),
-    );
-  }
-
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
-  createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
+  override createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
     if (mediaMessage.length === 0) {
       return [];
     }
@@ -1390,7 +1380,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  protected createAssistantMessageForAccumulatedOutput(
+  protected override createAssistantMessageForAccumulatedOutput(
     workspaceState: AgentWorkspaceState,
   ): MessageParam {
     this.logger.debug('Creating new assistant message for fresh request');
@@ -1415,7 +1405,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Determines if generation should continue based on stop reason and end tag presence. */
-  shouldContinue(
+  override shouldContinue(
     stopReason: ProviderStopReason,
     newResponse: string,
     _agentSetting: AgentSetting,

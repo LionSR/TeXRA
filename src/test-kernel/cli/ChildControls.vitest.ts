@@ -78,10 +78,7 @@ describe('CLI child controls', () => {
         parentStream,
         streams,
       }),
-    ).toMatchObject({
-      streamId: root,
-      slice: streams.get(root),
-    });
+    ).toBe(root);
   });
 
   it('roots nested child-list rows at the resolved target stream', () => {
@@ -107,13 +104,13 @@ describe('CLI child controls', () => {
       streams,
     });
 
-    expect(target.streamId).toBe(child);
+    expect(target).toBe(child);
     expect(
       streamTreeViews({
         activeStreamId: child,
         childRosters: entries,
         parentStream,
-        rootStreamId: target.streamId,
+        rootStreamId: target,
         streams,
       }).map((view) => view.id),
     ).toEqual([child, leaf]);

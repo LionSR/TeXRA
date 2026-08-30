@@ -12,6 +12,7 @@ import {
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import {
   usageLoggingOptOut,
   type UsageLoggingOptOut,
@@ -191,27 +192,31 @@ async function checkAuth(
     const profile = await deps.authProfile();
     if (profile.authenticated) {
       const accountLabel = profile.accountLabel || 'unknown';
-      return pass('auth', 'TeXRA account', `Signed in as ${accountLabel}.`);
+      return pass(
+        'auth',
+        RESEARCHER_ACCESS.label,
+        `Signed in as ${accountLabel}.`,
+      );
     }
     if (profile.sessionState === 'transient') {
       return warn(
         'auth',
-        'TeXRA account',
+        RESEARCHER_ACCESS.label,
         'The authentication service is temporarily unavailable.',
         'Your stored session is intact; retry once the service is reachable rather than signing in again.',
       );
     }
     return warn(
       'auth',
-      'TeXRA account',
+      RESEARCHER_ACCESS.label,
       'Not signed in.',
       'Run `texra login` for the hosted research-agent catalog, or add a provider API key with `texra setup`.',
     );
   } catch (error) {
     return failFromError(
       'auth',
-      'TeXRA account',
-      'Could not read TeXRA sign-in state.',
+      RESEARCHER_ACCESS.label,
+      `Could not read ${RESEARCHER_ACCESS.label} sign-in state.`,
       error,
     );
   }

@@ -27,9 +27,15 @@ import {
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { warn as logWarning } from '@logger/logUtils';
-import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import { createLog, warn as logWarning } from '@logger/logUtils';
+import {
+  API_PROVIDERS,
+  apiKeyEnvName,
+  apiKeySecretName,
+  type ApiProvider,
+} from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import {
   backfillFirstRunDone,
@@ -49,13 +55,19 @@ import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { signInCliSubscription } from '../runtime/subscriptionLogin';
-import { hasCliRunCredential } from '../runtime/credentialStatus';
 import { saveProviderApiKey } from '../runtime/providerApiKey';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
-import { formatSavedKeySummary } from './onboardingState';
+/**
+ * Human-facing "we stored your key here" line. Naming the exact secret entry
+ * (and the env-var alternative) fixes the opacity other CLIs have about where a
+ * pasted key actually went. Never includes the key itself.
+ */
+function formatSavedKeySummary(provider: ApiProvider): string {
+  return `Saved your ${providerDisplayName(provider)} API key. Stored in TeXRA secrets as \`${apiKeySecretName(provider)}\` (or set ${apiKeyEnvName(provider)} in your environment).`;
+}
 
 interface CliOnboardingResult {
   /**
@@ -80,6 +92,7 @@ interface OnboardingGateContext {
 }
 
 const LOG_CHANNEL = 'CLI Onboarding';
+const credentialLog = createLog('Setup Credentials');
 
 /**
  * The gate degrades to "not configured yet" when a state read or write fails,
@@ -125,7 +138,10 @@ export async function maybeRunCliOnboarding(
     return NO_ONBOARDING_RESULT;
   }
   const globalState = platform().globalState;
-  const hasCredential = await hasCliRunCredential();
+  const hasCredential = await hasUsableSetupCredential(
+    platform().secrets,
+    credentialLog.warn,
+  );
   // Onboarding-funnel backfill (PRD: agent-native onboarding): a CLI user
   // with execution history never enters State 0/1. Credential presence alone
   // does not prove this is an upgrader: fresh installs can inherit env keys.
@@ -144,9 +160,8 @@ export async function maybeRunCliOnboarding(
         },
       )
     : false;
-  // LAST_KNOWN_VERSION is stamped by desktop/extension startup. The CLI's
-  // API-mode preference is written during platform init, including first launch,
-  // so it is not a reliable prior-install signal.
+  // LAST_KNOWN_VERSION is stamped by desktop/extension startup and is the
+  // reliable prior-install signal shared across hosts.
   const hasPriorInstall =
     needsFirstRunBackfill &&
     globalState.get<string | undefined>(GlobalStateKey.LAST_KNOWN_VERSION) !==

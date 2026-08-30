@@ -121,17 +121,16 @@ export interface CliHistoryConversationPreviewMessage {
 /** A run's generated files and its edited workspace files render alike. */
 type CliHistoryFile = RunGeneratedFile;
 
-export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
-
 /** Rows the resume surfaces offer. Both the launcher's resume browser and the
  *  `/resume` form read this, and the launcher's Resume row counts against it,
- *  so the advertised count can never exceed the list it opens. */
-export const RESUME_LIST_LIMIT = 50;
+ *  so the advertised count can never exceed the list it opens. Filtering and
+ *  capping live together so a caller cannot honor one half of the rule. */
+const RESUME_LIST_LIMIT = 50;
 
-export function resumableCliHistoryEntries<
+export function listResumableCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'resumable'>,
 >(entries: readonly T[]): T[] {
-  return entries.filter((entry) => entry.resumable);
+  return entries.filter((entry) => entry.resumable).slice(0, RESUME_LIST_LIMIT);
 }
 
 export type CliHistoryDeleteResult =

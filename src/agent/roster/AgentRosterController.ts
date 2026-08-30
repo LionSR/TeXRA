@@ -171,7 +171,7 @@ export class AgentRosterController<
     return allPresets(this.extraPresets());
   }
 
-  getSelection(): AgentRosterSelection {
+  private getSelection(): AgentRosterSelection {
     return readAgentRosterSelection(this.deps.workspaceState);
   }
 
@@ -179,9 +179,9 @@ export class AgentRosterController<
     return getDefaultTeamId(this.deps.globalState);
   }
 
-  getEffectiveSelection(): AgentRosterSnapshot['effectiveSelection'] {
-    const selection = this.getSelection();
-    return this.resolveEffectiveSelection(selection);
+  private getEffectiveSelection(): AgentRosterSnapshot['effectiveSelection'] {
+    return this.resolveEffectiveSelection(this.getSelection())
+      .effectiveSelection;
   }
 
   /** The team this workspace effectively runs, or null when it runs no team. */
@@ -214,7 +214,8 @@ export class AgentRosterController<
 
   snapshot(): AgentRosterSnapshot {
     const selection = this.getSelection();
-    const effectiveSelection = this.resolveEffectiveSelection(selection);
+    const { effectiveSelection, missingTeamId } =
+      this.resolveEffectiveSelection(selection);
     const presets = this.extraPresets();
     const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
       const identifiers = selectedIdentifiers(
@@ -231,7 +232,7 @@ export class AgentRosterController<
       selection,
       effectiveSelection,
       defaultTeamId: this.getDefaultTeamId(),
-      missingTeamId: this.missingTeamId(selection),
+      missingTeamId,
       unresolvedNames: unique(unresolvedNames),
     };
   }
@@ -270,24 +271,26 @@ export class AgentRosterController<
     );
   }
 
-  private resolveEffectiveSelection(
-    selection: AgentRosterSelection,
-  ): AgentRosterSnapshot['effectiveSelection'] {
-    if (selection.kind === 'inherit') {
-      const teamId = this.teamIdOf(selection);
-      if (!teamId) return { kind: 'all' };
-      selection = { kind: 'team', teamId };
-    }
-    if (selection.kind === 'team' && !this.hasPreset(selection.teamId)) {
-      return { kind: 'all' };
-    }
-    return selection;
-  }
-
-  private missingTeamId(selection: AgentRosterSelection): string | undefined {
+  /**
+   * Resolve a selection once, answering both questions the snapshot asks of
+   * it: what the workspace effectively runs, and — when the selection names a
+   * team preset that no longer exists — which team id went missing.
+   */
+  private resolveEffectiveSelection(selection: AgentRosterSelection): {
+    effectiveSelection: AgentRosterSnapshot['effectiveSelection'];
+    missingTeamId: string | undefined;
+  } {
     const teamId = this.teamIdOf(selection);
-    if (!teamId) return undefined;
-    return this.hasPreset(teamId) ? undefined : teamId;
+    if (teamId && !this.hasPreset(teamId)) {
+      return { effectiveSelection: { kind: 'all' }, missingTeamId: teamId };
+    }
+    if (selection.kind === 'inherit') {
+      return {
+        effectiveSelection: teamId ? { kind: 'team', teamId } : { kind: 'all' },
+        missingTeamId: undefined,
+      };
+    }
+    return { effectiveSelection: selection, missingTeamId: undefined };
   }
 
   private effectiveCategorySelection(

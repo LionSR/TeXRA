@@ -13,7 +13,6 @@ import {
   type StreamTabId,
   type WorkflowCallProgress,
 } from '@shared/schemas';
-import { workflowPhaseCallProgress } from '@shared/copy/workflowCall';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
@@ -108,23 +107,44 @@ function latestWorkflowCallEvents(
 beforeEach(() => clearStoreCache());
 
 describe('workflow-script progress bridge', () => {
-  it('announces an attempt before script parsing can fail', async () => {
+  it('records the declared plan once, before any phase opens', async () => {
     const { trace, events } = recordingTrace();
+    await runScript(
+      trace,
+      'plan-marker',
+      `export const meta = {
+  name: 'plan-marker-test',
+  description: 'records the declared plan',
+  phases: [{ title: 'Research' }, { title: 'Write' }],
+  tasks: [
+    { id: 'inspect', label: 'Inspect source', phase: 'Research' },
+    { id: 'draft', label: 'Draft the section', phase: 'Write' },
+  ],
+}
+phase('Research')
+return await agent('Inspect', { id: 'inspect' })`,
+    );
 
-    await expect(
-      runScript(trace, 'invalid-script', 'not valid js'),
-    ).rejects.toThrow();
-
-    expect(events[0]).toMatchObject({
-      type: 'workflow.attempt',
+    const plans = events.filter((event) => event.type === 'workflow.plan');
+    expect(plans).toHaveLength(1);
+    expect(plans[0]).toMatchObject({
       attemptId: expect.any(String),
+      phases: [{ title: 'Research' }, { title: 'Write' }],
+      tasks: [
+        { id: 'inspect', label: 'Inspect source', phase: 'Research' },
+        { id: 'draft', label: 'Draft the section', phase: 'Write' },
+      ],
     });
-    expect(
-      events.some(
-        (event) =>
-          event.type === 'workflow.call' || event.type === 'stage.start',
-      ),
-    ).toBe(false);
+    // The plan precedes the first phase stage and every card.
+    const planIndex = events.indexOf(plans[0]!);
+    const firstStage = events.findIndex(
+      (event) => event.type === 'stage.start',
+    );
+    const firstCard = events.findIndex(
+      (event) => event.type === 'workflow.call',
+    );
+    expect(planIndex).toBeLessThan(firstStage);
+    expect(planIndex).toBeLessThan(firstCard);
   });
 
   it('keeps planned call cards in their phase stage across incremental updates', async () => {
@@ -187,7 +207,6 @@ return await agent('Inspect', { id: 'inspect' })`,
         kind: 'phase',
         index: 0,
         total: 2,
-        attemptId: planned?.call.attemptId,
       }),
     );
     expect(events.some((event) => event.type === 'child.activity')).toBe(false);
@@ -384,12 +403,8 @@ return await agent('Run loose', { id: 'loose' })`,
     const researchId = stageId(events, 'Research');
     const latest = latestWorkflowCallEvents(events);
     expect(
-      workflowPhaseCallProgress(
-        latest.flatMap((event) =>
-          event.call.phase === 'Research' ? [event.call] : [],
-        ),
-      ),
-    ).toEqual({ done: 0, total: 0 });
+      latest.filter((event) => event.call.phase === 'Research'),
+    ).toHaveLength(0);
     expect(latest.filter((event) => event.stageId === researchId)).toHaveLength(
       0,
     );
@@ -416,10 +431,12 @@ return await agent('Run loose', { id: 'loose' })`,
     );
 
     const researchId = stageId(events, 'Research');
-    expect(workflowCallEvent(events, 'Loose task', 'failed')).toMatchObject({
+    const failed = workflowCallEvent(events, 'Loose task', 'failed');
+    expect(failed).toMatchObject({
       stageId: undefined,
-      call: { phase: undefined, error: 'model unavailable' },
+      call: { error: 'model unavailable' },
     });
+    expect(failed?.call.phase).toBeUndefined();
     expect(events).toContainEqual({
       type: 'stage.end',
       id: researchId,

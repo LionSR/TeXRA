@@ -16,6 +16,7 @@ import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
+  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   SETTINGS_TAB_PANEL_BY_NAME,
   type ChatGptAuthStatus,
   type CopilotRouteInfo,
@@ -69,7 +70,11 @@ export class SubscriptionsTab extends LitElement {
     `,
   ];
 
+  /** Parent-owned acknowledgement generation for restoring rejected edits. */
+  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) chatgptAuth: ChatGptAuthStatus | null = null;
+  @property({ attribute: false }) chatgptCodexContextWindow =
+    CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.defaultValue;
   @property({ attribute: false }) grokAuth: GrokAuthStatus | null = null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
@@ -128,8 +133,10 @@ export class SubscriptionsTab extends LitElement {
           </div>
         </div>
         <subscription-section
+          .ackGeneration=${this.ackGeneration}
           .provider=${CHATGPT_SUBSCRIPTION_SECTION}
           .auth=${this.chatgptAuth}
+          .contextWindow=${this.chatgptCodexContextWindow}
           .usage=${this.usage?.chatgpt ?? null}
           .now=${this.now}
         ></subscription-section>

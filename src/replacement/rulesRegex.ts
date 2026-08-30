@@ -408,10 +408,10 @@ export const EQUATION_STYLE_REPLACEMENTS: RegexReplacementCategory = {
       (cmd) => [[`\\\\${cmd}\\{\\s+([^}]*)\\s+\\}`, `\\${cmd}{$1}`]],
     ),
     // Remove spaces inside caption (only horizontal whitespace, preserving newlines for multi-line captions)
-    '\\\\caption\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}':
+    '\\\\caption{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)}':
       createCaptionTrimmer('\\caption'),
     // Remove spaces inside caption*
-    '\\\\caption\\*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}':
+    '\\\\caption\\*{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)}':
       createCaptionTrimmer('\\caption*'),
   },
 };

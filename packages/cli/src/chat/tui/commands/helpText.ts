@@ -18,7 +18,7 @@ export const GOAL_MODE_HELP = [
   'Ask the agent to create a plan, then choose `r run as goal` in the plan approval panel. ' +
     'The active goal keeps the agent working across turns until it verifies completion, pauses, or you stop it.',
   '',
-  'Use `/status` to inspect the active session. Goal mode auto-approves bash only; edits and other approvals still ask.',
+  'Use `/goal` to choose whether goal mode auto-approves commands only or all goal work (commands, file edits, and delegated work). Other prompts still ask. Use `/status` to inspect the active session.',
 ].join('\n');
 
 // Help sections in display order; `undefined` collects uncategorized

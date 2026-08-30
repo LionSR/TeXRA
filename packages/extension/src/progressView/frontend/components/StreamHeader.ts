@@ -10,7 +10,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type {
   ConversationProgress,
-  GoalStatus,
+  GoalState,
   StreamStage,
   StreamState,
   StreamTabInfo,
@@ -422,9 +422,11 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       superYolo: Boolean(toolUse?.superYoloBypass),
       toolEdit: Boolean(toolUse?.toolEditBypass),
     };
-    const goalActive = Boolean(toolUse?.goalActive);
-    const goalStatus = toolUse?.goalStatus;
-    const goalObjective = toolUse?.goalObjective ?? '';
+    const goal = deriveGoalState({
+      goalActive: toolUse?.goalActive,
+      goalStatus: toolUse?.goalStatus,
+      goalObjective: toolUse?.goalObjective,
+    });
     const hasExecutionId = Boolean(this.stream.executionId);
     const identity = this.stream.identity;
     const isNativeAgentRun = isPlainAgentIdentity(identity);
@@ -546,7 +548,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
             ${streamStatusTooltip(state, statusLabel)}
           </wa-tooltip>
           ${this.renderRunElapsed(state?.runStartedAt)}
-          ${this.renderGoalChip(goalActive, goalStatus, goalObjective)}
+          ${this.renderGoalChip(goal)}
           ${this.renderProgressBadge(progress, stage)}
         </div>
         <div class="header-actions">
@@ -591,20 +593,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     return { disabled, hidden };
   }
 
-  private renderGoalChip(
-    goalActive: boolean,
-    goalStatus: GoalStatus | undefined,
-    goalObjective: string,
-  ): TemplateResult | typeof nothing {
-    // `goalActive`/`goalStatus`/`goalObjective` are three independently-set
-    // state fields (mirroring the wire/storage shape) — derive the canonical
-    // "status/objective only meaningful when active" union once here rather
-    // than guarding ad hoc.
-    const goal = deriveGoalState({
-      goalActive,
-      goalStatus,
-      goalObjective: goalObjective || undefined,
-    });
+  private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {
     if (!goal.active) return nothing;
     const isPaused = goal.status === 'paused';
     const label = isPaused ? 'Goal paused' : 'Goal';

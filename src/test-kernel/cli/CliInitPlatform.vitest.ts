@@ -510,6 +510,7 @@ describe('CLI platform init', () => {
     );
 
     expect(mocks.initializeNodeRuntimeSkills).toHaveBeenCalledWith({
+      host: 'cli',
       cwd: '/tmp/project',
       resourcesPath: '/tmp/resources',
       skillSourceOptions: {

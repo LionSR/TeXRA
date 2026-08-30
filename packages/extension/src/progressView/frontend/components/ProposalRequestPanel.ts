@@ -29,17 +29,16 @@ import type {
   AgentProposalPermission,
   PermissionPayload,
   WorkflowAgentProposalPermission,
-  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { AgentCategory, getProposalFileGroups } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowCallCardLine,
-  workflowScriptDeclaredItemsByPhase,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 import { markdownStyles } from '@shared/styles/markdownStyles';
+import { getModelLabel } from '@shared/model/modelLabel';
 import {
   readSelectValue,
   renderAgentOptions,
@@ -100,15 +99,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     }
   }
 
-  // Setup restores the proposal into the main view for a manual run. A
-  // per-call review card decides only whether the script's call runs now
-  // (admission is run|skip), so it offers no Setup.
-  private get canSetup(): boolean {
-    return this.permission.data.workflowCall === undefined;
-  }
-
   protected override handleExtraKey(key: string): boolean {
-    if (key === 's' && this.canSetup) {
+    if (key === 's') {
       this.emitAction({ action: 'setup' });
       return true;
     }
@@ -127,20 +119,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     this.emitAction(this.approveAllDelegatedWorkDecision);
   }
 
-  protected override get canReviewWorkflowCalls(): boolean {
-    const data = this.permission.data;
-    return (
-      data.agentCategory === AgentCategory.Workflow &&
-      data.workflowScript !== undefined
-    );
-  }
-
-  protected override reviewWorkflowCallsHandler(
-    scope: Exclude<WorkflowCallReviewScope, 'none'>,
-  ): void {
-    this.emitAction({ action: 'approve', callReview: scope });
-  }
-
   override render(): TemplateResult {
     const data = this.permission.data;
     const modelOptions = this.permission.modelOptionsData ?? [];
@@ -150,8 +128,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     let categoryLabel = 'Tool-Use';
     if (workflowScript) {
       categoryLabel = 'Multi-agent workflow';
-    } else if (data.workflowCall) {
-      categoryLabel = 'Workflow call';
     } else if (isWorkflow) {
       categoryLabel = 'Workflow';
     }
@@ -205,11 +181,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                   </div>
                 `
               : html`<span class="workflow-proposal__model"
-                  >${data.model}</span
+                  >${getModelLabel(data.model)}</span
                 >`
           }
         </div>
-        ${this.renderWorkflowCallContext(data)}
         ${
           workflowScript
             ? this.renderWorkflowScriptSummary(data, workflowScript)
@@ -220,16 +195,14 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       `,
       approveTitle: 'Approve (y)',
       rejectTitle: 'Reject (n)',
-      trailingActions: this.canSetup
-        ? renderLabeledActionButton({
-            id: 'proposal-setup-button',
-            icon: 'reply',
-            text: 'Setup',
-            tooltip: 'Setup (s)',
-            action: 'setup',
-            onClick: () => this.emitAction({ action: 'setup' }),
-          })
-        : nothing,
+      trailingActions: renderLabeledActionButton({
+        id: 'proposal-setup-button',
+        icon: 'reply',
+        text: 'Setup',
+        tooltip: 'Setup (s)',
+        action: 'setup',
+        onClick: () => this.emitAction({ action: 'setup' }),
+      }),
     });
   }
 
@@ -242,7 +215,17 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     workflow: NonNullable<WorkflowAgentProposalPermission['workflowScript']>,
   ): TemplateResult {
     const fullName = `${workflow.name}: ${workflow.description}`;
-    const declaredGroups = workflowScriptDeclaredItemsByPhase(workflow);
+    // The plan's phases as the run model folds them for a run that has not
+    // started: every declared phase in order, its declared items under it,
+    // unphased items under the trailing `Unphased` phase — the same shape the
+    // popup and the board show once the run is live.
+    const { phases } = workflowRunModel({
+      taskGroups: [],
+      rows: [],
+      plan: workflow,
+      runSettled: false,
+      childProgress: new Map(),
+    });
 
     return html`
       <div class="workflow-proposal__workflow-summary">
@@ -257,7 +240,10 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       <div class="workflow-proposal__cost-warning">
         ${waIcon('triangle-exclamation')}
         ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(data.agent, data.model)}
+        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
+          data.agent,
+          getModelLabel(data.model),
+        )}
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"
@@ -265,17 +251,17 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       >
         ${this.renderInstruction(workflow.description)}
         ${
-          declaredGroups.length > 0
+          phases.length > 0
             ? html`<ul class="workflow-proposal__task-list">
                 ${repeat(
-                  declaredGroups,
-                  (group) => group.phase ?? '',
-                  (group) =>
+                  phases,
+                  (phase) => phase.key,
+                  (phase) =>
                     html`<li>
-                      ${group.phase ?? 'No phase'}
+                      ${phase.heading.phaseLabel}
                       <ul>
                         ${repeat(
-                          group.items,
+                          phase.declaredTasks,
                           (task) => task.id,
                           (task) => html`<li>${task.label}</li>`,
                         )}
@@ -303,17 +289,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
         ${this.renderProposalFileList('Script', [workflow.scriptPath], true)}
       </wa-details>
     `;
-  }
-
-  /** One issued call of a multi-agent workflow under per-call/phase review. */
-  private renderWorkflowCallContext(
-    data: AgentProposalPermission,
-  ): TemplateResult | typeof nothing {
-    const call = data.workflowCall;
-    if (!call) return nothing;
-    return html`<div class="workflow-proposal__plan-note">
-      <strong>${call.label}</strong> — ${workflowCallCardLine(call)}
-    </div>`;
   }
 
   private renderInstruction(instruction: string): TemplateResult {

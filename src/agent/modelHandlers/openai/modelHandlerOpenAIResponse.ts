@@ -43,7 +43,7 @@ import {
   getSdkErrorMessage,
 } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
+import { isGpt5ModelName } from '@model/modelNames';
 import type {
   OpenAIResponseProviderCapabilities,
   ProviderCapabilityProfile,
@@ -105,7 +105,6 @@ import {
   contentToText,
   createInputText,
   hasResponseOutputText,
-  isAssistantTextMessage,
   isMessageItem,
 } from './openAIResponseContent';
 import {
@@ -440,7 +439,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
    * on per-step streaming.
    */
   private isBackgroundModeEligible(): boolean {
-    return isGptFamilyModelName(this.config.name) && this.isWorkflowMode();
+    return (
+      this.config.name.toLowerCase().startsWith('gpt') && this.isWorkflowMode()
+    );
   }
 
   /** The `previous_response_id` chain anchor + conversation bookkeeping. See
@@ -1219,7 +1220,9 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /** Formats image/audio content for the Responses API. */
-  createMediaContent(mediaMessage: MediaEntry[]): ResponseInputContent[] {
+  override createMediaContent(
+    mediaMessage: MediaEntry[],
+  ): ResponseInputContent[] {
     return mediaMessage.flatMap((media): ResponseInputContent[] => {
       const mediaType = media.media_type ?? '';
       const classification = classifyMediaEntry(media);
@@ -2799,20 +2802,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       role: 'assistant',
       content: text,
     } satisfies EasyInputMessage;
-  }
-
-  override extractAssistantText(
-    message: ResponseInputItem,
-  ): string | undefined {
-    if (!isAssistantTextMessage(message)) {
-      return undefined;
-    }
-
-    // String content (from createAssistantMessage) or array content
-    // (input_text history or output_text response parts); empty flattens to
-    // undefined.
-    const text = contentToText(message.content, '');
-    return text.length > 0 ? text : undefined;
   }
 
   private appendAssistantText(

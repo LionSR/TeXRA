@@ -17,7 +17,6 @@ import {
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { ProviderMessage } from '@agent/types/ProviderMessage';
 import {
@@ -96,7 +95,6 @@ function createWaitNodeServices(
         ...capabilities,
       },
       createUserFollowUpMessages: vi.fn(async () => []),
-      extractAssistantText: () => undefined,
       ...modelHandlerOverrides,
     }),
     session: {
@@ -182,10 +180,6 @@ describe('ToolUseWaitNode', () => {
 
       const node = new ToolUseWaitNode().setServices(services);
       const prep = await node.prep(shared);
-      // The child-run loop reads the turn facts off the flow result and
-      // delivers them after suspension (see childRunLoop.ts), so the node
-      // carries none.
-      expect(prep.lastResponse).toBeUndefined();
 
       const transition = await withTestRunContext(
         services.runScope,
@@ -303,7 +297,6 @@ describe('ToolUseWaitNode', () => {
 
     const services = createWaitNodeServices({
       isSubagent: false,
-      modelHandler: { extractAssistantText: () => 'partial response' },
       onIdle,
       session: { waitForFollowUp },
     });
@@ -313,7 +306,6 @@ describe('ToolUseWaitNode', () => {
     await withTestRunContext(services.runScope, () => node.exec(prep));
 
     expect(onIdle).toHaveBeenCalledOnce();
-    expect(onIdle).toHaveBeenCalledWith('partial response');
     expect(waitForFollowUp).toHaveBeenCalledOnce();
   });
 
@@ -428,9 +420,9 @@ describe('ToolUseWaitNode', () => {
     const node = new ToolUseWaitNode().setServices(services);
 
     try {
-      // No AsyncLocalStorage frame: `pauseActiveGoal` routes the bash bypass
-      // mutation through `services.runScope.session` (the owner session), never
-      // through `currentSession()`/`defaultSession()`.
+      // No AsyncLocalStorage frame: `pauseActiveGoal` clears every possible
+      // goal bypass through `services.runScope.session` (the owner session),
+      // never through `currentSession()`/`defaultSession()`.
       const exec = await node.exec(waitPrep(true));
 
       const goal = GoalStore.getForStream(streamId);
@@ -447,9 +439,14 @@ describe('ToolUseWaitNode', () => {
         kind: 'bash',
         bypassActive: false,
       });
-      expect(setApprovalBypassState).not.toHaveBeenCalledWith({
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
         streamId,
         kind: 'toolEdit',
+        bypassActive: false,
+      });
+      expect(setApprovalBypassState).toHaveBeenCalledWith({
+        streamId,
+        kind: 'superYolo',
         bypassActive: false,
       });
     } finally {
@@ -470,8 +467,8 @@ describe('ToolUseWaitNode', () => {
     const createUserFollowUpMessages = appendUserFollowUpMessages();
     const onFollowUpConsumed = vi.fn();
     const waitForFollowUp = vi.fn();
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined);
+    const streamStatus = ownerSession.status;
     const services = createWaitNodeServices({
       isSubagent: false,
       modelHandler: {
@@ -665,8 +662,8 @@ describe('ToolUseWaitNode', () => {
 
   it('updates the run session status while waiting and resuming', async () => {
     const streamId = 'wait-node-owner' as StreamTabId;
-    const streamStatus = new StreamStatusMachine(new SessionEventHub());
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined);
+    const streamStatus = ownerSession.status;
     const shared = toolUseRunShared();
     const createUserFollowUpMessages = vi.fn(async () => []);
     const services = createWaitNodeServices({
@@ -708,8 +705,8 @@ describe('ToolUseWaitNode', () => {
   it('repairs retry-cancelled parent cycles to waiting before blocking', async () => {
     const streamId = 'wait-node-retry-cancelled-wait' as StreamTabId;
     const statusHub = new SessionEventHub();
-    const streamStatus = new StreamStatusMachine(statusHub);
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined, statusHub);
+    const streamStatus = ownerSession.status;
     // Status is a session fact on the machine's own hub — the single rail.
     const recorded = recordSessionEvents(statusHub);
     const waitForFollowUp = vi.fn(async () => null);
@@ -758,10 +755,7 @@ describe('ToolUseWaitNode', () => {
       stateSlices: {
         runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
         workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-        userChannels: {
-          input: Object.freeze({ INSTRUCTION: 'initial request' }),
-          transient: { INSTRUCTION: 'initial request' },
-        },
+        userChannels: { INSTRUCTION: 'initial request' },
       },
     });
     const createUserFollowUpMessages = appendUserFollowUpMessages();
@@ -778,8 +772,8 @@ describe('ToolUseWaitNode', () => {
     const detachSequence = statusHub.subscribeStatus(() =>
       sequence.push('status'),
     );
-    const streamStatus = new StreamStatusMachine(statusHub);
-    const ownerSession = sessionWithInteractions(undefined, streamStatus);
+    const ownerSession = sessionWithInteractions(undefined, statusHub);
+    const streamStatus = ownerSession.status;
     const services = createWaitNodeServices({
       logger,
       modelHandler: {
@@ -849,7 +843,7 @@ describe('ToolUseWaitNode', () => {
     expect(info).toHaveBeenCalledWith('please revise the theorem', {
       messageType: MESSAGE_TYPES.USER_MESSAGE,
     });
-    expect(shared.stateSlices?.userChannels.transient.INSTRUCTION).toBe(
+    expect(shared.stateSlices?.userChannels.INSTRUCTION).toBe(
       'please revise the theorem',
     );
   });

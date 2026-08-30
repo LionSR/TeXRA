@@ -15,7 +15,7 @@ import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from './proposalFields';
-import { WorkflowCallIdentitySchema } from './workflowCallProgress';
+import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
 
 /** Optional stream ID - allows empty string when stream context is unavailable */
 const OptionalStreamIdSchema = z.union([StreamTabIdSchema, z.literal('')]);
@@ -56,27 +56,10 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
-/**
- * How a multi-agent workflow's issued calls are admitted after the proposal is
- * approved: run them all, review the first call of each phase, or review each
- * call as the script issues it. Only a workflow-script proposal carries it.
- */
-export const WORKFLOW_CALL_REVIEW_SCOPE = {
-  NONE: 'none',
-  PHASE: 'phase',
-  CALL: 'call',
-} as const;
-export const WorkflowCallReviewScopeSchema = z.enum(WORKFLOW_CALL_REVIEW_SCOPE);
-export type WorkflowCallReviewScope = z.infer<
-  typeof WorkflowCallReviewScopeSchema
->;
-
-const WorkflowScriptProposalDetailsSchema = z.strictObject({
+const WorkflowScriptProposalDetailsSchema = WorkflowDeclaredPlanSchema.extend({
   name: z.string().min(1),
   description: z.string().min(1),
   scriptPath: z.string().min(1),
-  phases: z.array(z.strictObject({ title: z.string().min(1) })),
-  tasks: z.array(WorkflowCallIdentitySchema),
 });
 
 /** Workflow agent proposal - includes file fields for document processing */

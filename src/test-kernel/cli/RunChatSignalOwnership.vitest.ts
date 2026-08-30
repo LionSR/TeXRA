@@ -263,7 +263,6 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
-      agentSource: 'default',
       model: 'gpt-test',
       modelSource: 'default',
     });
@@ -302,7 +301,6 @@ describe('runChat signal ownership wiring', () => {
     mocks.tuiOutputStreamForColor.mockImplementation((stream) => stream);
     mocks.createChatSessionController.mockReturnValue({
       admitInterruptedFollowUp: vi.fn(() => ({ kind: 'not_interrupted' })),
-      canStartRootRun: vi.fn(() => true),
       clearInterruptedRecovery: vi.fn(),
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,

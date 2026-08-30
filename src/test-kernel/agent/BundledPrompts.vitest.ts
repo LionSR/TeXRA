@@ -23,7 +23,7 @@ interface GoalPromptsYaml {
 }
 
 // The shipped bundle every host resolves at startup. Loading through it (rather
-// than through a per-prompt path) is what pins each table row's `relPath` to
+// than through a per-prompt path) is what pins each loader's relative path to
 // the real resource layout.
 const RESOURCES_PATH = resolve(REPO_ROOT, 'packages/extension/resources');
 const GOAL_YAML_PATH = join(RESOURCES_PATH, 'goal', 'goal.yaml');

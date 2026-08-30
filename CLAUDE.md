@@ -234,3 +234,9 @@ Load these when the work lands in their territory:
 - **releasing** — cutting a release: changelog, tags, GitHub Releases, desktop
   installers.
 - **tech-debt-tournament** — one cycle of the recurring scoped tech-debt sweep.
+
+<!-- effect-solutions:start -->
+
+Follow the **Effect Best Practices** guidance in `AGENTS.md`.
+
+<!-- effect-solutions:end -->

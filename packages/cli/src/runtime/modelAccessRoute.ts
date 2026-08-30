@@ -6,11 +6,12 @@ import {
 } from '@shared/codingPlanSubscriptions';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
+import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
 // Kept to one rendered row: the /api form and the orchestration header both
-// budget a single line for this description.
-export const CLI_MODEL_ACCESS_DESCRIPTION =
-  'Set subscription preferences and how the rest is paid for.';
+// budget a single line for this description (75 columns at most).
+export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
+  'Sign in or out, set subscription preferences, and how the rest is paid for.';
 
 export type CliModelAccessRoute =
   | 'chatgpt'
@@ -53,9 +54,12 @@ export interface CliModelAccessStatus {
     Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
   >;
   readonly texraSignedIn?: boolean;
-  /** Display names of providers with configured API keys (e.g. `['DeepSeek']`). */
-  readonly personalKeyProviders?: readonly string[];
+  readonly texraAccountLabel?: string;
 }
+
+export type CliAccountStatus = CliModelAccessStatus & {
+  readonly texraSignedIn: boolean;
+};
 
 interface CliModelAccessItem {
   readonly value: CliModelAccessSelection;
@@ -64,7 +68,7 @@ interface CliModelAccessItem {
   readonly disabled?: boolean;
 }
 
-type CliModelAccessItemsInput =
+export type CliModelAccessItemsInput =
   | {
       readonly kind: 'loaded';
       readonly access: CliModelAccessStatus;
@@ -330,9 +334,7 @@ export function buildCliModelAccessItems(
 }
 
 /** Compact configuration summary; observed per-request routes use UsageRoute. */
-export function formatCliModelAccessSummary(
-  status: CliModelAccessStatus,
-): string {
+function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
   const chatGpt = status.preferences.chatGpt === 'on' ? 'On' : 'Off';
   const grok = status.preferences.grok === 'on' ? 'On' : 'Off';
   const codingPlans = CODING_PLAN_SUBSCRIPTIONS.map((plan) => {
@@ -340,4 +342,74 @@ export function formatCliModelAccessSummary(
     return `${label} ${cliCodingPlanStatus(status, plan).preferred ? 'On' : 'Off'}`;
   });
   return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
+}
+
+/** Launcher-row summary: Researcher Access ahead of the access summary. */
+export function formatCliAccountAccessSummary(
+  status: CliModelAccessStatus,
+): string {
+  const texra = status.texraSignedIn === true ? 'signed in' : 'signed out';
+  return `${RESEARCHER_ACCESS.label} ${texra} · ${formatCliModelAccessSummary(status)}`;
+}
+
+export interface CliAccountAccessRow {
+  readonly provider: 'chatgpt' | 'grok' | 'texra';
+  readonly operation: 'sign-in' | 'sign-out';
+  readonly label: string;
+  readonly description: string;
+}
+
+/**
+ * Account rows of the merged account & access surfaces, deduped per provider
+ * by sign-in state and stored preference. A signed-in subscription gets
+ * exactly one sign-out row. A signed-out one gets a browser sign-in row only
+ * when its preference is still 'on' (an expired or revoked session blocking
+ * the preference) — with the preference 'off' the toggle row is already the
+ * sign-in path, and a second row would be two controls for one action. TeXRA
+ * has no toggle, so it gets a sign-out row whenever it is signed in; its
+ * sign-in rows stay surface-specific.
+ */
+export function buildCliAccountAccessRows(
+  status: CliModelAccessStatus,
+): readonly CliAccountAccessRow[] {
+  const rows: CliAccountAccessRow[] = [];
+  if (status.chatGptSignedIn) {
+    rows.push({
+      provider: 'chatgpt',
+      operation: 'sign-out',
+      label: CHATGPT_AUTH.signOutLabel,
+      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
+    });
+  } else if (status.preferences.chatGpt === 'on') {
+    rows.push({
+      provider: 'chatgpt',
+      operation: 'sign-in',
+      label: CHATGPT_AUTH.signInLabel,
+      description: 'Use a ChatGPT subscription',
+    });
+  }
+  if (status.grokSignedIn) {
+    rows.push({
+      provider: 'grok',
+      operation: 'sign-out',
+      label: GROK_AUTH.signOutLabel,
+      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
+    });
+  } else if (status.preferences.grok === 'on') {
+    rows.push({
+      provider: 'grok',
+      operation: 'sign-in',
+      label: GROK_AUTH.signInLabel,
+      description: 'Use a Grok / SuperGrok subscription',
+    });
+  }
+  if (status.texraSignedIn === true) {
+    rows.push({
+      provider: 'texra',
+      operation: 'sign-out',
+      label: `Sign out of ${RESEARCHER_ACCESS.label}`,
+      description: status.texraAccountLabel ?? RESEARCHER_ACCESS.label,
+    });
+  }
+  return rows;
 }

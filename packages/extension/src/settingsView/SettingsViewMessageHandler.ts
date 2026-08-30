@@ -84,6 +84,7 @@ import {
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -458,7 +459,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.grokHandlers.sendAuthStatus(webview),
       this.githubHandlers.sendPRSubscriptions(webview),
       this.sendSettingsSnapshot(webview, 'approval'),
-      this.sendSettingsSnapshot(webview, 'agent-skills'),
+      this.sendSettingsSnapshot(webview, 'skills'),
+      this.sendSkillsList(webview),
       this.sendSettingsSnapshot(webview, 'telemetry'),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.sendSettingsSnapshot(webview, 'latex'),
@@ -532,6 +534,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     );
   }
 
+  private async sendSkillsList(webview: vscode.Webview): Promise<void> {
+    const result = await loadRuntimeSkillDisplay();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+      ...result,
+    });
+  }
+
   /**
    * Generic write path for catalog-backed settings-view rows.
    */
@@ -584,7 +594,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     snapshot: SettingsViewSnapshot,
   ): Promise<void> {
     await dispatchStateSettingSnapshot(snapshot, {
-      'agent-skills': () => this.rebroadcastSnapshot('agent-skills'),
       approval: () => this.rebroadcastSnapshot('approval'),
       'git-author': () => {
         // Git identity is also process env, so the write must reach `git`
@@ -598,6 +607,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) => this.sendModelSelectionData(w)),
       'multi-agent': () => this.rebroadcastSnapshot('multi-agent'),
       profile: () => this.withActiveWebview((w) => this.sendProfileData(w)),
+      skills: async () => {
+        await this.rebroadcastSnapshot('skills');
+        await this.withActiveWebview((w) => this.sendSkillsList(w));
+      },
       telemetry: () => this.rebroadcastSnapshot('telemetry'),
     });
   }
@@ -648,7 +661,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
     const mainView = await getMainWebview(this.viewName);
     if (mainView) {
-      const setupComplete = await hasUsableSetupCredential(platform().secrets);
+      const setupComplete = await hasUsableSetupCredential(
+        platform().secrets,
+        this.log.warn,
+      );
       mainView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_BANNER,
         banner: 'apiKey',

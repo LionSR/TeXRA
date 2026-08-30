@@ -144,7 +144,7 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name--clickable:hover {
-        text-decoration-color: var(--wa-color-text-normal);
+        text-decoration-color: currentColor;
       }
 
       /* Sits between the name and the description: a run's phase identifies

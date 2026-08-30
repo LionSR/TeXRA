@@ -30,7 +30,7 @@ Design rules in `AGENTS.md` → "Zod v4 Schema Patterns" (including "Schemas as 
 
 ## 3. PocketFlow / agent runtime
 
-- **`return 'continue' | 'finalize' | 'complete' | 'default'`** → use `FlowTransition.CONTINUE`/`FINALIZE`/`COMPLETE`/`DEFAULT` from `@agent/core/flows/FlowTransitions`.
+- **`return 'continue' | 'complete' | 'default' | 'waiting'`** → use `FlowTransition.CONTINUE`/`COMPLETE`/`DEFAULT`/`WAITING` from `@agent/core/flows/FlowTransitions`.
 - **Mutable services**: anything passed to `flow.setServices()` that gets reassigned mid-run belongs in the shared store, not services.
 - **Lifecycle leak**: agent init/finalize logic appearing inside flows or nodes. Agents own lifecycle; flows execute; nodes throw and let `agent.run()` catch.
 - **`prep` / `exec` / `post` boundaries**: state mutations belong in `post`, not `exec`. Retries via `maxRetries` / `retryDelay` getters, not ad-hoc loops.

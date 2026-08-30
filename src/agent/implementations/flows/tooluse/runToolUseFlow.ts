@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { logSdkError } from '@agent/trace';
 import { getExecutionStore } from '@agent/storage';
 import type { Action } from '@agent/node';
+import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
@@ -55,7 +56,6 @@ import {
   type PreparedShared,
   type ToolUseRunShared,
 } from './nodes/types';
-import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
@@ -82,8 +82,8 @@ export interface RunToolUseFlowInput extends BaseFlowContextInit {
   isSubagent?: boolean;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Root-run-only: fires with the latest response at every cycle boundary — see `ToolUseServices.onIdle`. */
-  onIdle?: (lastResponse: string | undefined) => void;
+  /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
+  onIdle?: () => void;
   /**
    * Fires after a running tool-use chat changes its model, once the shared
    * `ModelCell` already holds the new pair. The handler is deliberately not
@@ -177,7 +177,7 @@ export async function runToolUseFlow(
     runSession.followUps,
   );
   const baseRegistry = toolRegistry ?? getDefaultToolRegistry();
-  const { tools: resolvedTools } = await resolveAgentTools({
+  const resolvedTools = await resolveAgentTools({
     tools: setting.tools,
     registry: baseRegistry,
     logger,
@@ -254,11 +254,21 @@ export async function runToolUseFlow(
   const persistModelSwitch = async (model: string): Promise<void> => {
     const flow = activePersistedFlow;
     const liveShared = await flow?.getShared();
-    if (!flow || !liveShared || !setToolUseSharedModel(liveShared, model)) {
+    if (!flow || !liveShared?.stateSlices) {
       throw new Error(
         'Cannot save the model switch because the resumable session state is unavailable.',
       );
     }
+    // `modelId` is the resume SSOT; `MODEL` remains the prompt-facing user
+    // variable for the live run.
+    liveShared.modelId = model;
+    liveShared.stateSlices = {
+      ...liveShared.stateSlices,
+      userChannels: {
+        ...liveShared.stateSlices.userChannels,
+        [USER_VAR_MODEL]: model,
+      },
+    };
     await flow.setShared(liveShared);
   };
 
@@ -378,7 +388,6 @@ export async function runToolUseFlow(
   let persistedFlowRecordExists = false;
   let flowRunStarted = false;
   let primaryFailure: { readonly error: unknown } | undefined;
-  let earlyResult: RunToolUseFlowResult | undefined;
   const startupInterruption = new Error('Tool-use startup interrupted.');
   const teardownFailures: Array<{
     readonly operation: string;
@@ -430,7 +439,6 @@ export async function runToolUseFlow(
     // it before touching the persisted resume record.
     if (signal.aborted && input.resume) {
       resumeStartupPreservation = 'cancellation';
-      earlyResult = { outcome };
       throw startupInterruption;
     }
 
@@ -449,7 +457,6 @@ export async function runToolUseFlow(
       // not start a repair write after that handoff.
       if (signal.aborted) {
         persistenceRecoveryPending = false;
-        earlyResult = { outcome };
         throw startupInterruption;
       }
       if (flowRecord) {
@@ -694,7 +701,6 @@ export async function runToolUseFlow(
   if (!runAlreadyFailed && firstTeardownFailure) {
     throw firstTeardownFailure.error;
   }
-  if (earlyResult) return earlyResult;
 
   return {
     outcome,

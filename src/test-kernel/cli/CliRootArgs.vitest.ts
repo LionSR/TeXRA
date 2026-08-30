@@ -32,7 +32,6 @@ import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
   hasMixedStdinWorkflowInputSpecs,
-  isMaterializedStdinWorkflowInputPath,
   workflowInputGlobOptions,
 } from '@cli/runtime/workflowInputs';
 import {
@@ -584,7 +583,7 @@ describe('CLI root argument routing', () => {
       expect(expanded).toHaveLength(1);
       expect(readCount()).toBe(1);
       expect(path.basename(expanded[0])).toBe('stdin.tex');
-      expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
+      expect(path.basename(path.dirname(expanded[0]))).toMatch(/^texra-stdin-/);
       await expect(
         fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
       ).resolves.toContain('\\begin{document}Hi');
@@ -606,7 +605,7 @@ describe('CLI root argument routing', () => {
       });
 
       expect(path.basename(expanded[0])).toBe('stdin.tex');
-      expect(isMaterializedStdinWorkflowInputPath(expanded[0])).toBe(true);
+      expect(path.basename(path.dirname(expanded[0]))).toMatch(/^texra-stdin-/);
       expect(expanded[1]).toBe('paper.tex');
     });
   });
@@ -626,18 +625,6 @@ describe('CLI root argument routing', () => {
     expect(hasMixedStdinWorkflowInputSpecs(['-', '-'])).toBe(false);
     expect(hasMixedStdinWorkflowInputSpecs(['-', 'paper.tex'])).toBe(true);
     expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
-  });
-
-  it('does not classify ordinary stdin-named files as materialized stdin', () => {
-    expect(isMaterializedStdinWorkflowInputPath('stdin.tex')).toBe(false);
-    expect(
-      isMaterializedStdinWorkflowInputPath('texra-stdin-workflow/stdin.tex'),
-    ).toBe(false);
-    expect(
-      isMaterializedStdinWorkflowInputPath(
-        'texra-stdin-123-workflow/stdin.tex',
-      ),
-    ).toBe(false);
   });
 
   it('does not read stdin before later --input validation errors', async () => {
@@ -681,7 +668,9 @@ describe('CLI root argument routing', () => {
       expect(inputFiles).toEqual(['main.tex']);
       expect(contextFiles).toHaveLength(1);
       expect(path.basename(contextFiles[0])).toBe('stdin.tex');
-      expect(isMaterializedStdinWorkflowInputPath(contextFiles[0])).toBe(true);
+      expect(path.basename(path.dirname(contextFiles[0]))).toMatch(
+        /^texra-stdin-/,
+      );
       await expect(
         fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
       ).resolves.toBe('context body');
@@ -1019,32 +1008,48 @@ describe('CLI root argument routing', () => {
 
 describe('CLI global color/input flags', () => {
   it('preserves whitespace in the explicit workspace argument', () => {
-    expect(pickGlobalArgs({ cwd: ' workspace ' }).cwd).toBe(' workspace ');
+    expect(
+      pickGlobalArgs({ cwd: ' workspace ' }, { skillSourcePaths: [] }).cwd,
+    ).toBe(' workspace ');
   });
 
   it('maps CLI color and no-input flags to canonical knobs', () => {
-    expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
+    expect(
+      pickGlobalArgs(
+        { color: false, 'no-input': true },
+        { skillSourcePaths: [] },
+      ),
+    ).toMatchObject({
       noColor: true,
       noInput: true,
     });
   });
 
   it('maps citty negated input output to --no-input', () => {
-    expect(pickGlobalArgs({ input: false })).toMatchObject({
+    expect(
+      pickGlobalArgs({ input: false }, { skillSourcePaths: [] }),
+    ).toMatchObject({
       noInput: true,
     });
-    expect(pickGlobalArgs({ input: 'file.tex' })).toMatchObject({
+    expect(
+      pickGlobalArgs({ input: 'file.tex' }, { skillSourcePaths: [] }),
+    ).toMatchObject({
       noInput: false,
     });
   });
 
   it('treats absent/default color and no-input flags as not negated', () => {
-    expect(pickGlobalArgs({ color: true, 'no-input': false })).toMatchObject({
+    expect(
+      pickGlobalArgs(
+        { color: true, 'no-input': false },
+        { skillSourcePaths: [] },
+      ),
+    ).toMatchObject({
       noColor: false,
       noInput: false,
     });
     // Absent flags default to "not negated" too.
-    expect(pickGlobalArgs({})).toMatchObject({
+    expect(pickGlobalArgs({}, { skillSourcePaths: [] })).toMatchObject({
       noColor: false,
       noInput: false,
     });
@@ -1053,10 +1058,7 @@ describe('CLI global color/input flags', () => {
   it('maps runtime source flags to canonical knobs', () => {
     expect(
       pickGlobalArgs(
-        {
-          'include-interop': true,
-          source: 'fallback/skills',
-        },
+        { 'include-interop': true },
         { skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'] },
       ),
     ).toMatchObject({
@@ -1064,7 +1066,7 @@ describe('CLI global color/input flags', () => {
       skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'],
     });
     expect(
-      pickGlobalArgs({ source: ['one/skills', 'two/skills'] }),
+      pickGlobalArgs({}, { skillSourcePaths: ['one/skills', 'two/skills'] }),
     ).toMatchObject({
       includeInteropSkills: false,
       skillSourcePaths: ['one/skills', 'two/skills'],
@@ -1319,7 +1321,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('/status');
     expect(stdout).toContain('/goal');
     expect(stdout).toContain(
-      'explain autonomous goal mode and approved-plan startup',
+      'configure autonomous goal mode and auto-approval scope',
     );
     expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('ChatGPT or Researcher Access');

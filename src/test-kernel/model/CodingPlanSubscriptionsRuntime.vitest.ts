@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resolveProxyEndpoint } from '@agent/modelHandlers/support/ProxyConfigResolver';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
-  activeCodingPlanForModel,
+  activeSubscriptionUsageRoute,
   codingPlanSubscriptionRuntimes,
 } from '@model/codingPlanSubscriptions';
 import { platform } from '@platform/platform';
@@ -72,9 +72,9 @@ describe('coding-plan subscription runtime', () => {
   it('reports the GLM plan for the resolved official endpoint', async () => {
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
 
-    await expect(activeCodingPlanForModel('glm52')).resolves.toMatchObject({
-      descriptor: { id: 'glmCodingPlan' },
-    });
+    await expect(activeSubscriptionUsageRoute('glm52')).resolves.toBe(
+      'glm-coding-plan-subscription',
+    );
   });
 
   it('does not classify a custom coding-shaped GLM endpoint as plan usage', async () => {
@@ -84,7 +84,9 @@ describe('coding-plan subscription runtime', () => {
       'proxy.test/api/coding/paas/v4',
     );
 
-    await expect(activeCodingPlanForModel('glm52')).resolves.toBeUndefined();
+    await expect(
+      activeSubscriptionUsageRoute('glm52'),
+    ).resolves.toBeUndefined();
   });
 
   it('restores Kimi preference without overwriting newer OpenRouter state', async () => {

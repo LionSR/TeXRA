@@ -53,12 +53,13 @@ export class Pagination extends LitElement {
 
       .pagination-bar {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
+        gap: var(--wa-space-2xs);
         padding: var(--wa-space-2xs) 0;
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        user-select: none;
       }
 
       .pagination-status {
@@ -70,6 +71,7 @@ export class Pagination extends LitElement {
         display: flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+        margin-inline-start: auto;
       }
 
       .pagination-controls wa-button::part(base) {
@@ -135,7 +137,7 @@ export class Pagination extends LitElement {
     const atLast = page >= totalPages - 1;
 
     return html`
-      <div class="pagination-bar">
+      <div class="pagination-bar" role="group" aria-label="Pagination">
         <span class="pagination-status" role="status" aria-atomic="true">
           ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems}
         </span>

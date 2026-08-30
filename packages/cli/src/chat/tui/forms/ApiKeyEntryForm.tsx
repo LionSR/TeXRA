@@ -27,7 +27,7 @@ export interface ApiKeyEntryFormProps {
   readonly onCancel: () => void;
 }
 
-export interface CredentialEntryFormProps {
+interface CredentialEntryFormProps {
   readonly title: string;
   readonly helper?: ReactNode;
   readonly placeholder: string;

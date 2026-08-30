@@ -8,7 +8,6 @@ import {
   type WorkflowAgentCallOptions,
   type WorkflowAgentInvocation,
   type WorkflowAgentRunner,
-  type WorkflowCallAdmission,
   type WorkflowScriptRunOptions,
 } from '@agent/workflowScript';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -16,18 +15,11 @@ import type { LaunchRunContext } from '@agent/runtime/RunContext';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
-import {
-  AgentCategory,
-  DEFAULT_TOOL_CONFIG,
-  ToolUseAgentProposalSchema,
-  WORKFLOW_CALL_REVIEW_SCOPE,
-  WorkflowAgentProposalSchema,
-} from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type {
   ExecutionId,
   RunStorageFileLocation,
   StreamTabId,
-  WorkflowCallReviewScope,
 } from '@shared/schemas';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -45,7 +37,7 @@ import {
   rejectOversizedBibAttachments,
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import { requestDelegationProposal, requireVisibleAgent } from './proposalFlow';
+import { requireVisibleAgent } from './proposalFlow';
 
 const log = createLog('workflowScriptAgentRunner');
 
@@ -428,77 +420,5 @@ export function createWorkflowScriptAgentRunner(
       }
       throw error;
     }
-  };
-}
-
-/**
- * Per-call admission for a workflow run the user chose to review call by call
- * or phase by phase. Each issued call is resolved exactly as launch resolves
- * it and shown through the ordinary delegation proposal on the run's stream —
- * the same card, the same reject-with-feedback, and the same "approve all
- * delegated work" bypass, which then admits the rest. Under phase review the
- * first call of each phase decides for the phase; a rejected call is skipped
- * alone, its siblings unaffected.
- */
-export function createWorkflowCallAdmission(params: {
-  readonly parent: LaunchRunContext;
-  readonly defaultAgent: AgentEntry;
-  readonly run: WorkflowRunIdentity;
-  readonly workflowName: string;
-  readonly scope: Exclude<WorkflowCallReviewScope, 'none'>;
-}): NonNullable<WorkflowScriptRunOptions['admitCall']> {
-  const decidedPhases = new Map<string, WorkflowCallAdmission>();
-  return async (request) => {
-    const phaseKey = request.phase ?? '';
-    const admitsPhase = params.scope === WORKFLOW_CALL_REVIEW_SCOPE.PHASE;
-    const decided = admitsPhase ? decidedPhases.get(phaseKey) : undefined;
-    if (decided !== undefined) return decided;
-
-    const { configPayload } = await resolveWorkflowCallConfig(
-      request,
-      params.parent,
-      params.defaultAgent,
-      params.run.executionId,
-    );
-    const shared = {
-      agent: configPayload.agent,
-      agentSource: configPayload.agentSource,
-      model: configPayload.model,
-      instruction: request.prompt,
-      memories: [],
-      ...(configPayload.workingDirectory !== undefined && {
-        workingDirectory: configPayload.workingDirectory,
-      }),
-      workflowCall: {
-        workflowName: params.workflowName,
-        callId: request.progressId,
-        label: request.label,
-        ...(request.phase !== undefined && { phase: request.phase }),
-        ...(admitsPhase && { admitsPhase: true as const }),
-      },
-    };
-    const proposal =
-      configPayload.agentCategory === AgentCategory.ToolUse
-        ? ToolUseAgentProposalSchema.parse({
-            ...shared,
-            agentCategory: AgentCategory.ToolUse,
-          })
-        : WorkflowAgentProposalSchema.parse({
-            ...shared,
-            agentCategory: AgentCategory.Workflow,
-            inputFiles: configPayload.inputFiles ?? [],
-            contextFiles: configPayload.contextFiles ?? [],
-            mediaFiles: configPayload.mediaFiles ?? [],
-            outputFiles: [],
-            toolConfig: DEFAULT_TOOL_CONFIG,
-          });
-    const decision = await requestDelegationProposal(
-      proposal,
-      params.run.streamId,
-    );
-    const admission: WorkflowCallAdmission =
-      decision.result.action === 'approve' ? 'run' : 'skip';
-    if (admitsPhase) decidedPhases.set(phaseKey, admission);
-    return admission;
   };
 }

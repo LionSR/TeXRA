@@ -79,11 +79,6 @@ export const logEntryStyles = css`
     opacity: var(--opacity-subtle);
   }
 
-  .workflow-task--awaitingApproval {
-    border-inline-start-color: var(--wa-color-warning-border-loud);
-    background: var(--wa-color-warning-fill-quiet);
-  }
-
   .workflow-task--running {
     border-inline-start-color: var(--wa-color-focus);
     background: var(--wa-color-neutral-fill-quiet);
@@ -158,8 +153,6 @@ export const logEntryStyles = css`
   .workflow-task-status {
     align-self: center;
     padding: calc(var(--wa-space-3xs) / 2) var(--wa-space-2xs);
-    border-radius: 999px;
-    background: transparent;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     white-space: nowrap;

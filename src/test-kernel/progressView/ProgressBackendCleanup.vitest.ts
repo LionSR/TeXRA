@@ -39,7 +39,8 @@ import {
   snapshotFacts,
 } from '@test/support/storeTestDrivers';
 import { GoalStore } from '@tools/goal';
-import { streamDataDir, StreamSnapshotStore } from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 import {
   stagedStreamDataDir,
   STREAM_DATA_DIR,

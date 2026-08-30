@@ -2,7 +2,6 @@ import type {
   HostBashApprovalRequest,
   HostUserQuestionRequest,
 } from '@agent/runtime';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -10,9 +9,9 @@ import {
   type AgentProposalPermission,
   type RetryPermission,
 } from '@shared/schemas';
+import { getModelLabel } from '@shared/model/modelLabel';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
-  workflowCallCardLine,
   workflowScriptPlanSummary,
 } from '@shared/copy/workflowScriptProposal';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -20,7 +19,7 @@ import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
 import {
   cliRetryActionHint,
-  classifyCliRetryAction,
+  cliRetryQuotaRoute,
   type CliApprovalContent,
 } from './approvalPrompts';
 
@@ -148,7 +147,7 @@ function agentProposalApprovalSummary(
         `Multi-agent workflow proposal requested: ${workflow.name} · ${workflowScriptPlanSummary(workflow)}`,
         WORKFLOW_SCRIPT_PROPOSAL_COPY.defaults(
           proposal.agent,
-          getRuntimeModelLabel(proposal.model),
+          getModelLabel(proposal.model),
         ),
         WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning,
         `Script: ${workflow.scriptPath}`,
@@ -157,13 +156,7 @@ function agentProposalApprovalSummary(
         `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
           proposal.agentCategory,
         )})`,
-        `Model: ${getRuntimeModelLabel(proposal.model)}`,
-        ...(proposal.workflowCall
-          ? [
-              `Workflow call: ${proposal.workflowCall.label}`,
-              workflowCallCardLine(proposal.workflowCall),
-            ]
-          : []),
+        `Model: ${getModelLabel(proposal.model)}`,
       ];
   return [
     ...header,
@@ -205,7 +198,7 @@ export function buildAgentProposalApprovalContent(
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const hint = cliRetryActionHint(classifyCliRetryAction(payload));
+  const hint = cliRetryActionHint(cliRetryQuotaRoute(payload));
   return hint ? [message, hint].join('\n') : message;
 }
 

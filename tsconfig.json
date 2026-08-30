@@ -1,5 +1,11 @@
 {
+  "$schema": "./node_modules/@effect/language-service/schema.json",
   "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service"
+      }
+    ],
     "module": "nodenext",
     "target": "ES2022",
     "jsx": "react-jsx",
@@ -165,6 +171,7 @@
     },
     "moduleResolution": "nodenext",
     "strict": true,
+    "noImplicitOverride": true,
     "skipLibCheck": true,
     "types": ["node", "vscode"]
   },

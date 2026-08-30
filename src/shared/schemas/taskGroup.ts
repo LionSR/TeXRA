@@ -46,16 +46,13 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
  * projection maps a legacy value UP to the native value it corresponds to;
  * a value in neither vocabulary is rejected at the canonical persistence
  * boundary. Exported traces recover stale display fields independently in
- * `TraceGroupLogPayloadSchema`. `attemptId` is different: it owns physical-run
- * identity, so genuine absence remains valid for older rows while a malformed
- * present value rejects the payload instead of becoming a legacy omission.
+ * `TraceGroupLogPayloadSchema`.
  */
 const groupLogPayloadFields = {
   status: z.union([TaskGroupStatusSchema, EndGroupStatusSchema]).optional(),
   kind: StageKindSchema.optional(),
   index: taskGroupIndexField.optional(),
   total: taskGroupTotalField.optional(),
-  attemptId: z.string().min(1).optional(),
   name: z.string().optional(),
   endTime: taskGroupEndTimeField.optional(),
 };
@@ -65,8 +62,7 @@ export const GroupLogPayloadSchema = z.looseObject(groupLogPayloadFields);
 /**
  * Permanent exported-trace recovery for group rows written by older versions.
  * Each display-only field recovers independently so one stale value does not
- * discard the whole trace entry. Attempt identity remains strict because
- * erasing malformed ownership would attach work to the wrong physical run.
+ * discard the whole trace entry.
  */
 export const TraceGroupLogPayloadSchema = z.looseObject({
   ...groupLogPayloadFields,

@@ -34,10 +34,8 @@ import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError } from '@common/errors';
 import {
-  attachErrorPresentationPending,
-  attachErrorPresented,
-  hasErrorPresentationPending,
-  hasErrorPresentedMarker,
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
@@ -58,11 +56,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
-import {
-  countMediaFilesNeedingVision,
-  formatMediaNeedsVisionWarning,
-  shouldWarnMediaNeedsVision,
-} from './mediaVisionWarning';
+import { mediaNeedsVisionWarning } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
 import { currentSession, type SessionHandle } from './SessionHandle';
 import type { StreamStatusMachine } from './StreamStatusService';
@@ -162,23 +156,21 @@ async function presentLaunchError<K extends RuntimePresentationEvent>(
 ): Promise<never> {
   const delivered = await interactions.emit(event, payload, {
     replayWhenAttached: true,
-    onReplayScheduled: () => attachErrorPresentationPending(err),
-    onReplayDelivered: () => attachErrorPresented(err),
+    onReplayScheduled: () => attachErrorPresentationClaimed(err),
     onReplayNotDelivered: (host) => {
       host.emit?.('requestShowError', { message: toErrorMessage(err) });
     },
   });
-  // Mark "presented" only when a live host confirmed it rendered the
-  // targeted notice. A queued replay marks it as presentation-pending; the
-  // replay either attaches the presented marker on confirmed delivery or
-  // emits the generic fallback on non-delivery. A live-host emit that throws
-  // synchronously is normalized to `false` by `SessionHostInteractions.emit`,
-  // leaving the marker unset so the launch catch emits the generic fallback.
-  if (delivered) attachErrorPresented(err);
+  // Claim presentation only when a live host confirmed it rendered the
+  // targeted notice, or when the notice was retained for replay (the replay
+  // owns the eventual fallback). A live-host emit that throws synchronously
+  // is normalized to `false` by `SessionHostInteractions.emit`, leaving the
+  // marker unset so the launch catch emits the generic fallback.
+  if (delivered) attachErrorPresentationClaimed(err);
   throw err;
 }
 
-export async function getAgentPath(
+async function getAgentPath(
   agentIdentifier: string,
   interactions: Pick<SessionHostInteractions, 'emit'>,
   category: AgentCategory,
@@ -453,17 +445,13 @@ async function assembleAgentLaunchContext(
   // Tell the user when attached images will be dropped because the chosen model
   // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
   // drop them silently otherwise.
-  if (
-    shouldWarnMediaNeedsVision(config.mediaFiles, modelHandler.capabilities)
-  ) {
-    agentLogger.warn(
-      formatMediaNeedsVisionWarning(
-        countMediaFilesNeedingVision(config.mediaFiles),
-        'attached',
-        fullConfig.model,
-      ),
-    );
-  }
+  const visionWarning = mediaNeedsVisionWarning(
+    config.mediaFiles,
+    modelHandler.capabilities,
+    'attached',
+    fullConfig.model,
+  );
+  if (visionWarning) agentLogger.warn(visionWarning);
 
   const agentPath = path.dirname(resolution.entry.path);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
@@ -501,10 +489,7 @@ async function assembleAgentLaunchContext(
       : await parentStage.child('Init').run(buildVars);
   input.signal?.throwIfAborted();
 
-  const userVarChannels: UserVariableChannels = {
-    input: Object.freeze(baseVars),
-    transient: { ...baseVars },
-  };
+  const userVarChannels: UserVariableChannels = { ...baseVars };
   const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
 
   const usageMonitor = new UsageMonitor(
@@ -561,52 +546,40 @@ function acquireStreamOrThrow(
 }
 
 /**
- * Saga-style compensation for a failed stream activation.
+ * Saga-style compensation for a stream activation that failed after the UI tab
+ * was registered: the tab is visible, so surface the failure on it and
+ * transition to FAILED rather than leaving it hanging in STARTING.
  *
- *  - Pre-activation failure (no `activated` resources): the UI tab was never
- *    registered. Release the reserved lock if we held it, and publish a
- *    terminal rollback only if acquisition already emitted a visible status.
- *
- *  - Post-activation failure (`activated` resources set): the UI tab is
- *    visible. Surface the failure on it and transition to FAILED so the
- *    tab doesn't hang in STARTING.
+ * A pre-activation failure has no visible tab and only releases the reserved
+ * lock; that one line is inlined at its call site.
  */
-function compensateFailedActivation(args: {
+function compensateActivatedFailure(args: {
   config: AgentConfig;
-  reservedStreamId?: StreamTabId;
-  activated?: { streamId: StreamTabId; runTrace: RunTrace };
+  streamId: StreamTabId;
+  runTrace: RunTrace;
   streamStatus: StreamStatusMachine;
   err: unknown;
 }): void {
-  const { config, reservedStreamId, activated, streamStatus, err } = args;
-
-  if (activated) {
-    const { streamId, runTrace } = activated;
-    logSdkError(
-      runTrace.trace,
-      `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`,
-      err,
-      { operation: `start ${config.agent}` },
-    );
-    if (
-      !streamStatus.transitionToTerminal(
+  const { config, streamId, runTrace, streamStatus, err } = args;
+  logSdkError(
+    runTrace.trace,
+    `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`,
+    err,
+    { operation: `start ${config.agent}` },
+  );
+  if (
+    !streamStatus.transitionToTerminal(
+      streamId,
+      STREAM_PHASE.FAILED,
+      STREAM_TRANSITION_CAUSE.LIFECYCLE,
+    )
+  ) {
+    runTrace.trace.warn('Failed to mark activation failure terminal', {
+      data: {
+        agentIdentifier: config.agent,
         streamId,
-        STREAM_PHASE.FAILED,
-        STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      )
-    ) {
-      runTrace.trace.warn('Failed to mark activation failure terminal', {
-        data: {
-          agentIdentifier: config.agent,
-          streamId,
-        },
-      });
-    }
-    return;
-  }
-
-  if (reservedStreamId) {
-    streamStatus.releaseIfReserved(reservedStreamId);
+      },
+    });
   }
 }
 
@@ -616,7 +589,7 @@ function compensateFailedActivation(args: {
  *
  * Treats the `setActiveStream` emission as a transactional commit point:
  * resolution failures before that point release the lock silently; failures
- * after surface on the visible tab via {@link compensateFailedActivation}.
+ * after surface on the visible tab via {@link compensateActivatedFailure}.
  */
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
@@ -653,10 +626,10 @@ export async function buildAgentLaunchContext(
       (runTrace) => {
         activationRegistered = true;
         resources.add(() =>
-          compensateFailedActivation({
+          compensateActivatedFailure({
             config,
-            reservedStreamId,
-            activated: { streamId, runTrace },
+            streamId,
+            runTrace,
             streamStatus,
             err: launchFailure.error,
           }),
@@ -676,22 +649,15 @@ export async function buildAgentLaunchContext(
         data: { error: cleanupError },
       });
     }
-    if (!activationRegistered) {
+    if (!activationRegistered && reservedStreamId) {
       // Pre-activation failure: no visible tab to compensate on; release the
       // reserved stream lock silently.
-      compensateFailedActivation({
-        config,
-        reservedStreamId,
-        activated: undefined,
-        streamStatus,
-        err,
-      });
+      streamStatus.releaseIfReserved(reservedStreamId);
     }
     if (
       !input.suppressErrorNotification &&
       !(err instanceof ZodError) &&
-      !hasErrorPresentedMarker(err) &&
-      !hasErrorPresentationPending(err)
+      !hasErrorPresentationClaimed(err)
     ) {
       interactions.emit(
         'requestShowError',

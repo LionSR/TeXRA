@@ -37,7 +37,12 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
-import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
+import {
+  detectRawErrorBody,
+  detectStatusCode,
+  firstBodyStringField,
+  pickStringField,
+} from '@common/errors/sdkError/errorInspection';
 import { attachManualRetryOnlyError } from '@common/errors/sdkError/errorMetadata';
 import {
   PARTIAL_TEXT_TAIL_MAX,
@@ -217,6 +222,39 @@ function errorMessageOf(error: unknown): string {
   return typeof message === 'string' ? message : '';
 }
 
+const TRANSIENT_BACKGROUND_RETRIEVAL_403_MESSAGE =
+  'There was a problem processing your request. You will not be charged.';
+const TRANSIENT_BACKGROUND_RETRIEVAL_403_CODE = 'PERMISSION_DENIED';
+const TRANSIENT_BACKGROUND_RETRIEVAL_400_MESSAGE =
+  'Request contains an invalid argument.';
+
+/** Match only the narrow 403 fingerprint observed from a live background get. */
+function isTransientBackgroundRetrieval403(error: unknown): boolean {
+  const rawBody = detectRawErrorBody(error);
+  const code =
+    pickStringField(error, 'code') ??
+    firstBodyStringField(rawBody, 'code') ??
+    firstBodyStringField(rawBody, 'status');
+  return (
+    detectStatusCode(error) === 403 &&
+    code?.toUpperCase() === TRANSIENT_BACKGROUND_RETRIEVAL_403_CODE &&
+    errorMessageOf(error).includes(TRANSIENT_BACKGROUND_RETRIEVAL_403_MESSAGE)
+  );
+}
+
+/** Match the ambiguous 400 that follows the recognized transient 403. */
+function isTransientBackgroundRetrieval400(error: unknown): boolean {
+  return (
+    detectStatusCode(error) === 400 &&
+    errorMessageOf(error).includes(TRANSIENT_BACKGROUND_RETRIEVAL_400_MESSAGE)
+  );
+}
+
+interface TransientBackgroundRetrievalState {
+  toleratedErrorCount: number;
+  lastError: unknown;
+}
+
 /**
  * Best-effort predicate for "the `previous_interaction_id` we chained onto is
  * gone (expired / unknown / rejected)". On a match the handler drops the chain
@@ -373,6 +411,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private static readonly BACKGROUND_FAILURE_STATUSES: readonly InteractionStatus[] =
     ['failed', 'cancelled', 'incomplete', 'budget_exceeded'];
 
+  /** Re-emit bounded diagnostics roughly every five minutes at the 5s cadence. */
+  private static readonly TRANSIENT_RETRIEVAL_WARNING_INTERVAL_POLLS = 60;
+
+  /** Diagnostics for pending interactions in the recognized retrieval state. */
+  private readonly transientBackgroundRetrieval = new Map<
+    string,
+    TransientBackgroundRetrievalState
+  >();
+
   /**
    * Pending background-interaction id + resume/poll choreography, owned by the
    * shared provider-neutral {@link BackgroundRunLifecycle} (also used by the
@@ -409,11 +456,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     extractId: (r) => r.id,
     extractStatus: (r) => r.status ?? 'unknown',
     retrieve: (client, interactionId, _retrieveParams, signal) =>
-      client.interactions.get(
-        interactionId,
-        ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
-        this.interactionsRequestOptions(signal),
-      ),
+      this.retrieveBackgroundInteraction(client, interactionId, signal),
     tagSdkError: (error) => this.sdkErrorTagger(error, this.config.provider),
     onResumeRetrieveError: (error, interactionId) =>
       this.classifyBackgroundRetrieveFailure(error, interactionId),
@@ -432,6 +475,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       usage: interaction.usage ?? undefined,
     }),
     onAbortDiscard: (client, interactionId) => {
+      this.transientBackgroundRetrieval.delete(interactionId);
       // Fire-and-forget cancel; never awaited so abort propagation is instant.
       void this.cancelBackgroundInteraction(client, interactionId);
     },
@@ -487,9 +531,10 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * impossible in stateless mode, so `stateful` is load-bearing (unlike OpenAI,
    * which always sends store:true). Workflow-only mirrors OpenAI's exclusion of
    * tool-use loops (which rely on per-step streaming). There is no Gemini
-   * analogue of isGptFamilyModelName, and not every Interactions-capable model
-   * supports background (gemini-2.5-flash 400s), so the per-model gate is the
-   * runtime `backgroundUnsupported` fallback rather than a model-name check.
+   * analogue of OpenAI's GPT-family name check, and not every
+   * Interactions-capable model supports background (gemini-2.5-flash 400s), so
+   * the per-model gate is the runtime `backgroundUnsupported` fallback rather
+   * than a model-name check.
    */
   private useBackgroundMode(stateful: boolean): boolean {
     return (
@@ -1016,13 +1061,6 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       type: 'model_output',
       content: [this.textMedia(text)],
     } satisfies ModelOutputStep;
-  }
-
-  override extractAssistantText(message: Step): string | undefined {
-    if (message.type !== 'model_output') return undefined;
-    return joinNonEmpty(
-      (message.content ?? []).filter(isTextContent).map((c) => c.text),
-    );
   }
 
   protected textMedia(text: string): TextContent {
@@ -1868,10 +1906,17 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   private createBackgroundTimeoutError(interactionId: string): Error {
+    const transient = this.transientBackgroundRetrieval.get(interactionId);
+    this.transientBackgroundRetrieval.delete(interactionId);
     return this.createManualBackgroundError(
       `Google Interactions background interaction ${interactionId} exceeded ` +
         `maximum polling duration of ${ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS} ms. ` +
+        (transient
+          ? `Polling tolerated ${transient.toleratedErrorCount} recognized retrieval errors; ` +
+            'the last is attached as the cause. '
+          : '') +
         'Server-side cancellation was attempted; retry explicitly to start a new interaction.',
+      transient?.lastError,
     );
   }
 
@@ -1894,6 +1939,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       status === 410 ||
       isStaleInteractionChainError(error)
     ) {
+      this.transientBackgroundRetrieval.delete(interactionId);
       return {
         action: 'replace',
         error: this.createManualBackgroundError(
@@ -1952,6 +1998,71 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
           `unknown status "${status}"; refusing to submit a replacement.`,
       ),
     };
+  }
+
+  /**
+   * Poll `interactions.get(id)`, tolerating Google's in-progress retrieval
+   * bug. Verified live (2026-08-23, gemini-3.7-flash, @google/genai 2.17.1):
+   * while a background interaction is still running, `get` returns an HTTP 403
+   * permission-denied response containing the fixed billing-neutral message,
+   * followed by HTTP 400 invalid-argument responses. Once the job reaches a
+   * terminal status the same call succeeds. The docs promise an `in_progress`
+   * snapshot instead. No raw live error object was retained, so the predicate
+   * accepts both the SDK's native fields and its JSON-in-message envelope.
+   *
+   * The ambiguous 400 is tolerated only after the same interaction produced
+   * the recognized 403. Retryable retrieval failures preserve that evidence
+   * while the lifecycle retains the interaction id.
+   */
+  private async retrieveBackgroundInteraction(
+    client: GoogleGenAI,
+    interactionId: string,
+    signal: AbortSignal | undefined,
+  ): Promise<GoogleGenAIInteraction> {
+    try {
+      const interaction = await client.interactions.get(
+        interactionId,
+        ModelHandlerGoogleInteractions.BACKGROUND_GET_PARAMS,
+        this.interactionsRequestOptions(signal),
+      );
+      if (
+        interaction.status === 'completed' ||
+        interaction.status === 'requires_action' ||
+        ModelHandlerGoogleInteractions.BACKGROUND_FAILURE_STATUSES.includes(
+          interaction.status as InteractionStatus,
+        )
+      ) {
+        this.transientBackgroundRetrieval.delete(interactionId);
+      }
+      return interaction;
+    } catch (error) {
+      const previous = this.transientBackgroundRetrieval.get(interactionId);
+      const recognized403 = isTransientBackgroundRetrieval403(error);
+      const recognized400 =
+        previous !== undefined && isTransientBackgroundRetrieval400(error);
+      if (!recognized403 && !recognized400) throw error;
+
+      const toleratedErrorCount = (previous?.toleratedErrorCount ?? 0) + 1;
+      this.transientBackgroundRetrieval.set(interactionId, {
+        toleratedErrorCount,
+        lastError: error,
+      });
+      if (
+        toleratedErrorCount === 1 ||
+        toleratedErrorCount %
+          ModelHandlerGoogleInteractions.TRANSIENT_RETRIEVAL_WARNING_INTERVAL_POLLS ===
+          0
+      ) {
+        this.logger.warn(
+          `Google Interactions background interaction ${interactionId} remains in transient retrieval state ` +
+            `(tolerated errors: ${toleratedErrorCount}; classification=known-provider-retrieval-lag).`,
+        );
+      }
+      return {
+        id: interactionId,
+        status: 'in_progress',
+      } as GoogleGenAIInteraction;
+    }
   }
 
   /** Cancel the in-flight background interaction (best-effort; swallow errors). */

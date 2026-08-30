@@ -120,13 +120,12 @@ function delegationRegistry(tools: readonly ToolInput[]) {
 }
 
 async function resolveToolList(tools: ToolInput[] = [DELEGATE_AGENT_TOOL]) {
-  const resolved = await resolveAgentTools({
+  return resolveAgentTools({
     tools,
     registry: delegationRegistry(tools),
     logger: { warn: () => {} },
     toolInjections: new ToolInjectionRegistry(),
   });
-  return resolved.tools;
 }
 
 async function resolveDelegateAgent(extraTools: ToolInput[] = []) {

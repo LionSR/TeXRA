@@ -1,11 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
-  cliMemoryStoragePathFromInput,
   formatCliMemoryList,
+  loadCliMemoryDetail,
 } from '@cli/runtime/memory';
 import type { MemoryViewItem } from '@shared/schemas';
+
+vi.mock('@tools/memory/memoryFileSystem', () => ({
+  loadMemoryPreview: async () => ({ lineCount: 1, preview: 'preview' }),
+}));
 
 const item: MemoryViewItem = {
   displayPath: '/memories/project.md',
@@ -41,14 +46,15 @@ describe('CLI memory formatting', () => {
 
   it('limits long memory listings and reports hidden rows', () => {
     const list = formatCliMemoryList(
-      [item, { ...item, displayPath: '/memories/other.md' }],
-      {
-        limit: 1,
-      },
+      Array.from({ length: CLI_MEMORY_LIST_LIMIT + 1 }, (_unused, index) => ({
+        ...item,
+        displayPath: `/memories/project-${index}.md`,
+      })),
     );
 
-    expect(list).toContain('Memories (2):');
-    expect(list).toContain('/memories/project.md');
+    expect(list).toContain(`Memories (${CLI_MEMORY_LIST_LIMIT + 1}):`);
+    expect(list).toContain('/memories/project-0.md');
+    expect(list).not.toContain(`/memories/project-${CLI_MEMORY_LIST_LIMIT}.md`);
     expect(list).toContain('... 1 more');
   });
 
@@ -57,19 +63,21 @@ describe('CLI memory formatting', () => {
     'memories/project.md',
     'memories\\project.md',
     'project.md',
-  ])('accepts the path form %s', (input) => {
-    expect(cliMemoryStoragePathFromInput(input)).toBe('memories/project.md');
+  ])('accepts the path form %s', async (input) => {
+    await expect(loadCliMemoryDetail(input)).resolves.toMatchObject({
+      path: '/memories/project.md',
+    });
   });
 
-  it('rejects absolute paths outside the memory display root', () => {
-    expect(() => cliMemoryStoragePathFromInput('/memoriesExtra')).toThrow(
+  it('rejects absolute paths outside the memory display root', async () => {
+    await expect(loadCliMemoryDetail('/memoriesExtra')).rejects.toThrow(
       'Invalid memory path',
     );
   });
 
-  it('reports the original display path when a memory path escapes the root', () => {
-    expect(() =>
-      cliMemoryStoragePathFromInput('/memories/../outside.md'),
-    ).toThrow('Invalid memory path: /memories/../outside.md');
+  it('reports the original display path when a memory path escapes the root', async () => {
+    await expect(
+      loadCliMemoryDetail('/memories/../outside.md'),
+    ).rejects.toThrow('Invalid memory path: /memories/../outside.md');
   });
 });

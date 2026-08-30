@@ -242,7 +242,6 @@ export interface PhaseRow extends TranscriptRowBase {
   readonly phaseLabel: string;
   readonly phaseIndex?: number;
   readonly phaseTotal?: number;
-  readonly attemptId?: string;
 }
 
 /** A plain log line: a `default` row, a row with no message type, or a
@@ -271,11 +270,6 @@ export type TranscriptRow =
   | LogRow;
 
 export type TranscriptRowKind = TranscriptRow['kind'];
-
-export type TranscriptRowOf<K extends TranscriptRowKind> = Extract<
-  TranscriptRow,
-  { kind: K }
->;
 
 // ---------------------------------------------------------------------------
 // Settlement

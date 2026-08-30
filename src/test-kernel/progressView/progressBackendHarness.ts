@@ -68,7 +68,7 @@ export const stubStreamControls: GetProgressStreamControls = () => ({
   bashBypass: false,
   toolEditBypass: false,
   superYoloBypass: false,
-  goalActive: false,
+  goal: { active: false },
 });
 
 export function toolUseConfig(agent: string, model: string): AgentConfig {

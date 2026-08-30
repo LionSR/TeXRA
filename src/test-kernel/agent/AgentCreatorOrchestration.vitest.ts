@@ -77,7 +77,7 @@ describe('agent creator orchestration', () => {
     mocks.runHelperModelCompletion.mockReset();
     mocks.validateAgentYamlContent.mockReset();
     mocks.createHelperModelKit.mockResolvedValue({
-      kit: { modelName: 'test' },
+      kit: { handler: {}, client: {} },
     });
     mocks.runHelperModelCompletion.mockResolvedValue(
       '<yaml>generated: true</yaml>',

@@ -2,10 +2,13 @@ import {
   formatCliModelAccessRoute,
   type CliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
-import { getRuntimeModelLabel } from '@model/runtimeModelRegistry';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
+import {
+  formatTexraApprovalPolicy,
+  type TexraApprovalPolicy,
+} from '@shared/approvalPolicy';
 import type { StreamPhase, StreamSubstate } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { getModelLabel } from '@shared/model/modelLabel';
 import { BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -26,7 +29,6 @@ export interface CliSessionStatusInput {
   readonly model: string;
   readonly teamName?: string;
   readonly modelAccess: CliModelAccessRoute;
-  readonly approval: string;
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: StreamPhase | undefined;
   readonly substate?: StreamSubstate;
@@ -41,7 +43,7 @@ export interface CliSessionStatusInput {
   readonly commandName?: string;
   readonly cwd?: string;
   readonly processCwd?: string;
-  readonly approvalPolicy?: TexraApprovalPolicy;
+  readonly approvalPolicy: TexraApprovalPolicy;
 }
 
 export function formatCliStatusLabel(
@@ -92,9 +94,9 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
   return [
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
-    `model: ${getRuntimeModelLabel(input.model)}`,
+    `model: ${getModelLabel(input.model)}`,
     `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
-    `approval: ${input.approval}`,
+    `approval: ${formatTexraApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),

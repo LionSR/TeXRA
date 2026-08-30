@@ -15,7 +15,7 @@ export function createToolUseResumeShared(
     stateSlices: {
       runStateSnapshot: AgentRunStateSnapshotSchema.parse({}),
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      userChannels: { input: {}, transient: {} },
+      userChannels: {},
     },
     ...overrides,
   };

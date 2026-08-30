@@ -30,12 +30,11 @@ import {
   hydrateStreamArtifacts,
   readStreamArtifacts,
 } from '@cli/chat/tui/state/subscribeStreamArtifacts';
+import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
 import { activeStreamParentOrSelfId } from '@cli/chat/tui/state/streamViews';
-import type { StreamArtifactReader } from '@cli/chat/tui/state/streamArtifactProjection';
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import { formatTexraApprovalPolicy } from '@shared/approvalPolicy';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { isActivePhase } from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
@@ -169,7 +168,6 @@ export async function showCliSessionStatus(
           : undefined,
         prospectiveRoute,
       }),
-      approval: formatTexraApprovalPolicy(context.getApprovalPolicy()),
       approvalBypasses: slice?.bypass,
       status: activePhase?.phase,
       substate: activePhase?.substate,
@@ -182,8 +180,8 @@ export async function showCliSessionStatus(
         slice && meta.transcriptMode === 'persistent'
           ? context.session.executionId
           : undefined,
-      commandName: context.commandName,
-      cwd: context.cwd,
+      commandName: context.cliContext.commandName,
+      cwd: context.cliContext.cwd,
       processCwd: context.processCwd,
       approvalPolicy: context.getApprovalPolicy(),
       queuedFollowUpMessages:

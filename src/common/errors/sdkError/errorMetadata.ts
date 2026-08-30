@@ -109,32 +109,22 @@ const manualRetryOnlyErrorMarker = createErrorMarker('manualRetryOnlyError');
 export const attachManualRetryOnlyError = manualRetryOnlyErrorMarker.attach;
 export const hasManualRetryOnlyErrorMarker = manualRetryOnlyErrorMarker.has;
 
-const errorPresentedMarker = createErrorMarker('errorPresented');
-
-/** Marks that a targeted, actionable notification was confirmed delivered
- *  by the attached presentation host (its `emit` returned `true`) for this
- *  error at its throw site (e.g. model-not-recognized, agent-not-found), so a
- *  later generic handler on the same call stack does not show a second,
- *  redundant notification for the same failure. Only attach it after the
- *  targeted emit reports delivery: attaching on a fire-and-forget or
- *  best-effort event would let a host that could not render the targeted
- *  notification leave the user with no visible failure at all. */
-export const attachErrorPresented = errorPresentedMarker.attach;
-export const hasErrorPresentedMarker = errorPresentedMarker.has;
-
-const errorPresentationPendingMarker = createErrorMarker(
-  'errorPresentationPending',
+const errorPresentationClaimedMarker = createErrorMarker(
+  'errorPresentationClaimed',
 );
 
-/** Marks an error whose targeted notification was retained for replay because
- *  no host was attached at the throw site. The queued replay owns the
- *  delivery decision: when it runs it either attaches `errorPresented` (on
- *  confirmed delivery) or emits the caller-supplied fallback. Generic
- *  fallback gates treat this marker exactly like `errorPresented` so they do
- *  not queue a second surface before that replay settles. */
-export const attachErrorPresentationPending =
-  errorPresentationPendingMarker.attach;
-export const hasErrorPresentationPending = errorPresentationPendingMarker.has;
+/** Marks that a targeted, actionable notification owns this error's
+ *  presentation, so a later generic handler on the same call stack does not
+ *  show a second, redundant notification for the same failure. Attached in
+ *  exactly two cases: the targeted emit reported confirmed delivery, or no
+ *  host was attached at the throw site and the notification was retained for
+ *  replay (the queued replay then either renders it or calls the
+ *  caller-supplied not-delivered fallback). It is never attached for a
+ *  fire-and-forget or declined emit, so a host that could not render the
+ *  targeted notification still leaves the generic surface free to fire. */
+export const attachErrorPresentationClaimed =
+  errorPresentationClaimedMarker.attach;
+export const hasErrorPresentationClaimed = errorPresentationClaimedMarker.has;
 
 export const providerErrorMetadata =
   createErrorMetadata<ProviderError>('providerError');

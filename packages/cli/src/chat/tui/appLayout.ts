@@ -107,50 +107,6 @@ export function allocateMiddleRows({
   };
 }
 
-function allocateConversationBottomPanelRows({
-  maxRows,
-  sessionCount,
-  childListFocused,
-  minimumSessionPanelRows = 2,
-  todosPlanContentRows,
-  transcriptRows,
-}: {
-  readonly maxRows: number;
-  readonly sessionCount: number;
-  readonly childListFocused: boolean;
-  readonly minimumSessionPanelRows?: number;
-  readonly todosPlanContentRows: number;
-  readonly transcriptRows: number;
-}): {
-  readonly bottomPanelRows: number;
-  readonly sessionPanelRows: number;
-  readonly todosPlanRows: number;
-} {
-  const availableTranscriptRows = Math.max(0, transcriptRows);
-  const none = { bottomPanelRows: 0, sessionPanelRows: 0, todosPlanRows: 0 };
-  // Exactly one bottom panel exists at a time. Child sessions already have a
-  // compact count and navigation affordance in the status bar, so their list
-  // stays collapsed until the user focuses it — a large workflow must not take
-  // transcript space merely because it is running in the background — and the
-  // todos/plan panel hides while the list has focus
-  // (`shouldShowTodosPlanPanel`). Each panel owns one separator row above its
-  // content, and a lone row cannot hold separator plus content.
-  if (childListFocused) {
-    if (sessionCount === 0) return none;
-    const rows = Math.min(maxRows, sessionCount + 1, availableTranscriptRows);
-    if (rows < minimumSessionPanelRows) return none;
-    return { bottomPanelRows: rows, sessionPanelRows: rows, todosPlanRows: 0 };
-  }
-  if (todosPlanContentRows === 0) return none;
-  const rows = Math.min(
-    maxRows,
-    todosPlanContentRows + 1,
-    Math.floor(availableTranscriptRows / 2),
-  );
-  if (rows < 2) return none;
-  return { bottomPanelRows: rows, sessionPanelRows: 0, todosPlanRows: rows };
-}
-
 export function allocateConversationPanelRows({
   maxRows,
   sessionCount,
@@ -172,17 +128,44 @@ export function allocateConversationPanelRows({
   readonly todosPlanRows: number;
 } {
   const availableTranscriptRows = Math.max(0, transcriptRows);
-  const bottomPanels = allocateConversationBottomPanelRows({
+  // A bottom panel may never consume the last transcript row.
+  const panelBudget = Math.max(0, availableTranscriptRows - 1);
+  const none = {
+    bottomPanelRows: 0,
+    conversationRows: availableTranscriptRows,
+    sessionPanelRows: 0,
+    todosPlanRows: 0,
+  };
+  // Exactly one bottom panel exists at a time. Child sessions already have a
+  // compact count and navigation affordance in the status bar, so their list
+  // stays collapsed until the user focuses it — a large workflow must not take
+  // transcript space merely because it is running in the background — and the
+  // todos/plan panel hides while the list has focus
+  // (`shouldShowTodosPlanPanel`). Each panel owns one separator row above its
+  // content, and a lone row cannot hold separator plus content.
+  if (childListFocused) {
+    if (sessionCount === 0) return none;
+    const rows = Math.min(maxRows, sessionCount + 1, panelBudget);
+    if (rows < minimumSessionPanelRows) return none;
+    return {
+      bottomPanelRows: rows,
+      conversationRows: availableTranscriptRows - rows,
+      sessionPanelRows: rows,
+      todosPlanRows: 0,
+    };
+  }
+  if (todosPlanContentRows === 0) return none;
+  const rows = Math.min(
     maxRows,
-    sessionCount,
-    childListFocused,
-    minimumSessionPanelRows,
-    todosPlanContentRows,
-    transcriptRows: Math.max(0, availableTranscriptRows - 1),
-  });
+    todosPlanContentRows + 1,
+    Math.floor(panelBudget / 2),
+  );
+  if (rows < 2) return none;
   return {
-    ...bottomPanels,
-    conversationRows: availableTranscriptRows - bottomPanels.bottomPanelRows,
+    bottomPanelRows: rows,
+    conversationRows: availableTranscriptRows - rows,
+    sessionPanelRows: 0,
+    todosPlanRows: rows,
   };
 }
 

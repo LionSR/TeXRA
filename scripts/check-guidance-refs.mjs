@@ -265,7 +265,7 @@ function relativeMarkdownLinks(line, definitions) {
   if (/^\s{0,3}\[[^\]]+\]:/u.test(line)) return [];
 
   const links = [];
-  for (let open = line.indexOf('['); open !== -1;) {
+  for (let open = line.indexOf('['); open !== -1; ) {
     if (isEscaped(line, open)) {
       open = line.indexOf('[', open + 1);
       continue;

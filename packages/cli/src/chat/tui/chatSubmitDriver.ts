@@ -41,7 +41,6 @@ import {
   sessionMeta as sessionMetaSignal,
   setTransientNotice,
   streams as streamsSignal,
-  streamPhaseFor,
 } from './state/cliState';
 import {
   focusedChildFollowUpRoute,
@@ -113,7 +112,6 @@ export function chatTuiFocusedChildFollowUpRoute(): FocusedChildFollowUpRoute {
     activeStreamId,
     parentStream: parentStreamSignal.get(),
     metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
-    phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
   });
 }
 

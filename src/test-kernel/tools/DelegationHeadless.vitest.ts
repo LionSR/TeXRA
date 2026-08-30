@@ -682,7 +682,7 @@ describe('headless delegation', () => {
       expect.any(Object),
       IN_BAND_LOGICAL_EXECUTION_ID,
       expect.objectContaining({
-        allowWaitingResult: true,
+        isSubagent: true,
         stopAfterCycle: true,
       }),
     );
@@ -1308,7 +1308,7 @@ describe('headless delegation', () => {
     const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
     expect(executeOptions).toEqual(
       expect.objectContaining({
-        allowWaitingResult: true,
+        isSubagent: true,
         onRun: expect.any(Function),
         session: expect.any(Object),
       }),

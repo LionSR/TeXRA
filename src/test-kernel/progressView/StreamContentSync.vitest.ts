@@ -92,7 +92,7 @@ async function createSyncHarness(
     bashBypass: false,
     toolEditBypass: false,
     superYoloBypass: false,
-    goalActive: false,
+    goal: { active: false },
   }),
 ): Promise<SyncHarness> {
   const state = new SessionState();
@@ -281,9 +281,11 @@ describe('progress view stream-content projection', () => {
           bashBypass: true,
           toolEditBypass: true,
           superYoloBypass: true,
-          goalActive: true,
-          goalStatus: 'active',
-          goalObjective: 'Keep making progress.',
+          goal: {
+            active: true,
+            status: 'active',
+            objective: 'Keep making progress.',
+          },
         };
       },
     );

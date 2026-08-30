@@ -1,4 +1,16 @@
 /**
+ * Whether a workflow-script run has ended, as the shared workflow run model
+ * reads it (`runSettled`): a known status that is neither running nor
+ * waiting. An unknown status is not "ended" — a plan-only phase must not
+ * vanish before the stream's first status has arrived. Both hosts call this,
+ * so neither can drift.
+ */
+export function workflowRunSettled(
+  phase: StreamLifecycleStatus | undefined,
+): boolean {
+  return phase !== undefined && !isInFlightPhase(phase);
+}
+/**
  * Stream status constants shared across agent runtime and UI layers.
  */
 // Local imports - shared schemas
@@ -37,7 +49,7 @@ export function deriveRunOutcome(facts: {
 
 /**
  * Project the canonical outcome onto the frozen public execution-status
- * vocabulary (trace document `terminalStatus`, CLI NDJSON history status).
+ * vocabulary (CLI NDJSON history status, CLI display prose).
  * The only production mapping — flows and hosts must not hand-roll their
  * own. An out-of-vocabulary value (stale fixture, unparsed legacy data)
  * fails with a named error instead of an undefined-property crash

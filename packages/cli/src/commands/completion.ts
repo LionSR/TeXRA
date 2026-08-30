@@ -3,10 +3,8 @@ import { defineCommand } from 'citty';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from '../runtime/cliContext';
-import {
-  generateCompletionScript,
-  parseCompletionShell,
-} from '../runtime/completion';
+import { generateCompletionScript } from '../runtime/completion';
+import { parseCompletionShell } from '../runtime/completionCommandTree';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStdout } from '../runtime/logSinks';
 

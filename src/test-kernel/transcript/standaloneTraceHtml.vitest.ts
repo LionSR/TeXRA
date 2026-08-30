@@ -28,7 +28,6 @@ function trace(overrides: Partial<TraceDocument> = {}): TraceDocument {
       streamId: STREAM_ID,
       status: 'ready',
     }),
-    terminalStatus: null,
     ...overrides,
   };
 }

@@ -6,7 +6,6 @@ import { describe, it } from 'vitest';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { TaskStateSchema } from '@agent/core/state/TaskState';
 import { agentConfigToTaskState } from '@agent/core/state/agentConfigToTaskState';
 import { AgentCategory } from '@shared/schemas';
 
@@ -48,22 +47,6 @@ describe('agentConfigToTaskState', () => {
     });
 
     const taskState = agentConfigToTaskState(config);
-
-    assert.deepEqual(taskState, { agentConfig: config });
-  });
-
-  it('accepts old tool-use task states with the removed empty session placeholder', () => {
-    const config = AgentConfigSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
-      agent: 'assistant',
-      model: 'sonnet46T',
-      instruction: 'Check the proof.',
-    });
-
-    const taskState = TaskStateSchema.parse({
-      agentConfig: config,
-      toolSessionState: {},
-    });
 
     assert.deepEqual(taskState, { agentConfig: config });
   });

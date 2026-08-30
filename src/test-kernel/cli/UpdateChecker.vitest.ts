@@ -5,8 +5,6 @@ import {
   detectInstallMethod,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,
-  formatUpdateCommand,
-  isPackageManagerInstall,
   notifyCliUpdate,
   resetCliUpdateNotifyLatchForTests,
 } from '@cli/runtime/updateChecker';
@@ -21,128 +19,101 @@ vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
 }));
 
 describe('detectInstallMethod', () => {
-  it('recognizes pnpm, yarn, and bun global layouts', () => {
-    expect(
-      detectInstallMethod('/Users/me/Library/pnpm/global/5/node_modules/x'),
-    ).toBe('pnpm');
-    expect(detectInstallMethod('/usr/local/.pnpm/x/node_modules/x')).toBe(
-      'pnpm',
-    );
-    expect(detectInstallMethod('/Users/me/.config/yarn/global/x')).toBe('yarn');
+  it.each([
+    // npm/pnpm/yarn/bun globals all install under a node_modules tree; the
+    // manager-specific segment is what separates them.
+    {
+      path: '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist',
+      expected: 'pnpm',
+    },
+    {
+      path: '/usr/local/.pnpm/x/node_modules/@texra-ai/cli/dist',
+      expected: 'pnpm',
+    },
+    {
+      path: '/Users/me/.config/yarn/global/node_modules/@texra-ai/cli/dist',
+      expected: 'yarn',
+    },
     // Yarn Classic's global bin: dotted `.yarn` segment.
-    expect(detectInstallMethod('/Users/me/.yarn/bin/x')).toBe('yarn');
-    expect(detectInstallMethod('/Users/me/.bun/install/global/x')).toBe('bun');
-  });
-
-  it('recognizes Homebrew Cellar layouts across platforms', () => {
-    // Apple Silicon.
-    expect(
-      detectInstallMethod(
-        '/opt/homebrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
-      ),
-    ).toBe('brew');
-    // Intel macOS.
-    expect(
-      detectInstallMethod(
-        '/usr/local/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
-      ),
-    ).toBe('brew');
-    // Linuxbrew.
-    expect(
-      detectInstallMethod(
-        '/home/linuxbrew/.linuxbrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
-      ),
-    ).toBe('brew');
-  });
-
-  it('falls back to npm for the unmarked global layout', () => {
-    expect(
-      detectInstallMethod('/usr/local/lib/node_modules/@texra-ai/cli/dist'),
-    ).toBe('npm');
-  });
-
-  it('does not treat Homebrew-managed Node npm globals as brew installs', () => {
-    expect(
-      detectInstallMethod(
-        '/opt/homebrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe('npm');
-    expect(
-      detectInstallMethod(
-        '/home/linuxbrew/.linuxbrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe('npm');
-  });
-});
-
-describe('isPackageManagerInstall', () => {
-  it('treats node_modules-resident installs as managed', () => {
-    // npm/pnpm/yarn/bun globals all live under node_modules.
-    expect(
-      isPackageManagerInstall(
-        '/usr/local/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe(true);
-    expect(
-      isPackageManagerInstall(
-        '/Users/me/Library/pnpm/global/5/node_modules/@texra-ai/cli/dist/bin/texra.js',
-      ),
-    ).toBe(true);
-  });
-
-  it('treats a Homebrew Cellar install as managed even without node_modules', () => {
-    // The tap formula installs the bundled binary under Cellar/<v>/, which need
-    // not contain a node_modules segment — the `cellar` segment marks it (same
-    // path shape detectInstallMethod recognizes as brew).
-    const brewPath =
-      '/opt/homebrew/Cellar/texra/0.38.10/libexec/dist/bin/texra.js';
-    expect(brewPath.toLowerCase().includes('node_modules')).toBe(false);
-    expect(isPackageManagerInstall(brewPath)).toBe(true);
-    expect(detectInstallMethod(brewPath)).toBe('brew');
-  });
-
-  it('is case-insensitive for Windows paths', () => {
-    expect(
-      isPackageManagerInstall(
-        'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@texra-ai\\cli\\dist\\bin\\texra.js',
-      ),
-    ).toBe(true);
-  });
-
-  it('treats a source/dev or linked checkout as unmanaged', () => {
-    // A dev build runs straight from packages/cli/dist — no node_modules
-    // segment — which is exactly why this gate is needed: detectInstallMethod
-    // would otherwise fall back to 'npm' and prompt `npm install -g`.
-    const devPath = '/Users/me/projects/texra/packages/cli/dist/bin/texra.js';
-    expect(isPackageManagerInstall(devPath)).toBe(false);
-    expect(detectInstallMethod(devPath)).toBe('npm');
-    expect(
-      isPackageManagerInstall('/Users/me/.local/share/texra/dist/bin/texra.js'),
-    ).toBe(false);
+    {
+      path: '/Users/me/.yarn/global/node_modules/@texra-ai/cli/dist',
+      expected: 'yarn',
+    },
+    {
+      path: '/Users/me/.bun/install/global/node_modules/@texra-ai/cli/dist',
+      expected: 'bun',
+    },
+    // npm's global layout carries no manager segment, so it is the fallback.
+    {
+      path: '/usr/local/lib/node_modules/@texra-ai/cli/dist',
+      expected: 'npm',
+    },
+    // Case-insensitive for Windows paths.
+    {
+      path: 'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@texra-ai\\cli\\dist\\bin\\texra.js',
+      expected: 'npm',
+    },
+    // Homebrew's tap formula installs under Cellar/<version>/ with no
+    // node_modules segment; `Cellar` alone marks it (Apple Silicon, Intel
+    // macOS, Linuxbrew).
+    {
+      path: '/opt/homebrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      expected: 'brew',
+    },
+    {
+      path: '/usr/local/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      expected: 'brew',
+    },
+    {
+      path: '/home/linuxbrew/.linuxbrew/Cellar/texra/0.38.7/libexec/dist/bin/texra.js',
+      expected: 'brew',
+    },
+    // Homebrew-managed Node hosts plain npm globals — the broader `homebrew` /
+    // `linuxbrew` prefix must not be read as a brew formula install.
+    {
+      path: '/opt/homebrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      expected: 'npm',
+    },
+    {
+      path: '/home/linuxbrew/.linuxbrew/lib/node_modules/@texra-ai/cli/dist/bin/texra.js',
+      expected: 'npm',
+    },
+    // A source/dev or linked checkout runs straight from packages/cli/dist and
+    // was installed by no package manager: an `npm install -g` prompt could
+    // not update it, so the update check has to skip entirely.
+    {
+      path: '/Users/me/projects/texra/packages/cli/dist/bin/texra.js',
+      expected: undefined,
+    },
+    {
+      path: '/Users/me/.local/share/texra/dist/bin/texra.js',
+      expected: undefined,
+    },
+  ])('classifies $path as $expected', ({ path, expected }) => {
+    expect(detectInstallMethod(path)).toBe(expected);
   });
 });
 
-describe('buildUpdateCommand / formatUpdateCommand', () => {
+describe('buildUpdateCommand', () => {
   it('produces the matching install invocation per manager', () => {
-    expect(formatUpdateCommand('npm')).toBe(
-      'npm install -g @texra-ai/cli@latest',
-    );
-    expect(formatUpdateCommand('pnpm')).toBe(
-      'pnpm add -g @texra-ai/cli@latest',
-    );
-    expect(formatUpdateCommand('yarn')).toBe(
-      'yarn global add @texra-ai/cli@latest',
-    );
-    expect(formatUpdateCommand('bun')).toBe('bun add -g @texra-ai/cli@latest');
-    // Homebrew upgrades through brew, not the npm registry; refresh the tap
-    // first so the just-detected version is actually available locally.
-    expect(formatUpdateCommand('brew')).toBe(
-      'brew update && brew upgrade texra',
-    );
     expect(buildUpdateCommand('npm')).toEqual({
       command: 'npm',
       args: ['install', '-g', '@texra-ai/cli@latest'],
     });
+    expect(buildUpdateCommand('pnpm')).toEqual({
+      command: 'pnpm',
+      args: ['add', '-g', '@texra-ai/cli@latest'],
+    });
+    expect(buildUpdateCommand('yarn')).toEqual({
+      command: 'yarn',
+      args: ['global', 'add', '@texra-ai/cli@latest'],
+    });
+    expect(buildUpdateCommand('bun')).toEqual({
+      command: 'bun',
+      args: ['add', '-g', '@texra-ai/cli@latest'],
+    });
+    // Homebrew upgrades through brew, not the npm registry; refresh the tap
+    // first so the just-detected version is actually available locally.
     expect(buildUpdateCommand('brew')).toEqual({
       command: 'brew',
       args: ['update', '&&', 'brew', 'upgrade', 'texra'],

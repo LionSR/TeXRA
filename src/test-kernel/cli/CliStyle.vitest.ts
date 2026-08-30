@@ -16,7 +16,6 @@ const STYLE_METHODS = [
 describe('createCliStyle', () => {
   it('wraps text in SGR escapes when enabled', () => {
     const style = createCliStyle(true);
-    expect(style.enabled).toBe(true);
     for (const method of STYLE_METHODS) {
       const out = style[method]('text');
       expect(out).toContain('text');
@@ -27,7 +26,6 @@ describe('createCliStyle', () => {
 
   it('is identity (no escapes) when disabled', () => {
     const style = createCliStyle(false);
-    expect(style.enabled).toBe(false);
     for (const method of STYLE_METHODS) {
       expect(style[method]('text')).toBe('text');
     }

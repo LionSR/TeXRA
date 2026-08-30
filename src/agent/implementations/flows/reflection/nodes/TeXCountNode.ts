@@ -11,7 +11,7 @@ export class TeXCountNode extends BaseNode<
   ReflectionFlowShared,
   ReflectionServices
 > {
-  async prep(shared: ReflectionFlowShared): Promise<FileLocation[]> {
+  override async prep(shared: ReflectionFlowShared): Promise<FileLocation[]> {
     const { config, fileService } = this.services;
     return getFilesForRound(
       shared.currentRound,
@@ -21,7 +21,7 @@ export class TeXCountNode extends BaseNode<
     );
   }
 
-  async exec(files: FileLocation[]): Promise<string | null> {
+  override async exec(files: FileLocation[]): Promise<string | null> {
     const { config } = this.services;
     if (!config.toolConfig.attachTeXCount || files.length === 0) {
       return null;
@@ -29,7 +29,7 @@ export class TeXCountNode extends BaseNode<
     return getTeXCountStats(files.map((f) => f.absolutePath));
   }
 
-  async execFallback(
+  override async execFallback(
     _files: FileLocation[],
     error: Error,
   ): Promise<string | null> {
@@ -38,14 +38,14 @@ export class TeXCountNode extends BaseNode<
     return null;
   }
 
-  async post(
+  override async post(
     shared: ReflectionFlowShared,
     _files: FileLocation[],
     execRes: string | null,
   ): Promise<string | undefined> {
     if (execRes && shared.context) {
       this.services.modelCell.handler.prependTextToUserMessage(
-        shared.context.messages,
+        shared.context,
         execRes,
       );
     }

@@ -66,23 +66,13 @@ function ephemeralSession(
   return { session, canResume: false, warning };
 }
 
-/** Prepare the process session for a noninteractive run before it can start. */
-export async function initializeHeadlessTranscriptSession(
-  openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
-): Promise<CliTranscriptSession> {
-  const existing = tryDefaultSession();
-  if (existing) return persistentSession(existing);
-
-  const transcripts = await openPersistentStore();
-  return initializePersistentSession(transcripts);
-}
-
 /**
- * Prepare the interactive TUI session under an explicit persistence policy.
- * Only the `use-ephemeral` arm permits an in-memory session after open failure.
+ * Prepare the process session under an explicit persistence policy. The
+ * default `fail` policy is what every noninteractive run needs; only the
+ * `use-ephemeral` arm permits an in-memory session after open failure.
  */
-export async function initializeInteractiveTranscriptSession(
-  policy: InteractiveTranscriptPolicy,
+export async function initializeCliTranscriptSession(
+  policy: InteractiveTranscriptPolicy = { onPersistentOpenFailure: 'fail' },
   openPersistentStore: OpenPersistentStore = () => StreamLogStore.open(),
 ): Promise<CliTranscriptSession> {
   const existing = tryDefaultSession();

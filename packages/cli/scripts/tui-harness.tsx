@@ -28,7 +28,6 @@ import {
   defaultSession,
   initializeDefaultSession,
 } from '@agent/runtime/SessionHandle';
-import { SupabaseClient } from '@auth/SupabaseClient';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -57,6 +56,7 @@ import {
   type StreamPhase,
   type StreamTabId,
   type UserQuestionPermission,
+  HISTORY_RUN_STATUS,
 } from '@shared/schemas';
 import {
   toolRowModel,
@@ -147,15 +147,12 @@ import {
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { formatCliAuthStatusLine } from '../src/runtime/apiStatus';
 import {
+  buildCliAccountAccessItems,
   buildCliAgentItems,
   buildCliOrchestrationItems,
   buildCliResumeItems,
   buildCliTeamItems,
 } from '../src/runtime/orchestration';
-import {
-  CLI_HISTORY_RESUMABLE_STATUS,
-  type CliHistoryEntry,
-} from '../src/runtime/history';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { saveProviderApiKey } from '../src/runtime/providerApiKey';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
@@ -164,6 +161,7 @@ import {
   type CliRuntimeHost,
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
+import type { CliHistoryEntry } from '../src/runtime/history';
 import type { CliContext } from '../src/runtime/cliContext';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
@@ -171,7 +169,6 @@ import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 const STREAM_ID = 'harness-stream-1';
 const RUNNING_WORKFLOW_FIRST_AGENT_STREAM_ID =
   'correct@harness-model#harness-workflow-agent-a' as StreamTabId;
-const SHOW_WORKFLOW_TIMELINE = process.env.HARNESS_WORKFLOW_TIMELINE === '1';
 const SHOW_WORKFLOW_RUNNING = process.env.HARNESS_WORKFLOW_RUNNING === '1';
 const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
@@ -231,7 +228,6 @@ const SHOW_ORCHESTRATION_HISTORY =
   process.env.HARNESS_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
-const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
@@ -339,7 +335,6 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   commandName: 'texra',
   configWarnings: [],
   cwd: HARNESS_CWD,
-  helperModel: 'harness-model',
   mode: 'interactive',
   outputFormat: 'text',
   quietLogs: true,
@@ -418,7 +413,6 @@ await initLocalCliPlatform({
   installSignalHandlers: false,
   resourcesPath: HARNESS_RESOURCES_PATH,
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
-  helperModel: 'harness-model',
   skillSourceOptions: {},
   version: '0.0.0-harness',
 });
@@ -497,7 +491,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       timestamp: '2026-06-06T00:02:00Z',
       agent: 'orchestrator',
       model: 'harness-model',
-      status: CLI_HISTORY_RESUMABLE_STATUS,
+      status: HISTORY_RUN_STATUS.RESUMABLE,
       resumable: true,
       inputBasename: '-',
       category: AgentCategory.ToolUse,
@@ -536,14 +530,18 @@ const HARNESS_MODEL_ACCESS =
           ? { chatGptAccountLabel: 'harness@example.edu' }
           : {}),
         grokSignedIn: false,
+        texraSignedIn: false,
       }
     : undefined;
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: HARNESS_PRESET_PLANS,
   history: HARNESS_ORCHESTRATION_HISTORY,
   toolUseAgents: HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES,
-  modelAccess: HARNESS_MODEL_ACCESS,
+  accountAccess: HARNESS_MODEL_ACCESS,
 });
+const HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS = HARNESS_MODEL_ACCESS
+  ? buildCliAccountAccessItems(HARNESS_MODEL_ACCESS)
+  : undefined;
 const HARNESS_ORCHESTRATION_RESUME_ITEMS = buildCliResumeItems(
   HARNESS_ORCHESTRATION_HISTORY,
 );
@@ -624,14 +622,9 @@ function harnessOrchestrationModels(): readonly CliModelAccess[] {
 }
 
 function harnessOrchestrationStatusLines(): readonly string[] {
-  const authenticated = HARNESS_AUTHENTICATED === '1';
-  const profile = {
-    authenticated,
-    accountLabel: authenticated ? 'harness@example.edu' : undefined,
-  };
   return [
     `api: ${formatCliModelAccessRouteInline('personal')}`,
-    formatCliAuthStatusLine(profile),
+    formatCliAuthStatusLine({ authenticated: false }),
   ];
 }
 
@@ -643,7 +636,7 @@ if (SHOW_ORCHESTRATION) {
       agentItems={HARNESS_ORCHESTRATION_AGENT_ITEMS}
       teamItems={HARNESS_ORCHESTRATION_TEAM_ITEMS}
       models={process.env.HARNESS_API_MODE ? harnessOrchestrationModels() : []}
-      modelAccess={HARNESS_MODEL_ACCESS}
+      accountAccessItems={HARNESS_ORCHESTRATION_ACCOUNT_ACCESS_ITEMS}
       version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
@@ -661,18 +654,6 @@ if (SHOW_ORCHESTRATION) {
   );
   await instance.waitUntilExit();
   process.exit(0);
-}
-
-if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
-  const accessToken = HARNESS_AUTHENTICATED === '1' ? 'harness-token' : null;
-  SupabaseClient.setAuthProvider({
-    whenReady: async () => {},
-    ensureFreshToken: async () => accessToken,
-    getStoredSessionState: async () =>
-      accessToken === null ? 'none' : 'authenticated',
-    getStoredAccountLabel: async () => null,
-    getLastRefreshFailure: () => null,
-  });
 }
 
 /** A settled text row the way the fold hands one to the painter. `seqNo` and
@@ -1193,7 +1174,6 @@ function harnessInitialStreamStatus(): StreamPhase | undefined {
 }
 
 function harnessInitialEntries(): TranscriptRow[] {
-  if (SHOW_WORKFLOW_TIMELINE) return [];
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
@@ -1240,109 +1220,6 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();
 }
 
-function seedWorkflowTimeline(): void {
-  // Hex-valid: the StreamSnapshotStore (the one artifact accumulator) parses
-  // payload execution ids and drops non-conforming rows.
-  const executionId = 'aaaa0001f10e' as ExecutionId;
-  const childStreamId = 'workflow-script#aaaa0001f10e' as StreamTabId;
-  emitSetActiveStream(childStreamId, AgentCategory.Workflow);
-  emitChildRoster(STREAM_ID, [
-    {
-      executionId,
-      agentName: 'repositoryAudit',
-      childStreamId,
-      identity: { kind: 'multiAgentWorkflow', workflowName: 'repositoryAudit' },
-    },
-  ]);
-  emitParentStreamEdge(childStreamId, STREAM_ID);
-  transitionStreamRunning(childStreamId);
-  // Mirror a user focusing the running child before its terminal transition.
-  // The session adapter's status rail must return this focus to the owner
-  // below.
-  activeStreamIdSignal.set(childStreamId);
-
-  const output = {
-    source: 'paper.tex',
-    location: {
-      kind: 'runStorage' as const,
-      executionId,
-      relativePath: 'r1/paper.tex',
-      absolutePath: '/private/tmp/texra-harness/r1/paper.tex',
-    },
-    round: 0,
-    lineage: null,
-    diff: null,
-  };
-  const runTrace = createRunTrace(childStreamId, defaultSession().transcripts);
-  const runStage = runTrace.trace.openStage('Repository audit', {
-    id: 'harness-workflow-run',
-    kind: 'run',
-  });
-  const roundStage = runTrace.trace.openStage('Round 1', {
-    id: 'harness-workflow-round-1',
-    index: 0,
-    kind: 'round',
-    parent: runStage,
-    total: 2,
-  });
-
-  roundStage.end('completed');
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: childStreamId,
-    event: {
-      type: 'addOutputFiles',
-      filesByRound: { 0: [output] },
-      streamId: childStreamId,
-    },
-  });
-  defaultSession().events.emit({
-    scope: 'run',
-    streamId: childStreamId,
-    event: {
-      type: 'updateCompileFailures',
-      filesByRound: {
-        0: [
-          {
-            round: 0,
-            displayName: 'paper.tex',
-            output: output.location,
-            log: {
-              kind: 'runStorage',
-              executionId,
-              relativePath: 'r1/paper.log',
-              absolutePath: '/private/tmp/texra-harness/r1/paper.log',
-            },
-            logRelativePath: 'r1/paper.log',
-          },
-        ],
-      },
-      streamId: childStreamId,
-    },
-  });
-  const secondRoundStage = runTrace.trace.openStage('Round 2', {
-    id: 'harness-workflow-round-2',
-    index: 1,
-    kind: 'round',
-    parent: runStage,
-    total: 2,
-  });
-  secondRoundStage.end('completed');
-  runStage.end('completed');
-  syncStreamLog(defaultSession(), childStreamId);
-  transitionStreamTerminal(childStreamId);
-  emitChildRoster(STREAM_ID, []);
-  runTrace.dispose();
-
-  if (activeStreamIdSignal.get() !== STREAM_ID) {
-    throw new Error('Completed workflow child did not return focus to owner');
-  }
-  const retained = visibleSubagentRows(STREAM_ID, childRosters.get());
-  if (!retained.some((child) => child.childStreamId === childStreamId)) {
-    throw new Error('Completed workflow child was not retained for refocus');
-  }
-}
-
 function seedRunningWorkflow(): void {
   const executionId = 'aaaa0002f10e' as ExecutionId;
   const childStreamId = 'workflow-script#aaaa0002f10e' as StreamTabId;
@@ -1372,9 +1249,8 @@ function seedRunningWorkflow(): void {
   // the durable summary mirror (`SessionHandle`'s `attachSessionEvents`) so
   // `getStreamMetadata(...)` overlays `identity` regardless of the RUNNING
   // transition's ephemeral metadata reset. Emit straight onto the hub here,
-  // the same way the output-file/compile-failure facts below do —
-  // `SubagentList`'s `workflowDashboardRoot` gate reads that overlay to pick
-  // the two-column task dashboard.
+  // the same way a real run's facts do — `App` reads that overlay to open
+  // the workflow popup instead of focusing the stream.
   defaultSession().events.emit({
     scope: 'run',
     streamId: childStreamId,
@@ -1426,9 +1302,8 @@ function seedRunningWorkflow(): void {
     },
     stageId: phaseStage.id,
   });
-  // Focus before projection: background workflow streams intentionally keep
-  // only operational rows, while the focused stream owns the task transcript.
-  activeStreamIdSignal.set(childStreamId);
+  // A workflow is never the focused stream: its slice keeps the compact
+  // operational rows the popup renders from.
   syncStreamLog(defaultSession(), childStreamId);
 
   const workflowChildren = [
@@ -2275,7 +2150,6 @@ function handleHarnessSubmit(line: string): void {
     metadata: focusedActiveStreamId
       ? streamMetadataFor(focusedActiveStreamId)
       : undefined,
-    phaseOf: (streamId) => streamPhaseFor(streamId)?.phase,
   });
   if (focusedChildRoute.kind === 'reject') {
     appendHarnessAssistantTranscript(
@@ -2306,7 +2180,7 @@ function appendHarnessStatus(): void {
       modelAccess: resolveCliModelAccessRoute({
         usageRoute: readStreamArtifacts(streamId)?.cumulativeUsage?.usageRoute,
       }),
-      approval: formatTexraApprovalPolicy(harnessRuntimeSession.approvalPolicy),
+      approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: slice?.bypass,
       status: streamPhaseFor(streamId)?.phase,
       goal: GoalStore.getForStream(streamId),
@@ -2462,10 +2336,8 @@ function renderHarnessApp(): React.JSX.Element {
       onKillExecution={markHarnessExecutionStopped}
       onWorkflowControl={() => undefined}
       canInterruptStream={canInterruptHarnessStream}
-      canStopActiveRun={() => canInterrupt}
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptActive={markHarnessInterrupted}
       onInterruptStream={markHarnessStreamInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
@@ -2497,10 +2369,6 @@ if (SHOW_TERMINAL_RESUME_REPAINT) {
     );
     void exitHarness(1);
   });
-}
-
-if (SHOW_WORKFLOW_TIMELINE) {
-  seedWorkflowTimeline();
 }
 
 if (SHOW_WORKFLOW_RUNNING) {

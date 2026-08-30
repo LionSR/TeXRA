@@ -40,8 +40,8 @@ export const EXECUTION_STATUS = {
   ERROR: 'error',
 } as const;
 
-export const ExecutionStatusSchema = z.enum(EXECUTION_STATUS);
-export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
+export type ExecutionStatus =
+  (typeof EXECUTION_STATUS)[keyof typeof EXECUTION_STATUS];
 
 /**
  * Canonical terminal outcome of an agent run — the single fact "how did this
@@ -158,21 +158,6 @@ export const STREAM_SUBSTATE = {
 
 export const StreamSubstateSchema = z.enum(STREAM_SUBSTATE);
 export type StreamSubstate = z.infer<typeof StreamSubstateSchema>;
-
-export function executionStatusToRunOutcome(
-  status: ExecutionStatus | undefined,
-): RunOutcome | undefined {
-  switch (status) {
-    case EXECUTION_STATUS.COMPLETED:
-      return RUN_OUTCOME.COMPLETED;
-    case EXECUTION_STATUS.INTERRUPTED:
-      return RUN_OUTCOME.CANCELLED;
-    case EXECUTION_STATUS.ERROR:
-      return RUN_OUTCOME.FAILED;
-    case undefined:
-      return undefined;
-  }
-}
 
 /**
  * Wire-level lifecycle status of a stream that has no phase in this process:

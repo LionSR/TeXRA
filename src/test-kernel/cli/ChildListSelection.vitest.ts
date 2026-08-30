@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  childListStreamId,
-  childStreamListValue,
-  isWorkflowTaskListValue,
-  workflowPhaseListValue,
-  workflowTaskListValue,
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
   type ChildListSelectionState,
@@ -16,9 +11,9 @@ import type { StreamTabId } from '@shared/schemas';
 const main = 'main' as StreamTabId;
 const strategy = 'strategy' as StreamTabId;
 const analysis = 'analysis' as StreamTabId;
-const mainValue = childStreamListValue(main);
-const strategyValue = childStreamListValue(strategy);
-const analysisValue = childStreamListValue(analysis);
+const mainValue = main;
+const strategyValue = strategy;
+const analysisValue = analysis;
 
 function reconcileSelection(
   state: ChildListSelectionState,
@@ -33,26 +28,6 @@ function reconcileSelection(
 }
 
 describe('CLI child list selection', () => {
-  it('uses stable prefixed values for child rows', () => {
-    expect(mainValue).toBe('stream:main');
-    expect(childListStreamId(mainValue)).toBe(main);
-    expect(workflowPhaseListValue('entry:phase')).toBe(
-      'workflowPhase:entry:phase',
-    );
-    expect(workflowTaskListValue('entry:task')).toBe('workflowTask:entry:task');
-    expect(isWorkflowTaskListValue(workflowTaskListValue('entry:task'))).toBe(
-      true,
-    );
-    expect(isWorkflowTaskListValue(workflowPhaseListValue('entry:phase'))).toBe(
-      false,
-    );
-    expect(isWorkflowTaskListValue(undefined)).toBe(false);
-    expect(
-      childListStreamId(workflowTaskListValue('entry:task')),
-    ).toBeUndefined();
-    expect(childListStreamId(undefined)).toBeUndefined();
-  });
-
   it('preserves a selection across list focus and row reordering', () => {
     let state = reconcileSelection(
       INITIAL_CHILD_LIST_SELECTION,
@@ -142,7 +117,7 @@ describe('CLI child list selection', () => {
     let state = reconcileSelection(
       {
         focused: true,
-        selectedValue: childStreamListValue('gone' as StreamTabId),
+        selectedValue: 'gone' as StreamTabId,
       },
       [analysisValue, mainValue],
       main,

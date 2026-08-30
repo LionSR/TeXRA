@@ -256,11 +256,6 @@ export class WorkflowExecutionState {
     });
   }
 
-  /** Hold an issued call for the user's review before it may queue. */
-  awaitAdmission(id: string): void {
-    this.updateCall(id, { status: WORKFLOW_CALL_STATUS.AWAITING_APPROVAL });
-  }
-
   /**
    * Queue a call for a concurrency slot. Live-attempt facts of a prior attempt
    * are dropped — a stale resolved model must not describe the attempt about
@@ -366,8 +361,7 @@ export class WorkflowExecutionState {
       }
       if (
         call.status === WORKFLOW_CALL_STATUS.PLANNED ||
-        call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED ||
-        call.status === WORKFLOW_CALL_STATUS.AWAITING_APPROVAL
+        call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
         call.status = WORKFLOW_CALL_STATUS.SKIPPED;
         call.settledBySweep = true;

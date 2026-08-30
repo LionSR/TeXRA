@@ -37,12 +37,6 @@ export interface AgentRuntimeEmitOptions {
   readonly onReplayScheduled?: () => void;
   /**
    * Invoked once a retained event is actually replayed to a host and that
-   * host reports delivery. This is the only queued path that may record a
-   * confirmed-presentation marker.
-   */
-  readonly onReplayDelivered?: () => void;
-  /**
-   * Invoked once a retained event is actually replayed to a host and that
    * host reports non-delivery (or rejects). The callback receives the host
    * that performed the replay so the caller can present its fallback surface
    * on the same host.

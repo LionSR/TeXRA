@@ -7,6 +7,7 @@
 import { getExecutionStore, type TodoEntry } from '@agent/storage';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
+import { KVStore } from '@common/storage/KVStore';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
@@ -21,7 +22,8 @@ import {
 import { assertNever, isObject } from '@utils/core';
 
 import { StreamLogStore } from './StreamLogStore';
-import { StreamSnapshotStore } from './StreamSnapshotStore';
+import { streamDataDir } from './streamDataPaths';
+import { readWorkPlan } from './streamSnapshotRead';
 
 /**
  * The execution→stream foreign key: the `streamId` stamped on execution
@@ -33,59 +35,38 @@ import { StreamSnapshotStore } from './StreamSnapshotStore';
  *
  * The resolved branch carries the already-read `meta` so a caller that also
  * needs other metadata fields (the trace assembler) does not pay a second
- * `readMeta()`. The absence reason is typed so callers can distinguish "no
- * execution metadata at all" from "metadata that predates stamped streams".
+ * `readMeta()`. Absence is a plain `null`: no execution metadata at all and
+ * metadata predating stamped streams are the same answer to every caller.
  */
-export type ExecutionStreamResolution =
-  | {
-      readonly streamId: StreamTabId;
-      readonly meta: ExecutionMeta;
-    }
-  | { readonly reason: 'no-meta' | 'no-stream' };
-
 export async function resolveStreamForExecution(
   executionId: ExecutionId,
-): Promise<ExecutionStreamResolution> {
+): Promise<{
+  readonly streamId: StreamTabId;
+  readonly meta: ExecutionMeta;
+} | null> {
   const meta = await getExecutionStore(executionId).readMeta();
-  if (!meta) return { reason: 'no-meta' };
-  if (!meta.streamId) return { reason: 'no-stream' };
+  if (!meta?.streamId) return null;
   return { streamId: meta.streamId, meta };
-}
-
-type CompletedRunTodosSource = 'streamData' | 'none';
-
-export interface CompletedRunTodosReadResult {
-  readonly todos: TodoEntry[];
-  readonly source: CompletedRunTodosSource;
-  readonly streamId?: StreamTabId;
 }
 
 /**
  * Read the archived task list for a completed run from the durable stream
  * sidecar (`streamData/{stream}/workPlan.json`), keyed through
- * {@link resolveStreamForExecution}.
+ * {@link resolveStreamForExecution}. An unresolved execution, a missing
+ * sidecar and an empty one all read as `[]` — no consumer distinguished them.
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
-): Promise<CompletedRunTodosReadResult> {
-  const snapshotStore = new StreamSnapshotStore();
+): Promise<TodoEntry[]> {
   const resolution = await resolveStreamForExecution(executionId);
-
-  if (
-    !('reason' in resolution) &&
-    (await snapshotStore.hasPersistedWorkPlan(resolution.streamId))
-  ) {
-    const snapshot = await snapshotStore.read(resolution.streamId);
-    return {
-      todos: snapshot.todos.map((todo): TodoEntry => ({
-        content: todo.content,
-        status: todo.status,
-      })),
-      source: 'streamData',
-      streamId: resolution.streamId,
-    };
-  }
-  return { todos: [], source: 'none' };
+  if (!resolution) return [];
+  const workPlan = await readWorkPlan(
+    new KVStore(streamDataDir(resolution.streamId)),
+  );
+  return workPlan.todos.map((todo): TodoEntry => ({
+    content: todo.content,
+    status: todo.status,
+  }));
 }
 
 // ============================================================================
@@ -339,7 +320,7 @@ export async function readCompletedRunConversation(
   executionId: ExecutionId,
 ): Promise<CompletedRunConversationReadResult> {
   const resolution = await resolveStreamForExecution(executionId);
-  if ('reason' in resolution) return { conversation: null, source: 'none' };
+  if (!resolution) return { conversation: null, source: 'none' };
   const { streamId } = resolution;
 
   // A call-scoped read-only store seeded with just this stream, so this

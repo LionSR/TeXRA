@@ -1,5 +1,5 @@
 import { platform } from '@platform/platform';
-import { settingByKey } from '@shared/schemas';
+import { settingByKey, type SettingHost } from '@shared/schemas';
 import { readSetting, writeSetting } from '@shared/config/settingsAccess';
 
 function requireEntry(key: string) {
@@ -21,14 +21,18 @@ function requireEntry(key: string) {
  * (`workspaceState` / `globalState` / `config`) is the one the catalog entry
  * declares, so the right backing store is picked without the caller naming it.
  *
- * Reads resolve to the `'vscode'` slot, which every row shares with `desktop`;
- * the CLI-divergent git-author keys are read through the CLI's own
- * `readGitAuthorSettingsFromState`.
+ * Reads default to the `'vscode'` slot, which most rows share with `desktop`.
+ * A host-neutral runtime whose row deliberately diverges by host may pass the
+ * active host explicitly; host-specific convenience readers remain preferable
+ * when they also own normalization or side effects.
  */
-export function readPlatformSetting<T>(key: string): T {
+export function readPlatformSetting<T>(
+  key: string,
+  host: SettingHost = 'vscode',
+): T {
   // `Platform` structurally supplies the `config`/`workspaceState`/`globalState`
   // slots `readSetting` reads from, so it passes as `SettingsStores` directly.
-  return readSetting(requireEntry(key), platform()) as T;
+  return readSetting(requireEntry(key), platform(), host) as T;
 }
 
 /**

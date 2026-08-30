@@ -430,9 +430,14 @@ function toOpenAISchemaObject(def: ToolDefinition): Record<string, unknown> {
   return toObjectParametersSchema(convertToolSchema(def), 'OpenAI');
 }
 
+// The base `Tool` (custom function tool) member of `ToolUnion` carries no
+// `type` field at all, so `ToolUnion['type']` doesn't type-check directly —
+// `Extract` narrows to the native-tool members first.
+type AnthropicNativeToolType = Extract<ToolUnion, { type: string }>['type'];
+
 // Map local tool names to Anthropic remote tool types.
 // The custom `memory` tool (with pin/unpin) is sent as a regular function tool.
-const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
+const ANTHROPIC_TOOL_TYPE_MAP: Record<string, AnthropicNativeToolType> = {
   bash: 'bash_20250124',
   web_search: 'web_search_20260209',
   web_fetch: 'web_fetch_20260209',

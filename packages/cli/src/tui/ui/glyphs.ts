@@ -44,9 +44,6 @@ export const ERROR_ENTRY_PREFIX = '! ';
 /** Corner glyph that opens each tool-output block. */
 export const TOOL_OUTPUT_CORNER = '⎿';
 
-/** Generated-tokens marker in child-row metadata (`↓40k`). */
-export const TOKENS_GENERATED = '↓';
-
 /** 1 Hz solid/hollow blink pair for "your input is needed" prompts (approval
  *  modals) — deliberately distinct from STATUS_DOT (never animated) so the
  *  two never read as the same signal. Pair with `ui/LoadingIndicator`'s

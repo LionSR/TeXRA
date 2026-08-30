@@ -225,6 +225,27 @@ function compareTranscriptOrderKeys(
 }
 
 /**
+ * Candidates already in settlement order, else stably sorted into it. Used
+ * identically by the append-only scan and its rebuild oracle so the two
+ * paths can never disagree on scrollback order.
+ */
+function inSettlementOrder<
+  T extends {
+    readonly index: number;
+    readonly key: readonly [number, number];
+  },
+>(items: readonly T[]): readonly T[] {
+  return items.every(
+    (c, i) =>
+      i === 0 || compareTranscriptOrderKeys(items[i - 1]!.key, c.key) <= 0,
+  )
+    ? items
+    : items.toSorted(
+        (l, r) => compareTranscriptOrderKeys(l.key, r.key) || l.index - r.index,
+      );
+}
+
+/**
  * Printable rows in their append-only scrollback order.
  *
  * Source-backed rows use the durable order in which they became immutable.
@@ -256,18 +277,7 @@ export function orderedStaticTranscriptEntries(
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
 
-  const alreadyOrdered = candidates.every(
-    (candidate, i) =>
-      i === 0 ||
-      compareTranscriptOrderKeys(candidates[i - 1]!.key, candidate.key) <= 0,
-  );
-  const ordered = alreadyOrdered
-    ? candidates
-    : candidates.toSorted(
-        (left, right) =>
-          compareTranscriptOrderKeys(left.key, right.key) ||
-          left.index - right.index,
-      );
+  const ordered = inSettlementOrder(candidates);
 
   return ordered.map(({ entry }) => entry);
 }
@@ -381,10 +391,6 @@ function makeStaticTranscriptScanCursor(
  * {@link orderedStaticTranscriptEntries} (the full rebuild path), this walks
  * only the suffix after `previous.scannedIndex`, so ordinary stream-sync ticks
  * cost O(delta) instead of O(history).
- *
- * The suffix is exact: `hasLaterRenderable` is computed backward over just
- * the suffix, which is all that is needed to resolve the live-user-prompt
- * deferral rule (`userPromptAwaitsLiveContinuation`).
  */
 export function incrementalStaticTranscriptEntries(
   entries: readonly TranscriptRow[] | undefined,
@@ -425,15 +431,6 @@ export function incrementalStaticTranscriptEntries(
 
   const start = previous.scannedIndex;
   const suffix = source.slice(start);
-  const hasLaterRenderable = new Array<boolean>(suffix.length);
-  let laterRenderable = false;
-  for (let index = suffix.length - 1; index >= 0; index -= 1) {
-    hasLaterRenderable[index] = laterRenderable;
-    const entry = suffix[index]!;
-    if (isRenderableTranscriptEntry(entry)) {
-      laterRenderable = true;
-    }
-  }
 
   const appended: Array<{
     entry: TranscriptRow;
@@ -450,12 +447,9 @@ export function incrementalStaticTranscriptEntries(
       scannedIndex = start + index + 1;
       continue;
     }
-    const defersLiveUserPrompt =
-      isActivePhase(status) &&
-      entry.kind === 'user' &&
-      !isInquiryContinuationText(transcriptRowHeadline(entry)) &&
-      !hasLaterRenderable[index];
-    if (defersLiveUserPrompt) break;
+    if (userPromptAwaitsLiveContinuation(suffix, index, status)) {
+      break;
+    }
     scannedIndex = start + index + 1;
     appended.push({
       entry,
@@ -469,18 +463,7 @@ export function incrementalStaticTranscriptEntries(
   // covers a reorder inside one tick; a suffix whose first row belongs before
   // rows an earlier tick already printed cannot be appended at all, so it
   // falls back to the oracle rebuild (a known-origin repaint).
-  const alreadyOrdered = appended.every(
-    (candidate, i) =>
-      i === 0 ||
-      compareTranscriptOrderKeys(appended[i - 1]!.key, candidate.key) <= 0,
-  );
-  const ordered = alreadyOrdered
-    ? appended
-    : appended.toSorted(
-        (left, right) =>
-          compareTranscriptOrderKeys(left.key, right.key) ||
-          left.index - right.index,
-      );
+  const ordered = inSettlementOrder(appended);
 
   const first = ordered[0];
   if (

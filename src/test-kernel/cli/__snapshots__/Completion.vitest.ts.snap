@@ -155,11 +155,6 @@ _texra() {
     return
   fi
 
-  if [[ "$path" == 'completion' && "$cur" != -* ]]; then
-    COMPREPLY=( $(compgen -W 'bash zsh fish' -- "$cur") )
-    return
-  fi
-
   if [[ "$path" == 'agents show' && "$cur" != -* ]]; then
     COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") )
     return
@@ -167,6 +162,11 @@ _texra() {
 
   if [[ "$path" == 'models show' && "$cur" != -* ]]; then
     COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") )
+    return
+  fi
+
+  if [[ "$path" == 'completion' && "$cur" != -* ]]; then
+    COMPREPLY=( $(compgen -W 'bash zsh fish' -- "$cur") )
     return
   fi
 
@@ -200,8 +200,8 @@ complete -c texra -n '__fish_use_subcommand' -a 'tools' -d 'Inspect external too
 complete -c texra -n '__fish_use_subcommand' -a 'multi-agent' -d 'List, show, and run multi-agent team presets'
 complete -c texra -n '__fish_use_subcommand' -a 'models' -d 'Inspect and manage TeXRA models'
 complete -c texra -n '__fish_use_subcommand' -a 'login' -d 'Sign in with Researcher Access'
-complete -c texra -n '__fish_use_subcommand' -a 'logout' -d 'Sign out of TeXRA'
-complete -c texra -n '__fish_use_subcommand' -a 'auth' -d 'Sign in with ChatGPT, Grok, or your TeXRA account; check status'
+complete -c texra -n '__fish_use_subcommand' -a 'logout' -d 'Sign out of Researcher Access'
+complete -c texra -n '__fish_use_subcommand' -a 'auth' -d 'Sign in with ChatGPT, Grok, or Researcher Access; check status'
 complete -c texra -n '__fish_use_subcommand' -a 'doctor' -d 'Check CLI runtime dependencies'
 complete -c texra -n '__fish_use_subcommand' -a 'completion' -d 'Print shell completion script'
 complete -c texra -n '__fish_use_subcommand' -a 'version' -d 'Print the CLI version'
@@ -603,8 +603,8 @@ complete -c texra -n '__fish_seen_subcommand_from auth' -l 'color' -d 'Emit ANSI
 complete -c texra -n '__fish_seen_subcommand_from auth' -l 'no-color' -d 'Disable ANSI color on every stream'
 complete -c texra -n '__fish_seen_subcommand_from auth' -l 'no-input' -d 'For headless commands, disable prompts and default approvals to never'
 complete -c texra -n '__fish_seen_subcommand_from auth' -a 'login' -d 'Sign in with Researcher Access'
-complete -c texra -n '__fish_seen_subcommand_from auth' -a 'logout' -d 'Sign out of TeXRA'
-complete -c texra -n '__fish_seen_subcommand_from auth' -a 'status' -d 'Show TeXRA sign-in status'
+complete -c texra -n '__fish_seen_subcommand_from auth' -a 'logout' -d 'Sign out of Researcher Access'
+complete -c texra -n '__fish_seen_subcommand_from auth' -a 'status' -d 'Show Researcher Access sign-in status'
 complete -c texra -n '__fish_seen_subcommand_from auth' -a 'chatgpt' -d 'Sign in with your ChatGPT subscription to use Codex models'
 complete -c texra -n '__fish_seen_subcommand_from auth' -a 'grok' -d 'Sign in with your Grok (xAI SuperGrok) account to use xAI models via subscription'
 complete -c texra -n '__fish_seen_subcommand_from auth; and __fish_seen_subcommand_from login' -l 'print' -s 'p' -d 'For headless commands, run non-interactively and print the result to stdout'

@@ -16,10 +16,7 @@ import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import {
-  computeSelectWindowSize,
-  type SelectWindowSize,
-} from '@cli/tui/selectWindow';
+import { computeSelectWindowSize } from '@cli/tui/selectWindow';
 import { platform } from '@platform/platform';
 import {
   AGENT_MODE_PRESETS,
@@ -82,7 +79,7 @@ export function buildChatDefaultAgentItems(
   ];
 }
 
-export function selectedAgentKeys(
+function selectedAgentKeys(
   selection: AgentRosterCategorySelection,
   agents: readonly AgentEntry[],
 ): readonly string[] {
@@ -94,22 +91,8 @@ function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
   return selection === 'all' ? 'all' : String(selection.length);
 }
 
-export function agentRosterSelectWindow(args: {
-  readonly availableRows: number | undefined;
-  readonly itemCount: number;
-}): SelectWindowSize {
-  return computeSelectWindowSize({ ...args, chromeRows: 5 });
-}
-
-export async function setChatDefaultAgent(
-  workspacePath: string | undefined,
-  agent: string | undefined,
-): Promise<void> {
-  if (!workspacePath) {
-    throw new Error('Default chat-agent selection requires a workspace.');
-  }
-  await setWorkspaceCliChatAgent(workspacePath, agent);
-}
+// Border, title, footer spacer, and key hints are the chrome.
+const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
 async function loadRosterData(): Promise<AgentRosterData> {
   await loadAgents({ includeRemote: false });
@@ -154,9 +137,10 @@ export function AgentRosterForm(
     onSelect: (value: string) => void,
     onCancel: () => void,
   ) => {
-    const window = agentRosterSelectWindow({
+    const window = computeSelectWindowSize({
       availableRows: props.availableRows,
       itemCount: items.length,
+      chromeRows: AGENT_ROSTER_SELECT_CHROME_ROWS,
     });
     return (
       <FormFrame title="/config · Agents" showCloseHint={false}>
@@ -282,7 +266,14 @@ export function AgentRosterForm(
       ),
       (value) => {
         const cwd = platform().workspace.getWorkspacePath();
-        write(() => setChatDefaultAgent(cwd, value || undefined), 'overview');
+        write(async () => {
+          if (!cwd) {
+            throw new Error(
+              'Default chat-agent selection requires a workspace.',
+            );
+          }
+          await setWorkspaceCliChatAgent(cwd, value || undefined);
+        }, 'overview');
       },
       () => setMode('overview'),
     );

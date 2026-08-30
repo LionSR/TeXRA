@@ -35,7 +35,7 @@ describe('formatSlashCommandHelp', () => {
     // collapse in the help surface's markdown renderer, list items do not.
     expect(help).toContain('- `/clear` — Start a fresh chat session');
     expect(help).toContain(
-      '- `/goal` (`/goals`) — Explain autonomous goal mode',
+      '- `/goal` (`/goals`) — Configure autonomous goal mode',
     );
     expect(help).toContain('- `/plan` — Read the focused session work plan');
     expect(help).toContain('- `/exit` (`/quit`) — Exit the CLI session');
@@ -45,7 +45,7 @@ describe('formatSlashCommandHelp', () => {
       '- `/key` (`/keys`) — Add a provider API key with masked input',
     );
     expect(help).toContain(
-      '- `/login` — Sign in to ChatGPT or Researcher Access',
+      '- `/login` — Sign in to ChatGPT, Grok, or Researcher Access',
     );
   });
 

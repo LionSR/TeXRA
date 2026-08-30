@@ -773,7 +773,7 @@ describe('CLI run progress renderer', () => {
 
   it('fits the delegated task within an ANSI terminal row', () => {
     const output = outputBuffer();
-    const renderer = ansiRenderer(output, { columns: 80 });
+    const renderer = ansiRenderer(output, { getColumns: () => 80 });
 
     handleOrchestratorRootRun(renderer);
     handleStreamDescription(renderer, 'child-stream', 'A'.repeat(100));
@@ -1229,11 +1229,14 @@ describe('CLI run progress renderer', () => {
 
   it('maps the global quiet flag into CLI context args', () => {
     expect(
-      pickGlobalArgs({
-        quiet: true,
-        'output-format': 'text',
-        'approval-policy': 'never',
-      }).quiet,
+      pickGlobalArgs(
+        {
+          quiet: true,
+          'output-format': 'text',
+          'approval-policy': 'never',
+        },
+        { skillSourcePaths: [] },
+      ).quiet,
     ).toBe(true);
   });
 });

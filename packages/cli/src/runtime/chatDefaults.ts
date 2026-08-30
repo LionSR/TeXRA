@@ -40,12 +40,8 @@ function usableConfiguredAgent(value: string | undefined): string | undefined {
 interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
-  readonly source: ChatDefaultSource;
-  readonly agentSource: ChatDefaultValueSource;
   readonly modelSource: ChatDefaultValueSource;
 }
-
-type ChatDefaultSource = 'workspace' | 'user' | 'history' | 'builtin' | 'mixed';
 
 /** Chat default value sources are the shared run-model decision reasons. */
 type ChatDefaultValueSource = Extract<
@@ -163,55 +159,16 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   return { model: resolveKnownCliModelId(mostRecent.record.model) };
 }
 
-function deriveSource(sources: {
-  readonly agent: ChatDefaultValueSource;
-  readonly model: ChatDefaultValueSource;
-}): ChatDefaultSource {
-  const agentSource = chatDefaultSource(sources.agent);
-  const modelSource = chatDefaultSource(sources.model);
-  return agentSource === modelSource ? agentSource : 'mixed';
-}
-
-function chatDefaultSource(source: ChatDefaultValueSource): ChatDefaultSource {
-  switch (source) {
-    case 'workspace-config':
-      return 'workspace';
-    case 'user-config':
-      return 'user';
-    case 'history':
-      return 'history';
-    case 'builtin-default':
-      return 'builtin';
-    case 'explicit-override':
-    case 'environment':
-      return 'mixed';
-  }
-}
-
-function sourceForOverride(
-  override: string | undefined,
-  env: string | undefined,
-): ChatDefaultValueSource | undefined {
-  if (override) return 'explicit-override';
-  if (env) return 'environment';
-  return undefined;
-}
-
 function buildChatDefaults(init: {
   readonly agent: string | undefined;
   readonly model: string | undefined;
-  readonly agentSource: ChatDefaultValueSource | undefined;
   readonly modelSource: ChatDefaultValueSource | undefined;
   readonly visibleToolUseAgents?: readonly { readonly name: string }[];
 }): ChatDefaults {
-  const agentSource = init.agentSource ?? 'builtin-default';
-  const modelSource = init.modelSource ?? 'builtin-default';
   return {
     agent: init.agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: init.model ?? CLI_BUILTIN_DEFAULT_MODEL,
-    source: deriveSource({ agent: agentSource, model: modelSource }),
-    agentSource,
-    modelSource,
+    modelSource: init.modelSource ?? 'builtin-default',
   };
 }
 
@@ -244,7 +201,6 @@ export async function resolveChatDefaults(
   const envAgent = usableConfiguredAgent(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
-  let agentSource = sourceForOverride(overrideAgent, envAgent);
   const directModel = overrideModel || envModel;
   const skipDefaultTierIo = Boolean(agent && directModel);
 
@@ -263,19 +219,10 @@ export async function resolveChatDefaults(
       loadUserDefaults(init.quiet ?? false),
       loadHistoryDefaults(),
     ]);
-    const tiers: ReadonlyArray<
-      readonly [ChatDefaultValueSource, PartialDefaults]
-    > = [
-      ['workspace-config', workspace],
-      ['user-config', user],
-      ['history', history],
-    ];
-
-    for (const [source, defaults] of tiers) {
-      if (!agent && defaults.agent) {
-        agent = defaults.agent;
-        agentSource = source;
-      }
+    // History never changes the chat agent, so only the two config tiers can
+    // supply one; the order below is the per-field fallthrough.
+    for (const defaults of [workspace, user, history]) {
+      if (!agent && defaults.agent) agent = defaults.agent;
     }
   }
 
@@ -291,7 +238,6 @@ export async function resolveChatDefaults(
   return buildChatDefaults({
     agent,
     model: modelDecision?.model,
-    agentSource,
     // The candidate list above only uses reasons in ChatDefaultValueSource.
     modelSource: modelDecision?.reason as ChatDefaultValueSource | undefined,
     visibleToolUseAgents: init.visibleToolUseAgents,

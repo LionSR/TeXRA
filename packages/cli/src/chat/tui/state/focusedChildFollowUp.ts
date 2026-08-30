@@ -3,11 +3,11 @@ import {
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
   isPlainAgentIdentity,
-  type StreamPhase,
   type StreamTabId,
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 
+import { streamPhaseFor } from './cliState';
 import { activeStreamScope } from './streamViews';
 
 export type FocusedChildFollowUpRoute =
@@ -16,14 +16,13 @@ export type FocusedChildFollowUpRoute =
   | { readonly kind: 'reject'; readonly streamId: StreamTabId };
 
 /** Select both the focused-child composer presentation and submission route.
- *  `metadata` is the active stream's shared metadata and `phaseOf` its
- *  lifecycle phase; callers read both (`streamMetadataFor(activeStreamId)`,
- *  `streamPhaseFor(streamId)`) so this selector stays pure. */
+ *  `metadata` is the active stream's shared metadata, which callers read
+ *  (`streamMetadataFor(activeStreamId)`) so tests can inject shapes no live
+ *  session produces. */
 export function focusedChildFollowUpRoute(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly metadata: Readonly<SessionStreamMetadata> | undefined;
-  readonly phaseOf: (streamId: StreamTabId) => StreamPhase | undefined;
 }): FocusedChildFollowUpRoute {
   const scope = activeStreamScope({
     activeStreamId: init.activeStreamId,
@@ -33,7 +32,7 @@ export function focusedChildFollowUpRoute(init: {
     return { kind: 'none' };
   }
 
-  const status = init.phaseOf(scope.streamId);
+  const status = streamPhaseFor(scope.streamId)?.phase;
   const metadata = init.metadata;
   // Terminal-backed agents consume follow-up queues at runtime, but the TUI
   // keeps their composer hidden until terminal-backed interaction has parity.
