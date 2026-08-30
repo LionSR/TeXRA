@@ -33,7 +33,12 @@ import type {
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
 import type { MediaEntry } from '@agent/types/mediaTypes';
-import { detectStatusCode } from '@common/errors/sdkError/errorInspection';
+import {
+  detectRawErrorBody,
+  detectStatusCode,
+  firstBodyStringField,
+  pickStringField,
+} from '@common/errors/sdkError/errorInspection';
 import {
   attachManualRetryOnlyError,
   attachPartialText,
@@ -222,21 +227,21 @@ function errorMessageOf(error: unknown): string {
 
 const TRANSIENT_BACKGROUND_RETRIEVAL_403_MESSAGE =
   'There was a problem processing your request. You will not be charged.';
-const TRANSIENT_BACKGROUND_RETRIEVAL_403_CODE = 'permission_denied';
+const TRANSIENT_BACKGROUND_RETRIEVAL_403_CODE = 'PERMISSION_DENIED';
 const TRANSIENT_BACKGROUND_RETRIEVAL_400_MESSAGE =
   'Request contains an invalid argument.';
 
-/** Match only the fixed 403 fingerprint observed from a live background get. */
+/** Match only the narrow 403 fingerprint observed from a live background get. */
 function isTransientBackgroundRetrieval403(error: unknown): boolean {
-  const details = error as {
-    code?: unknown;
-    error?: { code?: unknown };
-  };
-  const code = details.code ?? details.error?.code;
+  const rawBody = detectRawErrorBody(error);
+  const code =
+    pickStringField(error, 'code') ??
+    firstBodyStringField(rawBody, 'code') ??
+    firstBodyStringField(rawBody, 'status');
   return (
     detectStatusCode(error) === 403 &&
-    code === TRANSIENT_BACKGROUND_RETRIEVAL_403_CODE &&
-    errorMessageOf(error) === TRANSIENT_BACKGROUND_RETRIEVAL_403_MESSAGE
+    code?.toUpperCase() === TRANSIENT_BACKGROUND_RETRIEVAL_403_CODE &&
+    errorMessageOf(error).includes(TRANSIENT_BACKGROUND_RETRIEVAL_403_MESSAGE)
   );
 }
 
@@ -244,8 +249,13 @@ function isTransientBackgroundRetrieval403(error: unknown): boolean {
 function isTransientBackgroundRetrieval400(error: unknown): boolean {
   return (
     detectStatusCode(error) === 400 &&
-    errorMessageOf(error) === TRANSIENT_BACKGROUND_RETRIEVAL_400_MESSAGE
+    errorMessageOf(error).includes(TRANSIENT_BACKGROUND_RETRIEVAL_400_MESSAGE)
   );
+}
+
+interface TransientBackgroundRetrievalState {
+  toleratedErrorCount: number;
+  lastError: unknown;
 }
 
 /**
@@ -404,8 +414,14 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   private static readonly BACKGROUND_FAILURE_STATUSES: readonly InteractionStatus[] =
     ['failed', 'cancelled', 'incomplete', 'budget_exceeded'];
 
-  /** Interactions that have produced the recognized transient retrieval 403. */
-  private readonly transientBackgroundRetrievalIds = new Set<string>();
+  /** Re-emit bounded diagnostics roughly every five minutes at the 5s cadence. */
+  private static readonly TRANSIENT_RETRIEVAL_WARNING_INTERVAL_POLLS = 60;
+
+  /** Diagnostics for pending interactions in the recognized retrieval state. */
+  private readonly transientBackgroundRetrieval = new Map<
+    string,
+    TransientBackgroundRetrievalState
+  >();
 
   /**
    * Pending background-interaction id + resume/poll choreography, owned by the
@@ -462,14 +478,12 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       usage: interaction.usage ?? undefined,
     }),
     onAbortDiscard: (client, interactionId) => {
-      this.transientBackgroundRetrievalIds.delete(interactionId);
+      this.transientBackgroundRetrieval.delete(interactionId);
       // Fire-and-forget cancel; never awaited so abort propagation is instant.
       void this.cancelBackgroundInteraction(client, interactionId);
     },
-    onTimeoutDiscard: (client, interactionId) => {
-      this.transientBackgroundRetrievalIds.delete(interactionId);
-      return this.cancelBackgroundInteraction(client, interactionId);
-    },
+    onTimeoutDiscard: (client, interactionId) =>
+      this.cancelBackgroundInteraction(client, interactionId),
   });
 
   /**
@@ -1882,10 +1896,17 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   }
 
   private createBackgroundTimeoutError(interactionId: string): Error {
+    const transient = this.transientBackgroundRetrieval.get(interactionId);
+    this.transientBackgroundRetrieval.delete(interactionId);
     return this.createManualBackgroundError(
       `Google Interactions background interaction ${interactionId} exceeded ` +
         `maximum polling duration of ${ModelHandlerGoogleInteractions.BACKGROUND_MAX_DURATION_MS} ms. ` +
+        (transient
+          ? `Polling tolerated ${transient.toleratedErrorCount} recognized retrieval errors; ` +
+            'the last is attached as the cause. '
+          : '') +
         'Server-side cancellation was attempted; retry explicitly to start a new interaction.',
+      transient?.lastError,
     );
   }
 
@@ -1908,6 +1929,7 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
       status === 410 ||
       isStaleInteractionChainError(error)
     ) {
+      this.transientBackgroundRetrieval.delete(interactionId);
       return {
         action: 'replace',
         error: this.createManualBackgroundError(
@@ -1971,15 +1993,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
   /**
    * Poll `interactions.get(id)`, tolerating Google's in-progress retrieval
    * bug. Verified live (2026-08-23, gemini-3.7-flash, @google/genai 2.17.1):
-   * while a background interaction is still running, `get` returns the fixed
-   * HTTP 403 permission_denied fingerprint on the first poll and the fixed
-   * HTTP 400 invalid-argument message on later polls. Once the job reaches a
+   * while a background interaction is still running, `get` returns an HTTP 403
+   * permission-denied response containing the fixed billing-neutral message,
+   * followed by HTTP 400 invalid-argument responses. Once the job reaches a
    * terminal status the same call succeeds. The docs promise an `in_progress`
-   * snapshot instead.
+   * snapshot instead. No raw live error object was retained, so the predicate
+   * accepts both the SDK's native fields and its JSON-in-message envelope.
    *
    * The ambiguous 400 is tolerated only after the same interaction produced
-   * the recognized 403. All other failures keep their normal classification
-   * via {@link classifyBackgroundRetrieveFailure}.
+   * the recognized 403. Retryable retrieval failures preserve that evidence
+   * while the lifecycle retains the interaction id.
    */
   private async retrieveBackgroundInteraction(
     client: GoogleGenAI,
@@ -1993,31 +2016,36 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
         this.interactionsRequestOptions(signal),
       );
       if (
-        !ModelHandlerGoogleInteractions.BACKGROUND_PENDING_STATUSES.includes(
+        interaction.status === 'completed' ||
+        interaction.status === 'requires_action' ||
+        ModelHandlerGoogleInteractions.BACKGROUND_FAILURE_STATUSES.includes(
           interaction.status as InteractionStatus,
         )
       ) {
-        this.transientBackgroundRetrievalIds.delete(interactionId);
+        this.transientBackgroundRetrieval.delete(interactionId);
       }
       return interaction;
     } catch (error) {
+      const previous = this.transientBackgroundRetrieval.get(interactionId);
       const recognized403 = isTransientBackgroundRetrieval403(error);
       const recognized400 =
-        this.transientBackgroundRetrievalIds.has(interactionId) &&
-        isTransientBackgroundRetrieval400(error);
-      if (!recognized403 && !recognized400) {
-        this.transientBackgroundRetrievalIds.delete(interactionId);
-        throw error;
-      }
+        previous !== undefined && isTransientBackgroundRetrieval400(error);
+      if (!recognized403 && !recognized400) throw error;
 
+      const toleratedErrorCount = (previous?.toleratedErrorCount ?? 0) + 1;
+      this.transientBackgroundRetrieval.set(interactionId, {
+        toleratedErrorCount,
+        lastError: error,
+      });
       if (
-        recognized403 &&
-        !this.transientBackgroundRetrievalIds.has(interactionId)
+        toleratedErrorCount === 1 ||
+        toleratedErrorCount %
+          ModelHandlerGoogleInteractions.TRANSIENT_RETRIEVAL_WARNING_INTERVAL_POLLS ===
+          0
       ) {
-        this.transientBackgroundRetrievalIds.add(interactionId);
         this.logger.warn(
-          `Google Interactions background interaction ${interactionId} entered transient retrieval state ` +
-            '(HTTP 403; classification=known-provider-retrieval-lag).',
+          `Google Interactions background interaction ${interactionId} remains in transient retrieval state ` +
+            `(tolerated errors: ${toleratedErrorCount}; classification=known-provider-retrieval-lag).`,
         );
       }
       return {

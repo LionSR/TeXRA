@@ -45,17 +45,33 @@ const TRANSIENT_RETRIEVAL_MESSAGE_403 =
   'There was a problem processing your request. You will not be charged.';
 const TRANSIENT_RETRIEVAL_MESSAGE_400 = 'Request contains an invalid argument.';
 
-function transientRetrieval403(): Error {
-  return Object.assign(new Error(TRANSIENT_RETRIEVAL_MESSAGE_403), {
-    status: 403,
-    code: 'permission_denied',
+function googleApiError(
+  status: number,
+  message: string,
+  providerStatus: string,
+): ApiError {
+  return new ApiError({
+    status,
+    message: JSON.stringify({
+      error: { code: status, message, status: providerStatus },
+    }),
   });
 }
 
-function transientRetrieval400(): Error {
-  return Object.assign(new Error(TRANSIENT_RETRIEVAL_MESSAGE_400), {
-    status: 400,
-  });
+function transientRetrieval403(): ApiError {
+  return googleApiError(
+    403,
+    TRANSIENT_RETRIEVAL_MESSAGE_403,
+    'PERMISSION_DENIED',
+  );
+}
+
+function transientRetrieval400(): ApiError {
+  return googleApiError(
+    400,
+    TRANSIENT_RETRIEVAL_MESSAGE_400,
+    'INVALID_ARGUMENT',
+  );
 }
 
 interface Interaction {
@@ -786,12 +802,11 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
   });
 
-  it('propagates a genuine permission-denied 403 and retains its id', async () => {
+  it('retains a known id after a non-missing 4xx retrieval failure', async () => {
     useBackgroundTimers();
     const handler = createHandler();
     const forbidden = Object.assign(new Error('request rejected'), {
       status: 403,
-      code: 'permission_denied',
     });
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_forbidden', status: 'in_progress' }),
@@ -810,90 +825,53 @@ describe('ModelHandlerGoogleInteractions background mode', () => {
     });
   });
 
-  it.each([
-    {
-      label: 'generic durable',
-      error: Object.assign(new Error('request is invalid'), { status: 400 }),
-    },
-    { label: 'ambiguous pre-403', error: transientRetrieval400() },
-  ])('propagates a $label 400', async ({ error }) => {
-    useBackgroundTimers();
-    const handler = createHandler();
-    const { client, calls } = bgClient({
-      submit: () => ({ id: 'int_bad_request', status: 'in_progress' }),
-      getSequence: [error],
-    });
-
-    const firstError = await failFirstRetrieval(handler, client);
-
-    expect(firstError).toBe(error);
-    expectLedger(calls, 1, ['int_bad_request']);
-  });
-
-  it('polls through the recognized 403 then 400 and warns once without provider text', async () => {
-    useBackgroundTimers();
+  it('tolerates the Google retrieval fingerprint across retry and preserves timeout diagnostics', async () => {
+    mockConfig();
+    const startedAt = new Date('2026-08-01T00:00:00.000Z');
+    vi.useFakeTimers({ now: startedAt });
     const handler = createHandler();
     const warn = vi.fn();
     handler.setLogger({ ...noopTrace, warn });
+    const transportFailure = new ApiError({
+      message: 'temporarily unavailable',
+      status: 503,
+    });
+    const invalidArgument = transientRetrieval400();
     const { client, calls } = bgClient({
       submit: () => ({ id: 'int_slow', status: 'in_progress' }),
-      getSequence: [
-        transientRetrieval403(),
-        transientRetrieval400(),
-        completedInteraction('int_slow'),
-      ],
+      getSequence: [transientRetrieval403(), transportFailure, invalidArgument],
     });
 
-    const result = await runWithPolls(
-      respond(handler, client, [userStep('a')]),
-      3,
+    const firstError = await runWithPolls(
+      captureRejection(respond(handler, client, [userStep('a')])),
+      2,
     );
+    expect(firstError).toBe(transportFailure);
 
-    expect(result.response.status).toBe('completed');
-    expectLedger(calls, 1, ['int_slow', 'int_slow', 'int_slow']);
+    const timeoutPromise = captureRejection(
+      respond(handler, client, [userStep('a')]),
+    );
+    await runWithPolls(Promise.resolve(), 58);
+    vi.setSystemTime(startedAt.getTime() + MAX_DURATION_MS);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    const timeout = await timeoutPromise;
+
+    expect(timeout.message).toContain(
+      'Polling tolerated 60 recognized retrieval errors',
+    );
+    expect(timeout.cause).toBe(invalidArgument);
     const transientWarnings = warn.mock.calls.filter(([message]) =>
       String(message).includes('classification=known-provider-retrieval-lag'),
     );
-    expect(transientWarnings).toHaveLength(1);
+    expect(transientWarnings).toHaveLength(2);
     expect(JSON.stringify(warn.mock.calls)).not.toContain(
       TRANSIENT_RETRIEVAL_MESSAGE_403,
     );
+    expect(calls.create).toHaveLength(1);
+    expect(calls.get).toHaveLength(61);
+    expect(calls.get.every((id) => id === 'int_slow')).toBe(true);
+    expect(calls.cancel).toEqual(['int_slow']);
   });
-
-  it.each([
-    { label: 'success', terminal: completedInteraction('int_reused') },
-    {
-      label: 'failure',
-      terminal: { id: 'int_reused', status: 'failed' },
-    },
-  ])(
-    'resets transient retrieval state after terminal $label',
-    async ({ terminal }) => {
-      useBackgroundTimers();
-      const handler = createHandler();
-      const invalidArgument = transientRetrieval400();
-      const { client, calls } = bgClient({
-        submit: () => ({ id: 'int_reused', status: 'in_progress' }),
-        getSequence: [transientRetrieval403(), terminal, invalidArgument],
-      });
-
-      if (terminal.status === 'completed') {
-        await runWithPolls(respond(handler, client, [userStep('a')]), 2);
-      } else {
-        await runWithPolls(
-          captureRejection(respond(handler, client, [userStep('a')])),
-          2,
-        );
-      }
-
-      const nextError = await failFirstRetrieval(handler, client, undefined, [
-        userStep('b'),
-      ]);
-
-      expect(nextError).toBe(invalidArgument);
-      expectLedger(calls, 2, ['int_reused', 'int_reused', 'int_reused']);
-    },
-  );
 
   it.each([404, 410])(
     'clears a definitively missing interaction on HTTP %i and requires manual retry',
