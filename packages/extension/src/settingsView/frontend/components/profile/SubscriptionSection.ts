@@ -137,7 +137,6 @@ export class SubscriptionSection extends LitElement {
                   value: this.contextWindow,
                   min: contextWindowSetting.min,
                   max: contextWindowSetting.max,
-                  step: 1_000,
                   unit: 'tokens',
                   onChange: (value) =>
                     postStateSetting(contextWindowSetting.configKey, value),

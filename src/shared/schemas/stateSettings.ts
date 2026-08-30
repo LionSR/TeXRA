@@ -579,6 +579,8 @@ const CORE_SETTING_ROWS: Record<
       through:
         'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/ModelFactory.ts -> src/agent/modelHandlers/openai/modelHandlerCodex.ts -> src/model/providerCapabilities.ts',
     }),
+    // This bucket controls snapshot/rebroadcast routing, not tab placement;
+    // reuse it for the Subscriptions control because no subscriptions bucket exists.
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
     onWrite: { invalidatesModelOptions: true },
   },

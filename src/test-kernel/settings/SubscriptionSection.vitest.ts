@@ -117,14 +117,14 @@ describe('subscription-section provider descriptors', () => {
     >('.setting-number-input');
 
     expect(input).toBeInstanceOf(HTMLElement);
-    input!.value = '872000';
+    input!.value = '272000';
     input!.dispatchEvent(
       new Event('change', { bubbles: true, composed: true }),
     );
 
     expect(mocks.postMessage).toHaveBeenCalledWith(
       SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-      { key: 'texra.chatgptCodex.contextWindow', value: 872_000 },
+      { key: 'texra.chatgptCodex.contextWindow', value: 272_000 },
     );
   });
 });
