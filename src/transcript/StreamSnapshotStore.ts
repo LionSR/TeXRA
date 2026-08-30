@@ -1854,7 +1854,9 @@ export class StreamSnapshotStore {
           // Snapshot the surviving state BEFORE the restore below, whose
           // `persistEagerOverlays` drains the very overlays it reads.
           const resolvedRefreshBaseline =
-            refreshBaseline === 'unknown' ? current?.diskState : refreshBaseline;
+            refreshBaseline === 'unknown'
+              ? current?.diskState
+              : refreshBaseline;
           const failureBaseline: DiskState | undefined =
             reportArtifactAuthority && current && versionIsCurrent
               ? resolvedRefreshBaseline
