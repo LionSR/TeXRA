@@ -130,7 +130,7 @@ describe('subscription usage rendering', () => {
     const meters = kimiRow!.shadowRoot?.querySelectorAll('progress');
     expect(meters).toHaveLength(2);
     expect(meters?.[0]?.getAttribute('aria-label')).toBe(
-      'Kimi Code 5-hour usage: 25% used',
+      'Kimi Code 5-hour usage',
     );
     expect(text).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');

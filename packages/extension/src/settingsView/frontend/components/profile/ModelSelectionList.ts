@@ -134,7 +134,7 @@ export class ModelSelectionList extends LitElement {
       <wa-select
         class="reasoning-level-select"
         .value=${currentValue}
-        title="Reasoning level"
+        aria-label=${`Reasoning level for ${model.label}`}
         ?disabled=${model.disabled}
         @change=${(e: Event) => this.handleReasoningLevelChange(model.name, e)}
       >
@@ -206,11 +206,13 @@ export class ModelSelectionList extends LitElement {
             });
           }}
         >
-          <span class="model-name">${model.label}</span>
-          <span class="model-shortname">(${model.name})</span>
+          <bdi class="model-name" dir="auto">${model.label}</bdi>
+          <bdi class="model-shortname" dir="auto">(${model.name})</bdi>
           ${
             model.routeLabel
-              ? html`<span class="model-route">· ${model.routeLabel}</span>`
+              ? html`<span class="model-route"
+                  >· <bdi dir="auto">${model.routeLabel}</bdi></span
+                >`
               : nothing
           }
           ${this.renderAvailabilityIcon(model, isLastEnabledActiveModel)}
@@ -270,7 +272,7 @@ export class ModelSelectionList extends LitElement {
             })}
             <span class="provider-group-name">${group.displayName}</span>
             <span class="provider-group-count">
-              ${enabledCount}/${totalCount} enabled
+              ${enabledCount} of ${totalCount} enabled
             </span>
           </wa-button>
           <div class="provider-group-actions settings-disclosure-actions">
@@ -281,7 +283,11 @@ export class ModelSelectionList extends LitElement {
           isExpanded
             ? html`
                 <div class="provider-group-content settings-disclosure-content">
-                  ${group.current.map((m) => this.renderModelRow(m))}
+                  <ul class="model-list">
+                    ${group.current.map(
+                      (model) => html`<li>${this.renderModelRow(model)}</li>`,
+                    )}
+                  </ul>
                   ${
                     group.deprecated.length > 0
                       ? this.renderDeprecatedToggle(group)
@@ -311,13 +317,16 @@ export class ModelSelectionList extends LitElement {
             ? 'provider-group-chevron expanded'
             : 'provider-group-chevron',
         })}
-        ${group.deprecated.length} deprecated
+        ${group.deprecated.length}
+        ${group.deprecated.length === 1 ? 'deprecated model' : 'deprecated models'}
       </wa-button>
       ${
         isOpen
-          ? html`<div class="deprecated-models">
-              ${group.deprecated.map((m) => this.renderModelRow(m))}
-            </div>`
+          ? html`<ul class="model-list deprecated-models">
+              ${group.deprecated.map(
+                (model) => html`<li>${this.renderModelRow(model)}</li>`,
+              )}
+            </ul>`
           : nothing
       }
     `;
@@ -389,7 +398,7 @@ export class ModelSelectionList extends LitElement {
             Use short model names
           </wa-switch>
           <span class="short-names-description">
-            Send unpinned names (e.g. gpt-5.5 instead of gpt-5.5-2026-04-15)
+            Send aliases such as gpt-5.5 instead of dated model versions.
           </span>
         </div>
         <div class="settings-disclosure-list">

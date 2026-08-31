@@ -15,9 +15,6 @@ import type { MemoryViewItem } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { renderEmptyState } from '@shared/wa/emptyState';
 
-// Side-effect imports - register WA icon component
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
 // Local imports - memory view components (side-effect: register)
 import './MemoryItem';
 
@@ -52,6 +49,9 @@ export class MemoryList extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
     `,
   ];
@@ -97,13 +97,13 @@ export class MemoryList extends LitElement {
 
     return html`
       ${this.renderPagination()}
-      <div class="memory-list">
+      <ul class="memory-list" aria-label="Saved memories">
         ${repeat(
           paged,
           (item) => item.storagePath,
-          (item) => html`<memory-item .item=${item}></memory-item>`,
+          (item) => html` <li><memory-item .item=${item}></memory-item></li> `,
         )}
-      </div>
+      </ul>
       ${this.renderPagination()}
     `;
   }

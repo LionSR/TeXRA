@@ -37,13 +37,6 @@ export class ProviderKeyModal extends LitElement {
         line-height: var(--line-height-normal);
       }
 
-      .provider-key-label {
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-2xs);
-        font-weight: var(--font-weight-medium);
-      }
-
       wa-input.provider-key-input {
         display: block;
         width: 100%;
@@ -149,18 +142,20 @@ export class ProviderKeyModal extends LitElement {
             The key is stored by TeXRA on this device and is not shown again
             after saving.
           </p>
-          <label class="provider-key-label">
-            ${displayName} API key
-            <wa-input
-              class="provider-key-input"
-              type="password"
-              autocomplete="off"
-              spellcheck="false"
-              .value=${this.value}
-              @input=${this.handleInput}
-            ></wa-input>
-          </label>
-          <p class="provider-key-error" aria-live="polite">${this.error}</p>
+          <wa-input
+            class="provider-key-input"
+            type="password"
+            label=${`${displayName} API key`}
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            .value=${this.value}
+            @input=${this.handleInput}
+          >
+            <p slot="hint" class="provider-key-error" aria-live="polite">
+              ${this.error}
+            </p>
+          </wa-input>
         </form>
         <div slot="footer" class="provider-key-actions">
           <wa-button

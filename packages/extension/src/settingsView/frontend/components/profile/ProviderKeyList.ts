@@ -69,13 +69,13 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderActions(entry: ProviderKeyStatus): TemplateResult {
-    const { provider } = entry;
+    const { displayName, provider } = entry;
     const removeButton =
       entry.status === 'set'
         ? renderIconActionButton({
             id: `provider-key-remove-${provider}`,
             icon: 'trash',
-            label: `Remove ${provider} key`,
+            label: `Remove ${displayName} API key`,
             tooltip: 'Remove key',
             onClick: () =>
               postMessage(SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY, {
@@ -89,7 +89,7 @@ export class ProviderKeyList extends LitElement {
         ${renderIconActionButton({
           id: `provider-key-set-${provider}`,
           icon: 'key',
-          label: `Set ${provider} API key`,
+          label: `Set ${displayName} API key`,
           tooltip: 'Set API key',
           // Bubbles to SettingsApp, which owns the desktop-vs-VS Code
           // provider-key entry flow (modal on desktop, host prompt otherwise).
@@ -99,7 +99,7 @@ export class ProviderKeyList extends LitElement {
         ${renderIconActionButton({
           id: `provider-key-get-${provider}`,
           icon: 'arrow-up-right-from-square',
-          label: `Get ${provider} API key`,
+          label: `Open ${displayName} API key page`,
           tooltip: 'Get API key from provider',
           onClick: () =>
             postMessage(SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL, {
@@ -134,6 +134,12 @@ export class ProviderKeyList extends LitElement {
             <wa-input
               id=${`endpoint-${entry.provider}`}
               class="endpoint-input form-control-fill"
+              name=${`endpoint-${entry.provider}`}
+              type="url"
+              inputmode="url"
+              autocomplete="url"
+              spellcheck="false"
+              dir="ltr"
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
@@ -195,20 +201,23 @@ export class ProviderKeyList extends LitElement {
     const isExpanded = this.expandedProvider === entry.provider;
 
     return html`
-      <section class="settings-disclosure">
+      <section class="settings-disclosure" role="listitem">
         <div class="settings-disclosure-summary">
           <wa-button
             class="settings-disclosure-toggle"
             appearance="plain"
             size="s"
             aria-expanded=${String(isExpanded)}
+            aria-label=${`${entry.displayName} settings`}
             title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"
             @click=${() => this.toggleExpanded(entry.provider)}
           >
             ${waIcon('chevron-right', {
               className: 'settings-disclosure-chevron',
             })}
-            <span class="provider-name">${entry.displayName}</span>
+            <span class="provider-name"
+              ><bdi dir="auto">${entry.displayName}</bdi></span
+            >
           </wa-button>
           <span class="settings-disclosure-status">
             ${renderKeyStatusIcon(entry.status)}
@@ -244,7 +253,11 @@ export class ProviderKeyList extends LitElement {
             postStateSetting(GlobalStateKey.STREAMING_GLOBAL, checked);
           },
         })}
-        <div class="settings-disclosure-list">
+        <div
+          class="settings-disclosure-list"
+          role="list"
+          aria-label="Provider API keys"
+        >
           ${rows.map((entry) => this.renderRow(entry))}
         </div>
       </div>

@@ -102,6 +102,7 @@ export class SubscriptionSection extends LitElement {
 
   override render(): TemplateResult {
     const provider = this.provider;
+    const headingId = `${provider.sectionId}-heading`;
     const contextWindowSetting = provider.contextWindowSetting;
     const signedIn = this.auth?.signedIn ?? false;
     const preferSubscription = this.auth?.preferSubscription ?? false;
@@ -109,8 +110,9 @@ export class SubscriptionSection extends LitElement {
     // A same-value settings rebroadcast must repaint a rejected number edit.
     void this.ackGeneration;
     return html`
-      <section id=${provider.sectionId}>
+      <section id=${provider.sectionId} aria-labelledby=${headingId}>
         ${renderSettingsSectionHeading({
+          id: headingId,
           title: provider.title,
           description: provider.description,
           icon: 'circle-user',
@@ -145,10 +147,11 @@ export class SubscriptionSection extends LitElement {
           }
           <div class="settings-row">
             <div class="settings-row-text">
-              <span class="settings-row-label">
+              <span class="settings-row-label" aria-live="polite">
                 ${
                   signedIn
-                    ? html`${waIcon('circle-check')} Signed in as ${account}`
+                    ? html`${waIcon('circle-check')} Signed in as
+                        <bdi dir="auto">${account}</bdi>`
                     : provider.accountTitle
                 }
               </span>
@@ -165,6 +168,7 @@ export class SubscriptionSection extends LitElement {
                 signedIn
                   ? renderLabeledActionButton({
                       text: 'Sign out',
+                      label: `Sign out of ${provider.title}`,
                       kind: 'secondary',
                       appearance: 'outlined',
                       onClick: () => postMessage(provider.commands.signOut),
