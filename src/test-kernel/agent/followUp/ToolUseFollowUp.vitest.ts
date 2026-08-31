@@ -326,6 +326,32 @@ describe('ToolUseFollowUpQueue claim exclusivity', () => {
   });
 });
 
+describe('ToolUseFollowUpQueue terminal tombstones', () => {
+  it('evicts the oldest tombstone at the historical cap', () => {
+    const followUps = new ToolUseFollowUpQueue();
+    const oldest = id('stream:terminalized-0');
+    followUps.terminalize(oldest);
+    for (
+      let index = 1;
+      index <= ToolUseFollowUpQueue.TERMINALIZED_CAP;
+      index += 1
+    ) {
+      followUps.terminalize(id(`stream:terminalized-${index}`));
+    }
+
+    expect(
+      followUps.submit(oldest, { text: 'after eviction' }, 'recoverable'),
+    ).toMatchObject({ kind: 'queued' });
+    expect(
+      followUps.submit(
+        id('stream:terminalized-1'),
+        { text: 'still terminalized' },
+        'recoverable',
+      ),
+    ).toEqual({ kind: 'refused' });
+  });
+});
+
 describe('presentFollowUpResult', () => {
   it('words only refusals, with a failed wake as information', () => {
     expect(presentFollowUpResult({ status: 'sent' })).toEqual({
