@@ -712,7 +712,7 @@ export function applyStreamChanges(
 /** Phase groups represented inside the already-retained dashboard rows.
  *  Stable row/group ids preserve a phase whose divider crossed the cutoff but
  *  whose task did not, without making this helper another retention owner. */
-export function retainedWorkflowTaskGroups(
+function retainedWorkflowTaskGroups(
   taskGroups: readonly TaskGroup[],
   rows: readonly TranscriptRow[],
 ): readonly TaskGroup[] {
