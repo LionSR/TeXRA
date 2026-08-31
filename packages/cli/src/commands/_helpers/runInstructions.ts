@@ -6,15 +6,10 @@
  */
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 
-type ApprovalRunContext = {
-  readonly mode: 'headless' | 'interactive';
-  readonly approvalPolicy: TexraApprovalPolicy;
-};
-
 const TERMINAL_RUN_GUIDANCE =
   'This CLI run exits after your final response. Do not end by asking the user whether to perform more work; either complete the requested work now or state the exact artifacts and next command/action for a future run.';
 
-export function formatCliRunFileInstruction(init: {
+function formatCliRunFileInstruction(init: {
   readonly inputFiles: readonly string[];
   readonly contextFiles?: readonly string[];
 }): string | undefined {
@@ -86,28 +81,6 @@ const PRIVILEGED_ACTION_GUIDANCE =
 const CLI_APPROVAL_POLICY_GUIDANCE =
   'Valid CLI approval policies are "ask", "never", and "yolo" only. If suggesting a rerun, use --approval-policy yolo for headless auto-approval or an interactive run with --approval-policy ask; do not invent other approval mode names.';
 
-export function formatUnavailableApprovalInstruction(
-  context: ApprovalRunContext,
-): string | undefined {
-  if (context.approvalPolicy === 'never') {
-    return [
-      'Approval policy for this run is "never": privileged actions that require approval will be rejected automatically.',
-      PRIVILEGED_ACTION_GUIDANCE,
-      CLI_APPROVAL_POLICY_GUIDANCE,
-    ].join(' ');
-  }
-
-  if (context.mode === 'headless' && context.approvalPolicy === 'ask') {
-    return [
-      'This is a headless run with approval policy "ask": approval prompts cannot be answered, so privileged actions that require approval will be rejected automatically.',
-      PRIVILEGED_ACTION_GUIDANCE,
-      CLI_APPROVAL_POLICY_GUIDANCE,
-    ].join(' ');
-  }
-
-  return undefined;
-}
-
 interface MultiAgentInstructionPreset {
   readonly name: string;
   readonly description: string;
@@ -122,7 +95,10 @@ export function formatMultiAgentRunInstruction(
     readonly inputFiles: readonly string[];
     readonly contextFiles: readonly string[];
     readonly instruction: string;
-    readonly approvalContext: ApprovalRunContext;
+    readonly approvalContext: {
+      readonly mode: 'headless' | 'interactive';
+      readonly approvalPolicy: TexraApprovalPolicy;
+    };
     readonly workingDirectory: string;
   },
 ): string {
@@ -134,10 +110,23 @@ export function formatMultiAgentRunInstruction(
     COMPLETENESS_GUIDANCE,
     TERMINAL_RUN_GUIDANCE,
   ];
-  const approvalInstruction = formatUnavailableApprovalInstruction(
-    init.approvalContext,
-  );
-  if (approvalInstruction) parts.push(approvalInstruction);
+  const { approvalPolicy, mode } = init.approvalContext;
+  if (
+    approvalPolicy === 'never' ||
+    (mode === 'headless' && approvalPolicy === 'ask')
+  ) {
+    const unavailableMessage =
+      approvalPolicy === 'never'
+        ? 'Approval policy for this run is "never": privileged actions that require approval will be rejected automatically.'
+        : 'This is a headless run with approval policy "ask": approval prompts cannot be answered, so privileged actions that require approval will be rejected automatically.';
+    parts.push(
+      [
+        unavailableMessage,
+        PRIVILEGED_ACTION_GUIDANCE,
+        CLI_APPROVAL_POLICY_GUIDANCE,
+      ].join(' '),
+    );
+  }
   const inputFileInstruction = formatCliRunFileInstruction({
     inputFiles: init.inputFiles,
     contextFiles: init.contextFiles,
