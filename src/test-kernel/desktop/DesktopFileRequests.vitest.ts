@@ -34,6 +34,47 @@ describe('desktop file requests', () => {
     );
   });
 
+  it('rejects immediately and unregisters when posting throws', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.postMessage.mockImplementationOnce(() => {
+        throw new Error('desktop bridge unavailable');
+      });
+
+      const read = requestFileRead('main.tex');
+      const request = mocks.postMessage.mock.calls[0]?.[1] as
+        { requestId: string } | undefined;
+      if (!request) throw new Error('Expected a desktop file request');
+
+      await expect(read).rejects.toThrow('desktop bridge unavailable');
+      expect(takePendingFileRequest(request.requestId)).toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the timeout when a read response resolves', async () => {
+    vi.useFakeTimers();
+    try {
+      const read = requestFileRead('main.tex');
+      const request = mocks.postMessage.mock.calls[0]?.[1] as
+        { requestId: string } | undefined;
+      if (!request) throw new Error('Expected a desktop file request');
+      const pending = takePendingFileRequest(request.requestId);
+      if (pending?.kind !== 'read') {
+        throw new Error('Expected a pending desktop file read');
+      }
+
+      pending.resolve('contents');
+
+      await expect(read).resolves.toBe('contents');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('times out reads after 60 seconds and ignores a late response', async () => {
     vi.useFakeTimers();
     try {

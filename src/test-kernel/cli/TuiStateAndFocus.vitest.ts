@@ -122,6 +122,7 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
+import { throwAggregated } from '@utils/core';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -481,9 +482,9 @@ function toolEntry(
 }
 
 /** Run `body` with a TUI run-fact subscription attached to a fresh hub. */
-function withRunFacts(
-  body: (hub: SessionEventHub, session: SessionHandle) => void,
-): void {
+async function withRunFacts(
+  body: (hub: SessionEventHub, session: SessionHandle) => void | Promise<void>,
+): Promise<void> {
   const hub = new SessionEventHub();
   const snapshots = new StreamSnapshotStore();
   const session = new SessionHandle({
@@ -492,13 +493,31 @@ function withRunFacts(
     transcripts: StreamLogStore.ephemeral('TUI session signals test'),
   });
   const detach = attachSessionSignalsAdapter(session);
+  const failures: unknown[] = [];
   boundFactSession = session;
   try {
-    body(hub, session);
+    await body(hub, session);
+  } catch (error) {
+    failures.push(error);
   } finally {
     boundFactSession = undefined;
-    detach();
+    try {
+      detach();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await snapshots.flush();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await snapshots.load([]);
+    } catch (error) {
+      failures.push(error);
+    }
   }
+  throwAggregated(failures, 'TUI run-fact test and cleanup failed');
 }
 
 afterEach(() => {
@@ -560,8 +579,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('prunes parent edges when a stream is removed', () => {
-    withRunFacts((hub, session) => {
+  it('prunes parent edges when a stream is removed', async () => {
+    await withRunFacts((hub, session) => {
       trackStreams(session, root, child1, child2);
       emitParentEdge(hub, child1, root);
       emitParentEdge(hub, child2, root);
@@ -581,8 +600,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('refuses focus for a removed stream identity', () => {
-    withRunFacts((hub) => {
+  it('refuses focus for a removed stream identity', async () => {
+    await withRunFacts((hub) => {
       setStatus(child1, STREAM_PHASE.RUNNING);
       focusStream(child1);
       expect(activeStreamId.get()).toBe(child1);
@@ -630,8 +649,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     expect(activeStreamId.get()).toBe(root);
   });
 
-  it('removes stale child rows when a stream is removed', () => {
-    withRunFacts((hub, session) => {
+  it('removes stale child rows when a stream is removed', async () => {
+    await withRunFacts((hub, session) => {
       activeStreamId.set(root);
       trackStreams(session, root, child1, child2);
       emitChildRoster(hub, root, [
@@ -670,8 +689,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('updates retained child rows when a failed subagent leaves the active list', () => {
-    withRunFacts((hub, session) => {
+  it('updates retained child rows when a failed subagent leaves the active list', async () => {
+    await withRunFacts((hub, session) => {
       trackStreams(session, root);
       emitChildRoster(hub, root, [
         childRosterRow('codex', child1, STREAM_PHASE.RUNNING, 'agent-1'),
@@ -696,8 +715,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('treats a null-parent update as child promotion to top-level', () => {
-    withRunFacts((hub, session) => {
+  it('treats a null-parent update as child promotion to top-level', async () => {
+    await withRunFacts((hub, session) => {
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
       expect(parentStream.get().get(child1)).toBe(root);
@@ -708,8 +727,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('projects phase stages onto the shared stream state and leaves rounds alone', () => {
-    withRunFacts((hub, session) => {
+  it('projects phase stages onto the shared stream state and leaves rounds alone', async () => {
+    await withRunFacts((hub, session) => {
       // `run.config` resolves the category and RUNNING mints the execution
       // state — the production order in which stage facts arrive.
       emitRunConfig(hub, child1, 'exec-stage-child' as ExecutionId);
@@ -747,8 +766,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('keeps a dynamically opened phase positionless', () => {
-    withRunFacts((hub, session) => {
+  it('keeps a dynamically opened phase positionless', async () => {
+    await withRunFacts((hub, session) => {
       emitRunConfig(hub, child1, 'exec-stage-child' as ExecutionId);
       transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, child1, {
@@ -764,8 +783,8 @@ describe('cliState stream, focus, and child-edge fields', () => {
     });
   });
 
-  it('scopes focus order and the transcript viewport by child topology facts', () => {
-    withRunFacts((hub, session) => {
+  it('scopes focus order and the transcript viewport by child topology facts', async () => {
+    await withRunFacts((hub, session) => {
       activeStreamId.set(root);
       trackStreams(session, root, child1);
       setStatus(child1, STREAM_PHASE.RUNNING);
@@ -1506,8 +1525,8 @@ describe('CLI TUI row allocation', () => {
     },
   );
 
-  it('selects the focused child stream as a follow-up target', () => {
-    withRunFacts((hub, session) => {
+  it('selects the focused child stream as a follow-up target', async () => {
+    await withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
       setStatus(child1, STREAM_PHASE.WAITING);
       markToolUseAgent(hub, child1);
@@ -1525,8 +1544,8 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('ignores stale child row status when routing focused child follow-ups', () => {
-    withRunFacts((hub, session) => {
+  it('ignores stale child row status when routing focused child follow-ups', async () => {
+    await withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
       trackStreams(session, root, child1);
       emitChildRoster(hub, root, [
@@ -1547,8 +1566,8 @@ describe('CLI TUI row allocation', () => {
   // Follow-up routing reads the focused child's own slice status; the status
   // a roster row was stamped with cannot keep a stopped child accepting
   // follow-ups.
-  it('routes focused child follow-ups from the stream status, not the roster row', () => {
-    withRunFacts((hub, session) => {
+  it('routes focused child follow-ups from the stream status, not the roster row', async () => {
+    await withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
       trackStreams(session, root, child1);
       emitChildRoster(hub, root, [
@@ -1702,8 +1721,8 @@ describe('CLI TUI row allocation', () => {
     ).toEqual({ kind: 'reject', streamId: child1 });
   });
 
-  it('fails closed when focused child status is missing while leaving root routing unchanged', () => {
-    withRunFacts((hub, session) => {
+  it('fails closed when focused child status is missing while leaving root routing unchanged', async () => {
+    await withRunFacts((hub, session) => {
       mintSlice(child1);
       markToolUseAgent(hub, child1);
       trackStreams(session, child1);
@@ -1719,8 +1738,8 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('mirrors running child status events into focused child routing', () => {
-    withRunFacts((hub, session) => {
+  it('mirrors running child status events into focused child routing', async () => {
+    await withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
       trackStreams(session, root, child1);
       emitChildRoster(hub, root, [
@@ -1747,8 +1766,8 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('mirrors stopped child status events into focused child routing', () => {
-    withRunFacts((hub, session) => {
+  it('mirrors stopped child status events into focused child routing', async () => {
+    await withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.WAITING);
       trackStreams(session, root, child1);
       emitChildRoster(hub, root, [
@@ -1776,8 +1795,8 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('returns a focused attached child to its immediate owner on lifecycle completion', () => {
-    withRunFacts((hub, session) => {
+  it('returns a focused attached child to its immediate owner on lifecycle completion', async () => {
+    await withRunFacts((hub, session) => {
       // The owner must be a row of the current state lifetime: focus never
       // lands on a stream identity retired by an earlier `resetCliState`.
       setStatus(root, STREAM_PHASE.RUNNING);
@@ -1795,8 +1814,8 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('returns a user-stopped focused child to its immediate owner', () => {
-    withRunFacts((hub, session) => {
+  it('returns a user-stopped focused child to its immediate owner', async () => {
+    await withRunFacts((hub, session) => {
       setStatus(root, STREAM_PHASE.RUNNING);
       activeStreamId.set(child1);
 
@@ -1811,8 +1830,8 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('does not auto-return for WAITING, repair, unrelated, or detached status events', () => {
-    withRunFacts((hub, session) => {
+  it('does not auto-return for WAITING, repair, unrelated, or detached status events', async () => {
+    await withRunFacts((hub, session) => {
       const detachedChild = 'detached-child' as StreamTabId;
 
       transitionStatus(session, child1, STREAM_PHASE.RUNNING, 'lifecycle');
@@ -2624,8 +2643,8 @@ describe('CLI transcript state', () => {
     expect(JSON.stringify(entries)).not.toContain('compact-stale-phase');
   });
 
-  it('keeps the runtime description while the latest line follows the transcript', () => {
-    withRunFacts((hub) => {
+  it('keeps the runtime description while the latest line follows the transcript', async () => {
+    await withRunFacts((hub) => {
       activeStreamId.set(root);
       hub.emit({
         scope: 'session',
@@ -3002,8 +3021,8 @@ describe('CLI transcript state', () => {
     expect(entryTexts(child1)).toEqual(['Child stream note.']);
   });
 
-  it('keeps root local notices out of a focused child stream', () => {
-    withRunFacts((hub, session) => {
+  it('keeps root local notices out of a focused child stream', async () => {
+    await withRunFacts((hub, session) => {
       rootStreamId.set(root);
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
@@ -3026,8 +3045,8 @@ describe('CLI transcript state', () => {
     });
   });
 
-  it('uses the focused child parent for local notices before root id is set', () => {
-    withRunFacts((hub, session) => {
+  it('uses the focused child parent for local notices before root id is set', async () => {
+    await withRunFacts((hub, session) => {
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
       activeStreamId.set(child1);
@@ -3269,8 +3288,8 @@ describe('CLI transcript state', () => {
 });
 
 describe('sessionSignalsAdapter run facts', () => {
-  it('clears follow-up routing when current run metadata omits capability', () => {
-    withRunFacts((hub, session) => {
+  it('clears follow-up routing when current run metadata omits capability', async () => {
+    await withRunFacts((hub, session) => {
       const executionId = 'e9911-adapter' as ExecutionId;
       setStatus(child1, STREAM_PHASE.WAITING);
       trackStreams(session, child1);
@@ -3306,8 +3325,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('keeps a session-scoped fact subscription live after state reset', () => {
-    withRunFacts((hub, session) => {
+  it('keeps a session-scoped fact subscription live after state reset', async () => {
+    await withRunFacts((hub, session) => {
       const nextRoot = 'root-after-clear' as StreamTabId;
       const todos: TodoItem[] = [
         {
@@ -3378,8 +3397,8 @@ describe('sessionSignalsAdapter run facts', () => {
     }
   });
 
-  it('applies typed updateTodos run facts without host emission', () => {
-    withRunFacts((hub, session) => {
+  it('applies typed updateTodos run facts without host emission', async () => {
+    await withRunFacts((hub, session) => {
       const todos: TodoItem[] = [
         {
           content: 'State the compactness lemma',
@@ -3404,8 +3423,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies typed updatePlan run facts without host emission', () => {
-    withRunFacts((hub, session) => {
+  it('applies typed updatePlan run facts without host emission', async () => {
+    await withRunFacts((hub, session) => {
       const plan: Plan = {
         objective:
           'Prove the local estimate and record the stopping criterion.',
@@ -3477,8 +3496,8 @@ describe('sessionSignalsAdapter run facts', () => {
     }
   });
 
-  it('keeps a captured work-plan reader synchronized after focus moves', () => {
-    withRunFacts((hub, session) => {
+  it('keeps a captured work-plan reader synchronized after focus moves', async () => {
+    await withRunFacts((hub, session) => {
       const nextPlan: Plan = { objective: 'Updated reader objective.' };
       const nextTodos: TodoItem[] = [
         {
@@ -3521,8 +3540,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies typed goalPaused run facts without host emission', () => {
-    withRunFacts((hub) => {
+  it('applies typed goalPaused run facts without host emission', async () => {
+    await withRunFacts((hub) => {
       hub.emit({
         scope: 'run',
         streamId: root,
@@ -3536,8 +3555,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct stage.start(kind: round) events without host emission', () => {
-    withRunFacts((hub, session) => {
+  it('applies direct stage.start(kind: round) events without host emission', async () => {
+    await withRunFacts((hub, session) => {
       emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
       transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
@@ -3556,8 +3575,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct non-round stage.start events to the phase slot, not the round slot', () => {
-    withRunFacts((hub, session) => {
+  it('applies direct non-round stage.start events to the phase slot, not the round slot', async () => {
+    await withRunFacts((hub, session) => {
       emitRunConfig(hub, root, 'exec-stage-root' as ExecutionId);
       transitionStatus(session, root, STREAM_PHASE.RUNNING, 'lifecycle');
       emitStageStart(hub, root, {
@@ -3575,8 +3594,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct child activity and parent-link facts without host emission', () => {
-    withRunFacts((hub, session) => {
+  it('applies direct child activity and parent-link facts without host emission', async () => {
+    await withRunFacts((hub, session) => {
       const child: ActiveChildInfo = childRosterRow(
         'critic',
         child1,
@@ -3597,8 +3616,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct usage events without host emission', () => {
-    withRunFacts((hub, session) => {
+  it('applies direct usage events without host emission', async () => {
+    await withRunFacts((hub, session) => {
       const storageKey = 'root-direct-run' as ExecutionId;
       const usage = {
         inputTokens: 100,
@@ -3628,8 +3647,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct session stream facts without host emission', () => {
-    withRunFacts((hub) => {
+  it('applies direct session stream facts without host emission', async () => {
+    await withRunFacts((hub) => {
       activeStreamId.set(root);
       hub.emit({
         scope: 'session',
@@ -3673,8 +3692,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct run config and conversation progress without host emission', () => {
-    withRunFacts((hub, session) => {
+  it('applies direct run config and conversation progress without host emission', async () => {
+    await withRunFacts((hub, session) => {
       // The agent identity arrives with `run.start` while `run.config`
       // supplies model/category through the summary mirror (#9947); RUNNING
       // then mints the execution state that conversation progress lands on.
@@ -3707,8 +3726,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('streams every workflow output round into selected-agent state', () => {
-    withRunFacts((hub, session) => {
+  it('streams every workflow output round into selected-agent state', async () => {
+    await withRunFacts((hub, session) => {
       // A real hex id: the snapshot store (now the accumulator the slice is
       // projected from) parses output-file payloads, and ExecutionIdSchema
       // rejects non-hex ids the old slice-spread silently accepted.
@@ -3786,8 +3805,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('projects missing-output and compile facts', () => {
-    withRunFacts((hub, session) => {
+  it('projects missing-output and compile facts', async () => {
+    await withRunFacts((hub, session) => {
       const artifacts = () => projectStreamArtifacts(session.snapshots, root);
       hub.emit({
         scope: 'run',
@@ -3833,8 +3852,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('applies direct usage sequences exactly once', () => {
-    withRunFacts((hub, session) => {
+  it('applies direct usage sequences exactly once', async () => {
+    await withRunFacts((hub, session) => {
       const storageKey = 'root-direct-sequence-run' as ExecutionId;
       const firstUsage = {
         inputTokens: 100,
@@ -3874,8 +3893,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('registers suppressed child streams without switching away from the parent page', () => {
-    withRunFacts((hub) => {
+  it('registers suppressed child streams without switching away from the parent page', async () => {
+    await withRunFacts((hub) => {
       activeStreamId.set(root);
 
       hub.emit({
@@ -3894,8 +3913,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('captures per-stream model identity from task state', () => {
-    withRunFacts((hub) => {
+  it('captures per-stream model identity from task state', async () => {
+    await withRunFacts((hub) => {
       emitRunConfig(hub, child1, 'exec-search');
 
       const metadata = streamMetadataFor(child1);
@@ -3904,9 +3923,9 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('refreshes queued follow-up display when an active follow-up is sent', () => {
+  it('refreshes queued follow-up display when an active follow-up is sent', async () => {
     setStatus(root, STREAM_PHASE.RUNNING);
-    withRunFacts((hub, session) => {
+    await withRunFacts((hub, session) => {
       const lease = session.followUps.claimLive(root, 'flow')!;
       const queue = session.followUps.queue(lease);
       try {
@@ -3943,8 +3962,8 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('keeps latest usage separate from cumulative resume usage', () => {
-    withRunFacts((hub, session) => {
+  it('keeps latest usage separate from cumulative resume usage', async () => {
+    await withRunFacts((hub, session) => {
       const storageKey = 'root-run' as ExecutionId;
 
       emitUsage(hub, root, storageKey, {
@@ -3977,8 +3996,8 @@ describe('sessionSignalsAdapter run facts', () => {
 });
 
 describe('session tree order', () => {
-  it('orders retained sibling sessions', () => {
-    withRunFacts((hub, session) => {
+  it('orders retained sibling sessions', async () => {
+    await withRunFacts((hub, session) => {
       trackStreams(session, root);
       emitChildRoster(hub, root, [
         childRosterRow('a', child1, undefined, 'e1'),
@@ -3992,10 +4011,10 @@ describe('session tree order', () => {
     });
   });
 
-  it('retains an inactive child session with history', () => {
+  it('retains an inactive child session with history', async () => {
     // An edge observed before any roster tick still makes the child
     // focusable once its slice exists — no roster row required.
-    withRunFacts((hub, session) => {
+    await withRunFacts((hub, session) => {
       trackStreams(session, child1);
       emitParentEdge(hub, child1, root);
       setStatus(root, STREAM_PHASE.WAITING);
