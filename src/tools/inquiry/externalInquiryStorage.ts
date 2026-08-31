@@ -80,6 +80,14 @@ type ExternalInquiryTurnRecord = z.infer<
 
 const EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION = 1;
 
+/**
+ * 0.40.x requires this retired generation fence on every persisted turn.
+ * Keep the placeholder at the write boundary so current runtime state never
+ * regains generation semantics. Remove when 0.40.x downgrade support retires
+ * in v0.41.
+ */
+const V040_PARENT_GENERATION_ID = '00000000-0000-4000-8000-000000000000';
+
 const ManifestBaseShape = {
   schemaVersion: z.literal(EXTERNAL_INQUIRY_MANIFEST_SCHEMA_VERSION),
   threadId: InquiryThreadIdSchema,
@@ -179,10 +187,17 @@ async function readThreadManifest(
 async function writeThreadManifest(
   manifest: ExternalInquiryThreadManifest,
 ): Promise<void> {
+  const persisted = {
+    ...manifest,
+    turns: manifest.turns.map((turn) => ({
+      ...turn,
+      parentGenerationId: V040_PARENT_GENERATION_ID,
+    })),
+  };
   await GlobalStorageFS.ensureDir(threadDir(manifest.threadId));
   await GlobalStorageFS.writeAtomic(
     threadManifestPath(manifest.threadId),
-    JSON.stringify(manifest, null, 2),
+    JSON.stringify(persisted, null, 2),
   );
 }
 
