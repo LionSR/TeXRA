@@ -6,12 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **Do not open current inquiry threads in TeXRA 0.40.0-0.40.5** — current
-  inquiry manifests are excluded from downgrade and mixed-version
-  shared-storage compatibility because turns now live inline instead of in
-  retired per-turn files. TeXRA 0.40.6 accepts the manifest shape, but
-  cross-version answer delivery is not supported; finish or drop open inquiries
-  before switching versions.
+- **Do not share current inquiry storage with TeXRA 0.40.0-0.40.5** — current
+  inquiry manifests no longer include the per-turn file paths those versions
+  require, and current builds no longer write the corresponding sidecar files.
+  TeXRA 0.40.6 accepts the manifest shape, but cross-version answer delivery is
+  not supported; finish or drop open inquiries before switching versions.
 
 ### Features
 
