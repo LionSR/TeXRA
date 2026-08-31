@@ -280,9 +280,10 @@ const LegacyRetryErrorInfoSchema = z
   })
   .pipe(RetryErrorInfoSchema);
 
-/** Persisted retry-state reader for records written before the canonical
- * classification shipped. Remove after 2026-11-30, when those records have
- * aged out. Current runtime and IPC schemas must remain migration-free. */
+/** Persisted retry-state reader introduced 2026-08-31 for records written
+ * before the canonical classification shipped. Remove after 2026-11-30, when
+ * those records have aged out. Current runtime and IPC schemas must remain
+ * migration-free. */
 export const PersistedRetryErrorInfoSchema = z.union([
   RetryErrorInfoSchema,
   LegacyRetryErrorInfoSchema,

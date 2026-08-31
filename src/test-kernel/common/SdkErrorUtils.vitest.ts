@@ -923,6 +923,27 @@ describe('provider error schemas', () => {
     }
   });
 
+  it('normalizes a persisted relay retry error without relaxing the current schema', () => {
+    const legacyRelayError = {
+      message: 'legacy relay error',
+      userRetryable: true,
+      isCredentialExhausted: true,
+      isUpstreamCreditDepleted: true,
+      isRelayError: true,
+    };
+
+    expect(PersistedRetryErrorInfoSchema.parse(legacyRelayError)).toStrictEqual(
+      {
+        message: 'legacy relay error',
+        userRetryable: true,
+        classification: { kind: 'upstream-credit' },
+      },
+    );
+    expect(RetryErrorInfoSchema.safeParse(legacyRelayError).success).toBe(
+      false,
+    );
+  });
+
   it('preserves legacy marker precedence while rejecting malformed classifications', () => {
     const contradictoryLegacy = PersistedRetryErrorInfoSchema.parse({
       message: 'old record with overlapping markers',
