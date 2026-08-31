@@ -39,6 +39,7 @@ import {
 } from '@transcript';
 import {
   cleanupExecutionAdjacentStreamState,
+  createExecutionAdjacentStreamCleanup,
   resolveAdjacentStreamCleanup,
 } from '@transcript/adjacentStreamCleanup';
 import { byStringProp } from '@utils/core';
@@ -371,9 +372,9 @@ export async function deleteCliHistory(options: {
       : undefined,
   );
   if (options.all) {
+    const cleanupExecution = createExecutionAdjacentStreamCleanup(cleanup);
     const result = await deleteAllExecutions({
-      beforeDelete: (executionId) =>
-        cleanupExecutionAdjacentStreamState(executionId, cleanup),
+      beforeDelete: cleanupExecution,
     });
     await GoalStore.forgetByExecutionIds(result.deleted);
     return {

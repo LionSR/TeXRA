@@ -110,7 +110,9 @@ describe('resumeRun tool-use queue ownership', () => {
     await expect(
       resumeRun(EXECUTION, { session, executeWorkflow }),
     ).resolves.toEqual({ started: true, delivered: true });
-    expect(recoverLegacyExecutionStreamIdMock).toHaveBeenCalledWith(EXECUTION);
+    expect(recoverLegacyExecutionStreamIdMock).toHaveBeenCalledWith(EXECUTION, {
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
   });
 
   it('claims stream recovery before resolving the disk index', async () => {

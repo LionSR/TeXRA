@@ -14,7 +14,7 @@
  * history deletion while leaving transcript or snapshot state behind.
  */
 import { getExecutionStore } from '@agent/storage';
-import { recoverLegacyExecutionStreamId } from '@agent/storage/executionStreamHealing';
+import { createLegacyExecutionStreamHealer } from '@agent/storage/executionStreamHealing';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -106,25 +106,31 @@ export function resolveAdjacentStreamCleanup(
   return liveStreamCleanup ?? createStandaloneStreamCleanup();
 }
 
-/**
- * Resolve an execution's stamped stream and delete its adjacent state.
- * Intended for `deleteExecution`/`deleteAllExecutions` `beforeDelete` hooks.
- */
-export async function cleanupExecutionAdjacentStreamState(
+/** Build one execution cleanup operation with one lazy legacy sidecar scan. */
+export function createExecutionAdjacentStreamCleanup(
+  cleanup: AdjacentStreamCleanup,
+): (executionId: ExecutionId) => Promise<void> {
+  const recoverLegacyStreamId = createLegacyExecutionStreamHealer();
+  return async (executionId) => {
+    try {
+      const meta = await getExecutionStore(executionId).readMetaStrict();
+      if (!meta) return;
+      const recovery = await recoverLegacyStreamId(executionId, meta);
+      if (!recovery.streamId) return;
+      await cleanup.deleteAdjacentStreamState(recovery.streamId);
+    } catch (error) {
+      throw new Error(
+        `Execution ${executionId}'s transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,
+        { cause: error },
+      );
+    }
+  };
+}
+
+/** Resolve one execution's stamped stream and delete its adjacent state. */
+export function cleanupExecutionAdjacentStreamState(
   executionId: ExecutionId,
   cleanup: AdjacentStreamCleanup,
 ): Promise<void> {
-  try {
-    const meta = await getExecutionStore(executionId).readMetaStrict();
-    const streamId =
-      meta?.streamId ??
-      (meta ? await recoverLegacyExecutionStreamId(executionId) : undefined);
-    if (!streamId) return;
-    await cleanup.deleteAdjacentStreamState(streamId);
-  } catch (error) {
-    throw new Error(
-      `Execution ${executionId}'s transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,
-      { cause: error },
-    );
-  }
+  return createExecutionAdjacentStreamCleanup(cleanup)(executionId);
 }

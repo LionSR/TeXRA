@@ -187,7 +187,9 @@ async function resumeRunWithRecoveryProvenance(
     [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
     streamId =
       meta?.streamId ??
-      (meta ? await recoverLegacyExecutionStreamId(executionId) : undefined);
+      (meta
+        ? await recoverLegacyExecutionStreamId(executionId, meta)
+        : undefined);
   } catch (error) {
     abandonSupplied();
     throw error;

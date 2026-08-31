@@ -38,7 +38,7 @@ import {
   runWithInactiveExecutionLease,
   type LeaseReapPolicy,
 } from './executionLease';
-import { recoverLegacyExecutionStreamId } from './executionStreamHealing';
+import { createLegacyExecutionStreamHealer } from './executionStreamHealing';
 
 const log = createLog('ExecutionListing');
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
@@ -144,10 +144,10 @@ interface ExecutionStreamReference {
 export interface ExecutionStreamReferenceListing {
   readonly references: ExecutionStreamReference[];
   /**
-   * Executions whose checkpoint `stat` or metadata read failed. They are not
-   * discarded: a checkpointed run whose storage cannot be read is unknown
-   * state, and the caller attributes it to a stream through its own
-   * execution-id channel rather than letting the row vanish into `ready`.
+   * Executions whose checkpoint, metadata, or historical stream ownership is
+   * unreadable or ambiguous. They are not discarded: unknown ownership keeps
+   * destructive callers from treating an absent index edge as proof that a
+   * stream is unowned.
    */
   readonly unreadable: ReadonlyMap<ExecutionId, string>;
 }
@@ -157,7 +157,9 @@ export interface ExecutionStreamReferenceListing {
  *
  * A pre-#9520 row without `streamId` gets one chance to recover a unique,
  * well-formed sidecar match and stamp it durably. Ambiguous or malformed
- * evidence remains unlinked, so the sweep still acts only on an authored edge.
+ * evidence remains unlinked and is reported as unknown ownership, so a
+ * destructive sweep retains possibly related streams instead of inventing an
+ * edge.
  *
  * With `checkpointedOnly`, only executions that still hold a resume
  * checkpoint (flow record) are listed; the existence check runs before the
@@ -171,6 +173,7 @@ export async function listExecutionStreamReferences(
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
   const unreadable = new Map<ExecutionId, string>();
+  const recoverLegacyStreamId = createLegacyExecutionStreamHealer();
   const results = await pMap(
     executionDirs,
     async (executionId): Promise<ExecutionStreamReference | null> => {
@@ -184,9 +187,19 @@ export async function listExecutionStreamReferences(
         }
         const meta = await store.readMetaStrict();
         if (!meta) return null;
-        const streamId =
-          meta.streamId ?? (await recoverLegacyExecutionStreamId(executionId));
-        return streamId ? { executionId, streamId } : null;
+        const recovery = await recoverLegacyStreamId(executionId, meta);
+        if (recovery.streamId) {
+          return { executionId, streamId: recovery.streamId };
+        }
+        if (recovery.ownershipUnknown) {
+          const cause =
+            'historical stream ownership evidence is ambiguous or unreadable';
+          unreadable.set(executionId, cause);
+          log.warn(
+            `Execution ${executionId} has unknown stream ownership while listing references: ${cause}`,
+          );
+        }
+        return null;
       } catch (error) {
         const cause = toErrorMessage(error);
         unreadable.set(executionId, cause);
@@ -213,11 +226,10 @@ export async function readExecutionStreamIndex(): Promise<{
   /** Streams named by a readable `ExecutionMeta.streamId`. */
   readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
   /**
-   * Executions whose metadata could not be read, with the cause (each is also
-   * logged where the read failed). Their `meta.streamId` is unknown and may
-   * name any stream, so absence from `byStream` proves a stream unowned only
-   * while this is empty: a caller that would delete or settle an unowned
-   * stream must retain it instead.
+   * Executions whose metadata or historical ownership evidence could not be
+   * read conclusively, with the cause (each is also logged where detected).
+   * Their stream is unknown, so absence from `byStream` proves a stream
+   * unowned only while this is empty: destructive callers retain it instead.
    */
   readonly unreadable: ReadonlyMap<ExecutionId, string>;
 }> {

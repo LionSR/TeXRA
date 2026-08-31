@@ -20,7 +20,12 @@ import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
+import { createExecutionAdjacentStreamCleanup } from '@transcript/adjacentStreamCleanup';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  streamDataDir,
+} from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
 function config(agent: string): AgentConfig {
@@ -200,6 +205,87 @@ describe('execution listing normalization', () => {
     const index = await readExecutionStreamIndex();
 
     expect(index.byStream.get(streamId)).toBe(executionId);
+  });
+
+  it('scans legacy sidecars once per listing and does not cache no-match results', async () => {
+    const unique = 'f9892111' as ExecutionId;
+    const ambiguous = 'f9892112' as ExecutionId;
+    const noMatch = 'f9892113' as ExecutionId;
+    for (const executionId of [unique, ambiguous, noMatch]) {
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+      });
+    }
+    await writeStreamMeta('legacy-unique' as StreamTabId, {
+      executionId: unique,
+    });
+    await writeStreamMeta('legacy-ambiguous-a' as StreamTabId, {
+      executionId: ambiguous,
+    });
+    await writeStreamMeta('legacy-ambiguous-b' as StreamTabId, {
+      executionId: ambiguous,
+    });
+    const readDir = vi.spyOn(StorageFS, 'readDir');
+    const streamScanCount = (): number =>
+      readDir.mock.calls.filter(([dir]) => dir === STREAM_DATA_DIR).length;
+
+    try {
+      const first = await listExecutionStreamReferences();
+
+      expect(first.references).toEqual([
+        { executionId: unique, streamId: 'legacy-unique' },
+      ]);
+      expect(first.unreadable.has(ambiguous)).toBe(true);
+      expect(streamScanCount()).toBe(1);
+      await writeStreamMeta('legacy-late-match' as StreamTabId, {
+        executionId: noMatch,
+      });
+
+      const second = await listExecutionStreamReferences();
+
+      expect(second.references).toEqual(
+        expect.arrayContaining([
+          { executionId: unique, streamId: 'legacy-unique' },
+          { executionId: noMatch, streamId: 'legacy-late-match' },
+        ]),
+      );
+      expect(second.references).toHaveLength(2);
+      expect(streamScanCount()).toBe(2);
+      expect(
+        (await getExecutionStore(ambiguous).readMeta())?.streamId,
+      ).toBeUndefined();
+    } finally {
+      readDir.mockRestore();
+    }
+  });
+
+  it('shares one legacy sidecar scan across bulk deletion cleanup', async () => {
+    const first = 'f9892121' as ExecutionId;
+    const second = 'f9892122' as ExecutionId;
+    for (const executionId of [first, second]) {
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+      });
+      await writeStreamMeta(`stream-${executionId}` as StreamTabId, {
+        executionId,
+      });
+    }
+    const deleteAdjacentStreamState = vi.fn();
+    const cleanupExecution = createExecutionAdjacentStreamCleanup({
+      deleteAdjacentStreamState,
+    });
+    const readDir = vi.spyOn(StorageFS, 'readDir');
+
+    try {
+      await Promise.all([cleanupExecution(first), cleanupExecution(second)]);
+
+      expect(deleteAdjacentStreamState).toHaveBeenCalledTimes(2);
+      expect(
+        readDir.mock.calls.filter(([dir]) => dir === STREAM_DATA_DIR),
+      ).toHaveLength(1);
+    } finally {
+      readDir.mockRestore();
+    }
   });
 
   it('sees metadata replaced by another host after an earlier listing', async () => {
