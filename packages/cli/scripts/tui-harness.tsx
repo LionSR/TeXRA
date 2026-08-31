@@ -483,23 +483,21 @@ await loadAgents({ includeRemote: false });
 
 // Models the production boundary: `listCliHistoryEntries` already applies
 // `isUserVisibleExecution`, so menu builders only ever see user-started rows.
-function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
-  if (!SHOW_ORCHESTRATION_HISTORY) return [];
-  return [
-    {
-      id: 'cccccccccccc' as ExecutionId,
-      timestamp: '2026-06-06T00:02:00Z',
-      agent: 'orchestrator',
-      model: 'harness-model',
-      status: HISTORY_RUN_STATUS.RESUMABLE,
-      resumable: true,
-      inputBasename: '-',
-      category: AgentCategory.ToolUse,
-    },
-  ];
-}
-
-const HARNESS_ORCHESTRATION_HISTORY = harnessOrchestrationHistory();
+const HARNESS_ORCHESTRATION_HISTORY: readonly CliHistoryEntry[] =
+  SHOW_ORCHESTRATION_HISTORY
+    ? [
+        {
+          id: 'cccccccccccc' as ExecutionId,
+          timestamp: '2026-06-06T00:02:00Z',
+          agent: 'orchestrator',
+          model: 'harness-model',
+          status: HISTORY_RUN_STATUS.RESUMABLE,
+          resumable: true,
+          inputBasename: '-',
+          category: AgentCategory.ToolUse,
+        },
+      ]
+    : [];
 const HARNESS_VISIBLE_TOOL_USE_AGENT_ENTRIES = getVisibleAgents(
   AgentCategory.ToolUse,
 );
@@ -587,12 +585,6 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
     : []),
 ];
 
-function isHarnessModelAvailable(
-  availability: HarnessModelFixture['availability'],
-): boolean {
-  return availability === 'provider-key' || availability === 'openrouter-key';
-}
-
 function harnessModelStatus(
   availability: HarnessModelFixture['availability'],
 ): string {
@@ -607,18 +599,16 @@ function harnessModelStatus(
 }
 
 function harnessOrchestrationModels(): readonly CliModelAccess[] {
-  const models = HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) => ({
+  return HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) => ({
     model: fixture,
-    available: isHarnessModelAvailable(fixture.availability),
-    status: harnessModelStatus(fixture.availability),
+    available: SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
+      ? false
+      : fixture.availability === 'provider-key' ||
+        fixture.availability === 'openrouter-key',
+    status: SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
+      ? 'missing key'
+      : harnessModelStatus(fixture.availability),
   }));
-  return SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
-    ? models.map((model) => ({
-        ...model,
-        available: false,
-        status: 'missing key',
-      }))
-    : models;
 }
 
 function harnessOrchestrationStatusLines(): readonly string[] {
@@ -2044,7 +2034,14 @@ function appendHarnessTranscript(
   explicitStreamId?: StreamTabId,
   options: { readonly finalized?: boolean } = {},
 ): void {
-  const streamId = explicitStreamId ?? defaultHarnessTranscriptStreamId();
+  const streamId =
+    explicitStreamId ??
+    resolveLocalTranscriptStreamId({
+      activeStreamId: activeStreamIdSignal.get(),
+      fallbackStreamId: STREAM_ID,
+      parentStream: parentStream.get(),
+      rootStreamId: rootStreamId.get(),
+    });
   patchStream(streamId, (slice) => ({
     ...slice,
     entries: [
@@ -2058,15 +2055,6 @@ function appendHarnessTranscript(
       ),
     ],
   }));
-}
-
-function defaultHarnessTranscriptStreamId(): StreamTabId {
-  return resolveLocalTranscriptStreamId({
-    activeStreamId: activeStreamIdSignal.get(),
-    fallbackStreamId: STREAM_ID,
-    parentStream: parentStream.get(),
-    rootStreamId: rootStreamId.get(),
-  });
 }
 
 function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {

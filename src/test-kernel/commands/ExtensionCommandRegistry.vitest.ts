@@ -6,7 +6,6 @@ import {
   EXTENSION_COMMAND_HANDLERS,
   EXTENSION_INTERNAL_COMMAND_IDS,
   type ExtensionCommandActions,
-  type ExtensionRegistryCommandId,
 } from '@commands/extensionCommandHandlers';
 import {
   commandCatalog,
@@ -74,7 +73,7 @@ function makeActions(): ExtensionCommandActions {
 
 function dispatch(
   actions: ExtensionCommandActions,
-  id: ExtensionRegistryCommandId,
+  id: keyof typeof EXTENSION_COMMAND_HANDLERS,
   ...args: unknown[]
 ): Promise<boolean> {
   return Promise.resolve(

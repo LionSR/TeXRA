@@ -13,7 +13,6 @@ import {
  */
 interface AgentReviewCollection {
   readonly repoRoot: string;
-  readonly baseDescription: string;
   /**
    * Paths in the reviewed diff, already run through
    * `normalizeReviewFilePath` by the collector — `isPathInChangeSet`

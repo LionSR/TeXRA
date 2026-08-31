@@ -171,7 +171,7 @@ function compactBoundedDiffDisplayLines(
   const visibleLines = lines.slice(start, start + visibleCount);
   if (visibleBudget === 1) return visibleLines;
 
-  const hiddenRows = Math.max(0, lines.length - visibleLines.length);
+  const hiddenRows = lines.length - visibleLines.length;
   if (hiddenRows === 0) return visibleLines;
 
   return [

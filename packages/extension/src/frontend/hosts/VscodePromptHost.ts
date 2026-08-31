@@ -11,7 +11,7 @@ import type {
 } from '@hosts/uiHosts';
 
 export class VscodePromptHost implements PromptHost {
-  async info<T extends string = string>(
+  info<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
   ): Promise<T | undefined> {
@@ -22,14 +22,14 @@ export class VscodePromptHost implements PromptHost {
     );
   }
 
-  async warning<T extends string = string>(
+  warning<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
   ): Promise<T | undefined> {
     return this.showMessage(message, options, vscode.window.showWarningMessage);
   }
 
-  async error<T extends string = string>(
+  error<T extends string = string>(
     message: string,
     options: PromptMessageOptions<T> = {},
   ): Promise<T | undefined> {

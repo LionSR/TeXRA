@@ -17,7 +17,6 @@ interface DataRootOptions {
 
 interface ResourcesPathOptions {
   appPath?: string;
-  isDirectory?: (path: string) => boolean;
   resourcesPath?: string;
 }
 
@@ -64,10 +63,7 @@ export function resolveResourcesPath(
     join(mainDirname, '../../../../resources'),
   ].filter((candidate): candidate is string => Boolean(candidate));
 
-  const isDirectory = options.isDirectory ?? isExistingDirectory;
-  const found = candidates.find((candidate) =>
-    hasRequiredResourceDirectories(candidate, isDirectory),
-  );
+  const found = candidates.find(hasRequiredResourceDirectories);
   if (!found) {
     throw new Error(
       `Unable to locate TeXRA resources. Checked: ${candidates.join(', ')}`,
@@ -76,14 +72,11 @@ export function resolveResourcesPath(
   return found;
 }
 
-function hasRequiredResourceDirectories(
-  candidate: string,
-  isDirectory: (path: string) => boolean,
-): boolean {
+function hasRequiredResourceDirectories(candidate: string): boolean {
   return (
-    isDirectory(candidate) &&
+    isExistingDirectory(candidate) &&
     BUNDLED_AGENT_DIRECTORY_NAMES.every((directoryName) =>
-      isDirectory(join(candidate, directoryName)),
+      isExistingDirectory(join(candidate, directoryName)),
     )
   );
 }

@@ -52,7 +52,7 @@ async function fetchLatestDesktopRelease(): Promise<
   return tag ? { version: tag.replace(/^v/, '') } : undefined;
 }
 
-export interface CheckForDesktopUpdateOptions {
+interface CheckForDesktopUpdateOptions {
   currentVersion: string;
   globalState: StateStore;
   /** Skip entirely for unpackaged/dev runs, whose version is not meaningful. */

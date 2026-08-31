@@ -26,7 +26,7 @@ import {
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
 
-export interface DesktopShellActionFactoryOptions {
+interface DesktopShellActionFactoryOptions {
   getCustomAgentDirectory(): Promise<string>;
   openExternalUrl(url: string): Promise<void>;
   openLogFolder(): Promise<void>;

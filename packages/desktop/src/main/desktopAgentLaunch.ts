@@ -11,7 +11,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 
-export interface DesktopAgentLaunchContext {
+interface DesktopAgentLaunchContext {
   readonly session: SessionHandle;
 }
 

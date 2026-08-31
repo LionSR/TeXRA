@@ -26,7 +26,7 @@ export function buildConfigCategoryItems(
   for (const entry of entries) {
     counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1);
   }
-  return [...counts].map(([category, count]) => ({
+  return Array.from(counts, ([category, count]) => ({
     value: category,
     label: configCategoryLabel(category),
     description: formatResultCount(count, 'setting'),

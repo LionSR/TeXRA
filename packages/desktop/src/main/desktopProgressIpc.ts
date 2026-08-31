@@ -34,7 +34,7 @@ interface DesktopProgressSource {
   ensure(): Promise<DesktopProgressIpcBridge>;
 }
 
-export interface DesktopProgressIpcOptions {
+interface DesktopProgressIpcOptions {
   source: DesktopProgressSource;
   /** Called for a recognized command that wasn't dispatched to a real
    *  handler. A matched `unsupported(...)` registry entry supplies its

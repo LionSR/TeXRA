@@ -62,20 +62,19 @@ type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
  * reporting any failure under `errorMessage`. Every command in this file goes
  * through here.
  */
-async function withLatexdiffTool<T>(
+async function withLatexdiffTool(
   tool: LatexdiffTool,
   errorMessage: string,
-  action: () => Promise<T>,
-): Promise<T | undefined> {
+  action: () => Promise<void>,
+): Promise<void> {
   try {
     if (!(await checkToolInstalled(tool))) {
       log.warn(`${tool} is not installed; command will not run.`);
-      return undefined;
+      return;
     }
-    return await action();
+    await action();
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, errorMessage, err);
-    return undefined;
   }
 }
 
@@ -115,7 +114,6 @@ async function promptForLatexdiffMathMarkup(): Promise<
 }
 
 interface OpenedLatexdiffResult {
-  diffFilePath: string;
   diffLocation: FileLocation;
   viewerReady: boolean;
 }
@@ -149,7 +147,7 @@ async function openLatexdiffResult(
     preserveFocus: true,
     scheduleViewer: options.scheduleViewer,
   });
-  return { diffFilePath, diffLocation, viewerReady };
+  return { diffLocation, viewerReady };
 }
 
 /**
@@ -207,9 +205,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
         });
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
-          log.debug(
-            `Successfully generated diff: ${opened.diffFilePath}${suffix}`,
-          );
+          log.debug(`Successfully generated diff: ${result.diffPath}${suffix}`);
           if (opened.viewerReady) {
             lastViewerLocation = opened.diffLocation;
           }

@@ -112,7 +112,7 @@ export function buildUpdateCommand(method: InstallMethod): {
 }
 
 /** Fetch the `latest` dist-tag version from the npm registry, or undefined. */
-export async function fetchLatestCliVersion(options?: {
+export function fetchLatestCliVersion(options?: {
   registry?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;

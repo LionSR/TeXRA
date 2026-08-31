@@ -25,7 +25,7 @@ import {
 import { useAsyncPickerForm } from './_shared/ListForm';
 import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext';
 
-export interface ModelListFormProps {
+interface ModelListFormProps {
   readonly currentModel: string;
   readonly availableRows?: number;
   readonly selectable: boolean;
@@ -54,7 +54,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
-    load: () => getCliModelAccessList(),
+    load: getCliModelAccessList,
     isEmpty: (models) => !models.some((model) => model.available),
     closeEmptyOnEnter: true,
     items: (models) =>

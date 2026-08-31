@@ -22,7 +22,6 @@ import {
   ExecutionIdSchema,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
-  RunOutcomeSchema,
   resolveHistoryRunStatus,
   type ExecutionId,
   type ExecutionMeta,
@@ -70,7 +69,7 @@ function mergeHistoryFiles(
       if (!files.has(file.path)) files.set(file.path, file);
     }
   }
-  return [...files.values()].sort(byStringProp((f) => f.path));
+  return [...files.values()].toSorted(byStringProp((f) => f.path));
 }
 
 export interface CliHistoryEntry {
@@ -454,7 +453,7 @@ function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   ) {
     return status;
   }
-  return runOutcomeToExecutionStatus(RunOutcomeSchema.parse(status));
+  return runOutcomeToExecutionStatus(status);
 }
 
 export function cliHistoryNdjsonRecords(

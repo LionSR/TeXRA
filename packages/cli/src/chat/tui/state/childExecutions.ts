@@ -177,9 +177,11 @@ export function activeSubagentsFor(
   parentStreamId: StreamTabId,
   rosters: ChildRosters,
 ): readonly ActiveChildInfo[] {
-  const roster = rosters.get(parentStreamId);
-  if (!roster) return [];
-  return roster.filter((child) => child.finishedAt === undefined);
+  return (
+    rosters
+      .get(parentStreamId)
+      ?.filter((child) => child.finishedAt === undefined) ?? []
+  );
 }
 
 /** Display rows for a parent: the shared roster verbatim (live rows first,

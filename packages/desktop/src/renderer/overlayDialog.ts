@@ -38,7 +38,7 @@ function createDialogCloseButton(
  * it keeps overlays owning only their content and behavior, and stops the
  * near-identical shells (and their `desktop-*` class families) from drifting.
  */
-export interface OverlayDialogOptions {
+interface OverlayDialogOptions {
   appRoot: HTMLElement;
   /**
    * CSS class family. Derives `${prefix}-overlay`, `${prefix}-close`,
@@ -53,7 +53,7 @@ export interface OverlayDialogOptions {
   title: string;
 }
 
-export interface OverlayDialogHandle {
+interface OverlayDialogHandle {
   dialog: WaDialog;
   titleEl: HTMLElement;
   subtitleEl: HTMLElement;

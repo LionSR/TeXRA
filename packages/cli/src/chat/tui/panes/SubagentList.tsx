@@ -109,7 +109,7 @@ function SessionRow({
   session,
 }: {
   readonly active: boolean;
-  readonly cumulativeUsage?: TokenUsageStats | undefined;
+  readonly cumulativeUsage?: TokenUsageStats;
   readonly focused: boolean;
   readonly hiddenRowSummary: string | undefined;
   readonly isListRoot: boolean;

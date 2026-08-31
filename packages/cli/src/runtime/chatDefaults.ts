@@ -159,19 +159,6 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   return { model: resolveKnownCliModelId(mostRecent.record.model) };
 }
 
-function buildChatDefaults(init: {
-  readonly agent: string | undefined;
-  readonly model: string | undefined;
-  readonly modelSource: ChatDefaultValueSource | undefined;
-  readonly visibleToolUseAgents?: readonly { readonly name: string }[];
-}): ChatDefaults {
-  return {
-    agent: init.agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
-    model: init.model ?? CLI_BUILTIN_DEFAULT_MODEL,
-    modelSource: init.modelSource ?? 'builtin-default',
-  };
-}
-
 interface ResolveChatDefaultsInit {
   readonly cwd: string;
   readonly agentOverride?: string;
@@ -235,11 +222,14 @@ export async function resolveChatDefaults(
     { model: CLI_BUILTIN_DEFAULT_MODEL, reason: 'builtin-default' },
   ]);
 
-  return buildChatDefaults({
-    agent,
-    model: modelDecision?.model,
-    // The candidate list above only uses reasons in ChatDefaultValueSource.
-    modelSource: modelDecision?.reason as ChatDefaultValueSource | undefined,
-    visibleToolUseAgents: init.visibleToolUseAgents,
-  });
+  const model = modelDecision?.model;
+  // The candidate list above only uses reasons in ChatDefaultValueSource.
+  const modelSource = modelDecision?.reason as
+    ChatDefaultValueSource | undefined;
+  const visibleToolUseAgents = init.visibleToolUseAgents;
+  return {
+    agent: agent ?? pickDefaultToolUseAgent(visibleToolUseAgents),
+    model: model ?? CLI_BUILTIN_DEFAULT_MODEL,
+    modelSource: modelSource ?? 'builtin-default',
+  };
 }

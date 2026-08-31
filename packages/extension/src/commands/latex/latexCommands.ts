@@ -1,3 +1,6 @@
+// Standard library imports
+import { setTimeout as sleep } from 'node:timers/promises';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -19,7 +22,6 @@ import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { createLog } from '@logger/logUtils';
 import { AgentCategory } from '@shared/schemas';
-import { delay } from '@utils/core';
 
 import {
   getIndentTeXNotification,
@@ -85,7 +87,7 @@ export async function handleIndentCurrentTeX(): Promise<void> {
       const success = await runLatexFormatter(relativePath);
 
       if (success) {
-        await delay(100);
+        await sleep(100);
         await showLoggedInfoMessage(
           CHANNEL,
           'LaTeX file indented successfully',

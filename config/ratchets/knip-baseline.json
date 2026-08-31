@@ -722,12 +722,6 @@
       "name": "runnableCliModelAccessEntries"
     },
     {
-      "file": "packages/cli/src/runtime/multiAgentPresets.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cliMultiAgentPresetListRecord"
-    },
-    {
       "file": "packages/cli/src/runtime/pager.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -920,18 +914,6 @@
       "name": "DesktopProtocolApp"
     },
     {
-      "file": "packages/desktop/src/main/desktopSupabaseAuth.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DesktopOAuthClient"
-    },
-    {
-      "file": "packages/desktop/src/main/desktopWindowTitle.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "getDesktopSessionActivity"
-    },
-    {
       "file": "packages/desktop/src/main/platform/electronSecrets.ts",
       "category": "unused",
       "kind": "exports",
@@ -978,18 +960,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "parseDesktopLogEntries"
-    },
-    {
-      "file": "packages/desktop/src/renderer/logsPane.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DesktopLogEntry"
-    },
-    {
-      "file": "packages/desktop/src/renderer/logsPane.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "DesktopLogLevel"
     },
     {
       "file": "packages/desktop/src/shared/desktopCommandSurface.ts",

@@ -321,15 +321,17 @@ export function createChatSessionController(
   // the local transcript unless the run was stopped intentionally, and set
   // the exit code accordingly.
   const reportRunFailure = (error: unknown): void => {
+    if (session.stopRequested) {
+      session.runExitCode = CliExitCode.Success;
+      return;
+    }
     // A launch failure already rendered through a targeted presentation
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
-    if (!session.stopRequested && !hasErrorPresentationClaimed(error)) {
+    if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    if (session.stopRequested) {
-      session.runExitCode = CliExitCode.Success;
-    } else if (error instanceof ExecutionLeaseActiveError) {
+    if (error instanceof ExecutionLeaseActiveError) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;

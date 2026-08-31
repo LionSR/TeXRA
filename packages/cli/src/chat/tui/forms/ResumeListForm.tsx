@@ -13,7 +13,7 @@ import type { ExecutionId } from '@shared/schemas';
 
 import { AsyncListForm } from './_shared/ListForm';
 
-export interface ResumeListFormProps {
+interface ResumeListFormProps {
   readonly availableRows?: number;
   readonly onSelect: (value: ExecutionId) => void;
   readonly onClose: () => void;

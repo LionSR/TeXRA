@@ -15,15 +15,13 @@ export function registerMergeCommands(context: vscode.ExtensionContext): void {
 }
 
 async function handleMerge(
-  inputFile: string,
   baseFile: string,
   editedFile: string,
-  model?: string,
 ): Promise<void> {
-  if (!editedFile || (!baseFile && !inputFile)) {
+  if (!baseFile || !editedFile) {
     await showLoggedMessageWithDocs(
       CHANNEL,
-      'Both input file and edited file must be specified for merge operation',
+      'Both base file and edited file must be specified for merge operation',
       'intelligent-merge',
       'View Merge Docs',
     );
@@ -32,8 +30,8 @@ async function handleMerge(
 
   await vscode.commands.executeCommand('texra.execute', {
     agent: 'merge',
-    model: model ?? getHelperModelName(),
-    inputFiles: [baseFile ?? inputFile],
+    model: getHelperModelName(),
+    inputFiles: [baseFile],
     editedFile,
   });
 }

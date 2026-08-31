@@ -31,7 +31,7 @@ import type { ApprovalDecision } from '../state/approvalQueue';
 export const CONFIRM_CARD_FEEDBACK_PLACEHOLDER =
   'Feedback to send with rejection';
 
-export interface ConfirmCardProps {
+interface ConfirmCardProps {
   readonly borderStyle: BoxProps['borderStyle'];
   readonly color: string;
   readonly title: string;
@@ -183,7 +183,7 @@ export function ConfirmCard({
     });
   }
   const stackedCompactHints = compactHintLayout?.stackedHints ?? hints;
-  const stackCompactHints = compact && (compactHintLayout?.stack ?? false);
+  const stackCompactHints = compactHintLayout?.stack ?? false;
 
   if (compact) {
     return (

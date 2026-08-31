@@ -17,7 +17,7 @@ import { resolveXtermTheme } from '@shared/wa/xtermTheme';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
 
-export interface TerminalPaneCallbacks {
+interface TerminalPaneCallbacks {
   /** Requests a pty for `sessionId` at the measured geometry. */
   start(sessionId: string, cols: number, rows: number): void;
   sendInput(sessionId: string, data: string): void;
@@ -25,7 +25,7 @@ export interface TerminalPaneCallbacks {
   close(sessionId: string): void;
 }
 
-export interface TerminalPane {
+interface TerminalPane {
   readonly element: HTMLElement;
   /**
    * Shows `sessionId`, creating its terminal and pty on first use. `focus`

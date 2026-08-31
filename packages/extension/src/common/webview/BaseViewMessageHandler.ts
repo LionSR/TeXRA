@@ -61,13 +61,6 @@ export abstract class BaseViewMessageHandler<
     this._activeView = undefined;
   }
 
-  /**
-   * Record the active webview reference.
-   */
-  private setActiveView(webviewView: T): void {
-    this._activeView = webviewView;
-  }
-
   /** Keep a failed notification from becoming an unhandled host rejection. */
   private reportNotificationFailure(notification: PromiseLike<unknown>): void {
     void notification.then(undefined, (error: unknown) => {
@@ -116,7 +109,7 @@ export abstract class BaseViewMessageHandler<
     dispatcher: DispatcherFn<TMessage>,
     handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
-    this.setActiveView(webviewView);
+    this._activeView = webviewView;
 
     let unsupported = false;
     const handled = dispatcher(message, handlers, (error) => {

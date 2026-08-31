@@ -7,7 +7,7 @@
  * into the proposed side.
  */
 
-import { promises as fs } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
 
 import * as vscode from 'vscode';
 
@@ -47,7 +47,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Promise<ToolEditPreview> {
-    await fs.mkdir(this.storageDirectory, { recursive: true });
+    await mkdir(this.storageDirectory, { recursive: true });
     const staged = await writeApprovalTempFiles({
       directory: this.storageDirectory,
       targetPath: request.path,
@@ -125,7 +125,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     );
   }
 
-  async readProposedContent(): Promise<string> {
+  readProposedContent(): Promise<string> {
     return this.diffViewHost.readProposedContent(this.diffSession);
   }
 
@@ -168,8 +168,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
         return;
       }
       const wasClosed = event.closed.some((tab) => {
-        const uri = tabInputFileUri(tab);
-        return uri !== null && uri.toString() === proposedUri;
+        return tabInputFileUri(tab)?.toString() === proposedUri;
       });
       if (wasClosed) {
         this.tabCloseListener?.dispose();

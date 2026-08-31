@@ -52,7 +52,7 @@ export function ansiEscapeEnd(text: string, index: number): number {
       stEnd === -1 ? undefined : stEnd + OSC_STRING_TERMINATOR.length,
       c1End === -1 ? undefined : c1End + 1,
     ].filter((end): end is number => end !== undefined);
-    return ends.length === 0 ? text.length : Math.min(...ends);
+    return Math.min(...ends, text.length);
   }
 
   if (isAnsiIntermediateByte(next)) {

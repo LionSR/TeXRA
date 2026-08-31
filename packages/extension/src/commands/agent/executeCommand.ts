@@ -57,7 +57,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
       // progress-view compile fixer); a direct main-view launch omits it and
       // keeps the user's selected model.
-      preferHelperModel: wrapped?.preferHelperModel === true,
+      preferHelperModel: wrapped?.preferHelperModel ?? false,
       modelHandlerCompatibilityKey: wrapped?.modelHandlerCompatibilityKey,
       copilotRouteOverride: wrapped?.copilotRouteOverride,
       onRun,

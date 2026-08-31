@@ -28,8 +28,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
-function parseAgentKeys(value: string | undefined): string[] {
-  if (!value) return [];
+function parseAgentKeys(value = ''): string[] {
   return unique(
     value
       .split(',')

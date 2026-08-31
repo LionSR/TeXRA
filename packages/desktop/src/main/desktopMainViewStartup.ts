@@ -20,7 +20,7 @@ async function defaultGetAuthStatus(): Promise<MainViewAuthStatus> {
   return { authenticated: false };
 }
 
-export interface DesktopMainViewStartupOptions {
+interface DesktopMainViewStartupOptions {
   renderer: DesktopRenderer;
   getAuthStatus?: () => Promise<MainViewAuthStatus>;
   loadOptions?: () => Promise<MainViewStartupOptions>;
@@ -63,7 +63,7 @@ export function createDesktopMainViewStartup({
       // but return `false` so sibling handlers still receive it.
       [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
         when: (message) => message.view === 'main',
-        run: () => postStartupMessages(),
+        run: postStartupMessages,
         claim: false,
       },
     },

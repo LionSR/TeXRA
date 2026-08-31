@@ -7,7 +7,7 @@ export interface ReturnKeyInput {
 }
 
 export const SYNTHETIC_SHIFT_RETURN_INPUT = '\uE000';
-const ESC = String.fromCharCode(27);
+const ESC = '\u001B';
 
 const RAW_CONTROL_INPUTS = new Map<number, string>([
   [1, 'a'],
@@ -44,7 +44,7 @@ export function isEscapeInput(
   input: string,
   key: Pick<ReturnKeyInput, 'escape'>,
 ): boolean {
-  return key.escape === true || input === '\u001B';
+  return key.escape === true || input === ESC;
 }
 
 export function isUnhandledControlInput(input: string): boolean {
@@ -60,9 +60,7 @@ export function metaChordInput(
 ): string | undefined {
   if (key.ctrl) return undefined;
   if (key.meta && input) return input;
-  return input.startsWith('\u001B') && input.length > 1
-    ? input.slice(1)
-    : undefined;
+  return input.startsWith(ESC) && input.length > 1 ? input.slice(1) : undefined;
 }
 
 // A return keypress that should act as Enter (submit / confirm / select).

@@ -31,7 +31,7 @@ const HOST_PLATFORM: DesktopPlatform = ((): DesktopPlatform => {
 })();
 
 /** Menu template shape produced before Electron materializes native menus. */
-export interface DesktopMenuTemplateItem extends Omit<
+interface DesktopMenuTemplateItem extends Omit<
   MenuItemConstructorOptions,
   'click' | 'submenu'
 > {

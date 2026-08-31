@@ -60,12 +60,11 @@ function shouldSeparateEntries({
   nextEntry,
   nextLines,
 }: {
-  readonly previousEntry: TranscriptRow | undefined;
+  readonly previousEntry: TranscriptRow;
   readonly previousLines: readonly string[];
   readonly nextEntry: TranscriptRow;
   readonly nextLines: readonly string[];
 }): boolean {
-  if (!previousEntry) return false;
   if (isPromptToToolTurn(previousEntry, nextEntry)) return false;
   return !(
     isCompactToolEntry(previousEntry, previousLines) &&
@@ -90,7 +89,7 @@ export function transcriptToLines(
     const lines = transcriptEntryLines(entry, cols, executionLabels);
     if (lines.length === 0) continue;
     if (
-      out.length > 0 &&
+      previousEntry !== undefined &&
       shouldSeparateEntries({
         previousEntry,
         previousLines,

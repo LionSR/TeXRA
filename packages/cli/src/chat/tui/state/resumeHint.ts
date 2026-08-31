@@ -95,8 +95,7 @@ export function collectResumeUsage(
   const usages: TokenUsageStats[] = [];
 
   for (const streamId of streams.keys()) {
-    const usage: TokenUsageStats | undefined =
-      readStreamArtifacts(streamId)?.cumulativeUsage;
+    const usage = readStreamArtifacts(streamId)?.cumulativeUsage;
     if (!usage || !usageHasTokens(usage)) continue;
     usages.push(usage);
   }

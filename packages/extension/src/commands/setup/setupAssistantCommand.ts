@@ -103,10 +103,9 @@ async function ensureCredentialOrPrompt(): Promise<boolean> {
     },
   ];
 
-  type CredentialPick = (typeof picks)[number];
   // Each option already carries its own description, so the picker needs no
   // second explanation of the same three choices.
-  const picked = await vscode.window.showQuickPick<CredentialPick>(picks, {
+  const picked = await vscode.window.showQuickPick(picks, {
     title: 'TeXRA setup',
     placeHolder:
       'Choose how the setup assistant reaches models before it starts.',

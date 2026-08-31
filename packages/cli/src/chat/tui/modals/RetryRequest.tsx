@@ -22,7 +22,7 @@ import {
   type RetryApprovalPayload,
 } from '../state/approvalQueue';
 
-export interface RetryRequestProps {
+interface RetryRequestProps {
   readonly availableRows?: number;
   readonly payload: RetryApprovalPayload;
   readonly onDecide: (decision: ApprovalDecision) => void;
@@ -37,10 +37,7 @@ function retryGuidanceRows(
   width: number,
 ): number {
   if (!guidance) return 0;
-  return Math.max(
-    1,
-    wrapAnsiToWidth(guidance, Math.max(1, width)).split('\n').length,
-  );
+  return wrapAnsiToWidth(guidance, width).split('\n').length;
 }
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
@@ -48,14 +45,13 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { data, tui } = props.payload;
   const errorText = data.errorMessage ?? data.operation;
   const isApiSwitchable = isCliApiSwitchableRetry(data);
-  const personalApiKeyAvailable = tui.personalApiKeyAvailable;
   const canSwitchToPersonalKey =
-    isApiSwitchable && personalApiKeyAvailable === true;
+    isApiSwitchable && tui.personalApiKeyAvailable === true;
   // Which subscription/plan toggle the switch disables is decided next to the
   // classifiers in approvalPrompts.ts; the modal only renders the action.
   const switchDecision: ApprovalDecision = cliRetryApiSwitchDecision(data);
   let guidanceText: string | undefined;
-  if (isApiSwitchable && personalApiKeyAvailable !== true) {
+  if (isApiSwitchable && !canSwitchToPersonalKey) {
     const requestedProvider = data.errorDetails?.provider;
     const provider =
       requestedProvider && isApiProvider(requestedProvider)

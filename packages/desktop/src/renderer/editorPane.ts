@@ -41,7 +41,7 @@ import {
 type CodeEditor = ReturnType<MonacoModule['editor']['create']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;
 
-export interface EditorPaneCallbacks {
+interface EditorPaneCallbacks {
   /** Lists the direct children of one workspace directory for the tree. */
   listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
   readFile(path: string): Promise<string>;
@@ -58,7 +58,7 @@ export interface EditorPaneCallbacks {
   onError(error: unknown): void;
 }
 
-export interface EditorPane {
+interface EditorPane {
   /** Editor surface, hosted by whichever pane holds the editor tab. */
   readonly element: HTMLElement;
   /**

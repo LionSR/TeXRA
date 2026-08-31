@@ -198,7 +198,7 @@ async function expandWorkflowInputSpec(
 
   const normalizeMatches = (matches: string[]): string[] =>
     matches
-      .sort()
+      .toSorted()
       .map((match) =>
         normalizeCliInputPathForRun(match, cwd, flagLabel, options),
       );

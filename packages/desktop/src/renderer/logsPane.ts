@@ -14,10 +14,9 @@ import {
   type DesktopSetLogMessage,
 } from '../shared/desktopLogMessages';
 
-export type DesktopLogLevel =
-  'debug' | 'error' | 'info' | 'log' | 'warn' | 'unknown';
+type DesktopLogLevel = 'debug' | 'error' | 'info' | 'log' | 'warn' | 'unknown';
 
-export interface DesktopLogEntry {
+interface DesktopLogEntry {
   readonly id: string;
   readonly level: DesktopLogLevel;
   readonly message: string;
@@ -40,7 +39,7 @@ interface DesktopLogEntryDraft {
   readonly timestamp?: string;
 }
 
-export interface LogsPaneOptions {
+interface LogsPaneOptions {
   readonly sendCommand?: (command: string) => void;
   readonly scheduleRefresh?: (
     callback: () => void,
@@ -49,7 +48,7 @@ export interface LogsPaneOptions {
   readonly refreshIntervalMs?: number;
 }
 
-export interface LogsPaneController {
+interface LogsPaneController {
   /**
    * Root element, hosted by the Logs tab. Previously this lived inside a
    * `wa-drawer`; logs are now a tab so they can stay open next to a running
@@ -158,12 +157,11 @@ export function parseDesktopLogEntries(text: string): DesktopLogEntry[] {
 export function createLogsPane(
   options: LogsPaneOptions = {},
 ): LogsPaneController {
-  const container: HTMLElement = document.createElement('div');
+  const container = document.createElement('div');
   container.setAttribute('data-desktop-view', 'logs');
   container.className = 'desktop-log-host';
 
-  const sendCommand =
-    options.sendCommand ?? ((command: string) => postMessage(command));
+  const sendCommand = options.sendCommand ?? postMessage;
   const scheduleRefresh =
     options.scheduleRefresh ??
     ((callback: () => void, intervalMs: number) =>
@@ -300,7 +298,7 @@ export function createLogsPane(
   }
 
   function applySnapshot(message: DesktopSetLogMessage): void {
-    const path = message.log.path ?? 'the desktop log file';
+    const path = message.log.path;
     const entries = parseDesktopLogEntries(message.log.text);
     state = {
       entries,

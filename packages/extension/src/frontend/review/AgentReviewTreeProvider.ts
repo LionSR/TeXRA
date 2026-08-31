@@ -16,7 +16,7 @@ import * as vscode from 'vscode';
 // Local imports
 import type { ReviewIssue, ReviewSeverity } from '@agent/review';
 
-import { AgentReviewService, issueRange } from './AgentReviewService';
+import { AgentReviewService } from './AgentReviewService';
 
 export type AgentReviewNode =
   | { kind: 'file'; file: string; uri: vscode.Uri; issues: ReviewIssue[] }
@@ -122,16 +122,4 @@ function buildTooltip(issue: ReviewIssue): vscode.MarkdownString {
   if (issue.suggestion)
     lines.push('', `**Suggested fix:** ${issue.suggestion}`);
   return new vscode.MarkdownString(lines.join('\n'));
-}
-
-/** Reveal an issue's location in the editor. */
-export async function openReviewIssue(issue: ReviewIssue): Promise<void> {
-  const uri = vscode.Uri.file(AgentReviewService.issuePath(issue));
-  const document = await vscode.workspace.openTextDocument(uri);
-  const editor = await vscode.window.showTextDocument(document, {
-    preview: true,
-  });
-  const range = issueRange(issue);
-  editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
-  editor.selection = new vscode.Selection(range.start, range.start);
 }

@@ -21,7 +21,7 @@ import {
   selectCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 import type { RunModelDecisionReason } from '@model/runModelDecision';
-import { AgentCategory, type StreamTabId } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { FOCUSED_BACKGROUND_TASK } from '@shared/copy/nestedRuns';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -284,15 +284,6 @@ export function createChatSubmitDriver(
     void followUpQueue.add(async () => {
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
-      const emitQueuedFollowUpsChanged = (streamId: StreamTabId): void => {
-        runtimeSession.events.emit({
-          scope: 'session',
-          event: {
-            type: 'updateQueuedFollowUps',
-            payload: { streamId },
-          },
-        });
-      };
       try {
         while (
           !followUpTarget &&
@@ -326,7 +317,13 @@ export function createChatSubmitDriver(
           displayText: prepared.displayInstruction,
         });
         if (result.status !== 'failed') {
-          emitQueuedFollowUpsChanged(followUpTarget);
+          runtimeSession.events.emit({
+            scope: 'session',
+            event: {
+              type: 'updateQueuedFollowUps',
+              payload: { streamId: followUpTarget },
+            },
+          });
           delivered = true;
           const presentation = presentFollowUpResult(result);
           if (presentation.severity !== 'none') {

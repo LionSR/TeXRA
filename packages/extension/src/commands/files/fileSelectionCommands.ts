@@ -19,18 +19,16 @@ interface PickerOptions {
 }
 
 /** Run a dialog, announce what was picked, and report failures once. */
-async function announceSelection<T extends string | string[]>(
-  select: () => Promise<T | null>,
-): Promise<T | null> {
+async function announceSelection(
+  select: () => Promise<string[] | null>,
+): Promise<string[] | null> {
   try {
     const result = await select();
     if (!result) {
       return null;
     }
 
-    const message = Array.isArray(result)
-      ? `Selected files: ${result.join(', ')}`
-      : `Selected file: ${result}`;
+    const message = `Selected files: ${result.join(', ')}`;
     vscode.window.showInformationMessage(message);
     log.info(message);
     return result;

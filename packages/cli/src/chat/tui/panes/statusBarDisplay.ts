@@ -14,7 +14,6 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
-import { STATUS_BAR_HORIZONTAL_PADDING } from '@cli/tui/ui/theme';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { codingPlanForUsageRoute } from '@shared/codingPlanSubscriptions';
 import {
@@ -57,6 +56,8 @@ import {
   nearestActiveStreamAncestor,
 } from '../state/streamViews';
 import type { ApprovalQueueStatusKind } from '../state/approvalQueue';
+
+const STATUS_BAR_HORIZONTAL_PADDING = 2;
 
 // 'dim' is not an Ink color name — it is a sentinel this file's own renderer
 // (`StatusBar.tsx`) reads to apply `dimColor` instead of an explicit `color`.

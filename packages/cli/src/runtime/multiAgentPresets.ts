@@ -240,12 +240,6 @@ export function cliMultiAgentPresetListRecord(
   };
 }
 
-export function cliMultiAgentPresetListRecords(
-  plans: readonly CliMultiAgentPresetRunPlan[],
-): CliMultiAgentPresetListRecord[] {
-  return plans.map(cliMultiAgentPresetListRecord);
-}
-
 function formatPresetAvailabilityForLauncher(
   availability: TeamAvailability,
   blockReason: string | undefined,

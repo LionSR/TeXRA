@@ -10,7 +10,7 @@ import type {
   DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
-export interface DesktopPromptInput {
+interface DesktopPromptInput {
   title: string;
   prompt: string;
   password?: boolean;
@@ -20,9 +20,7 @@ interface DesktopPromptRenderer {
   postToRenderer(message: unknown): boolean;
 }
 
-interface PendingPrompt {
-  resolve(value: string | undefined): void;
-}
+type PromptResolver = (value: string | undefined) => void;
 
 export interface DesktopPromptIpc extends DesktopMessageHandler {
   request(input: DesktopPromptInput): Promise<string | undefined>;
@@ -31,14 +29,14 @@ export interface DesktopPromptIpc extends DesktopMessageHandler {
 
 /** Owns correlated desktop prompt requests and their exact settlement. */
 export class DesktopPromptController implements DesktopPromptIpc {
-  private readonly pending = new Map<string, PendingPrompt>();
+  private readonly pending = new Map<string, PromptResolver>();
 
   constructor(private readonly renderer: DesktopPromptRenderer) {}
 
   request(input: DesktopPromptInput): Promise<string | undefined> {
     const requestId = randomUUID();
     return new Promise((resolve) => {
-      this.pending.set(requestId, { resolve });
+      this.pending.set(requestId, resolve);
       const delivered = this.renderer.postToRenderer({
         command: DESKTOP_PROMPT_COMMANDS.SHOW,
         requestId,
@@ -66,7 +64,7 @@ export class DesktopPromptController implements DesktopPromptIpc {
     const pending = this.pending.get(requestId);
     if (!pending) return false;
     this.pending.delete(requestId);
-    pending.resolve(value);
+    pending(value);
     return true;
   }
 }

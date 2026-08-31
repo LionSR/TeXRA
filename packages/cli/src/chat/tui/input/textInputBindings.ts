@@ -44,7 +44,7 @@ export interface TextInputKey {
   readonly meta?: boolean;
 }
 
-export type TextInputBinding = {
+type TextInputBinding = {
   /** Chord label shown in docs and audits, e.g. `Ctrl-W / Alt-Backspace`. */
   readonly keys: string;
   readonly action: string;

@@ -4,7 +4,6 @@ import { Box, Text, useWindowSize } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
-  EDIT_DIFF_PADDING,
   isCompactRows,
   MIN_MODAL_CONTENT_WIDTH,
 } from '@cli/tui/ui/theme';
@@ -32,12 +31,13 @@ import type {
   ToolEditApprovalPayload,
 } from '../state/approvalQueue';
 
+const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
 const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 export const COMPACT_EDIT_APPROVAL_MAX_ROWS = 9;
 const DEFAULT_EDIT_DIFF_ROWS = 30;
 
-export interface EditApprovalProps {
+interface EditApprovalProps {
   readonly availableRows?: number;
   readonly payload: ToolEditApprovalPayload;
   readonly onDecide: (decision: ApprovalDecision) => void;

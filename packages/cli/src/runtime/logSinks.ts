@@ -278,7 +278,6 @@ export class NdjsonStdoutSink implements LogSink {
   private waitForStdoutDrain(): Promise<boolean> {
     if (!this.stdout.usable) return Promise.resolve(false);
     return new Promise<boolean>((resolve) => {
-      let cleanup = (): void => undefined;
       const onDrain = (): void => {
         cleanup();
         resolve(true);
@@ -287,7 +286,7 @@ export class NdjsonStdoutSink implements LogSink {
         cleanup();
         resolve(false);
       };
-      cleanup = (): void => {
+      const cleanup = (): void => {
         this.stdout.off('drain', onDrain);
         this.stdout.off('error', onClosed);
         this.stdout.off('close', onClosed);

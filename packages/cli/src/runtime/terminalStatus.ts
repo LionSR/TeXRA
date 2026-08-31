@@ -65,8 +65,7 @@ export async function readCliRunOutcomeState(
     const meta = await getExecutionStore(result.executionId).readMeta();
     const persistedOutcome = meta?.outcome;
     return {
-      outcome:
-        persistedOutcome === undefined ? result.outcome : persistedOutcome,
+      outcome: persistedOutcome ?? result.outcome,
       outcomePersisted: persistedOutcome !== undefined,
     };
   } catch (error) {

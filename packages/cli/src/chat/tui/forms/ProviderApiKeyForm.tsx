@@ -65,7 +65,7 @@ export function formatProviderApiKeySummary(
   return view.loading ? `${summary} · refreshing` : summary;
 }
 
-export interface ProviderApiKeyFormProps {
+interface ProviderApiKeyFormProps {
   readonly availableRows?: number;
   readonly statusView?: ProviderApiKeyStatusView;
   readonly onSave: (
