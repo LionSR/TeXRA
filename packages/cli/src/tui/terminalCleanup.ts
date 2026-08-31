@@ -50,13 +50,11 @@ export function supportsTerminalJobControl(
   return platform !== 'win32';
 }
 
-export function cleanupTerminalModes(
-  termProgram: string | undefined = cliEnvValue('TERM_PROGRAM'),
-): void {
+export function cleanupTerminalModes(): void {
   // TERM_PROGRAM is fixed for the process, so the writer owns the emulator
   // check rather than having it threaded through the exit controller.
   writeTerminalSequence(
-    termProgram === 'iTerm.app'
+    cliEnvValue('TERM_PROGRAM') === 'iTerm.app'
       ? `${RESET_TERMINAL_MODES}${CLEAR_ITERM_PROGRESS}`
       : RESET_TERMINAL_MODES,
   );
