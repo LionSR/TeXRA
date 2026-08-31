@@ -355,6 +355,7 @@ describe('ConfigForm helpers', () => {
       statuses: {
         openai: 'set',
         anthropic: 'not-set',
+        glm: 'not-set',
         kimiCode: 'env',
       },
       loading: false,
@@ -371,6 +372,12 @@ describe('ConfigForm helpers', () => {
     expect(items.find((item) => item.value === 'kimiCode')).toMatchObject({
       label: 'Kimi Code',
       description: 'Env',
+    });
+    const glmRows = items.filter((item) => item.value === 'glm');
+    expect(glmRows).toHaveLength(1);
+    expect(glmRows[0]).toMatchObject({
+      label: 'GLM API/GLM Coding Plan',
+      description: 'Not set',
     });
   });
 

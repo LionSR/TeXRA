@@ -1358,6 +1358,23 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'provider-key-form',
+    rows: 24,
+    cols: 100,
+    env: { HARNESS_ENTRIES: '0' },
+    keys: ['/key', '\r'],
+    frame: 'viewport',
+    expect: [
+      'Add provider API key',
+      'Choose the service that issued the key.',
+      'GLM API/GLM Coding Plan',
+      'Kimi Code',
+      '↑/↓ navigate',
+      'Esc close',
+    ],
+    unexpect: ['GLM Coding Plan —', 'Platform not initialized', '/key - error'],
+  },
+  {
     name: 'api-form-chatgpt-hotkey',
     rows: 12,
     cols: 80,

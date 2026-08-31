@@ -6,6 +6,7 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
+import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { providerDisplayName } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -33,10 +34,18 @@ function providerApiKeyStatusLabel(
   return 'Status unavailable';
 }
 
+function providerApiKeyFormLabel(provider: ApiProvider): string {
+  const providerName = providerDisplayName(provider);
+  const codingPlan = codingPlanForApiProvider(provider);
+  return codingPlan && !codingPlan.exclusiveCredential
+    ? `${providerName} API/${codingPlan.displayName}`
+    : providerName;
+}
+
 export function buildProviderApiKeyItems(view: ProviderApiKeyStatusView) {
   return API_PROVIDERS.map((provider) => ({
     value: provider,
-    label: providerDisplayName(provider),
+    label: providerApiKeyFormLabel(provider),
     description: providerApiKeyStatusLabel(view.statuses?.[provider], view),
   }));
 }
@@ -94,7 +103,7 @@ export function ProviderApiKeyForm(
             ? buildProviderApiKeyItems(props.statusView)
             : API_PROVIDERS.map((provider) => ({
                 value: provider,
-                label: providerDisplayName(provider),
+                label: providerApiKeyFormLabel(provider),
               }))
         }
         description={

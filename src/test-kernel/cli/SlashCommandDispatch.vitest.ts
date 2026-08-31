@@ -7,7 +7,10 @@ import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
-import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/modelAccessCommands';
+import {
+  applyCliModelAccessSelection,
+  applyCliProviderApiKey,
+} from '@cli/chat/tui/commands/handlers/modelAccessCommands';
 import {
   showCliMemoryList,
   showCliMemoryPreview,
@@ -48,6 +51,7 @@ import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
+import * as providerApiKey from '@cli/runtime/providerApiKey';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { SessionState } from '@controllers/session/SessionState';
@@ -804,6 +808,19 @@ describe('handleTuiSlashCommand', () => {
     expectAccessStatusText(apiStatusText);
     expect(apiStatusText).toBe(authStatusText);
     expect(overview).toHaveBeenCalledTimes(2);
+  });
+
+  it('explains the shared GLM key routes after saving it', async () => {
+    const save = vi
+      .spyOn(providerApiKey, 'saveProviderApiKey')
+      .mockResolvedValue(undefined);
+
+    const notice = await applyCliProviderApiKey('glm', 'glm-secret');
+
+    expect(save).toHaveBeenCalledWith('glm', 'glm-secret');
+    expect(notice).toBe(
+      "Tip: this key uses the regular GLM endpoint by default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
+    );
   });
 
   it('exposes cancellation while model access is signing in to ChatGPT', async () => {
