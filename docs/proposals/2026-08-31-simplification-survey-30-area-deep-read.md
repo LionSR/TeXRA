@@ -321,17 +321,21 @@ the supervised-send and packaged-relaunch branches.
 The accepted candidates were implemented on four branches, each based directly
 on the evidence commit:
 
-1. `codex/simplify-core-data-layers`: S3, S5, S9, and S10. This batch removes
-   79 lines net. Its focused suites ran 84 tests, and the workspace typecheck,
-   lint, formatting, and dead-code ratchet all passed.
-2. `codex/simplify-agent-runtime-carriers`: S1, S2, S4, and S6. This batch
+1. [PR #11682](https://github.com/LionSR/TeXRA/pull/11682)
+   (`codex/simplify-core-data-layers`): S3, S5, S9, and S10. This batch
+   removes 79 lines net. Its focused suites ran 84 tests, and the workspace
+   typecheck, lint, formatting, and dead-code ratchet all passed.
+2. [PR #11683](https://github.com/LionSR/TeXRA/pull/11683)
+   (`codex/simplify-agent-runtime-carriers`): S1, S2, S4, and S6. This batch
    removes 91 lines net while preserving synchronous child-run failures, both
    compiled-PDF writes, and resumed-message identity. The focused suites ran
    242 tests, and the workspace, test-kernel, and CLI typechecks passed.
-3. `codex/simplify-export-inquiry-data`: S7 and S8. This batch removes 58
+3. [PR #11684](https://github.com/LionSR/TeXRA/pull/11684)
+   (`codex/simplify-export-inquiry-data`): S7 and S8. This batch removes 58
    lines net. The export/parity suites ran 83 tests, the inquiry suites ran 68,
    and the workspace, test-kernel, and CLI typechecks passed.
-4. `codex/simplify-desktop-lifecycle`: S12. This batch removes 90 lines net.
+4. [PR #11685](https://github.com/LionSR/TeXRA/pull/11685)
+   (`codex/simplify-desktop-lifecycle`): S12. This batch removes 90 lines net.
    The desktop lifecycle suites ran 26 tests, and the desktop and test-kernel
    typechecks passed.
 
