@@ -25,6 +25,7 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
 
   override render(): TemplateResult {
     const provider = this.state.provider ?? '';
+    const providerLabel = capitalize(provider);
 
     return renderWarningBanner({
       id: 'apiKeyBanner',
@@ -33,7 +34,8 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
         <span>
           ${
             provider
-              ? html`<strong>${capitalize(provider)}</strong> API key missing.`
+              ? html`<strong><bdi dir="auto">${providerLabel}</bdi></strong> API
+                  key is missing.`
               : 'TeXRA requires an API key to run.'
           }
         </span>
@@ -44,7 +46,12 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
             size="s"
             @click=${() => this.handleAction('set')}
           >
-            ${waIcon('key', { slot: 'start' })} Set API key
+            ${waIcon('key', { slot: 'start' })}
+            ${
+              provider
+                ? html`Set <bdi dir="auto">${providerLabel}</bdi> API key`
+                : 'Set API key'
+            }
           </wa-button>
           <wa-button
             id="apiKeyGuideButton"
@@ -53,7 +60,11 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
             @click=${() => this.handleAction('guide')}
           >
             ${waIcon('book', { slot: 'start' })}
-            ${provider ? 'Get a key' : 'Open key guide'}
+            ${
+              provider
+                ? html`Get <bdi dir="auto">${providerLabel}</bdi> API key`
+                : 'Open key guide'
+            }
           </wa-button>
         </div>
         <span class="hint">
