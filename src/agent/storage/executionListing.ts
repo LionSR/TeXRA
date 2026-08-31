@@ -38,7 +38,7 @@ import {
   runWithInactiveExecutionLease,
   type LeaseReapPolicy,
 } from './executionLease';
-import { createLegacyExecutionStreamHealer } from './executionStreamHealing';
+import { createExecutionMetaReader } from './executionMetaPersistence';
 
 const log = createLog('ExecutionListing');
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
@@ -173,7 +173,7 @@ export async function listExecutionStreamReferences(
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
   const unreadable = new Map<ExecutionId, string>();
-  const recoverLegacyStreamId = createLegacyExecutionStreamHealer();
+  const metaReader = createExecutionMetaReader();
   const results = await pMap(
     executionDirs,
     async (executionId): Promise<ExecutionStreamReference | null> => {
@@ -185,21 +185,8 @@ export async function listExecutionStreamReferences(
         ) {
           return null;
         }
-        const meta = await store.readMetaStrict();
-        if (!meta) return null;
-        const recovery = await recoverLegacyStreamId(executionId, meta);
-        if (recovery.streamId) {
-          return { executionId, streamId: recovery.streamId };
-        }
-        if (recovery.ownershipUnknown) {
-          const cause =
-            'historical stream ownership evidence is ambiguous or unreadable';
-          unreadable.set(executionId, cause);
-          log.warn(
-            `Execution ${executionId} has unknown stream ownership while listing references: ${cause}`,
-          );
-        }
-        return null;
+        const meta = await metaReader.readStrict(executionId);
+        return meta?.streamId ? { executionId, streamId: meta.streamId } : null;
       } catch (error) {
         const cause = toErrorMessage(error);
         unreadable.set(executionId, cause);
@@ -212,7 +199,32 @@ export async function listExecutionStreamReferences(
     },
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
-  return { references: results.filter(filterNotNull), unreadable };
+  const references = results.filter(filterNotNull);
+  const claimsByStream = new Map<StreamTabId, ExecutionStreamReference[]>();
+  for (const reference of references) {
+    const claims = claimsByStream.get(reference.streamId);
+    if (claims) claims.push(reference);
+    else claimsByStream.set(reference.streamId, [reference]);
+  }
+  const duplicateExecutions = new Set<ExecutionId>();
+  for (const [streamId, claims] of claimsByStream) {
+    if (claims.length < 2) continue;
+    const cause = `duplicate execution metadata claims stream ${streamId}`;
+    for (const { executionId } of claims) {
+      duplicateExecutions.add(executionId);
+      unreadable.set(executionId, cause);
+    }
+    log.warn(
+      `Stream ${streamId} has ${claims.length} execution metadata claims; ownership remains unknown.`,
+      { data: { executionIds: claims.map(({ executionId }) => executionId) } },
+    );
+  }
+  return {
+    references: references.filter(
+      ({ executionId }) => !duplicateExecutions.has(executionId),
+    ),
+    unreadable,
+  };
 }
 
 /**

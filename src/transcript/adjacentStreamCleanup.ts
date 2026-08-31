@@ -13,8 +13,7 @@
  * a failed sidecar deletion visible to callers instead of reporting a clean
  * history deletion while leaving transcript or snapshot state behind.
  */
-import { getExecutionStore } from '@agent/storage';
-import { createLegacyExecutionStreamHealer } from '@agent/storage/executionStreamHealing';
+import { createExecutionMetaReader } from '@agent/storage/executionMetaPersistence';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -110,14 +109,12 @@ export function resolveAdjacentStreamCleanup(
 export function createExecutionAdjacentStreamCleanup(
   cleanup: AdjacentStreamCleanup,
 ): (executionId: ExecutionId) => Promise<void> {
-  const recoverLegacyStreamId = createLegacyExecutionStreamHealer();
+  const metaReader = createExecutionMetaReader();
   return async (executionId) => {
     try {
-      const meta = await getExecutionStore(executionId).readMetaStrict();
-      if (!meta) return;
-      const recovery = await recoverLegacyStreamId(executionId, meta);
-      if (!recovery.streamId) return;
-      await cleanup.deleteAdjacentStreamState(recovery.streamId);
+      const meta = await metaReader.readStrict(executionId);
+      if (!meta?.streamId) return;
+      await cleanup.deleteAdjacentStreamState(meta.streamId);
     } catch (error) {
       throw new Error(
         `Execution ${executionId}'s transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,

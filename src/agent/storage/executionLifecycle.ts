@@ -30,6 +30,7 @@ import { getExecutionStore } from './ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
   releaseOwnedExecutionLease,
+  runWithExecutionLeaseWriteFence,
 } from './executionLease';
 
 const log = createLog('ExecutionLifecycle');
@@ -74,14 +75,16 @@ function enqueueMetaUpdate(
   executionId: ExecutionId,
   updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
 ): Promise<void> {
-  return metaWriteLocks.runExclusive(executionId, async () => {
-    const store = getExecutionStore(executionId);
-    const existing = await store.readMeta();
-    if (!existing) {
-      throw new Error(`Execution metadata not found for ${executionId}`);
-    }
-    await store.writeMeta({ ...existing, ...updater(existing) });
-  });
+  return metaWriteLocks.runExclusive(executionId, () =>
+    runWithExecutionLeaseWriteFence(executionId, async () => {
+      const store = getExecutionStore(executionId);
+      const existing = await store.readMeta();
+      if (!existing) {
+        throw new Error(`Execution metadata not found for ${executionId}`);
+      }
+      await store.writeMeta({ ...existing, ...updater(existing) });
+    }),
+  );
 }
 
 /** Stamp a confirmed pre-#9520 stream edge without replacing a concurrent writer. */

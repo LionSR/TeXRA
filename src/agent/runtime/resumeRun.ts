@@ -19,7 +19,7 @@ import {
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
-import { recoverLegacyExecutionStreamId } from '@agent/storage/executionStreamHealing';
+import { readExecutionMeta } from '@agent/storage/executionMetaPersistence';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   AgentCategory,
@@ -184,12 +184,11 @@ async function resumeRunWithRecoveryProvenance(
   let meta: Awaited<ReturnType<typeof store.readMeta>>;
   let streamId: StreamTabId | undefined;
   try {
-    [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
-    streamId =
-      meta?.streamId ??
-      (meta
-        ? await recoverLegacyExecutionStreamId(executionId, meta)
-        : undefined);
+    [config, meta] = await Promise.all([
+      store.readConfig(),
+      readExecutionMeta(executionId),
+    ]);
+    streamId = meta?.streamId;
   } catch (error) {
     abandonSupplied();
     throw error;

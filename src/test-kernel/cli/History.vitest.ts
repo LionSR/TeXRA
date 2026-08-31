@@ -15,6 +15,7 @@ import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -138,6 +139,16 @@ const config = AgentConfigSchema.parse({
 });
 
 const tempDirs = useTempDirs();
+
+async function writeExecutionStreamMeta(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): Promise<void> {
+  await new KVStore(resolveRunStoragePath(executionId)).write('meta', {
+    timestamp: '2026-05-18T08:00:00.000Z',
+    streamId,
+  });
+}
 
 // An internal tool-use agent config with no input/output files, built from
 // the base `config` with per-test field overrides.
@@ -1099,10 +1110,7 @@ describe('CLI history runtime', () => {
     const snapshots = new StreamSnapshotStore();
     snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
     await snapshots.flush();
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      streamId,
-    });
+    await writeExecutionStreamMeta(executionId, streamId);
 
     await cleanupExecutionAdjacentStreamState(
       executionId,
@@ -1152,10 +1160,7 @@ describe('CLI history runtime', () => {
     snapshotFacts(snapshots).setRunConfig(parentStream, config, executionId);
     snapshotFacts(snapshots).setParentStream(childStream, parentStream);
     await snapshots.flush();
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      streamId: parentStream,
-    });
+    await writeExecutionStreamMeta(executionId, parentStream);
 
     await cleanupExecutionAdjacentStreamState(
       executionId,
@@ -1171,10 +1176,7 @@ describe('CLI history runtime', () => {
   it('reports a sidecar cleanup failure before deleting execution storage', async () => {
     const executionId = 'a1' as ExecutionId;
     const streamId = 'chat@deepseek#a1' as StreamTabId;
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-05-18T08:00:00.000Z',
-      streamId,
-    });
+    await writeExecutionStreamMeta(executionId, streamId);
 
     await expect(
       cleanupExecutionAdjacentStreamState(executionId, {

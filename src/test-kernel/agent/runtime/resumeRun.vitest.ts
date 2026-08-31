@@ -25,9 +25,9 @@ vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   getExecutionStore: getExecutionStoreMock,
 }));
 
-const recoverLegacyExecutionStreamIdMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/executionStreamHealing', () => ({
-  recoverLegacyExecutionStreamId: recoverLegacyExecutionStreamIdMock,
+const readExecutionMetaMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/executionMetaPersistence', () => ({
+  readExecutionMeta: readExecutionMetaMock,
 }));
 
 const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
@@ -85,7 +85,7 @@ describe('resumeRun tool-use queue ownership', () => {
       readMeta: async () => ({ streamId: STREAM }),
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
-    recoverLegacyExecutionStreamIdMock.mockReset().mockResolvedValue(undefined);
+    readExecutionMetaMock.mockReset().mockResolvedValue({ streamId: STREAM });
     readExecutionStreamIndexMock.mockReset().mockResolvedValue({
       byStream: new Map([[STREAM, EXECUTION]]),
       unreadable: new Map(),
@@ -103,16 +103,16 @@ describe('resumeRun tool-use queue ownership', () => {
     const session = createSession();
     getExecutionStoreMock.mockReturnValue({
       readConfig: async () => snapshot().agentConfig,
-      readMeta: async () => ({ timestamp: '2026-07-31T00:00:00.000Z' }),
     });
-    recoverLegacyExecutionStreamIdMock.mockResolvedValueOnce(STREAM);
+    readExecutionMetaMock.mockResolvedValueOnce({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: STREAM,
+    });
 
     await expect(
       resumeRun(EXECUTION, { session, executeWorkflow }),
     ).resolves.toEqual({ started: true, delivered: true });
-    expect(recoverLegacyExecutionStreamIdMock).toHaveBeenCalledWith(EXECUTION, {
-      timestamp: '2026-07-31T00:00:00.000Z',
-    });
+    expect(readExecutionMetaMock).toHaveBeenCalledWith(EXECUTION);
   });
 
   it('claims stream recovery before resolving the disk index', async () => {

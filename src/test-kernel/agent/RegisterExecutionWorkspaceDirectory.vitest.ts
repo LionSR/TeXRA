@@ -173,7 +173,7 @@ describe('execution lifecycle', () => {
   });
 
   it('does not relabel a turn-owned result while persisting terminal metadata', async () => {
-    const executionId = 'abc123' as ExecutionId;
+    const executionId = 'terminal-result-label' as ExecutionId;
     mocks.readMeta.mockResolvedValue(executionMeta({ outcome: 'completed' }));
     mocks.readResultMeta.mockResolvedValue(
       resultMeta('completed', 'Interim result.'),

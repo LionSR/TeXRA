@@ -1,9 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { finalizeRun, getExecutionStore } from '@agent/storage';
-import { writeSessionDescription } from '@agent/storage/executionLifecycle';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  writeLegacyExecutionStreamId,
+  writeSessionDescription,
+} from '@agent/storage/executionLifecycle';
+import { KVStore } from '@common/storage/KVStore';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { StorageFS } from '@utils/files/storageFS';
 
 describe('execution metadata updates', () => {
   setupPlatform({ workspacePath: '/workspace' });
@@ -55,6 +66,43 @@ describe('execution metadata updates', () => {
     expect((await getExecutionStore(id).readMeta())?.outcome).toBe(
       RUN_OUTCOME.COMPLETED,
     );
+  });
+
+  it('preserves a stream ID persisted before a stale updater acquires its lease', async () => {
+    const id = 'bbb005' as ExecutionId;
+    const legacy = 'legacy-stream' as StreamTabId;
+    const modern = 'modern-stream' as StreamTabId;
+    const timestamp = new Date(0).toISOString();
+    const store = getExecutionStore(id);
+    await store.writeMeta({ timestamp });
+    const started = createDeferred();
+    const release = createDeferred();
+    const originalReadDir = StorageFS.readDir.bind(StorageFS);
+    const readDir = vi
+      .spyOn(StorageFS, 'readDir')
+      .mockImplementationOnce(async (path) => {
+        started.resolve();
+        await release.promise;
+        return originalReadDir(path);
+      });
+
+    try {
+      const staleUpdate = writeLegacyExecutionStreamId(id, legacy);
+      await started.promise;
+      // Model a second process that won its lease and persisted while this
+      // updater was still outside its own lease-protected transaction.
+      await new KVStore(resolveRunStoragePath(id)).write('meta', {
+        timestamp,
+        streamId: modern,
+      });
+      release.resolve();
+
+      await expect(staleUpdate).resolves.toBe(modern);
+      expect((await store.readMeta())?.streamId).toBe(modern);
+    } finally {
+      release.resolve();
+      readDir.mockRestore();
+    }
   });
 
   it('updates and finalizes core metadata despite malformed workflow observability', async () => {

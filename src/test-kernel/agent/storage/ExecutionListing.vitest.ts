@@ -10,13 +10,17 @@ import {
   listExecutionStreamReferences,
   readExecutionStreamIndex,
 } from '@agent/storage/executionListing';
-import { recoverLegacyExecutionStreamId } from '@agent/storage/executionStreamHealing';
+import {
+  createExecutionMetaReader,
+  readExecutionMeta,
+} from '@agent/storage/executionMetaPersistence';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -128,9 +132,11 @@ describe('execution listing normalization', () => {
     });
     await writeStreamMeta(streamId, { executionId });
 
-    await expect(recoverLegacyExecutionStreamId(executionId)).resolves.toBe(
+    await expect(
+      createExecutionMetaReader().readStrict(executionId),
+    ).resolves.toMatchObject({
       streamId,
-    );
+    });
     await expect(
       getExecutionStore(executionId).readMeta(),
     ).resolves.toMatchObject({ streamId });
@@ -167,9 +173,9 @@ describe('execution listing normalization', () => {
       });
     }
 
-    await expect(
-      recoverLegacyExecutionStreamId(executionId),
-    ).resolves.toBeUndefined();
+    await expect(readExecutionMeta(executionId)).resolves.toEqual(
+      expect.not.objectContaining({ streamId: expect.any(String) }),
+    );
     expect(
       (await getExecutionStore(executionId).readMeta())?.streamId,
     ).toBeUndefined();
@@ -185,9 +191,9 @@ describe('execution listing normalization', () => {
     const readDir = vi.spyOn(StorageFS, 'readDir');
 
     try {
-      await expect(recoverLegacyExecutionStreamId(executionId)).resolves.toBe(
-        streamId,
-      );
+      await expect(
+        createExecutionMetaReader().readStrict(executionId),
+      ).resolves.toMatchObject({ streamId });
       expect(readDir).not.toHaveBeenCalled();
     } finally {
       readDir.mockRestore();
@@ -205,6 +211,38 @@ describe('execution listing normalization', () => {
     const index = await readExecutionStreamIndex();
 
     expect(index.byStream.get(streamId)).toBe(executionId);
+  });
+
+  it('does not heal across an existing execution metadata claim', async () => {
+    const modern = 'f9892105' as ExecutionId;
+    const legacy = 'f9892106' as ExecutionId;
+    const streamId = 'already-claimed-stream' as StreamTabId;
+    await getExecutionStore(modern).writeMeta({
+      timestamp: '2026-08-30T00:00:00.000Z',
+      streamId,
+    });
+    await getExecutionStore(legacy).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    await writeStreamMeta(streamId, { executionId: legacy });
+
+    const index = await readExecutionStreamIndex();
+
+    expect(index.byStream.get(streamId)).toBe(modern);
+    expect(index.unreadable.has(legacy)).toBe(true);
+    expect(
+      (await getExecutionStore(legacy).readMeta())?.streamId,
+    ).toBeUndefined();
+
+    await getExecutionStore(legacy).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId,
+    });
+    const duplicate = await readExecutionStreamIndex();
+    expect(duplicate.byStream.has(streamId)).toBe(false);
+    expect([...duplicate.unreadable.keys()]).toEqual(
+      expect.arrayContaining([modern, legacy]),
+    );
   });
 
   it('scans legacy sidecars once per listing and does not cache no-match results', async () => {
@@ -283,10 +321,40 @@ describe('execution listing normalization', () => {
       expect(
         readDir.mock.calls.filter(([dir]) => dir === STREAM_DATA_DIR),
       ).toHaveLength(1);
+      expect(
+        readDir.mock.calls.filter(([dir]) => dir === RUNS_STORAGE_DIR),
+      ).toHaveLength(1);
     } finally {
       readDir.mockRestore();
     }
   });
+
+  it.each([
+    { name: 'ambiguous', malformed: false },
+    { name: 'unreadable', malformed: true },
+  ])(
+    'fails bulk deletion cleanup for $name historical ownership',
+    async ({ malformed }) => {
+      const executionId = 'f9892123' as ExecutionId;
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+      });
+      await writeStreamMeta('cleanup-evidence-a' as StreamTabId, {
+        executionId,
+      });
+      await writeStreamMeta(
+        'cleanup-evidence-b' as StreamTabId,
+        malformed ? null : { executionId },
+      );
+      const deleteAdjacentStreamState = vi.fn();
+      const cleanupExecution = createExecutionAdjacentStreamCleanup({
+        deleteAdjacentStreamState,
+      });
+
+      await expect(cleanupExecution(executionId)).rejects.toThrow();
+      expect(deleteAdjacentStreamState).not.toHaveBeenCalled();
+    },
+  );
 
   it('sees metadata replaced by another host after an earlier listing', async () => {
     const id = 'fff666' as ExecutionId;
