@@ -38,7 +38,6 @@ import {
 } from './SubagentListDisplay';
 import { useSignal } from '../state/useSignal';
 import { streamPhaseFor } from '../state/cliState';
-import type { ChildListValue } from '../state/childListSelection';
 import type { PendingApprovalKind } from '../state/approvalQueue';
 import type { StreamView } from '../state/streamViews';
 
@@ -217,7 +216,7 @@ export interface SubagentListProps {
   readonly onCancel?: () => void;
   readonly onFocusStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution?: (executionId: string) => void;
-  readonly onSelectionChange?: (value: ChildListValue) => void;
+  readonly onSelectionChange?: (value: StreamTabId) => void;
   /**
    * Pending approval kinds per stream id (see `pendingApprovalSummaries`; the
    * caller folds stream-less approvals onto the visible surface root via
@@ -232,11 +231,8 @@ export interface SubagentListProps {
     string,
     readonly PendingApprovalKind[]
   >;
-  readonly selectedValue?: ChildListValue;
+  readonly selectedValue?: StreamTabId;
   readonly sessions?: readonly StreamView[];
-  /** Stream `selectedValue` points at, resolved once by `App` — the same
-   *  stream the status bar advertises as killable. */
-  readonly selectedChildStreamId?: StreamTabId;
   /** Stream the list is rooted on — its row never shows a summary. */
   readonly listRootStreamId?: StreamTabId;
   readonly activeSubagentExecutionIds?: ReadonlyMap<StreamTabId, string>;
@@ -252,8 +248,8 @@ export function SubagentList(
     [sessions],
   );
   const { items, sessionsByValue } = useMemo(() => {
-    const nextItems: SelectItem<ChildListValue>[] = [];
-    const byValue = new Map<ChildListValue, StreamView>();
+    const nextItems: SelectItem<StreamTabId>[] = [];
+    const byValue = new Map<StreamTabId, StreamView>();
     // Row order has one owner, `streamTreeEntries`: do not re-sort here, it
     // would desynchronise the Alt+1..9 numbers it assigns from the rows on
     // screen.
@@ -271,7 +267,7 @@ export function SubagentList(
   useInput(
     (input, key) => {
       if (key.ctrl || key.meta) return;
-      const streamId = props.selectedChildStreamId;
+      const streamId = props.selectedValue;
       if (!streamId) return;
       if (input.toLowerCase() !== 'k') return;
       const executionId = props.activeSubagentExecutionIds?.get(streamId);
@@ -311,8 +307,7 @@ export function SubagentList(
         wrap={false}
         onHighlightChange={(value) => props.onSelectionChange?.(value)}
         onSelect={(value) => {
-          const streamId = value;
-          if (streamId) props.onFocusStream?.(streamId);
+          if (value) props.onFocusStream?.(value);
         }}
         renderItem={(item, state) => {
           const session = sessionsByValue.get(item.value);

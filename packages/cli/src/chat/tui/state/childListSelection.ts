@@ -1,28 +1,25 @@
 // Local imports - shared stream identity
 import type { StreamTabId } from '@shared/schemas';
 
-/** A child-list row is a stream; the selection carries its id as is. */
-export type ChildListValue = StreamTabId;
-
 export interface ChildListSelectionState {
   readonly focused: boolean;
-  readonly selectedValue: ChildListValue | undefined;
+  readonly selectedValue: StreamTabId | undefined;
 }
 
 type ChildListSelectionAction =
   | { readonly kind: 'blur' }
-  | { readonly kind: 'focus'; readonly value?: ChildListValue }
+  | { readonly kind: 'focus'; readonly value?: StreamTabId }
   | { readonly kind: 'focusStream'; readonly streamId: StreamTabId }
-  | { readonly kind: 'highlight'; readonly value: ChildListValue }
+  | { readonly kind: 'highlight'; readonly value: StreamTabId }
   | {
       readonly kind: 'syncActiveStream';
       readonly streamId: StreamTabId;
-      readonly values: readonly ChildListValue[];
+      readonly values: readonly StreamTabId[];
     }
   | {
       readonly kind: 'reconcile';
       readonly activeStreamId: StreamTabId | undefined;
-      readonly values: readonly ChildListValue[];
+      readonly values: readonly StreamTabId[];
     };
 
 export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
@@ -31,16 +28,13 @@ export const INITIAL_CHILD_LIST_SELECTION: ChildListSelectionState = {
 };
 
 function resolveChildSelectionValue(
-  values: readonly ChildListValue[],
-  selectedValue: ChildListValue | undefined,
+  values: readonly StreamTabId[],
+  selectedValue: StreamTabId | undefined,
   activeStreamId: StreamTabId | undefined,
-): ChildListValue | undefined {
+): StreamTabId | undefined {
   if (selectedValue && values.includes(selectedValue)) return selectedValue;
-  if (activeStreamId) {
-    const activeValue = activeStreamId;
-    if (values.includes(activeValue)) return activeValue;
-    return undefined;
-  }
+  if (activeStreamId)
+    return values.includes(activeStreamId) ? activeStreamId : undefined;
   return values[0];
 }
 

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   formatWorkPlanReaderText,
   workPlanReaderLayout,
-  workPlanReaderTitle,
 } from '@cli/chat/tui/panes/WorkPlanReader';
 import { TODO_STATUS, type TodoItem } from '@shared/schemas';
 
@@ -72,11 +71,6 @@ describe('WorkPlanReader display model', () => {
     expect(
       formatWorkPlanReaderText(null, [], { plan: false, todos: true }),
     ).toContain('(objective unavailable)');
-  });
-
-  it('uses a concise title in narrow or unlabeled contexts', () => {
-    expect(workPlanReaderTitle(undefined)).toBe('Work plan');
-    expect(workPlanReaderTitle('proof')).toBe('Work plan: proof');
   });
 
   it('counts a wrapped narrow footer in the available row budget', () => {

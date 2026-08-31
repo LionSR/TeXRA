@@ -34,7 +34,6 @@ import {
   queuedFollowUpsFor,
   sessionStateRevision,
 } from '../state/childExecutions';
-import { type ChildListValue } from '../state/childListSelection';
 import { inputBarContentRows } from '../state/cliState';
 import {
   readStreamArtifacts,
@@ -58,9 +57,7 @@ interface ConversationRegionSnapshot {
   readonly reverseSearchOpen: boolean;
   readonly rootStreamId: StreamTabId | undefined;
   readonly slashPaletteOpen: boolean;
-  readonly selectedChildValue: ChildListValue | undefined;
-  /** Stream `selectedChildValue` points at, resolved once by `App`. */
-  readonly selectedChildStreamId: StreamTabId | undefined;
+  readonly selectedChildValue: StreamTabId | undefined;
   readonly childListFocused: boolean;
   readonly sessionViews: readonly StreamView[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
@@ -83,7 +80,7 @@ interface ConversationRegionProps {
   readonly rows: number;
   readonly snapshot: ConversationRegionSnapshot;
   readonly onCancelChildList: () => void;
-  readonly onChildSelectionChange: (value: ChildListValue) => void;
+  readonly onChildSelectionChange: (value: StreamTabId) => void;
   readonly onFocusSession: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
 }
@@ -265,7 +262,6 @@ export function ConversationRegion({
               onSelectionChange={onChildSelectionChange}
               pendingApprovals={snapshot.pendingApprovals}
               listRootStreamId={snapshot.listRootStreamId}
-              selectedChildStreamId={snapshot.selectedChildStreamId}
               selectedValue={snapshot.selectedChildValue}
               sessions={snapshot.sessionViews}
               activeSubagentExecutionIds={snapshot.activeSubagentExecutionIds}
