@@ -491,7 +491,7 @@ const CORE_SETTING_ROWS: Record<
     default: false,
     title: 'Google background responses',
     description:
-      'Run Google workflow generations as background Interactions (submit + poll). When this and Google provider streaming are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. Enable either setting to avoid relying on one long unary request. Off by default; requires server-side conversation state, and unsupported models fall back automatically.',
+      'Run Google workflow generations as background Interactions (submit + poll). When this and Google provider streaming are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. Provider streaming avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
@@ -499,7 +499,7 @@ const CORE_SETTING_ROWS: Record<
       provider: 'google',
       label: 'Background responses',
       description:
-        'Run workflow generations as background Interactions (submit + poll). When this and provider streaming are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. Enable either setting to avoid relying on one long unary request. Off by default; requires server-side conversation state, and unsupported models fall back automatically.',
+        'Run workflow generations as background Interactions (submit + poll). When this and provider streaming are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. Provider streaming avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     },
   }),
   'model.useBackgroundResponses': modelProviderToggle({
