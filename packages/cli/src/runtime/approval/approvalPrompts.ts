@@ -1,5 +1,6 @@
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
+import { getExhaustionReason } from '@shared/schemas';
 import type {
   AgentProposalPermission,
   PlanApprovalPermission,
@@ -100,7 +101,7 @@ export function cliRetryQuotaRoute(
   payload: RetryPermission,
 ): QuotaFallbackRoute | undefined {
   const details = payload.errorDetails;
-  const route = quotaFallbackRouteForExhaustion(details?.exhaustionReason);
+  const route = quotaFallbackRouteForExhaustion(getExhaustionReason(details));
   if (!route) return undefined;
   // Kimi Code-exclusive models are served only by the coding endpoint, so
   // turning the plan off cannot reroute them to a Moonshot fallback. They

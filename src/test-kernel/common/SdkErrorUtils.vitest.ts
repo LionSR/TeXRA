@@ -24,6 +24,7 @@ import { tagGoogleSdkError } from '@agent/modelHandlers/google/googleSdkError';
 import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 import {
   attachContextWindowError,
+  attachMissingApiKeyError,
   attachProviderError,
   attachSdkErrorMetadata,
   attachStreamDiagnostics,
@@ -43,6 +44,8 @@ import {
 import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import {
   ErrorLogDataSchema,
+  PersistedRetryErrorInfoSchema,
+  ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
   toRetryErrorInfo,
 } from '@shared/schemas';
@@ -312,7 +315,7 @@ describe('formatProviderHttpError', () => {
     expect(formatted).toMatchObject({
       provider: 'copilot',
       statusCode: 429,
-      exhaustionReason: 'copilot-subscription',
+      classification: { kind: 'copilot-subscription' },
       userRetryable: true,
     });
   });
@@ -561,7 +564,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(error);
 
     expect(formatted.provider).toBe('openai');
-    expect(formatted.exhaustionReason).toBe('upstream-credit');
+    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -582,7 +585,7 @@ describe('formatProviderHttpError', () => {
     const formatted = formatProviderHttpError(error);
 
     expect(formatted.provider).toBe('openai');
-    expect(formatted.exhaustionReason).toBe('upstream-credit');
+    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -597,7 +600,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.exhaustionReason).toBe('upstream-credit');
+    expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -611,7 +614,7 @@ describe('formatProviderHttpError', () => {
 
     expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(500);
-    expect(formatted.exhaustionReason).toBeUndefined();
+    expect(formatted.classification).toBeUndefined();
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -731,6 +734,17 @@ describe('formatProviderHttpError', () => {
   });
 });
 
+describe('provider marker classification', () => {
+  it('formats a missing API key marker as the aligned agent-error kind', () => {
+    const err = new Error('provider-specific credential wording');
+    attachMissingApiKeyError(err);
+
+    expect(formatProviderHttpError(err).classification).toStrictEqual({
+      kind: 'missing-api-key',
+    });
+  });
+});
+
 describe('isContextWindowError', () => {
   it('recognizes a TeXRA-internal throw via its typed marker, independent of wording', () => {
     // ModelHandler.validateTokenLimits tags its own throw with
@@ -742,6 +756,9 @@ describe('isContextWindowError', () => {
     attachContextWindowError(err);
 
     expect(isContextWindowError(err)).toBe(true);
+    expect(formatProviderHttpError(err).classification).toStrictEqual({
+      kind: 'context-window',
+    });
   });
 
   it('still recognizes the marker after the internal message wording changes', () => {
@@ -868,57 +885,78 @@ describe('isPreviousResponseIdError', () => {
 });
 
 describe('provider error schemas', () => {
-  it('normalizes legacy retryable fields from persisted error logs', () => {
-    const errorLog = ErrorLogDataSchema.parse({
-      message: 'old persisted error',
-      retryable: false,
-      isRelayError: false,
-    });
-    const retryInfo = RetryErrorInfoSchema.parse({
-      message: 'old retry state',
-      retryable: true,
-    });
-
-    expect(errorLog.userRetryable).toBe(false);
-    expect('retryable' in errorLog).toBe(false);
-    expect(retryInfo.userRetryable).toBe(true);
+  it('rejects legacy classifications on live partial transport', () => {
+    expect(
+      ProviderErrorPartialSchema.safeParse({
+        exhaustionReason: 'upstream-credit',
+      }).success,
+    ).toBe(false);
   });
 
-  it('migrates legacy exhaustion booleans persisted by older TeXRA versions', () => {
-    // Stream logs are unversioned JSON reparsed on later loads (see
-    // StreamLogStore) — a record written before the exhaustionReason
-    // refactor still carries the independent boolean flags.
-    const chatgptLegacy = ErrorLogDataSchema.parse({
-      message: 'legacy chatgpt-subscription record',
-      userRetryable: true,
-      isCredentialExhausted: true,
-      isChatGptSubscriptionLimited: true,
-    });
-    expect(chatgptLegacy.exhaustionReason).toBe('chatgpt-subscription');
-    expect('isCredentialExhausted' in chatgptLegacy).toBe(false);
-    expect('isChatGptSubscriptionLimited' in chatgptLegacy).toBe(false);
+  it('normalizes every legacy classification into one canonical discriminant', () => {
+    const cases = [
+      [{ exhaustionReason: 'upstream-credit' }, 'upstream-credit'],
+      [{ missingApiKey: true }, 'missing-api-key'],
+      [{ contextWindow: true }, 'context-window'],
+      [
+        {
+          isCredentialExhausted: true,
+          isChatGptSubscriptionLimited: true,
+        },
+        'chatgpt-subscription',
+      ],
+    ] as const;
 
-    const upstreamLegacy = RetryErrorInfoSchema.parse({
-      message: 'legacy upstream-credit record',
-      userRetryable: true,
-      isCredentialExhausted: true,
-      isUpstreamCreditDepleted: true,
-    });
-    expect(upstreamLegacy.exhaustionReason).toBe('upstream-credit');
+    for (const [legacy, kind] of cases) {
+      const parsed = PersistedRetryErrorInfoSchema.parse({
+        message: 'legacy persisted error',
+        retryable: true,
+        ...legacy,
+      });
+      expect(parsed.classification).toStrictEqual({ kind });
+      expect(parsed.userRetryable).toBe(true);
+      expect('retryable' in parsed).toBe(false);
+      expect('exhaustionReason' in parsed).toBe(false);
+      expect('missingApiKey' in parsed).toBe(false);
+      expect('contextWindow' in parsed).toBe(false);
+      expect(RetryErrorInfoSchema.safeParse(parsed).success).toBe(true);
+    }
+  });
 
-    const relayLimitLegacy = RetryErrorInfoSchema.parse({
-      message: 'legacy relay-limit record',
+  it('preserves legacy marker precedence while rejecting malformed classifications', () => {
+    const contradictoryLegacy = PersistedRetryErrorInfoSchema.parse({
+      message: 'old record with overlapping markers',
       userRetryable: true,
-      isCredentialExhausted: true,
+      exhaustionReason: 'upstream-credit',
+      missingApiKey: true,
+      contextWindow: true,
     });
-    expect(relayLimitLegacy.exhaustionReason).toBe('relay-limit');
+    expect(contradictoryLegacy.classification).toStrictEqual({
+      kind: 'missing-api-key',
+    });
 
-    const noExhaustionLegacy = RetryErrorInfoSchema.parse({
-      message: 'legacy non-exhausted record',
-      userRetryable: true,
-      isCredentialExhausted: false,
-    });
-    expect(noExhaustionLegacy.exhaustionReason).toBeUndefined();
+    expect(() =>
+      PersistedRetryErrorInfoSchema.parse({
+        message: 'malformed legacy marker',
+        userRetryable: false,
+        missingApiKey: false,
+      }),
+    ).toThrow();
+    expect(() =>
+      RetryErrorInfoSchema.parse({
+        message: 'malformed canonical classification',
+        userRetryable: false,
+        classification: { kind: 'not-a-provider-kind' },
+      }),
+    ).toThrow();
+    expect(() =>
+      PersistedRetryErrorInfoSchema.parse({
+        message: 'mixed canonical and legacy classifications',
+        userRetryable: false,
+        classification: { kind: 'context-window' },
+        missingApiKey: true,
+      }),
+    ).toThrow();
   });
 });
 
@@ -929,7 +967,7 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
     statusCode: 429,
     statusText: 'Too Many Requests',
     provider: 'anthropic',
-    exhaustionReason: 'relay-limit',
+    classification: { kind: 'relay-limit' },
     requestId: 'req_abc123',
     streamDiagnostics: {
       thinkingChars: 100,
@@ -954,7 +992,7 @@ describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
 
     expect(reconstructed.statusCode).toBe(429);
     expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.exhaustionReason).toBe('relay-limit');
+    expect(reconstructed.classification).toStrictEqual({ kind: 'relay-limit' });
     expect(reconstructed.requestId).toBe('req_abc123');
     expect(reconstructed.userRetryable).toBe(true);
   });
@@ -1028,26 +1066,19 @@ describe('attachProviderError end-to-end', () => {
     expect(normalizeProviderError(wrapper)).toBe(retryInfo);
   });
 
-  it('migrates legacy fields on a cached ProviderError instead of returning them unchanged', () => {
-    // Simulates a cached error attached before the retryable/exhaustion-flag
-    // migration ran — e.g. a resumed tool-use flow's raw persisted
-    // `lastError`, which bypasses the schema-level migration on that resume
-    // path (parseToolUseShared parses the persisted shape directly).
-    const legacyCached = {
-      message: 'legacy relay-limit record',
-      retryable: true,
-      isCredentialExhausted: true,
+  it('ignores malformed current ProviderError metadata', () => {
+    const malformed = {
+      message: 'mixed provider metadata',
+      userRetryable: true,
+      classification: { kind: 'context-window' },
+      missingApiKey: true,
     } as unknown as ProviderError;
-
-    const err = new Error(legacyCached.message);
-    attachProviderError(err, legacyCached);
+    const err = new Error(malformed.message);
+    attachProviderError(err, malformed);
 
     const recovered = normalizeProviderError(err);
 
-    expect(recovered.userRetryable).toBe(true);
-    expect(recovered.exhaustionReason).toBe('relay-limit');
-    expect('retryable' in recovered).toBe(false);
-    expect('isCredentialExhausted' in recovered).toBe(false);
-    expect(recovered.exhaustionReason !== undefined).toBe(true);
+    expect(recovered).not.toBe(malformed);
+    expect(recovered.classification).toBeUndefined();
   });
 });

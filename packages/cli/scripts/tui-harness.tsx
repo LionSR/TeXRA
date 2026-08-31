@@ -974,7 +974,7 @@ function makeRetryApprovalPayload(): RetryPermission {
       model: 'harness-model',
       errorMessage: 'ChatGPT subscription usage limit reached. Resets in 2h.',
       errorDetails: {
-        exhaustionReason: 'chatgpt-subscription',
+        classification: { kind: 'chatgpt-subscription' },
         provider: 'openai',
         statusCode: 429,
       },
@@ -989,7 +989,7 @@ function makeRetryApprovalPayload(): RetryPermission {
     errorDetails: {
       // Keep this fixture interactive: upstream-credit requires an
       // explicit user decision before changing credentials.
-      exhaustionReason: 'upstream-credit',
+      classification: { kind: 'upstream-credit' },
       provider: 'openai',
       statusCode: 429,
     },

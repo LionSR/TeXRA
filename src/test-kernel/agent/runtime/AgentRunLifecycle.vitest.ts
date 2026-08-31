@@ -1259,7 +1259,7 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('classifies a carried missing-api-key failure through the flattened flag', async () => {
+  it('classifies a carried missing-api-key failure through the canonical discriminant', async () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-carried-missing-key',
     );
@@ -1274,11 +1274,11 @@ describe('runFlowWithLifecycle', () => {
           streamId,
           response: '',
           // The retry-state flatten drops the Error and its Symbol marker;
-          // the carried flag is what keeps the kind reachable at this exit.
+          // the canonical classification keeps the kind reachable here.
           error: {
             message: 'Missing OpenRouter API key.',
             userRetryable: false,
-            missingApiKey: true as const,
+            classification: { kind: 'missing-api-key' as const },
           },
         })),
       ).rejects.toThrow('Missing OpenRouter API key.');

@@ -29,7 +29,7 @@ function createRetryPermission(
       model: 'test-model',
       errorMessage: 'Provider quota exhausted',
       errorDetails: {
-        exhaustionReason: 'upstream-credit',
+        classification: { kind: 'upstream-credit' },
         userRetryable: true,
       },
       ...overrides,
@@ -94,7 +94,7 @@ describe('retry-request-panel', () => {
     const element = await mountPanel({
       model: 'kimiCoding',
       errorDetails: {
-        exhaustionReason: 'kimi-code-subscription',
+        classification: { kind: 'kimi-code-subscription' },
         userRetryable: true,
       },
     });
@@ -106,7 +106,7 @@ describe('retry-request-panel', () => {
     const element = await mountPanel({
       model: 'kimiCoding',
       errorDetails: {
-        exhaustionReason: 'kimi-code-subscription',
+        classification: { kind: 'kimi-code-subscription' },
         userRetryable: true,
       },
     });
@@ -122,7 +122,7 @@ describe('retry-request-panel', () => {
     const element = await mountPanel({
       model: 'kimiCoding',
       errorDetails: {
-        exhaustionReason: 'upstream-credit',
+        classification: { kind: 'upstream-credit' },
         userRetryable: true,
       },
     });
@@ -150,7 +150,7 @@ describe('retry-request-panel', () => {
       model: 'sonnet46',
       errorMessage: 'Copilot quota exhausted',
       errorDetails: {
-        exhaustionReason: 'copilot-subscription',
+        classification: { kind: 'copilot-subscription' },
         userRetryable: true,
       },
     });

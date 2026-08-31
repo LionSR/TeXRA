@@ -307,7 +307,7 @@ interface DomainEvent extends StageStamp {
  * for `abort` / `disk-full` (see `src/common/errors/sdkError/
  * providerErrorFormat.ts`): it deliberately opts out of provider/
  * credential classification, so `statusCode`/`provider`/`requestId`/
- * `exhaustionReason` are never populated for these kinds.
+ * `classification` is never populated for these kinds.
  */
 type ResultEventLocalError = Readonly<{
   message?: string;

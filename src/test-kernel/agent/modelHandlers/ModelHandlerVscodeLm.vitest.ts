@@ -537,7 +537,7 @@ describe('ModelHandlerVscodeLm port errors', () => {
       expect(formatted).toMatchObject({
         provider: ModelProvider.COPILOT,
         statusCode: 429,
-        exhaustionReason: 'copilot-subscription',
+        classification: { kind: 'copilot-subscription' },
         userRetryable: true,
       });
       expect(isCredentialExhausted(formatted)).toBe(true);

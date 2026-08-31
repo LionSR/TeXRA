@@ -27,7 +27,7 @@ describe('projectTranscriptRow', () => {
         message: 'HTTP 429',
         userRetryable: true,
         statusCode: 429,
-        exhaustionReason: 'chatgpt-subscription',
+        classification: { kind: 'chatgpt-subscription' },
         provider: 'anthropic',
         rawErrorBody: { type: 'error' },
       },
@@ -40,7 +40,7 @@ describe('projectTranscriptRow', () => {
       'provider',
       'statusCode',
       'userRetryable',
-      'exhaustionReason',
+      'classification',
       'rawErrorBody',
     ]);
     expect(row.detailText.lineCount).toBeGreaterThan(5);

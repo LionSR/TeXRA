@@ -12,8 +12,9 @@ import {
   type ErrorLogData,
   type ExhaustionReason,
   type ProviderError,
+  type ProviderErrorClassification,
   type RetryErrorInfo,
-  normalizeLegacyProviderErrorFields,
+  getExhaustionReason,
   toRetryErrorInfo,
 } from '@shared/schemas';
 import {
@@ -32,7 +33,9 @@ import {
   detectPartialText,
   detectSdkErrorMetadata,
   detectStreamDiagnostics,
+  hasContextWindowErrorMarker,
   hasManualRetryOnlyErrorMarker,
+  hasMissingApiKeyErrorMarker,
   providerErrorMetadata,
 } from './errorMetadata';
 import {
@@ -336,14 +339,26 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     quotaLimit?.exhaustionReason ??
     (isUpstreamCreditDepleted ? 'upstream-credit' : undefined);
   const isCredentialExhausted = exhaustionReason !== undefined;
+  let markerClassification: ProviderErrorClassification | undefined;
+  if (hasMissingApiKeyErrorMarker(err)) {
+    markerClassification = { kind: 'missing-api-key' };
+  } else if (hasContextWindowErrorMarker(err)) {
+    markerClassification = { kind: 'context-window' };
+  } else if (exhaustionReason !== undefined) {
+    markerClassification = { kind: exhaustionReason };
+  }
 
   // Terminal failures (user abort, local disk-full): never retryable and never
   // a credential affordance. Carries diagnostics but deliberately opts
   // out of the credential classification computed below.
-  function terminalError(message: string): ProviderError {
+  function terminalError(
+    message: string,
+    classification?: ProviderErrorClassification,
+  ): ProviderError {
     return {
       message,
       userRetryable: false,
+      classification,
       rawErrorBody,
       streamDiagnostics,
       partialText,
@@ -382,15 +397,18 @@ export function formatProviderHttpError(err: unknown): ProviderError {
       `${extractedMessage ?? 'Conversation exceeds the model context window.'} ` +
         'Retrying would resend the same oversized request. Start a new ' +
         'session, or reduce attached files and tool output.',
+      hasMissingApiKeyErrorMarker(err)
+        ? { kind: 'missing-api-key' }
+        : { kind: 'context-window' },
     );
   }
 
-  // Classification flags + diagnostics carried by BOTH the SDK-matched and the
+  // Classification + diagnostics carried by BOTH the SDK-matched and the
   // unrecognized returns below. The abort / disk-full early returns above
-  // deliberately opt out (no credential flags). Single source
-  // for these fields so adding a future flag touches one place, not two.
-  const classification = {
-    exhaustionReason,
+  // deliberately opt out. Single source for these fields keeps the SDK and
+  // fallback paths identical.
+  const providerDetails = {
+    classification: markerClassification,
     rawErrorBody,
     streamDiagnostics,
     partialText,
@@ -401,7 +419,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   if (sdkMatch) {
     return {
       ...sdkMatch,
-      ...classification,
+      ...providerDetails,
       message: subscriptionLimitMessage ?? sdkMatch.message,
       // Credential-exhausted errors keep userRetryable=true so the retry
       // panel surfaces with the "Use your own API key" affordance, but
@@ -434,7 +452,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   return {
-    ...classification,
+    ...providerDetails,
     message: subscriptionLimitMessage ?? message,
     statusCode,
     statusText,
@@ -454,18 +472,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 export function normalizeProviderError(err: unknown): ProviderError {
   const cached = findInCauseChain(err, providerErrorMetadata.detect);
   if (cached) {
-    // A cached error may have been attached before the legacy retryable/
-    // exhaustion-flag migration ran (e.g. a resumed flow's raw persisted
-    // `lastError`, which bypasses the schema-level migration on the resume
-    // path) — run the same migration fresh errors get so callers never read
-    // legacy field names off a cached value.
-    const normalized = normalizeLegacyProviderErrorFields(
-      cached,
-    ) as ProviderError;
-    // Migrate the normalized error from a deeper cause onto the wrapper so
-    // later reads skip both the chain walk and this normalization.
-    providerErrorMetadata.attach(err, normalized);
-    return normalized;
+    // Cache metadata is canonical and validated by providerErrorMetadata.
+    // Copy a value found on a deeper cause onto the wrapper so later reads can
+    // skip the cause-chain walk.
+    providerErrorMetadata.attach(err, cached);
+    return cached;
   }
 
   // Compute fresh but DO NOT cache the result: a caller may format an error for
@@ -511,7 +522,7 @@ function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
 
 /** Which recovery scope owns a 429, read from the normalized provider error. */
 function detectRateLimitScope(formatted: ProviderError): 'model' | 'wire' {
-  if (formatted.exhaustionReason !== undefined) return 'wire';
+  if (getExhaustionReason(formatted) !== undefined) return 'wire';
   return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
 }
 
@@ -597,7 +608,7 @@ export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
   const retryAfterMs = detectRetryAfterMs(chain);
   return {
     rateLimitScope,
-    exhaustionReason: formatted.exhaustionReason,
+    exhaustionReason: getExhaustionReason(formatted),
     wireRouteFailure:
       rateLimitScope === 'wire' ||
       statusCode === StatusCodes.REQUEST_TIMEOUT ||
@@ -625,7 +636,7 @@ export function isProviderErrorAutoRetryable(err: unknown): boolean {
   const formatted = normalizeProviderError(err);
   return (
     formatted.userRetryable &&
-    formatted.exhaustionReason === undefined &&
+    getExhaustionReason(formatted) === undefined &&
     !isUnauthorizedProviderError(formatted) &&
     formatted.statusCode !== StatusCodes.FORBIDDEN
   );

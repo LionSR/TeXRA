@@ -50,7 +50,7 @@ describe('formatProviderHttpError for Grok subscription limits', () => {
   it('classifies a stamped usage-limit error as switchable exhaustion', () => {
     const error = stampedError('xAI rejected the request', USAGE_LIMIT_BODY);
     const providerError = formatProviderHttpError(error);
-    expect(providerError.exhaustionReason).toBe('xai-subscription');
+    expect(providerError.classification?.kind).toBe('xai-subscription');
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain('Grok subscription usage limit');
     expect(providerError.message).toContain(

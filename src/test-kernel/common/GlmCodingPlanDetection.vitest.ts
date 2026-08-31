@@ -127,7 +127,7 @@ describe('formatProviderHttpError for GLM Coding Plan limits', () => {
 
     const providerError = formatProviderHttpError(error);
 
-    expect(providerError.exhaustionReason).toBe('glm-coding-plan');
+    expect(providerError.classification?.kind).toBe('glm-coding-plan');
     expect(providerError.userRetryable).toBe(true);
     expect(providerError.message).toContain(
       'GLM Coding Plan usage limit reached',
@@ -147,6 +147,6 @@ describe('formatProviderHttpError for GLM Coding Plan limits', () => {
 
     const providerError = formatProviderHttpError(error);
 
-    expect(providerError.exhaustionReason).not.toBe('glm-coding-plan');
+    expect(providerError.classification?.kind).not.toBe('glm-coding-plan');
   });
 });

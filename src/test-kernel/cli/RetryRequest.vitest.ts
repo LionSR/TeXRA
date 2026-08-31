@@ -31,7 +31,7 @@ describe('CLI retry request', () => {
         errorMessage: 'ChatGPT subscription usage limit reached.',
         errorDetails: {
           message: 'ChatGPT subscription usage limit reached.',
-          exhaustionReason: 'chatgpt-subscription' as const,
+          classification: { kind: 'chatgpt-subscription' },
           provider: 'openai',
         },
       },

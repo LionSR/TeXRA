@@ -63,26 +63,27 @@ export const ExhaustionReasonSchema = z.enum([
 ]);
 export type ExhaustionReason = z.infer<typeof ExhaustionReasonSchema>;
 
+/** Mutually exclusive provider-error classifications. The two runtime kinds
+ * share AgentErrorKind's spelling; exhaustion members retain the actionable
+ * route reason as the discriminant itself. */
+const ProviderErrorClassificationSchema = z.object({
+  kind: z.union([
+    z.literal('missing-api-key'),
+    z.literal('context-window'),
+    ExhaustionReasonSchema,
+  ]),
+});
+export type ProviderErrorClassification = z.infer<
+  typeof ProviderErrorClassificationSchema
+>;
+
 /**
- * Migrates the legacy `retryable`/exhaustion-boolean fields on a raw provider
- * error value into the canonical `userRetryable`/`exhaustionReason` shape.
- * Used both as the `z.preprocess` step for schemas below and directly by
- * `normalizeProviderError` (`@common/errors/sdkError/providerErrorFormat`) so
- * a cached `ProviderError` — attached before this migration ran, e.g. from a
- * resumed flow's raw persisted state — is normalized the same way a freshly
- * formatted error is, instead of being returned with legacy fields intact.
- *
- * The pre-refactor independent `isCredentialExhausted` /
- * `isUpstreamCreditDepleted` / `isChatGptSubscriptionLimited` booleans are
- * still present in error data persisted to disk by older TeXRA versions (stream
- * logs are unversioned JSON reparsed on later loads). Priority mirrors the
- * original derivation order in `formatProviderHttpError`: ChatGPT-subscription
- * and upstream-credit were independently detected and OR'd into
- * `isCredentialExhausted` alongside the relay-limit condition, so a legacy
- * record with only `isCredentialExhausted: true` set reconstructs as
- * `'relay-limit'`.
+ * Normalizes persisted provider errors at the storage readers below. Older
+ * records carried independent classification markers; preserve their original
+ * runtime precedence (missing API key, context window, then exhaustion) while
+ * exposing only the canonical classification downstream.
  */
-export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
+function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return value;
   }
@@ -93,34 +94,66 @@ export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
     record = { ...rest, userRetryable: retryable };
   }
 
-  if ('exhaustionReason' in record) {
-    return record;
-  }
-
-  const hasLegacyExhaustionFlags =
-    'isCredentialExhausted' in record ||
-    'isUpstreamCreditDepleted' in record ||
-    'isChatGptSubscriptionLimited' in record;
-  if (!hasLegacyExhaustionFlags) {
-    return record;
+  const legacyClassificationKeys = [
+    'exhaustionReason',
+    'missingApiKey',
+    'contextWindow',
+    'isCredentialExhausted',
+    'isUpstreamCreditDepleted',
+    'isChatGptSubscriptionLimited',
+  ] as const;
+  const hasLegacyClassification = legacyClassificationKeys.some((key) =>
+    Object.hasOwn(record, key),
+  );
+  if ('classification' in record) {
+    return hasLegacyClassification
+      ? { ...record, classification: { kind: undefined } }
+      : record;
   }
 
   const {
+    exhaustionReason,
+    missingApiKey,
+    contextWindow,
     isCredentialExhausted,
     isUpstreamCreditDepleted,
     isChatGptSubscriptionLimited,
     ...rest
   } = record;
 
-  let exhaustionReason: ExhaustionReason | undefined;
-  if (isChatGptSubscriptionLimited === true) {
-    exhaustionReason = 'chatgpt-subscription';
+  let kind: ProviderErrorClassification['kind'] | undefined;
+  if (missingApiKey === true) {
+    kind = 'missing-api-key';
+  } else if (contextWindow === true) {
+    kind = 'context-window';
+  } else if (exhaustionReason !== undefined) {
+    kind = exhaustionReason as ProviderErrorClassification['kind'];
+  } else if (isChatGptSubscriptionLimited === true) {
+    kind = 'chatgpt-subscription';
   } else if (isUpstreamCreditDepleted === true) {
-    exhaustionReason = 'upstream-credit';
+    kind = 'upstream-credit';
   } else if (isCredentialExhausted === true) {
-    exhaustionReason = 'relay-limit';
+    kind = 'relay-limit';
   }
-  return exhaustionReason === undefined ? rest : { ...rest, exhaustionReason };
+
+  if (!hasLegacyClassification) return record;
+
+  // Preserve malformed present values as a parse failure rather than silently
+  // treating corrupted persisted data as unclassified.
+  if (
+    (missingApiKey !== undefined && missingApiKey !== true) ||
+    (contextWindow !== undefined && contextWindow !== true) ||
+    (isCredentialExhausted !== undefined &&
+      typeof isCredentialExhausted !== 'boolean') ||
+    (isUpstreamCreditDepleted !== undefined &&
+      typeof isUpstreamCreditDepleted !== 'boolean') ||
+    (isChatGptSubscriptionLimited !== undefined &&
+      typeof isChatGptSubscriptionLimited !== 'boolean')
+  ) {
+    return { ...rest, classification: { kind: undefined } };
+  }
+
+  return kind === undefined ? rest : { ...rest, classification: { kind } };
 }
 
 /** Core error details from a provider/SDK */
@@ -136,23 +169,10 @@ const ProviderErrorObjectSchema = z.object({
    *  true (because they need user action — a key swap or new API key —
    *  before any retry makes sense). */
   userRetryable: z.boolean(),
-  /** Reason the credential/quota is exhausted (upstream provider credit
-   *  depletion, or a subscription usage limit). Auto-
-   *  retry is skipped and the retry panel offers a "Use your own API key"
-   *  button for any of these. Use the `isCredentialExhausted` helper below
-   *  for the combined check. */
-  exhaustionReason: ExhaustionReasonSchema.optional(),
+  /** The provider failure's one canonical classification. Absent for ordinary
+   *  provider, transport, abort, and local-I/O failures. */
+  classification: ProviderErrorClassificationSchema.optional(),
   requestId: z.string().optional(),
-  /** True when the underlying failure was "no usable credential", detected via
-   *  the typed marker at its one throw site. Carried explicitly because the
-   *  retry-state flatten drops the Error object (and its Symbol metadata), and
-   *  the classifier is deliberately marker-only for this kind. */
-  missingApiKey: z.literal(true).optional(),
-  /** True when the failure was an internally-tagged context-window overflow.
-   *  Same rationale as `missingApiKey`: internal preflight throws carry the
-   *  verdict as a typed marker, and their messages match no provider prose
-   *  pattern, so the flatten must carry it explicitly. */
-  contextWindow: z.literal(true).optional(),
   rawErrorBody: z.unknown().optional(),
   streamDiagnostics: StreamDiagnosticsSchema.optional(),
   /** Tail of text generated before a streaming failure. Present when the
@@ -162,7 +182,10 @@ const ProviderErrorObjectSchema = z.object({
    *  at runtime, so size enforcement is the producer's responsibility. */
   partialText: z.string().optional(),
 });
-export type ProviderError = z.infer<typeof ProviderErrorObjectSchema>;
+/** Canonical current ProviderError metadata. Unknown fields are rejected so
+ * legacy or mixed records cannot enter the runtime metadata cache. */
+export const ProviderErrorSchema = ProviderErrorObjectSchema.strict();
+export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 
 /** Context about where/when the error occurred */
 const ErrorContextSchema = z.object({
@@ -171,7 +194,9 @@ const ErrorContextSchema = z.object({
 });
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
-/** Complete error log data - combines provider error with context */
+/** Complete error log data, including the compatibility reader for unversioned
+ * stream logs written before the canonical classification shipped. Remove the
+ * preprocess after 2026-11-30, when those records have aged out. */
 export const ErrorLogDataSchema = z.preprocess(
   normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema.extend({
@@ -184,20 +209,26 @@ export const ErrorLogDataSchema = z.preprocess(
 );
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
-/** Provider error with all fields optional for event transport */
-export const ProviderErrorPartialSchema = z.preprocess(
-  normalizeLegacyProviderErrorFields,
-  ProviderErrorObjectSchema.partial(),
-);
+/** Canonical provider error with all fields optional for event transport. */
+export const ProviderErrorPartialSchema =
+  ProviderErrorObjectSchema.partial().strict();
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 
-/** Single source of truth for "auto-retry should be skipped because the
- *  credential/quota is exhausted". Derived from `exhaustionReason` rather than
- *  stored as its own field, so the two cannot drift out of sync. */
+/** Recover the actionable exhaustion reason from the canonical classification. */
+export function getExhaustionReason(
+  errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
+): ExhaustionReason | undefined {
+  const kind = errorDetails?.classification?.kind;
+  return ExhaustionReasonSchema.safeParse(kind).success
+    ? (kind as ExhaustionReason)
+    : undefined;
+}
+
+/** Whether an identical retry needs a credential or route change first. */
 export function isCredentialExhausted(
-  errorDetails: Pick<ProviderError, 'exhaustionReason'> | undefined | null,
+  errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
 ): boolean {
-  return errorDetails?.exhaustionReason !== undefined;
+  return getExhaustionReason(errorDetails) !== undefined;
 }
 
 /**
@@ -210,11 +241,18 @@ export function isCredentialExhausted(
  * with `.omit()` keeps it from drifting out of sync with
  * `ProviderErrorObjectSchema` as new error fields are added.
  */
-export const RetryErrorInfoSchema = z.preprocess(
-  normalizeLegacyProviderErrorFields,
-  ProviderErrorObjectSchema.omit({ rawErrorBody: true }),
-);
+export const RetryErrorInfoSchema = ProviderErrorObjectSchema.omit({
+  rawErrorBody: true,
+}).strict();
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
+
+/** Persisted retry-state reader for records written before the canonical
+ * classification shipped. Remove after 2026-11-30, when those records have
+ * aged out. Current runtime and IPC schemas must remain migration-free. */
+export const PersistedRetryErrorInfoSchema = z.preprocess(
+  normalizeLegacyProviderErrorFields,
+  RetryErrorInfoSchema,
+);
 
 /** Project a full ProviderError onto the retry-state record by dropping the
  *  bulky `rawErrorBody`; every other field carries over unchanged. */
