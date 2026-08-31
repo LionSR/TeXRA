@@ -327,7 +327,7 @@ describe('ToolUseFollowUpQueue claim exclusivity', () => {
 });
 
 describe('ToolUseFollowUpQueue terminal tombstones', () => {
-  it('evicts the least-recently-used tombstone at the historical cap', () => {
+  it('evicts the oldest tombstone at the historical cap', () => {
     const followUps = new ToolUseFollowUpQueue();
     const oldest = id('stream:terminalized-0');
     followUps.terminalize(oldest);
