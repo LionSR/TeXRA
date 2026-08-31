@@ -29,8 +29,6 @@ import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   executeStableSubagentInBand,
   SubagentDurabilityError,
-  SubagentReconciliationError,
-  type InBandSubagentExecutionOptions,
 } from '@tools/delegation/inBandSubagentExecution';
 import {
   provideAgentEngine,
@@ -187,6 +185,14 @@ async function delegateWithProposalDecision(decision: ProposalResult) {
 const STABLE_PARENT_EXECUTION_ID = 'abcdef123456' as ExecutionId;
 const IN_BAND_LOGICAL_EXECUTION_ID = 'aaaaaa111111' as ExecutionId;
 
+type PreparedInBandSubagentOptions = Awaited<
+  ReturnType<Parameters<typeof executeStableSubagentInBand>[0]['prepare']>
+>;
+type InBandSubagentExecutionOptions = PreparedInBandSubagentOptions & {
+  parentExecutionId: ExecutionId;
+  signal?: AbortSignal;
+};
+
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
   overrides: Partial<InBandSubagentExecutionOptions> = {},
@@ -210,11 +216,12 @@ function runInBand(
   options: InBandSubagentExecutionOptions,
   executionId: ExecutionId = IN_BAND_LOGICAL_EXECUTION_ID,
 ) {
+  const { parentExecutionId, signal, ...prepared } = options;
   return executeStableSubagentInBand({
     executionId,
-    parentExecutionId: options.parentExecutionId,
-    signal: options.signal,
-    prepare: async () => options,
+    parentExecutionId,
+    signal,
+    prepare: async () => prepared,
   });
 }
 
@@ -791,7 +798,7 @@ describe('headless delegation', () => {
         parentExecutionId: STABLE_PARENT_EXECUTION_ID,
         prepare: vi.fn(),
       }),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
@@ -811,7 +818,7 @@ describe('headless delegation', () => {
 
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
@@ -826,7 +833,7 @@ describe('headless delegation', () => {
 
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.executeAgent).not.toHaveBeenCalled();
   });
@@ -893,7 +900,7 @@ describe('headless delegation', () => {
       expect.objectContaining({ phase: 'launched' }),
     );
     await expect(runInBand(options, logicalExecutionId)).rejects.toBeInstanceOf(
-      SubagentReconciliationError,
+      SubagentDurabilityError,
     );
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
@@ -1016,7 +1023,7 @@ describe('headless delegation', () => {
 
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
 
@@ -1059,7 +1066,7 @@ describe('headless delegation', () => {
     abandonedLeasePresent = false;
     await expect(
       runInBand(delegationOptions(), logicalExecutionId),
-    ).rejects.toBeInstanceOf(SubagentReconciliationError);
+    ).rejects.toBeInstanceOf(SubagentDurabilityError);
     expect(mocks.executeAgent).toHaveBeenCalledOnce();
   });
 
