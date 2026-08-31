@@ -27,7 +27,6 @@ function createState(
   return createPRSubscriptionState({
     listeners: new Set([listener]),
     currentShaState: createPRCurrentShaState(SHA),
-    state: 'open',
     mergeableState: 'clean',
     ...overrides,
   });
@@ -115,7 +114,6 @@ describe('PRPollingSource CI-started events', () => {
     const state = createState(events, {
       initialized: false,
       currentShaState: undefined,
-      state: undefined,
     });
 
     queuePollResponses(ghGet, SHA, [checkRun(1, 'lint')]);
