@@ -394,6 +394,7 @@ describe('long-running model transport', () => {
     }> = [];
     interactions.getClient = (apiVersion?: string) => {
       const sdk = installedGetClient(apiVersion);
+      expect(sdk._httpClient.request).toBe(longRunningGoogleInteractionsFetch);
       const request = vi.spyOn(sdk._httpClient, 'request');
       routeClients.push({ apiVersion, request });
       return sdk;
