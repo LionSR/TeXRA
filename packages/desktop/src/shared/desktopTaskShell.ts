@@ -11,7 +11,7 @@
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, getBasename } from '@utils/core';
 
-export const WORKBENCH_KINDS = [
+const WORKBENCH_KINDS = [
   'editor',
   'terminal',
   'browser',
@@ -97,14 +97,14 @@ export interface DesktopTaskShellState {
   readonly nextTerminalSerial: number;
 }
 
-export const BOTTOM_PANEL_MIN_HEIGHT = 180;
-export const BOTTOM_PANEL_MAX_HEIGHT = 560;
-export const PROJECT_SECTION_MIN_POSITION = 20;
-export const PROJECT_SECTION_MAX_POSITION = 80;
-export const SIDEBAR_MIN_WIDTH = 220;
-export const SIDEBAR_MAX_WIDTH = 480;
-export const WORKBENCH_MIN_WIDTH = 380;
-export const WORKBENCH_MAX_WIDTH = 960;
+const BOTTOM_PANEL_MIN_HEIGHT = 180;
+const BOTTOM_PANEL_MAX_HEIGHT = 560;
+const PROJECT_SECTION_MIN_POSITION = 20;
+const PROJECT_SECTION_MAX_POSITION = 80;
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 480;
+const WORKBENCH_MIN_WIDTH = 380;
+const WORKBENCH_MAX_WIDTH = 960;
 
 export function initialDesktopTaskShellState(): DesktopTaskShellState {
   return {
@@ -138,7 +138,7 @@ export function workbenchTabsForPlacement(
   return state.workbenchTabs.filter((tab) => tab.placement === placement);
 }
 
-export function workbenchTab(
+function workbenchTab(
   state: DesktopTaskShellState,
   tabId: string,
 ): WorkbenchTab | undefined {
@@ -297,7 +297,7 @@ export function closeWorkbench(
   };
 }
 
-export function reopenWorkbench(
+function reopenWorkbench(
   state: DesktopTaskShellState,
   placement: WorkbenchPlacement,
 ): DesktopTaskShellState {
