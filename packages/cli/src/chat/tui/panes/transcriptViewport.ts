@@ -3,6 +3,7 @@
 import { createLog } from '@logger/logUtils';
 import type { TranscriptRow } from '@shared/transcript';
 import type { ExecutionLabels } from '@shared/tools/executionsDisplay';
+import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   transcriptEntryLayout,
@@ -11,10 +12,11 @@ import {
 import { isRenderableTranscriptEntry } from './transcriptEntries';
 
 const FAILED_ENTRY_ESTIMATE_ROWS = 1;
+const BROKEN_ENTRY_REPORT_CAP = 1000;
 const log = createLog('transcriptViewport');
 /** Entry ids already reported, so a persistently-throwing entry is logged once
  *  instead of once per stream-sync tick (the estimate path runs per frame). */
-const brokenEntryIdsReported = new Set<string>();
+const brokenEntryIdsReported = createBoundedIdSet(BROKEN_ENTRY_REPORT_CAP);
 
 // Live mode captures the pending-pane paint contract: assistant text uses its
 // capped raw tail, while rich tool rows keep one descriptor line per terminal

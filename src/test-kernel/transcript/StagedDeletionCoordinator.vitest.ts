@@ -63,8 +63,8 @@ function createFakeHost(): FakeHost {
       calls.push('cancelPendingWrites');
       return [];
     },
-    bumpStreamVersion: () => {
-      calls.push('bumpStreamVersion');
+    invalidateStreamGeneration: () => {
+      calls.push('invalidateStreamGeneration');
     },
     seedChain: () => undefined,
     evict: () => {
@@ -109,7 +109,10 @@ describe('StagedDeletionCoordinator', () => {
 
     // Both must happen before the rename: a write queued against the
     // pre-staging directory would otherwise recreate it behind the move.
-    expect(calls).toStrictEqual(['cancelPendingWrites', 'bumpStreamVersion']);
+    expect(calls).toStrictEqual([
+      'cancelPendingWrites',
+      'invalidateStreamGeneration',
+    ]);
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
     expect(await StorageFS.exists(stagedStreamDataDir(STREAM))).toBe(true);
   });

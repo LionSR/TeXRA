@@ -1472,6 +1472,7 @@ export class StreamLogStore {
     this.dirtyIds.delete(streamId);
     this.releaseRequests.delete(streamId);
     this.summaries.delete(streamId);
+    this.writeFailureWarned.delete(streamId);
   }
 
   private forgetAllStreamState(): void {
@@ -1482,6 +1483,7 @@ export class StreamLogStore {
     this.dirtyIds.clear();
     this.releaseRequests.clear();
     this.summaries.clear();
+    this.writeFailureWarned.clear();
   }
 
   private assertWritableStore(operation: string): void {

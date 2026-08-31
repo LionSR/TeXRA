@@ -77,7 +77,7 @@ export interface StagedStreamSnapshotDeletion {
 /**
  * The narrow port back into the snapshot store. Every member is a capability
  * the staged-deletion machine cannot own itself: durable writes, the store's
- * per-(stream, category) write locks, its stream-version guard, its seeding
+ * per-(stream, category) write locks, its stream-generation guard, its seeding
  * chain, and its in-memory record.
  */
 export interface StagedDeletionHost {
@@ -90,7 +90,7 @@ export interface StagedDeletionHost {
    */
   cancelPendingWrites(stream: StreamTabId): Promise<void>[];
   /** Invalidate writes queued against the pre-staging directory. */
-  bumpStreamVersion(stream: StreamTabId): void;
+  invalidateStreamGeneration(stream: StreamTabId): void;
   /** The stream's in-flight seed/refresh chain, if one is running. */
   seedChain(stream: StreamTabId): Promise<void> | undefined;
   /** Drop the stream's in-memory record once a deletion commits. */
@@ -479,7 +479,7 @@ export class StagedDeletionCoordinator {
       if (writesCancelled) return;
       writesCancelled = true;
       const pending = this.host.cancelPendingWrites(stream);
-      this.host.bumpStreamVersion(stream);
+      this.host.invalidateStreamGeneration(stream);
       await Promise.all(pending);
     };
     const waitForSeedChain = async (ignoreFailure = false): Promise<void> => {
@@ -606,7 +606,7 @@ export class StagedDeletionCoordinator {
       const failures: unknown[] = [error];
       // An initial namespace inspection can fail before the normal seed wait.
       // Let any active refresh restore or replace authoritative memory before
-      // the version bump invalidates its continuation.
+      // revoking the generation invalidates its continuation.
       await waitForSeedChain(true);
       await cancelWrites();
       const failedRollback = this.markRollbackFailed(stream, state);
