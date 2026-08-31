@@ -85,7 +85,13 @@ function modelOf(
     taskGroups: phases.map((name, index) =>
       phaseGroup(name, index, phases.length),
     ),
-    rows: tasks.map(taskRow),
+    rows: tasks.map((task) =>
+      taskRow(
+        task.attemptId === undefined && options.plan
+          ? { ...task, attemptId: options.plan.attemptId }
+          : task,
+      ),
+    ),
     plan: options.plan,
     runSettled: options.runSettled ?? false,
     childProgress: options.childProgress ?? new Map(),
@@ -123,17 +129,222 @@ describe('workflow run model', () => {
     });
   });
 
-  it('scopes cards and phases to the newest attempt', () => {
-    const model = modelOf(
-      ['Map'],
-      [
-        { id: 'legacy', phase: 'Map', status: 'failed' },
-        { id: 'old', phase: 'Map', status: 'failed', attemptId: 'a1' },
-        { id: 'new', phase: 'Map', attemptId: 'a2' },
-      ],
-    );
-    expect(model.tasks.map((row) => row.call.id)).toStrictEqual(['new']);
-    expect(model.phases[0]?.tally.failed).toBe(0);
+  it('scopes resumed calls and phase boundaries to the newest attempt', () => {
+    const oldMap = {
+      ...phaseGroup('Map', 0, 2),
+      id: 'old-map',
+    };
+    const oldEmpty = {
+      ...phaseGroup('Review', 1, 2),
+      id: 'old-review',
+      attemptId: 'a1',
+    };
+    const newMap = {
+      ...phaseGroup('Map', 0, 2),
+      id: 'new-map',
+    };
+    const newEmpty = {
+      ...phaseGroup('Review', 1, 2),
+      id: 'new-review',
+      attemptId: 'a2',
+    };
+    const old = {
+      ...taskRow({
+        id: 'old-failure',
+        phase: 'Map',
+        status: 'failed',
+        attemptId: 'a1',
+      }),
+      groupId: oldMap.id,
+      seqNo: 10,
+    };
+    const resumedPhase = {
+      ...taskRow({
+        id: 'resumed-phase',
+        phase: 'Map',
+        status: 'completed',
+        attemptId: 'a2',
+      }),
+      groupId: newMap.id,
+      seqNo: 30,
+    };
+    const resumedUngrouped = {
+      ...taskRow({ id: 'resumed-unphased', attemptId: 'a2' }),
+      seqNo: 40,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [oldMap, oldEmpty, newMap, newEmpty],
+      // A tree renderer can present root rows before child rows. seqNo remains
+      // the transcript authority regardless of that input arrangement.
+      rows: [resumedUngrouped, resumedPhase, old],
+      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
+      'resumed-phase',
+      'resumed-unphased',
+    ]);
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
+      newMap.id,
+      newEmpty.id,
+      `unphased-${resumedUngrouped.id}`,
+    ]);
+    expect(model.tally).toStrictEqual({
+      done: 1,
+      total: 2,
+      running: 1,
+      failed: 0,
+      declared: 0,
+    });
+  });
+
+  it('uses a new plan boundary before its calls or tagged phases arrive', () => {
+    const stale = {
+      ...phaseGroup('Old', 0, 2),
+      id: 'old-empty',
+      attemptId: 'a1',
+    };
+    const current = {
+      ...phaseGroup('Current', 1, 2),
+      id: 'current-empty',
+    };
+    const staleUntaggedCard = {
+      ...taskRow({ id: 'old-call', phase: 'Old', status: 'failed' }),
+      groupId: stale.id,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [stale, current],
+      rows: [staleUntaggedCard],
+      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks).toStrictEqual([]);
+    // Explicit old ownership is actionable. Missing ownership is not: mixed-
+    // version traces cannot distinguish an old call-less phase from this
+    // genuinely current one, so the compatible choice is to preserve it.
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([current.id]);
+  });
+
+  it('deduplicates an untagged empty phase when the latest attempt owns its identity', () => {
+    const oldMap = {
+      ...phaseGroup('Map', 0, 1),
+      id: 'old-map',
+    };
+    const currentMap = {
+      ...phaseGroup('Map', 0, 1),
+      id: 'current-map',
+      attemptId: 'a2',
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [oldMap, currentMap],
+      rows: [],
+      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
+      currentMap.id,
+    ]);
+  });
+
+  it('uses a call-less tagged phase as the latest fallback boundary', () => {
+    const oldMap = {
+      ...phaseGroup('Map', 0, 2),
+      id: 'old-map',
+      startTime: 10,
+      attemptId: 'a1',
+    };
+    const currentReview = {
+      ...phaseGroup('Review', 1, 2),
+      id: 'current-review',
+      startTime: 30,
+      attemptId: 'a2',
+    };
+    const oldCard = {
+      ...taskRow({ id: 'old-card', phase: 'Map', attemptId: 'a1' }),
+      groupId: oldMap.id,
+      seqNo: 10,
+      timestamp: 20,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [oldMap, currentReview],
+      rows: [oldCard],
+      plan: undefined,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks).toStrictEqual([]);
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
+      currentReview.id,
+    ]);
+  });
+
+  it('orders mixed-generation cards by the shared transcript fallback', () => {
+    const oldChild = {
+      ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
+      seqNo: 10,
+      timestamp: 10,
+    };
+    const resumedRoot = {
+      ...taskRow({ id: 'resumed-root', attemptId: 'a2' }),
+      timestamp: 20,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [],
+      // Tree pre-order places the newer root row before the older grouped
+      // child. Mixed-generation rows fall back to timestamps, not input order.
+      rows: [resumedRoot, oldChild],
+      plan: undefined,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
+      'resumed-root',
+    ]);
+  });
+
+  it('selects an attempt deterministically across clock-skewed row generations', () => {
+    const oldChild = {
+      ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
+      seqNo: 10,
+      timestamp: 300,
+    };
+    const currentChild = {
+      ...taskRow({ id: 'current-child', phase: 'Map', attemptId: 'a2' }),
+      seqNo: 20,
+      timestamp: 100,
+    };
+    const currentLegacyRoot = {
+      ...taskRow({ id: 'current-legacy-root', attemptId: 'a2' }),
+      timestamp: 200,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [],
+      // Root-first input plus 300 > 200 > 100 creates a cycle for pairwise
+      // seqNo/timestamp sorting. Attempt selection must not depend on that sort.
+      rows: [currentLegacyRoot, currentChild, oldChild],
+      plan: undefined,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
+      'current-child',
+      'current-legacy-root',
+    ]);
   });
 
   it('leads a phase with what needs attention and collapses the rest into counted groups', () => {
@@ -343,10 +554,16 @@ describe('workflow run model', () => {
       phases: [{ title: 'Map' }],
       tasks: [],
     };
-    expect(workflowMarkerOf(entry(plan))).toStrictEqual({ kind: 'plan', plan });
-    expect(workflowMarkerOf(entry({ kind: 'workflowPlan' }))?.kind).toBe(
-      'malformedPlan',
-    );
+    expect(workflowMarkerOf(entry(plan))).toStrictEqual({
+      kind: 'plan',
+      attemptId: 'a',
+      plan,
+    });
+    expect(
+      workflowMarkerOf(
+        entry({ kind: 'workflowPlan', attemptId: 'new', phases: 'broken' }),
+      ),
+    ).toMatchObject({ kind: 'malformedPlan', attemptId: 'new' });
     expect(workflowMarkerOf(entry({ kind: 'somethingElse' }))).toBeUndefined();
   });
 });

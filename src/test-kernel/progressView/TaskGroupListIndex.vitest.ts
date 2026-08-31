@@ -49,6 +49,7 @@ type TaskGroupListInternals = HTMLElement & {
   isToolUse: boolean;
   terminal: boolean;
   toggleStates: ToggleStateStore | null;
+  workflowAttemptId: string | undefined;
   workflowPlan: WorkflowPlanMarker | undefined;
   childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   updateComplete: Promise<boolean>;
@@ -89,7 +90,7 @@ function runGroup(name: string, overrides: Partial<TaskGroup> = {}): TaskGroup {
 }
 
 function workflowTaskRow(
-  groupId: string,
+  groupId: string | undefined,
   id: string,
   timestamp: number,
   data: WorkflowCallProgress,
@@ -102,7 +103,7 @@ function workflowTaskRow(
     text: data.id,
     timestamp,
     level,
-    groupId,
+    ...(groupId === undefined ? {} : { groupId }),
     messageType: MESSAGE_TYPES.WORKFLOW_TASK,
     data,
   });
@@ -143,6 +144,7 @@ function renderList(
   rows: TranscriptRow[],
   options: {
     toggleStates?: ToggleStateStore;
+    workflowAttemptId?: string;
     workflowPlan?: WorkflowPlanMarker;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
@@ -660,6 +662,88 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     ]);
   });
 
+  it('hides superseded phase headers and failed cards after a resume', async () => {
+    const oldRun = runGroup('Run: old workflow');
+    const currentRun = createGroup('current-run', STREAM_PHASE.RUNNING, {
+      name: 'Run: current workflow',
+      startTime: 4,
+    });
+    const oldMap = createGroup('old-map', STREAM_PHASE.FAILED, {
+      name: 'Map',
+      startTime: 2,
+      parentGroupId: oldRun.id,
+      kind: 'phase',
+      attemptId: 'a1',
+      index: 0,
+      total: 1,
+    });
+    const currentMap = createGroup('current-map', STREAM_PHASE.RUNNING, {
+      name: 'Map',
+      startTime: 4,
+      parentGroupId: currentRun.id,
+      kind: 'phase',
+      attemptId: 'a2',
+      index: 0,
+      total: 1,
+    });
+    const rows: TranscriptRow[] = [
+      workflowTaskRow(oldMap.id, 'stale-failure', 3, {
+        id: 'stale',
+        label: 'Stale failure',
+        phase: 'Map',
+        status: 'failed',
+        error: 'old attempt',
+        attemptId: 'a1',
+      }),
+      workflowTaskRow(currentMap.id, 'current-call', 5, {
+        id: 'current',
+        label: 'Current call',
+        phase: 'Map',
+        status: 'running',
+        attemptId: 'a2',
+      }),
+      workflowTaskRow(oldRun.id, 'stale-unphased', 6, {
+        id: 'stale-unphased',
+        label: 'Stale unphased call',
+        status: 'failed',
+        error: 'old attempt',
+        attemptId: 'a1',
+      }),
+      workflowTaskRow(undefined, 'stale-standalone', 7, {
+        id: 'stale-standalone',
+        label: 'Stale standalone call',
+        status: 'failed',
+        error: 'old attempt',
+        attemptId: 'a1',
+      }),
+      workflowTaskRow(undefined, 'current-standalone', 8, {
+        id: 'current-standalone',
+        label: 'Current standalone call',
+        status: 'running',
+        attemptId: 'a2',
+      }),
+    ];
+
+    const list = await renderList(
+      [oldRun, oldMap, currentRun, currentMap],
+      rows,
+      {
+        workflowAttemptId: 'a2',
+      },
+    );
+
+    expect(groupHeader(list, oldMap.id)).toBeNull();
+    expect(groupHeader(list, currentMap.id)).not.toBeNull();
+    expect(list.shadowRoot?.querySelectorAll('.log-run-band')).toHaveLength(1);
+    expect(list.shadowRoot?.textContent).not.toContain('Stale failure');
+    expect(list.shadowRoot?.textContent).not.toContain('Stale unphased call');
+    expect(list.shadowRoot?.textContent).not.toContain('Stale standalone call');
+    expect(list.shadowRoot?.textContent).toContain('Current call');
+    expect(
+      list.shadowRoot?.querySelectorAll('[data-log-id="current-standalone"]'),
+    ).toHaveLength(1);
+  });
+
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {
     const run = runGroup('Run: workflow');
     const phase = createGroup('phase-solo', STREAM_PHASE.RUNNING, {
@@ -749,6 +833,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
           label: `Queued ${id}`,
           phase: 'Map',
           status: 'queued',
+          attemptId: 'attempt-1',
         }),
       ),
       workflowTaskRow('phase-map', 'live', 6, {
@@ -756,6 +841,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         label: 'Running now',
         phase: 'Map',
         status: 'running',
+        attemptId: 'attempt-1',
         childStreamId: 'researcher@gpt#live',
       }),
     ];

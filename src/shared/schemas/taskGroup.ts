@@ -18,6 +18,8 @@ export const TaskGroupSchema = z.strictObject({
   status: TaskGroupStatusSchema,
   parentGroupId: z.string().optional(),
   kind: StageKindSchema.optional(),
+  /** Workflow-script projection attempt that opened this phase. */
+  attemptId: z.string().min(1).optional(),
   index: taskGroupIndexField.optional(),
   total: taskGroupTotalField.optional(),
 });
@@ -51,6 +53,7 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
 const groupLogPayloadFields = {
   status: z.union([TaskGroupStatusSchema, EndGroupStatusSchema]).optional(),
   kind: StageKindSchema.optional(),
+  attemptId: z.string().min(1).optional(),
   index: taskGroupIndexField.optional(),
   total: taskGroupTotalField.optional(),
   name: z.string().optional(),
@@ -61,13 +64,16 @@ export const GroupLogPayloadSchema = z.looseObject(groupLogPayloadFields);
 
 /**
  * Permanent exported-trace recovery for group rows written by older versions.
- * Each display-only field recovers independently so one stale value does not
- * discard the whole trace entry.
+ * Display-only fields recover independently so one stale value does not
+ * discard the whole trace entry. Attempt ownership is lifecycle identity, not
+ * display data: an invalid present value rejects the entry rather than being
+ * mistaken for a compatible legacy omission.
  */
 export const TraceGroupLogPayloadSchema = z.looseObject({
   ...groupLogPayloadFields,
   status: groupLogPayloadFields.status.catch(undefined),
   kind: groupLogPayloadFields.kind.catch(undefined),
+  attemptId: groupLogPayloadFields.attemptId,
   index: groupLogPayloadFields.index.catch(undefined),
   total: groupLogPayloadFields.total.catch(undefined),
   name: groupLogPayloadFields.name.catch(undefined),

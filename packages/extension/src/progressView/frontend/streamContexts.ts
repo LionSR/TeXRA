@@ -70,7 +70,9 @@ export interface StreamLogContextValue {
   /** Current log generation. */
   rowGeneration: number;
   taskGroups: TaskGroup[];
-  /** The newest attempt's declared workflow plan, for the run model. */
+  /** Newest workflow-attempt boundary, even if its plan body was malformed. */
+  workflowAttemptId: string | undefined;
+  /** The newest valid declared workflow plan, for the run model. */
   workflowPlan: WorkflowPlanMarker | undefined;
   /** Live progress of the stream's children, by child stream. */
   childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
@@ -91,6 +93,7 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   updatedRowBaseGeneration: 0,
   rowGeneration: 0,
   taskGroups: [],
+  workflowAttemptId: undefined,
   workflowPlan: undefined,
   childProgress: new Map(),
   isToolUse: false,

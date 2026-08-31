@@ -135,6 +135,7 @@ function applyEntry(
   // previous attempt's.
   const marker = workflowMarkerOf(entry);
   if (marker) {
+    streamLogs.workflowAttemptId = marker.attemptId;
     if (marker.kind === 'malformedPlan') {
       console.warn(
         `[logSlice] Ignoring malformed workflow plan marker ${entry.id}: ${marker.error}`,
@@ -297,6 +298,7 @@ export const logHandlers = {
               rowIndex: streamLogs.rowIndex,
               taskGroupIndex: streamLogs.taskGroupIndex,
               compactionProjection: streamLogs.compactionProjection,
+              workflowAttemptId: streamLogs.workflowAttemptId,
               workflowPlan: streamLogs.workflowPlan,
               updatedRowIndices: [...updatedRowIndices],
               updatedRowBaseGeneration,

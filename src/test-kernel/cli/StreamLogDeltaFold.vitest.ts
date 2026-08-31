@@ -507,14 +507,17 @@ describe('transcript fold vs from-scratch oracle', () => {
   });
 
   it("keeps a relaunched workflow's prior attempt as a closed group", () => {
-    // Parity with the progress view: a relaunch appends a fresh attempt's
-    // rows, and the board keeps the previous attempt's cards on screen (each
-    // relaunch carries fresh stage ids and fresh `workflow-task-*` log ids, so
-    // nothing is double-counted). The terminal shows the same rows. The
-    // attempt marker itself is an `internal` entry, which the shared projector
-    // gives no row on either host.
+    // A relaunch appends a fresh attempt without deleting raw transcript
+    // history. The popup's shared model scopes those retained rows separately.
+    // The attempt marker itself is an `internal` entry, which the shared
+    // projector gives no row on either host.
     withStreamSubscription(() => {
-      const planMarker = (id: string, attemptId: string, timestamp: number) =>
+      const planMarker = (
+        id: string,
+        attemptId: string,
+        timestamp: number,
+        malformed = false,
+      ) =>
         appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
           id,
           type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -522,7 +525,12 @@ describe('transcript fold vs from-scratch oracle', () => {
           timestamp,
           messageType: MESSAGE_TYPES.INTERNAL,
           text: '',
-          data: { kind: 'workflowPlan', attemptId, phases: [], tasks: [] },
+          data: {
+            kind: 'workflowPlan',
+            attemptId,
+            phases: malformed ? 'unreadable' : [],
+            tasks: [],
+          },
         });
 
       configureStreams(CONFIGS[2]);
@@ -558,7 +566,7 @@ describe('transcript fold vs from-scratch oracle', () => {
           ?.entries.map((entry) => entry.id),
       ).toEqual(['old-failed', 'survey-complete-old']);
 
-      planMarker('workflow-attempt-new', 'attempt-new', 4);
+      planMarker('workflow-attempt-new', 'attempt-new', 4, true);
       appendTranscriptEntry(defaultSession().transcripts, FOLD_STREAM, {
         id: 'new-running',
         type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -581,6 +589,10 @@ describe('transcript fold vs from-scratch oracle', () => {
           .get(FOLD_STREAM)
           ?.entries.map((entry) => entry.id),
       ).toEqual(['old-failed', 'survey-complete-old', 'new-running']);
+      expect(streams.get().get(FOLD_STREAM)?.workflowAttemptId).toBe(
+        'attempt-new',
+      );
+      expect(streams.get().get(FOLD_STREAM)?.workflowPlan).toBeUndefined();
     });
   });
 

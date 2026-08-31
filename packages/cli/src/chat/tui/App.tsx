@@ -383,6 +383,7 @@ export function App(props: AppProps): React.JSX.Element {
     return workflowRunModel({
       taskGroups: workflowPopupRoot.taskGroups,
       rows: workflowPopupRoot.entries,
+      workflowAttemptId: workflowPopupRoot.workflowAttemptId,
       plan: workflowPopupRoot.workflowPlan,
       runSettled: workflowPopupRunSettled,
       childProgress,

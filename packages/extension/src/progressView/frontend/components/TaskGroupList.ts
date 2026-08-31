@@ -177,8 +177,11 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) streamStatus: StreamLifecycleStatus | null =
     null;
 
-  /** The newest attempt's declared workflow plan; with the groups, rows, and
-   *  status it is the shared run model's whole input. */
+  /** Newest workflow-attempt boundary, even if its plan body was malformed. */
+  @property({ attribute: false }) workflowAttemptId: string | undefined =
+    undefined;
+
+  /** The newest attempt's valid declared workflow plan. */
   @property({ attribute: false }) workflowPlan: WorkflowPlanMarker | undefined =
     undefined;
 
@@ -287,6 +290,7 @@ export class TaskGroupList extends LitElement {
       groupsChanged ||
       rowsChanged ||
       changedProperties.has('rowGeneration') ||
+      changedProperties.has('workflowAttemptId') ||
       changedProperties.has('workflowPlan') ||
       changedProperties.has('childProgress') ||
       changedProperties.has('streamStatus')
@@ -351,11 +355,13 @@ export class TaskGroupList extends LitElement {
 
   private rebuildRunModel(): void {
     const model =
+      this.workflowAttemptId !== undefined ||
       this.workflowPlan !== undefined ||
       this.groups.some((group) => group.kind === 'phase')
         ? workflowRunModel({
             taskGroups: this.groups,
             rows: this.rows,
+            workflowAttemptId: this.workflowAttemptId,
             plan: this.workflowPlan,
             runSettled: workflowRunSettled(this.streamStatus ?? undefined),
             childProgress: this.childProgress,
@@ -514,7 +520,7 @@ export class TaskGroupList extends LitElement {
   private renderRunBand(node: GroupTree): TemplateResult | typeof nothing {
     const model = this.model;
     if (this.isToolUse || !model || model.tally.total === 0) return nothing;
-    if (!node.children.some((child) => child.group.kind === 'phase')) {
+    if (!node.children.some((child) => this.phaseModels.has(child.group.id))) {
       return nothing;
     }
     return html`<div class="log-run-band">
@@ -684,18 +690,19 @@ export class TaskGroupList extends LitElement {
   /**
    * Rows of a group followed by its child groups. A phase's cards come from
    * the model (`renderPhaseRows`); its other rows — the script's own log
-   * lines — follow in transcript order. A phase the model does not hold (one
-   * whose every card belonged to a superseded attempt) keeps its rows as
-   * plain history.
+   * lines — follow in transcript order. Superseded phase groups do not reach
+   * this path: the shared model is the authority for which attempt is visible.
    */
-  private renderGroupBody(node: GroupTree): TemplateResult {
+  private renderGroupBody(node: GroupTree, isRoot: boolean): TemplateResult {
     const phase = this.phaseModels.get(node.group.id);
-    const rows = phase
-      ? node.rows.filter((row) => row.kind !== 'workflowTask')
-      : node.rows;
-    return html`${
-      phase ? this.renderPhaseRows(phase) : nothing
-    }${this.renderRowEntries(rows, `group:${node.group.id}`)}${repeat(
+    const rows =
+      phase || (isRoot && this.model !== null)
+        ? node.rows.filter((row) => row.kind !== 'workflowTask')
+        : node.rows;
+    return html`${phase ? this.renderPhaseRows(phase) : nothing}${this.renderRowEntries(
+      rows,
+      `group:${node.group.id}`,
+    )}${repeat(
       node.children,
       (c) => c.group.id,
       (c) => this.renderGroupNode(c),
@@ -708,6 +715,13 @@ export class TaskGroupList extends LitElement {
     isRoot = false,
   ): TemplateResult | typeof nothing {
     const { group } = node;
+    if (
+      group.kind === 'phase' &&
+      this.model !== null &&
+      !this.phaseModels.has(group.id)
+    ) {
+      return nothing;
+    }
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
@@ -720,7 +734,7 @@ export class TaskGroupList extends LitElement {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${this.renderRunBand(node)} ${this.renderGroupBody(node)}
+            ${this.renderRunBand(node)} ${this.renderGroupBody(node, true)}
           </div>
         </div>
       `;
@@ -749,7 +763,7 @@ export class TaskGroupList extends LitElement {
           ${this.renderGroupHeader(node)}
         </div>
         <div id=${contentId} class="log-group-content">
-          ${expanded ? this.renderGroupBody(node) : nothing}
+          ${expanded ? this.renderGroupBody(node, false) : nothing}
         </div>
       </wa-details>
     `;
@@ -842,11 +856,20 @@ export class TaskGroupList extends LitElement {
       ${repeat(
         visibleTimeline,
         (item) => item.key,
-        (item) =>
-          'row' in item
-            ? this.renderLogEntry(item.row)
-            : this.renderGroupNode(item.tree, true),
+        (item) => {
+          if ('row' in item) {
+            return this.model !== null && item.row.kind === 'workflowTask'
+              ? nothing
+              : this.renderLogEntry(item.row);
+          }
+          return this.renderGroupNode(item.tree, true);
+        },
       )}
+      ${
+        this.model?.unphasedPhase
+          ? this.renderPhaseRows(this.model.unphasedPhase)
+          : nothing
+      }
       ${this.renderDeclaredPhases()}
     `;
   }

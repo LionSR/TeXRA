@@ -420,7 +420,8 @@ export function syncStreamLog(
       });
     }
 
-    const { taskGroups, workflowPlan, compaction } = projections;
+    const { taskGroups, workflowAttemptId, workflowPlan, compaction } =
+      projections;
     const compactingActive = compaction.blocks.some(
       (block) => block.status === 'running',
     );
@@ -484,6 +485,7 @@ export function syncStreamLog(
       slice.thinkingActive === thinkingActive &&
       slice.compactingActive === compactingActive &&
       slice.taskGroups === taskGroups &&
+      slice.workflowAttemptId === workflowAttemptId &&
       slice.workflowPlan === workflowPlan
     ) {
       return slice;
@@ -497,6 +499,7 @@ export function syncStreamLog(
       thinkingActive,
       compactingActive,
       taskGroups,
+      workflowAttemptId,
       workflowPlan,
     };
   });
@@ -546,6 +549,7 @@ export function releaseInactiveStreamTranscript(
     resetTranscriptFoldState(fold);
     fold.taskGroupProjection = undefined;
     fold.compactionProjection = undefined;
+    fold.workflowAttemptId = undefined;
     fold.workflowPlan = undefined;
   }
 }
