@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
       (secrets: unknown, provider: string) => Promise<string | undefined>
     >(),
   getUseOpenRouter: vi.fn<() => boolean>(),
+  getProviderEndpoint: vi.fn<() => string>(),
+  useChinaRegion: vi.fn<() => boolean>(),
+  getGLMCodingPlan: vi.fn<() => boolean>(),
 }));
 
 vi.mock('@model/providerCapabilities', async (importOriginal) => {
@@ -45,6 +48,9 @@ vi.mock('@platform/platform', () => ({
 
 vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
+  getProviderEndpoint: mocks.getProviderEndpoint,
+  useChinaRegion: mocks.useChinaRegion,
+  getGLMCodingPlan: mocks.getGLMCodingPlan,
 }));
 
 const {
@@ -58,6 +64,9 @@ beforeEach(() => {
   mocks.isXaiSubscriptionActive.mockReset().mockResolvedValue(false);
   mocks.lookupApiKey.mockReset().mockResolvedValue(undefined);
   mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
+  mocks.getProviderEndpoint.mockReset().mockReturnValue('');
+  mocks.useChinaRegion.mockReset().mockReturnValue(true);
+  mocks.getGLMCodingPlan.mockReset().mockReturnValue(false);
 });
 
 function selectCredentialModel(
