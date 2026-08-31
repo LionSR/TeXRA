@@ -81,20 +81,27 @@ export const ACCOUNT_OUTCOME = {
  * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
  */
 export const RESEARCHER_ACCESS_AUTH = {
-  signInLabel: `Sign in with ${RESEARCHER_ACCESS.label}`,
-  loginDescription: `Remote agents through ${RESEARCHER_ACCESS.label}`,
+  signInLabel: `Sign in to your ${RESEARCHER_ACCESS.label}`,
+  signInExample: `sign in to your ${RESEARCHER_ACCESS.label}`,
+  deviceSignInExample: `sign in to your ${RESEARCHER_ACCESS.label} over SSH`,
+  credentialsOnlyExample: `sign in to your ${RESEARCHER_ACCESS.label} (credentials only)`,
+  loginDescription: `Remote agents through your ${RESEARCHER_ACCESS.label}`,
   deviceCodeLabel: `${RESEARCHER_ACCESS.label} device code`,
-  signOutDescription: `Sign out of ${RESEARCHER_ACCESS.label}`,
+  signOutDescription: `Sign out of your ${RESEARCHER_ACCESS.label}`,
   statusDescription: `Show ${RESEARCHER_ACCESS.label} sign-in status`,
   statusExample: `show ${RESEARCHER_ACCESS.label} sign-in status`,
-  authDescription: `Sign in with ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, or ${RESEARCHER_ACCESS.label}; check status`,
+  authDescription: `Sign in with ${CHATGPT_AUTH.label} or ${GROK_AUTH.label}, or sign in to your ${RESEARCHER_ACCESS.label}; check status`,
   /** `/login` slash-command description. */
-  slashLoginDescription: `Sign in to ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, or ${RESEARCHER_ACCESS.label}`,
-  startingDevice: `Starting ${RESEARCHER_ACCESS.label} device-code sign-in.`,
+  slashLoginDescription: `Sign in with ${CHATGPT_AUTH.label} or ${GROK_AUTH.label}, or sign in to your ${RESEARCHER_ACCESS.label}`,
+  chatLoginDescription: `manage ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, and your ${RESEARCHER_ACCESS.label} sign-ins`,
+  startingDevice: `Starting device-code sign-in to your ${RESEARCHER_ACCESS.label}.`,
   startingNoBrowser: (provider: string): string =>
-    `Starting ${RESEARCHER_ACCESS.label} ${provider} sign-in.`,
+    `Starting ${provider} sign-in to your ${RESEARCHER_ACCESS.label}.`,
   startingBrowser: (provider: string): string =>
-    `Opening browser for ${RESEARCHER_ACCESS.label} ${provider} sign-in...`,
+    `Opening browser for ${provider} sign-in to your ${RESEARCHER_ACCESS.label}...`,
   signedIn: (accountLabel: string): string =>
-    ACCOUNT_OUTCOME.signedInAs(RESEARCHER_ACCESS.label, accountLabel),
+    `Signed in to your ${RESEARCHER_ACCESS.label} as ${accountLabel}.`,
+  signedOut: `Signed out of your ${RESEARCHER_ACCESS.label}.`,
+  signOutFailedWithReason: (reason: string): string =>
+    `${RESEARCHER_ACCESS.label} sign-out failed: ${reason}`,
 } as const;
