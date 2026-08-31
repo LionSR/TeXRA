@@ -14,12 +14,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),
-  resolveAgentForLaunch: vi.fn(),
   writeSessionDescription: vi.fn(),
-}));
-
-vi.mock('@agent/index', () => ({
-  resolveAgentForLaunch: mocks.resolveAgentForLaunch,
 }));
 
 vi.mock('@agent/runtime/helperModel', async (importActual) => ({
@@ -36,7 +31,7 @@ function runDescription(
   streamId: string,
   session: ReturnType<typeof createTestSession>,
   category: AgentCategory = AgentCategory.ToolUse,
-  agentSource?: string,
+  agentDescription?: string,
 ): Promise<void> {
   return generateSessionDescription(
     executionId as ExecutionId,
@@ -46,8 +41,8 @@ function runDescription(
       model: 'gemini35f',
       instruction: 'Fix grammar.',
       agentCategory: category,
-      ...(agentSource ? { agentSource } : {}),
     }),
+    agentDescription,
     session,
   );
 }
@@ -61,12 +56,13 @@ function helperAnswering(text: string) {
   };
 }
 
-/** Point the launch resolver and helper-model kit at one resolved answer. */
-function mockToolUseAnswer(description: string, text: string): void {
-  mocks.resolveAgentForLaunch.mockReturnValue({ entry: { description } });
+/** Point the helper-model kit at one resolved answer. */
+function mockToolUseAnswer(text: string): ReturnType<typeof helperAnswering> {
+  const handler = helperAnswering(text);
   mocks.createHelperModelKit.mockResolvedValue({
-    kit: { client: {}, handler: helperAnswering(text) },
+    kit: { client: {}, handler },
   });
+  return handler;
 }
 
 describe('session description helpers', () => {
@@ -94,29 +90,25 @@ describe('session description helpers', () => {
     ).toBe('Summarize the paper.');
   });
 
-  it('generates descriptions for workflow runs, looked up in their own roster', async () => {
+  it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
     const events: SessionEvent[] = [];
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
     });
-    mockToolUseAnswer('Corrects a draft', 'Correcting derivation signs');
+    const handler = mockToolUseAnswer('Correcting derivation signs');
 
     await runDescription(
       'exec-workflow',
       'stream-workflow',
       session,
       AgentCategory.Workflow,
+      'Corrects a draft',
     );
     detach();
 
-    // Resolved through the launch resolver under the run's own category: a
-    // tool-use lookup would miss a workflow agent entirely, leaving the helper
-    // prompt without the agent's purpose.
-    expect(mocks.resolveAgentForLaunch).toHaveBeenCalledWith(
-      AgentCategory.Workflow,
-      'correct',
-      undefined,
+    expect(handler.initializeMessages.mock.calls[0]?.[1]).toContain(
+      '<agent-purpose>Corrects a draft</agent-purpose>',
     );
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
       'exec-workflow',
@@ -136,34 +128,10 @@ describe('session description helpers', () => {
     ]);
   });
 
-  it('passes the pinned agent source to the launch resolver', async () => {
-    const session = createTestSession();
-    mockToolUseAnswer('The custom roster copy', 'Correcting derivation signs');
-
-    await runDescription(
-      'exec-pinned',
-      'stream-pinned',
-      session,
-      AgentCategory.Workflow,
-      'custom',
-    );
-
-    // Without the source, two rosters holding `correct` resolve by priority
-    // and the label can describe the agent that did not run.
-    expect(mocks.resolveAgentForLaunch).toHaveBeenCalledWith(
-      AgentCategory.Workflow,
-      'correct',
-      'custom',
-    );
-  });
-
   it('logs helper-model failures without rejecting the fire-and-forget call', async () => {
     const session = createTestSession();
     const helperError = new Error('helper unavailable');
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    mocks.resolveAgentForLaunch.mockReturnValue({
-      entry: { description: 'General chat assistant' },
-    });
     mocks.createHelperModelKit.mockRejectedValueOnce(helperError);
 
     await expect(
@@ -179,9 +147,6 @@ describe('session description helpers', () => {
 
   it('does not reject when the diagnostic sink also fails', async () => {
     const session = createTestSession();
-    mocks.resolveAgentForLaunch.mockReturnValue({
-      entry: { description: 'General chat assistant' },
-    });
     mocks.createHelperModelKit.mockRejectedValueOnce(
       new Error('helper unavailable'),
     );
@@ -200,7 +165,7 @@ describe('session description helpers', () => {
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
     });
-    mockToolUseAnswer('General chat assistant', 'Fixing proof typos');
+    mockToolUseAnswer('Fixing proof typos');
 
     await runDescription('exec-tool', 'stream-tool', session);
     detach();

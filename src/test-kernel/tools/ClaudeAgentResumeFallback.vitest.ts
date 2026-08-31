@@ -117,8 +117,8 @@ const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:claude-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
-function completedChildRunLoop(): { completion: Promise<void> } {
-  return { completion: Promise.resolve() };
+function completedChildRunLoop(): Promise<void> {
+  return Promise.resolve();
 }
 
 function stubExecutions(): any {
@@ -277,9 +277,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       .mockImplementation(() => {});
     const lateFailure = new Error('late Claude finalization failed');
     mocks.createChildStream.mockReturnValue(childStream);
-    mocks.startChildRunLoop.mockReturnValue({
-      completion: Promise.reject(lateFailure),
-    });
+    mocks.startChildRunLoop.mockReturnValue(Promise.reject(lateFailure));
 
     await expect(
       new ClaudeAgentTool().call({ prompt: 'launch Claude' }),

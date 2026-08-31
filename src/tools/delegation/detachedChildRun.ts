@@ -133,14 +133,14 @@ export async function startDetachedChildRunLoop<TTurn>(
         budgeted,
         ...loopParams
       } = input;
-      ({ completion } = startChildRunLoop({
+      completion = startChildRunLoop({
         ...loopParams,
         ...(childStream !== undefined && { childStream }),
         strategy: launch.strategy,
         // Every detached native/workflow child takes one shared-budget slot per
         // turn; an awaited in-band child rides its idle parent's slot instead.
         budgeted: budgeted ?? true,
-      }));
+      });
     } catch (error) {
       if (childStream) {
         try {

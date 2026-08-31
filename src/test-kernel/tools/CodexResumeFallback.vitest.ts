@@ -111,8 +111,8 @@ const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:codex-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
-function completedChildRunLoop(): { completion: Promise<void> } {
-  return { completion: Promise.resolve() };
+function completedChildRunLoop(): Promise<void> {
+  return Promise.resolve();
 }
 
 function toolContext(runContext: Record<string, unknown> = {}): unknown {
@@ -170,9 +170,7 @@ describe('codex tool - atomic resume fallback', () => {
       .mockImplementation(() => {});
     const lateFailure = new Error('late Codex finalization failed');
     mocks.createChildStream.mockReturnValue(childStream);
-    mocks.startChildRunLoop.mockReturnValue({
-      completion: Promise.reject(lateFailure),
-    });
+    mocks.startChildRunLoop.mockReturnValue(Promise.reject(lateFailure));
     mocks.importCodexClass.mockResolvedValue(
       class MockCodex {
         startThread(): {

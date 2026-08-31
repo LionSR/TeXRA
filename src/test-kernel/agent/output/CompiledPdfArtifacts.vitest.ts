@@ -155,8 +155,7 @@ describe('compiled PDF artifacts', () => {
       compiledPdfPath,
     });
 
-    expect(artifact?.pdf.relativePath).toBe('output/r2/paper.pdf');
-    expect(artifact?.latestPdf.relativePath).toBe('output/latest/paper.pdf');
+    expect(artifact?.relativePath).toBe('output/latest/paper.pdf');
     await expect(readOutput(runDirectory, 'r2', 'paper.pdf')).resolves.toBe(
       'pdf bytes',
     );
@@ -185,10 +184,7 @@ describe('compiled PDF artifacts', () => {
       pdfStemSuffix: '-diff',
     });
 
-    expect(artifact?.pdf.relativePath).toBe('output/r4/sections/main-diff.pdf');
-    expect(artifact?.latestPdf.relativePath).toBe(
-      'output/latest/sections/main-diff.pdf',
-    );
+    expect(artifact?.relativePath).toBe('output/latest/sections/main-diff.pdf');
   });
 
   it('strips a Windows-style round prefix without duplicating it', async () => {
@@ -210,10 +206,7 @@ describe('compiled PDF artifacts', () => {
       pdfStemSuffix: '-diff',
     });
 
-    expect(artifact?.pdf.relativePath).toBe('output/r4/sections/main-diff.pdf');
-    expect(artifact?.latestPdf.relativePath).toBe(
-      'output/latest/sections/main-diff.pdf',
-    );
+    expect(artifact?.relativePath).toBe('output/latest/sections/main-diff.pdf');
   });
 
   it('keeps distinct diff kinds for the same revised source', async () => {
@@ -248,9 +241,9 @@ describe('compiled PDF artifacts', () => {
       pdfStemSuffix: '-round-diff',
     });
 
-    expect(baseDiff?.pdf.relativePath).toBe('output/r5/sections/main-diff.pdf');
-    expect(roundDiff?.pdf.relativePath).toBe(
-      'output/r5/sections/main-round-diff.pdf',
+    expect(baseDiff?.relativePath).toBe('output/latest/sections/main-diff.pdf');
+    expect(roundDiff?.relativePath).toBe(
+      'output/latest/sections/main-round-diff.pdf',
     );
     await expect(
       readOutput(runDirectory, 'r5', 'sections', 'main-diff.pdf'),
@@ -293,10 +286,8 @@ describe('compiled PDF artifacts', () => {
       compiledPdfPath: secondPdfPath,
     });
 
-    expect(first?.pdf.relativePath).toBe('output/r3/ch1/main.pdf');
-    expect(second?.pdf.relativePath).toBe('output/r3/ch2/main.pdf');
-    expect(first?.latestPdf.relativePath).toBe('output/latest/ch1/main.pdf');
-    expect(second?.latestPdf.relativePath).toBe('output/latest/ch2/main.pdf');
+    expect(first?.relativePath).toBe('output/latest/ch1/main.pdf');
+    expect(second?.relativePath).toBe('output/latest/ch2/main.pdf');
     await expect(
       readOutput(runDirectory, 'r3', 'ch1', 'main.pdf'),
     ).resolves.toBe('chapter 1');
