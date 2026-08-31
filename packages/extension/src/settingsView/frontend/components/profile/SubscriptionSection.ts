@@ -150,8 +150,8 @@ export class SubscriptionSection extends LitElement {
               <span class="settings-row-label" aria-live="polite">
                 ${
                   signedIn
-                    ? html`${waIcon('circle-check')} Signed in as
-                        <bdi dir="auto">${account}</bdi>`
+                    ? html`${waIcon('circle-check')}
+                        <bdi dir="auto">${`Signed in as ${account}`}</bdi>`
                     : provider.accountTitle
                 }
               </span>
