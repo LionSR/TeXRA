@@ -360,14 +360,3 @@ export type AgentRunHandle = Pick<
   | 'deliveryTargetStreamId'
   | 'interrupt'
 >;
-
-/**
- * True when the handle is a child of parentStreamId (not the parent itself).
- */
-export function isChildExecution(
-  handle: AgentExecutionHandle,
-  parentStreamId: StreamTabId,
-): boolean {
-  if (handle.parentStreamId !== parentStreamId) return false;
-  return handle.isChildExecution;
-}

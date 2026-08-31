@@ -36,7 +36,6 @@ import {
 import { formatDuration, onAbort } from '@utils/core';
 import { createListenerSet, type ListenerSet } from '@utils/core/listenerSet';
 import {
-  isChildExecution,
   type AgentExecutionHandle,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
@@ -655,7 +654,7 @@ export class ExecutionRegistry {
       activation.interrupt();
     }
     for (const handle of this.handles.values()) {
-      if (isChildExecution(handle, parentStreamId)) {
+      if (handle.isOwnedBy(parentStreamId)) {
         this.terminate(handle, visited, options);
       }
     }
@@ -675,7 +674,7 @@ export class ExecutionRegistry {
       detachedChildStreamIds.push(activation.childStreamId);
     }
     for (const handle of this.handles.values()) {
-      if (!isChildExecution(handle, parentStreamId)) continue;
+      if (!handle.isOwnedBy(parentStreamId)) continue;
       this.approvals.detachStreamFromParent(handle.childStreamId);
       handle.detach();
       detachedChildStreamIds.push(handle.childStreamId);
@@ -818,7 +817,7 @@ export class ExecutionRegistry {
   getActiveChildren(parentStreamId: StreamTabId): ActiveChildInfo[] {
     const result: ActiveChildInfo[] = [];
     for (const handle of this.handles.values()) {
-      if (!isChildExecution(handle, parentStreamId)) continue;
+      if (!handle.isOwnedBy(parentStreamId)) continue;
       const { status } = this.getStatus(handle);
       result.push({
         executionId: handle.executionId,
@@ -843,7 +842,7 @@ export class ExecutionRegistry {
       return true;
     }
     for (const handle of this.handles.values()) {
-      if (isChildExecution(handle, parentStreamId)) return true;
+      if (handle.isOwnedBy(parentStreamId)) return true;
     }
     return false;
   }

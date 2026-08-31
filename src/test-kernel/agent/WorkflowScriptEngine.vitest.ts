@@ -7,7 +7,6 @@ import {
   type WorkflowScriptControl,
   type WorkflowScriptRunResult,
 } from '@agent/workflowScript';
-import { WorkflowScriptParseError } from '@agent/workflowScript/parseScript';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
@@ -138,7 +137,7 @@ return null`),
 
   it('rejects scripts without a leading meta export', () => {
     expect(() => parseWorkflowScript(`return 1`)).toThrow(
-      WorkflowScriptParseError,
+      /Workflow script must begin with `export const meta/,
     );
   });
 
