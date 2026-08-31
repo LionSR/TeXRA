@@ -87,14 +87,29 @@ async function createGoogleTransportClient(): Promise<GoogleGenAI> {
   return handler.getClient();
 }
 
-function pendingBodyResponse(
-  sourceCancel: (reason?: unknown) => void,
-): Response {
-  return new Response(
+function stubGoogleBody(
+  path: string,
+  options: { body?: string; signal?: AbortSignal } = {},
+) {
+  const input = new Request(
+    `https://generativelanguage.googleapis.com/${path}`,
+    options.signal ? { signal: options.signal } : undefined,
+  );
+  const addListener = vi.spyOn(input.signal, 'addEventListener');
+  const removeListener = vi.spyOn(input.signal, 'removeEventListener');
+  const sourceCancel = vi.fn();
+  const response = new Response(
     new ReadableStream<Uint8Array>({
+      start(controller) {
+        if (options.body === undefined) return;
+        controller.enqueue(new TextEncoder().encode(options.body));
+        controller.close();
+      },
       cancel: sourceCancel,
     }),
   );
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+  return { input, addListener, removeListener, sourceCancel };
 }
 
 describe('long-running model transport', () => {
@@ -270,54 +285,48 @@ describe('long-running model transport', () => {
     await userCancellationRejection;
   });
 
-  it.each(['normal success', 'fetch failure'] as const)(
-    'cleans up its timer and caller abort listener after %s',
-    async (outcome) => {
-      vi.useFakeTimers();
-      const caller = new AbortController();
-      const input = new Request(
-        'https://generativelanguage.googleapis.com/test',
-        {
-          signal: caller.signal,
-        },
-      );
-      const addListener = vi.spyOn(input.signal, 'addEventListener');
-      const removeListener = vi.spyOn(input.signal, 'removeEventListener');
-      const failure = new Error('fetch failed');
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() => {
-          if (outcome === 'normal success') {
-            return Promise.resolve(new Response('{"ok":true}'));
-          }
-          return Promise.reject(failure);
-        }),
-      );
+  it('cleans up after normal source stream consumption', async () => {
+    vi.useFakeTimers();
+    const caller = new AbortController();
+    const { input, addListener, removeListener, sourceCancel } = stubGoogleBody(
+      'success',
+      { body: '{"ok":true}', signal: caller.signal },
+    );
 
-      const result = longRunningGoogleInteractionsFetch(input);
-      if (outcome === 'normal success') {
-        await expect((await result).json()).resolves.toEqual({ ok: true });
-      } else {
-        await expect(result).rejects.toBe(failure);
-      }
+    const response = await longRunningGoogleInteractionsFetch(input);
+    await expect(response.json()).resolves.toEqual({ ok: true });
 
-      expect(addListener).toHaveBeenCalledOnce();
-      expect(removeListener).toHaveBeenCalledOnce();
-      expect(vi.getTimerCount()).toBe(0);
-    },
-  );
+    expect(addListener).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(sourceCancel).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cleans up its timer and caller abort listener after fetch failure', async () => {
+    vi.useFakeTimers();
+    const caller = new AbortController();
+    const input = new Request(
+      'https://generativelanguage.googleapis.com/fetch-failure',
+      { signal: caller.signal },
+    );
+    const addListener = vi.spyOn(input.signal, 'addEventListener');
+    const removeListener = vi.spyOn(input.signal, 'removeEventListener');
+    const failure = new Error('fetch failed');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(failure));
+
+    await expect(longRunningGoogleInteractionsFetch(input)).rejects.toBe(
+      failure,
+    );
+
+    expect(addListener).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('cancels the source reader and cleans up after a body timeout', async () => {
     vi.useFakeTimers();
-    const input = new Request(
-      'https://generativelanguage.googleapis.com/body-timeout',
-    );
-    const removeListener = vi.spyOn(input.signal, 'removeEventListener');
-    const sourceCancel = vi.fn();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(pendingBodyResponse(sourceCancel)),
-    );
+    const { input, removeListener, sourceCancel } =
+      stubGoogleBody('body-timeout');
 
     const response = await longRunningGoogleInteractionsFetch(input);
     const body = response.text();
@@ -335,15 +344,11 @@ describe('long-running model transport', () => {
   it('cancels the source reader and cleans up when the caller aborts during the body', async () => {
     vi.useFakeTimers();
     const caller = new AbortController();
-    const input = new Request(
-      'https://generativelanguage.googleapis.com/abort-body',
-      { signal: caller.signal },
-    );
-    const removeListener = vi.spyOn(input.signal, 'removeEventListener');
-    const sourceCancel = vi.fn();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(pendingBodyResponse(sourceCancel)),
+    const { input, removeListener, sourceCancel } = stubGoogleBody(
+      'abort-body',
+      {
+        signal: caller.signal,
+      },
     );
 
     const response = await longRunningGoogleInteractionsFetch(input);
@@ -362,15 +367,8 @@ describe('long-running model transport', () => {
 
   it('cancels the source reader and cleans up when the consumer cancels the stream', async () => {
     vi.useFakeTimers();
-    const input = new Request(
-      'https://generativelanguage.googleapis.com/cancel-stream',
-    );
-    const removeListener = vi.spyOn(input.signal, 'removeEventListener');
-    const sourceCancel = vi.fn();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(pendingBodyResponse(sourceCancel)),
-    );
+    const { input, removeListener, sourceCancel } =
+      stubGoogleBody('cancel-stream');
 
     const response = await longRunningGoogleInteractionsFetch(input);
     const reason = new Error('consumer stopped');
@@ -381,7 +379,7 @@ describe('long-running model transport', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('installs the long-running HTTP seam for every Google Interactions route and API version', async () => {
+  it('routes every Google Interactions request through the long-running HTTP seam', async () => {
     vi.useFakeTimers();
     const client = await createGoogleTransportClient();
     const interactions = client.interactions as unknown as {
@@ -392,11 +390,12 @@ describe('long-running model transport', () => {
     const installedGetClient = interactions.getClient.bind(interactions);
     const routeClients: Array<{
       apiVersion: string | undefined;
-      request: unknown;
+      request: ReturnType<typeof vi.fn>;
     }> = [];
     interactions.getClient = (apiVersion?: string) => {
       const sdk = installedGetClient(apiVersion);
-      routeClients.push({ apiVersion, request: sdk._httpClient.request });
+      const request = vi.spyOn(sdk._httpClient, 'request');
+      routeClients.push({ apiVersion, request });
       return sdk;
     };
 
@@ -412,28 +411,35 @@ describe('long-running model transport', () => {
             { headers: { 'content-type': 'text/event-stream' } },
           );
         }
+        const responses = [
+          { id: 'created', status: 'completed' },
+          { id: 'retrieved', status: 'completed' },
+          { id: 'cancelled', status: 'cancelled' },
+        ];
         return new Response(
-          JSON.stringify({
-            id: requests.length === 2 ? 'retrieved' : 'cancelled',
-            status: requests.length === 2 ? 'completed' : 'cancelled',
-            outputs: [],
-          }),
+          JSON.stringify({ ...responses[requests.length - 2], outputs: [] }),
           { headers: { 'content-type': 'application/json' } },
         );
       }),
     );
 
     const stream = await client.interactions.create(
-      {
-        model: 'gemini-test',
-        input: [],
-        stream: true,
-        api_version: 'v1alpha',
-      },
+      { model: 'gemini-test', input: [], stream: true },
       { maxRetries: 0 },
     );
     const events = [];
     for await (const event of stream) events.push(event);
+    await expect(
+      client.interactions.create(
+        {
+          model: 'gemini-test',
+          input: [],
+          stream: false,
+          api_version: 'v1alpha',
+        },
+        { maxRetries: 0 },
+      ),
+    ).resolves.toMatchObject({ id: 'created', status: 'completed' });
     await expect(
       client.interactions.get('retrieved', {}, { maxRetries: 0 }),
     ).resolves.toMatchObject({ id: 'retrieved', status: 'completed' });
@@ -444,12 +450,17 @@ describe('long-running model transport', () => {
     expect(events).toEqual([
       expect.objectContaining({ event_type: 'interaction.completed' }),
     ]);
-    expect(routeClients).toEqual([
-      { apiVersion: 'v1alpha', request: longRunningGoogleInteractionsFetch },
-      { apiVersion: undefined, request: longRunningGoogleInteractionsFetch },
-      { apiVersion: undefined, request: longRunningGoogleInteractionsFetch },
+    expect(routeClients.map(({ apiVersion }) => apiVersion)).toEqual([
+      undefined,
+      'v1alpha',
+      undefined,
+      undefined,
     ]);
+    expect(
+      routeClients.map(({ request }) => request.mock.calls.length),
+    ).toEqual([1, 1, 1, 1]);
     expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+      '/v1beta/interactions',
       '/v1alpha/interactions',
       '/v1beta/interactions/retrieved',
       '/v1beta/interactions/cancelled/cancel',
