@@ -443,8 +443,21 @@ const ToolInfoSchema = z.object({
   description: z.string().optional(),
 });
 
+/** One setup action exposed by a tool dashboard card. */
+const ToolInstallActionSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('guide'), text: z.string() }),
+  z.strictObject({ kind: z.literal('url'), url: z.string() }),
+  z.strictObject({
+    kind: z.literal('extension'),
+    extensionId: z.string(),
+  }),
+  z.strictObject({ kind: z.literal('command'), command: z.string() }),
+  z.strictObject({ kind: z.literal('auth'), command: z.string() }),
+]);
+export type ToolInstallAction = z.infer<typeof ToolInstallActionSchema>;
+
 /** Single tool entry in the dashboard */
-const ToolDashboardItemSchema = z.object({
+const ToolDashboardItemSchema = z.strictObject({
   id: z.string(),
   name: z.string(),
   category: ToolCategorySchema,
@@ -453,11 +466,7 @@ const ToolDashboardItemSchema = z.object({
   status: ToolStatusSchema,
   requiresSetup: z.boolean(),
   statusLabel: z.string().optional(),
-  installGuide: z.string().optional(),
-  installUrl: z.string().optional(),
-  installExtensionId: z.string().optional(),
-  installCommand: z.string().optional(),
-  authCommand: z.string().optional(),
+  installActions: z.array(ToolInstallActionSchema),
   configNotes: z.string().optional(),
   statusDetail: z.string().optional(),
   authNote: z.string().optional(),
