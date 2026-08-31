@@ -1,4 +1,5 @@
 import { LRUCache } from 'lru-cache';
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { isCodexSignedIn } from '@model/codex/codexSignedIn';
 import { isPreferCodexSubscription } from '@model/codex/codexPreference';
@@ -42,6 +43,7 @@ import {
 import {
   isOpenRouterRoutingUnsupported,
   resolveDirectModelApiKeyProvider,
+  resolveModelApiKeyProvider,
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
@@ -56,8 +58,6 @@ import {
   staticModelConfigEntries,
 } from './runtimeModelRegistry';
 import type { ProviderCapabilityProfile } from './providerCapabilities';
-import type { ModelConfig } from 'llm-zoo';
-
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
 /**
@@ -242,7 +242,11 @@ async function getPersonalAccessKindForModel(
 
   // At the picker boundary, absent and unreadable provider keys both degrade to
   // unavailable while still allowing an OpenRouter route below.
-  return config.openrouterFullName && ctx.hasOpenRouter
+  const openRouterFallbackProvider = resolveModelApiKeyProvider(config, true);
+  return config.openrouterFullName &&
+    ctx.hasOpenRouter &&
+    (config.provider !== ModelProvider.GLM ||
+      openRouterFallbackProvider === 'openRouter')
     ? 'openrouter-key'
     : null;
 }

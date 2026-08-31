@@ -386,6 +386,39 @@ describe('GLM custom endpoint routing', () => {
       handler.dispose();
     }
   });
+
+  it('does not advertise OpenRouter for a model-custom route without a GLM key', async () => {
+    MODEL_CONFIGS.glm52.baseUrl = 'https://model.test/v4';
+    await installPlatform({
+      globalState: { 'texra.useOpenRouter': true },
+      secrets: {
+        [apiKeySecretName('openRouter')]: 'openrouter-key',
+      },
+    });
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+
+    const [customAccess] = await computeModelOptionsData(['glm52']);
+    const handler = await createModelHandler(MODEL_CONFIGS.glm52);
+    try {
+      expect(handler.constructor.name).toBe('ModelHandlerGLM');
+      expect(customAccess).toMatchObject({
+        availability: 'missing-key',
+        disabled: true,
+      });
+    } finally {
+      handler.dispose();
+    }
+
+    delete MODEL_CONFIGS.glm52.baseUrl;
+    invalidateModelOptionsCache();
+
+    const [openRouterAccess] = await computeModelOptionsData(['glm52']);
+    expect(openRouterAccess).toMatchObject({
+      availability: 'openrouter-key',
+      disabled: false,
+    });
+  });
 });
 
 describe('OpenAI model handler routing', () => {
