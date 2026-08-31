@@ -13,11 +13,11 @@ importers:
   .:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.245
-        version: 0.3.245(@anthropic-ai/sdk@0.120.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.250
+        version: 0.3.250(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.120.0
-        version: 0.120.0(zod@4.4.3)
+        specifier: ^0.122.0
+        version: 0.122.0(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.12.0
         version: 3.12.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.2.18)
@@ -28,8 +28,8 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1
       '@google/genai':
-        specifier: ^2.18.0
-        version: 2.18.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
+        specifier: ^2.19.0
+        version: 2.19.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -52,11 +52,11 @@ importers:
         specifier: ^7.1.1
         version: 7.1.1
       '@openai/codex-sdk':
-        specifier: ^0.149.1
-        version: 0.149.1
+        specifier: ^0.150.1
+        version: 0.150.1
       '@openrouter/sdk':
-        specifier: ^1.2.66
-        version: 1.2.66
+        specifier: ^1.2.80
+        version: 1.2.80
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4(@opentelemetry/api@1.9.1)
@@ -112,8 +112,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1
       fast-xml-parser:
-        specifier: ^5.11.0
-        version: 5.11.0
+        specifier: ^5.11.1
+        version: 5.11.1
       fastest-levenshtein:
         specifier: ^1.0.16
         version: 1.0.16
@@ -148,8 +148,8 @@ importers:
         specifier: ^0.18.4
         version: 0.18.4
       ky:
-        specifier: ^2.0.2
-        version: 2.0.2
+        specifier: ^2.1.0
+        version: 2.1.0
       lit:
         specifier: ^3.3.3
         version: 3.3.3
@@ -160,8 +160,8 @@ importers:
         specifier: ^11.5.2
         version: 11.5.2
       markdown-it:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^15.0.1
+        version: 15.0.1
       markdown-it-texmath:
         specifier: ^1.0.0
         version: 1.0.0
@@ -190,8 +190,8 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       p-map:
-        specifier: ^7.0.6
-        version: 7.0.6
+        specifier: ^7.0.7
+        version: 7.0.7
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
@@ -223,8 +223,8 @@ importers:
         specifier: ^7.1.1
         version: 7.1.1
       pretty-ms:
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: ^9.3.1
+        version: 9.3.1
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
@@ -271,8 +271,8 @@ importers:
         specifier: ^7.29.0
         version: 7.29.0
       vscode-jsonrpc:
-        specifier: ^9.0.1
-        version: 9.0.1
+        specifier: ^9.0.2
+        version: 9.0.2
       which:
         specifier: ^5.0.0
         version: 5.0.0
@@ -398,17 +398,17 @@ importers:
   packages/agent:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.245
-        version: 0.3.245(@anthropic-ai/sdk@0.120.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.250
+        version: 0.3.250(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.120.0
-        version: 0.120.0(zod@4.4.3)
+        specifier: ^0.122.0
+        version: 0.122.0(zod@4.4.3)
       '@cantoo/pdf-lib':
         specifier: ^2.9.1
         version: 2.9.1(html-entities@2.6.0)
       '@google/genai':
-        specifier: ^2.18.0
-        version: 2.18.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
+        specifier: ^2.19.0
+        version: 2.19.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -422,11 +422,11 @@ importers:
         specifier: ^7.1.1
         version: 7.1.1
       '@openai/codex-sdk':
-        specifier: ^0.149.1
-        version: 0.149.1
+        specifier: ^0.150.1
+        version: 0.150.1
       '@openrouter/sdk':
-        specifier: ^1.2.66
-        version: 1.2.66
+        specifier: ^1.2.80
+        version: 1.2.80
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4(@opentelemetry/api@1.9.1)
@@ -476,8 +476,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1
       fast-xml-parser:
-        specifier: ^5.11.0
-        version: 5.11.0
+        specifier: ^5.11.1
+        version: 5.11.1
       glob:
         specifier: ^13.0.6
         version: 13.0.6
@@ -500,8 +500,8 @@ importers:
         specifier: ^3.1.1
         version: 3.1.1
       ky:
-        specifier: ^2.0.2
-        version: 2.0.2
+        specifier: ^2.1.0
+        version: 2.1.0
       llm-zoo:
         specifier: ^1.31.0
         version: 1.31.0(zod@4.4.3)
@@ -527,8 +527,8 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       p-map:
-        specifier: ^7.0.6
-        version: 7.0.6
+        specifier: ^7.0.7
+        version: 7.0.7
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
@@ -560,8 +560,8 @@ importers:
         specifier: ^7.1.1
         version: 7.1.1
       pretty-ms:
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: ^9.3.1
+        version: 9.3.1
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
@@ -593,8 +593,8 @@ importers:
         specifier: ^7.29.0
         version: 7.29.0
       vscode-jsonrpc:
-        specifier: ^9.0.1
-        version: 9.0.1
+        specifier: ^9.0.2
+        version: 9.0.2
       which:
         specifier: ^5.0.0
         version: 5.0.0
@@ -688,8 +688,8 @@ importers:
         specifier: ^11.5.2
         version: 11.5.2
       markdown-it:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^15.0.1
+        version: 15.0.1
       node-pty:
         specifier: ^1.0.0
         version: 1.1.0
@@ -742,8 +742,8 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0
       lucide-static:
-        specifier: ^1.34.0
-        version: 1.34.0
+        specifier: ^1.35.0
+        version: 1.35.0
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -752,11 +752,11 @@ importers:
         version: 7.8.5
     devDependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.245
-        version: 0.3.245(@anthropic-ai/sdk@0.120.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.250
+        version: 0.3.250(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
       '@openai/codex-sdk':
-        specifier: ^0.149.1
-        version: 0.149.1
+        specifier: ^0.150.1
+        version: 0.150.1
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
@@ -783,16 +783,16 @@ importers:
         version: '@typescript/typescript6@6.0.2'
       vite:
         specifier: ^8.2.2
-        version: 8.2.2(@types/node@26.3.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
+        version: 8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)
 
   packages/extension:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.3.245
-        version: 0.3.245(@anthropic-ai/sdk@0.120.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
+        specifier: ^0.3.250
+        version: 0.3.250(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.120.0
-        version: 0.120.0(zod@4.4.3)
+        specifier: ^0.122.0
+        version: 0.122.0(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.12.0
         version: 3.12.0(@floating-ui/utils@0.2.12)(@types/node@22.19.17)(@types/react@19.2.18)
@@ -803,8 +803,8 @@ importers:
         specifier: ^7.3.1
         version: 7.3.1
       '@google/genai':
-        specifier: ^2.18.0
-        version: 2.18.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
+        specifier: ^2.19.0
+        version: 2.19.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))
       '@jamesgopsill/crossref-client':
         specifier: ^1.1.0
         version: 1.1.0
@@ -818,11 +818,11 @@ importers:
         specifier: ^1.1.6
         version: 1.1.6
       '@openai/codex-sdk':
-        specifier: ^0.149.1
-        version: 0.149.1
+        specifier: ^0.150.1
+        version: 0.150.1
       '@openrouter/sdk':
-        specifier: ^1.2.66
-        version: 1.2.66
+        specifier: ^1.2.80
+        version: 1.2.80
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4(@opentelemetry/api@1.9.1)
@@ -851,8 +851,8 @@ importers:
         specifier: ^10.0.1
         version: 10.0.1
       fast-xml-parser:
-        specifier: ^5.11.0
-        version: 5.11.0
+        specifier: ^5.11.1
+        version: 5.11.1
       glob:
         specifier: ^13.0.6
         version: 13.0.6
@@ -881,8 +881,8 @@ importers:
         specifier: ^11.5.2
         version: 11.5.2
       markdown-it:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^15.0.1
+        version: 15.0.1
       markdown-it-texmath:
         specifier: ^1.0.0
         version: 1.0.0
@@ -899,8 +899,8 @@ importers:
         specifier: ^7.4.0
         version: 7.4.0(patch_hash=b93e49cfd275eb480aac067d76a3da100df386766cc32c5e62863ed5ae3b18b9)(ws@8.21.3)(zod@4.4.3)
       p-map:
-        specifier: ^7.0.6
-        version: 7.0.6
+        specifier: ^7.0.7
+        version: 7.0.7
       p-queue:
         specifier: ^9.3.3
         version: 9.3.3
@@ -1083,8 +1083,8 @@ importers:
         specifier: ^11.5.2
         version: 11.5.2
       markdown-it:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^15.0.1
+        version: 15.0.1
       markdown-it-texmath:
         specifier: ^1.0.0
         version: 1.0.0
@@ -1110,8 +1110,8 @@ importers:
         specifier: ^7.1.1
         version: 7.1.1
       pretty-ms:
-        specifier: ^9.3.0
-        version: 9.3.0
+        specifier: ^9.3.1
+        version: 9.3.1
       serialize-error:
         specifier: ^13.0.1
         version: 13.0.1
@@ -1147,60 +1147,60 @@ packages:
     resolution: {integrity: sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA==}
     engines: {node: '>=18'}
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.245':
-    resolution: {integrity: sha512-oH1R4yxVKR8oSYMqKHb5NaAPYq8+/enKR0qZKi+lKm6ru64onCmoujT3ilD9rz6TYALCYp2L8Jl2zwOerKSpug==}
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.250':
+    resolution: {integrity: sha512-tcekW4gR2UH0Q3COBaNPQIdud2lKEbs0HfG2yNKC18hXFPpgbuLCdjq0ndS1lcvC1q8ncPW3oQPUutQt3StICQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.245':
-    resolution: {integrity: sha512-VtK8dfnF0GhVzJgVylZxPdGRZb21DhOpd04WWefKRfnWVbgjdOtEGpafyMi4ZaND/ftYpc2PB2P7IX8OkIj5iA==}
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.250':
+    resolution: {integrity: sha512-8Yxmmi76oVEIam+oRgxcL2RtqEkKX9Gp4rh500HmMltjX3Tk/ryjCoJEHoaUdU/LU6vWvfQU5W+dB/SJCQQb2A==}
     cpu: [x64]
     os: [darwin]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.245':
-    resolution: {integrity: sha512-81QcZcFL5YcLLdvw2AXBq8Bxs/Fcq4qkq5dqUkjEEIi6jI2+WTk5gCjLsUg9zVaHG1yoVN3HKBFJss+sI+evHA==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.250':
+    resolution: {integrity: sha512-wpe2UmFrC2wyR+DbG6zIiRmqiFvK8nJjdi++nf3jNn0ZSHvW2BqPrh+JnPJOcmkAYR58IdMIj2jagbQAGtN/rA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.245':
-    resolution: {integrity: sha512-qIi1grLff5a3Z6K9dUsWKrFKcjUuOGErX89DHC9m0UBfGN6swOs6cFj9zvFYhJhLBJeZu0JKyz18BHSXfeu3PA==}
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.250':
+    resolution: {integrity: sha512-exABrKfqDv9rp6UCqOTjd4rH1lH6YZt0IuGFsAEHg52N08i5+4/uRtUlQzMf0VpN/dgqDoxt5jpOB9hH863r9w==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.245':
-    resolution: {integrity: sha512-3Uxl7YDnqpQHbSpEOYCPytcbcuo1PcdYHDXDpoSotBPlvFOJEiLGCGhwWfEbTO/9RGdp94Qm0T2gGtPNE6QpFg==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.250':
+    resolution: {integrity: sha512-ZMjXn2r00SlS17ozg6RfK+OF7kPo3COrCUTPrKnXZk7AYZ+hE0xqunrkt66LwYNFc+KlvDTAZZHSiZVblTT7rA==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.245':
-    resolution: {integrity: sha512-fvPtGYI61pGRP2rmaYskyLE83PytLLMV/NzDunmDlIRvqkzgQrxDBeOistt6mc29uAlI70EbaKW4zsSft6IhBQ==}
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.250':
+    resolution: {integrity: sha512-skqoeRDEjobqtIXmt9GNWJUyjcSvKHEf5QVf4PF9v37CtkJWEt7Hs64yFkahFD1mY34FAUyy/Ij0NrbeGKHPBg==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.245':
-    resolution: {integrity: sha512-N8JTt+DuX2xwbbnLMLDUgmnbtz3VKSGI07WV4WjCEBeb6Olt2KJHDksnJzknrbFBapJz915Vbv2fO+izJcRI1g==}
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.250':
+    resolution: {integrity: sha512-PC3pzcV8/bT9+PAM9k4fGMU64YY0F9NV6f/G4vbLMqz4qZAWqQp9AXMea+F5KULeJG2ygaAhmhcDyOzW77HhEw==}
     cpu: [arm64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.245':
-    resolution: {integrity: sha512-C8PHrQBPgExO6sr5bwG+IW7cTR2KDmvAUj9By++u+IiTFEAtPCEjOQ3CFgfPc5wTuGD26SrzWUbdEom5TQp1Dg==}
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.250':
+    resolution: {integrity: sha512-PjJRbJwDHccSUWls5gTiuXMgERit1WrrMQzzRqhhBHGzrlQueHVodrpg7HaN5gtirADJzfINcc7azq8j3qcEYw==}
     cpu: [x64]
     os: [win32]
 
-  '@anthropic-ai/claude-agent-sdk@0.3.245':
-    resolution: {integrity: sha512-b/SXCxBxZfN4ItHFDUS1uJ3xhI5fOSv3/VxyZvekYmlsbSwZi/75UqKhVlT7qbB1LDJOB48ZmQdCTxWhJWjObA==}
+  '@anthropic-ai/claude-agent-sdk@0.3.250':
+    resolution: {integrity: sha512-qT/1cBZs0+xPsQfqVOnwIk6pNW8XBkTpQS5RAXKHYb2XYCKqYc0UmOaeiYU2WeI6HEZKORa5iCaAZyKWGluShw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: ^4.0.0
 
-  '@anthropic-ai/sdk@0.120.0':
-    resolution: {integrity: sha512-ZlvmNFT/iIF6JD13rxbbMWD8nvGR0RaUp6yMQnoc+4Af0YjVVe/bIdW1XSQQsoxXAtg1NaT6Vak0LKFlJ4d37Q==}
+  '@anthropic-ai/sdk@0.122.0':
+    resolution: {integrity: sha512-GGPNftt0caaz9MDlmNQGHX8855Ojaduyy5pm9Sm1h7HalCn0cWNb5/bweadJF+4yzbal+QL6ztBa09WAAOzLmQ==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -1813,8 +1813,8 @@ packages:
     resolution: {integrity: sha512-v0BLa0eqg7ubvVWeNSHVBs8fWH/GJicERZoJaxJ3FE/lj67VSqzoMg9pzfZVOfLMX10y0pGwQAuxoRVVH2patg==}
     engines: {node: '>=6'}
 
-  '@google/genai@2.18.0':
-    resolution: {integrity: sha512-uy9gWVTAZXuA/2tld0QJl/QNiGEn4QOmfX4PiRgZQmeFQRQhojpD/Gf41SPnBJmjEnT83a+h4AdU1HHYaYvVDw==}
+  '@google/genai@2.19.0':
+    resolution: {integrity: sha512-IM3u1FjpOLyOPsPh0smGA6Ntj2olUWCPbTs/WQj7cA/2AKCGw/652W7IaySx0XtwuscFnMYBoraebQusSZ0zSQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -2150,53 +2150,53 @@ packages:
   '@octokit/types@17.0.0':
     resolution: {integrity: sha512-ByP1v7YL5SMveFPP7+sj0/ZuWCOOg/Chs4NafOMpq6WNIM/hdGY0S7C0TCGDBWu1aGmOxmUIhMx3cO+IdwYZ1Q==}
 
-  '@openai/codex-sdk@0.149.1':
-    resolution: {integrity: sha512-R00Rz5327LefZggAxl28r7vFQq1vxa91OxtjZJOsQfAM/MyH8InW5qwwRu6pzUmRGp1E29XrOzm7u1TeV5Yz2A==}
+  '@openai/codex-sdk@0.150.1':
+    resolution: {integrity: sha512-/Xp8CM2POoXcZd7MZ+07oXstAgNvflr0Mj7IUPKhyv1HAzaqoedv6PAcgJPUyiNU0vi1lfbkgcJU5QC+lxspSw==}
     engines: {node: '>=18'}
 
-  '@openai/codex@0.149.1':
-    resolution: {integrity: sha512-6q5pbcpFbJbqOpkubSDBwXmktQ55aD8eUzGzBF1zASob2DjwhBKDSNGtdZKalfrNJUdTDTPDMmzCXEXs5tMBYA==}
+  '@openai/codex@0.150.1':
+    resolution: {integrity: sha512-knrbhpJH3mEULAVStcZW4F5WEt9MQhBj6KFOonBSIUGTLcHlu9CE7FRmr95E33y94+sWNZSeVBBV/kYvlfgxkQ==}
     engines: {node: '>=16'}
     hasBin: true
 
-  '@openai/codex@0.149.1-darwin-arm64':
-    resolution: {integrity: sha512-6X84kTCbnTgPIJ2EdcPsrvwS0Wxsqpa+bCswGmRf4BjhcQ5nPMnBC6yCAaCMj+vrbXQHj+L6sa9FaR4QkmA1qw==}
+  '@openai/codex@0.150.1-darwin-arm64':
+    resolution: {integrity: sha512-Z614kKSI3/p+YMotBJMxCc4kvRCYEgsVmnaCG6U8HDraqTFxYcQYQ79B4/GBCBS88/KtacHI6qzjA+4Mu5BynA==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [darwin]
 
-  '@openai/codex@0.149.1-darwin-x64':
-    resolution: {integrity: sha512-MfLBQLfcElJL9tvj6y45qVHHMGSXCPnQOixuD3/Zq0g1BW/eFizkrGLdn48cFpc+l8cK+gt5nYG5pQYwVs6g4A==}
+  '@openai/codex@0.150.1-darwin-x64':
+    resolution: {integrity: sha512-vcvJ7Q4IP2vA5ZR3v9Pj9VLKtlhD7efujxHqqW/NJ8F2/XqTD4iPjErV07190Om3wONW48yploTgul16QUk9Mg==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [darwin]
 
-  '@openai/codex@0.149.1-linux-arm64':
-    resolution: {integrity: sha512-OqxUfZ1TVvHd18zHPKK/8ZRlpk8Vy11mg5CMHaLxNWldTbwVImDKtSLWT+m8m4NM5Sz4PbjtZMrVT/RfpBW/mQ==}
+  '@openai/codex@0.150.1-linux-arm64':
+    resolution: {integrity: sha512-U0BY5UDsCy1up/O2YzGtVtDbcumNerVyZVVx55PW9gGQsFOL0utOyBJiG/UiocFAXix8JNvNJxYMRt2Jx0FJKg==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [linux]
 
-  '@openai/codex@0.149.1-linux-x64':
-    resolution: {integrity: sha512-Of5fGYgr7tAMsyj6vhXb4/RM/UoA3Zq8BLegUBDC09UNy1XTLGYP/2XD+UX8z3qh0NDwxYdCjFIWdDNijKZggQ==}
+  '@openai/codex@0.150.1-linux-x64':
+    resolution: {integrity: sha512-B3Bu5MF/G9qFhbSMrdyZz9ocknXOo45DnOdWrREJaxWTjiuUO1ogoDR0/ttdc29JRFkbbXs3aC+Td8vIx3X0oA==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [linux]
 
-  '@openai/codex@0.149.1-win32-arm64':
-    resolution: {integrity: sha512-5K0DmOKGK9Bos627p8sK8ATHjovPK0sDyT6h9Cb+4v+5CW5SGw1HLgjGxoLfJ8g3cg6mtg/pRCXXo2L/j71UVA==}
+  '@openai/codex@0.150.1-win32-arm64':
+    resolution: {integrity: sha512-8I7N3ppKS1ql9GUr2RHS5Gw+KkRCKfIMIDDK/brxq6HizLgHoDK4CIR0OTvEgdX3Yh/2reBbxr9P4L1e+61e+Q==}
     engines: {node: '>=16'}
     cpu: [arm64]
     os: [win32]
 
-  '@openai/codex@0.149.1-win32-x64':
-    resolution: {integrity: sha512-G3QXGAg7nyyhqOeooAMUekBCeHd8a1QByhKcVAFyzNBaI06t6Ft7nsF+1SzFS0spuIdU4YyMi5YD26ukADBQUQ==}
+  '@openai/codex@0.150.1-win32-x64':
+    resolution: {integrity: sha512-1P1tscFnw4A4ip/WN1R5WYPdfuAlxLctPpcE1QAPQnOtbkJR5NX8da4kNTQmiDN/Flx3TLJPDTRHP9Jn435eJg==}
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@1.2.66':
-    resolution: {integrity: sha512-r5WtTmb00k/7YBOqp1PY4X1J0ZmZv3NkyZ46o2J+WUqV4NjPItOG39HclUy3jrKxmE3bggHWWKU+mV7o8Rfe0Q==}
+  '@openrouter/sdk@1.2.80':
+    resolution: {integrity: sha512-anSNV33p+8hWOgm/m+ACymgawY0aVQ+mpuAB3BZ4xhd174us7nZJrtMpBrW0X0PNzcCmJlrEFl4FTR2E5+/Gpg==}
 
   '@opentelemetry/api-logs@0.220.0':
     resolution: {integrity: sha512-CmVa4ImJ+ynfrPMNaAXHET6Bhb44SwzmfyVJFq9ni2jgXJR/l7C6gfVFddNmHP+ZOkP9cf4f9DBe68qVLTHc9w==}
@@ -2896,8 +2896,8 @@ packages:
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
 
-  '@types/node@26.3.0':
-    resolution: {integrity: sha512-L3fgrnchriRC2ExBflb8j4uZZURHZfQsmQeyVzhjcHW4kkwVyo8/0h1B2MVzMTrYUJYu6G7EWs14hW/L9putqw==}
+  '@types/node@26.4.0':
+    resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
 
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
@@ -3445,8 +3445,8 @@ packages:
   argparse@2.0.1:
     resolution: {integrity: sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==}
 
-  argparse@3.0.0:
-    resolution: {integrity: sha512-BOp5NMrHqKxmq/OLr+clzzrRxgOKSLkcjmkWuChp7Irqwn4s74WjOBPIgWfA/HMcBnVkZ5XEuf9uUqzlpfCQ6A==}
+  argparse@3.0.1:
+    resolution: {integrity: sha512-nM4mHF/KM1v59ZNKX7zfusQz5wUAxR511YG8Vo6TyiV4aqhu++rbJW4v04xsWhpSsHFj66flT8P7znVpyO20xQ==}
 
   array-parallel@0.1.3:
     resolution: {integrity: sha512-TDPTwSWW5E4oiFiKmz6RGJ/a80Y91GuLgUYuLd49+XBS75tYo8PNgaT2K/OxuQYqkoI852MDGBorg9OcUSTQ8w==}
@@ -4326,8 +4326,8 @@ packages:
     resolution: {integrity: sha512-a6Qh1RMCNbSrU1+sAyAAZH3rTe+OaWJbNZIq0S+ifZciUUOQtlVxBJwoTUE2bYhysmG/RYyI5WJFIKdBahJdrQ==}
     hasBin: true
 
-  fast-xml-parser@5.11.0:
-    resolution: {integrity: sha512-9IGxMqvqLOnqP+Egi1nqDHKv5k8aZ7r9n558enxcucmyVGEBNPAU+MOg/8jPIS7rO7sSq4gFm1/nHtiaubMruw==}
+  fast-xml-parser@5.11.1:
+    resolution: {integrity: sha512-TBw6K/fxoQGGjCmZDw9w/ZwP3uDcnTM4YH/g+PFRWr8sbe5idXtxNN6vITh4+1ruCZaho6uBFurElsA7F0zzgw==}
     hasBin: true
 
   fastest-levenshtein@1.0.16:
@@ -4605,8 +4605,8 @@ packages:
   highlightjs-lean@1.2.0:
     resolution: {integrity: sha512-GH4tsvbzzZVZiHfrZ7FyaSecnY1ba54XSZB19Iz7VG0N+YYeOPLf2vi0v7Sds+/shaTtRqqxK5Oss9f4wro+uQ==}
 
-  hono@4.13.4:
-    resolution: {integrity: sha512-AGEwKIyRMHRv1t8Wjwa3LHxQ61X5CqrdFT+4BRNTpqS5aJNnpl5WLjADb7vFlJzI/8uK7T5QLVApCMQKNa3LgQ==}
+  hono@4.13.5:
+    resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@4.1.0:
@@ -4825,8 +4825,8 @@ packages:
     resolution: {integrity: sha512-mE00Gnza5EEB3Ds0HfMyllZzbBrmLOX3vfWoj9A9PEnTfratQ/BcaJOuMhnkhjXvb2+FkY3VuHqtAGpTPmglFQ==}
     engines: {node: '>=18'}
 
-  is-unsafe@2.0.0:
-    resolution: {integrity: sha512-2LdV822R+wmI86unXA93WCFpL6g+av8ynWk0nrHyJqGop5VoocYsSLFgN8jrfalT6iGeLNM4KXuVSsULP53kEA==}
+  is-unsafe@2.0.2:
+    resolution: {integrity: sha512-HgbIHPBH0KHHCcjLfGsCvhtPTVxjaAZlXjwdz7/GQC40SjSe4sfQsar8J5VFo8JOSbarkpV0OLG95bbaNd9aAQ==}
 
   is-wayland@0.1.0:
     resolution: {integrity: sha512-QkbMsWkIfkrzOPxenwye0h56iAXirZYHG9eHVPb22fO9y+wPbaX/CHacOWBa/I++4ohTcByimhM1/nyCsH8KNA==}
@@ -4966,8 +4966,8 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
-  ky@2.0.2:
-    resolution: {integrity: sha512-/GmXpo9F9W+f8n4Ivr2iH+7h7wL7jLbLKWkMlpflcCRb6kGjBfTlASEXaZ9qUgNTn4VgS0P2pwxxzQ4EM6Ulgg==}
+  ky@2.1.0:
+    resolution: {integrity: sha512-nIKwelw+7qVqKOlX4Eht6GXfEXlDHcdIjyLWV3s119kYt5s+70ayTnYS+0fRNmtgGRRAfqdeWQbh8YizqkS0ng==}
     engines: {node: '>=22'}
 
   lazy-val@1.0.5:
@@ -5137,8 +5137,8 @@ packages:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
 
-  lucide-static@1.34.0:
-    resolution: {integrity: sha512-pSUvFhfhvDnhXN1fXerZEMgKLQQ3DneKwFYlqB5ji8OEAN0iPi/qgwQvCkcL519QgMeR66IpS/pT342VyT/g4g==}
+  lucide-static@1.35.0:
+    resolution: {integrity: sha512-Mc0cSZXDF+JkVG5YCrTsiDE3jnUrhNE0HJxL/8JJAI6NBGBDuJQPCni4QBRtK1AXVAmU4SlD1DfQG66VStUNCg==}
 
   macos-version@6.0.0:
     resolution: {integrity: sha512-O2S8voA+pMfCHhBn/TIYDXzJ1qNHpPDU32oFxglKnVdJABiYYITt45oLkV9yhwA3E2FDwn3tQqUFrTsr1p3sBQ==}
@@ -5154,12 +5154,12 @@ packages:
   markdown-it-texmath@1.0.0:
     resolution: {integrity: sha512-4hhkiX8/gus+6e53PLCUmUrsa6ZWGgJW2XCW6O0ASvZUiezIK900ZicinTDtG3kAO2kon7oUA/ReWmpW2FByxg==}
 
-  markdown-it@14.3.0:
-    resolution: {integrity: sha512-RCEsPjR+sr0x+AuYp601tKTkgFG4YEPLCzHST3cQ/fhlJkqAkz1L2/Qbp1j9qw5SBwQHFBoW8+hoN5xssOF0Tw==}
+  markdown-it@14.3.1:
+    resolution: {integrity: sha512-4Ej49aYTDFIQ+uBkfX8GBvJGccoARxxPep+7aWTs55ozbjQJpW9M26Fe53vnGgvLeVzva/amzjQQaQu9w0vMhA==}
     hasBin: true
 
-  markdown-it@15.0.0:
-    resolution: {integrity: sha512-Lf8ajvVNdRpzSNB4VegxNy7gjs8gU35l4b4+ET49LrQC5PKYwLZ72u60LeJ9gv3qiaesuYjJWCyVeQmv/QWKQw==}
+  markdown-it@15.0.1:
+    resolution: {integrity: sha512-9/7gE95FNPkfUWrjJIoHZza2iLmuJlPD0UNMxPi7bxUrbCR525YZY0r+zyfes0dZI5ZZ/uNIXUJca0pJvtw41g==}
     hasBin: true
 
   marked@11.2.0:
@@ -5523,8 +5523,8 @@ packages:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
 
-  p-map@7.0.6:
-    resolution: {integrity: sha512-I4Prw6ivkd6p8PiYR1tXASOAOBzIJwu0TB7fqaX0c/8c3QAehNYmX57EijyGGGBt3c/BIowGwV03RVBtXvHEVg==}
+  p-map@7.0.7:
+    resolution: {integrity: sha512-VaWRu2i4FJNRtiRWCuuQRgfQ1B7a6+gMSrO+3j0EQi/k0ULfS9kosRxGoiqwzIjZTDI02tGfk5mXXltLg6QtfQ==}
     engines: {node: '>=18'}
 
   p-queue@9.3.3:
@@ -5724,8 +5724,8 @@ packages:
     resolution: {integrity: sha512-X+vn9z8nOFZQlxOLmfJ0iKDdMD7jYTsTW12OAlCpdoE3Igik6L37pugIZi+N3usuyp5McfgKPWi12q3zvHLeGQ==}
     engines: {node: '>=20'}
 
-  pretty-ms@9.3.0:
-    resolution: {integrity: sha512-gjVS5hOP+M3wMm5nmNOucbIrqudzs9v/57bWRHQWLYklXqoXKrVfYW2W9+glfGsqtPgpiz5WwyEEB+ksXIx3gQ==}
+  pretty-ms@9.3.1:
+    resolution: {integrity: sha512-HzMy3Geq23nVALD/M2LliU+F+M+gVNsvkQWWqeBZ8HDiCgzo6YPJ/Omrmtq24EFrIsk0a3EkQGEd7bDOo+IhGA==}
     engines: {node: '>=18'}
 
   proc-log@6.1.0:
@@ -5746,8 +5746,8 @@ packages:
   proper-lockfile@4.1.2:
     resolution: {integrity: sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA==}
 
-  protobufjs@7.6.5:
-    resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
+  protobufjs@7.6.6:
+    resolution: {integrity: sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg==}
     engines: {node: '>=12.0.0'}
 
   proxy-addr@2.0.7:
@@ -6637,8 +6637,8 @@ packages:
       jsdom:
         optional: true
 
-  vscode-jsonrpc@9.0.1:
-    resolution: {integrity: sha512-rfuA6T75H6m5EkbhtEPzre9pT0HPcDI2MMy4+nPFIBks5J8JBAUHD4tRYSgaBOijIEC7SRkC1kKyXTLqbmh9jw==}
+  vscode-jsonrpc@9.0.2:
+    resolution: {integrity: sha512-SbQSV9yRemARxeXw6LU5sS6Zq0e9/DgCCX5yelH263ZQWukbTk8EF8fjTrr1dziasf4GwlJbvTwFnTrnQFWZXQ==}
     engines: {node: '>=14.0.0'}
 
   w3c-xmlserializer@5.0.0:
@@ -6855,46 +6855,46 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-darwin-x64@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-linux-arm64@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-linux-x64@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-win32-arm64@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.245':
+  '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.250':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.245(@anthropic-ai/sdk@0.120.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.250(@anthropic-ai/sdk@0.122.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@anthropic-ai/sdk': 0.120.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.122.0(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
-      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.245
-      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.245
+      '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-linux-arm64': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-linux-x64': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-linux-x64-musl': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.250
+      '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.250
 
-  '@anthropic-ai/sdk@0.120.0(zod@4.4.3)':
+  '@anthropic-ai/sdk@0.122.0(zod@4.4.3)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.0.0
@@ -7627,11 +7627,11 @@ snapshots:
     dependencies:
       '@fortawesome/fontawesome-common-types': 7.3.1
 
-  '@google/genai@2.18.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))':
+  '@google/genai@2.19.0(@modelcontextprotocol/sdk@1.30.0(zod@4.4.3))':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
-      protobufjs: 7.6.5
+      protobufjs: 7.6.6
       ws: 8.21.3
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.30.0(zod@4.4.3)
@@ -7640,9 +7640,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@hono/node-server@2.1.1(hono@4.13.4)':
+  '@hono/node-server@2.1.1(hono@4.13.5)':
     dependencies:
-      hono: 4.13.4
+      hono: 4.13.5
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -7915,7 +7915,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.30.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 2.1.1(hono@4.13.4)
+      '@hono/node-server': 2.1.1(hono@4.13.5)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -7925,7 +7925,7 @@ snapshots:
       eventsource-parser: 3.1.1
       express: 5.2.1
       express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.4
+      hono: 4.13.5
       jose: 6.2.10
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -8009,38 +8009,38 @@ snapshots:
     dependencies:
       '@octokit/openapi-types': 28.0.0
 
-  '@openai/codex-sdk@0.149.1':
+  '@openai/codex-sdk@0.150.1':
     dependencies:
-      '@openai/codex': 0.149.1
+      '@openai/codex': 0.150.1
 
-  '@openai/codex@0.149.1':
+  '@openai/codex@0.150.1':
     optionalDependencies:
-      '@openai/codex-darwin-arm64': '@openai/codex@0.149.1-darwin-arm64'
-      '@openai/codex-darwin-x64': '@openai/codex@0.149.1-darwin-x64'
-      '@openai/codex-linux-arm64': '@openai/codex@0.149.1-linux-arm64'
-      '@openai/codex-linux-x64': '@openai/codex@0.149.1-linux-x64'
-      '@openai/codex-win32-arm64': '@openai/codex@0.149.1-win32-arm64'
-      '@openai/codex-win32-x64': '@openai/codex@0.149.1-win32-x64'
+      '@openai/codex-darwin-arm64': '@openai/codex@0.150.1-darwin-arm64'
+      '@openai/codex-darwin-x64': '@openai/codex@0.150.1-darwin-x64'
+      '@openai/codex-linux-arm64': '@openai/codex@0.150.1-linux-arm64'
+      '@openai/codex-linux-x64': '@openai/codex@0.150.1-linux-x64'
+      '@openai/codex-win32-arm64': '@openai/codex@0.150.1-win32-arm64'
+      '@openai/codex-win32-x64': '@openai/codex@0.150.1-win32-x64'
 
-  '@openai/codex@0.149.1-darwin-arm64':
+  '@openai/codex@0.150.1-darwin-arm64':
     optional: true
 
-  '@openai/codex@0.149.1-darwin-x64':
+  '@openai/codex@0.150.1-darwin-x64':
     optional: true
 
-  '@openai/codex@0.149.1-linux-arm64':
+  '@openai/codex@0.150.1-linux-arm64':
     optional: true
 
-  '@openai/codex@0.149.1-linux-x64':
+  '@openai/codex@0.150.1-linux-x64':
     optional: true
 
-  '@openai/codex@0.149.1-win32-arm64':
+  '@openai/codex@0.150.1-win32-arm64':
     optional: true
 
-  '@openai/codex@0.149.1-win32-x64':
+  '@openai/codex@0.150.1-win32-x64':
     optional: true
 
-  '@openrouter/sdk@1.2.66':
+  '@openrouter/sdk@1.2.80':
     dependencies:
       zod: 4.4.3
 
@@ -8368,7 +8368,7 @@ snapshots:
       '@secretlint/source-creator': 10.2.2
       '@secretlint/types': 10.2.2
       debug: 4.4.3
-      p-map: 7.0.6
+      p-map: 7.0.7
     transitivePeerDependencies:
       - supports-color
 
@@ -8648,7 +8648,7 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
-  '@types/node@26.3.0':
+  '@types/node@26.4.0':
     dependencies:
       undici-types: 8.3.0
     optional: true
@@ -9028,7 +9028,7 @@ snapshots:
       hosted-git-info: 4.1.0
       jsonc-parser: 3.3.1
       leven: 3.1.0
-      markdown-it: 14.3.0
+      markdown-it: 14.3.1
       mime: 1.6.0
       minimatch: 10.2.6
       parse-semver: 1.1.1
@@ -9173,7 +9173,7 @@ snapshots:
 
   argparse@2.0.1: {}
 
-  argparse@3.0.0: {}
+  argparse@3.0.1: {}
 
   array-parallel@0.1.3: {}
 
@@ -10091,7 +10091,7 @@ snapshots:
       is-plain-obj: 4.1.0
       is-stream: 4.0.1
       npm-run-path: 6.0.0
-      pretty-ms: 9.3.0
+      pretty-ms: 9.3.1
       signal-exit: 4.1.0
       strip-final-newline: 4.0.0
       which-command: 0.1.0
@@ -10119,7 +10119,7 @@ snapshots:
       is-plain-obj: 4.1.0
       is-stream: 4.0.1
       npm-run-path: 6.0.0
-      pretty-ms: 9.3.0
+      pretty-ms: 9.3.1
       signal-exit: 4.1.0
       strip-final-newline: 4.0.0
       yoctocolors: 2.1.2
@@ -10205,11 +10205,11 @@ snapshots:
     dependencies:
       strnum: 1.1.2
 
-  fast-xml-parser@5.11.0:
+  fast-xml-parser@5.11.1:
     dependencies:
       '@nodable/entities': 3.0.0
       fast-xml-builder: 1.3.1
-      is-unsafe: 2.0.0
+      is-unsafe: 2.0.2
       path-expression-matcher: 1.6.2
       strnum: 2.4.2
       xml-naming: 0.3.0
@@ -10530,7 +10530,7 @@ snapshots:
 
   highlightjs-lean@1.2.0: {}
 
-  hono@4.13.4: {}
+  hono@4.13.5: {}
 
   hosted-git-info@4.1.0:
     dependencies:
@@ -10736,7 +10736,7 @@ snapshots:
 
   is-unicode-supported@2.1.0: {}
 
-  is-unsafe@2.0.0: {}
+  is-unsafe@2.0.2: {}
 
   is-wayland@0.1.0: {}
 
@@ -10902,7 +10902,7 @@ snapshots:
       yaml: 2.9.0
       zod: 4.4.3
 
-  ky@2.0.2: {}
+  ky@2.1.0: {}
 
   lazy-val@1.0.5: {}
 
@@ -11038,7 +11038,7 @@ snapshots:
     dependencies:
       yallist: 4.0.0
 
-  lucide-static@1.34.0: {}
+  lucide-static@1.35.0: {}
 
   macos-version@6.0.0:
     dependencies:
@@ -11056,7 +11056,7 @@ snapshots:
 
   markdown-it-texmath@1.0.0: {}
 
-  markdown-it@14.3.0:
+  markdown-it@14.3.1:
     dependencies:
       argparse: 2.0.1
       entities: 4.5.0
@@ -11065,9 +11065,9 @@ snapshots:
       punycode.js: 2.3.1
       uc.micro: 2.1.0
 
-  markdown-it@15.0.0:
+  markdown-it@15.0.1:
     dependencies:
-      argparse: 3.0.0
+      argparse: 3.0.1
       entities: 8.0.0
       linkify-it: 6.1.0
       mdurl: 2.1.0
@@ -11435,7 +11435,7 @@ snapshots:
     dependencies:
       p-limit: 3.1.0
 
-  p-map@7.0.6: {}
+  p-map@7.0.7: {}
 
   p-queue@9.3.3:
     dependencies:
@@ -11609,7 +11609,7 @@ snapshots:
 
   pretty-bytes@7.1.1: {}
 
-  pretty-ms@9.3.0:
+  pretty-ms@9.3.1:
     dependencies:
       parse-ms: 4.0.0
 
@@ -11630,7 +11630,7 @@ snapshots:
       retry: 0.12.0
       signal-exit: 3.0.7
 
-  protobufjs@7.6.5:
+  protobufjs@7.6.6:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2
@@ -12544,7 +12544,7 @@ snapshots:
       terser: 5.48.0
       yaml: 2.9.0
 
-  vite@8.2.2(@types/node@26.3.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0):
+  vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
@@ -12552,7 +12552,7 @@ snapshots:
       rolldown: 1.2.5
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.3.0
+      '@types/node': 26.4.0
       esbuild: 0.28.2
       fsevents: 2.3.3
       jiti: 2.7.0
@@ -12588,7 +12588,7 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vscode-jsonrpc@9.0.1: {}
+  vscode-jsonrpc@9.0.2: {}
 
   w3c-xmlserializer@5.0.0:
     dependencies:
