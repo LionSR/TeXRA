@@ -23,11 +23,11 @@ const AgentFlowMetaSchema = z.object({
    */
   totalCostUsd: z.number().nonnegative().optional(),
   /**
-   * The structured provider error of a run that ended FAILED. This is the one
-   * carrier for a failure that still has a result: a flow reports its failure
-   * on the result it returns rather than through an exception subclass, and
-   * `runFlowWithLifecycle` reads it to classify, log, and publish the terminal
-   * error facts. Absent on every non-failed outcome.
+   * Structured provider/runtime error behind a FAILED outcome, when one exists.
+   * `runFlowWithLifecycle` classifies and publishes this error. Domain verdicts
+   * such as rejected workflow output can also end FAILED without manufacturing
+   * provider error metadata; their diagnostics remain in category fields.
+   * Absent on every non-failed outcome.
    */
   error: RetryErrorInfoSchema.optional(),
 });

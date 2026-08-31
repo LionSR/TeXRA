@@ -6,7 +6,10 @@ import {
   persistChildRunResultMeta,
   type ResumabilityDecision,
 } from '@agent/storage';
-import type { AgentConfigPayload } from '@agent/runtime';
+import {
+  isTerminalPersistedCompileRejection,
+  type AgentConfigPayload,
+} from '@agent/runtime';
 import { RUN_OUTCOME, type ExecutionId, AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -198,7 +201,7 @@ export async function executeCliWorkflowConfig(
       typeof shared === 'object' && shared !== null
         ? (shared as Record<string, unknown>).lastError
         : undefined;
-    return lastError == null;
+    return lastError == null && !isTerminalPersistedCompileRejection(shared);
   };
   const writeResumeHint = (
     executionId: ExecutionId,

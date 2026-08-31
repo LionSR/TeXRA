@@ -250,11 +250,9 @@ export async function resolveWorkflowOutput(
 ): Promise<CliWorkflowRunResult> {
   const runDirectory = options.runDirectory ?? getRunDir(result.executionId);
   const baseResult = { ...result, workingDirectory: context.cwd, runDirectory };
-  // Interrupted rounds remain inspectable in run storage, but are not final
-  // artifacts and must not replace the user's requested destination.
-  if (result.outcome === RUN_OUTCOME.CANCELLED && (outputFile || outputDir)) {
-    return baseResult;
-  }
+  // Only completed runs may publish to user-requested destinations. Partial or
+  // rejected artifacts remain inspectable in run storage through baseResult.
+  if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
   // Commit before validation as well as copying: once output finalization owns
   // the verdict, its missing-output and filesystem failures must stay visible.
   if ((outputFile || outputDir) && options.tryCommitPublication?.() === false) {
@@ -326,6 +324,13 @@ export async function resolveWorkflowOutput(
 }
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
+  if (result.outcome === RUN_OUTCOME.FAILED) {
+    const diagnosticPath =
+      result.runDirectory ?? finalWorkflowOutput(result.outputs)?.absolutePath;
+    return diagnosticPath
+      ? `FAILED\nRun artifacts: ${diagnosticPath}`
+      : 'FAILED';
+  }
   if (
     result.outcome === RUN_OUTCOME.CANCELLED &&
     result.runDirectory &&

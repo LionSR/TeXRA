@@ -44,10 +44,10 @@ export const WorkflowAgentFinalResultSchema = WorkflowFlowResultSchema.pick({
     diffsUnavailable: z.string().optional(),
     structured: JsonValueSchema.optional(),
     /**
-     * The structured error of a run that ended FAILED, carried on the typed
-     * result so chaining consumers read the failure from the artifact itself
-     * (the result-only observability contract). Absent on non-failed
-     * outcomes; journal entries only ever hold completed results.
+     * Structured provider/runtime error behind a FAILED outcome, when present.
+     * Outcome-only domain failures can end FAILED without this field and carry
+     * their diagnostics in category-specific result fields. Absent on every
+     * non-failed outcome; journal entries only ever hold completed results.
      */
     error: RetryErrorInfoSchema.optional(),
   })
@@ -64,12 +64,12 @@ const ToolUseAgentFinalResultSchema = ToolUseFlowResultSchema.pick({
     files: ToolUseFlowResultSchema.shape.files.unwrap().prefault(() => []),
     cost: CostSchema,
     structured: JsonValueSchema.optional(),
-    /** See the workflow member: failed runs carry their structured error. */
+    /** See the workflow member: provider/runtime failures carry this field. */
     error: RetryErrorInfoSchema.optional(),
   })
   .strict();
 
-/** Stable result returned by any completed agent run. */
+/** Stable result returned by any terminal agent run. */
 export const AgentFinalResultSchema = z.discriminatedUnion('category', [
   WorkflowAgentFinalResultSchema,
   ToolUseAgentFinalResultSchema,

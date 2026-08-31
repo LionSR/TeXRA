@@ -1,11 +1,12 @@
-import { getExecutionStore } from '@agent/storage';
 import {
   classifyRun,
+  hasTerminalPersistedCompileRejection,
   retrieveSessionResumeData,
   type AgentConfig,
 } from '@agent/runtime';
+import { getExecutionStore } from '@agent/storage';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('CliToolUseResumeData');
@@ -42,6 +43,12 @@ export async function readCliResumeDataForListing(
 ): Promise<CliSessionResumeData | null> {
   try {
     if ((await classifyRun(id)).kind !== 'resumable') return null;
+    if (
+      config.agentCategory === AgentCategory.Workflow &&
+      (await hasTerminalPersistedCompileRejection(id))
+    ) {
+      return null;
+    }
     return await readCliSessionResumeData(id, config);
   } catch (error) {
     logger.debug(

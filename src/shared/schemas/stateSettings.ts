@@ -1367,7 +1367,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+      'src/agent/implementations/flows/reflection/runReflectionFlow.ts',
       WORKFLOW_REJECT_RUNTIME_REACHABILITY,
     ),
     surfaces: { settingsView: 'latex', cliConfig: true },

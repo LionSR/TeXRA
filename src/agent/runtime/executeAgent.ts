@@ -308,10 +308,10 @@ export interface SubagentRunOptions {
   /** Session owning this run's coordination state. Defaults to the process session. */
   session?: SessionHandle;
   /**
-   * Fires when the subagent run itself fails, so a caller can report the
-   * failure up the delegation chain. Distinct from a host-level failure
-   * surface such as `ResumeQueuedToolUseOptions.onError` (log + toast for a
-   * failed resume-plumbing step) — this callback is about the run's outcome.
+   * Fires when a subagent fails with a provider/runtime error that the caller
+   * can report up the delegation chain. Outcome-only domain failures remain on
+   * the returned result and do not manufacture an error for this callback.
+   * Distinct from host-level resume-plumbing error surfaces.
    */
   onRunError?: (
     error: unknown,

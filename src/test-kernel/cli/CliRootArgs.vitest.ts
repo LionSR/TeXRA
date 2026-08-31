@@ -838,7 +838,7 @@ describe('CLI root argument routing', () => {
     });
   });
 
-  it('reports missing workflow outputs as a failed copy operation', async () => {
+  it('keeps a failed workflow with no output in run storage', async () => {
     await expect(
       resolveWorkflowOutput(
         'corrected.tex',
@@ -852,11 +852,13 @@ describe('CLI root argument routing', () => {
           compileFailures: [],
         },
         createRunCommandCliContext(),
-        {},
+        { runDirectory: '/tmp/runs/execution-without-output' },
       ),
-    ).rejects.toThrow(
-      'Workflow error without a generated output; corrected.tex was not written.',
-    );
+    ).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.FAILED,
+      runDirectory: '/tmp/runs/execution-without-output',
+      outputs: [],
+    });
   });
 
   it('restores one requested workflow output path for resume', () => {
