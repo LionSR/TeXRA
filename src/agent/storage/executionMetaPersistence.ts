@@ -27,7 +27,7 @@ import { isDirectory } from '@utils/files/fsEntryType';
 
 // Local imports
 import { getExecutionStore } from './ExecutionKVStore';
-import { writeLegacyExecutionStreamId } from './executionLifecycle';
+import { updateExecutionMeta } from './executionLifecycle';
 
 const log = createLog('ExecutionStreamHealing');
 const LEGACY_SCAN_CONCURRENCY = 8;
@@ -162,6 +162,16 @@ async function readModernStreamClaims(): Promise<ModernStreamClaims> {
   return { byStream, unreadable };
 }
 
+async function stampRecoveredStreamId(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): Promise<StreamTabId> {
+  const persisted = await updateExecutionMeta(executionId, (existing) =>
+    existing.streamId ? {} : { streamId },
+  );
+  return persisted.streamId ?? streamId;
+}
+
 /**
  * Create one operation-scoped healer for the execution metadata read boundary.
  * Evidence is loaded lazily, so modern reads never scan compatibility data and
@@ -170,12 +180,24 @@ async function readModernStreamClaims(): Promise<ModernStreamClaims> {
 function createLegacyExecutionStreamHealer(): (
   executionId: ExecutionId,
   meta: ExecutionMeta,
+  validateModernClaims: boolean,
 ) => Promise<LegacyExecutionStreamRecovery> {
   let sidecarEvidence: Promise<LegacyStreamEvidence> | undefined;
   let modernClaims: Promise<ModernStreamClaims> | undefined;
-  return async (executionId, meta) => {
+  return async (executionId, meta, validateModernClaims) => {
     if (meta.streamId) {
-      return { streamId: meta.streamId, ownershipUnknown: false };
+      if (!validateModernClaims) {
+        return { streamId: meta.streamId, ownershipUnknown: false };
+      }
+      modernClaims ??= readModernStreamClaims();
+      const claims = await modernClaims;
+      const claimedByAnotherExecution = (
+        claims.byStream.get(meta.streamId) ?? []
+      ).some((claimant) => claimant !== executionId);
+      return {
+        streamId: meta.streamId,
+        ownershipUnknown: claims.unreadable || claimedByAnotherExecution,
+      };
     }
 
     sidecarEvidence ??= readLegacyStreamEvidence();
@@ -201,7 +223,7 @@ function createLegacyExecutionStreamHealer(): (
       return { streamId: undefined, ownershipUnknown: true };
     }
     return {
-      streamId: await writeLegacyExecutionStreamId(executionId, candidates[0]),
+      streamId: await stampRecoveredStreamId(executionId, candidates[0]),
       ownershipUnknown: false,
     };
   };
@@ -211,7 +233,7 @@ function createLegacyExecutionStreamHealer(): (
 class ExecutionStreamOwnershipUnknownError extends Error {
   constructor(readonly executionId: ExecutionId) {
     super(
-      `Execution ${executionId} has ambiguous or unreadable historical stream ownership.`,
+      `Execution ${executionId} has ambiguous or unreadable persisted stream ownership.`,
     );
     this.name = 'ExecutionStreamOwnershipUnknownError';
   }
@@ -220,6 +242,8 @@ class ExecutionStreamOwnershipUnknownError extends Error {
 export interface ExecutionMetaReader {
   read(executionId: ExecutionId): Promise<ExecutionMeta | null>;
   readStrict(executionId: ExecutionId): Promise<ExecutionMeta | null>;
+  /** Validate persisted stream claims before destructive adjacent cleanup. */
+  readForDeletion(executionId: ExecutionId): Promise<ExecutionMeta | null>;
 }
 
 /**
@@ -237,30 +261,37 @@ export function createExecutionMetaReader(): ExecutionMetaReader {
   const normalize = async (
     executionId: ExecutionId,
     meta: ExecutionMeta | null,
-    strict: boolean,
+    mode: 'permissive' | 'strict' | 'deletion',
   ): Promise<ExecutionMeta | null> => {
-    if (!meta || meta.streamId) return meta;
-    const recovery = await healLegacyStreamId(executionId, meta);
-    if (recovery.streamId) {
-      return { ...meta, streamId: recovery.streamId };
-    }
-    if (strict && recovery.ownershipUnknown) {
+    if (!meta) return meta;
+    const recovery = await healLegacyStreamId(
+      executionId,
+      meta,
+      mode === 'deletion',
+    );
+    if (recovery.ownershipUnknown && mode !== 'permissive') {
       throw new ExecutionStreamOwnershipUnknownError(executionId);
     }
-    return meta;
+    return recovery.streamId ? { ...meta, streamId: recovery.streamId } : meta;
   };
   return {
     read: async (executionId) =>
       normalize(
         executionId,
         await getExecutionStore(executionId).readMeta(),
-        false,
+        'permissive',
       ),
     readStrict: async (executionId) =>
       normalize(
         executionId,
         await getExecutionStore(executionId).readMetaStrict(),
-        true,
+        'strict',
+      ),
+    readForDeletion: async (executionId) =>
+      normalize(
+        executionId,
+        await getExecutionStore(executionId).readMetaStrict(),
+        'deletion',
       ),
   };
 }

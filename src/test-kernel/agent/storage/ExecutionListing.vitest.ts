@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearStoreCache,
+  deleteExecution,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
@@ -66,6 +67,16 @@ async function writeStreamMeta(
   meta: unknown,
 ): Promise<void> {
   await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, meta);
+}
+
+async function writeEncodedStreamMeta(
+  encodedStreamId: string,
+  meta: unknown,
+): Promise<void> {
+  await new KVStore(`${STREAM_DATA_DIR}/${encodedStreamId}`).write(
+    STREAM_DATA_KEYS.META,
+    meta,
+  );
 }
 
 describe('execution listing normalization', () => {
@@ -181,6 +192,32 @@ describe('execution listing normalization', () => {
     ).toBeUndefined();
   });
 
+  it.each([
+    { name: 'reserved', encodedStreamId: '%2E%2E' },
+    { name: 'undecodable', encodedStreamId: '%E0%A4%A' },
+    { name: 'noncanonical', encodedStreamId: '%6Cegacy-invalid' },
+  ])(
+    'fails closed for a $name sidecar directory name',
+    async ({ encodedStreamId }) => {
+      const executionId = 'f9892109' as ExecutionId;
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+      });
+      await writeStreamMeta('valid-candidate' as StreamTabId, { executionId });
+      await writeEncodedStreamMeta(encodedStreamId, { executionId });
+
+      await expect(readExecutionMeta(executionId)).resolves.toEqual(
+        expect.not.objectContaining({ streamId: expect.any(String) }),
+      );
+      expect(
+        (await getExecutionStore(executionId).readMeta())?.streamId,
+      ).toBeUndefined();
+      await expect(
+        createExecutionMetaReader().readForDeletion(executionId),
+      ).rejects.toThrow(/ownership/i);
+    },
+  );
+
   it('does not scan sidecars for a modern row', async () => {
     const executionId = 'f9892103' as ExecutionId;
     const streamId = 'modern-stream' as StreamTabId;
@@ -243,6 +280,43 @@ describe('execution listing normalization', () => {
     expect([...duplicate.unreadable.keys()]).toEqual(
       expect.arrayContaining([modern, legacy]),
     );
+  });
+
+  it('blocks deletion of either execution when modern metadata duplicates a stream claim', async () => {
+    const first = 'f9892107' as ExecutionId;
+    const second = 'f9892108' as ExecutionId;
+    const streamId = 'duplicate-modern-stream' as StreamTabId;
+    for (const executionId of [first, second]) {
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-08-30T00:00:00.000Z',
+        streamId,
+      });
+    }
+    await writeStreamMeta(streamId, { executionId: first });
+    const deleteAdjacentStreamState = vi.fn(async (stream: StreamTabId) => {
+      await StorageFS.delete(streamDataDir(stream), { recursive: true });
+    });
+    const cleanupExecution = createExecutionAdjacentStreamCleanup({
+      deleteAdjacentStreamState,
+    });
+
+    for (const executionId of [first, second]) {
+      await expect(
+        deleteExecution(executionId, {
+          beforeDelete: () => cleanupExecution(executionId),
+        }),
+      ).rejects.toThrow();
+      expect(deleteAdjacentStreamState).not.toHaveBeenCalled();
+      await expect(
+        StorageFS.exists(`${RUNS_STORAGE_DIR}/${first}`),
+      ).resolves.toBe(true);
+      await expect(
+        StorageFS.exists(`${RUNS_STORAGE_DIR}/${second}`),
+      ).resolves.toBe(true);
+      await expect(
+        new KVStore(streamDataDir(streamId)).exists(STREAM_DATA_KEYS.META),
+      ).resolves.toBe(true);
+    }
   });
 
   it('scans legacy sidecars once per listing and does not cache no-match results', async () => {

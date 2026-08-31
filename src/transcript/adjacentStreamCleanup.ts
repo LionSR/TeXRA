@@ -105,14 +105,14 @@ export function resolveAdjacentStreamCleanup(
   return liveStreamCleanup ?? createStandaloneStreamCleanup();
 }
 
-/** Build one execution cleanup operation with one lazy legacy sidecar scan. */
+/** Build one execution cleanup operation with one lazy ownership scan. */
 export function createExecutionAdjacentStreamCleanup(
   cleanup: AdjacentStreamCleanup,
 ): (executionId: ExecutionId) => Promise<void> {
   const metaReader = createExecutionMetaReader();
   return async (executionId) => {
     try {
-      const meta = await metaReader.readStrict(executionId);
+      const meta = await metaReader.readForDeletion(executionId);
       if (!meta?.streamId) return;
       await cleanup.deleteAdjacentStreamState(meta.streamId);
     } catch (error) {

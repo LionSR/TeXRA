@@ -70,11 +70,11 @@ export async function getPersistedUserFollowUpSupport(
 
 const metaWriteLocks = new KeyedMutex<ExecutionId>();
 
-/** Run a read-modify-write cycle on an execution's metadata under its lock. */
-function enqueueMetaUpdate(
+/** Run a fenced read-modify-write cycle on an execution's metadata. */
+export function updateExecutionMeta(
   executionId: ExecutionId,
   updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
-): Promise<void> {
+): Promise<ExecutionMeta> {
   return metaWriteLocks.runExclusive(executionId, () =>
     runWithExecutionLeaseWriteFence(executionId, async () => {
       const store = getExecutionStore(executionId);
@@ -82,22 +82,11 @@ function enqueueMetaUpdate(
       if (!existing) {
         throw new Error(`Execution metadata not found for ${executionId}`);
       }
-      await store.writeMeta({ ...existing, ...updater(existing) });
+      const updated = { ...existing, ...updater(existing) };
+      await store.writeMeta(updated);
+      return updated;
     }),
   );
-}
-
-/** Stamp a confirmed pre-#9520 stream edge without replacing a concurrent writer. */
-export async function writeLegacyExecutionStreamId(
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): Promise<StreamTabId> {
-  let persistedStreamId = streamId;
-  await enqueueMetaUpdate(executionId, (existing) => {
-    persistedStreamId = existing.streamId ?? streamId;
-    return existing.streamId ? {} : { streamId };
-  });
-  return persistedStreamId;
 }
 
 /** Persist the workflow runner's canonical execution snapshot on its run. */
@@ -106,7 +95,9 @@ export function writeWorkflowExecutionSnapshot(
   workflow: WorkflowExecutionSnapshot,
 ): Promise<void> {
   const canonical = WorkflowExecutionSnapshotSchema.parse(workflow);
-  return enqueueMetaUpdate(executionId, () => ({ workflow: canonical }));
+  return updateExecutionMeta(executionId, () => ({ workflow: canonical })).then(
+    () => undefined,
+  );
 }
 
 interface RegisterExecutionOptions {
@@ -213,7 +204,7 @@ export async function clearTerminalExecutionState(
 }> {
   const meta = await getExecutionStore(executionId).readMeta();
   if (meta?.outcome !== undefined) {
-    await enqueueMetaUpdate(executionId, () => ({ outcome: undefined }));
+    await updateExecutionMeta(executionId, () => ({ outcome: undefined }));
   }
   return {
     previousOutcome: meta?.outcome,
@@ -300,7 +291,7 @@ export async function finalizeRun(
   };
   try {
     // Persist the canonical terminal outcome — the one terminal write.
-    await enqueueMetaUpdate(executionId, (existing) =>
+    await updateExecutionMeta(executionId, (existing) =>
       keepExistingOutcome === true && existing.outcome != null
         ? {}
         : { outcome },
@@ -343,7 +334,7 @@ export async function writeSessionDescription(
   // prevent read-modify-write races (e.g. against terminal status). Never
   // throws: the description is presentation metadata, not lifecycle state.
   try {
-    await enqueueMetaUpdate(executionId, () => ({ description }));
+    await updateExecutionMeta(executionId, () => ({ description }));
   } catch (err) {
     // Swallow and log — don't let storage I/O errors disrupt execution lifecycle.
     log.debug(

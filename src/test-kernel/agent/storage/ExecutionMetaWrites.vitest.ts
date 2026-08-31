@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { finalizeRun, getExecutionStore } from '@agent/storage';
-import {
-  writeLegacyExecutionStreamId,
-  writeSessionDescription,
-} from '@agent/storage/executionLifecycle';
+import { writeSessionDescription } from '@agent/storage/executionLifecycle';
+import { readExecutionMeta } from '@agent/storage/executionMetaPersistence';
 import { KVStore } from '@common/storage/KVStore';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
@@ -14,6 +12,7 @@ import {
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
 describe('execution metadata updates', () => {
@@ -75,19 +74,26 @@ describe('execution metadata updates', () => {
     const timestamp = new Date(0).toISOString();
     const store = getExecutionStore(id);
     await store.writeMeta({ timestamp });
+    await new KVStore(streamDataDir(legacy)).write(STREAM_DATA_KEYS.META, {
+      executionId: id,
+    });
     const started = createDeferred();
     const release = createDeferred();
     const originalReadDir = StorageFS.readDir.bind(StorageFS);
+    let blocked = false;
     const readDir = vi
       .spyOn(StorageFS, 'readDir')
-      .mockImplementationOnce(async (path) => {
-        started.resolve();
-        await release.promise;
+      .mockImplementation(async (path) => {
+        if (!blocked && path.includes(id)) {
+          blocked = true;
+          started.resolve();
+          await release.promise;
+        }
         return originalReadDir(path);
       });
 
     try {
-      const staleUpdate = writeLegacyExecutionStreamId(id, legacy);
+      const staleUpdate = readExecutionMeta(id);
       await started.promise;
       // Model a second process that won its lease and persisted while this
       // updater was still outside its own lease-protected transaction.
@@ -97,7 +103,7 @@ describe('execution metadata updates', () => {
       });
       release.resolve();
 
-      await expect(staleUpdate).resolves.toBe(modern);
+      await expect(staleUpdate).resolves.toMatchObject({ streamId: modern });
       expect((await store.readMeta())?.streamId).toBe(modern);
     } finally {
       release.resolve();
