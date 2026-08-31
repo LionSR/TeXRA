@@ -10,57 +10,12 @@ import { getMainWebview } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import type { ModelOptionData } from '@shared/schemas';
 
 const CHANNEL = 'mainViewCommands';
 
-type AgentOptionsData = Awaited<ReturnType<typeof computeAgentOptionsData>>;
 interface RefreshAllOptionsArgs {
   readonly selectedToolUseAgent?: string;
   readonly agentCatalogAlreadyFresh?: boolean;
-}
-
-function postModelOptions(
-  webview: vscode.WebviewView,
-  optionsData: ModelOptionData[],
-): void {
-  webview.webview.postMessage({
-    command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
-    optionsData,
-  });
-}
-
-function postAgentOptions(
-  webview: vscode.WebviewView,
-  optionsData: AgentOptionsData,
-  selectedToolUseAgent?: string,
-): void {
-  webview.webview.postMessage({
-    command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
-    optionsData,
-    ...(selectedToolUseAgent && { selectedToolUseAgent }),
-  });
-}
-
-async function postTeamOptions(webview: vscode.WebviewView): Promise<void> {
-  webview.webview.postMessage({
-    command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
-    optionsData: await loadMainViewTeamOptions(),
-  });
-}
-
-async function runRefresh(
-  label: string,
-  apply: (webview: vscode.WebviewView) => Promise<void>,
-): Promise<void> {
-  const webview = await getMainWebview(CHANNEL);
-  if (!webview) return;
-
-  try {
-    await apply(webview);
-  } catch (error) {
-    await showLoggedErrorMessage(CHANNEL, `Failed to refresh ${label}`, error);
-  }
 }
 
 /**
@@ -75,21 +30,39 @@ export function registerMainViewCommands(
   registerCommandEntries(context, [
     {
       id: 'texra.refreshAllOptions',
-      handler: (args?: RefreshAllOptionsArgs) =>
-        runRefresh('options', async (webview) => {
+      handler: async (args?: RefreshAllOptionsArgs) => {
+        const webview = await getMainWebview(CHANNEL);
+        if (!webview) return;
+
+        try {
           if (!args?.agentCatalogAlreadyFresh) await refresh();
           const [modelOptions, agentOptionsData] = await Promise.all([
             computeModelOptionsData(),
             computeAgentOptionsData(),
           ]);
-          postModelOptions(webview, modelOptions);
-          postAgentOptions(
-            webview,
-            agentOptionsData,
-            args?.selectedToolUseAgent,
+          webview.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
+            optionsData: modelOptions,
+          });
+          webview.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
+            optionsData: agentOptionsData,
+            ...(args?.selectedToolUseAgent && {
+              selectedToolUseAgent: args.selectedToolUseAgent,
+            }),
+          });
+          webview.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_TEAM_OPTIONS,
+            optionsData: await loadMainViewTeamOptions(),
+          });
+        } catch (error) {
+          await showLoggedErrorMessage(
+            CHANNEL,
+            'Failed to refresh options',
+            error,
           );
-          await postTeamOptions(webview);
-        }),
+        }
+      },
     },
   ]);
 }
