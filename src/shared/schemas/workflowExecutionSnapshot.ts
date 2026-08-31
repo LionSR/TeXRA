@@ -105,7 +105,7 @@ const WorkflowExecutionCallBaseSchema = z.strictObject({
 
 const WorkflowExecutionIssuedCallSchema =
   WorkflowExecutionCallBaseSchema.extend({
-    /** Older persisted issued calls predate these two explicit markers. */
+    /** Set at issue time; older persisted issued calls predate this marker. */
     issued: z.literal(true).optional(),
     kind: WorkflowCallKindSchema.optional(),
     agent: z.string().optional(),
@@ -115,45 +115,37 @@ const WorkflowExecutionIssuedCallSchema =
     childStreamId: StreamTabIdSchema.optional(),
   });
 
-const WorkflowExecutionMaybeIssuedCallSchema =
-  WorkflowExecutionCallBaseSchema.extend({
-    /** Set the moment the script actually issues `agent()` for this call. */
-    issued: z.literal(true).optional(),
-    kind: WorkflowCallKindSchema.optional(),
-    agent: z.string().optional(),
-    /** Declared by the script at issue time, then the host-resolved model. */
-    model: z.string().optional(),
-    childExecutionId: ExecutionIdSchema.optional(),
-    childStreamId: StreamTabIdSchema.optional(),
-  });
+type MaybeIssuedCall = Pick<
+  z.infer<typeof WorkflowExecutionIssuedCallSchema>,
+  'issued' | 'kind'
+>;
+
+function requireKindWhenExplicitlyIssued(
+  call: MaybeIssuedCall,
+  context: z.RefinementCtx,
+): void {
+  if (call.issued === true && call.kind === undefined) {
+    context.addIssue({
+      code: 'custom',
+      path: ['kind'],
+      message: 'An issued workflow call requires kind.',
+    });
+  }
+}
 
 const WorkflowExecutionPlannedCallSchema =
-  WorkflowExecutionMaybeIssuedCallSchema.extend({
+  WorkflowExecutionIssuedCallSchema.extend({
     status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
     timestamps: WorkflowExecutionLiveTimestampsSchema,
-  }).superRefine((call, context) => {
-    if (call.issued === true && call.kind === undefined) {
-      context.addIssue({
-        code: 'custom',
-        path: ['kind'],
-        message: 'An issued workflow call requires kind.',
-      });
-    }
-  });
+  }).superRefine(requireKindWhenExplicitlyIssued);
 
 const WorkflowExecutionSkippedCallSchema =
-  WorkflowExecutionMaybeIssuedCallSchema.extend({
+  WorkflowExecutionIssuedCallSchema.extend({
     status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
     settledBySweep: z.literal(true).optional(),
     timestamps: WorkflowExecutionTerminalTimestampsSchema,
   }).superRefine((call, context) => {
-    if (call.issued === true && call.kind === undefined) {
-      context.addIssue({
-        code: 'custom',
-        path: ['kind'],
-        message: 'An issued workflow call requires kind.',
-      });
-    }
+    requireKindWhenExplicitlyIssued(call, context);
     const hasLegacyIssuedFacts =
       call.kind !== undefined ||
       call.agent !== undefined ||

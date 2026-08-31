@@ -125,7 +125,9 @@ export function workflowExecutionView(
         }),
         status: call.status,
         ...(call.settledBySweep && { settledBySweep: true }),
-        error: compactWorkflowText(call.error),
+        ...(call.status === WORKFLOW_CALL_STATUS.FAILED && {
+          error: compactWorkflowText(call.error),
+        }),
         costUsd: call.costUsd,
         timestamps: call.timestamps,
       };

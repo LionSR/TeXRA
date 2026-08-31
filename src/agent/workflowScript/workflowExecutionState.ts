@@ -11,19 +11,6 @@ import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@shared/copy/workflowCall';
 
 import type { WorkflowAttemptFacts } from './types';
 
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-type ValueOfUnion<T, K extends PropertyKey> = T extends T
-  ? K extends keyof T
-    ? T[K]
-    : never
-  : never;
-type WorkflowExecutionCallPatch = {
-  [K in KeysOfUnion<WorkflowExecutionCall>]?: ValueOfUnion<
-    WorkflowExecutionCall,
-    K
-  >;
-};
-
 interface WorkflowCallDefinition {
   readonly id: string;
   readonly label: string;
@@ -241,7 +228,7 @@ export class WorkflowExecutionState {
     return call;
   }
 
-  updateCall(id: string, patch: WorkflowExecutionCallPatch): void {
+  updateCall(id: string, patch: Partial<WorkflowExecutionCall>): void {
     const call = this.#call(id);
     if (this.#sealed) return;
     Object.assign(call, patch);
@@ -541,10 +528,7 @@ type ReusableWorkflowExecutionCall = Extract<
 function isReusableCall(
   call: WorkflowExecutionCall,
 ): call is ReusableWorkflowExecutionCall {
-  return (
-    call.status === WORKFLOW_CALL_STATUS.COMPLETED ||
-    call.status === WORKFLOW_CALL_STATUS.CACHED
-  );
+  return isReusableStatus(call.status);
 }
 
 function isReusableStatus(status: WorkflowExecutionCall['status']): boolean {
