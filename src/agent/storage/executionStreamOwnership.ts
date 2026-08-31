@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
 
 import pMap from 'p-map';
@@ -13,7 +14,11 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
+import {
+  canUseStreamDataDir,
+  STREAM_DATA_KEYS,
+  streamDataDir,
+} from '@transcript/streamDataPaths';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -23,6 +28,10 @@ import { getExecutionStore } from './ExecutionKVStore';
 const log = createLog('ExecutionStreamOwnership');
 const OWNERSHIP_SCAN_CONCURRENCY = 8;
 const STREAM_OWNERSHIP_LOCKS_DIR = 'streamOwnershipLocks';
+const heldOwnershipFences = new AsyncLocalStorage<ReadonlySet<StreamTabId>>();
+const validatedDeletionFences = new AsyncLocalStorage<
+  ReadonlyMap<StreamTabId, ExecutionId | undefined>
+>();
 
 export interface ModernStreamClaims {
   readonly byStream: ReadonlyMap<StreamTabId, readonly ExecutionId[]>;
@@ -95,12 +104,75 @@ export function runWithExecutionStreamOwnershipFence<T>(
   streamId: StreamTabId,
   operation: () => Promise<T>,
 ): Promise<T> {
+  if (!canUseStreamDataDir(streamId)) {
+    return Promise.reject(
+      new Error(
+        `Stream ${streamId} cannot participate in persisted ownership.`,
+      ),
+    );
+  }
+  const held = heldOwnershipFences.getStore();
+  if (held?.has(streamId)) return operation();
   const lockPath = path.join(
     platform().storage.getStoragePath(),
     STREAM_OWNERSHIP_LOCKS_DIR,
     encodeURIComponent(streamId),
   );
-  return platform().fileLocks.runExclusive(lockPath, operation);
+  return platform().fileLocks.runExclusive(lockPath, () =>
+    heldOwnershipFences.run(new Set([...(held ?? []), streamId]), operation),
+  );
+}
+
+/** Freshly prove persisted ownership and keep that proof fenced through delete. */
+export function runWithValidatedExecutionStreamDeletion<T>(
+  streamId: StreamTabId,
+  executionId: ExecutionId | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const validated = validatedDeletionFences.getStore();
+  if (validated?.has(streamId)) {
+    const validatedExecutionId = validated.get(streamId);
+    if (executionId && validatedExecutionId !== executionId) {
+      return Promise.reject(
+        new Error(`Stream ${streamId} was validated for another execution.`),
+      );
+    }
+    return operation();
+  }
+  return runWithExecutionStreamOwnershipFence(streamId, async () => {
+    const [claims, sidecarOwner] = await Promise.all([
+      readModernStreamClaims(),
+      readStreamSidecarOwner(streamId),
+    ]);
+    const streamClaims = claims.byStream.get(streamId) ?? [];
+    let valid: boolean;
+    if (executionId) {
+      valid =
+        !claims.unreadable &&
+        streamClaims.length === 1 &&
+        streamClaims[0] === executionId &&
+        sidecarOwner === executionId;
+    } else {
+      const sidecarOwnerMeta = sidecarOwner
+        ? await getExecutionStore(sidecarOwner).readMetaStrict()
+        : null;
+      valid =
+        !claims.unreadable &&
+        streamClaims.length === 0 &&
+        (sidecarOwner === undefined ||
+          sidecarOwnerMeta === null ||
+          (sidecarOwnerMeta.streamId !== undefined &&
+            sidecarOwnerMeta.streamId !== streamId));
+    }
+    if (!valid) {
+      throw new Error(
+        `Stream ${streamId} does not have freshly validated persisted ownership.`,
+      );
+    }
+    const next = new Map(validated ?? []);
+    next.set(streamId, executionId);
+    return validatedDeletionFences.run(next, operation);
+  });
 }
 
 /** Reject a new metadata claim when persisted evidence names another owner. */

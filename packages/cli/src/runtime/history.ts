@@ -46,7 +46,10 @@ import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from './cliContext';
-import { readCliResumeDataForListing } from './toolUseResumeData';
+import {
+  createCliResumeDataReaderForListing,
+  readCliResumeDataForListing,
+} from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -159,9 +162,12 @@ export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   // Every row costs a resumability probe plus an optional resume-data read.
   // One at a time makes a long history crawl; all at once opens one file
   // handle burst per run, so keep it bounded. `pMap` preserves input order.
-  return pMap(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
-    concurrency: HISTORY_ENTRY_CONCURRENCY,
-  });
+  const readResumeData = createCliResumeDataReaderForListing();
+  return pMap(
+    entries.filter(isUserVisibleExecution),
+    (entry) => toCliHistoryEntry(entry, readResumeData),
+    { concurrency: HISTORY_ENTRY_CONCURRENCY },
+  );
 }
 
 export async function readCliHistoryDetails(
@@ -531,11 +537,12 @@ export function formatCliHistoryDetailsText(
 
 async function toCliHistoryEntry(
   entry: AgentExecutionListingEntry,
+  readResumeData: ReturnType<typeof createCliResumeDataReaderForListing>,
 ): Promise<CliHistoryEntry> {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumeData = await readCliResumeDataForListing(entry.id, config);
+  const resumeData = await readResumeData(entry.id, config);
   return {
     id: entry.id,
     timestamp: entry.timestamp,

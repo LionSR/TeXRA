@@ -7,6 +7,7 @@ import PQueue from 'p-queue';
 
 import {
   ExecutionLeaseActiveError,
+  ExecutionLeaseLostError,
   getExecutionStore,
   readExecutionMeta,
 } from '@agent/storage';
@@ -335,7 +336,10 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    if (error instanceof ExecutionLeaseActiveError) {
+    if (
+      error instanceof ExecutionLeaseActiveError ||
+      error instanceof ExecutionLeaseLostError
+    ) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;

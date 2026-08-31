@@ -23,6 +23,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
+import { platform } from '@platform/platform';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -372,6 +373,68 @@ describe('execution listing normalization', () => {
     }
   });
 
+  it('freshly revalidates ownership when registration commits before the deletion fence', async () => {
+    const owner = 'f9892116' as ExecutionId;
+    const competing = 'f9892117' as ExecutionId;
+    const streamId = 'cleanup-registration-gap' as StreamTabId;
+    await getExecutionStore(owner).writeMeta({
+      timestamp: '2026-08-30T00:00:00.000Z',
+      streamId,
+    });
+    await writeStreamMeta(streamId, { executionId: owner });
+    const cleanupReachedFence = createDeferred();
+    const releaseCleanupFence = createDeferred();
+    const fileLocks = platform().fileLocks;
+    const originalRunExclusive = fileLocks.runExclusive.bind(fileLocks);
+    let delayCleanupFence = true;
+    const runExclusive = vi
+      .spyOn(fileLocks, 'runExclusive')
+      .mockImplementation((lockPath, operation) => {
+        if (delayCleanupFence && lockPath.includes('streamOwnershipLocks')) {
+          delayCleanupFence = false;
+          cleanupReachedFence.resolve();
+          return releaseCleanupFence.promise.then(() =>
+            originalRunExclusive(lockPath, operation),
+          );
+        }
+        return originalRunExclusive(lockPath, operation);
+      });
+    const deleteAdjacentStreamState = vi.fn();
+    const cleanup = createExecutionAdjacentStreamCleanup({
+      deleteAdjacentStreamState,
+    })(owner);
+    const rejectedCleanup =
+      expect(cleanup).rejects.toThrow('freshly validated');
+
+    try {
+      await cleanupReachedFence.promise;
+      await getExecutionStore(owner).writeMeta({
+        timestamp: '2026-08-30T00:00:00.000Z',
+        streamId: 'owner-moved-stream' as StreamTabId,
+      });
+      await new KVStore(streamDataDir(streamId)).delete(STREAM_DATA_KEYS.META);
+      const competingConfig = config('assistant');
+      await registerExecution(
+        competing,
+        competingConfig,
+        competingConfig.agent,
+        {
+          streamId,
+          identity: { kind: 'agent', agent: competingConfig.agent },
+        },
+      );
+      await writeStreamMeta(streamId, { executionId: competing });
+      releaseCleanupFence.resolve();
+
+      await rejectedCleanup;
+      expect(deleteAdjacentStreamState).not.toHaveBeenCalled();
+    } finally {
+      releaseCleanupFence.resolve();
+      runExclusive.mockRestore();
+      await releaseOwnedExecutionLease(competing).catch(() => undefined);
+    }
+  });
+
   it('scans legacy sidecars once per listing and does not cache no-match results', async () => {
     const unique = 'f9892111' as ExecutionId;
     const ambiguous = 'f9892112' as ExecutionId;
@@ -424,7 +487,7 @@ describe('execution listing normalization', () => {
     }
   });
 
-  it('shares one legacy sidecar scan across bulk deletion cleanup', async () => {
+  it('shares legacy evidence while freshly revalidating each destructive stream', async () => {
     const first = 'f9892121' as ExecutionId;
     const second = 'f9892122' as ExecutionId;
     for (const executionId of [first, second]) {
@@ -450,7 +513,7 @@ describe('execution listing normalization', () => {
       ).toHaveLength(1);
       expect(
         readDir.mock.calls.filter(([dir]) => dir === RUNS_STORAGE_DIR),
-      ).toHaveLength(1);
+      ).toHaveLength(3);
     } finally {
       readDir.mockRestore();
     }

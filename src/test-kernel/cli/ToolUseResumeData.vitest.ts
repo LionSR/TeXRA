@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
-import { readCliResumeDataForListing } from '@cli/runtime/toolUseResumeData';
+import {
+  createCliResumeDataReaderForListing,
+  readCliResumeDataForListing,
+} from '@cli/runtime/toolUseResumeData';
 import { KVStore } from '@common/storage/KVStore';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { reflectionFlowShared } from '@test/agent/progressTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -67,6 +71,37 @@ describe('CLI listing resume data', () => {
     await expect(
       getExecutionStore(executionId).readMeta(),
     ).resolves.toMatchObject({ streamId });
+  });
+
+  it('shares one compatibility scan across a history-list operation', async () => {
+    const first = 'c86442' as ExecutionId;
+    const second = 'c86443' as ExecutionId;
+    for (const executionId of [first, second]) {
+      await getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-07-31T00:00:00.000Z',
+      });
+      await writeFlowRecord(
+        executionId,
+        reflectionFlowShared({ currentRound: 1 }),
+      );
+      await new KVStore(
+        streamDataDir(`historical-${executionId}` as StreamTabId),
+      ).write(STREAM_DATA_KEYS.META, { executionId });
+    }
+    const readDir = vi.spyOn(StorageFS, 'readDir');
+    const readResumeData = createCliResumeDataReaderForListing();
+
+    await Promise.all([
+      readResumeData(first, config),
+      readResumeData(second, config),
+    ]);
+
+    expect(
+      readDir.mock.calls.filter(([dir]) => dir === STREAM_DATA_DIR),
+    ).toHaveLength(1);
+    expect(
+      readDir.mock.calls.filter(([dir]) => dir === RUNS_STORAGE_DIR),
+    ).toHaveLength(1);
   });
 
   it.each([

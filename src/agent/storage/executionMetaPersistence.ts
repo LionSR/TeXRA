@@ -30,6 +30,7 @@ import {
   readModernStreamClaims,
   readStreamSidecarOwner,
   runWithExecutionStreamOwnershipFence,
+  runWithValidatedExecutionStreamDeletion,
   type ModernStreamClaims,
 } from './executionStreamOwnership';
 
@@ -283,13 +284,9 @@ export function createExecutionMetaReader(): ExecutionMetaReader {
       const meta = await readForDeletion(executionId);
       const streamId = meta?.streamId;
       if (!streamId) return;
-      await runWithExecutionStreamOwnershipFence(streamId, async () => {
-        const recovery = await healLegacyStreamId(executionId, meta, true);
-        if (recovery.ownershipUnknown || recovery.streamId !== streamId) {
-          throw new ExecutionStreamOwnershipUnknownError(executionId);
-        }
-        await operation(streamId);
-      });
+      await runWithValidatedExecutionStreamDeletion(streamId, executionId, () =>
+        operation(streamId),
+      );
     },
   };
 }

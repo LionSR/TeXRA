@@ -9,6 +9,7 @@ import { StreamDeletionSupersededError } from '@transcript/StreamLogStore';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { runWithValidatedExecutionStreamDeletion } from './executionStreamOwnership';
 import {
   deleteExecution as deleteStoredExecution,
   listExecutionStreamReferences,
@@ -362,6 +363,8 @@ export class SessionStores {
     executionId: ExecutionId | undefined,
     shouldDelete?: () => boolean,
   ): Promise<DeleteStreamResult> {
+    // Reserved IDs have no persisted sidecar directory, so they never enter
+    // lock naming or a destructive storage operation.
     if (!canUseStreamDataDir(stream)) return 'deleted';
     if (shouldDelete?.() === false) return 'superseded';
 
@@ -381,7 +384,7 @@ export class SessionStores {
 
     const outcome = await this.deleteExecutionWithStreamState(
       executionId,
-      () => this.deleteStreamSidecars(stream, shouldDelete),
+      () => this.deleteStreamSidecars(stream, shouldDelete, executionId),
       shouldDelete,
     );
     switch (outcome.kind) {
@@ -580,6 +583,7 @@ export class SessionStores {
           async () => {
             const cleanup = await this.deleteAdjacentStreamStates(
               streams,
+              executionId,
               shouldDeleteStream,
             );
             failedAdjacentStreams = cleanup.failed;
@@ -782,7 +786,7 @@ export class SessionStores {
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
-              () => this.deleteStreamSidecars(stream),
+              () => this.deleteStreamSidecars(stream, undefined, executionId),
             );
             if (outcome.kind === 'streams-deleted') {
               sweptStreams.push(stream);
@@ -877,7 +881,17 @@ export class SessionStores {
     return swept;
   }
 
-  private async deleteStreamSidecars(
+  private deleteStreamSidecars(
+    stream: StreamTabId,
+    shouldDelete?: () => boolean,
+    executionId?: ExecutionId,
+  ): Promise<void> {
+    return runWithValidatedExecutionStreamDeletion(stream, executionId, () =>
+      this.deleteStreamSidecarsFenced(stream, shouldDelete),
+    );
+  }
+
+  private async deleteStreamSidecarsFenced(
     stream: StreamTabId,
     shouldDelete?: () => boolean,
   ): Promise<void> {
@@ -969,6 +983,7 @@ export class SessionStores {
 
   private async deleteAdjacentStreamStates(
     streams: readonly StreamTabId[],
+    executionId: ExecutionId,
     shouldDeleteStream?: (stream: StreamTabId) => boolean,
   ): Promise<{
     failed: Set<StreamTabId>;
@@ -984,6 +999,7 @@ export class SessionStores {
           await this.deleteStreamSidecars(
             stream,
             shouldDeleteStream ? () => shouldDeleteStream(stream) : undefined,
+            executionId,
           );
         } catch (error) {
           if (error instanceof StreamDeletionSupersededError) {
