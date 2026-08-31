@@ -4,7 +4,6 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   MainViewExecuteInboundMessageSchema,
-  MainViewExecuteMessageSchema,
 } from '@shared/schemas';
 import {
   buildMainViewExecuteMessage,
@@ -122,7 +121,6 @@ describe('MainView execute message builder', () => {
       }),
     );
 
-    expect(MainViewExecuteMessageSchema.parse(message)).toEqual(message);
     expect(
       MainViewExecuteInboundMessageSchema.parse({
         command: MAIN_VIEW_COMMANDS.EXECUTE,

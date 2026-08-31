@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  DiffResultDisplaySchema,
-  parseDiffResultEntries,
-} from '@shared/schemas';
+import { parseDiffResultEntries } from '@shared/schemas';
 
 const canonicalDiffResult = {
   status: 'success',
@@ -56,12 +53,6 @@ const canonicalDisplay = {
 };
 
 describe('DiffResult transforms', () => {
-  it('derives display data from the canonical schema', () => {
-    expect(DiffResultDisplaySchema.parse(canonicalDiffResult)).toEqual(
-      canonicalDisplay,
-    );
-  });
-
   it('parses canonical entries through the public parser', () => {
     expect(parseDiffResultEntries([canonicalDiffResult])).toEqual([
       canonicalDisplay,

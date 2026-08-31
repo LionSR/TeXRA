@@ -17,7 +17,7 @@ export const MainViewExecuteFilesSchema = z.object({
  * command discriminant separately; keeping the payload schema command-free
  * matches the browser-side builder and the execution controller.
  */
-export const MainViewExecuteMessageSchema = z.object({
+const MainViewExecuteMessageSchema = z.object({
   agent: z.string().optional(),
   model: z.string().optional(),
   instruction: z.string().optional(),
