@@ -107,6 +107,14 @@ export const streamLogContext = createContext<StreamLogContextValue>(
   'progress-stream-log',
 );
 
+/** Live active-phase progress for each child of the active stream. */
+export const EMPTY_CHILD_PROGRESS: ReadonlyMap<StreamTabId, ChildRunProgress> =
+  new Map();
+
+export const childProgressContext = createContext<
+  ReadonlyMap<StreamTabId, ChildRunProgress>
+>('progress-child-run-progress');
+
 export const permissionsContext = createContext<PermissionPayload[]>(
   'progress-permissions',
 );

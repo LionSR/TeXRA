@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { StatusEvent } from '@agent/trace';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -113,6 +113,36 @@ describe('StreamStatusMachine', () => {
     );
     expect(machine.get(streamId)).toBe(STREAM_PHASE.WAITING);
     expect(machine.tryAcquire(streamId)).toBe(false);
+  });
+
+  it('closes the active window in WAITING and restamps after the resume gap', () => {
+    vi.useFakeTimers({ now: 1_000 });
+    const { machine, streamId } = setupMachine(
+      'stream-status-active-window-resume',
+    );
+
+    try {
+      expect(
+        machine.transition(streamId, STREAM_PHASE.RUNNING, 'lifecycle'),
+      ).toBe(true);
+      expect(machine.getStreamState(streamId)?.runStartedAt).toBe(1_000);
+
+      vi.setSystemTime(5_000);
+      expect(machine.transition(streamId, STREAM_PHASE.WAITING, 'wait')).toBe(
+        true,
+      );
+      expect(machine.getStreamState(streamId)).toEqual({
+        phase: STREAM_PHASE.WAITING,
+      });
+
+      vi.setSystemTime(15_000);
+      expect(machine.transition(streamId, STREAM_PHASE.RUNNING, 'resume')).toBe(
+        true,
+      );
+      expect(machine.getStreamState(streamId)?.runStartedAt).toBe(15_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([

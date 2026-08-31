@@ -1242,6 +1242,43 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('reports active elapsed from runStartedAt without a handle fallback', () => {
+    vi.useFakeTimers({ now: 1_000 });
+    const { streamStatus, registry } = createRegistry();
+    const parentStreamId = 'parent-active-elapsed-test' as StreamTabId;
+    const childStreamId = 'child-active-elapsed-test' as StreamTabId;
+    const handle = createHandle(
+      'exec-active-elapsed-test',
+      parentStreamId,
+      childStreamId,
+    );
+
+    try {
+      registry.track(handle);
+      vi.setSystemTime(10_000);
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+        runStartedAt: 6_000,
+      });
+
+      expect(registry.getStatus(handle)).toEqual({
+        status: STREAM_PHASE.RUNNING,
+        elapsed: '4s',
+      });
+      expect(registry.getActiveChildren(parentStreamId)[0]?.startedAt).toBe(
+        1_000,
+      );
+
+      seedStreamStatusForTest(streamStatus, childStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+      expect(registry.getStatus(handle).elapsed).toBeNull();
+    } finally {
+      vi.useRealTimers();
+      registry.dispose();
+    }
+  });
+
   it('publishes initial status when tracking an agent execution', () => {
     const { streamStatus, registry } = createRegistry();
     const parentStreamId = 'parent-track-agent-status-test' as StreamTabId;

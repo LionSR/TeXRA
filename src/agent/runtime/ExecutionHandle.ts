@@ -116,9 +116,9 @@ export class AgentExecutionHandle {
   /**
    * Epoch ms when this handle generation was created. The value remains on a
    * handle while it is parked at WAITING. Resume constructs and tracks a
-   * replacement handle, whose `startedAt` is stamped anew. This feeds
-   * `executionRegistry.getStatus`'s elapsed, the roster's
-   * `ActiveChildInfo.startedAt`, and the `executions` tool's `Started:` line.
+   * replacement handle, whose `startedAt` is stamped anew. This feeds the
+   * roster's `ActiveChildInfo.startedAt` and the `executions` tool's `Started:`
+   * line.
    * Durable execution creation time is `ExecutionMeta.timestamp`.
    */
   readonly startedAt = Date.now();

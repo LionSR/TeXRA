@@ -462,16 +462,17 @@ export class ExecutionRegistry {
   getStatus(
     handle: AgentExecutionHandle,
   ): ExecutionStatusInfo & { status: StreamPhase } {
-    const status =
-      this.streamStatus.get(handle.childStreamId) ?? STREAM_PHASE.RUNNING;
+    const phaseState = this.streamStatus.getStreamState(handle.childStreamId);
+    const status = phaseState?.phase ?? STREAM_PHASE.RUNNING;
+    const runStartedAt = phaseState?.runStartedAt;
 
-    if (!isActivePhase(status)) {
+    if (!isActivePhase(status) || runStartedAt === undefined) {
       return { status, elapsed: null };
     }
 
     return {
       status,
-      elapsed: formatDuration(Date.now() - handle.startedAt),
+      elapsed: formatDuration(Date.now() - runStartedAt),
     };
   }
 

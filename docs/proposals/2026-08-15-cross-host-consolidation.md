@@ -185,10 +185,12 @@ owner and one surface (CLI `/status` reads the log directly; the extension's
 reader-less fold and `StreamState.activeSkills` are deleted) — see the row.
 C13c **OPEN**. C17
 **OPEN** — the counts still are not on `ToolEditApprovalRequest` and
-`DiffView.statsFromHunks` still recomputes. C22 **PARTIAL #10892 — and now
-three representations, not two**: `startedAt` shipped and the CLI ticks from
-it, but the redundant `formatDuration` stamp survives on the wire and the
-webview still renders it. C18 **PARTIAL #10889** — the SYNC branch and
+`DiffView.statsFromHunks` still recomputes. C22 **RESOLVED #10892 / #11561**:
+rendered elapsed strings are gone, and live elapsed time now comes from the
+status plane's active-phase `runStartedAt` in
+both CLI and webview. The roster's `startedAt` remains a distinct
+handle-generation fact for retained rows and executions-tool output. C18
+**PARTIAL #10889** — the SYNC branch and
 `streamStates` go through the shared builders; the `StreamTabInfo` literal is
 still hand-built. Doc correction: `ProgressStreamProjectionBuilder.ts` no
 longer exists; the live owner is `src/shared/streams/streamContentSync.ts`.
@@ -275,11 +277,13 @@ longer exists; the live owner is `src/shared/streams/streamContentSync.ts`.
   have the CLI call the canonical counting helper; keep `buildHunks` only
   for the visual diff. Same disease as C22.
 - **C22. `elapsed`: wire-stamped vs locally recomputed.**
-  `executionRegistry.ts:323` stamps `formatDuration(...)`; the webview renders
-  it verbatim (`BackgroundTasksPanel.ts:478-480`); the CLI recomputes with a
-  _different_ formatter and live ticking (`childControls.ts:24-34`). → One
-  derivation + one formatter; if live ticking is wanted, ship `startedAt` on
-  the wire and derive in one shared helper. **Net:** ~−15 L.
+  **RESOLVED #10892 / #11561.** No rendered duration travels on the wire.
+  Live elapsed time derives from the child stream's status-plane
+  `runStartedAt`, which opens only for the current active phase, clears in
+  WAITING and terminal phases, and restamps on resume. The roster's
+  `startedAt` is deliberately retained as a different fact: handle-generation
+  creation, used with `finishedAt` for retained rows and by executions-tool
+  output.
 - **C18. `replayTrace` bootstrap re-implements two live builders.**
   `packages/trace-viewer/src/replayTrace.ts:228-254` hand-builds the
   `SyncStreamContentPayload` category branch that

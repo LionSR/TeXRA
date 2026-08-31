@@ -725,8 +725,9 @@ export class SessionFactApplier {
   /**
    * Replace a parent stream's live child roster, retaining every non-process
    * child that just left it instead of folding it into a counter — a finished
-   * subagent keeps its executionId, agentName, status, startedAt, elapsed and
-   * toolName so hosts can list it. Process children (background bash) are
+   * subagent keeps its executionId, identity, status, and handle-generation
+   * startedAt so hosts can list it and close that window with `finishedAt`.
+   * Process children (background bash) are
    * ephemeral and are never retained. A retained row is only ever created from
    * an entry that was already in OUR roster and is absent from `next`, so a
    * first roster can never mark anything finished.
