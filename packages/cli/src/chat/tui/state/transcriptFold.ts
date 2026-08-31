@@ -41,7 +41,10 @@ import {
   type CompactionActivityProjection,
 } from '@shared/streams/compactionActivityProjection';
 import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
-import { workflowMarkerOf } from '@shared/streams/workflowRunModel';
+import {
+  workflowMarkerOf,
+  type WorkflowRunModel,
+} from '@shared/streams/workflowRunModel';
 import type { StreamLog } from '@transcript';
 import { truncateSummary } from '@utils/text/stringUtils';
 import {
@@ -773,6 +776,33 @@ export function compactWorkflowEntries(
   };
 }
 
+/** Current-plan task ids that have appeared as cards. Intersecting with the
+ *  plan bounds the eviction snapshot by state the slice already retains. */
+export function issuedWorkflowPlanTaskIds(
+  rows: readonly TranscriptRow[],
+  plan: WorkflowPlanMarker | undefined,
+): ReadonlySet<string> {
+  if (!plan) return new Set();
+  const planTaskIds = new Set(plan.tasks.map((task) => task.id));
+  return new Set(
+    rows.flatMap((row) =>
+      row.kind === 'workflowTask' &&
+      row.call.attemptId === plan.attemptId &&
+      planTaskIds.has(row.call.id)
+        ? [row.call.id]
+        : [],
+    ),
+  );
+}
+
+export interface RetainedWorkflowPopupProjection {
+  readonly rows: readonly TranscriptRow[];
+  readonly taskGroups: readonly TaskGroup[];
+  readonly plan: WorkflowPlanMarker | undefined;
+  readonly retainedPhaseIds: ReadonlySet<string>;
+  readonly firstPlanIndex: number;
+}
+
 /** The popup's dashboard projection, kept bounded even while its presentation
  *  lease makes the slice expose the complete transcript to Ctrl-T. */
 export function retainedWorkflowPopupProjection(input: {
@@ -780,11 +810,7 @@ export function retainedWorkflowPopupProjection(input: {
   readonly taskGroups: readonly TaskGroup[];
   readonly workflowPlan: WorkflowPlanMarker | undefined;
   readonly transcriptFold?: TranscriptFoldState;
-}): {
-  readonly rows: readonly TranscriptRow[];
-  readonly taskGroups: readonly TaskGroup[];
-  readonly plan: WorkflowPlanMarker | undefined;
-} {
+}): RetainedWorkflowPopupProjection {
   const fold = input.transcriptFold;
   const fullRows = fold?.hydrated
     ? fold.items.map((item) => item.rendered)
@@ -809,13 +835,19 @@ export function retainedWorkflowPopupProjection(input: {
     !input.workflowPlan ||
     (!compact.dashboardTruncated && !phaseGroupWasDropped)
   ) {
-    return { rows: compact.rows, taskGroups, plan: input.workflowPlan };
+    return {
+      rows: compact.rows,
+      taskGroups,
+      plan: input.workflowPlan,
+      retainedPhaseIds,
+      firstPlanIndex: 0,
+    };
   }
 
   const attemptId = input.workflowPlan.attemptId;
-  // An opened plan phase's index pins the cutoff in declared-plan order. Keep
-  // that phase and every still-unopened phase after it, but do not let an
-  // earlier dropped phase come back through the plan union.
+  // An opened plan phase's index pins the cutoff in declared-plan order. The
+  // model keeps the complete phase array so later plan-only headings retain
+  // their original index/total; retainedWorkflowRunModel removes earlier ones.
   const allIndexedPhases = input.taskGroups.filter(
     (
       group,
@@ -836,32 +868,50 @@ export function retainedWorkflowPopupProjection(input: {
   } else if (openedIndexes.length > 0) {
     firstPlanIndex = Math.max(...openedIndexes) + 1;
   }
-  const phases = input.workflowPlan.phases.slice(firstPlanIndex);
-  const phaseTitles = new Set(phases.map((phase) => phase.title));
   // A plan task that already issued outside the retained rows must not return
-  // as Declared. Tasks that have not issued yet remain visible.
-  const issuedIds = new Set(
-    fullRows.flatMap((row) =>
-      row.kind === 'workflowTask' && row.call.attemptId === attemptId
-        ? [row.call.id]
-        : [],
-    ),
-  );
-  const retainedIds = new Set(
-    compact.rows.flatMap((row) =>
-      row.kind === 'workflowTask' && row.call.attemptId === attemptId
-        ? [row.call.id]
-        : [],
-    ),
+  // as Declared. Tasks that have not issued yet remain visible. After eviction,
+  // use the bounded issued-id snapshot captured before the full fold was reset.
+  const issuedIds = fold?.hydrated
+    ? issuedWorkflowPlanTaskIds(fullRows, input.workflowPlan)
+    : (fold?.retainedWorkflowIssuedTaskIds ??
+      issuedWorkflowPlanTaskIds(fullRows, input.workflowPlan));
+  const retainedIds = issuedWorkflowPlanTaskIds(
+    compact.rows,
+    input.workflowPlan,
   );
   const tasks = input.workflowPlan.tasks.filter(
-    (task) =>
-      (!issuedIds.has(task.id) || retainedIds.has(task.id)) &&
-      (task.phase === undefined || phaseTitles.has(task.phase)),
+    (task) => !issuedIds.has(task.id) || retainedIds.has(task.id),
   );
   return {
     rows: compact.rows,
     taskGroups,
-    plan: { ...input.workflowPlan, phases, tasks },
+    plan: { ...input.workflowPlan, tasks },
+    retainedPhaseIds,
+    firstPlanIndex,
+  };
+}
+
+/** Remove model phases outside the CLI compaction projection. The shared model
+ *  still sees the original plan, preserving declared phase numbering. */
+export function retainedWorkflowRunModel(
+  model: WorkflowRunModel,
+  projection: RetainedWorkflowPopupProjection,
+): WorkflowRunModel {
+  const phases = model.phases.filter(
+    (phase) =>
+      projection.retainedPhaseIds.has(phase.key) ||
+      phase === model.unphasedPhase ||
+      (!phase.opened &&
+        (phase.heading.phaseIndex === undefined ||
+          phase.heading.phaseIndex >= projection.firstPlanIndex)),
+  );
+  const declared = phases.reduce(
+    (total, phase) => total + phase.declaredTasks.length,
+    0,
+  );
+  return {
+    ...model,
+    phases,
+    tally: { ...model.tally, declared },
   };
 }

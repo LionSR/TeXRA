@@ -38,11 +38,15 @@ import {
   unbindChildStreamState,
 } from '@cli/chat/tui/state/childExecutions';
 import {
+  releaseInactiveStreamTranscript,
   subscribeStreamLog,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { retainedWorkflowPopupProjection } from '@cli/chat/tui/state/transcriptFold';
+import {
+  retainedWorkflowPopupProjection,
+  retainedWorkflowRunModel,
+} from '@cli/chat/tui/state/transcriptFold';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
@@ -235,6 +239,11 @@ describe('CLI workflow-script child-stream transcript', () => {
       tasks: [
         { id: 'stale-call', label: 'Stale call', phase: 'Stale' },
         {
+          id: 'retained-call-0',
+          label: 'Retained call 0',
+          phase: 'Repeated',
+        },
+        {
           id: 'retained-call-1998',
           label: 'Retained call 1998',
           phase: 'Repeated',
@@ -271,7 +280,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       index: 1,
       total: 3,
     });
-    for (let index = 0; index < 1_999; index++) {
+    for (let index = 0; index < 2_000; index++) {
       runTrace.trace.emit({
         type: 'workflow.call',
         logId: `retained-task-${index}`,
@@ -303,6 +312,37 @@ describe('CLI workflow-script child-stream transcript', () => {
       false,
     );
 
+    setStatus(STREAM_PHASE.COMPLETED);
+    releaseInactiveStreamTranscript(defaultSession().transcripts, STREAM_ID);
+    expect(streamSlice()?.transcriptFold?.hydrated).toBe(false);
+    const evictedSlice = streamSlice()!;
+    const evictedRetained = retainedWorkflowPopupProjection(evictedSlice);
+    const evictedModel = retainedWorkflowRunModel(
+      workflowRunModel({
+        taskGroups: evictedRetained.taskGroups,
+        rows: evictedRetained.rows,
+        workflowAttemptId: evictedSlice.workflowAttemptId,
+        plan: evictedRetained.plan,
+        runSettled: true,
+        childProgress: new Map(),
+      }),
+      evictedRetained,
+    );
+    expect(evictedModel.phases.map((phase) => phase.key)).toEqual([
+      'empty-phase',
+      'declared-Future',
+      'referenced-phase',
+    ]);
+    expect(
+      evictedModel.phases.flatMap((phase) =>
+        phase.declaredTasks.map((task) => task.id),
+      ),
+    ).toEqual(['future-call']);
+    expect(
+      evictedModel.phases.find((phase) => phase.key === 'declared-Future')
+        ?.heading,
+    ).toMatchObject({ phaseIndex: 2, phaseTotal: 3 });
+
     // Exercise the roster-first interval: the parent already classifies this
     // child as a workflow, but the child's own run metadata has not landed.
     seedStreamMeta(STREAM_ID, { agentCategory: AgentCategory.Workflow });
@@ -324,7 +364,7 @@ describe('CLI workflow-script child-stream transcript', () => {
     const dispose = subscribeStreamLog(defaultSession());
     try {
       openWorkflowPopup(STREAM_ID);
-      await waitFor(() => streamEntries().length === 2_005);
+      await waitFor(() => streamEntries().length === 2_006);
       expect(streamEntries().some((row) => row.id === 'stale-phase')).toBe(
         true,
       );
@@ -339,16 +379,20 @@ describe('CLI workflow-script child-stream transcript', () => {
         'empty-phase',
       ]);
       const retained = retainedWorkflowPopupProjection(slice);
-      const model = workflowRunModel({
-        taskGroups: retained.taskGroups,
-        rows: retained.rows,
-        workflowAttemptId: slice.workflowAttemptId,
-        plan: retained.plan,
-        runSettled: false,
-        childProgress: new Map(),
-      });
+      const model = retainedWorkflowRunModel(
+        workflowRunModel({
+          taskGroups: retained.taskGroups,
+          rows: retained.rows,
+          workflowAttemptId: slice.workflowAttemptId,
+          plan: retained.plan,
+          runSettled: true,
+          childProgress: new Map(),
+        }),
+        retained,
+      );
       expect(retained.rows).toHaveLength(2_000);
       expect(retained.plan?.phases.map((phase) => phase.title)).toEqual([
+        'Stale',
         'Repeated',
         'Future',
       ]);
@@ -366,6 +410,9 @@ describe('CLI workflow-script child-stream transcript', () => {
         'Future',
         'Repeated',
       ]);
+      expect(
+        model.phases.find((phase) => phase.key === 'declared-Future')?.heading,
+      ).toMatchObject({ phaseIndex: 2, phaseTotal: 3 });
       expect(model.phases.map((phase) => phase.tasks.length)).toEqual([
         0, 0, 1_999,
       ]);
@@ -376,7 +423,7 @@ describe('CLI workflow-script child-stream transcript', () => {
       seedWorkflowStreamMeta();
       openTranscriptReader(STREAM_ID);
       syncStreamLog(defaultSession(), STREAM_ID);
-      await waitFor(() => streamEntries().length === 2_005);
+      await waitFor(() => streamEntries().length === 2_006);
       expect(streamEntries().map(transcriptRowHeadline)).toContain(
         'Old workflow detail',
       );

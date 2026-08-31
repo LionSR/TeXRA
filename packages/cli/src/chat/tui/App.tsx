@@ -89,7 +89,10 @@ import {
   streamPhaseFor,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
-import { retainedWorkflowPopupProjection } from './state/transcriptFold';
+import {
+  retainedWorkflowPopupProjection,
+  retainedWorkflowRunModel,
+} from './state/transcriptFold';
 import {
   activeSubagentsFor,
   childRosters as childRostersSignal,
@@ -382,14 +385,17 @@ export function App(props: AppProps): React.JSX.Element {
       });
     }
     const retained = retainedWorkflowPopupProjection(workflowPopupRoot);
-    return workflowRunModel({
-      taskGroups: retained.taskGroups,
-      rows: retained.rows,
-      workflowAttemptId: workflowPopupRoot.workflowAttemptId,
-      plan: retained.plan,
-      runSettled: workflowPopupRunSettled,
-      childProgress,
-    });
+    return retainedWorkflowRunModel(
+      workflowRunModel({
+        taskGroups: retained.taskGroups,
+        rows: retained.rows,
+        workflowAttemptId: workflowPopupRoot.workflowAttemptId,
+        plan: retained.plan,
+        runSettled: workflowPopupRunSettled,
+        childProgress,
+      }),
+      retained,
+    );
     // The two revisions are the signals that a child's progress or usage
     // moved; they carry no value of their own.
   }, [
