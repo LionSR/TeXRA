@@ -38,6 +38,8 @@ export class AccountTab extends LitElement {
         display: block;
       }
 
+      /* Stored account labels can be long email addresses. Keep them inside
+         the banner when the settings pane narrows or text is enlarged. */
       .settings-banner-title {
         overflow-wrap: anywhere;
         unicode-bidi: plaintext;

@@ -72,15 +72,18 @@ export class SkillsTab extends LitElement {
 
   private renderSourceToggle(scope: ActiveSkillSourceScope): TemplateResult {
     const checked = !this.disabledSources.includes(scope);
+    const id = `skill-source-${scope}`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${SOURCE_LABELS[scope]}</span>
-          <span class="settings-row-help">${scope} skill sources</span>
+          <label class="settings-row-label" for=${id}
+            >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</label
+          >
+          <span class="settings-row-help">Skills from ${scope} sources.</span>
         </div>
         <div class="settings-row-control">
           <wa-switch
-            aria-label=${`${SOURCE_LABELS[scope]} skill sources`}
+            id=${id}
             .checked=${checked}
             ?disabled=${!this.masterEnabled}
             @change=${(event: Event) =>
@@ -100,16 +103,17 @@ export class SkillsTab extends LitElement {
 
   private renderSkill(item: SkillDisplayItem): TemplateResult {
     const sourceEnabled = !this.disabledSources.includes(item.scope);
+    const id = `skill-${item.scope}-${item.name}`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${item.name}</span>
+          <label class="settings-row-label" for=${id}>Use ${item.name}</label>
           <span class="settings-row-help">${item.description}</span>
           <span class="settings-row-help"><code>${item.path}</code></span>
         </div>
         <div class="settings-row-control">
           <wa-switch
-            aria-label=${`Enable ${item.name}`}
+            id=${id}
             .checked=${item.enabled}
             ?disabled=${!this.masterEnabled || !sourceEnabled}
             @change=${(event: Event) =>
@@ -160,7 +164,7 @@ export class SkillsTab extends LitElement {
         }
         ${
           this.skills.length === 0
-            ? html`<div class="empty-state">No skills discovered</div>`
+            ? html`<div class="empty-state">No skills found</div>`
             : ActiveSkillSourceScopeSchema.options.flatMap((scope) => {
                 const items = groups.get(scope);
                 return items

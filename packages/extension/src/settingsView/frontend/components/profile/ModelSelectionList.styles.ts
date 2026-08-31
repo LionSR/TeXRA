@@ -23,7 +23,7 @@ export const modelSelectionListStyles: CSSResult = css`
     margin-bottom: var(--wa-space-s);
   }
 
-  .helper-model-row label {
+  .helper-model-label {
     font-weight: var(--font-weight-medium);
     color: var(--wa-color-text-normal);
     white-space: nowrap;
@@ -196,6 +196,20 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   @container settings (max-width: 520px) {
+    .helper-model-row,
+    .short-names-toggle {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .helper-model-label {
+      white-space: normal;
+    }
+
+    .helper-model-select {
+      max-width: none;
+    }
+
     .model-row {
       flex-wrap: wrap;
     }

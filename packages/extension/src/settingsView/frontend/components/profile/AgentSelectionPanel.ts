@@ -266,6 +266,9 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
                         title="Show all ${sourceName} agents"
                       >
                         Show all
+                        <span class="visually-hidden"
+                          >${sourceName} agents</span
+                        >
                       </wa-button>`
                     : nothing
                 }
@@ -279,6 +282,9 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
                         title="Hide all ${sourceName} agents"
                       >
                         Hide all
+                        <span class="visually-hidden"
+                          >${sourceName} agents</span
+                        >
                       </wa-button>`
                     : nothing
                 }
@@ -431,7 +437,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         }
 
         <dl class="agent-detail-meta">
-          <dt class="agent-detail-meta-label">Shown in selector</dt>
+          <dt class="agent-detail-meta-label">Shown in agent selector</dt>
           <dd class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
           </dd>

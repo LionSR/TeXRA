@@ -90,6 +90,27 @@ export class SubscriptionUsageRow extends LitElement {
         color: var(--color-text-secondary);
         font-size: var(--wa-font-size-xs, 0.75rem);
       }
+
+      @container settings (max-width: 520px) {
+        .usage-window {
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+
+        .usage-summary {
+          grid-column: 1;
+          grid-row: 1;
+        }
+
+        .usage-window progress {
+          grid-column: 1 / -1;
+          grid-row: 2;
+        }
+
+        .usage-reset {
+          grid-column: 2;
+          grid-row: 1;
+        }
+      }
     `,
   ];
 
@@ -138,7 +159,7 @@ export class SubscriptionUsageRow extends LitElement {
               );
               return html`
                 <div class="usage-window">
-                  <span
+                  <span class="usage-summary"
                     ><bdi dir="auto">${label}</bdi>:
                     <bdi dir="auto">${percent}</bdi></span
                   >
@@ -147,7 +168,9 @@ export class SubscriptionUsageRow extends LitElement {
                     value=${window.percentUsed}
                     aria-label="${snapshot.providerName} ${label} usage"
                   ></progress>
-                  <span><bdi dir="auto">${reset ?? ''}</bdi></span>
+                  <span class="usage-reset"
+                    ><bdi dir="auto">${reset ?? ''}</bdi></span
+                  >
                 </div>
               `;
             })}

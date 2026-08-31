@@ -107,6 +107,8 @@ export class ShortcutsTab extends LitElement {
   private handleSearch(event: Event): void {
     const input = event.target as HTMLInputElement | null;
     this.query = input?.value ?? '';
+    this.feedback = '';
+    this.feedbackIsError = false;
   }
 
   private startRecording(id: string): void {
@@ -239,6 +241,12 @@ export class ShortcutsTab extends LitElement {
   override render(): TemplateResult {
     const entries = this.visibleEntries();
     const groups = groupBy(entries, (entry) => entry.category);
+    const query = this.query.trim();
+    const feedback =
+      this.feedback ||
+      (query
+        ? `${entries.length} matching ${entries.length === 1 ? 'shortcut' : 'shortcuts'}.`
+        : '');
     return html`
       <div class="tab-content-container">
         ${renderSettingsBanner({
@@ -267,13 +275,13 @@ export class ShortcutsTab extends LitElement {
           role="status"
           data-error=${String(this.feedbackIsError)}
         >
-          ${this.feedback || nothing}
+          ${feedback || nothing}
         </p>
         ${
           entries.length === 0
             ? renderEmptyState({
                 icon: 'magnifying-glass',
-                title: 'No matching commands.',
+                title: 'No matching commands',
                 body: 'Try a different search term.',
                 headingTag: 'h3',
                 className: 'empty-state',

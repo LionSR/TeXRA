@@ -265,6 +265,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
               })}
               ${renderLabeledActionButton({
                 text: 'Change folder',
+                label: 'Change custom agents folder',
                 kind: 'secondary',
                 appearance: 'outlined',
                 onClick: () => this.handleChangeCustomDir(),
@@ -275,6 +276,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
                   : renderLabeledActionButton({
                       icon: 'arrow-rotate-left',
                       text: 'Use default folder',
+                      label: 'Reset custom agents folder',
                       kind: 'secondary',
                       appearance: 'outlined',
                       onClick: () => this.handleResetCustomDir(),

@@ -59,7 +59,7 @@ export class MemoryItem extends LitElement {
 
       .memory-preview {
         font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed);
+        line-height: var(--line-height-relaxed, 1.5);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
         border-radius: var(--border-radius);
         margin: 0;
@@ -252,7 +252,7 @@ export class MemoryItem extends LitElement {
     if (item.preview === undefined) {
       return item.previewError === true
         ? html`<em class="text-secondary">Unable to load contents.</em>`
-        : html`<em class="text-secondary">Loading contents...</em>`;
+        : html`<em class="text-secondary">Loading contents…</em>`;
     }
     if (!item.preview.trim()) {
       return html`<em class="text-secondary">This note is empty.</em>`;

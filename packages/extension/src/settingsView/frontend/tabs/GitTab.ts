@@ -366,7 +366,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                           </div>
                           ${renderLabeledActionButton({
                             icon: 'circle-stop',
-                            text: 'Stop',
+                            text: 'Stop monitoring',
                             label: `Stop monitoring ${subscription.key}`,
                             kind: 'secondary',
                             appearance: 'outlined',
@@ -404,7 +404,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         id="git-author-name"
                         class="form-control-fill"
                         name="git-author-name"
-                        autocomplete="off"
+                        autocomplete="name"
                         spellcheck="false"
                         .value=${this.authorName}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
@@ -419,7 +419,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         name="git-author-email"
                         type="email"
                         inputmode="email"
-                        autocomplete="off"
+                        autocomplete="email"
                         autocapitalize="off"
                         spellcheck="false"
                         dir="ltr"

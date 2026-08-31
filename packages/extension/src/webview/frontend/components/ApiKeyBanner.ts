@@ -68,7 +68,7 @@ export class ApiKeyBanner extends StateVisibleBanner<ApiKeyBannerState> {
           </wa-button>
         </div>
         <span class="hint">
-          Chat subscriptions don't include API access - except Codex models
+          Chat subscriptions don't include API access — except Codex models
           through ChatGPT. For other models, use a provider developer key.
         </span>
       `,

@@ -405,6 +405,7 @@ export class MainApp extends MainAppBase {
     const setupCard =
       onboardingState === 'setup'
         ? html`<onboarding-setup-card
+            .headingLevel=${desktopHost ? 2 : 1}
             @onboarding-run-setup=${() =>
               postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_RUN_SETUP)}
             @onboarding-open-getting-started=${
