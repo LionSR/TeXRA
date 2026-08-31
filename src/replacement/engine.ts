@@ -194,8 +194,6 @@ function getAllReplacements(): NonRegexReplacementCategory {
 
   return {
     name: 'all',
-    description: 'Combined non-regex replacements',
-    isRegex: false,
     patterns,
   };
 }
@@ -224,7 +222,6 @@ function getAllReplacementsRegex(): RegexReplacementCategory[] {
     ...enabledCategories,
     {
       name: 'custom_regex',
-      description: 'Custom regex replacements from user settings',
       isRegex: true,
       flags: 'g',
       patterns: customReplacements,

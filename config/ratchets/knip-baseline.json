@@ -1208,12 +1208,6 @@
       "name": "resolveOutputFiles"
     },
     {
-      "file": "src/agent/runtime/index.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SessionEvent"
-    },
-    {
       "file": "src/agent/runtime/ModelFactory.ts",
       "category": "production-dead",
       "kind": "exports",

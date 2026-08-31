@@ -53,7 +53,6 @@ export const FILE_HANDLING_RULES = Object.freeze({
       'preamble.tex',
       'yaml',
     ]),
-    inputDirectories: Object.freeze([]),
     mediaDirectories: Object.freeze([
       'build',
       'node_modules',

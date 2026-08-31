@@ -35,25 +35,14 @@ import { extractScratchpad } from '@utils/text/xmlExtraction';
 // Cycle Fields
 // ============================================================================
 
-/**
- * Serializable response cycle fields: the base cycle fields plus this flow's
- * output tracking. Everything here is structuredClone compatible; the
- * non-serializable rest lives in {@link CycleTransientFields}.
- */
-interface CycleFields extends BaseCycleFields {
+/** Shared state for one response cycle. */
+export interface ResponseCycleShared extends BaseCycleFields {
   /** Whether output file exists */
   outputExists: boolean;
   /** Agent output location selected before this cycle starts. */
   outputLocation: AgentFileLocation;
   /** Processed response text */
   processedResponse?: string;
-}
-
-/**
- * Transient cycle fields that are NOT serialized. These hold non-serializable
- * data (unknown response objects) and are regenerated each cycle execution.
- */
-interface CycleTransientFields {
   /** System prompt for model (regenerated from agent prompt each cycle) */
   systemPrompt?: string;
   /** Raw response from model (type unknown, not serialized) */
@@ -63,15 +52,6 @@ interface CycleTransientFields {
   /** Ownership token for clearing this cycle's pending compaction request. */
   contextWindowRecoveryRequestId?: number;
 }
-
-/**
- * Full cycle shared type combining serializable and transient fields.
- *
- * This is what cycle nodes operate on. ResponseCycleNode creates a
- * dedicated instance for each cycle, keeping cycle fields off the
- * outer ReflectionFlowShared.
- */
-export type ResponseCycleShared = CycleFields & CycleTransientFields;
 
 /** Prep result for ResponsePrepNode - captures interruption status and initial state. */
 interface ResponsePrepResult {

@@ -29,7 +29,7 @@ export {
 
 // SessionEventHub
 export { SessionEventHub } from './SessionEventHub';
-export type { SessionEvent, SessionFact } from './SessionEventHub';
+export type { SessionFact } from './SessionEventHub';
 
 // StreamStatusMachine — the per-stream lifecycle record hosts render from
 // (`SessionState.streamStatus.getStreamState`). Type only: the machine itself

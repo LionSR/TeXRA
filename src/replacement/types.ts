@@ -12,7 +12,6 @@ export type ReplacementValue = string | ReplacementFunction;
 /** Plain string substitution, applied via `String.prototype.replaceAll`. */
 export interface NonRegexReplacementCategory {
   name: string;
-  description: string;
   patterns: Record<string, string>;
   isRegex?: false;
 }
@@ -20,7 +19,6 @@ export interface NonRegexReplacementCategory {
 /** Regex-based substitution; patterns may be a replacement string or callback. */
 export interface RegexReplacementCategory {
   name: string;
-  description: string;
   patterns: Record<string, ReplacementValue>;
   isRegex: true;
   /** Regex flags such as 'g'. */

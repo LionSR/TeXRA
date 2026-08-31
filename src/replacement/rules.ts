@@ -21,8 +21,6 @@ import type { NonRegexReplacementCategory as NonRegexReplacementCategoryName } f
 
 export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'characters' satisfies NonRegexReplacementCategoryName,
-  description: 'Fixes for special characters and diacritics',
-  isRegex: false,
   patterns: {
     ansätze: 'ans{\\"a}tze',
     Rényi: "R{\\'e}nyi",
@@ -35,8 +33,6 @@ export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {
 // Common LaTeX equation spacing fixes
 export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'equations' satisfies NonRegexReplacementCategoryName,
-  description: 'Fixes for LaTeX equation spacing and formatting',
-  isRegex: false,
   patterns: (() => {
     // ====================================================================
     // Auto-generated replacements - for easily maintainable pattern groups
@@ -174,8 +170,6 @@ export const EQUATION_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'font_commands' satisfies NonRegexReplacementCategoryName,
-  description: 'Normalize deprecated font commands to modern equivalents',
-  isRegex: false,
   patterns: {
     ...createPatterns(
       [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'],
@@ -195,16 +189,11 @@ export const FONT_COMMAND_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const LATEX_FORBIDDEN_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latex_forbidden_commands' satisfies NonRegexReplacementCategoryName,
-  description:
-    'Removes LaTeX commands that should never appear, such as section endings',
-  isRegex: false,
   patterns: generateInvalidSectionEndingFixes(SECTION_TYPES),
 };
 
 export const GPTNESS_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'gptness' satisfies NonRegexReplacementCategoryName,
-  description: 'GPTness improvements',
-  isRegex: false,
   patterns: {
     'delve into': 'discuss',
     'delves into': 'discusses',
@@ -324,8 +313,6 @@ export const GPTNESS_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const HTML_ENTITY_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'html_entities' satisfies NonRegexReplacementCategoryName,
-  description: 'Converts common HTML entities into LaTeX-safe equivalents',
-  isRegex: false,
   patterns: {
     // Angle brackets often appear when XML tags are HTML-escaped
     '&lt;': '<',
@@ -448,8 +435,6 @@ export const HTML_ENTITY_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latex_xml' satisfies NonRegexReplacementCategoryName,
-  description: 'Fixes specific to XML output processing',
-  isRegex: false,
   patterns: (() => {
     // ====================================================================
     // Auto-generated replacements - for easily maintainable pattern groups
@@ -527,8 +512,6 @@ export const LATEX_XML_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const LATEXDIFF_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latexdiff' satisfies NonRegexReplacementCategoryName,
-  description: 'Fixes for LaTeXdiff markup and compatibility issues',
-  isRegex: false,
   patterns: {
     // Fix issues with latexdiff markup and excessive newlines
     '\n\n}\\end{align*}%DIFAUXCMD': '\n}\\end{align*}%DIFAUXCMD',
@@ -542,9 +525,6 @@ export const LATEXDIFF_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const PERSONAL_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'personal_style' satisfies NonRegexReplacementCategoryName,
-  description:
-    'Personal writing style preferences for specific LaTeX commands and spacing',
-  isRegex: false,
   patterns: {
     // ===== Spacing preferences =====
     // Consistent spacing for math mode and delimiters
@@ -612,8 +592,6 @@ export const PERSONAL_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const SECTION_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'sections' satisfies NonRegexReplacementCategoryName,
-  description: 'Fixes for section spacing in LaTeX documents',
-  isRegex: false,
   // Examples:
   // \end{align}\n\section -> \end{align}\n\n\n\section
   // \end{equation}\n\paragraph -> \end{equation}\n\n\n\paragraph
@@ -626,9 +604,6 @@ export const SECTION_REPLACEMENTS: NonRegexReplacementCategory = {
 // LaTeX spacing and punctuation fixes
 export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'latex_spacing' satisfies NonRegexReplacementCategoryName,
-  description:
-    'Fixes for LaTeX spacing, punctuation, and formatting [for O1 model]',
-  isRegex: false,
   patterns: {
     // ===== Basic spacing fixes =====
     // Remove unnecessary spacing commands (order matters: longer patterns first)
@@ -746,9 +721,6 @@ export const LATEX_SPACING_REPLACEMENTS: NonRegexReplacementCategory = {
 
 export const UNICODE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'unicode' satisfies NonRegexReplacementCategoryName,
-  description:
-    'Fixes for common non-math Unicode characters to LaTeX equivalents or for general cleanup (e.g., removing zero-width spaces). Math-specific Unicode is handled by a separate function within math environments.',
-  isRegex: false,
   patterns: {
     // ===== Dash and hyphen replacements (globally safe) =====
     '–': '-', // en dash (U+2013) to ASCII hyphen (U+002D)
