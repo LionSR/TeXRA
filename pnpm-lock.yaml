@@ -741,9 +741,6 @@ importers:
       fix-path:
         specifier: ^5.0.0
         version: 5.0.0
-      lucide-static:
-        specifier: ^1.35.0
-        version: 1.35.0
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -5136,9 +5133,6 @@ packages:
   lru-cache@6.0.0:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
-
-  lucide-static@1.35.0:
-    resolution: {integrity: sha512-Mc0cSZXDF+JkVG5YCrTsiDE3jnUrhNE0HJxL/8JJAI6NBGBDuJQPCni4QBRtK1AXVAmU4SlD1DfQG66VStUNCg==}
 
   macos-version@6.0.0:
     resolution: {integrity: sha512-O2S8voA+pMfCHhBn/TIYDXzJ1qNHpPDU32oFxglKnVdJABiYYITt45oLkV9yhwA3E2FDwn3tQqUFrTsr1p3sBQ==}
@@ -11041,8 +11035,6 @@ snapshots:
   lru-cache@6.0.0:
     dependencies:
       yallist: 4.0.0
-
-  lucide-static@1.35.0: {}
 
   macos-version@6.0.0:
     dependencies:
