@@ -62,32 +62,10 @@ export const agentSelectionPanelStyles: CSSResult = css`
     align-items: center;
     gap: var(--wa-space-2xs);
     padding: var(--wa-space-2xs) var(--wa-space-xs);
-    cursor: pointer;
+    min-height: var(--wa-height-option, 32px);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
     border-inline-start: var(--border-medium) solid transparent;
-  }
-
-  /*
-   * Source-tinted left rail — uses existing WA semantic colours so each
-   * group gets a quiet identity cue without introducing a new palette.
-   * Inline = warning, custom = success, remote = neutral; built-in rows fall
-   * through to the brand rail below, which shows only while selected. The
-   * hairline shows on hover/selected so the resting state stays calm.
-   */
-  .agent-list-item[data-source='inline']:hover,
-  .agent-list-item[data-source='inline'].selected {
-    border-inline-start-color: var(--wa-color-warning-fill-loud);
-  }
-
-  .agent-list-item[data-source='custom']:hover,
-  .agent-list-item[data-source='custom'].selected {
-    border-inline-start-color: var(--wa-color-success-fill-loud);
-  }
-
-  .agent-list-item[data-source='remote']:hover,
-  .agent-list-item[data-source='remote'].selected {
-    border-inline-start-color: var(--border-control);
   }
 
   .agent-list-item:hover {
@@ -111,6 +89,23 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   .agent-list-item-toggle {
     flex-shrink: 0;
+  }
+
+  .agent-list-item-select {
+    display: flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    flex: 1;
+    min-width: 0;
+    min-height: var(--height-control-compact);
+    padding: 0;
+    border: 0;
+    border-radius: var(--border-radius-small);
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
   }
 
   .agent-list-item-name {
@@ -176,6 +171,7 @@ export const agentSelectionPanelStyles: CSSResult = css`
 
   .agent-detail-meta-value {
     color: var(--wa-color-text-normal);
+    margin: 0;
   }
 
   .agent-detail-tools {

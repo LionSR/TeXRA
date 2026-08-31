@@ -10,14 +10,12 @@ const DATETIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
-  hour12: false,
 };
 
 const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
-  hour12: false,
 };
 
 // Shared formatters (lazily initialized for browser environments)

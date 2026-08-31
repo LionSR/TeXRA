@@ -13,7 +13,7 @@
 
 // Third-party imports
 import { LRUCache } from 'lru-cache';
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
 import { createRef, ref, type Ref } from 'lit/directives/ref.js';
@@ -152,6 +152,9 @@ export class LogList extends LitElement {
   override render(): TemplateResult {
     if (this.streamCache.size === 0 || !this.streamContext.hasStreams) {
       return html`<task-group-list
+        role=${this.streamContext.terminalMode ? nothing : 'log'}
+        aria-label=${this.streamContext.terminalMode ? nothing : 'Run activity'}
+        aria-relevant=${this.streamContext.terminalMode ? nothing : 'additions'}
         .hasStreams=${this.streamContext.hasStreams}
         .streamStatus=${this.streamContext.streamStatus}
         .isToolUse=${this.streamContext.isToolUse}
@@ -170,6 +173,9 @@ export class LogList extends LitElement {
       ([id, data]) => html`
         <task-group-list
           ${ref(data.ref)}
+          role=${data.terminalMode ? nothing : 'log'}
+          aria-label=${data.terminalMode ? nothing : `Activity for ${id}`}
+          aria-relevant=${data.terminalMode ? nothing : 'additions'}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
           .workflowAttemptId=${data.workflowAttemptId}

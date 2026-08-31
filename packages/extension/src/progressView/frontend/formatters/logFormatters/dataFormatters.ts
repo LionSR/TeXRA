@@ -72,7 +72,7 @@ export function formatFileListTemplate(row: FileListRow): FormatResult {
 function renderXmlLink(xmlFile: string): TemplateResult {
   const xmlFileName = getBasename(xmlFile);
   // prettier-ignore
-  return html`<div class="xml-link-container">${waIcon('file-code')} <span>Open XML to check tag consistency:</span> ${buildFileLinkSpan(xmlFile, xmlFileName)} <span class="document-tag">(Expected &lt;${OUTPUT_DOCUMENTS_TAG}&gt; block)</span></div>`;
+  return html`<div class="xml-link-container">${waIcon('file-code')} <span>Open XML to check tag consistency:</span> ${buildFileLinkSpan(xmlFile, html`<bdi dir="auto">${xmlFileName}</bdi>`)} <span class="document-tag">(Expected <code dir="ltr">&lt;${OUTPUT_DOCUMENTS_TAG}&gt;</code> block)</span></div>`;
 }
 
 /** Format missing outputs entry as TemplateResult. */
@@ -90,7 +90,7 @@ export function formatMissingOutputsTemplate(
   const listItems = missing.map((f) => {
     const filePath = String(f);
     const basename = getBasename(filePath);
-    return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} ${buildFileLinkSpan(filePath, basename)}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${basename}</bdi>`)}</li>`;
   });
   return buildFileListDetails({
     logId: id,

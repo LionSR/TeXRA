@@ -127,7 +127,8 @@ export class UserMessage extends LitElement {
       .user-message-content {
         color: var(--wa-color-text-normal);
         white-space: pre-wrap;
-        word-wrap: break-word;
+        overflow-wrap: anywhere;
+        unicode-bidi: plaintext;
         line-height: 1.55;
         font-size: var(--font-size);
       }
@@ -251,9 +252,9 @@ export class UserMessage extends LitElement {
   }
 
   override render(): TemplateResult {
-    const { timeDisplay, tooltipTimestamp } = formatDisplayTimestamp(
-      new Date(this.timestamp),
-    );
+    const messageDate = new Date(this.timestamp);
+    const { timeDisplay, tooltipTimestamp } =
+      formatDisplayTimestamp(messageDate);
     const copyState = this.copyController.state;
     const rawMessageCopyState = this.rawMessageCopyController.state;
     // processMarkdownContent uses MarkdownIt with html:false and escapes
@@ -269,7 +270,8 @@ export class UserMessage extends LitElement {
 
     return html`
       <div class="user-message-container">
-        <div
+        <article
+          aria-label="User message"
           class=${classMap({
             'user-message': true,
             'user-message--structured-delivery': isStructuredDelivery,
@@ -278,8 +280,11 @@ export class UserMessage extends LitElement {
           <div class="user-message-header">
             <span class="user-message-header-left">
               ${waIcon('comment', { className: 'user-message-icon' })}
-              <span id="user-message-timestamp" class="user-message-timestamp"
-                >${timeDisplay}</span
+              <time
+                id="user-message-timestamp"
+                class="user-message-timestamp"
+                datetime=${messageDate.toISOString()}
+                >${timeDisplay}</time
               >
               <wa-tooltip for="user-message-timestamp"
                 >${tooltipTimestamp}</wa-tooltip
@@ -312,6 +317,8 @@ export class UserMessage extends LitElement {
               ? html`<div
                   class="user-message-content markdown-content"
                   data-log-id=${this.logId}
+                  tabindex="0"
+                  aria-label="User message details"
                 >
                   ${unsafeHTML(structuredMarkdownHtml)}
                 </div>`
@@ -321,7 +328,7 @@ export class UserMessage extends LitElement {
                   .textContent=${displayText}
                 ></div>`
           }
-        </div>
+        </article>
       </div>
     `;
   }

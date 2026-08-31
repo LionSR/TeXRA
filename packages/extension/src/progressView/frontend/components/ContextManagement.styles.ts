@@ -12,14 +12,16 @@ export const contextManagementStyles: CSSResult = css`
     margin: 0;
   }
 
-  /* Extend .details-summary from commonViewStyles with accent color */
-  .details-summary,
-  .details-summary .icon,
-  .context-title {
+  /* Keep the event color on the decorative status cue. Chart tokens are not
+     guaranteed to meet text contrast across every host theme. */
+  .details-summary .icon {
     color: var(--accent-color, var(--wa-color-text-normal));
   }
 
   .context-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
   }
 
@@ -32,6 +34,7 @@ export const contextManagementStyles: CSSResult = css`
   .stat-item {
     display: inline-flex;
     align-items: center;
+    min-width: 0;
     gap: var(--wa-space-3xs);
     font-size: var(--font-size-sm);
   }
@@ -40,8 +43,13 @@ export const contextManagementStyles: CSSResult = css`
     color: var(--color-text-muted);
   }
 
+  .stat-value {
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+  }
+
   .summary-block {
-    margin-top: var(--wa-space-2xs);
+    margin-block-start: var(--wa-space-2xs);
     display: block;
     width: 100%;
   }
@@ -59,7 +67,7 @@ export const contextManagementStyles: CSSResult = css`
     margin: 0;
     padding: var(--wa-space-2xs);
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-wrap: anywhere;
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius-small);
     background: var(--wa-color-surface-raised);

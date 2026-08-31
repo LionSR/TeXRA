@@ -166,6 +166,18 @@ export class RequestPanels extends LitElement {
         color: var(--color-text-secondary);
         font-size: var(--font-size-sm);
       }
+
+      /* Keep the inquiry title and its compact pager reachable when the dock
+         narrows or localized labels grow. */
+      .external-inquiry-requests__header {
+        flex-wrap: wrap;
+      }
+
+      /* Previous/next are logical directions, so mirror their directional
+         glyphs with the surrounding writing direction. */
+      :dir(rtl) .external-inquiry-requests__nav wa-icon {
+        transform: scaleX(-1);
+      }
     `,
   ];
 
@@ -295,7 +307,7 @@ export class RequestPanels extends LitElement {
     return html`
       <div class="${config.cssClass}__header">
         ${waIcon(config.icon)}
-        <h2>${config.title}</h2>
+        <h2 id="${config.cssClass}-heading">${config.title}</h2>
         ${extra}
       </div>
     `;
@@ -309,7 +321,10 @@ export class RequestPanels extends LitElement {
 
     const armedKey = this.armedPermissionKey();
     return html`
-      <section class=${config.cssClass}>
+      <section
+        class=${config.cssClass}
+        aria-labelledby="${config.cssClass}-heading"
+      >
         ${this.renderSectionHeader(config)}
         <div class="${config.cssClass}__list">
           ${repeat(
@@ -382,24 +397,37 @@ export class RequestPanels extends LitElement {
     const current = perms[index];
     const currentKey = getPermissionKey(current);
     const nav = html`
-      <div class="external-inquiry-requests__nav">
+      <div
+        class="external-inquiry-requests__nav"
+        role="group"
+        aria-label="External inquiry navigation"
+      >
         <wa-button
           id="ei-prev-btn"
           appearance="plain"
           size="s"
+          type="button"
+          aria-label="Previous inquiry"
           ?disabled=${index === 0}
           @click=${this.showPreviousInquiry}
         >
           ${waIcon('chevron-left')}
         </wa-button>
         <wa-tooltip for="ei-prev-btn">Previous inquiry</wa-tooltip>
-        <span class="external-inquiry-requests__counter">
-          ${index + 1} / ${perms.length}
+        <span
+          class="external-inquiry-requests__counter"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          ${index + 1} of ${perms.length}
         </span>
         <wa-button
           id="ei-next-btn"
           appearance="plain"
           size="s"
+          type="button"
+          aria-label="Next inquiry"
           ?disabled=${index === perms.length - 1}
           @click=${this.showNextInquiry}
         >
@@ -410,7 +438,10 @@ export class RequestPanels extends LitElement {
     `;
 
     return html`
-      <section class=${config.cssClass}>
+      <section
+        class=${config.cssClass}
+        aria-labelledby="${config.cssClass}-heading"
+      >
         ${this.renderSectionHeader(config, nav)}
         <div class="${config.cssClass}__list">
           ${keyed(
@@ -481,8 +512,9 @@ export class RequestPanels extends LitElement {
    * opt-out would cross into settingsView/shared lanes; remapping is
    * already impossible for hardwired keys). Without the gate, one stray
    * keystroke anywhere in the view could approve or reject a run.
-   * Non-character keys (Escape, arrows) are outside 2.1.4's scope and stay
-   * global.
+   * Arrow navigation is also focus-scoped so it cannot intercept navigation
+   * in another control elsewhere in the progress view. Escape stays global
+   * because it dismisses the active request rather than selecting content.
    */
   private handleGlobalKeydown = (event: KeyboardEvent): void => {
     if (isTextInput(document.activeElement)) return;
@@ -490,22 +522,31 @@ export class RequestPanels extends LitElement {
     if (this.permissions.length === 0) return;
 
     const key = event.key.toLowerCase();
+    const eventPath = event.composedPath();
+    const focusWithinPanels = eventPath.includes(this);
+    const focusWithinInquiry = eventPath.some(
+      (target) =>
+        target instanceof Element &&
+        target.classList.contains('external-inquiry-requests'),
+    );
 
-    // Arrow keys navigate the external inquiry carousel
-    if (this.externalInquiryCarouselActive) {
-      if (key === 'arrowleft') {
+    // Arrow keys navigate the visible carousel in its visual direction, but
+    // only while focus is within these request panels.
+    if (this.externalInquiryCarouselActive && focusWithinInquiry) {
+      const rtl = getComputedStyle(this).direction === 'rtl';
+      if (key === (rtl ? 'arrowright' : 'arrowleft')) {
         this.showPreviousInquiry();
         event.preventDefault();
         return;
       }
-      if (key === 'arrowright') {
+      if (key === (rtl ? 'arrowleft' : 'arrowright')) {
         this.showNextInquiry();
         event.preventDefault();
         return;
       }
     }
 
-    if (key.length === 1 && !event.composedPath().includes(this)) return;
+    if (key.length === 1 && !focusWithinPanels) return;
 
     const armed = this.armedPermission;
     const panel = armed ? this.findPanelFor(armed) : null;

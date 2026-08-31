@@ -53,6 +53,9 @@ export class QueuedFollowUps extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-3xs);
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
 
       .queued-follow-up-item {
@@ -81,6 +84,7 @@ export class QueuedFollowUps extends LitElement {
         min-width: 0;
         overflow-wrap: anywhere;
         white-space: pre-wrap;
+        text-align: start;
         color: var(--wa-color-text-normal);
       }
     `,
@@ -95,9 +99,13 @@ export class QueuedFollowUps extends LitElement {
     if (message.length <= MAX_MESSAGE_LENGTH) {
       return { display: message, full: undefined };
     }
+    const display = truncateWithEllipsis(message, MAX_MESSAGE_LENGTH);
     return {
-      display: truncateWithEllipsis(message, MAX_MESSAGE_LENGTH),
-      full: message,
+      display,
+      // The cheap length guard above counts UTF-16 code units, while the
+      // shared truncator counts graphemes. Do not add a redundant tooltip or
+      // tab stop when emoji or combining marks made the guard conservative.
+      full: display === message ? undefined : message,
     };
   }
 
@@ -107,16 +115,19 @@ export class QueuedFollowUps extends LitElement {
     // clears shadow content but the host stays in the parent's layout, so a
     // mounted-but-empty host would still consume the parent's flex gap.
     if (this.messages.length === 0) return nothing;
+    const messageCount = this.messages.length;
+    const summary = `${messageCount === 1 ? 'Queued message' : 'Queued messages'} (${messageCount})`;
     return html`
       <wa-details
         id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_COLLAPSIBLE}
         class="queued-collapsible"
-        summary="Queued messages"
+        summary=${summary}
         open
       >
-        <div
+        <ol
           id=${ELEMENT_IDS.QUEUED_FOLLOW_UPS_LIST}
           class="queued-follow-ups-list"
+          aria-label="Queued messages"
         >
           ${repeat(
             this.messages,
@@ -125,15 +136,25 @@ export class QueuedFollowUps extends LitElement {
               const { display, full } = this.truncateMessage(message);
               const itemId = `queued-follow-up-${index}`;
               return html`
-                <div id=${itemId} class="queued-follow-up-item">
+                <li
+                  id=${itemId}
+                  class="queued-follow-up-item"
+                  tabindex=${full ? '0' : nothing}
+                >
                   ${waIcon('comment', { className: 'queued-follow-up-icon' })}
-                  <span class="queued-follow-up-text">${display}</span>
-                </div>
-                ${full ? html`<wa-tooltip for=${itemId}>${full}</wa-tooltip>` : nothing}
+                  <bdi class="queued-follow-up-text">${display}</bdi>
+                </li>
+                ${
+                  full
+                    ? html`<wa-tooltip for=${itemId} dir="auto"
+                        >${full}</wa-tooltip
+                      >`
+                    : nothing
+                }
               `;
             },
           )}
-        </div>
+        </ol>
       </wa-details>
     `;
   }

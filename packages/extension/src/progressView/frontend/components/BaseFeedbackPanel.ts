@@ -25,7 +25,10 @@ export const REDIRECT_FEEDBACK_PROMPT = 'What should the agent do instead?';
 export abstract class BaseFeedbackPanel<
   K extends FeedbackPermissionKind = FeedbackPermissionKind,
 > extends BaseRequestPanel<K> {
-  @query('[data-feedback-input]') private feedbackInput?: HTMLElement;
+  @query('[data-feedback-input]')
+  private feedbackInput?: HTMLElementTagNameMap['wa-textarea'];
+  @query('wa-button[data-action="reject"]')
+  private rejectButton?: HTMLElement;
   @state() protected showFeedback = false;
 
   // ===========================================================================
@@ -42,7 +45,7 @@ export abstract class BaseFeedbackPanel<
         return true;
       case 'escape':
         if (this.showFeedback) {
-          this.showFeedback = false;
+          this.hideFeedback();
           return true;
         }
         return false;
@@ -77,6 +80,22 @@ export abstract class BaseFeedbackPanel<
     });
   }
 
+  private handleFeedbackKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape') return;
+
+    // RequestPanels deliberately ignores shortcuts while a text field owns
+    // focus. Handle Escape at the field so the advertised dismissal still
+    // works, then return focus to the action that opened it.
+    event.preventDefault();
+    event.stopPropagation();
+    this.hideFeedback();
+  }
+
+  private hideFeedback(): void {
+    this.showFeedback = false;
+    void this.updateComplete.then(() => this.rejectButton?.focus());
+  }
+
   protected renderRejectButton(rejectTitle: string): TemplateResult {
     // Both states keep the reject icon and name the consequence. Switching to
     // a checkmark labelled "Submit" made the confirm step of a rejection wear
@@ -94,23 +113,26 @@ export abstract class BaseFeedbackPanel<
   protected renderFeedbackSection(
     containerClass: string,
     inputClass: string,
-    placeholder = 'What should the agent change?',
+    prompt = 'What should the agent change?',
   ): TemplateResult | typeof nothing {
     if (!this.showFeedback) return nothing;
 
-    // A visible label, not a placeholder doing the label's job: the
-    // placeholder disappears on the first keystroke, taking the only
-    // description of the field with it.
+    // Use Web Awesome's supported label/hint API so both strings reach the
+    // internal textarea's accessibility tree as well as remaining visible.
     return html`
       <div class=${containerClass}>
-        <label for="feedback-input">${placeholder}</label>
         <wa-textarea
-          id="feedback-input"
           class=${inputClass}
-          placeholder="Optional — this is sent back to the agent"
+          name="rejection-feedback"
+          label=${prompt}
+          hint="Optional. This note is sent to the agent."
           rows="2"
           resize="vertical"
+          autocomplete="off"
+          spellcheck="true"
+          ?disabled=${this.archived}
           data-feedback-input
+          @keydown=${this.handleFeedbackKeydown}
         ></wa-textarea>
       </div>
     `;
@@ -121,9 +143,7 @@ export abstract class BaseFeedbackPanel<
   // ===========================================================================
 
   private getFeedbackValue(): string | undefined {
-    const trimmed = (
-      (this.feedbackInput as HTMLElement & { value?: string })?.value ?? ''
-    ).trim();
+    const trimmed = (this.feedbackInput?.value ?? '').trim();
     return trimmed || undefined;
   }
 }

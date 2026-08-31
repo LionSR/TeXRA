@@ -47,6 +47,12 @@ export const fileListStyles: CSSResult = css`
     margin-bottom: 0;
   }
 
+  .file-round-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
   .file-name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -70,9 +76,10 @@ export const fileListStyles: CSSResult = css`
     flex-shrink: 0;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
   }
 
-  .file-stats span:first-child {
+  .file-stats > .added {
     margin-inline-start: 0;
   }
 

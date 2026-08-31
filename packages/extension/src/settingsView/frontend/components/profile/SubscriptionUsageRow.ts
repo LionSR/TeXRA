@@ -145,7 +145,9 @@ export class SubscriptionUsageRow extends LitElement {
       <div class="settings-row subscription-usage-row">
         <div class="settings-row-text">
           <div class="usage-card">
-            <span class="usage-plan">${snapshot.planName} usage</span>
+            <span class="usage-plan"
+              ><bdi dir="auto">${snapshot.planName}</bdi> usage</span
+            >
             ${snapshot.windows.map((window) => {
               const label = subscriptionUsageWindowLabel(window);
               const percent = formatSubscriptionUsagePercent(
@@ -157,13 +159,18 @@ export class SubscriptionUsageRow extends LitElement {
               );
               return html`
                 <div class="usage-window">
-                  <span class="usage-summary">${label}: ${percent}</span>
+                  <span class="usage-summary"
+                    ><bdi dir="auto">${label}</bdi>:
+                    <bdi dir="auto">${percent}</bdi></span
+                  >
                   <progress
                     max="100"
                     value=${window.percentUsed}
-                    aria-label="${snapshot.providerName} ${label} usage: ${percent} used"
+                    aria-label="${snapshot.providerName} ${label} usage"
                   ></progress>
-                  <span class="usage-reset">${reset ?? ''}</span>
+                  <span class="usage-reset"
+                    ><bdi dir="auto">${reset ?? ''}</bdi></span
+                  >
                 </div>
               `;
             })}

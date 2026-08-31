@@ -1,7 +1,7 @@
 /** Container component for tool-use agent streams. */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared schemas
@@ -32,7 +32,14 @@ import './FollowUpInput';
 
 @customElement('tool-use-stream-content')
 export class ToolUseStreamContent extends BaseStreamContent {
-  static override styles = conversationContentStyles;
+  static override styles = [
+    conversationContentStyles,
+    css`
+      .conversation-composer-banner--empty {
+        padding: 0;
+      }
+    `,
+  ];
 
   private get currentState(): ToolUseStreamState | null {
     const { streamState } = this.streamContext;
@@ -105,10 +112,22 @@ export class ToolUseStreamContent extends BaseStreamContent {
   private renderComposerBanner(
     state: ToolUseStreamState,
     streamInfo: StreamTabInfo,
-  ): TemplateResult | typeof nothing {
-    if (composerVisible(state, streamInfo)) return nothing;
-    return html`<div class="conversation-composer-banner">
-      ${streamStatusTooltip(state, RUN_ENDED_MESSAGE)}
+  ): TemplateResult {
+    const visible = !composerVisible(state, streamInfo);
+    const message = visible
+      ? streamStatusTooltip(state, RUN_ENDED_MESSAGE)
+      : nothing;
+
+    return html`<div
+      class=${
+        visible
+          ? 'conversation-composer-banner'
+          : 'conversation-composer-banner conversation-composer-banner--empty'
+      }
+      role="status"
+      aria-atomic="true"
+    >
+      ${message}
     </div>`;
   }
 

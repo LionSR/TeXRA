@@ -70,7 +70,8 @@ export class ToolCard extends LitElement {
         font-weight: var(--font-weight-medium);
         font-size: var(--font-size);
         color: var(--wa-color-text-normal);
-        white-space: nowrap;
+        margin: 0;
+        overflow-wrap: anywhere;
       }
 
       wa-tag.tool-badge {
@@ -94,20 +95,29 @@ export class ToolCard extends LitElement {
       .tool-description {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
+        margin-top: 0;
         margin-bottom: var(--wa-space-2xs);
         line-height: var(--line-height-normal);
+        overflow-wrap: anywhere;
       }
 
       .tool-ids {
         display: flex;
         flex-wrap: wrap;
         gap: var(--wa-space-2xs);
-        margin-bottom: var(--wa-space-2xs);
+        padding: 0;
+        margin: 0 0 var(--wa-space-2xs);
+        list-style: none;
+      }
+
+      .tool-id {
+        min-width: 0;
       }
 
       wa-badge.tool-id-tag::part(base) {
         font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-xs);
+        overflow-wrap: anywhere;
       }
 
       .tool-guide {
@@ -139,10 +149,10 @@ export class ToolCard extends LitElement {
         padding: var(--border-thin) var(--wa-space-2xs);
         font-size: var(--font-size-xs);
         border-radius: var(--border-radius);
-        white-space: nowrap;
         font-weight: var(--font-weight-medium);
         color: var(--color-info);
         background: color-mix(in srgb, var(--color-info) 12%, transparent);
+        overflow-wrap: anywhere;
       }
 
       .tool-toggle {
@@ -169,7 +179,7 @@ export class ToolCard extends LitElement {
         margin-top: var(--wa-space-2xs);
         font-size: var(--font-size-xs);
         color: var(--color-text-secondary);
-        font-style: italic;
+        overflow-wrap: anywhere;
       }
     `,
   ];
@@ -340,7 +350,7 @@ export class ToolCard extends LitElement {
     return html`
       <wa-details
         class="collapsible-quiet tool-guide-details"
-        summary="Setup guide"
+        summary=${`Set up ${this.item.name}`}
         ?open=${this.guideExpanded}
         @wa-show=${this.handleGuideShow}
         @wa-hide=${this.handleGuideHide}
@@ -391,14 +401,14 @@ export class ToolCard extends LitElement {
     if (!this.item.authNote) return nothing;
     return html`
       <span class="tool-auth-note">
-        ${waIcon('key')} ${this.item.authNote}
+        ${waIcon('key')} <bdi dir="auto">${this.item.authNote}</bdi>
       </span>
     `;
   }
 
   override render(): TemplateResult {
     return html`
-      <div class="tool-card">
+      <article class="tool-card">
         <div class="tool-header">
           <div class="tool-title-group">
             ${
@@ -406,7 +416,9 @@ export class ToolCard extends LitElement {
                 ? this.renderAvailableStatusIcon()
                 : nothing
             }
-            <span class="tool-name">${this.item.name}</span>
+            <h3 class="tool-name">
+              <bdi dir="auto">${this.item.name}</bdi>
+            </h3>
             ${
               this.item.status === 'available'
                 ? nothing
@@ -416,10 +428,10 @@ export class ToolCard extends LitElement {
           </div>
           ${this.renderToggle()}
         </div>
-        <div class="tool-description">${this.item.description}</div>
+        <p class="tool-description" dir="auto">${this.item.description}</p>
         ${
           this.item.statusDetail
-            ? html`<div class="tool-config-note">
+            ? html`<div class="tool-config-note" dir="auto">
                 ${this.item.statusDetail}
               </div>`
             : nothing
@@ -427,27 +439,34 @@ export class ToolCard extends LitElement {
         ${
           this.item.tools.length > 0
             ? html`
-                <div class="tool-ids">
+                <ul class="tool-ids" aria-label="Included tools">
                   ${this.item.tools.map((tool, index) => {
                     const badgeId = `tool-id-badge-${this.item.id}-${index}`;
-                    return html`<wa-badge
+                    return html`<li class="tool-id">
+                      <wa-badge
                         id=${badgeId}
                         class="tool-id-tag"
                         variant="neutral"
                         appearance="filled"
-                        >${tool.name}</wa-badge
+                        aria-label=${
+                          tool.description
+                            ? `${tool.name}: ${tool.description}`
+                            : tool.name
+                        }
+                        ><bdi dir="auto">${tool.name}</bdi></wa-badge
                       >
                       <wa-tooltip for=${badgeId}
                         >${tool.description ?? tool.name}</wa-tooltip
-                      >`;
+                      >
+                    </li>`;
                   })}
-                </div>
+                </ul>
               `
             : nothing
         }
         <slot name="details"></slot>
         ${this.renderGuide()}
-      </div>
+      </article>
     `;
   }
 }

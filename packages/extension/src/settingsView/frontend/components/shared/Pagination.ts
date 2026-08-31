@@ -63,8 +63,7 @@ export class Pagination extends LitElement {
       }
 
       .pagination-status {
-        font-family: var(--wa-font-family-mono, monospace), monospace;
-        letter-spacing: 0.02em;
+        font-variant-numeric: tabular-nums;
       }
 
       .pagination-controls {
@@ -139,7 +138,7 @@ export class Pagination extends LitElement {
     return html`
       <div class="pagination-bar" role="group" aria-label="Pagination">
         <span class="pagination-status" role="status" aria-atomic="true">
-          ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems}
+          ${this.rangeStart}–${this.rangeEnd} of ${this.totalItems} items
         </span>
         <div class="pagination-controls">
           ${this.renderNavButton('backward-step', 'First page', 0, atFirst)}
@@ -149,7 +148,9 @@ export class Pagination extends LitElement {
             page - 1,
             atFirst,
           )}
-          <span class="pagination-status"> ${page + 1}/${totalPages} </span>
+          <span class="pagination-status"
+            >Page ${page + 1} of ${totalPages}</span
+          >
           ${this.renderNavButton('chevron-right', 'Next page', page + 1, atLast)}
           ${this.renderNavButton(
             'forward-step',

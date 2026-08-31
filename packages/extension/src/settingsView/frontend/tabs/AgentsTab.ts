@@ -159,7 +159,10 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
         <ul class="custom-agent-issues">
           ${issues.map(
             (issue) =>
-              html`<li><code>${issue.path}</code> — ${issue.message}</li>`,
+              html`<li>
+                <bdi dir="auto"><code>${issue.path}</code></bdi> —
+                <bdi dir="auto">${issue.message}</bdi>
+              </li>`,
           )}
         </ul>
       `,
@@ -188,7 +191,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
           })}
           ${renderLabeledActionButton({
             icon: 'plus',
-            text: 'New agent',
+            text: 'Create agent',
             kind: 'primary',
             appearance: 'filled',
             onClick: () => this.handleCreateAgent(category),
@@ -196,12 +199,17 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
         `
       : nothing;
     return html`
-      <section id="${category}-agents-section" class="agent-category">
+      <section
+        id="${category}-agents-section"
+        class="agent-category"
+        aria-labelledby="${category}-agents-heading"
+      >
         ${renderSettingsSectionHeading({
           title: `${title} (${agents.length})`,
           description,
           icon,
           actions,
+          id: `${category}-agents-heading`,
         })}
         <agent-selection-panel
           .agents=${agents}
@@ -246,7 +254,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
                 class="settings-row-help agents-dir-path"
                 title=${this.customAgentDir}
               >
-                ${this.customAgentDir}
+                <bdi dir="auto">${this.customAgentDir}</bdi>
               </span>
             </div>
             <div class="settings-row-control action-button-group">
@@ -256,7 +264,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
                 onClick: () => this.handleOpenFolder(),
               })}
               ${renderLabeledActionButton({
-                text: 'Change',
+                text: 'Change folder',
                 label: 'Change custom agents folder',
                 kind: 'secondary',
                 appearance: 'outlined',
@@ -267,7 +275,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
                   ? nothing
                   : renderLabeledActionButton({
                       icon: 'arrow-rotate-left',
-                      text: 'Reset',
+                      text: 'Use default folder',
                       label: 'Reset custom agents folder',
                       kind: 'secondary',
                       appearance: 'outlined',
@@ -295,7 +303,7 @@ export class AgentsTab extends UnsupportedCommandsMixin(LitElement) {
         ${renderSettingsSectionHeading({
           title: 'Reliability',
           description:
-            'Tweak how long model sessions handle retries and context limits.',
+            'Configure how model sessions handle retries and context limits.',
           icon: 'rotate-right',
         })}
         <div class="settings-section">

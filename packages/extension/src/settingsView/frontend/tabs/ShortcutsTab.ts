@@ -127,7 +127,7 @@ export class ShortcutsTab extends LitElement {
     event.stopPropagation();
     if (event.key === 'Escape') {
       this.recordingId = undefined;
-      this.feedback = '';
+      this.feedback = 'Shortcut recording canceled.';
       return;
     }
     if (event.key === 'Backspace' || event.key === 'Delete') {
@@ -191,13 +191,16 @@ export class ShortcutsTab extends LitElement {
       detectBrowserPlatform(),
     );
     const label = recording ? 'Press shortcut…' : (current ?? 'Not assigned');
+    const recorderLabel = recording
+      ? `Recording shortcut for ${entry.label}. Press the new shortcut.`
+      : `Change shortcut for ${entry.label}. Current shortcut: ${label}.`;
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
           <span class="settings-row-label">${entry.label}</span>
           <span class="settings-row-help">
             ${entry.category}
-            <span class="shortcuts-command">${entry.id}</span>
+            <bdi class="shortcuts-command" dir="ltr">${entry.id}</bdi>
           </span>
         </div>
         <div class="settings-row-control shortcuts-control">
@@ -205,12 +208,14 @@ export class ShortcutsTab extends LitElement {
             class="shortcut-recorder btn-secondary"
             appearance="outlined"
             size="s"
+            aria-label=${recorderLabel}
             data-recording=${String(recording)}
             @click=${() => this.startRecording(entry.id)}
             @keydown=${(event: KeyboardEvent) =>
               this.captureShortcut(event, entry)}
           >
-            ${waIcon('code', { slot: 'start' })} ${label}
+            ${waIcon('code', { slot: 'start' })}
+            ${recording ? label : html`<bdi dir="ltr">${label}</bdi>`}
           </wa-button>
           ${renderLabeledActionButton({
             icon: 'arrow-rotate-left',
@@ -259,10 +264,10 @@ export class ShortcutsTab extends LitElement {
           }),
         })}
         <wa-input
+          id="shortcuts-search"
           class="shortcuts-search"
           type="search"
-          placeholder="Filter shortcuts"
-          aria-label="Filter shortcuts"
+          label="Filter shortcuts"
           @input=${this.handleSearch}
         ></wa-input>
         <p

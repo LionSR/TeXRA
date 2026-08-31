@@ -105,7 +105,7 @@ export function formatBannerContentTemplate(
     : html`<div class="banner-content markdown-content log-entry-content ${contentClass}">${unsafeHTML(processMarkdownContent(trimmedContent))}</div>`;
 
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${buildDetailsSummary({
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details" ?open=${shouldOpen} aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${buildDetailsSummary({
     iconName: config.iconName,
     label: config.labelText,
     timestamp: config.showTimestamp && verbose

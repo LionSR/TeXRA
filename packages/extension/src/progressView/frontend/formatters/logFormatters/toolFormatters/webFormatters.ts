@@ -6,6 +6,7 @@
  */
 
 import { html, type TemplateResult } from 'lit';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 import {
   buildToolUseSection,
@@ -27,6 +28,29 @@ const STATUS_ICONS: Record<string, TeXRAIconName | typeof SPINNER_ICON_NAME> = {
 /** Line count past which fetched page text becomes a fixed-height scroll box. */
 const CONTENT_SCROLL_LINES = 20;
 
+/** Render a sanitized destination with protocol-appropriate navigation. */
+function buildWebLink(
+  url: string,
+  label: TemplateResult,
+  accessibleLabel: string,
+): TemplateResult {
+  const opensNewTab = /^https?:/i.test(url);
+  // prettier-ignore
+  return html`<a href=${url} class="web-search-link" target=${ifDefined(opensNewTab ? '_blank' : undefined)} rel=${ifDefined(opensNewTab ? 'noopener noreferrer' : undefined)} aria-label=${ifDefined(opensNewTab ? `${accessibleLabel} (opens in a new tab)` : undefined)}>${label}</a>`;
+}
+
+function webSearchFallback(status: string): string {
+  if (status === 'in_progress') return 'Search in progress';
+  if (status === 'failed') return 'Unable to complete search';
+  return 'Search completed';
+}
+
+function webFetchFallback(status: string | undefined, failed: boolean): string {
+  if (status === 'in_progress') return 'Fetching page';
+  if (failed) return 'Unable to fetch page';
+  return 'Fetch completed';
+}
+
 /** Format web search results as TemplateResult. */
 export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
   const searchResults = row.results;
@@ -43,11 +67,14 @@ export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
     // real href (an empty/missing href is not itself dangerous, but a
     // result with no safe URL should read as inert text, not a dead link).
     // prettier-ignore
-    const resultItems = searchResults.map(
-      (r) => html`<li class="detail-item">${waIcon('link')} ${r.url ? html`<a href=${r.url} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>` : html`<span class="web-search-link">${r.title ?? r.domain ?? ''}</span>`}${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
-    );
+    const resultItems = searchResults.map((r) => {
+      const label = r.title ?? r.domain ?? r.url ?? 'Untitled result';
+      const showDomain = r.domain && r.domain !== label;
+      // prettier-ignore
+      return html`<li class="detail-item">${waIcon('link')} ${r.url ? buildWebLink(r.url, html`<bdi dir="auto">${label}</bdi>`, label) : html`<span><bdi dir="auto">${label}</bdi></span>`}${showDomain ? html` <span class="file-source">(<bdi dir="auto">${r.domain}</bdi>)</span>` : ''}</li>`;
+    });
     // prettier-ignore
-    const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;
+    const resultsTemplate = html`<span class="file-list-summary">${resultCount} ${resultCount === 1 ? 'result' : 'results'}</span><ul class="detail-list">${resultItems}</ul>`;
     sections.push(buildToolUseSection('Sources:', resultsTemplate));
   } else if (statusKey === 'completed') {
     sections.push(
@@ -61,7 +88,7 @@ export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
   const contentTemplate =
     sections.length > 0
       ? html`${sections}`
-      : html`<pre>Web search executed</pre>`;
+      : html`<pre>${webSearchFallback(statusKey)}</pre>`;
 
   return buildToolUseDetails({
     row,
@@ -82,7 +109,7 @@ export function formatWebFetchTemplate(row: WebFetchRow): FormatResult {
 
   if (url) {
     // prettier-ignore
-    sections.push(buildToolUseSection('URL:', html`<a href=${url} class="web-search-link" target="_blank" rel="noopener noreferrer">${url}</a>`));
+    sections.push(buildToolUseSection('URL:', buildWebLink(url, html`<bdi dir="ltr">${url}</bdi>`, url)));
   }
 
   if (title) {
@@ -112,7 +139,7 @@ export function formatWebFetchTemplate(row: WebFetchRow): FormatResult {
   const contentTemplate =
     sections.length > 0
       ? html`${sections}`
-      : html`<pre>Web fetch executed</pre>`;
+      : html`<pre>${webFetchFallback(row.status, failed)}</pre>`;
 
   return buildToolUseDetails({
     row,

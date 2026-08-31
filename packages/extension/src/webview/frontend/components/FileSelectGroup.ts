@@ -293,7 +293,11 @@ export class FileSelectGroup extends LitElement {
     }
 
     const movable = this.currentFiles.length > 1;
-    return html`<div role="list" @click=${this.handleFileListClick}>
+    return html`<div
+      role="list"
+      aria-label=${`${this.config.label} files`}
+      @click=${this.handleFileListClick}
+    >
       ${repeat(
         this.currentFiles,
         (file) => file,
@@ -313,11 +317,12 @@ export class FileSelectGroup extends LitElement {
               title=${file}
             >
               <span class="file-name">
-                <span class="file-name-main">${display.name}</span>
+                <bdi class="file-name-main" dir="auto">${display.name}</bdi>
                 ${
                   display.folder
                     ? html`<span class="file-folder">
-                        ${waIcon('folder')} ${display.folder}
+                        ${waIcon('folder')}
+                        <bdi dir="auto">${display.folder}</bdi>
                       </span>`
                     : nothing
                 }
@@ -332,7 +337,7 @@ export class FileSelectGroup extends LitElement {
                         variant="neutral"
                         size="s"
                         type="button"
-                        aria-label=${`Move ${display.name} up`}
+                        aria-label=${`Move ${file} up`}
                         data-move-index=${index}
                         data-move-direction="-1"
                         ?disabled=${index === 0}
@@ -349,7 +354,7 @@ export class FileSelectGroup extends LitElement {
                         variant="neutral"
                         size="s"
                         type="button"
-                        aria-label=${`Move ${display.name} down`}
+                        aria-label=${`Move ${file} down`}
                         data-move-index=${index}
                         data-move-direction="1"
                         ?disabled=${index === this.currentFiles.length - 1}
@@ -369,7 +374,7 @@ export class FileSelectGroup extends LitElement {
                 variant="neutral"
                 size="s"
                 type="button"
-                aria-label=${`Remove ${display.name}`}
+                aria-label=${`Remove ${file}`}
                 data-remove-file=${file}
               >
                 ${waIcon('trash')}
@@ -397,6 +402,7 @@ export class FileSelectGroup extends LitElement {
   override render(): TemplateResult {
     const { config } = this;
     const typeLabel = capitalize(config.type);
+    const labelId = `${this.listId}Label`;
 
     return html`
       <div
@@ -404,6 +410,8 @@ export class FileSelectGroup extends LitElement {
           'file-select': true,
           'drop-active': this.fileDrop.isDragActive,
         })}
+        role="group"
+        aria-labelledby=${labelId}
         @dragenter=${this.fileDrop.handleDragEnter}
         @dragover=${this.fileDrop.handleDragOver}
         @dragleave=${this.fileDrop.handleDragLeave}
@@ -414,7 +422,7 @@ export class FileSelectGroup extends LitElement {
             <span class="file-select-icon" aria-hidden="true">
               ${waIcon(config.icon)}
             </span>
-            <span class="file-select-label">${config.label}</span>
+            <span id=${labelId} class="file-select-label">${config.label}</span>
             <span class="file-select-count" role="status" aria-atomic="true">
               ${
                 this.currentFiles.length === 0
@@ -446,6 +454,7 @@ export class FileSelectGroup extends LitElement {
               icon: 'trash',
               label: config.emptyListLabel,
               tooltip: config.emptyListLabel,
+              disabled: this.currentFiles.length === 0,
               onClick: this.handleEmptyFiles,
             })}
             ${renderIconActionButton({

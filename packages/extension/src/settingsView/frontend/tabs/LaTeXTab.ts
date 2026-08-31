@@ -347,7 +347,10 @@ export class LaTeXTab extends LitElement {
               ${installed ? dep.installedDesc : dep.missingDesc}
             </div>
             ${detectedPaths.map(
-              (p) => html`<div class="dependency-path">${p}</div>`,
+              (p) =>
+                html`<div class="dependency-path">
+                  <bdi dir="auto">${p}</bdi>
+                </div>`,
             )}
           </div>
           ${actionSlot}
@@ -356,7 +359,10 @@ export class LaTeXTab extends LitElement {
           !installed && installCmd
             ? html`
                 <div class="dependency-install-actions">
-                  <wa-copy-button value=${installCmd.command}></wa-copy-button>
+                  <wa-copy-button
+                    value=${installCmd.command}
+                    copy-label="Copy install command"
+                  ></wa-copy-button>
                   <wa-button
                     appearance="outlined"
                     variant="neutral"
@@ -431,8 +437,11 @@ export class LaTeXTab extends LitElement {
       title,
       description,
       actions: html`
-        <code class="install-command-text">${installCommand}</code>
-        <wa-copy-button value=${installCommand}></wa-copy-button>
+        <code class="install-command-text" dir="ltr">${installCommand}</code>
+        <wa-copy-button
+          value=${installCommand}
+          copy-label="Copy install command"
+        ></wa-copy-button>
         ${renderLabeledActionButton({
           icon: 'terminal',
           text: 'Run in Terminal',
@@ -715,6 +724,7 @@ export class LaTeXTab extends LitElement {
     const isCustom = Object.keys(value).length > 0;
     const error = this.replacementJsonErrors[opts.field];
     const controlId = `latex-setting-${opts.field}`;
+    const errorId = `${controlId}-error`;
     return html`
       <div class="settings-row replacement-map-row">
         <div class="settings-row-text">
@@ -728,6 +738,8 @@ export class LaTeXTab extends LitElement {
             rows="4"
             resize="auto"
             spellcheck="false"
+            aria-describedby=${error ? errorId : nothing}
+            aria-invalid=${error ? 'true' : 'false'}
             .value=${JSON.stringify(value, null, 2)}
             @change=${(event: Event) =>
               this.handleCustomReplacementChange(
@@ -744,7 +756,13 @@ export class LaTeXTab extends LitElement {
           </wa-textarea>
           ${
             error
-              ? html`<span class="replacement-json-error">${error}</span>`
+              ? html`<span
+                  id=${errorId}
+                  class="replacement-json-error"
+                  aria-live="polite"
+                  aria-atomic="true"
+                  >${error}</span
+                >`
               : nothing
           }
         </div>
@@ -806,7 +824,10 @@ export class LaTeXTab extends LitElement {
       control.setCustomValidity(message);
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
-        [field]: message,
+        [field]:
+          error instanceof Error
+            ? `Enter valid JSON. ${error.message}`
+            : 'Enter valid JSON.',
       };
       return;
     }

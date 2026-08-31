@@ -120,6 +120,9 @@ export const externalInquiryPanelStyles: CSSResult = css`
     display: flex;
     flex-direction: column;
     gap: ${sp.tiny};
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
 
   .external-inquiry-request__search-hint {
@@ -148,6 +151,8 @@ export const externalInquiryPanelStyles: CSSResult = css`
     padding: ${sp.small};
     background: var(--wa-color-surface-lowered);
     border-radius: var(--border-radius-small);
+    margin: 0;
+    list-style: none;
   }
 
   .external-inquiry-request__file-item {
@@ -189,6 +194,11 @@ export const externalInquiryPanelStyles: CSSResult = css`
   .external-inquiry-request__chat-links a {
     color: var(--wa-color-text-link);
     text-decoration: none;
+  }
+
+  .external-inquiry-request__chat-links {
+    line-height: var(--line-height-normal);
+    overflow-wrap: anywhere;
   }
 
   .external-inquiry-request__chat-links a:hover {

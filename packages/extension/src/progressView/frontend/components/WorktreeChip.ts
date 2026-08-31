@@ -49,8 +49,14 @@ export class WorktreeChip extends LitElement {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background-color: var(--color-chart-orange);
+        background-color: var(--color-warning);
         flex-shrink: 0;
+      }
+
+      @media (forced-colors: active) {
+        .dirty-dot {
+          background-color: CanvasText;
+        }
       }
     `,
   ];
@@ -66,24 +72,24 @@ export class WorktreeChip extends LitElement {
     const branch = this.info.branch ?? this.worktreeLabel();
     if (!branch) return nothing;
     const branchKind = this.info.branch ? 'Branch' : 'Worktree';
-    const tooltip = this.info.dirty
-      ? `${branchKind} ${branch} (uncommitted changes)`
-      : `${branchKind} ${branch}`;
     return html`<span id="worktree-branch" class="branch">
         ${waIcon('code-branch')}
-        <span class="branch-name">${branch}</span>
+        <bdi class="branch-name" dir="auto">${branch}</bdi>
         ${
           this.info.dirty
             ? html`<span
-                  class="dirty-dot"
-                  role="img"
-                  aria-label="uncommitted changes"
-                ></span>
-                <span class="visually-hidden">uncommitted changes</span>`
+                class="dirty-dot"
+                role="img"
+                aria-label="uncommitted changes"
+              ></span>`
             : nothing
         }
       </span>
-      <wa-tooltip for="worktree-branch">${tooltip}</wa-tooltip>`;
+      <wa-tooltip for="worktree-branch"
+        >${branchKind}: <bdi dir="auto">${branch}</bdi>${
+          this.info.dirty ? ' — uncommitted changes' : nothing
+        }</wa-tooltip
+      >`;
   }
 
   private worktreeLabel(): string | undefined {

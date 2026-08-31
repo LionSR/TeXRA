@@ -34,7 +34,9 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
         <span>
           ${
             this.state.agentName
-              ? `Agent file for “${this.state.agentName}” is missing.`
+              ? html`Agent file for “<bdi dir="auto"
+                    >${this.state.agentName}</bdi
+                  >” is missing.`
               : 'Agent configuration is missing.'
           }
         </span>
@@ -54,7 +56,11 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
             @click=${() => this.handleAction('dir')}
           >
             ${waIcon('folder', { slot: 'start' })}
-            ${this.state.customDirSet ? 'Open directory' : 'Set directory'}
+            ${
+              this.state.customDirSet
+                ? 'Open agent directory'
+                : 'Set agent directory'
+            }
           </wa-button>
           <wa-button
             id="agentConfigDocButton"
@@ -62,7 +68,7 @@ export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState
             size="s"
             @click=${() => this.handleAction('docs')}
           >
-            ${waIcon('book', { slot: 'start' })} Open docs
+            ${waIcon('book', { slot: 'start' })} Read agent docs
           </wa-button>
         </div>
       `,

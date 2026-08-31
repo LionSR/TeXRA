@@ -49,6 +49,7 @@ export const conversationContentStyles: CSSResult = css`
     padding-top: var(--wa-space-xs);
     overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior-block: contain;
     scrollbar-width: thin;
     position: relative;
     z-index: 2;
@@ -62,6 +63,7 @@ export const conversationContentStyles: CSSResult = css`
     padding-top: var(--wa-space-xs);
     overflow-x: hidden;
     overflow-y: auto;
+    overscroll-behavior-block: contain;
     scrollbar-width: thin;
   }
 

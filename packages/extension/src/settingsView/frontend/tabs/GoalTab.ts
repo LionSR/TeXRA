@@ -33,6 +33,9 @@ export class GoalTab extends LitElement {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
 
       .goal-actions {
@@ -44,12 +47,17 @@ export class GoalTab extends LitElement {
       .goal-row {
         display: grid;
         grid-template-columns: auto 1fr auto;
+        width: 100%;
+        min-width: 0;
         gap: var(--wa-space-s);
         align-items: center;
         padding: var(--wa-space-s);
         border: 1px solid var(--wa-color-neutral-border-quiet);
         border-radius: var(--wa-border-radius-m);
         background: var(--wa-color-surface-default);
+        color: inherit;
+        font: inherit;
+        text-align: start;
       }
 
       .goal-row.is-clickable {
@@ -96,13 +104,6 @@ export class GoalTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM, { streamId });
   }
 
-  private handleRowKey(event: KeyboardEvent, streamId: string): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      this.handleReveal(streamId);
-    }
-  }
-
   private renderActions(): TemplateResult {
     return html`<div class="goal-actions">
       ${renderLabeledActionButton({
@@ -117,19 +118,18 @@ export class GoalTab extends LitElement {
 
   private renderRow(item: Goal): TemplateResult {
     const metaParts: MetaPart[] = [
-      html`<span class="stream-id">${item.streamId}</span>`,
+      html`<code class="stream-id" dir="ltr">${item.streamId}</code>`,
       html`<span title="Wall-clock duration since this Goal started"
         >duration ${formatGoalTime(goalElapsedMs(item))}</span
       >`,
     ];
     return html`
-      <div
+      <button
+        type="button"
         class="goal-row is-clickable"
         @click=${() => this.handleReveal(item.streamId)}
-        @keydown=${(e: KeyboardEvent) => this.handleRowKey(e, item.streamId)}
-        role="button"
-        tabindex="0"
       >
+        <span class="visually-hidden">Open goal:</span>
         <wa-badge
           class="status-chip"
           variant=${item.status === 'active' ? 'success' : 'warning'}
@@ -137,13 +137,15 @@ export class GoalTab extends LitElement {
           >${capitalize(item.status)}</wa-badge
         >
         <div>
-          <div class="objective" title=${item.objective}>${item.objective}</div>
+          <div class="objective" title=${item.objective}>
+            <bdi>${item.objective}</bdi>
+          </div>
           <div class="text-secondary meta-strip">
             ${renderDotMeta(metaParts)}
           </div>
         </div>
         ${waIcon('chevron-right')}
-      </div>
+      </button>
     `;
   }
 
@@ -161,13 +163,13 @@ export class GoalTab extends LitElement {
                 className: 'empty-state',
               })
             : html`
-                <div class="goal-list">
+                <ul class="goal-list" aria-label="Goals">
                   ${repeat(
                     this.items,
                     (it) => it.goalId,
-                    (it) => this.renderRow(it),
+                    (it) => html`<li>${this.renderRow(it)}</li>`,
                   )}
-                </div>
+                </ul>
               `
         }
       </div>
