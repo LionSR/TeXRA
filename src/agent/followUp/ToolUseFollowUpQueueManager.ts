@@ -69,8 +69,9 @@ type FollowUpSubmission =
  * such as a child whose activation outlives its parent's teardown, cannot
  * recreate the queue and trigger a resume of a run that is gone; only an
  * explicit claim reopens the stream. Stream ids embed their execution id, so
- * the mark never collides with a later run. Tombstones are bounded because
- * evicting an old mark only lets a persisted-authority check recreate it.
+ * the mark never collides with a later run. Tombstones are bounded; after
+ * eviction, callers must revalidate persisted authority before recoverable
+ * admission.
  */
 export class ToolUseFollowUpQueue {
   static readonly DELIVERY_ID_CAP = 1000;
