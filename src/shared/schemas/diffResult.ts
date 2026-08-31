@@ -67,8 +67,7 @@ function diffResultToDisplay(entry: DiffResult): DiffResultDisplay {
  * Transform canonical latexdiff entries into flattened display entries for the
  * progress view. Use {@link DiffResultDisplay} for the output shape.
  */
-export const DiffResultDisplaySchema =
-  DiffResultSchema.transform(diffResultToDisplay);
+const DiffResultDisplaySchema = DiffResultSchema.transform(diffResultToDisplay);
 
 function getAbsolutePath(location: FileLocation | null): string {
   return location?.absolutePath ?? '';
