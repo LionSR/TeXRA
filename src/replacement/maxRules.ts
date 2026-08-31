@@ -474,8 +474,6 @@ const MAX_MANUAL_PATTERNS: Record<string, string> = {
 
 export const MAX_STYLE_REPLACEMENTS: NonRegexReplacementCategory = {
   name: 'max_style' satisfies NonRegexReplacementCategoryName,
-  description: 'Maximum style replacements for LaTeX commands and symbols',
-  isRegex: false,
   patterns: { ...MAX_AUTO_PATTERNS, ...MAX_MANUAL_PATTERNS },
 };
 
@@ -594,8 +592,6 @@ export function restoreLatexSectionSign(text: string): string {
 
 export const MAX_REGEX_REPLACEMENTS: RegexReplacementCategory = {
   name: 'max_style_regex' satisfies RegexReplacementCategoryName,
-  description:
-    'Maximum style regex replacements for LaTeX commands and symbols',
   isRegex: true,
   flags: 'gms',
   patterns: {

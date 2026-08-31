@@ -13,7 +13,6 @@ export interface FileListSettings {
   ignoredDirectories: string[];
   ignoredKeywords: string[];
   ignoredInputFiles: string[];
-  ignoredInputDirectories: string[];
   ignoredMediaDirs: string[];
 }
 
@@ -57,7 +56,6 @@ export function loadFileListSettings(): FileListSettings {
     ignoredDirectories: [...ignored.directories],
     ignoredKeywords: [...ignored.keywords],
     ignoredInputFiles: [...ignored.inputFiles],
-    ignoredInputDirectories: [...ignored.inputDirectories],
     ignoredMediaDirs: [...ignored.mediaDirectories],
   };
 }
@@ -69,10 +67,7 @@ function buildInputLikeConfig(
   return {
     include: getIncludedExtensions(category),
     excludeExtensions: settings.ignoredFileExtensions,
-    excludeDirs: [
-      ...settings.ignoredDirectories,
-      ...settings.ignoredInputDirectories,
-    ],
+    excludeDirs: settings.ignoredDirectories,
     excludeKeywords: settings.ignoredKeywords,
     excludeFiles: settings.ignoredInputFiles,
   };
