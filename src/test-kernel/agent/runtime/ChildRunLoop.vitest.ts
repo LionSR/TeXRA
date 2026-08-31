@@ -53,8 +53,9 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
+import type { WorkflowJournalEntry } from '@agent/workflowScript';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
@@ -81,6 +82,7 @@ import {
 } from '@shared/schemas';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
@@ -495,6 +497,64 @@ describe('childRunLoop E2E fixtures', () => {
     } finally {
       writeBarrier.resolve();
       writeTurnState.mockRestore();
+    }
+  });
+
+  it('refuses follow-ups for a completed parent while a child-stream loop is still running', async () => {
+    const { childStreamId, executionId } = loopIds(
+      'completed-parent-child-stream',
+    );
+    const { strategy, resolveTurn } = createFakeStrategy();
+    const sourceStream = createChildStream(executionId, PARENT_STREAM_ID, {
+      streamPrefix: 'codex',
+      run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+      description: 'Keep a background child running',
+      config: childStreamConfig,
+    });
+    session.executions.untrack(executionId);
+    const childStream: NonNullable<
+      ChildRunLoopParams<FakeTurn>['childStream']
+    > = {
+      logger: sourceStream.logger,
+      waitForInput: vi.fn(),
+      beginTurn: vi.fn(),
+      failTurn: vi.fn(),
+      finalize: vi.fn(async () => {}),
+    };
+    const loop = startLoop({ childStreamId, executionId }, strategy, {
+      childStream,
+    });
+    seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
+      phase: STREAM_PHASE.COMPLETED,
+    });
+    const tryResumeStream = vi.fn(async () => false);
+    const userAdmission = vi.fn();
+
+    try {
+      await expect(
+        submitFollowUp(PARENT_STREAM_ID, 'restore me', {
+          session,
+          resumePort: { tryResumeStream },
+          onAdmitted: userAdmission,
+        }),
+      ).resolves.toMatchObject({ status: 'failed' });
+      expect(userAdmission).toHaveBeenCalledWith(false);
+      await expect(
+        submitFollowUp(
+          PARENT_STREAM_ID,
+          { text: 'late child result', origin: 'subagent_result' },
+          {
+            session,
+            resumePort: { tryResumeStream },
+            mode: 'child_delivery',
+          },
+        ),
+      ).resolves.toMatchObject({ status: 'failed' });
+      expect(tryResumeStream).not.toHaveBeenCalled();
+      expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual([]);
+    } finally {
+      await resolveTurn(1, { kind: 'terminal', value: 'done' });
+      await loop.completion;
     }
   });
 

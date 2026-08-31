@@ -784,20 +784,24 @@ export function startChildRunLoop<TTurn>(
     childStreamId,
     strategy.ownsBackgroundProcess === true,
   );
-  // The parent counts this child as active from here until the final delivery
-  // below has landed, whatever turn handles come and go in between: a child
-  // result can therefore never reach a parent whose queue already went terminal.
+  // Native children have no persistent child-stream handle between turns, so
+  // retain their parent lineage until final delivery. Child-stream loops own
+  // their lifecycle through that stream instead; reserving parent delivery for
+  // them would make a terminal parent look recoverable after it can no longer
+  // accept either user input or the child's result.
   let activationDetached = false;
-  const releaseChildActivation = runSession.executions.reserveChildActivation({
-    executionId,
-    parentStreamId,
-    childStreamId,
-    interrupt: () => loop.interrupt(),
-    detach: () => {
-      activationDetached = true;
-    },
-    isDetached: () => activationDetached,
-  });
+  const releaseChildActivation = childStream
+    ? () => undefined
+    : runSession.executions.reserveChildActivation({
+        executionId,
+        parentStreamId,
+        childStreamId,
+        interrupt: () => loop.interrupt(),
+        detach: () => {
+          activationDetached = true;
+        },
+        isDetached: () => activationDetached,
+      });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
     if (sessionOwnershipReleased) return;
