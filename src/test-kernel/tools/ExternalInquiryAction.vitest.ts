@@ -52,7 +52,7 @@ describe('handleExternalInquiryAction', () => {
 
   it('persists and continues submit actions', async () => {
     const manifest = { status: 'answered' };
-    storageMocks.recordAnswerForOpenTurn.mockResolvedValue({ manifest });
+    storageMocks.recordAnswerForOpenTurn.mockResolvedValue(manifest);
 
     await handleExternalInquiryAction({
       action: 'submit',

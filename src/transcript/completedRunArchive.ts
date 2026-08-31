@@ -230,8 +230,8 @@ function webFetchEntryToMessages(
           type: 'web_fetch_tool_result',
           url: data.url,
           ...(data.title !== undefined && { title: data.title }),
-          // `page_content` is the field name normalizeConversationForExport's
-          // ContentBlockSchema already recognizes for this block type (#7508).
+          // `page_content` is the archived field name the export normalizer's
+          // web-fetch handling recognizes for this block type (#7508).
           ...(data.content !== undefined && {
             page_content: data.content,
           }),
