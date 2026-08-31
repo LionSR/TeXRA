@@ -109,6 +109,7 @@ describe('setup credential access', () => {
           new Error('chatgpt offline'),
         ),
       message: 'chatgpt offline',
+      expectedResult: false,
       expectedEvents: ['subscription:grok', 'key:openai', 'key:anthropic'],
     },
     {
@@ -118,19 +119,31 @@ describe('setup credential access', () => {
           new Error('grok offline'),
         ),
       message: 'grok offline',
+      expectedResult: false,
       expectedEvents: ['subscription:chatgpt', 'key:openai', 'key:anthropic'],
     },
     {
-      kind: 'Provider API key',
-      fail: () =>
-        mocks.lookupApiKey.mockRejectedValueOnce(new Error('keychain locked')),
+      kind: 'openai API key',
+      fail: () => {
+        access.keys.anthropic = 'sk-ant-test';
+        mocks.lookupApiKey.mockImplementationOnce(async (_, provider) => {
+          events.push(`key:${provider}`);
+          throw new Error('keychain locked');
+        });
+      },
       message: 'keychain locked',
-      expectedEvents: ['subscription:chatgpt', 'subscription:grok'],
+      expectedResult: true,
+      expectedEvents: [
+        'subscription:chatgpt',
+        'subscription:grok',
+        'key:openai',
+        'key:anthropic',
+      ],
     },
   ])('reports a failed $kind probe and continues safely', async (testCase) => {
     testCase.fail();
 
-    await expect(hasCredential()).resolves.toBe(false);
+    await expect(hasCredential()).resolves.toBe(testCase.expectedResult);
     expect(mocks.reportProbeFailure).toHaveBeenCalledWith(
       `${testCase.kind} check failed; treating it as no credential: ${testCase.message}`,
     );
