@@ -47,7 +47,6 @@ interface TestSourceModules {
   '@desktop/main/platform/pathFix': typeof import('@desktop/main/platform/pathFix');
   '@desktop/main/platform/paths': typeof import('@desktop/main/platform/paths');
   '@desktop/main/platform/warningDialog': typeof import('@desktop/main/platform/warningDialog');
-  '@desktop/renderer/desktopIconLibrary': typeof import('@desktop/renderer/desktopIconLibrary');
   '@desktop/renderer/promptOverlay': typeof import('@desktop/renderer/promptOverlay');
   '@desktop/renderer/rendererPlatform': typeof import('@desktop/renderer/rendererPlatform');
 }

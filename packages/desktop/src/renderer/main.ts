@@ -9,10 +9,6 @@ import './styles.css';
 import './themeTokens.css';
 
 import '@shared/wa';
-// Side-effect import, placed after the shared icon contract so the desktop's
-// Lucide resolver owns both Web Awesome library names. Registration runs at
-// module scope inside that file because ES imports hoist above statements.
-import './desktopIconLibrary';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

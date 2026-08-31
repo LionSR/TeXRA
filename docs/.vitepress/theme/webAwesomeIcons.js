@@ -1,15 +1,9 @@
 // Web Awesome icon registration for the VitePress site.
 //
-// Independent from packages/desktop/src/renderer/desktopIconLibrary.ts by
-// necessity, not by drift: that module resolves TeXRAIconName to Lucide
-// stroke glyphs for the Electron renderer, while this one resolves a wider
-// codicon-style alias vocabulary (kept for markdown ergonomics, e.g.
-// <wa-icon library="texra" name="sparkle"></wa-icon>) to Font Awesome glyphs
-// for the statically-built VitePress site, which cannot import from
-// packages/desktop or bundle Lucide's icon-nodes.json. Keep the two tables'
-// canonical-name overlap in sync by hand — see
-// docs/proposals/2026-08-25-simplification-survey-49-candidates.md and
-// issue #11424 for the last reconciliation pass.
+// Separate from the shared TypeScript registration because the statically
+// built VitePress site cannot import the application boundary and supports a
+// wider codicon-style alias vocabulary for markdown ergonomics, e.g.
+// <wa-icon library="texra" name="sparkle"></wa-icon>.
 //
 // Imported from ./index.js for its side effects (calls registerIconLibrary
 // once per page load).
