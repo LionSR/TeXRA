@@ -8,7 +8,7 @@ import {
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '../shared/hostBridgeChannels.js';
 
-export interface ElectronHostBridgeInstallOptions {
+interface ElectronHostBridgeInstallOptions {
   exposeInMainWorld(name: string, api: HostBridgeApi): void;
   onHostMessage(
     channel: typeof ELECTRON_WEBVIEW_PUSH_CHANNEL,

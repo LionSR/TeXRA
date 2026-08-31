@@ -100,7 +100,7 @@ export async function loadCliMultiAgentPresetPlanSet(
   };
 }
 
-async function reloadRemoteAgentsForGaps<T>(
+function reloadRemoteAgentsForGaps<T>(
   value: T,
   hasGaps: (value: T) => boolean,
   replan: () => T,

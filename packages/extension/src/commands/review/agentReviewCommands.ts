@@ -15,15 +15,12 @@ import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import {
   AGENT_REVIEW_VIEW_ID,
   AgentReviewService,
+  issueRange,
 } from '@frontend/review/AgentReviewService';
-import {
-  AGENT_REVIEW_CODE_ACTION_METADATA,
-  AgentReviewCodeActionProvider,
-} from '@frontend/review/AgentReviewCodeActionProvider';
+import { AgentReviewCodeActionProvider } from '@frontend/review/AgentReviewCodeActionProvider';
 import { registerAgentReviewCommitWatcher } from '@frontend/review/agentReviewCommitWatcher';
 import {
   AgentReviewTreeProvider,
-  openReviewIssue,
   type AgentReviewNode,
 } from '@frontend/review/AgentReviewTreeProvider';
 import { promptReviewOptions } from '@frontend/review/promptReviewOptions';
@@ -58,7 +55,14 @@ function handleDismissIssue(arg: unknown): void {
 async function handleOpenIssue(node: AgentReviewNode): Promise<void> {
   if (node.kind !== 'issue') return;
   try {
-    await openReviewIssue(node.issue);
+    const uri = vscode.Uri.file(AgentReviewService.issuePath(node.issue));
+    const document = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(document, {
+      preview: true,
+    });
+    const range = issueRange(node.issue);
+    editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+    editor.selection = new vscode.Selection(range.start, range.start);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Could not open review issue', err);
   }
@@ -110,7 +114,7 @@ export function registerAgentReviewCommands(
     vscode.languages.registerCodeActionsProvider(
       { scheme: 'file' },
       new AgentReviewCodeActionProvider(),
-      AGENT_REVIEW_CODE_ACTION_METADATA,
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
     ),
   );
 

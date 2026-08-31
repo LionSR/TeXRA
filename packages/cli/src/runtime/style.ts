@@ -33,11 +33,11 @@ export interface CliStyle {
 export function createCliStyle(colorEnabled: boolean): CliStyle {
   const c = pico.createColors(colorEnabled);
   return {
-    success: (text) => c.green(text),
-    warn: (text) => c.yellow(text),
-    error: (text) => c.red(text),
-    emphasis: (text) => c.bold(text),
-    muted: (text) => c.dim(text),
-    command: (text) => c.cyan(text),
+    success: c.green,
+    warn: c.yellow,
+    error: c.red,
+    emphasis: c.bold,
+    muted: c.dim,
+    command: c.cyan,
   };
 }

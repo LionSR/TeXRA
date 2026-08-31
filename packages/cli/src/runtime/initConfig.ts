@@ -86,10 +86,10 @@ export async function writeInitConfig(
  */
 function gitignoreWithTexra(existing: string): string | null {
   const entry = `${TEXRA_STORAGE_DIR_NAME}/`;
-  const present = existing
-    .split('\n')
-    .map((line) => line.trim())
-    .some((line) => line === entry || line === TEXRA_STORAGE_DIR_NAME);
+  const present = existing.split('\n').some((line) => {
+    const trimmedLine = line.trim();
+    return trimmedLine === entry || trimmedLine === TEXRA_STORAGE_DIR_NAME;
+  });
   if (present) return null;
   const trimmed = existing.replace(/\n+$/, '');
   return trimmed.length > 0 ? `${trimmed}\n${entry}\n` : `${entry}\n`;

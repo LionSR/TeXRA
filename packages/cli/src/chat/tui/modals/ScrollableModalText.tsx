@@ -84,17 +84,16 @@ export function modalTextDisplayLines({
   const contentWidth = clampModalWidth(width, minContentWidth);
   return text.split('\n').flatMap((line, index) => {
     const prefixed = `${index === 0 ? firstLinePrefix : continuationPrefix}${line}`;
-    const wrapped = ((): readonly string[] => {
-      if (prefixed.length === 0) return [''];
-      if (preWrapped) return [prefixed];
-      return wrapAnsiToWidth(prefixed, contentWidth)
-        .split('\n')
-        .map((part, partIndex) =>
-          trimWrappedLeadingWhitespace && partIndex !== 0
-            ? part.trimStart()
-            : part,
-        );
-    })();
+    const wrapped =
+      prefixed.length === 0 || preWrapped
+        ? [prefixed]
+        : wrapAnsiToWidth(prefixed, contentWidth)
+            .split('\n')
+            .map((part, partIndex) =>
+              trimWrappedLeadingWhitespace && partIndex !== 0
+                ? part.trimStart()
+                : part,
+            );
     return wrapped.map((part): ModalTextDisplayLine => ({
       kind: 'text',
       text: part,

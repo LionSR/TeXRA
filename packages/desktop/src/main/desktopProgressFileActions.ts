@@ -16,7 +16,6 @@ import { runLatexdiffForExecution } from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
-  DiffRunResult,
 } from '@latex/latexdiff/types';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -45,7 +44,7 @@ type DesktopProgressFileActionUi = Pick<
  * search). Kept as a narrow interface so the actions stay decoupled from the
  * full progress bridge.
  */
-export interface DesktopProgressFileActionHost {
+interface DesktopProgressFileActionHost {
   startExecution(request: ValidatedExecutionRequest): void;
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
@@ -158,7 +157,7 @@ export class DesktopProgressFileActions {
     runContext: DesktopLatexdiffRunContext,
   ): Promise<void> {
     const outcome = await this.runSharedLatexdiff(runContext);
-    if (!outcome || outcome.results.length === 0) {
+    if (!outcome?.results.length) {
       await this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
       return;
     }
@@ -248,10 +247,7 @@ export class DesktopProgressFileActions {
   private async openSharedLatexdiffResults(
     outcome: DiffRunOutcome,
   ): Promise<boolean> {
-    const successes = outcome.results.filter(
-      (entry): entry is Extract<DiffRunResult, { success: true }> =>
-        entry.success,
-    );
+    const successes = outcome.results.filter((entry) => entry.success);
 
     for (const result of successes) {
       await this.openDiffOutput(result.diffPath);

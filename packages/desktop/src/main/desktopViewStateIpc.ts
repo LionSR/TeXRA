@@ -9,7 +9,7 @@ import {
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
 
-export interface DesktopViewStateIpc extends DesktopMessageHandler {
+interface DesktopViewStateIpc extends DesktopMessageHandler {
   dispose(): void;
 }
 
@@ -52,8 +52,8 @@ export function createDesktopViewStateIpc(
       },
       claim: false,
     },
-    [MAIN_VIEW_COMMANDS.GET_THEME]: () => postTheme(),
-    [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => postDebugMode(),
+    [MAIN_VIEW_COMMANDS.GET_THEME]: postTheme,
+    [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: postDebugMode,
   });
 
   return {

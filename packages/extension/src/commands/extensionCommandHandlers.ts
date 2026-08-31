@@ -44,45 +44,6 @@ import {
  */
 
 /**
- * Optional `ApiProvider` argument for `texra.setApiKey`. The tuple's single
- * element is optional, so the registry's `safeParse` succeeds when the command
- * is invoked from the palette without arguments — the action then prompts the
- * user via `showQuickPick`.
- */
-const SetApiKeyArgsSchema = z.tuple([z.enum(API_PROVIDERS).optional()]);
-
-/**
- * Optional `AgentCategory` argument for `texra.createAgentWithAI`. The
- * registry parses raw `unknown` and the action defaults to `workflow`
- * when undefined (preserving the legacy `category ?? 'workflow'` shape).
- */
-const CreateAgentWithAIArgsSchema = z.tuple([AgentCategorySchema.optional()]);
-
-/**
- * Optional `AgentCategory` argument for `texra.showAgents`, selecting which
- * agent-category sub-tab opens under Settings > Agents.
- */
-const ShowAgentsArgsSchema = z.tuple([AgentCategorySchema.optional()]);
-
-/** Optional placement argument for `texra.showProgressView`. */
-const ShowProgressViewArgsSchema = z.tuple([
-  z.strictObject({ inPlace: z.boolean().optional() }).optional(),
-]);
-
-/** Positional arguments for opening a comparison between two files. */
-const CompareCommandArgsSchema = z.tuple([
-  FileLocationSchema,
-  FileLocationSchema,
-]);
-
-/** Positional arguments for accepting an edited file. */
-const AcceptEditedCommandArgsSchema = z.tuple([
-  FileLocationSchema,
-  FileLocationSchema,
-  AcceptCopyMetaSchema.optional(),
-]);
-
-/**
  * Catalog ids whose extension registration is driven by the shared
  * `dispatchCommandFromRegistry` handler map below, derived from the
  * `extensionRegistry: true` tag on `commandCatalog` entries
@@ -116,7 +77,7 @@ export const EXTENSION_INTERNAL_COMMAND_IDS = [
 type InternalExtensionRegistryCommandId =
   (typeof EXTENSION_INTERNAL_COMMAND_IDS)[number];
 
-export type ExtensionRegistryCommandId =
+type ExtensionRegistryCommandId =
   ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
 
 /**
@@ -243,12 +204,16 @@ export const EXTENSION_COMMAND_HANDLERS = {
       awaitTrue(actions.cleanMultiple(inputFile, agent, model, inputFiles)),
   ),
   'texra.compare': definedHandler(
-    CompareCommandArgsSchema,
+    z.tuple([FileLocationSchema, FileLocationSchema]),
     (actions: ExtensionCommandActions, baseLocation, editedLocation) =>
       awaitTrue(actions.compare(baseLocation, editedLocation)),
   ),
   'texra.acceptEdited': definedHandler(
-    AcceptEditedCommandArgsSchema,
+    z.tuple([
+      FileLocationSchema,
+      FileLocationSchema,
+      AcceptCopyMetaSchema.optional(),
+    ]),
     (
       actions: ExtensionCommandActions,
       baseLocation,
@@ -300,17 +265,17 @@ export const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.showImportOptions()),
   'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
   'texra.showProgressView': definedHandler(
-    ShowProgressViewArgsSchema,
+    z.tuple([z.strictObject({ inPlace: z.boolean().optional() }).optional()]),
     (actions: ExtensionCommandActions, options?: { inPlace?: boolean }) =>
       awaitTrue(actions.showProgressView(options?.inPlace ?? false)),
   ),
   'texra.setApiKey': definedHandler(
-    SetApiKeyArgsSchema,
+    z.tuple([z.enum(API_PROVIDERS).optional()]),
     (actions: ExtensionCommandActions, provider?: ApiProvider) =>
       awaitTrue(actions.setApiKey(provider)),
   ),
   'texra.createAgentWithAI': definedHandler(
-    CreateAgentWithAIArgsSchema,
+    z.tuple([AgentCategorySchema.optional()]),
     (actions: ExtensionCommandActions, category?: AgentCategory) =>
       awaitTrue(actions.createAgentWithAI(category ?? 'workflow')),
   ),
@@ -320,7 +285,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
       awaitTrue(actions.execute(input)),
   ),
   'texra.showAgents': definedHandler(
-    ShowAgentsArgsSchema,
+    z.tuple([AgentCategorySchema.optional()]),
     (actions: ExtensionCommandActions, subTab?: AgentCategory) =>
       awaitTrue(
         actions.showSettings(settingsTabByCommand['texra.showAgents'], subTab),

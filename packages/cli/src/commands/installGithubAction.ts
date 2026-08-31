@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -201,12 +200,9 @@ async function runInstallGithubAction(
   // during the launch cannot strand the user on the target branch.
   await openGitHubAppInstaller(slug);
 
-  let checkout: ExecResult;
-  if (branchExists) {
-    checkout = git(root, 'checkout', branch);
-  } else {
-    checkout = git(root, 'checkout', '-b', branch, baseRef);
-  }
+  const checkout = branchExists
+    ? git(root, 'checkout', branch)
+    : git(root, 'checkout', '-b', branch, baseRef);
   if (!checkout.success) {
     writeTextStderr(
       `Failed to check out branch "${branch}": ${checkout.stderr}`,

@@ -211,16 +211,12 @@ function configureAnsi(
   const quotePrefix = (): string =>
     quoteDepth > 0 ? style.dim('│ '.repeat(quoteDepth)) : '';
 
-  const startsAtQuoteOpen = (
-    tokens: Parameters<RendererRule>[0],
-    idx: number,
-  ) => tokens[idx - 1]?.type === 'blockquote_open';
-
   const quoteBlockStart = (
     tokens: Parameters<RendererRule>[0],
     idx: number,
   ): string => {
-    if (quoteDepth === 0 || startsAtQuoteOpen(tokens, idx)) return '';
+    if (quoteDepth === 0 || tokens[idx - 1]?.type === 'blockquote_open')
+      return '';
     return quotePrefix();
   };
 

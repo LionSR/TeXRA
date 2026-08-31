@@ -9,7 +9,7 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
-export interface DesktopExecutionIpcOptions {
+interface DesktopExecutionIpcOptions {
   /**
    * Handle a validated EXECUTE message from the renderer. Named apart from
    * `@agent/runtime`'s `executeAgent`/`runAgent` pair — this is a raw IPC

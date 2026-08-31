@@ -52,7 +52,7 @@ import type { WorkbenchKind } from '../shared/desktopTaskShell';
 import type { ZodType } from 'zod';
 
 /** Callbacks and live state reads the routes need from the renderer. */
-export interface DesktopMessageRouteHandlers {
+interface DesktopMessageRouteHandlers {
   /** Persist all dirty editor buffers. */
   saveAllFiles(): void;
   /** Re-list the workspace after something outside the editor wrote to it. */

@@ -14,7 +14,7 @@ import {
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-export interface AsyncListFormState<T> {
+interface AsyncListFormState<T> {
   readonly data: T | undefined;
   readonly loading: boolean;
   readonly error: string | undefined;
@@ -40,7 +40,7 @@ export interface AsyncListFormState<T> {
   readonly reportError: (error: unknown) => void;
 }
 
-export interface UseAsyncListFormOptions<T> {
+interface UseAsyncListFormOptions<T> {
   /** Loads the form's data once on mount. */
   readonly load: () => Promise<T>;
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */

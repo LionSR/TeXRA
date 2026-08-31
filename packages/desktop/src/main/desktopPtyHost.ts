@@ -164,7 +164,7 @@ function ensureSpawnHelperExecutable(): void {
 
 let nodePtyLoad: Promise<NodePtyModule> | undefined;
 
-async function loadNodePty(): Promise<NodePtyModule> {
+function loadNodePty(): Promise<NodePtyModule> {
   // Cached so repeated terminals don't re-resolve the addon; a failure clears
   // the cache so a later attempt can retry.
   nodePtyLoad ??= import('node-pty')

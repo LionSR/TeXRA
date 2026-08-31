@@ -13,11 +13,11 @@ import {
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '../shared/hostBridgeChannels.js';
 
-export interface DesktopHostBridgeOptions {
+interface DesktopHostBridgeOptions {
   onRendererMessage?: (message: unknown, window: BrowserWindow) => void;
 }
 
-export interface DesktopHostBridge {
+interface DesktopHostBridge {
   postToRenderer(message: unknown): void;
   dispose(): void;
 }

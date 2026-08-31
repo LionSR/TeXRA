@@ -43,7 +43,7 @@ export function listFormSelectWindow(args: {
   });
 }
 
-export interface ListFormProps<T> {
+interface ListFormProps<T> {
   readonly title: string;
   readonly compactTitle?: string;
   readonly availableRows?: number;
@@ -196,7 +196,7 @@ interface AsyncListFormControls<TData> {
   readonly reload: () => void;
 }
 
-export interface AsyncPickerForm<TData, TValue> {
+interface AsyncPickerForm<TData, TValue> {
   readonly data: TData | undefined;
   readonly items: ReadonlyArray<SelectItem<TValue>>;
   /** Apply a selection: the caller's handler, or a close for a read-only list. */
@@ -268,7 +268,7 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   };
 }
 
-export interface AsyncListFormProps<TData, TValue> extends Omit<
+interface AsyncListFormProps<TData, TValue> extends Omit<
   ListFormProps<TValue>,
   'items' | 'onSelect'
 > {

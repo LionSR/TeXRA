@@ -241,9 +241,7 @@ function leadingEllipsisDisplay(
   }
 
   let suffix = '';
-  const chars = [...text];
-  for (let index = chars.length - 1; index >= 0; index--) {
-    const char = chars[index] ?? '';
+  for (const char of [...text].toReversed()) {
     const candidate = `${char}${suffix}`;
     if (textDisplayWidth(candidate) > width - textDisplayWidth('…')) break;
     suffix = candidate;

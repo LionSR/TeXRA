@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   app,
   BrowserWindow,
@@ -152,7 +151,7 @@ import type {
 } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
+const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
 const credentialLog = createLog('Setup Credentials');
 
@@ -1036,9 +1035,7 @@ function createWindow(options: {
       // the State 0 walkthrough button opens the desktop docs externally — the
       // closest desktop analog, reusing the same docs URL the Help menu's
       // "Desktop Documentation" item opens.
-      openGettingStarted: async () => {
-        await previewHost.openExternal(DESKTOP_DOCS_URL);
-      },
+      openGettingStarted: () => previewHost.openExternal(DESKTOP_DOCS_URL),
       onAsyncError: reportAsyncError,
     },
   );

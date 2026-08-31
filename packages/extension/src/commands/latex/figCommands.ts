@@ -88,7 +88,6 @@ export async function handleCompileTikzFigures(): Promise<void> {
               description: path.dirname(fileLocation.absolutePath),
               resourceUri: vscode.Uri.file(fileLocation.absolutePath),
               iconPath: vscode.ThemeIcon.File,
-              file: fileLocation.absolutePath,
             }));
 
             const selected = await vscode.window.showQuickPick(items, {
@@ -98,8 +97,10 @@ export async function handleCompileTikzFigures(): Promise<void> {
             });
 
             if (selected) {
-              const uri = vscode.Uri.file(selected.file);
-              await vscode.commands.executeCommand('vscode.open', uri);
+              await vscode.commands.executeCommand(
+                'vscode.open',
+                selected.resourceUri,
+              );
             }
 
             await showLoggedInfoMessage(

@@ -445,7 +445,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             copyMeta,
           ]),
         mergeFile: (baseFile, editedFile) =>
-          this.runViewCommand('texra.merge', [undefined, baseFile, editedFile]),
+          this.runViewCommand('texra.merge', [baseFile, editedFile]),
         latexdiffFile: (baseFile, editedFile) =>
           this.runViewCommand('texra.latexdiff', [
             undefined,

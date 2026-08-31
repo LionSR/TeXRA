@@ -180,9 +180,8 @@ export function subscribeStreamArtifacts(
 
   return subscribeToSignalChanges([activeStreamId], () => {
     const next = activeStreamId.get();
-    const changed = next !== previous;
+    if (next === previous) return;
     previous = next;
-    if (!changed) return;
     if (!next) {
       ++focusRevision;
       return;

@@ -25,7 +25,7 @@ import {
 
 const logger = createLog('DesktopOnboarding');
 
-export interface DesktopOnboardingIpcOptions {
+interface DesktopOnboardingIpcOptions {
   state?: StateStore;
   /**
    * Host-provided check for a usable credential (a subscription or any

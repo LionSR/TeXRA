@@ -11,28 +11,13 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'ActiveFileGuards';
 
-type ActiveFileGuardFailureReason =
-  'noEditor' | 'unsupportedExtension' | 'saveFailed';
-
-interface ActiveFileGuardSuccess {
-  status: 'ok';
-  editor: vscode.TextEditor;
-  relativePath: string;
-}
-
-type ActiveFileGuardResult =
-  ActiveFileGuardSuccess | { status: ActiveFileGuardFailureReason };
-
 /**
  * Single owner of the reason -> message mapping for guard failures. Both the
  * user-facing warning (surfaced in {@link getActiveLatexEditor}) and the
  * standardized log line (in {@link runGuardedLatexCommand}) derive from here,
  * so adding a guard reason means editing this table, not two switches.
  */
-const GUARD_FAILURE_MESSAGES: Record<
-  ActiveFileGuardFailureReason,
-  { user: string; logTail: string; level: 'warn' | 'error' }
-> = {
+const GUARD_FAILURE_MESSAGES = {
   noEditor: {
     user: 'No active editor found. Open a LaTeX file in the editor and try again.',
     logTail: 'no active editor found.',
@@ -48,7 +33,21 @@ const GUARD_FAILURE_MESSAGES: Record<
     logTail: 'failed to save LaTeX document before running command.',
     level: 'error',
   },
-};
+} satisfies Record<
+  string,
+  { user: string; logTail: string; level: 'warn' | 'error' }
+>;
+
+type ActiveFileGuardFailureReason = keyof typeof GUARD_FAILURE_MESSAGES;
+
+interface ActiveFileGuardSuccess {
+  status: 'ok';
+  editor: vscode.TextEditor;
+  relativePath: string;
+}
+
+type ActiveFileGuardResult =
+  ActiveFileGuardSuccess | { status: ActiveFileGuardFailureReason };
 
 /**
  * Retrieve the active text editor when it holds a `.tex` document, optionally

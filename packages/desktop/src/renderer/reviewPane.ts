@@ -24,7 +24,7 @@ interface DiffViewElement extends HTMLElement {
   proposedText: string;
 }
 
-export interface ReviewPaneController {
+interface ReviewPaneController {
   readonly element: HTMLElement;
   clear(): void;
   open(payload: DesktopShowDiffMessage): void;

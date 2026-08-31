@@ -68,7 +68,7 @@ function statusHint(status: GitHubTokenStatus | undefined): string {
   return 'Needs repo for private repos, public_repo for public. Or export GH_TOKEN / GITHUB_TOKEN.';
 }
 
-export interface GitHubTokenFormProps {
+interface GitHubTokenFormProps {
   readonly availableRows?: number;
   readonly statusView?: GitHubTokenStatusView;
   readonly onSave: (token: string) => Promise<void>;
@@ -85,6 +85,16 @@ export function GitHubTokenForm(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
+  const runAction = (action: () => Promise<void>): void => {
+    setSaving(true);
+    void action()
+      .then(() => props.onDone())
+      .catch((actionError: unknown) => {
+        setSaving(false);
+        setError(toErrorMessage(actionError));
+      });
+  };
+
   if (entering) {
     return (
       <CredentialEntryForm
@@ -98,16 +108,7 @@ export function GitHubTokenForm(
           setError(undefined);
           setEntering(false);
         }}
-        onSubmit={(token) => {
-          setSaving(true);
-          void props
-            .onSave(token)
-            .then(() => props.onDone())
-            .catch((saveError: unknown) => {
-              setSaving(false);
-              setError(toErrorMessage(saveError));
-            });
-        }}
+        onSubmit={(token) => runAction(() => props.onSave(token))}
       />
     );
   }
@@ -143,14 +144,7 @@ export function GitHubTokenForm(
           return;
         }
         if (action === 'remove') {
-          setSaving(true);
-          void props
-            .onRemove()
-            .then(() => props.onDone())
-            .catch((removeError: unknown) => {
-              setSaving(false);
-              setError(toErrorMessage(removeError));
-            });
+          runAction(() => props.onRemove());
           return;
         }
         void tryOpenBrowser(GITHUB_TOKEN_CREATE_URL).then((opened) => {

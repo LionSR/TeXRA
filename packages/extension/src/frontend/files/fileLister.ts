@@ -33,7 +33,7 @@ export class FileLister {
     this.settings = loadFileListSettings();
   }
 
-  public async list(fileType: ListableFileType): Promise<string[]> {
+  public list(fileType: ListableFileType): Promise<string[]> {
     return this.listFiles(getFileListConfig(fileType, this.settings));
   }
 

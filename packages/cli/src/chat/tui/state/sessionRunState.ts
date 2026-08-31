@@ -109,8 +109,7 @@ export class TuiSession {
    * the published signals, so this is the sole bridge between the two.
    */
   private publish(): void {
-    const runPending = chatTuiRunPending(this);
-    rootRunPending.set(runPending);
+    rootRunPending.set(chatTuiRunPending(this));
     rootRunStreamId.set(this._streamId);
   }
 }

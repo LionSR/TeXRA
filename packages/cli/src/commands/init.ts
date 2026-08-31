@@ -48,10 +48,11 @@ export function defaultInitAnswers(
   agents: readonly InitAgentOption[],
   models: readonly CliModelAccess[],
 ): InitAnswers {
-  const firstAvailable = models.find((model) => model.available);
   return {
     agent: pickDefaultToolUseAgent(agents),
-    model: firstAvailable?.model.value ?? CLI_BUILTIN_DEFAULT_MODEL,
+    model:
+      models.find((model) => model.available)?.model.value ??
+      CLI_BUILTIN_DEFAULT_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
     // which silently denies every privileged action.

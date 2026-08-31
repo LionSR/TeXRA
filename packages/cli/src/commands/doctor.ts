@@ -13,9 +13,9 @@ import type { CliContext } from '../runtime/cliContext';
 async function runDoctor(context: CliContext): Promise<number> {
   let initError: unknown;
   try {
-    await suppressCliFetchStackLogs(async () => {
-      await initCliPlatform({ ...context, quietLogs: true });
-    });
+    await suppressCliFetchStackLogs(() =>
+      initCliPlatform({ ...context, quietLogs: true }),
+    );
   } catch (error) {
     initError = error;
   }

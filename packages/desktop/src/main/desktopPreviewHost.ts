@@ -23,7 +23,7 @@ interface DesktopShellAdapter {
   openPath(filePath: string): Promise<string>;
 }
 
-export interface DesktopPreviewHost extends ExternalOpener {
+interface DesktopPreviewHost extends ExternalOpener {
   openExternal(
     url: string,
     options?: { readonly reportFailure?: boolean },
@@ -33,7 +33,7 @@ export interface DesktopPreviewHost extends ExternalOpener {
   openBuildDisplay: BuildDisplayFn;
 }
 
-export interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
+interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
   showErrorMessage?: (message: string) => Promise<void> | void;
 }

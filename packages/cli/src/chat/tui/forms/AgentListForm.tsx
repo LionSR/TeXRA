@@ -19,7 +19,7 @@ import {
 } from './_shared/FormFrame';
 import { useAsyncPickerForm } from './_shared/ListForm';
 
-export interface AgentListFormProps {
+interface AgentListFormProps {
   readonly currentAgent: string;
   readonly availableRows?: number;
   readonly selectable: boolean;
@@ -59,11 +59,7 @@ export function currentVisibleAgent(
   const currentName = agentName(current);
   return agents.find((agent) => {
     const valueName = agentName(agent.value);
-    return (
-      agent.value === current ||
-      valueName === current ||
-      valueName === currentName
-    );
+    return agent.value === current || valueName === currentName;
   });
 }
 

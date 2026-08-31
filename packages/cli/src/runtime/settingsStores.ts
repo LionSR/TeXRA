@@ -9,10 +9,6 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
  * use the CLI `state.json` stores.
  */
 export function cliSettingsStores(): SettingsStores {
-  const active = platform();
-  return {
-    config: active.config,
-    workspaceState: active.workspaceState,
-    globalState: active.globalState,
-  };
+  const { config, workspaceState, globalState } = platform();
+  return { config, workspaceState, globalState };
 }

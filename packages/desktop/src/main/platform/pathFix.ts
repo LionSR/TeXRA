@@ -15,18 +15,6 @@ interface LaunchPathRepairOptions {
   platform?: NodeJS.Platform;
 }
 
-function prependMissingPathEntries(
-  pathValue: string | undefined,
-  entries: readonly string[],
-  separator: string,
-): string {
-  const parts = (pathValue ?? '').split(separator).filter(Boolean);
-  for (const entry of entries.toReversed()) {
-    if (!parts.includes(entry)) parts.unshift(entry);
-  }
-  return parts.join(separator);
-}
-
 export function repairLaunchPath(
   options: LaunchPathRepairOptions = {},
 ): string {
@@ -37,7 +25,11 @@ export function repairLaunchPath(
     // environments get the deterministic prepend below only.
     if (env === process.env) fixPath();
     // ':' is the POSIX PATH separator; this branch only runs on darwin.
-    env.PATH = prependMissingPathEntries(env.PATH, MACOS_PATH_ENTRIES, ':');
+    const parts = (env.PATH ?? '').split(':').filter(Boolean);
+    for (const entry of MACOS_PATH_ENTRIES.toReversed()) {
+      if (!parts.includes(entry)) parts.unshift(entry);
+    }
+    env.PATH = parts.join(':');
   }
   return env.PATH ?? '';
 }

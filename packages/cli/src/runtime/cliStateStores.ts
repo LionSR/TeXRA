@@ -20,7 +20,7 @@ interface CliStateStoresInit {
  *  is the single derivation of the global state path; pre-platform-init callers
  *  (e.g. the update checker) use it with a default provider instead of
  *  re-deriving the same path by hand. */
-export async function openCliGlobalStateStore(
+export function openCliGlobalStateStore(
   storage: StorageProvider,
 ): Promise<StateStore> {
   return JsonStore.open(

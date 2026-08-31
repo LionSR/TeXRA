@@ -86,7 +86,7 @@ export function deleteBeforeCursor(value: string, cursor: number): TextEdit {
 
 export function deleteAtCursor(value: string, cursor: number): TextEdit {
   const c = clampCursor(cursor, value.length);
-  return deleteSpan(value, c, Math.min(value.length, c + 1));
+  return deleteSpan(value, c, c + 1);
 }
 
 /** Ctrl-U: delete from the start of the current line to the cursor. */

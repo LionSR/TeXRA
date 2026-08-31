@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 import * as vscode from 'vscode';
 
@@ -54,11 +54,8 @@ export class VscodeDiffViewHost implements DiffViewHost {
             input.modified.toString() === proposedUri
           );
         }
-        const uri = tabInputFileUri(tab);
-        return (
-          uri !== null &&
-          (uri.toString() === originalUri || uri.toString() === proposedUri)
-        );
+        const uriString = tabInputFileUri(tab)?.toString();
+        return uriString === originalUri || uriString === proposedUri;
       });
 
     if (tabsToClose.length > 0) {
@@ -108,7 +105,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
     );
     return openDocument
       ? openDocument.getText()
-      : await fs.readFile(proposedUri.fsPath, 'utf8');
+      : await readFile(proposedUri.fsPath, 'utf8');
   }
 
   private toUri(source: DiffSource): vscode.Uri {

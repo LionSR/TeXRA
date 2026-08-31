@@ -4,8 +4,8 @@ import {
   getVisibleAgents,
   loadAgents,
   resolveAgentForLaunch,
+  type AgentEntry,
 } from '@agent/index';
-import type { AgentEntry } from '@agent/index';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   AGENT_CATEGORIES,
@@ -252,10 +252,11 @@ export function formatCliAgentList(
 }
 
 export function formatCliAgentDetails(entry: AgentEntry): string {
-  const lines: string[] = [];
-  lines.push(`name: ${entry.name}`);
-  lines.push(`category: ${entry.category}`);
-  lines.push(`source: ${entry.source}`);
+  const lines: string[] = [
+    `name: ${entry.name}`,
+    `category: ${entry.category}`,
+    `source: ${entry.source}`,
+  ];
   if (entry.path) lines.push(`path: ${entry.path}`);
   if (entry.description) {
     lines.push('');

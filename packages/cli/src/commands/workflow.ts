@@ -207,8 +207,7 @@ export async function executeCliWorkflowConfig(
     executionId: ExecutionId,
     waitForWrite = false,
   ): Promise<void> | undefined => {
-    if (!recoveryInputIsDurable) return;
-    if (resumeHintWritten) return;
+    if (!recoveryInputIsDurable || resumeHintWritten) return;
     resumeHintWritten = true;
     const hint = formatInterruptedResumeHint(
       runContext,

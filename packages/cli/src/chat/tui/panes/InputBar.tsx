@@ -371,13 +371,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
 
   // Slash palette pops up while typing /…
   const parsed = parseSlashInput(value);
-  const isTypingSlashCommandName =
-    parsed !== undefined && !/\s/.test(value.slice(1));
   const paletteMatchCount =
     parsed !== undefined ? matchSlashCommands(parsed.name).length : 0;
   const showPalette =
     parsed !== undefined &&
-    isTypingSlashCommandName &&
+    !/\s/.test(value.slice(1)) &&
     paletteMatchCount > 0 &&
     !reverseSearchOpen &&
     !disabled &&

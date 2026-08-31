@@ -45,8 +45,8 @@ async function resolveValue<T>(
   value: T | Promise<T> | (() => T | Promise<T>),
 ): Promise<T> {
   return typeof value === 'function'
-    ? await (value as () => T | Promise<T>)()
-    : await value;
+    ? (value as () => T | Promise<T>)()
+    : value;
 }
 
 function aliases(arg: ArgDef): string[] {
@@ -130,11 +130,11 @@ export function completionFlagTokens(flag: CompletionFlag): string[] {
  * `@cli/commands/_helpers/dispatch` - one resolution behavior, one place.
  */
 export async function commandMeta(command: AnyCommand): Promise<CommandMeta> {
-  return command.meta ? await resolveValue(command.meta) : {};
+  return command.meta ? resolveValue(command.meta) : {};
 }
 
 export async function commandArgs(command: AnyCommand): Promise<ArgsDef> {
-  return command.args ? await resolveValue(command.args) : {};
+  return command.args ? resolveValue(command.args) : {};
 }
 
 /**

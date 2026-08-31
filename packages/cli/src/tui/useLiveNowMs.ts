@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { subscribeToPolling } from './usePollingInterval';
 
 export function useLiveNowMs(shouldTick: boolean, resetKey?: unknown): number {
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(Date.now);
 
   useEffect(() => {
     if (!shouldTick) return;

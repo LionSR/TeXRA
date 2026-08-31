@@ -62,7 +62,7 @@ type DesktopAgentHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET
 >;
 
-export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
+interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;

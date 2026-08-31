@@ -197,100 +197,69 @@ interface DesktopMainViewResetMessage {
  * through `toElectronAccelerator` — the one spelling the renderer's keydown
  * comparison also produces.
  */
-const DESKTOP_LOCAL_COMMAND_ENTRIES = new Map<
+type DesktopLocalCommandEntry = Omit<
+  DesktopCommandMenuEntry,
+  'id' | 'icon' | 'accelerator'
+> & {
+  keybinding?: CommandKeybinding;
+};
+
+const DESKTOP_LOCAL_COMMAND_ENTRIES: Record<
   DesktopLocalCommandId,
-  Omit<DesktopCommandMenuEntry, 'icon' | 'accelerator'> & {
-    keybinding?: CommandKeybinding;
-  }
->([
-  [
-    DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.SAVE_FILE,
-      label: 'Save',
-      category: 'File',
-      keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS,
-      label: 'Desktop Documentation',
-      category: 'Help',
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
-      label: 'Show Logs',
-      category: 'TeXRA',
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
-      label: 'Toggle Bottom Bar',
-      category: 'View',
-      keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-      label: 'Toggle Side Panel',
-      category: 'View',
-      keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
-      label: 'Toggle Summary Bar',
-      category: 'View',
-      keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER,
-      label: 'Open Folder',
-      category: 'File',
-      keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
-      label: 'Open Logs Folder',
-      category: 'TeXRA',
-    },
-  ],
-  [
-    DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-    {
-      id: DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH,
-      label: 'Show Startup Team Chooser',
-      category: 'Help',
-    },
-  ],
-]);
+  DesktopLocalCommandEntry
+> = {
+  [DESKTOP_LOCAL_COMMANDS.SAVE_FILE]: {
+    label: 'Save',
+    category: 'File',
+    keybinding: { key: 'ctrl+s', mac: 'cmd+s' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: {
+    label: 'Desktop Documentation',
+    category: 'Help',
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: {
+    label: 'Show Logs',
+    category: 'TeXRA',
+  },
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: {
+    label: 'Toggle Bottom Bar',
+    category: 'View',
+    keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: {
+    label: 'Toggle Side Panel',
+    category: 'View',
+    keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: {
+    label: 'Toggle Summary Bar',
+    category: 'View',
+    keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: {
+    label: 'Open Folder',
+    category: 'File',
+    keybinding: { key: 'ctrl+o', mac: 'cmd+o' },
+  },
+  [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: {
+    label: 'Open Logs Folder',
+    category: 'TeXRA',
+  },
+  [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: {
+    label: 'Show Startup Team Chooser',
+    category: 'Help',
+  },
+};
 
 export function getDesktopCommandMenuEntries(
   platform: DesktopPlatform,
 ): DesktopCommandMenuEntry[] {
   return DESKTOP_COMMAND_IDS.map((id) => {
     if (isDesktopLocalCommandId(id)) {
-      const localEntry = DESKTOP_LOCAL_COMMAND_ENTRIES.get(id);
-      if (!localEntry) throw new Error(`Missing desktop command entry: ${id}`);
+      const localEntry = DESKTOP_LOCAL_COMMAND_ENTRIES[id];
       const { keybinding, ...entry } = localEntry;
       return {
+        id,
         ...entry,
         icon: DESKTOP_COMMAND_ICONS[id],
         ...(keybinding && {
@@ -389,9 +358,7 @@ export function dispatchDesktopCommand(
 }
 
 function isDesktopLocalCommandId(id: string): id is DesktopLocalCommandId {
-  return (Object.values(DESKTOP_LOCAL_COMMANDS) as readonly string[]).includes(
-    id,
-  );
+  return Object.hasOwn(DESKTOP_LOCAL_COMMAND_ENTRIES, id);
 }
 
 export function buildDesktopSettingsTabMessage(

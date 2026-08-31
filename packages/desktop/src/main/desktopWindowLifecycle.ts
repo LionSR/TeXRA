@@ -41,7 +41,7 @@ function installRendererNavigationCleanup(
   });
 }
 
-function installBeforeQuitHandler(options: {
+export function installDesktopBeforeQuitWiring(options: {
   app: BeforeQuitApp;
   getMainWindow(): MainWindow | null;
   lifecycle: ShutdownLifecycle;
@@ -66,15 +66,6 @@ function installBeforeQuitHandler(options: {
       options.app.quit();
     });
   });
-}
-
-export function installDesktopBeforeQuitWiring(options: {
-  app: BeforeQuitApp;
-  getMainWindow(): MainWindow | null;
-  lifecycle: ShutdownLifecycle;
-  continueAfterWindowClose(continueQuit: () => void): void;
-}): void {
-  installBeforeQuitHandler(options);
 }
 
 export interface DesktopWindowLifecycleWiring {

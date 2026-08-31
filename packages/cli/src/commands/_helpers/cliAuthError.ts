@@ -1,4 +1,3 @@
-import { CliExitCode } from '@cli/runtime/exitCodes';
 import { writeErrorStderr } from '@cli/runtime/logSinks';
 
 /**

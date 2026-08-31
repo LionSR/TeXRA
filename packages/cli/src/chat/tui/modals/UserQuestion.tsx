@@ -81,7 +81,7 @@ function userQuestionInlineClipIndicator({
 }): UserQuestionPromptLine {
   const prefix = `… ${hiddenRows} clipped rows - `;
   const clippedPrefix = clipToWidth(prefix, width);
-  const remainingWidth = Math.max(0, width - textDisplayWidth(clippedPrefix));
+  const remainingWidth = width - textDisplayWidth(clippedPrefix);
   if (remainingWidth <= 0) return { kind: 'overflow', text: clippedPrefix };
   return {
     ...line,
@@ -230,10 +230,7 @@ export function boundedUserQuestionPromptLines({
     availableContextRows === 1
       ? []
       : contextLines.slice(-(availableContextRows - 1));
-  const hiddenBefore = Math.max(
-    0,
-    contextLines.length - visibleContextLines.length,
-  );
+  const hiddenBefore = contextLines.length - visibleContextLines.length;
   return [
     ...(hiddenBefore > 0
       ? [

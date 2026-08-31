@@ -5,12 +5,13 @@ import {
   type KeyHint,
 } from '@cli/tui/ui/KeyHints';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
-import { APPROVAL_PULSE_FRAMES } from '@cli/tui/ui/glyphs';
 import {
   firstFittingCandidate,
   textDisplayWidth,
 } from '@cli/runtime/terminalText';
 import { DELEGATION_APPROVAL_COPY } from '@shared/copy/delegationApproval';
+
+const APPROVAL_PULSE_FRAMES = ['●', '○'] as const;
 
 type ConfirmCardKeyAction =
   'approve' | 'reject' | 'approveAlways' | 'feedback' | 'ignore';
@@ -49,9 +50,9 @@ interface ConfirmCardCompactHintLayout {
 
 /**
  * A pending approval always needs the user's eyes on it — prefix the title
- * with a 1 Hz solid/hollow blink (see `ui/glyphs.APPROVAL_PULSE_FRAMES`) off
- * the shared clock, same pattern as `LoadingIndicator` and the status bar's
- * running marker, so the card is harder to miss than a static line.
+ * with a 1 Hz solid/hollow blink off the shared clock, same pattern as
+ * `LoadingIndicator` and the status bar's running marker, so the card is
+ * harder to miss than a static line.
  */
 export function confirmCardPulsedTitle(nowMs: number, title: string): string {
   return `${loadingFrameAt(nowMs, APPROVAL_PULSE_FRAMES)} ${title}`;

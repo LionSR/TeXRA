@@ -1,6 +1,5 @@
 import { Text } from 'ink';
 
-import type { SelectItem } from '@cli/tui/ui/Select';
 import {
   TEXRA_APPROVAL_POLICY_OPTIONS,
   type TexraApprovalPolicy,
@@ -15,11 +14,6 @@ export interface ApprovalPolicyFormProps {
   readonly onCancel: () => void;
 }
 
-const APPROVAL_POLICY_ITEMS =
-  TEXRA_APPROVAL_POLICY_OPTIONS satisfies ReadonlyArray<
-    SelectItem<TexraApprovalPolicy>
-  >;
-
 export function ApprovalPolicyForm(
   props: ApprovalPolicyFormProps,
 ): React.JSX.Element {
@@ -27,8 +21,8 @@ export function ApprovalPolicyForm(
     <ListForm
       title="/approval"
       availableRows={props.availableRows}
-      items={APPROVAL_POLICY_ITEMS}
-      compactVisibleItems={APPROVAL_POLICY_ITEMS.length}
+      items={TEXRA_APPROVAL_POLICY_OPTIONS}
+      compactVisibleItems={TEXRA_APPROVAL_POLICY_OPTIONS.length}
       activeValue={props.currentPolicy}
       description={
         <Text dimColor>

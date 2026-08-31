@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  getDesktopSessionActivity,
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
@@ -91,7 +90,7 @@ describe('desktop process-session window title', () => {
       seedStreamStatusForTest(session.status, orphanStream, {
         phase: STREAM_PHASE.RUNNING,
       });
-      expect(getDesktopSessionActivity(session)).toBe('idle');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
 
       const waitingHandle = trackRunningAgent(
         session,
@@ -102,7 +101,7 @@ describe('desktop process-session window title', () => {
         waitingHandle,
         STREAM_PHASE.WAITING,
       );
-      expect(getDesktopSessionActivity(session)).toBe('idle');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
     } finally {
       session.dispose();
     }
@@ -121,13 +120,13 @@ describe('desktop process-session window title', () => {
         'execution:second',
         'stream:second' as StreamTabId,
       );
-      expect(getDesktopSessionActivity(session)).toBe('running');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
 
       session.executions.untrack(first.executionId);
-      expect(getDesktopSessionActivity(session)).toBe('running');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
 
       session.executions.untrack(second.executionId);
-      expect(getDesktopSessionActivity(session)).toBe('idle');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
     } finally {
       session.dispose();
     }
@@ -144,11 +143,13 @@ describe('desktop process-session window title', () => {
         plan: { objective: 'Check the title.' },
         goalEnabled: false,
       });
-      expect(getDesktopSessionActivity(session)).toBe('approval');
+      expect(getDesktopWindowTitle(session, undefined)).toBe(
+        'Approval needed TeXRA',
+      );
 
       session.interactions.cancel({ cause: 'Decision recorded.' });
       await firstApproval;
-      expect(getDesktopSessionActivity(session)).toBe('running');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('Running TeXRA');
 
       session.executions.untrack(handle.executionId);
       const secondApproval = session.interactions.requestPlanApproval({
@@ -157,11 +158,13 @@ describe('desktop process-session window title', () => {
         plan: { objective: 'Check the idle title.' },
         goalEnabled: false,
       });
-      expect(getDesktopSessionActivity(session)).toBe('approval');
+      expect(getDesktopWindowTitle(session, undefined)).toBe(
+        'Approval needed TeXRA',
+      );
 
       session.interactions.cancel({ cause: 'Decision recorded.' });
       await secondApproval;
-      expect(getDesktopSessionActivity(session)).toBe('idle');
+      expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
     } finally {
       session.dispose();
     }

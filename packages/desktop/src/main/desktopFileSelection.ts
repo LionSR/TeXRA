@@ -42,7 +42,7 @@ interface DesktopFileSelectionDialogOptions {
   allowMultiple?: boolean;
 }
 
-export interface DesktopFileSelectionOptions {
+interface DesktopFileSelectionOptions {
   postToRenderer(message: unknown): void;
   getWorkspacePath?: () => string | undefined;
   showOpenFileDialog?: (
@@ -74,7 +74,7 @@ const MULTI_DIALOG_TITLE_BY_FILE_TYPE = {
 
 type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
 
-async function listFiles(
+function listFiles(
   root: string,
   rawConfig: FileFilterConfig,
 ): Promise<string[]> {

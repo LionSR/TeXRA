@@ -303,14 +303,6 @@ const authStatusCommand = defineCliCommand({
   },
 });
 
-const AUTH_SUBCOMMANDS = {
-  login: loginCommand,
-  logout: logoutCommand,
-  status: authStatusCommand,
-  chatgpt: chatgptAuthCommand,
-  grok: grokAuthCommand,
-} as const;
-
 export const authCommand = defineCommand({
   meta: {
     name: 'auth',
@@ -326,5 +318,11 @@ export const authCommand = defineCommand({
   // flags like `--no-color` and `--output-format json` usable on the obvious
   // command.
   default: 'status',
-  subCommands: AUTH_SUBCOMMANDS,
+  subCommands: {
+    login: loginCommand,
+    logout: logoutCommand,
+    status: authStatusCommand,
+    chatgpt: chatgptAuthCommand,
+    grok: grokAuthCommand,
+  } as const,
 });

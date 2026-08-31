@@ -72,10 +72,6 @@ function orchestrationStepKeyHints(
   ];
 }
 
-function orchestrationKeyHints(): readonly KeyHint[] {
-  return orchestrationStepKeyHints('open', 'exit');
-}
-
 export function orchestrationFooterHints(
   items: readonly CliOrchestrationItem[],
 ): readonly string[] {
@@ -92,10 +88,7 @@ export function orchestrationFooterHints(
 }
 
 function orchestrationWrappedLineRows(line: string, columns: number): number {
-  return Math.max(
-    1,
-    wrapAnsiToWidth(line, Math.max(1, columns)).split('\n').length,
-  );
+  return wrapAnsiToWidth(line, Math.max(1, columns)).split('\n').length;
 }
 
 /** Rows a marginTop=1 block of lines occupies (wrapped lines plus the margin). */
@@ -412,7 +405,7 @@ export function OrchestrationApp(
           {...selectProps}
         />
       );
-      stepKeyHints = orchestrationKeyHints();
+      stepKeyHints = orchestrationStepKeyHints('open', 'exit');
       break;
   }
 

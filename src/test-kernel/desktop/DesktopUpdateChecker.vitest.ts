@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CheckForDesktopUpdateOptions } from '@desktop/main/desktopUpdateChecker';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -8,6 +7,9 @@ import { loadSourceModule } from './loadSourceModule.ts';
 
 type DesktopUpdateCheckerModule =
   typeof import('@desktop/main/desktopUpdateChecker');
+type CheckForDesktopUpdateOptions = Parameters<
+  DesktopUpdateCheckerModule['checkForDesktopUpdate']
+>[0];
 type DesktopLatestRelease = Parameters<
   CheckForDesktopUpdateOptions['notify']
 >[0];

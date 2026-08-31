@@ -77,10 +77,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private readonly callbackClaimQueue = new PQueue({ concurrency: 1 });
   private activeAttempt: ExtensionAuthAttempt | undefined;
 
-  private readonly notifier: AuthNotifier;
-
-  constructor(notifier: AuthNotifier) {
-    this.notifier = notifier;
+  constructor(private readonly notifier: AuthNotifier) {
     const hostPlatform = platform();
     this.secrets = hostPlatform.secrets;
     this.sessionCoordinator = createHostAuthCoordinator({
@@ -124,13 +121,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     return age >= 0 && age <= AUTH_CALLBACK_TIMEOUT_MS;
   }
 
-  private async persistPendingState(state: PendingOAuthState): Promise<void> {
-    await this.secrets.set(
-      this.pendingStateKey(state.nonce),
-      JSON.stringify(state),
-    );
-  }
-
   private async sweepPendingOAuthStates(): Promise<void> {
     let keys: readonly string[];
     try {
@@ -166,11 +156,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         'Authentication attempt is no longer pending. Try again.',
       );
     }
-    await this.persistPendingState({
-      nonce: attempt.nonce,
-      createdAt: attempt.createdAt,
-      flowId,
-    });
+    await this.secrets.set(
+      this.pendingStateKey(attempt.nonce),
+      JSON.stringify({
+        nonce: attempt.nonce,
+        createdAt: attempt.createdAt,
+        flowId,
+      }),
+    );
   }
 
   private async clearPendingAttempt(nonce: string): Promise<void> {
@@ -275,9 +268,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     // Keep listening after an active sign-in wait ends so a late browser
     // callback can still complete while its PKCE verifier remains in memory.
-    this.uriHandlerSubscription = handler.onDidReceiveCallback(async (uri) => {
-      await this.handleLateAuthCallback(uri);
-    });
+    this.uriHandlerSubscription = handler.onDidReceiveCallback((uri) =>
+      this.handleLateAuthCallback(uri),
+    );
   }
 
   /**
@@ -603,7 +596,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     invalidateModelOptionsCache();
     await refreshRemoteAgentCatalogAfterSignOut(
       invalidateRemoteAgentsAfterSignOut,
-      (message) => log.warn(message),
+      log.warn,
     );
     this._onDidChangeSessions.fire({
       added: [],

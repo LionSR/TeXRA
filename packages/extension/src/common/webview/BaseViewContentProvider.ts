@@ -11,7 +11,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 function buildWebviewHtml(
   webview: vscode.Webview,
   htmlPath: vscode.Uri,
-  replacements: Record<string, vscode.Uri | string>,
+  replacements: Record<string, vscode.Uri>,
 ): string {
   const htmlContent = AbsoluteFS.readSync(htmlPath.fsPath);
   const nonce = nanoid(32);
@@ -21,11 +21,10 @@ function buildWebviewHtml(
     .replaceAll('${cspSource}', webview.cspSource);
 
   for (const [key, value] of Object.entries(replacements)) {
-    const resolved =
-      value instanceof vscode.Uri
-        ? webview.asWebviewUri(value).toString()
-        : value;
-    result = result.replaceAll(`\${${key}}`, resolved);
+    result = result.replaceAll(
+      `\${${key}}`,
+      webview.asWebviewUri(value).toString(),
+    );
   }
 
   return result;
@@ -63,21 +62,9 @@ export class BundledViewContentProvider {
       this.log.debug(`Generated HTML content for ${this.viewName}`);
 
       return buildWebviewHtml(webview, htmlPath, {
-        commonStyleUri: this.buildUri(webview, [
-          'src',
-          'common',
-          'styles/common.css',
-        ]),
-        bundleUri: this.buildUri(webview, [
-          'dist',
-          this.viewFolder,
-          'bundle.js',
-        ]),
-        styleUri: this.buildUri(webview, [
-          'dist',
-          this.viewFolder,
-          'index.css',
-        ]),
+        commonStyleUri: this.buildUri(['src', 'common', 'styles/common.css']),
+        bundleUri: this.buildUri(['dist', this.viewFolder, 'bundle.js']),
+        styleUri: this.buildUri(['dist', this.viewFolder, 'index.css']),
       });
     } catch (err) {
       this.log.error(`Error generating HTML content: ${toErrorMessage(err)}`);
@@ -85,12 +72,7 @@ export class BundledViewContentProvider {
     }
   }
 
-  private buildUri(
-    webview: vscode.Webview,
-    pathSegments: string[],
-  ): vscode.Uri {
-    return webview.asWebviewUri(
-      vscode.Uri.joinPath(this.context.extensionUri, ...pathSegments),
-    );
+  private buildUri(pathSegments: string[]): vscode.Uri {
+    return vscode.Uri.joinPath(this.context.extensionUri, ...pathSegments);
   }
 }

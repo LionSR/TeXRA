@@ -137,9 +137,7 @@ export function createDesktopDiffHost(
         observedEmpty = false;
         const winner = await Promise.race([
           deadline,
-          Promise.allSettled([...inFlightFallbacks]).then(
-            () => 'settled' as const,
-          ),
+          Promise.allSettled(inFlightFallbacks).then(() => 'settled' as const),
         ]);
         if (winner === 'deadline') {
           return takeDirSnapshot();

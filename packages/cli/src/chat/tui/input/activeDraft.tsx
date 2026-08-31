@@ -3,9 +3,9 @@
 // Third-party imports
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 
-export type DraftDiscarder = () => boolean;
+type DraftDiscarder = () => boolean;
 
-export interface ActiveDraftRegistry {
+interface ActiveDraftRegistry {
   readonly register: (discard: DraftDiscarder) => () => void;
   readonly discard: () => boolean;
 }

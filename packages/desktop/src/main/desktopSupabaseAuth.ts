@@ -38,7 +38,7 @@ const DesktopPendingOAuthStateSchema = z.object({
 });
 type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
-export interface DesktopSupabaseAuth {
+interface DesktopSupabaseAuth {
   signIn(provider?: OAuthProvider): Promise<void>;
   signInAndWaitForSession(
     provider?: OAuthProvider,
@@ -78,7 +78,7 @@ interface DesktopSupabaseAuthOptions {
   log: DesktopAuthLog;
 }
 
-export interface DesktopOAuthClient {
+interface DesktopOAuthClient {
   auth: {
     signInWithOAuth(input: {
       provider: OAuthProvider;
@@ -279,8 +279,7 @@ export function createDesktopSupabaseAuth(
       );
       return;
     }
-    const callbackNonce =
-      new URLSearchParams(callback.query).get('app_nonce') ?? undefined;
+    const callbackNonce = new URLSearchParams(callback.query).get('app_nonce');
     if (!callbackNonce || !callbackState.matchesPendingNonce(callbackNonce)) {
       log.warn(
         'Desktop auth callback rejected: nonce mismatch (possible login-CSRF or stale callback)',

@@ -252,11 +252,9 @@ function liveAssistantDisplayLines({
   const columns = transcriptColumns(width);
   // Keep only the tail that could occupy the visible rows, so a very long
   // stream does not pay for wrapping text the slice will discard anyway.
-  const budget = Math.max(1, columns) * rows * 2;
+  const budget = columns * rows * 2;
   const windowed = text.length > budget ? text.slice(-budget) : text;
-  return wrapAnsiToWidth(windowed, columns)
-    .split('\n')
-    .slice(-Math.max(1, rows));
+  return wrapAnsiToWidth(windowed, columns).split('\n').slice(-rows);
 }
 
 /**

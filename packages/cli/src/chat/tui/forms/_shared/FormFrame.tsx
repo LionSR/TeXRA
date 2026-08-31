@@ -8,10 +8,11 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
-import { FORM_FRAME_MAX_WIDTH } from '@cli/tui/ui/theme';
 import { clamp } from '@utils/core';
 
-export interface FormFrameProps {
+const FORM_FRAME_MAX_WIDTH = 80;
+
+interface FormFrameProps {
   /** Border/title color. Defaults to the palette's informational hint —
    *  pass an explicit color only for a non-default state (e.g. an
    *  empty-results warning or an error transient). */

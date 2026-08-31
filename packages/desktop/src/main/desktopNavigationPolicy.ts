@@ -30,7 +30,7 @@ function routeOrDeny(
   shell.openExternal(url).catch(onAsyncError);
 }
 
-export interface DesktopNavigationPolicyOptions {
+interface DesktopNavigationPolicyOptions {
   onAsyncError?: (error: unknown) => void;
 }
 

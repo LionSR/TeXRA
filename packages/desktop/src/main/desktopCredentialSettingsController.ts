@@ -351,8 +351,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   /** Also driven by the desktop welcome card, not just the Settings view. */
-  async signInChatGpt(): Promise<void> {
-    await this.signInSubscription('chatgpt');
+  signInChatGpt(): Promise<void> {
+    return this.signInSubscription('chatgpt');
   }
 
   /**

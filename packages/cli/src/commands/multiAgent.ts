@@ -15,8 +15,8 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
+  cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
-  cliMultiAgentPresetListRecords,
   formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
@@ -118,13 +118,11 @@ function writeMultiAgentRunResult(
 
 async function runMultiAgentList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
-  const presets = readCliMultiAgentPresets();
   const { plans, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentPresetPlanSet(presets);
-  const records = cliMultiAgentPresetListRecords(plans);
+    await loadCliMultiAgentPresetPlanSet(readCliMultiAgentPresets());
 
   emitCliResult(context, {
-    json: records,
+    json: plans.map(cliMultiAgentPresetListRecord),
     ndjson: cliMultiAgentPresetNdjsonRecords(plans),
     text: formatCliMultiAgentPresetList(plans, {
       includeLoginHint: !remoteCatalogRefreshAttempted,
@@ -277,21 +275,19 @@ const multiAgentListCommand = defineCliCommand({
   run: runMultiAgentList,
 });
 
-const multiAgentPresetArgs = {
-  ...GLOBAL_ARGS,
-  preset: {
-    type: 'positional',
-    required: true,
-    description: 'Preset id or name from `texra multi-agent list`',
-  },
-} as const;
-
 const multiAgentShowCommand = defineCliCommand({
   meta: {
     name: 'show',
     description: 'Show one multi-agent team preset and its resolved agents',
   },
-  args: multiAgentPresetArgs,
+  args: {
+    ...GLOBAL_ARGS,
+    preset: {
+      type: 'positional',
+      required: true,
+      description: 'Preset id or name from `texra multi-agent list`',
+    },
+  },
   run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
 });
 

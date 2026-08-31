@@ -47,5 +47,5 @@ export function computeSelectWindowSize({
   if (selectRows < 3) {
     return { maxVisibleItems: selectRows, showOverflow: false };
   }
-  return { maxVisibleItems: Math.max(1, selectRows - 2), showOverflow: true };
+  return { maxVisibleItems: selectRows - 2, showOverflow: true };
 }

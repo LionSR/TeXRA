@@ -237,7 +237,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
   );
 }
 
-export async function runInitWizard(
+export function runInitWizard(
   options: InitWizardOptions,
 ): Promise<InitWizardResult | undefined> {
   return renderCliPrompt<InitWizardResult | undefined>(

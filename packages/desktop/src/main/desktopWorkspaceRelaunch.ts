@@ -1,4 +1,4 @@
-export interface DesktopWorkspaceRelaunchHandoff {
+interface DesktopWorkspaceRelaunchHandoff {
   supervised: boolean;
   send?: (args: string[]) => void;
   relaunch(args: string[]): void;

@@ -34,7 +34,7 @@ interface StartupPanelController {
   hide(): void;
 }
 
-export interface DesktopStartupTeamPanelOptions {
+interface DesktopStartupTeamPanelOptions {
   dismiss(): void;
   onVisibilityChanged(): void;
   showLauncher(): void;
