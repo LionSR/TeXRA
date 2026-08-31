@@ -3,7 +3,6 @@ import { LitElement } from 'lit';
 
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@shared/ipc';
-import { logWarn } from '@shared/log';
 import { postMessage } from '@shared/hostBridge';
 import {
   CommonViewMessageSchema,
@@ -103,7 +102,7 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
     if (!this.debugMode) {
       return;
     }
-    logWarn(context, error);
+    console.warn(context, error);
   }
 
   /**
