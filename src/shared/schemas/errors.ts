@@ -246,13 +246,48 @@ export const RetryErrorInfoSchema = ProviderErrorObjectSchema.omit({
 }).strict();
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
 
-/** Persisted retry-state reader for records written before the canonical
- * classification shipped. Remove after 2026-11-30, when those records have
- * aged out. Current runtime and IPC schemas must remain migration-free. */
-export const PersistedRetryErrorInfoSchema = z.preprocess(
-  normalizeLegacyProviderErrorFields,
+const legacyRetryErrorFields = [
+  'retryable',
+  'exhaustionReason',
+  'missingApiKey',
+  'contextWindow',
+  'isCredentialExhausted',
+  'isUpstreamCreditDepleted',
+  'isChatGptSubscriptionLimited',
+  'isRelayError',
+] as const;
+
+const LegacyRetryErrorInfoSchema = z
+  .looseObject({
+    retryable: z.boolean().optional(),
+    exhaustionReason: ExhaustionReasonSchema.optional(),
+    missingApiKey: z.literal(true).optional(),
+    contextWindow: z.literal(true).optional(),
+    isCredentialExhausted: z.boolean().optional(),
+    isUpstreamCreditDepleted: z.boolean().optional(),
+    isChatGptSubscriptionLimited: z.boolean().optional(),
+    isRelayError: z.boolean().optional(),
+  })
+  .refine((record) =>
+    legacyRetryErrorFields.some((key) => Object.hasOwn(record, key)),
+  )
+  .transform((record) => {
+    const rest = { ...record };
+    delete rest.isRelayError;
+    return 'classification' in record
+      ? { ...rest, classification: { kind: undefined } }
+      : normalizeLegacyProviderErrorFields(rest);
+  })
+  .pipe(RetryErrorInfoSchema);
+
+/** Persisted retry-state reader introduced 2026-08-31 for records written
+ * before the canonical classification shipped. Remove after 2026-11-30, when
+ * those records have aged out. Current runtime and IPC schemas must remain
+ * migration-free. */
+export const PersistedRetryErrorInfoSchema = z.union([
   RetryErrorInfoSchema,
-);
+  LegacyRetryErrorInfoSchema,
+]);
 
 /** Project a full ProviderError onto the retry-state record by dropping the
  *  bulky `rawErrorBody`; every other field carries over unchanged. */

@@ -55,9 +55,10 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
 
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
 
-/** Persisted result-meta reader for failed records written before the canonical
- * provider classification shipped. Remove after 2026-11-30, when those files
- * have aged out. Writers and AgentFinalResultSchema remain canonical-only. */
+/** Persisted result-meta reader introduced 2026-08-31 for failed records
+ * written before the canonical provider classification shipped. Remove after
+ * 2026-11-30, when those files have aged out. Writers and
+ * AgentFinalResultSchema remain canonical-only. */
 export const PersistedResultMetaSchema = z.preprocess((value) => {
   if (!isObject(value) || !isObject(value.result)) return value;
   const error = value.result.error;
