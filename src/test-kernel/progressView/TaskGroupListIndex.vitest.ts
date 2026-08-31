@@ -663,11 +663,15 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
   });
 
   it('hides superseded phase headers and failed cards after a resume', async () => {
-    const run = runGroup('Run: workflow');
+    const oldRun = runGroup('Run: old workflow');
+    const currentRun = createGroup('current-run', STREAM_PHASE.RUNNING, {
+      name: 'Run: current workflow',
+      startTime: 4,
+    });
     const oldMap = createGroup('old-map', STREAM_PHASE.FAILED, {
       name: 'Map',
       startTime: 2,
-      parentGroupId: 'run',
+      parentGroupId: oldRun.id,
       kind: 'phase',
       attemptId: 'a1',
       index: 0,
@@ -676,7 +680,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     const currentMap = createGroup('current-map', STREAM_PHASE.RUNNING, {
       name: 'Map',
       startTime: 4,
-      parentGroupId: 'run',
+      parentGroupId: currentRun.id,
       kind: 'phase',
       attemptId: 'a2',
       index: 0,
@@ -698,7 +702,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         status: 'running',
         attemptId: 'a2',
       }),
-      workflowTaskRow(run.id, 'stale-unphased', 6, {
+      workflowTaskRow(oldRun.id, 'stale-unphased', 6, {
         id: 'stale-unphased',
         label: 'Stale unphased call',
         status: 'failed',
@@ -720,12 +724,17 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       }),
     ];
 
-    const list = await renderList([run, oldMap, currentMap], rows, {
-      workflowAttemptId: 'a2',
-    });
+    const list = await renderList(
+      [oldRun, oldMap, currentRun, currentMap],
+      rows,
+      {
+        workflowAttemptId: 'a2',
+      },
+    );
 
     expect(groupHeader(list, oldMap.id)).toBeNull();
     expect(groupHeader(list, currentMap.id)).not.toBeNull();
+    expect(list.shadowRoot?.querySelectorAll('.log-run-band')).toHaveLength(1);
     expect(list.shadowRoot?.textContent).not.toContain('Stale failure');
     expect(list.shadowRoot?.textContent).not.toContain('Stale unphased call');
     expect(list.shadowRoot?.textContent).not.toContain('Stale standalone call');

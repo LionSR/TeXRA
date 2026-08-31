@@ -520,7 +520,7 @@ export class TaskGroupList extends LitElement {
   private renderRunBand(node: GroupTree): TemplateResult | typeof nothing {
     const model = this.model;
     if (this.isToolUse || !model || model.tally.total === 0) return nothing;
-    if (!node.children.some((child) => child.group.kind === 'phase')) {
+    if (!node.children.some((child) => this.phaseModels.has(child.group.id))) {
       return nothing;
     }
     return html`<div class="log-run-band">
