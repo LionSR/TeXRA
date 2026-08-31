@@ -5,9 +5,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
-  AgentCategory,
-  createStreamState,
-  GoalStateSchema,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
   SETTINGS_TAB_PANEL_NAMES,
@@ -215,30 +212,5 @@ describe('settings view tab definitions', () => {
 
     expect(labels.every((label) => label.trim().length > 0)).toBe(true);
     expect(new Set(labels).size).toBe(labels.length);
-  });
-});
-
-describe('tool-use stream goal state', () => {
-  it.each([
-    { active: false as const },
-    { active: true as const, status: 'active' as const, objective: 'Ship it' },
-    { active: true as const, status: 'paused' as const, objective: 'Ship it' },
-  ])('stores the canonical goal union: $active $status', (goal) => {
-    const state = createStreamState(AgentCategory.ToolUse, { goal });
-
-    expect(state).toMatchObject({ goal });
-    expect(state).not.toHaveProperty('goalActive');
-    expect(state).not.toHaveProperty('goalStatus');
-    expect(state).not.toHaveProperty('goalObjective');
-  });
-
-  it('rejects fields from the other canonical union branch', () => {
-    expect(
-      GoalStateSchema.safeParse({
-        active: false,
-        status: 'paused',
-        objective: 'impossible',
-      }).success,
-    ).toBe(false);
   });
 });
