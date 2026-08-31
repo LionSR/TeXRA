@@ -695,15 +695,14 @@ export class TaskGroupList extends LitElement {
    */
   private renderGroupBody(node: GroupTree, isRoot: boolean): TemplateResult {
     const phase = this.phaseModels.get(node.group.id);
-    const workflowPhase =
-      phase ?? (isRoot ? this.model?.unphasedPhase : undefined);
     const rows =
       phase || (isRoot && this.model !== null)
         ? node.rows.filter((row) => row.kind !== 'workflowTask')
         : node.rows;
-    return html`${
-      workflowPhase ? this.renderPhaseRows(workflowPhase) : nothing
-    }${this.renderRowEntries(rows, `group:${node.group.id}`)}${repeat(
+    return html`${phase ? this.renderPhaseRows(phase) : nothing}${this.renderRowEntries(
+      rows,
+      `group:${node.group.id}`,
+    )}${repeat(
       node.children,
       (c) => c.group.id,
       (c) => this.renderGroupNode(c),
@@ -857,11 +856,20 @@ export class TaskGroupList extends LitElement {
       ${repeat(
         visibleTimeline,
         (item) => item.key,
-        (item) =>
-          'row' in item
-            ? this.renderLogEntry(item.row)
-            : this.renderGroupNode(item.tree, true),
+        (item) => {
+          if ('row' in item) {
+            return this.model !== null && item.row.kind === 'workflowTask'
+              ? nothing
+              : this.renderLogEntry(item.row);
+          }
+          return this.renderGroupNode(item.tree, true);
+        },
       )}
+      ${
+        this.model?.unphasedPhase
+          ? this.renderPhaseRows(this.model.unphasedPhase)
+          : nothing
+      }
       ${this.renderDeclaredPhases()}
     `;
   }

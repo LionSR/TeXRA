@@ -705,6 +705,19 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         error: 'old attempt',
         attemptId: 'a1',
       }),
+      workflowTaskRow(undefined, 'stale-standalone', 7, {
+        id: 'stale-standalone',
+        label: 'Stale standalone call',
+        status: 'failed',
+        error: 'old attempt',
+        attemptId: 'a1',
+      }),
+      workflowTaskRow(undefined, 'current-standalone', 8, {
+        id: 'current-standalone',
+        label: 'Current standalone call',
+        status: 'running',
+        attemptId: 'a2',
+      }),
     ];
 
     const list = await renderList([run, oldMap, currentMap], rows, {
@@ -715,7 +728,11 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(groupHeader(list, currentMap.id)).not.toBeNull();
     expect(list.shadowRoot?.textContent).not.toContain('Stale failure');
     expect(list.shadowRoot?.textContent).not.toContain('Stale unphased call');
+    expect(list.shadowRoot?.textContent).not.toContain('Stale standalone call');
     expect(list.shadowRoot?.textContent).toContain('Current call');
+    expect(
+      list.shadowRoot?.querySelectorAll('[data-log-id="current-standalone"]'),
+    ).toHaveLength(1);
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {
