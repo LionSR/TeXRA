@@ -1083,6 +1083,334 @@ return 'guest success'`,
     expect(checkpoint?.journal.map((entry) => entry.index)).toEqual([0, 1, 2]);
   });
 
+  it('recovers moved implicit calls from their journaled positions', async () => {
+    const originalScript = `export const meta = {
+  name: 'moved-implicit-history',
+  description: 'keeps moved call history with its content identity',
+}
+const a = await agent('A')
+const b = await agent('B')
+const c = await agent('C')
+return [a, b, c]`;
+    const priorFacts = {
+      A: {
+        agent: 'agent-a',
+        model: 'model-a',
+        childExecutionId: 'aaaaaaaaaaaa' as ExecutionId,
+        childStreamId: 'agent-a#aaaaaaaaaaaa',
+        costUsd: 10,
+      },
+      B: {
+        agent: 'agent-b',
+        model: 'model-b',
+        childExecutionId: 'bbbbbbbbbbbb' as ExecutionId,
+        childStreamId: 'agent-b#bbbbbbbbbbbb',
+        costUsd: 20,
+      },
+      C: {
+        agent: 'agent-c',
+        model: 'model-c',
+        childExecutionId: 'cccccccccccc' as ExecutionId,
+        childStreamId: 'agent-c#cccccccccccc',
+        costUsd: 30,
+      },
+    } as const;
+    const completed = await runWorkflowScript({
+      script: originalScript,
+      runAgent: async (invocation) => {
+        const prompt = invocation.prompt as keyof typeof priorFacts;
+        invocation.report?.(priorFacts[prompt]);
+        return `result:${prompt}`;
+      },
+    });
+
+    const liveRunner = vi.fn(async (invocation) => {
+      expect(invocation.prompt).toBe('N');
+      invocation.report?.({
+        agent: 'agent-n',
+        model: 'model-n',
+        childExecutionId: 'nnnnnnnnnnnn' as ExecutionId,
+        childStreamId: 'agent-n#nnnnnnnnnnnn',
+        costUsd: 1,
+      });
+      return 'result:N';
+    });
+    const moved = await runWorkflowScript({
+      script: originalScript.replace(
+        `const b = await agent('B')`,
+        `await agent('N')\nconst b = await agent('B')`,
+      ),
+      initialSnapshot: completed.snapshot,
+      journal: completed.journal,
+      runAgent: liveRunner,
+    });
+
+    expect(liveRunner).toHaveBeenCalledOnce();
+    expect(moved.result).toEqual(['result:A', 'result:B', 'result:C']);
+    expect(moved.snapshot.calls).toMatchObject([
+      {
+        id: 'call-0',
+        status: 'cached',
+        agent: 'agent-a',
+        model: 'model-a',
+        childExecutionId: 'aaaaaaaaaaaa',
+        childStreamId: 'agent-a#aaaaaaaaaaaa',
+        costUsd: 10,
+        attempts: [
+          {
+            number: 1,
+            id: 'aaaaaaaaaaaa',
+            childStreamId: 'agent-a#aaaaaaaaaaaa',
+            model: 'model-a',
+            costUsd: 10,
+          },
+        ],
+      },
+      {
+        id: 'call-1',
+        status: 'completed',
+        agent: 'agent-n',
+        model: 'model-n',
+        childExecutionId: 'nnnnnnnnnnnn',
+        childStreamId: 'agent-n#nnnnnnnnnnnn',
+        costUsd: 1,
+        attempts: [
+          {
+            number: 1,
+            id: 'nnnnnnnnnnnn',
+            childStreamId: 'agent-n#nnnnnnnnnnnn',
+            model: 'model-n',
+            costUsd: 1,
+          },
+        ],
+      },
+      {
+        id: 'call-2',
+        status: 'cached',
+        agent: 'agent-b',
+        model: 'model-b',
+        childExecutionId: 'bbbbbbbbbbbb',
+        childStreamId: 'agent-b#bbbbbbbbbbbb',
+        costUsd: 20,
+        attempts: [
+          {
+            number: 1,
+            id: 'bbbbbbbbbbbb',
+            childStreamId: 'agent-b#bbbbbbbbbbbb',
+            model: 'model-b',
+            costUsd: 20,
+          },
+        ],
+      },
+      {
+        id: 'call-3',
+        status: 'cached',
+        agent: 'agent-c',
+        model: 'model-c',
+        childExecutionId: 'cccccccccccc',
+        childStreamId: 'agent-c#cccccccccccc',
+        costUsd: 30,
+        attempts: [
+          {
+            number: 1,
+            id: 'cccccccccccc',
+            childStreamId: 'agent-c#cccccccccccc',
+            model: 'model-c',
+            costUsd: 30,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('declines positional recovery when stale journal keys share an index', async () => {
+    const firstScript = `export const meta = {
+  name: 'duplicate-journal-index',
+  description: 'does not guess among stale keys at one position',
+}
+const a = await agent('A')
+const b = await agent('B')
+return [a, b]`;
+    const first = await runWorkflowScript({
+      script: firstScript,
+      runAgent: async (invocation) => {
+        invocation.report?.({
+          agent: `agent-${invocation.prompt.toLowerCase()}`,
+          costUsd: invocation.prompt === 'A' ? 10 : 20,
+        });
+        return `result:${invocation.prompt}`;
+      },
+    });
+    const second = await runWorkflowScript({
+      script: firstScript.replaceAll('B', 'C').replaceAll('b', 'c'),
+      initialSnapshot: first.snapshot,
+      journal: first.journal,
+      runAgent: async (invocation) => {
+        invocation.report?.({ agent: 'agent-c', costUsd: 30 });
+        return `result:${invocation.prompt}`;
+      },
+    });
+    const staleJournal = [
+      ...new Map(
+        [...first.journal, ...second.journal].map((entry) => [
+          entry.key,
+          entry,
+        ]),
+      ).values(),
+    ];
+    expect(staleJournal.filter((entry) => entry.index === 1)).toHaveLength(2);
+
+    second.snapshot.calls.reverse();
+    const restored = await runWorkflowScript({
+      script: firstScript,
+      initialSnapshot: second.snapshot,
+      journal: staleJournal,
+      runAgent: vi.fn(() => Promise.reject(new Error('must replay'))),
+    });
+
+    expect(restored.result).toEqual(['result:A', 'result:B']);
+    expect(
+      restored.snapshot.calls.find((call) => call.id === 'call-0'),
+    ).toMatchObject({
+      status: 'cached',
+      agent: 'agent-a',
+      costUsd: 10,
+    });
+    const restoredB = restored.snapshot.calls.find(
+      (call) => call.id === 'call-1',
+    );
+    expect(restoredB).toMatchObject({ status: 'cached', attempts: [] });
+    expect(restoredB?.agent).toBeUndefined();
+    expect(restoredB?.costUsd).toBeUndefined();
+  });
+
+  it.each(['queued', 'running'] as const)(
+    'preserves journal-proven metadata from a lagging %s snapshot',
+    async (status) => {
+      const laggingScript = `export const meta = {
+  name: 'lagging-journal-snapshot',
+  description: 'journal proof outranks lagging snapshot status',
+}
+return await agent('proven result')`;
+      const completed = await runWorkflowScript({
+        script: laggingScript,
+        runAgent: async (invocation) => {
+          invocation.report?.({
+            agent: 'proven-agent',
+            model: 'proven-model',
+            childExecutionId: 'pppppppppppp' as ExecutionId,
+            childStreamId: 'proven#pppppppppppp',
+            costUsd: 7,
+          });
+          return 'cached result';
+        },
+      });
+      const lagging = structuredClone(completed.snapshot);
+      lagging.lifecycle = 'active';
+      lagging.timestamps.completedAt = undefined;
+      lagging.calls[0]!.status = status;
+      lagging.calls[0]!.timestamps.completedAt = undefined;
+      lagging.calls[0]!.attempts[0]!.completedAt = undefined;
+
+      const snapshots: WorkflowExecutionSnapshot[] = [];
+      const replayed = await runWorkflowScript({
+        script: laggingScript,
+        initialSnapshot: lagging,
+        journal: completed.journal,
+        runAgent: vi.fn(() => Promise.reject(new Error('must replay'))),
+        onSnapshot: (snapshot) => {
+          snapshots.push(snapshot);
+        },
+      });
+      const call = replayed.snapshot.calls[0]!;
+
+      expect(call).toMatchObject({
+        id: 'call-0',
+        status: 'cached',
+        agent: 'proven-agent',
+        model: 'proven-model',
+        childExecutionId: 'pppppppppppp',
+        childStreamId: 'proven#pppppppppppp',
+        costUsd: 7,
+        attempts: [
+          {
+            number: 1,
+            id: 'pppppppppppp',
+            childStreamId: 'proven#pppppppppppp',
+            model: 'proven-model',
+            costUsd: 7,
+            completedAt: expect.any(String),
+          },
+        ],
+      });
+      expect(
+        snapshots.some((snapshot) => snapshot.calls[0]?.status === 'completed'),
+      ).toBe(false);
+    },
+  );
+
+  it.each(['failed', 'cancelled', 'skipped'] as const)(
+    'starts an implicit %s call clean without journal recovery proof',
+    async (status) => {
+      const implicitScript = `export const meta = {
+  name: 'implicit-legacy-reset',
+  description: 'resets unproven implicit history',
+}
+return await agent('same position')`;
+      const prior = await runWorkflowScript({
+        script: implicitScript,
+        runAgent: async (invocation) => {
+          invocation.report?.({
+            agent: 'stale-agent',
+            model: 'stale-model',
+            childExecutionId: 'ssssssssssss' as ExecutionId,
+            childStreamId: 'stale#ssssssssssss',
+            costUsd: 9,
+          });
+          return 'stale result';
+        },
+      });
+      prior.snapshot.calls[0]!.status = status;
+
+      const resumed = await runWorkflowScript({
+        script: implicitScript,
+        initialSnapshot: prior.snapshot,
+        journal: [],
+        runAgent: async (invocation) => {
+          invocation.report?.({
+            agent: 'fresh-agent',
+            model: 'fresh-model',
+            childExecutionId: 'ffffffffffff' as ExecutionId,
+            childStreamId: 'fresh#ffffffffffff',
+            costUsd: 1,
+          });
+          return 'fresh result';
+        },
+      });
+
+      expect(resumed.snapshot.calls).toMatchObject([
+        {
+          id: 'call-0',
+          status: 'completed',
+          agent: 'fresh-agent',
+          model: 'fresh-model',
+          childExecutionId: 'ffffffffffff',
+          childStreamId: 'fresh#ffffffffffff',
+          costUsd: 1,
+          attempts: [
+            {
+              number: 1,
+              id: 'ffffffffffff',
+              childStreamId: 'fresh#ffffffffffff',
+              model: 'fresh-model',
+              costUsd: 1,
+            },
+          ],
+        },
+      ]);
+    },
+  );
+
   it('round-trips an undefined agent result explicitly', async () => {
     const store = getExecutionStore(executionId);
     const undefinedScript = `export const meta = {

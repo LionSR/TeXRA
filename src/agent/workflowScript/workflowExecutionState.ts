@@ -22,9 +22,15 @@ interface WorkflowCallDefinition {
   readonly files: WorkflowExecutionCall['files'];
 }
 
+type WorkflowCallRecoverySource = (
+  { readonly id: string } | { readonly implicitIndex: number }
+) & { readonly journalProven: boolean };
+
 /** Owns canonical workflow stage/call transitions and interrupted-run hydration. */
 export class WorkflowExecutionState {
   readonly #snapshot: WorkflowExecutionSnapshot;
+  readonly #persistedCalls: readonly WorkflowExecutionCall[];
+  readonly #recoveryAt: string;
   readonly #publish: (snapshot: WorkflowExecutionSnapshot) => void;
   readonly #hasDeclaredStages: boolean;
   readonly #issuedCallIds = new Set<string>();
@@ -44,6 +50,10 @@ export class WorkflowExecutionState {
     this.#publish = options.publish;
     this.#hasDeclaredStages = options.phases.length > 0;
     const createdAt = now();
+    this.#recoveryAt = createdAt;
+    this.#persistedCalls = structuredClone(
+      options.initialSnapshot?.calls ?? [],
+    );
     const fresh: WorkflowExecutionSnapshot = {
       lifecycle: WORKFLOW_EXECUTION_LIFECYCLE.WAITING,
       stages: options.phases.map((phase, index) => ({
@@ -150,7 +160,10 @@ export class WorkflowExecutionState {
     this.#emit();
   }
 
-  issueCall(definition: WorkflowCallDefinition): void {
+  issueCall(
+    definition: WorkflowCallDefinition,
+    recoverySource?: WorkflowCallRecoverySource,
+  ): void {
     if (this.#sealed) throw new Error('Workflow execution state is sealed.');
     if (this.#issuedCallIds.has(definition.id)) {
       throw new Error(
@@ -158,9 +171,6 @@ export class WorkflowExecutionState {
       );
     }
     this.#issuedCallIds.add(definition.id);
-    let call = this.#snapshot.calls.find(
-      (candidate) => candidate.id === definition.id,
-    );
     const stageIndex =
       definition.phase === undefined
         ? -1
@@ -183,7 +193,7 @@ export class WorkflowExecutionState {
     const timestamp = now();
     // Only assign agent when the call definition supplies one. Engine issue
     // often omits agentName; a later report fills the host-resolved name.
-    // Re-issuing on resume must not wipe a hydrated agent with undefined —
+    // Re-issuing on resume must not wipe a recovered agent with undefined —
     // the journal-cache path only patches status/timestamps and would leave
     // /executions without the resolved agent after a cached replay.
     const canonical = {
@@ -195,30 +205,44 @@ export class WorkflowExecutionState {
       ...(definition.agent !== undefined && { agent: definition.agent }),
       ...(definition.model !== undefined && { model: definition.model }),
     };
-    if (!call) {
-      call = {
-        id: definition.id,
-        ...canonical,
-        attempts: [],
-        status: WORKFLOW_CALL_STATUS.PLANNED,
-        timestamps: { createdAt: timestamp, updatedAt: timestamp },
-      };
-      this.#snapshot.calls.push(call);
-    } else {
-      // A hydrated completed/cached result belongs to the prior attempt until
-      // the script re-issues the call; from here it is this attempt's call —
-      // replayed from the journal as cached, or re-run in a fresh execution
-      // window — so every attempt projects it the same way.
-      Object.assign(
-        call,
-        canonical,
-        isReusableStatus(call.status) && {
-          status: WORKFLOW_CALL_STATUS.PLANNED,
-          timestamps: { createdAt: call.timestamps.createdAt },
-        },
+    const fresh: WorkflowExecutionCall = {
+      id: definition.id,
+      ...canonical,
+      attempts: [],
+      status: WORKFLOW_CALL_STATUS.PLANNED,
+      timestamps: { createdAt: timestamp, updatedAt: timestamp },
+    };
+    let prior: WorkflowExecutionCall | undefined;
+    if (recoverySource !== undefined) {
+      const recoveryId =
+        'id' in recoverySource
+          ? recoverySource.id
+          : `call-${recoverySource.implicitIndex}`;
+      prior = this.#persistedCalls.find(
+        (candidate) => candidate.id === recoveryId,
       );
-      call.timestamps.updatedAt = timestamp;
     }
+    const call = recoverCall(
+      fresh,
+      prior,
+      this.#recoveryAt,
+      recoverySource?.journalProven ?? false,
+    );
+    Object.assign(
+      call,
+      canonical,
+      (isReusableStatus(call.status) || recoverySource?.journalProven) && {
+        status: WORKFLOW_CALL_STATUS.PLANNED,
+        timestamps: { createdAt: call.timestamps.createdAt },
+      },
+    );
+    call.timestamps.updatedAt = timestamp;
+
+    const existingIndex = this.#snapshot.calls.findIndex(
+      (candidate) => candidate.id === definition.id,
+    );
+    if (existingIndex < 0) this.#snapshot.calls.push(call);
+    else this.#snapshot.calls[existingIndex] = call;
     this.#emit();
   }
 
@@ -549,6 +573,41 @@ function closeOpenAttempts(
   );
 }
 
+function recoverCall(
+  fresh: WorkflowExecutionCall,
+  prior: WorkflowExecutionCall | undefined,
+  recoveryAt: string,
+  journalProven = false,
+): WorkflowExecutionCall {
+  if (!prior) return fresh;
+  const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
+  if (isReusableCall(prior) || journalProven) {
+    return {
+      ...prior,
+      id: fresh.id,
+      label: fresh.label,
+      stageId: fresh.stageId,
+      attempts,
+      costUsd: totalAttemptCost(attempts),
+    };
+  }
+  if (
+    fresh.status !== WORKFLOW_CALL_STATUS.PLANNED &&
+    fresh.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED
+  ) {
+    throw new Error(`Fresh workflow call ${fresh.id} is not a plan stub.`);
+  }
+  return {
+    ...fresh,
+    attempts,
+    costUsd: totalAttemptCost(attempts),
+    timestamps: {
+      createdAt: prior.timestamps.createdAt,
+      updatedAt: recoveryAt,
+    },
+  };
+}
+
 function hydrate(
   fresh: WorkflowExecutionSnapshot,
   persisted: WorkflowExecutionSnapshot | undefined,
@@ -559,35 +618,9 @@ function hydrate(
   snapshot.timestamps.createdAt = persisted.timestamps.createdAt;
   const freshIds = new Set(snapshot.calls.map((call) => call.id));
   const priorById = new Map(persisted.calls.map((call) => [call.id, call]));
-  snapshot.calls = snapshot.calls.map((call) => {
-    const prior = priorById.get(call.id);
-    if (!prior) return call;
-    const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
-    if (isReusableCall(prior)) {
-      return {
-        ...prior,
-        label: call.label,
-        stageId: call.stageId,
-        attempts,
-        costUsd: totalAttemptCost(attempts),
-      };
-    }
-    if (
-      call.status !== WORKFLOW_CALL_STATUS.PLANNED &&
-      call.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED
-    ) {
-      throw new Error(`Fresh workflow call ${call.id} is not a plan stub.`);
-    }
-    return {
-      ...call,
-      attempts,
-      costUsd: totalAttemptCost(attempts),
-      timestamps: {
-        createdAt: prior.timestamps.createdAt,
-        updatedAt: recoveryAt,
-      },
-    };
-  });
+  snapshot.calls = snapshot.calls.map((call) =>
+    recoverCall(call, priorById.get(call.id), recoveryAt),
+  );
   for (const prior of persisted.calls) {
     if (freshIds.has(prior.id)) continue;
     const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
