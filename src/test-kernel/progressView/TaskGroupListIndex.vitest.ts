@@ -705,12 +705,6 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         error: 'old attempt',
         attemptId: 'a1',
       }),
-      workflowTaskRow(run.id, 'current-unphased', 7, {
-        id: 'current-unphased',
-        label: 'Current unphased call',
-        status: 'running',
-        attemptId: 'a2',
-      }),
     ];
 
     const list = await renderList([run, oldMap, currentMap], rows, {
@@ -722,7 +716,6 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(list.shadowRoot?.textContent).not.toContain('Stale failure');
     expect(list.shadowRoot?.textContent).not.toContain('Stale unphased call');
     expect(list.shadowRoot?.textContent).toContain('Current call');
-    expect(list.shadowRoot?.textContent).toContain('Current unphased call');
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

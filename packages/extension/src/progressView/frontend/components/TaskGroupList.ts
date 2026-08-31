@@ -697,9 +697,10 @@ export class TaskGroupList extends LitElement {
     const phase = this.phaseModels.get(node.group.id);
     const workflowPhase =
       phase ?? (isRoot ? this.model?.unphasedPhase : undefined);
-    const rows = workflowPhase
-      ? node.rows.filter((row) => row.kind !== 'workflowTask')
-      : node.rows;
+    const rows =
+      phase || (isRoot && this.model !== null)
+        ? node.rows.filter((row) => row.kind !== 'workflowTask')
+        : node.rows;
     return html`${
       workflowPhase ? this.renderPhaseRows(workflowPhase) : nothing
     }${this.renderRowEntries(rows, `group:${node.group.id}`)}${repeat(
