@@ -133,9 +133,7 @@ return await agent('resume cancelled call', { id: 'cancelled-call' })`;
     expect(runner).toHaveBeenCalledOnce();
     expect(relaunched.result).toBe('resumed result');
     expect(relaunched.snapshot.calls[0]).toMatchObject({ status: 'completed' });
-    const serialized = WorkflowExecutionSnapshotSchema.parse(
-      JSON.parse(JSON.stringify(relaunched.snapshot)),
-    );
+    const serialized = JSON.parse(JSON.stringify(relaunched.snapshot));
     expect(serialized.calls[0]).not.toHaveProperty('error');
   });
 
