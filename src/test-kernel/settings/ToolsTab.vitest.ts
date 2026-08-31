@@ -32,6 +32,7 @@ function tool(
     tools: [],
     status,
     requiresSetup: status !== 'available',
+    installActions: [],
   };
 }
 

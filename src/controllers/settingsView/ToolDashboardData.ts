@@ -65,7 +65,10 @@ export function planToolTerminalAction(input: {
  * the dashboard when every tool in it declares itself unavailable on the
  * asking host.
  */
-const BUILTIN_TOOLS: (Omit<ToolDashboardItem, 'status' | 'tools'> & {
+const BUILTIN_TOOLS: (Omit<
+  ToolDashboardItem,
+  'status' | 'tools' | 'installActions'
+> & {
   toolNames: readonly RegisteredToolName[];
 })[] = [
   {
@@ -171,6 +174,7 @@ export async function buildToolDashboardItems(
     ...rest,
     tools: toolNames.map((name) => ({ name })),
     status: 'available' as const,
+    installActions: [],
   }));
 
   const results = cachedResults ?? (await runExternalToolChecks());
@@ -189,11 +193,28 @@ export async function buildToolDashboardItems(
       status,
       statusLabel,
       requiresSetup: true,
-      installGuide: def.installGuide,
-      installUrl: def.installUrl,
-      installExtensionId: def.installExtensionId,
-      installCommand: def.installCommand,
-      authCommand: def.authCommand,
+      installActions: [
+        ...(def.installGuide
+          ? [{ kind: 'guide' as const, text: def.installGuide }]
+          : []),
+        ...(def.installCommand
+          ? [{ kind: 'command' as const, command: def.installCommand }]
+          : []),
+        ...(def.authCommand
+          ? [{ kind: 'auth' as const, command: def.authCommand }]
+          : []),
+        ...(def.installExtensionId
+          ? [
+              {
+                kind: 'extension' as const,
+                extensionId: def.installExtensionId,
+              },
+            ]
+          : []),
+        ...(def.installUrl
+          ? [{ kind: 'url' as const, url: def.installUrl }]
+          : []),
+      ],
       configNotes: def.configNotes,
       statusDetail,
       authNote: def.authNote,

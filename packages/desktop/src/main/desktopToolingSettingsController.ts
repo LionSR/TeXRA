@@ -194,7 +194,10 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
  * standalone path (Lean 4's `lake` build, for example).
  */
 function withoutExtensionInstall(item: ToolDashboardItem): ToolDashboardItem {
-  if (item.installExtensionId == null) return item;
-  const { installExtensionId, ...rest } = item;
-  return rest;
+  const installActions = item.installActions.filter(
+    (action) => action.kind !== 'extension',
+  );
+  return installActions.length === item.installActions.length
+    ? item
+    : { ...item, installActions };
 }

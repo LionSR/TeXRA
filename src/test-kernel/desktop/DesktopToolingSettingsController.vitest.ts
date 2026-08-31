@@ -38,6 +38,7 @@ const DASHBOARD_ITEM: ToolDashboardItem = {
   tools: [],
   status: 'available',
   requiresSetup: true,
+  installActions: [],
   toggleable: true,
   enabled: true,
 };
@@ -351,7 +352,12 @@ describe('DefaultDesktopToolingSettingsController', () => {
     const { controller, posted } = createFixture({
       dashboard: {
         buildItems: async () => [
-          { ...DASHBOARD_ITEM, installExtensionId: 'leanprover.lean4' },
+          {
+            ...DASHBOARD_ITEM,
+            installActions: [
+              { kind: 'extension', extensionId: 'leanprover.lean4' },
+            ],
+          },
         ],
       },
     });

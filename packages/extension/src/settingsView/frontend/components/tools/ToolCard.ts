@@ -16,7 +16,11 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import type { ToolCommandKind, ToolDashboardItem } from '@shared/schemas';
+import type {
+  ToolCommandKind,
+  ToolDashboardItem,
+  ToolInstallAction,
+} from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -193,22 +197,6 @@ export class ToolCard extends LitElement {
     this.guideExpanded = false;
   }
 
-  private handleInstallUrl(): void {
-    if (this.item.installUrl) {
-      postMessage(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL, {
-        url: this.item.installUrl,
-      });
-    }
-  }
-
-  private handleInstallExtension(): void {
-    if (this.item.installExtensionId) {
-      postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION, {
-        extensionId: this.item.installExtensionId,
-      });
-    }
-  }
-
   private runCommand(kind: ToolCommandKind): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND, {
       toolId: this.item.id,
@@ -262,21 +250,89 @@ export class ToolCard extends LitElement {
     `;
   }
 
-  private renderGuide(): TemplateResult | typeof nothing {
-    if (!this.item.requiresSetup) return nothing;
+  private renderInstallAction(
+    action: ToolInstallAction,
+    secondaryAppearance: 'filled' | 'outlined',
+    secondaryVariant: 'brand' | 'neutral',
+  ): TemplateResult | typeof nothing {
+    switch (action.kind) {
+      case 'guide':
+        return nothing;
+      case 'command':
+        return html`
+          <wa-button
+            id="tool-install-btn-${this.item.id}"
+            appearance="filled"
+            variant="brand"
+            size="s"
+            @click=${() => this.runCommand('install')}
+          >
+            ${waIcon('terminal', { slot: 'start' })} Install in terminal
+          </wa-button>
+          <wa-tooltip for="tool-install-btn-${this.item.id}"
+            >${action.command}</wa-tooltip
+          >
+        `;
+      case 'auth':
+        return html`
+          <wa-button
+            id="tool-auth-btn-${this.item.id}"
+            appearance=${secondaryAppearance}
+            variant=${secondaryVariant}
+            size="s"
+            @click=${() => this.runCommand('auth')}
+          >
+            ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
+          </wa-button>
+          <wa-tooltip for="tool-auth-btn-${this.item.id}"
+            >${action.command}</wa-tooltip
+          >
+        `;
+      case 'extension':
+        return html`
+          <wa-button
+            appearance="filled"
+            variant="brand"
+            size="s"
+            @click=${() =>
+              postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION, {
+                extensionId: action.extensionId,
+              })}
+          >
+            ${waIcon('cloud-arrow-down', { slot: 'start' })} Install extension
+          </wa-button>
+        `;
+      case 'url':
+        return html`
+          <wa-button
+            appearance=${secondaryAppearance}
+            variant=${secondaryVariant}
+            size="s"
+            @click=${() =>
+              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL, {
+                url: action.url,
+              })}
+          >
+            ${waIcon('arrow-up-right-from-square', { slot: 'start' })} Open
+            install page
+          </wa-button>
+        `;
+    }
+  }
 
-    const hasGuide =
-      this.item.installGuide ||
-      this.item.installUrl ||
-      this.item.installCommand ||
-      this.item.authCommand;
-    if (!hasGuide) return nothing;
+  private renderGuide(): TemplateResult | typeof nothing {
+    if (
+      !this.item.requiresSetup ||
+      this.item.installActions.every((action) => action.kind === 'extension')
+    ) {
+      return nothing;
+    }
 
     // When a primary install action exists (terminal command or extension
     // marketplace), demote auxiliary buttons (Sign in, Open install page)
     // to secondary styling.
-    const hasPrimaryInstallAction = Boolean(
-      this.item.installCommand || this.item.installExtensionId,
+    const hasPrimaryInstallAction = this.item.installActions.some(
+      (action) => action.kind === 'command' || action.kind === 'extension',
     );
     const secondaryAppearance = hasPrimaryInstallAction ? 'outlined' : 'filled';
     const secondaryVariant = hasPrimaryInstallAction ? 'neutral' : 'brand';
@@ -289,78 +345,19 @@ export class ToolCard extends LitElement {
         @wa-show=${this.handleGuideShow}
         @wa-hide=${this.handleGuideHide}
       >
-        ${
-          this.item.installGuide
-            ? html`<div class="tool-guide">${this.item.installGuide}</div>`
-            : nothing
-        }
+        ${this.item.installActions.map((action) =>
+          action.kind === 'guide'
+            ? html`<div class="tool-guide">${action.text}</div>`
+            : nothing,
+        )}
         <div class="tool-guide-actions">
-          ${
-            this.item.installCommand
-              ? html`
-                  <wa-button
-                    id="tool-install-btn-${this.item.id}"
-                    appearance="filled"
-                    variant="brand"
-                    size="s"
-                    @click=${() => this.runCommand('install')}
-                  >
-                    ${waIcon('terminal', { slot: 'start' })} Install in terminal
-                  </wa-button>
-                  <wa-tooltip for="tool-install-btn-${this.item.id}"
-                    >${this.item.installCommand}</wa-tooltip
-                  >
-                `
-              : nothing
-          }
-          ${
-            this.item.authCommand
-              ? html`
-                  <wa-button
-                    id="tool-auth-btn-${this.item.id}"
-                    appearance=${secondaryAppearance}
-                    variant=${secondaryVariant}
-                    size="s"
-                    @click=${() => this.runCommand('auth')}
-                  >
-                    ${waIcon('right-to-bracket', { slot: 'start' })} Sign in
-                  </wa-button>
-                  <wa-tooltip for="tool-auth-btn-${this.item.id}"
-                    >${this.item.authCommand}</wa-tooltip
-                  >
-                `
-              : nothing
-          }
-          ${
-            this.item.installExtensionId
-              ? html`
-                  <wa-button
-                    appearance="filled"
-                    variant="brand"
-                    size="s"
-                    @click=${this.handleInstallExtension}
-                  >
-                    ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
-                    extension
-                  </wa-button>
-                `
-              : nothing
-          }
-          ${
-            this.item.installUrl
-              ? html`
-                  <wa-button
-                    appearance=${secondaryAppearance}
-                    variant=${secondaryVariant}
-                    size="s"
-                    @click=${this.handleInstallUrl}
-                  >
-                    ${waIcon('arrow-up-right-from-square', { slot: 'start' })}
-                    Open install page
-                  </wa-button>
-                `
-              : nothing
-          }
+          ${this.item.installActions.map((action) =>
+            this.renderInstallAction(
+              action,
+              secondaryAppearance,
+              secondaryVariant,
+            ),
+          )}
         </div>
         ${
           this.item.configNotes
