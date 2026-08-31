@@ -281,11 +281,16 @@ export async function runPersistedWorkflowScriptWithProgress(
   };
 
   /** Progress-only terminal metadata, read off the snapshot's own record. */
-  const terminalMetadata = (call: WorkflowExecutionCall) => {
+  const terminalMetadata = (
+    call: Extract<
+      WorkflowExecutionCall,
+      { readonly status: 'completed' | 'failed' | 'cancelled' | 'skipped' }
+    >,
+  ) => {
     const model = call.model ?? call.attempts.at(-1)?.model;
     const { startedAt, completedAt } = call.timestamps;
     const durationMs =
-      startedAt !== undefined && completedAt !== undefined
+      startedAt !== undefined
         ? Math.max(0, Date.parse(completedAt) - Date.parse(startedAt))
         : undefined;
     return {
@@ -297,9 +302,9 @@ export async function runPersistedWorkflowScriptWithProgress(
 
   const cardFor = (
     call: WorkflowExecutionCall,
-    status: WorkflowCallProgress['status'],
     snapshot: WorkflowExecutionSnapshot,
   ): WorkflowCallProgress => {
+    const status = projectWorkflowCallStatus(call);
     const phase = stageTitleFor(snapshot, call);
     // The latest attempt describes this card only once it has begun: a
     // re-queued call has not pushed its next attempt yet, and a cached or
@@ -329,8 +334,8 @@ export async function runPersistedWorkflowScriptWithProgress(
       }),
       ...(attemptCounts && { attemptNumber: call.attempts.length }),
     };
-    switch (status) {
-      case 'failed': {
+    switch (call.status) {
+      case WORKFLOW_CALL_STATUS.FAILED: {
         // A sweep-settled call never reached its own settlement: its card
         // carries spend but no model/duration, the same shape the settle
         // sweep emits.
@@ -338,21 +343,38 @@ export async function runPersistedWorkflowScriptWithProgress(
           call.costUsd !== undefined ? { totalCostUsd: call.costUsd } : {};
         return {
           ...identity,
-          status,
-          error: call.error ?? WORKFLOW_CALL_UNFINISHED_NOTE,
+          status: 'failed',
+          error: call.error,
           ...(call.settledBySweep ? spentOnly : terminalMetadata(call)),
         };
       }
-      case 'completed':
-      case 'cancelled':
-        return { ...identity, status, ...terminalMetadata(call) };
-      case 'skipped':
+      case WORKFLOW_CALL_STATUS.COMPLETED:
+        return { ...identity, status: 'completed', ...terminalMetadata(call) };
+      case WORKFLOW_CALL_STATUS.CANCELLED:
+        return { ...identity, status: 'cancelled', ...terminalMetadata(call) };
+      case WORKFLOW_CALL_STATUS.SKIPPED:
         // The sweep settles not-reached plans; a user skip settles itself.
         return call.settledBySweep
-          ? { ...identity, status, reason: 'not-reached' }
-          : { ...identity, status, reason: 'user', ...terminalMetadata(call) };
-      default:
-        return { ...identity, status };
+          ? { ...identity, status: 'skipped', reason: 'not-reached' }
+          : {
+              ...identity,
+              status: 'skipped',
+              reason: 'user',
+              ...terminalMetadata(call),
+            };
+      case WORKFLOW_CALL_STATUS.PLANNED:
+        return {
+          ...identity,
+          status: call.issued === true ? 'planned' : 'declared',
+        };
+      case WORKFLOW_CALL_STATUS.STAGE_BLOCKED:
+        return { ...identity, status: 'declared' };
+      case WORKFLOW_CALL_STATUS.QUEUED:
+        return { ...identity, status: 'queued' };
+      case WORKFLOW_CALL_STATUS.RUNNING:
+        return { ...identity, status: 'running' };
+      case WORKFLOW_CALL_STATUS.CACHED:
+        return { ...identity, status: 'cached' };
     }
   };
 
@@ -490,7 +512,7 @@ export async function runPersistedWorkflowScriptWithProgress(
         if (last && last.status === status && !streamChanged && !factsChanged) {
           continue;
         }
-        const card = cardFor(call, status, snapshot);
+        const card = cardFor(call, snapshot);
         const previousStatus = last?.status;
         emitCall(card);
         if (status === previousStatus) continue;

@@ -604,10 +604,12 @@ export async function runWorkflowScript(
       error: unknown,
       status: WorkflowFailedCallStatus = WORKFLOW_CALL_STATUS.FAILED,
     ): void => {
-      executionState.settleCall(progressId, {
-        status,
-        error: toErrorMessage(error),
-      });
+      executionState.settleCall(
+        progressId,
+        status === WORKFLOW_CALL_STATUS.CANCELLED
+          ? { status }
+          : { status, error: toErrorMessage(error) },
+      );
     };
 
     // Serialize (and round-trip deserialize) a result value for the journal,

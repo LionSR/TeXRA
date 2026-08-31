@@ -43,12 +43,16 @@ type WorkflowExecutionCallStatus = z.infer<
  */
 export type WorkflowControlAction = 'skip' | 'retry';
 
-const WorkflowExecutionTimestampsSchema = z.strictObject({
+const WorkflowExecutionLiveTimestampsSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   startedAt: z.iso.datetime().optional(),
   updatedAt: z.iso.datetime(),
-  completedAt: z.iso.datetime().optional(),
+  completedAt: z.never().optional(),
 });
+const WorkflowExecutionTerminalTimestampsSchema =
+  WorkflowExecutionLiveTimestampsSchema.extend({
+    completedAt: z.iso.datetime(),
+  });
 const WorkflowExecutionStageSchema = z.strictObject({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -82,39 +86,161 @@ export const WorkflowCallFilesSchema = z.strictObject({
   media: z.array(z.string()),
 });
 
-const WorkflowExecutionCallSchema = z.strictObject({
+const WorkflowExecutionCallBaseSchema = z.strictObject({
   id: z.string().min(1),
   label: z.string(),
   stageId: z.string().min(1).optional(),
-  /**
-   * Set the moment the script actually issues `agent()` for this call. A
-   * call without it is a `meta.tasks` plan label the run has not reached —
-   * first-class, so no consumer infers "declared only" from empty files or
-   * an absent agent (both also true of a structured call).
-   */
-  issued: z.literal(true).optional(),
-  /** Result contract of the call; absent until the call is issued. */
-  kind: WorkflowCallKindSchema.optional(),
-  agent: z.string().optional(),
-  /** Declared by the script at issue time, then the host-resolved model. */
-  model: z.string().optional(),
   files: WorkflowCallFilesSchema,
-  childExecutionId: ExecutionIdSchema.optional(),
-  childStreamId: StreamTabIdSchema.optional(),
   attempts: z.array(WorkflowExecutionAttemptSchema),
-  status: WorkflowExecutionCallStatusSchema,
-  /**
-   * The terminal sweep (`finish()`) assigned this call's outcome because the
-   * run ended while the call had not settled itself — not-reached plans and
-   * abandoned live calls. First-class so consumers never infer "swept" from
-   * the human-facing note strings. Absent means the call settled through its
-   * own path.
-   */
-  settledBySweep: z.literal(true).optional(),
-  error: z.string().optional(),
   costUsd: z.number().nonnegative().optional(),
-  timestamps: WorkflowExecutionTimestampsSchema,
+  issued: z.never().optional(),
+  kind: z.never().optional(),
+  agent: z.never().optional(),
+  model: z.never().optional(),
+  childExecutionId: z.never().optional(),
+  childStreamId: z.never().optional(),
+  settledBySweep: z.never().optional(),
+  error: z.never().optional(),
 });
+
+const WorkflowExecutionIssuedCallSchema =
+  WorkflowExecutionCallBaseSchema.extend({
+    /** Older persisted issued calls predate these two explicit markers. */
+    issued: z.literal(true).optional(),
+    kind: WorkflowCallKindSchema.optional(),
+    agent: z.string().optional(),
+    /** Declared by the script at issue time, then the host-resolved model. */
+    model: z.string().optional(),
+    childExecutionId: ExecutionIdSchema.optional(),
+    childStreamId: StreamTabIdSchema.optional(),
+  });
+
+const WorkflowExecutionMaybeIssuedCallSchema =
+  WorkflowExecutionCallBaseSchema.extend({
+    /** Set the moment the script actually issues `agent()` for this call. */
+    issued: z.literal(true).optional(),
+    kind: WorkflowCallKindSchema.optional(),
+    agent: z.string().optional(),
+    /** Declared by the script at issue time, then the host-resolved model. */
+    model: z.string().optional(),
+    childExecutionId: ExecutionIdSchema.optional(),
+    childStreamId: StreamTabIdSchema.optional(),
+  });
+
+const WorkflowExecutionPlannedCallSchema =
+  WorkflowExecutionMaybeIssuedCallSchema.extend({
+    status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
+    timestamps: WorkflowExecutionLiveTimestampsSchema,
+  }).superRefine((call, context) => {
+    if (call.issued === true && call.kind === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['kind'],
+        message: 'An issued workflow call requires kind.',
+      });
+    }
+  });
+
+const WorkflowExecutionSkippedCallSchema =
+  WorkflowExecutionMaybeIssuedCallSchema.extend({
+    status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
+    settledBySweep: z.literal(true).optional(),
+    timestamps: WorkflowExecutionTerminalTimestampsSchema,
+  }).superRefine((call, context) => {
+    if (call.issued === true && call.kind === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['kind'],
+        message: 'An issued workflow call requires kind.',
+      });
+    }
+    const hasLegacyIssuedFacts =
+      call.kind !== undefined ||
+      call.agent !== undefined ||
+      call.model !== undefined ||
+      call.childExecutionId !== undefined ||
+      call.childStreamId !== undefined ||
+      call.attempts.length > 0 ||
+      call.timestamps.startedAt !== undefined;
+    if (
+      call.issued === undefined &&
+      !hasLegacyIssuedFacts &&
+      call.settledBySweep !== true
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['settledBySweep'],
+        message: 'An unissued skipped workflow call must be sweep-settled.',
+      });
+    }
+  });
+
+/**
+ * Canonical persisted state of one workflow-script call. Status owns the
+ * lifecycle metadata it admits; issued invocation facts are a nested variant
+ * only where one status can represent both a declared and an issued call.
+ */
+const WorkflowExecutionCallSchema = z
+  .discriminatedUnion('status', [
+    WorkflowExecutionPlannedCallSchema,
+    WorkflowExecutionCallBaseSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.STAGE_BLOCKED),
+      timestamps: WorkflowExecutionLiveTimestampsSchema,
+    }),
+    WorkflowExecutionIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.QUEUED),
+      timestamps: WorkflowExecutionLiveTimestampsSchema,
+    }),
+    WorkflowExecutionIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.RUNNING),
+      timestamps: WorkflowExecutionLiveTimestampsSchema,
+    }),
+    WorkflowExecutionIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.COMPLETED),
+      timestamps: WorkflowExecutionTerminalTimestampsSchema,
+    }),
+    WorkflowExecutionIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.FAILED),
+      settledBySweep: z.literal(true).optional(),
+      error: z.string(),
+      timestamps: WorkflowExecutionTerminalTimestampsSchema,
+    }),
+    WorkflowExecutionIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.CANCELLED),
+      settledBySweep: z.literal(true).optional(),
+      timestamps: WorkflowExecutionTerminalTimestampsSchema,
+    }),
+    WorkflowExecutionSkippedCallSchema,
+    WorkflowExecutionIssuedCallSchema.extend({
+      status: z.literal(WORKFLOW_CALL_STATUS.CACHED),
+      timestamps: WorkflowExecutionTerminalTimestampsSchema,
+    }),
+  ])
+  .superRefine((call, context) => {
+    for (const [attemptIndex, attempt] of call.attempts.entries()) {
+      if (attempt.number !== attemptIndex + 1) {
+        context.addIssue({
+          code: 'custom',
+          path: ['attempts', attemptIndex, 'number'],
+          message: 'Workflow attempt numbers must be contiguous from 1.',
+        });
+      }
+      if (
+        (attemptIndex < call.attempts.length - 1 ||
+          TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status)) &&
+        attempt.completedAt === undefined
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['attempts', attemptIndex, 'completedAt'],
+          message:
+            attemptIndex < call.attempts.length - 1
+              ? 'A superseded workflow attempt requires completedAt.'
+              : 'A terminal workflow call cannot have an open attempt.',
+        });
+      }
+    }
+  });
 export type WorkflowExecutionCall = z.infer<typeof WorkflowExecutionCallSchema>;
 
 type WorkflowExecutionCounts = Record<WorkflowExecutionCallStatus, number> & {
@@ -246,41 +372,6 @@ export const WorkflowExecutionSnapshotSchema = z
           message: 'A workflow call stage must reference a matching stage.',
         });
       }
-      for (const [attemptIndex, attempt] of call.attempts.entries()) {
-        if (attempt.number !== attemptIndex + 1)
-          context.addIssue({
-            code: 'custom',
-            path: ['calls', index, 'attempts', attemptIndex, 'number'],
-            message: 'Workflow attempt numbers must be contiguous from 1.',
-          });
-        if (
-          attemptIndex < call.attempts.length - 1 &&
-          attempt.completedAt === undefined
-        )
-          context.addIssue({
-            code: 'custom',
-            path: ['calls', index, 'attempts', attemptIndex, 'completedAt'],
-            message: 'A superseded workflow attempt requires completedAt.',
-          });
-      }
-      if (
-        TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status) &&
-        call.timestamps.completedAt === undefined
-      )
-        context.addIssue({
-          code: 'custom',
-          path: ['calls', index, 'timestamps', 'completedAt'],
-          message: 'A terminal workflow call requires completedAt.',
-        });
-      if (
-        TERMINAL_WORKFLOW_CALL_STATUSES.has(call.status) &&
-        call.attempts.some((attempt) => attempt.completedAt === undefined)
-      )
-        context.addIssue({
-          code: 'custom',
-          path: ['calls', index, 'attempts'],
-          message: 'A terminal workflow call cannot have an open attempt.',
-        });
     }
     if (TERMINAL_LIFECYCLES.has(snapshot.lifecycle)) {
       if (snapshot.timestamps.completedAt === undefined)

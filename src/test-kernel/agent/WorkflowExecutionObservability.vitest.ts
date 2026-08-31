@@ -41,6 +41,168 @@ function recordingSnapshots(): {
   };
 }
 
+describe('workflow execution snapshot call schema', () => {
+  const liveTimestamps = {
+    createdAt: '2026-08-30T00:00:00.000Z',
+    updatedAt: '2026-08-30T00:00:00.000Z',
+  };
+  const terminalTimestamps = {
+    ...liveTimestamps,
+    completedAt: '2026-08-30T00:01:00.000Z',
+  };
+  const baseCall = {
+    id: 'call-1',
+    label: 'Call 1',
+    files: { input: [], context: [], media: [] },
+    attempts: [],
+  };
+  const issuedCall = {
+    ...baseCall,
+    issued: true,
+    kind: 'document',
+  };
+  const snapshotWithCall = (call: Record<string, unknown>) => {
+    const terminal = [
+      'completed',
+      'failed',
+      'cancelled',
+      'skipped',
+      'cached',
+    ].includes(String(call.status));
+    return {
+      lifecycle: terminal ? 'completed' : 'active',
+      stages: [],
+      calls: [call],
+      timestamps: terminal ? terminalTimestamps : liveTimestamps,
+    };
+  };
+
+  it.each([
+    [
+      'planned (declared)',
+      { ...baseCall, status: 'planned', timestamps: liveTimestamps },
+    ],
+    [
+      'planned (issued)',
+      { ...issuedCall, status: 'planned', timestamps: liveTimestamps },
+    ],
+    [
+      'planned (persisted before issued markers)',
+      {
+        ...baseCall,
+        status: 'planned',
+        agent: 'writer',
+        timestamps: liveTimestamps,
+      },
+    ],
+    [
+      'stageBlocked',
+      { ...baseCall, status: 'stageBlocked', timestamps: liveTimestamps },
+    ],
+    ['queued', { ...issuedCall, status: 'queued', timestamps: liveTimestamps }],
+    [
+      'queued (persisted before issued markers)',
+      { ...baseCall, status: 'queued', timestamps: liveTimestamps },
+    ],
+    [
+      'running',
+      { ...issuedCall, status: 'running', timestamps: liveTimestamps },
+    ],
+    [
+      'completed',
+      { ...issuedCall, status: 'completed', timestamps: terminalTimestamps },
+    ],
+    [
+      'failed',
+      {
+        ...issuedCall,
+        status: 'failed',
+        error: 'failed',
+        timestamps: terminalTimestamps,
+      },
+    ],
+    [
+      'cancelled',
+      { ...issuedCall, status: 'cancelled', timestamps: terminalTimestamps },
+    ],
+    [
+      'skipped (not reached)',
+      {
+        ...baseCall,
+        status: 'skipped',
+        settledBySweep: true,
+        timestamps: terminalTimestamps,
+      },
+    ],
+    [
+      'skipped (issued)',
+      { ...issuedCall, status: 'skipped', timestamps: terminalTimestamps },
+    ],
+    [
+      'cached',
+      { ...issuedCall, status: 'cached', timestamps: terminalTimestamps },
+    ],
+  ])('parses %s calls', (_name, call) => {
+    expect(
+      WorkflowExecutionSnapshotSchema.safeParse(snapshotWithCall(call)).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    [
+      'error on a completed call',
+      {
+        ...issuedCall,
+        status: 'completed',
+        error: 'not a failure',
+        timestamps: terminalTimestamps,
+      },
+    ],
+    [
+      'completedAt on a running call',
+      { ...issuedCall, status: 'running', timestamps: terminalTimestamps },
+    ],
+    [
+      'missing completedAt on a terminal call',
+      { ...issuedCall, status: 'completed', timestamps: liveTimestamps },
+    ],
+    [
+      'missing error on a failed call',
+      { ...issuedCall, status: 'failed', timestamps: terminalTimestamps },
+    ],
+    [
+      'issued metadata on a stage-blocked call',
+      { ...issuedCall, status: 'stageBlocked', timestamps: liveTimestamps },
+    ],
+    [
+      'unissued skipped call without the sweep marker',
+      { ...baseCall, status: 'skipped', timestamps: terminalTimestamps },
+    ],
+    [
+      'error on a cancelled call',
+      {
+        ...issuedCall,
+        status: 'cancelled',
+        error: 'not a failure',
+        timestamps: terminalTimestamps,
+      },
+    ],
+    [
+      'sweep marker on a completed call',
+      {
+        ...issuedCall,
+        status: 'completed',
+        settledBySweep: true,
+        timestamps: terminalTimestamps,
+      },
+    ],
+  ])('rejects %s', (_name, call) => {
+    expect(
+      WorkflowExecutionSnapshotSchema.safeParse(snapshotWithCall(call)).success,
+    ).toBe(false);
+  });
+});
+
 describe('workflow execution observability', () => {
   it('keeps later tasks stage-blocked, advances stages monotonically, and skips unreached work', async () => {
     const { snapshots, onSnapshot } = recordingSnapshots();
@@ -472,6 +634,7 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
 
     const terminal = finalSnapshot(snapshots);
     expect(terminal.lifecycle).toBe('cancelled');
+    expect(terminal.calls[0]?.error).toBeUndefined();
     const terminalCounts = deriveWorkflowCounts(terminal.calls);
     expect(terminalCounts.cancelled).toBe(1);
     expect(terminalCounts.running + terminalCounts.queued).toBe(0);
