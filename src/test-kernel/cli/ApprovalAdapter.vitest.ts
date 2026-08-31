@@ -156,7 +156,7 @@ const credentialExhaustedRetry: RetryPermission = {
   operation: 'Model request',
   errorMessage: 'HTTP 429 Too Many Requests',
   errorDetails: {
-    exhaustionReason: 'relay-limit',
+    classification: { kind: 'relay-limit' },
     statusCode: 429,
   },
 };
@@ -897,7 +897,7 @@ describe('formatRetryRequestMessage', () => {
     const retry: RetryPermission = {
       ...credentialExhaustedRetry,
       errorDetails: {
-        exhaustionReason: 'kimi-code-subscription',
+        classification: { kind: 'kimi-code-subscription' },
         statusCode: 429,
       },
     };
@@ -918,7 +918,7 @@ describe('formatRetryRequestMessage', () => {
     const retry: RetryPermission = {
       ...credentialExhaustedRetry,
       errorDetails: {
-        exhaustionReason: 'glm-coding-plan',
+        classification: { kind: 'glm-coding-plan' },
         statusCode: 429,
       },
     };

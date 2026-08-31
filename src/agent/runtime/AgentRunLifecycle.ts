@@ -314,10 +314,29 @@ const finalizedRunFailures = new WeakSet<Error>();
 function toFlowFailureError(error: RetryErrorInfo): Error {
   const failure = new Error(error.message);
   attachProviderError(failure, error);
-  // The classifiers for these kinds read Error markers; the flatten carried
-  // the verdicts as fields, so restore the markers on the rebuilt Error.
-  if (error.missingApiKey) attachMissingApiKeyError(failure);
-  if (error.contextWindow) attachContextWindowError(failure);
+  // Restore the typed runtime marker selected by the canonical persisted
+  // classification. Exhaustion kinds need no Error marker: their actionable
+  // route remains on the attached ProviderError.
+  const classificationKind = error.classification?.kind;
+  switch (classificationKind) {
+    case 'missing-api-key':
+      attachMissingApiKeyError(failure);
+      break;
+    case 'context-window':
+      attachContextWindowError(failure);
+      break;
+    case 'relay-limit':
+    case 'upstream-credit':
+    case 'chatgpt-subscription':
+    case 'copilot-subscription':
+    case 'kimi-code-subscription':
+    case 'glm-coding-plan':
+    case 'xai-subscription':
+    case undefined:
+      break;
+    default:
+      classificationKind satisfies never;
+  }
   return failure;
 }
 

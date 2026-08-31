@@ -4,6 +4,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
+  getExhaustionReason,
   isToolUseState,
   type GettingStartedActionDetail,
   type ProgressViewInboundMessage,
@@ -286,7 +287,7 @@ export function handlePermissionAction(
         // Non-terminal: panel stays open. The extension handler will
         // trigger retry on success, or leave the panel for the user
         // to choose Retry/Dismiss if the user cancels the key picker.
-        const exhaustionReason = data.errorDetails?.exhaustionReason;
+        const exhaustionReason = getExhaustionReason(data.errorDetails);
         postMessage(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY, {
           stream: data.streamId,
           requestId: data.requestId,

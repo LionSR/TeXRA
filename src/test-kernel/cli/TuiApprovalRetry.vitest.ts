@@ -208,7 +208,7 @@ function chatGptSubscriptionRetry(streamId: string): RetryPermission {
     errorMessage: message,
     errorDetails: {
       message,
-      exhaustionReason: 'chatgpt-subscription',
+      classification: { kind: 'chatgpt-subscription' },
       provider: 'openai',
     },
   } as RetryPermission;
@@ -226,7 +226,7 @@ function kimiCodeSubscriptionRetry(
     errorMessage: message,
     errorDetails: {
       message,
-      exhaustionReason: 'kimi-code-subscription',
+      classification: { kind: 'kimi-code-subscription' },
       provider: 'moonshot',
     },
   } as RetryPermission;
@@ -241,7 +241,7 @@ function glmCodingPlanRetry(streamId: string): RetryPermission {
     errorMessage: message,
     errorDetails: {
       message,
-      exhaustionReason: 'glm-coding-plan',
+      classification: { kind: 'glm-coding-plan' },
       provider: 'glm',
     },
   } as RetryPermission;
@@ -730,7 +730,7 @@ describe('TUI retry approvals', () => {
       errorMessage: 'ChatGPT subscription usage limit reached.',
       errorDetails: {
         message: 'ChatGPT subscription usage limit reached.',
-        exhaustionReason: 'chatgpt-subscription',
+        classification: { kind: 'chatgpt-subscription' },
       },
     } as RetryPermission);
 
@@ -779,7 +779,7 @@ describe('TUI retry approvals', () => {
       errorMessage: 'ChatGPT subscription usage limit reached.',
       errorDetails: {
         message: 'ChatGPT subscription usage limit reached.',
-        exhaustionReason: 'chatgpt-subscription',
+        classification: { kind: 'chatgpt-subscription' },
         provider: 'custom-provider',
       },
     } as RetryPermission;

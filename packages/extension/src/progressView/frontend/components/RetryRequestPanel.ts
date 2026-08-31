@@ -18,6 +18,7 @@ import {
 
 // Local imports - shared schemas
 import {
+  getExhaustionReason,
   isCredentialExhausted,
   type ProviderErrorPartial,
 } from '@shared/schemas';
@@ -65,7 +66,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     const data = this.permission.data;
     const canUseOwnApiKey = this.canUseOwnApiKey();
     const copilotQuotaExhausted =
-      data.errorDetails?.exhaustionReason === 'copilot-subscription';
+      getExhaustionReason(data.errorDetails) === 'copilot-subscription';
     const userRetryable = data.errorDetails?.userRetryable !== false;
     const metaParts: MetaPart[] = [
       ...(data.model ? [`Model: ${data.model}`] : []),
@@ -151,7 +152,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
       isCredentialExhausted(data.errorDetails) &&
       !isKimiCodeSubscriptionRetryBlocked(
         data.model,
-        data.errorDetails?.exhaustionReason,
+        getExhaustionReason(data.errorDetails),
       )
     );
   }

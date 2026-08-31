@@ -87,7 +87,7 @@ describe('formatProviderHttpError for Kimi Code subscription limits', () => {
 
     const providerError = formatProviderHttpError(error);
 
-    expect(providerError.exhaustionReason).toBe('kimi-code-subscription');
+    expect(providerError.classification?.kind).toBe('kimi-code-subscription');
     // The stored Moonshot key is NOT the broken credential, so no key change
     // is forced (that reason is reserved for upstream credit depletion).
     expect(providerError.userRetryable).toBe(true);
@@ -109,6 +109,8 @@ describe('formatProviderHttpError for Kimi Code subscription limits', () => {
 
     const providerError = formatProviderHttpError(error);
 
-    expect(providerError.exhaustionReason).not.toBe('kimi-code-subscription');
+    expect(providerError.classification?.kind).not.toBe(
+      'kimi-code-subscription',
+    );
   });
 });

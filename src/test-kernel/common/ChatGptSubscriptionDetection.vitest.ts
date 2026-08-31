@@ -51,7 +51,7 @@ describe('formatProviderHttpError for ChatGPT subscription limits', () => {
   it('classifies a usage-limit error as a switchable credential exhaustion', () => {
     const providerError = formatProviderHttpError(codexError(USAGE_LIMIT_BODY));
 
-    expect(providerError.exhaustionReason).toBe('chatgpt-subscription');
+    expect(providerError.classification?.kind).toBe('chatgpt-subscription');
     // The stored OpenAI key is NOT the broken credential, so no key change is
     // forced (that reason is reserved for upstream credit depletion).
     expect(providerError.userRetryable).toBe(true);

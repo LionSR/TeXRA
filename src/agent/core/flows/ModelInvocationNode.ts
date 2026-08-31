@@ -26,10 +26,7 @@ import type {
   ModelCredentialSelection,
 } from '@agent/types/ModelHandlerContracts';
 import { createKimiCodeFallbackHandler } from '@agent/runtime/ModelFactory';
-import {
-  hasContextWindowErrorMarker,
-  hasMissingApiKeyErrorMarker,
-} from '@common/errors/sdkError/errorMetadata';
+import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   classifyModelRouteFailure,
@@ -640,11 +637,6 @@ export class ModelInvocationNode<
     return {
       kind: 'failed',
       ...toRetryErrorInfo(formatted),
-      // The markers ride the Error, not the formatted record; stamp them here
-      // so the flow-exit classifier can still see them (the carried-error
-      // exit rebuilds a bare Error in toFlowFailureError).
-      ...(hasMissingApiKeyErrorMarker(error) ? { missingApiKey: true } : {}),
-      ...(hasContextWindowErrorMarker(error) ? { contextWindow: true } : {}),
     };
   }
 

@@ -292,7 +292,7 @@ describe('OpenAI-compatible provider request params', () => {
     expect('request' in thrown).toBe(false);
 
     const formatted = formatProviderHttpError(thrown);
-    expect(formatted.exhaustionReason).toBe('kimi-code-subscription');
+    expect(formatted.classification?.kind).toBe('kimi-code-subscription');
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -338,7 +338,7 @@ describe('OpenAI-compatible provider request params', () => {
     ).rejects.toBe(thrown);
 
     const formatted = formatProviderHttpError(thrown);
-    expect(formatted.exhaustionReason).toBe('kimi-code-subscription');
+    expect(formatted.classification?.kind).toBe('kimi-code-subscription');
     expect(formatted.userRetryable).toBe(true);
   });
 
