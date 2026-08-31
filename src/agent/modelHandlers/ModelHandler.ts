@@ -630,13 +630,23 @@ export abstract class ModelHandler<
     if (this.lastAttemptUsageRoute !== undefined) {
       return this.lastAttemptUsageRoute;
     }
-    // OpenRouter billing rolls up under the direct API-key tag; the
-    // subscription route names are already valid usage tags, and a new
-    // credential route fails to compile here until it picks its own tag.
-    if (this.lastAttemptCredentialRoute === 'openrouter') {
-      return 'api-key';
+    const route = this.lastAttemptCredentialRoute;
+    switch (route) {
+      case 'chatgpt-subscription':
+        return 'chatgpt-subscription';
+      case 'xai-subscription':
+        return 'xai-subscription';
+      case 'api-key':
+      case 'openrouter':
+        return 'api-key';
+      case undefined:
+        return undefined;
+      default:
+        // A new route must pick its own usage tag here: untagged usage is
+        // dropped silently by the caller rather than reported.
+        route satisfies never;
+        return undefined;
     }
-    return this.lastAttemptCredentialRoute;
   }
 
   /**
