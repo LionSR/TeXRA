@@ -96,7 +96,9 @@ export class SettingsViewProvider extends BaseWebviewProvider {
       );
     }
 
-    if (tab != null) {
+    // this._view can be undefined here: the awaited sendAllData above yields,
+    // and disposing the dashboard panel during that await runs cleanupView.
+    if (tab != null && this._view) {
       await this._view.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_TAB,
         tab,
