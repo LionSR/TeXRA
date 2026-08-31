@@ -34,7 +34,7 @@ export async function applyCliProviderApiKey(
   const codingPlan = codingPlanForApiProvider(provider);
   if (!codingPlan) return undefined;
   if (!codingPlan.exclusiveCredential) {
-    return `Tip: this key uses ${codingPlan.retryFallbackName} by default; enable '${codingPlan.preferenceLabel}' with \`/api ${codingPlan.cliProvider}\` or in \`/config\` to use ${codingPlan.displayName}.`;
+    return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' with \`/api ${codingPlan.cliProvider}\` or in \`/config\` to use ${codingPlan.displayName}.`;
   }
   // The coding-only models route through the subscription automatically;
   // dual-backend K3 needs the opt-in switch, which is only discoverable if
