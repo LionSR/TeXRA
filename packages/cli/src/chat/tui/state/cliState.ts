@@ -116,6 +116,10 @@ export interface TranscriptFoldState {
   workflowAttemptId?: string;
   /** The newest valid `workflowPlan` marker folded so far (last wins). */
   workflowPlan?: WorkflowPlanMarker;
+  /** Current-plan task ids known to have issued before transcript eviction.
+   *  Bounded by the already-retained plan, this keeps compact popup fallback
+   *  from reviving cutoff tasks as declared while the full log reloads. */
+  retainedWorkflowIssuedTaskIds?: ReadonlySet<string>;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
