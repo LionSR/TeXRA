@@ -58,12 +58,12 @@ interface ExecutionStopOptions {
 }
 
 /**
- * A child loop's lineage for the loop's whole life: from the synchronous start
- * of the loop, across every turn handle it tracks and untracks, until its
- * final result has been delivered to the parent. The parent counts it as an
- * active child throughout, so the parent's continuation stays recoverable
- * until the last delivery has landed and a child result can never arrive
- * after the parent's queue went terminal.
+ * A native child loop's lineage for the loop's whole life: from the
+ * synchronous start of the loop, across every turn handle it tracks and
+ * untracks, until its final result has been delivered to the parent. The
+ * parent counts it as an active child throughout, so the parent's continuation
+ * stays recoverable until the last delivery has landed. Child-stream loops use
+ * their persistent execution handle for lineage instead.
  */
 export interface ChildExecutionActivation {
   readonly executionId: ExecutionId;
@@ -529,13 +529,18 @@ export class ExecutionRegistry {
    */
   getToolUseFollowUpTarget(streamId: StreamTabId): ToolUseFollowUpTarget {
     const status = this.streamStatus.get(streamId);
-    const hasActiveChildren = this.hasActiveChildren(streamId);
 
     if (status !== undefined && !isInFlightPhase(status)) {
-      if (hasActiveChildren) return { kind: 'queue' };
+      // Only a native child's explicit delivery reservation can retain a
+      // terminal parent's continuation. A child-stream handle is lifecycle
+      // ownership, not authority to revive a parent that already finished.
+      for (const activation of this.activeChildActivations(streamId)) {
+        return { kind: 'queue' };
+      }
       return { kind: 'no_session', streamStatus: status };
     }
 
+    const hasActiveChildren = this.hasActiveChildren(streamId);
     const context = this.getToolUseFlowContext(streamId);
     if (context) return { kind: 'active', context };
 
@@ -772,8 +777,8 @@ export class ExecutionRegistry {
   }
 
   /**
-   * Retain a child loop's lineage until the returned disposer runs, which the
-   * loop does only after its final delivery to the parent.
+   * Retain a native child loop's lineage until the returned disposer runs,
+   * which the loop does only after its final delivery to the parent.
    */
   reserveChildActivation(activation: ChildExecutionActivation): () => void {
     this.assertActive();

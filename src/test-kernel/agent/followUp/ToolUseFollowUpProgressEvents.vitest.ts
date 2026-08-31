@@ -235,33 +235,4 @@ describe('tool-use follow-up progress events', () => {
       defaultSession().followUps.terminalize(resumingStreamId);
     }
   });
-
-  it('keeps terminal parents with active children on the children-running queue path', async () => {
-    const parentStreamId = 'stream:terminal-parent' as StreamTabId;
-    const childStreamId = 'stream:terminal-parent-child' as StreamTabId;
-    const executionId = 'exec-terminal-parent-child';
-    const handle = testExecutionHandle({
-      executionId,
-      parentStreamId,
-      childStreamId,
-      agent: 'critic',
-    });
-
-    seedStreamStatusForTest(defaultSession().status, parentStreamId, {
-      phase: STREAM_PHASE.COMPLETED,
-    });
-    defaultSession().executions.track(handle);
-
-    try {
-      const result = await submitFollowUp(parentStreamId, 'continue child');
-
-      expect(result).toEqual({ status: 'queued', wake: 'failed' });
-      expect(defaultSession().followUps.getAll(parentStreamId)).toEqual([
-        'continue child',
-      ]);
-    } finally {
-      defaultSession().executions.untrack(executionId);
-      defaultSession().followUps.terminalize(parentStreamId);
-    }
-  });
 });
