@@ -81,14 +81,6 @@ interface PhaseStage {
   failed: boolean;
 }
 
-/** One call as the projection last emitted it — exactly the card the
- *  transcript holds under `logId`, so a later emission (the fold's diff,
- *  the finally sweep) starts from what the reader already sees. */
-interface ProjectedWorkflowCall {
-  readonly logId: string;
-  card: WorkflowCallProgress;
-}
-
 function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   const result = AgentFinalResultSchema.safeParse(entry.result);
   if (!result.success) {
@@ -191,7 +183,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   const projectionId = generateShortId();
   const projectedCalls = new Map<
     WorkflowCallProgress['id'],
-    ProjectedWorkflowCall
+    WorkflowCallProgress
   >();
   // The engine terminalizes and flushes its snapshot before returning or
   // rethrowing, so the last one published is its final account of every call —
@@ -252,17 +244,11 @@ export async function runPersistedWorkflowScriptWithProgress(
    */
   const emitCall = (call: WorkflowCallProgress): void => {
     const card: WorkflowCallProgress = { ...call, attemptId: projectionId };
-    let projected = projectedCalls.get(call.id);
-    if (projected) {
-      projected.card = card;
-    } else {
-      // Stable trace identity for this call within its run stream.
-      projected = { logId: `workflow-task-${projectionId}-${call.id}`, card };
-      projectedCalls.set(call.id, projected);
-    }
+    projectedCalls.set(call.id, card);
     trace.emit({
       type: 'workflow.call',
-      logId: projected.logId,
+      // Stable trace identity for this call within its run stream.
+      logId: `workflow-task-${projectionId}-${call.id}`,
       call: card,
       stageId:
         card.phase === undefined
@@ -316,6 +302,20 @@ export async function runPersistedWorkflowScriptWithProgress(
         status === 'failed' ||
         status === 'cancelled' ||
         (status === 'skipped' && !call.settledBySweep));
+    const hasInvocationFacts =
+      call.kind !== undefined ||
+      call.agent !== undefined ||
+      call.model !== undefined ||
+      call.childExecutionId !== undefined ||
+      call.childStreamId !== undefined ||
+      call.attempts.length > 0 ||
+      call.timestamps.startedAt !== undefined;
+    const includeFiles =
+      call.issued === true ||
+      (call.status !== WORKFLOW_CALL_STATUS.PLANNED &&
+        call.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED &&
+        call.status !== WORKFLOW_CALL_STATUS.SKIPPED) ||
+      hasInvocationFacts;
     const identity = {
       id: call.id,
       label: call.label,
@@ -323,15 +323,12 @@ export async function runPersistedWorkflowScriptWithProgress(
       ...(call.childStreamId !== undefined
         ? { childStreamId: call.childStreamId }
         : {}),
-      // The invocation facts a card carries once the script has issued the
-      // call, read from the snapshot call — the one owner — so a declared stub
-      // never looks like a resolved call.
-      ...(call.issued && {
-        ...(call.kind !== undefined && { kind: call.kind }),
-        ...(call.agent !== undefined && { agent: call.agent }),
-        ...(call.model !== undefined && { model: call.model }),
-        files: call.files,
-      }),
+      // Project only invocation facts the snapshot owns. Historical issued
+      // calls may carry any subset and predate both explicit markers.
+      ...(call.kind !== undefined && { kind: call.kind }),
+      ...(call.agent !== undefined && { agent: call.agent }),
+      ...(call.model !== undefined && { model: call.model }),
+      ...(includeFiles && { files: call.files }),
       ...(attemptCounts && { attemptNumber: call.attempts.length }),
     };
     switch (call.status) {
@@ -472,11 +469,11 @@ export async function runPersistedWorkflowScriptWithProgress(
         if (stage.lifecycle === 'active') currentPhase = stage.title;
       }
       for (const call of snapshot.calls) {
-        const projected = projectedCalls.get(call.id);
+        const last = projectedCalls.get(call.id);
         // A retry re-queues a running call; the card follows it to `queued`
         // because that wait is real when another call took the freed slot.
         const status = projectWorkflowCallStatus(call);
-        const baseline = projected ? undefined : hydratedBaseline.get(call.id);
+        const baseline = last ? undefined : hydratedBaseline.get(call.id);
         if (baseline !== undefined) {
           // A reset historical call is current only once `issueCall` stamps
           // it issued by this attempt (hydration clears the stamp), which
@@ -500,7 +497,6 @@ export async function runPersistedWorkflowScriptWithProgress(
         // stage loop above opens for them. A card whose group does not exist
         // yet is thereby unrepresentable.
         if (call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED) continue;
-        const last = projected?.card;
         const streamChanged =
           call.childStreamId !== undefined &&
           last?.childStreamId !== call.childStreamId;
@@ -601,7 +597,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       fold(lastSnapshot);
     }
     closed = true;
-    for (const { card } of projectedCalls.values()) {
+    for (const card of projectedCalls.values()) {
       if (isTerminalWorkflowCallProgress(card)) continue;
       // Open the declared phase the run never reached so the settled card
       // still lands under a header; the loop below then closes it. The card
