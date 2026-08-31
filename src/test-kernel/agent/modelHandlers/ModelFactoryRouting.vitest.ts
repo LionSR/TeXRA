@@ -10,6 +10,7 @@ import {
 } from 'llm-zoo';
 
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
@@ -34,6 +35,11 @@ import {
 } from '@auth/codex';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
+import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import {
+  computeModelOptionsData,
+  invalidateModelOptionsCache,
+} from '@model/computeModelOptions';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {
   invalidateRuntimeModelRegistry,
@@ -339,6 +345,79 @@ describe('Copilot route preference on a canonical base model', () => {
         );
       },
     );
+  });
+});
+
+describe('GLM custom endpoint routing', () => {
+  afterEach(() => {
+    delete MODEL_CONFIGS.glm52.baseUrl;
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+  });
+
+  it('keeps dispatch, availability, and credentials on the model custom route when OpenRouter is enabled', async () => {
+    MODEL_CONFIGS.glm52.baseUrl = 'https://model.test/v4';
+    await installPlatform({
+      globalState: { 'texra.useOpenRouter': true },
+      secrets: {
+        [apiKeySecretName('glm')]: 'glm-key',
+        [apiKeySecretName('openRouter')]: 'openrouter-key',
+      },
+    });
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+
+    const [access] = await computeModelOptionsData(['glm52']);
+    const handler = await createModelHandler(MODEL_CONFIGS.glm52);
+    try {
+      const credential = await (
+        handler as unknown as {
+          resolveClientCredential(): Promise<ResolvedClientCredential>;
+        }
+      ).resolveClientCredential();
+
+      expect(handler.constructor.name).toBe('ModelHandlerGLM');
+      expect(access?.availability).toBe('provider-key');
+      expect(credential).toMatchObject({
+        route: 'api-key',
+        baseUrl: 'https://model.test/v4',
+      });
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('does not advertise OpenRouter for a model-custom route without a GLM key', async () => {
+    MODEL_CONFIGS.glm52.baseUrl = 'https://model.test/v4';
+    await installPlatform({
+      globalState: { 'texra.useOpenRouter': true },
+      secrets: {
+        [apiKeySecretName('openRouter')]: 'openrouter-key',
+      },
+    });
+    invalidateApiKeyCache();
+    invalidateModelOptionsCache();
+
+    const [customAccess] = await computeModelOptionsData(['glm52']);
+    const handler = await createModelHandler(MODEL_CONFIGS.glm52);
+    try {
+      expect(handler.constructor.name).toBe('ModelHandlerGLM');
+      expect(customAccess).toMatchObject({
+        availability: 'missing-key',
+        disabled: true,
+      });
+    } finally {
+      handler.dispose();
+    }
+
+    delete MODEL_CONFIGS.glm52.baseUrl;
+    invalidateModelOptionsCache();
+
+    const [openRouterAccess] = await computeModelOptionsData(['glm52']);
+    expect(openRouterAccess).toMatchObject({
+      availability: 'openrouter-key',
+      disabled: false,
+    });
   });
 });
 

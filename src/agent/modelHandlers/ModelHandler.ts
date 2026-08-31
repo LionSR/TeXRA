@@ -539,7 +539,12 @@ export abstract class ModelHandler<
    */
   private buildProxyConfig(useOpenRouter: boolean): ProxyConfig {
     if (this.config.baseUrl) {
-      return { route: 'custom', url: this.config.baseUrl, logger: this.logger };
+      return {
+        route: 'custom',
+        provider: this.config.provider,
+        url: this.config.baseUrl,
+        logger: this.logger,
+      };
     }
     return {
       route: 'direct',

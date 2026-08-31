@@ -17,6 +17,8 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 
 const getGLMCodingPlanMock = vi.hoisted(() => vi.fn());
+const getProviderEndpointMock = vi.hoisted(() => vi.fn());
+const getUseOpenRouterMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: vi.fn(),
@@ -24,6 +26,9 @@ vi.mock('@model/computeModelOptions', () => ({
 
 vi.mock('@utils/config/providerConfig', () => ({
   getGLMCodingPlan: getGLMCodingPlanMock,
+  getProviderEndpoint: getProviderEndpointMock,
+  getUseOpenRouter: getUseOpenRouterMock,
+  useChinaRegion: vi.fn(() => true),
 }));
 
 vi.mock('llm-zoo', async (importOriginal) => {
@@ -36,6 +41,10 @@ vi.mock('llm-zoo', async (importOriginal) => {
       userFacingFixture: {
         fullName: 'user-facing-fixture',
         label: 'User Facing Fixture',
+      },
+      glmCustomFixture: {
+        ...actual.MODEL_CONFIGS.glm52,
+        baseUrl: 'https://model.test/v4',
       },
     },
   };
@@ -125,6 +134,9 @@ function expectModelOptionsRequested(models: string[]): void {
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     computeModelOptionsDataMock.mockReset();
+    getGLMCodingPlanMock.mockReturnValue(false);
+    getProviderEndpointMock.mockReturnValue('');
+    getUseOpenRouterMock.mockReturnValue(false);
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -270,6 +282,33 @@ describe('CLI model access resolution', () => {
       expected: 'api: GLM Coding Plan',
     },
     {
+      name: 'keeps the plain api status for a custom GLM provider endpoint',
+      entry: model('glm52', {
+        model: modelOption('glm52', {
+          availability: 'provider-key',
+          provider: 'glm',
+        }),
+        status: 'api key set',
+      }),
+      codingPlan: true,
+      providerEndpoint: 'proxy.test/api/paas/v4',
+      expected: 'api: api key set',
+    },
+    {
+      name: 'keeps the plain api status for a model custom GLM endpoint',
+      entry: model('glmCustomFixture', {
+        model: modelOption('glmCustomFixture', {
+          availability: 'provider-key',
+          provider: 'glm',
+        }),
+        status: 'api key set',
+      }),
+      codingPlan: true,
+      providerEndpoint: 'proxy.test/api/paas/v4',
+      useOpenRouter: true,
+      expected: 'api: api key set',
+    },
+    {
       name: 'keeps the plain api status for GLM provider-key rows when the toggle is off',
       entry: model('glm52', {
         model: modelOption('glm52', {
@@ -282,7 +321,7 @@ describe('CLI model access resolution', () => {
       expected: 'api: api key set',
     },
     {
-      name: 'never claims GLM Coding Plan for an OpenRouter-routed GLM row',
+      name: 'preserves an OpenRouter fallback row when the global toggle is off',
       entry: model('glm52', {
         model: modelOption('glm52', {
           availability: 'openrouter-key',
@@ -293,11 +332,26 @@ describe('CLI model access resolution', () => {
       codingPlan: true,
       expected: 'api: openrouter key',
     },
+    {
+      name: 'never claims GLM Coding Plan for an OpenRouter-routed GLM row',
+      entry: model('glm52', {
+        model: modelOption('glm52', {
+          availability: 'openrouter-key',
+          provider: 'glm',
+        }),
+        status: 'openrouter key',
+      }),
+      codingPlan: true,
+      useOpenRouter: true,
+      expected: 'api: openrouter key',
+    },
   ])(
     'formats model picker status: $name',
-    ({ entry, expected, codingPlan }) => {
+    ({ entry, expected, codingPlan, providerEndpoint, useOpenRouter }) => {
       if (codingPlan !== undefined)
         getGLMCodingPlanMock.mockReturnValue(codingPlan);
+      getProviderEndpointMock.mockReturnValue(providerEndpoint ?? '');
+      getUseOpenRouterMock.mockReturnValue(useOpenRouter ?? false);
       expect(formatModelStatusForCli(entry)).toBe(expected);
     },
   );

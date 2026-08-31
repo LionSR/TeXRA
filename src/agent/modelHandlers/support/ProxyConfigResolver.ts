@@ -1,29 +1,18 @@
 import { ModelProvider } from 'llm-zoo';
+import { resolveGlmRoute } from '@model/glmRouting';
+import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
+import { normalizeProviderEndpoint } from '@model/providerEndpoint';
 import {
   shouldRouteModelThroughOpenRouter,
   type ModelRoutingConfig,
 } from '@model/openRouterRouting';
-import { tryParseUrl } from '@utils/core';
 import {
   getProviderEndpoint,
   useChinaRegion,
-  getGLMCodingPlan,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
 // Custom endpoints use the provider state written by the Models view.
-
-export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-
-/** Normalize a URL-like string to `host/path` form (no protocol, no trailing slashes). */
-function normalizeUrl(input: string): string {
-  if (!input) return '';
-
-  const withProtocol = input.includes('://') ? input : `https://${input}`;
-  const parsed = tryParseUrl(withProtocol);
-  if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
-}
 
 /**
  * Provider default base URLs. Providers whose endpoint depends on the
@@ -76,7 +65,12 @@ type ProxyLogger = { debug: (message: string) => void };
  * fact every call site already knows.
  */
 export type ProxyConfig =
-  | { route: 'custom'; url: string; logger?: ProxyLogger }
+  | {
+      route: 'custom';
+      provider: ModelProvider;
+      url: string;
+      logger?: ProxyLogger;
+    }
   | {
       route: 'direct';
       provider: ModelProvider;
@@ -116,9 +110,17 @@ export function resolveProxyEndpoint(config: ProxyConfig): {
 } {
   switch (config.route) {
     // Per-model custom base URL (e.g., temporary endpoints).
-    case 'custom':
+    case 'custom': {
       config.logger?.debug(`Using custom base URL for model: ${config.url}`);
+      if (config.provider === ModelProvider.GLM) {
+        const route = resolveGlmRoute({
+          baseUrl: config.url,
+          useOpenRouter: false,
+        });
+        return { baseUrl: route.baseUrl };
+      }
       return { baseUrl: config.url };
+    }
 
     case 'direct':
       return resolveDirectEndpoint(config);
@@ -140,23 +142,26 @@ function resolveDirectEndpoint(config: {
 } {
   const { provider, useOpenRouter, logger } = config;
 
+  if (provider === ModelProvider.GLM) {
+    const route = resolveGlmRoute({ useOpenRouter });
+    if (route.route === 'provider-custom') {
+      logger?.debug(`Using custom base URL for ${provider}: ${route.baseUrl}`);
+    }
+    return {
+      baseUrl: route.baseUrl,
+      ...(route.route === 'official-coding-plan' && {
+        usageRoute: route.usageRoute,
+      }),
+    };
+  }
+
   if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
 
   // Per-provider custom endpoint from dashboard settings (global state)
   const customUrl = getProviderEndpoint(provider);
   if (customUrl) {
     logger?.debug(`Using custom base URL for ${provider}: ${customUrl}`);
-    return { baseUrl: `https://${normalizeUrl(customUrl)}` };
-  }
-
-  if (provider === ModelProvider.GLM) {
-    const codingPlan = getGLMCodingPlan();
-    return {
-      baseUrl: `https://${useChinaRegion('glm') ? 'open.bigmodel.cn' : 'api.z.ai'}${codingPlan ? '/api/coding/paas/v4' : '/api/paas/v4'}`,
-      ...(codingPlan && {
-        usageRoute: 'glm-coding-plan-subscription' as const,
-      }),
-    };
+    return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
   }
 
   const baseUrl = BASE_URLS[provider];

@@ -1,11 +1,12 @@
+import { ModelProvider, type ModelConfig } from 'llm-zoo';
+
+import { resolveGlmRoute } from '@model/glmRouting';
 import {
   isKimiCodeExclusiveModel,
   type KimiSubscriptionModelFields,
 } from '@shared/model/kimiCodeRetryGate';
 
 import { isApiProvider, type ApiProvider } from './apiProviders';
-
-import type { ModelConfig } from 'llm-zoo';
 
 /**
  * A {@link ModelConfig} carrying TeXRA's own runtime-only routing override.
@@ -56,10 +57,11 @@ export function isOpenRouterRoutingUnsupported(
   config: ModelRoutingConfig,
   useOpenRouter: boolean,
 ): boolean {
-  return (
-    isOpenRouterAccessSelected(config, useOpenRouter) &&
-    config.capabilities?.reasoningMode !== undefined
-  );
+  const openRouterSelected =
+    config.provider === ModelProvider.GLM
+      ? shouldRouteModelThroughOpenRouter(config, useOpenRouter)
+      : isOpenRouterAccessSelected(config, useOpenRouter);
+  return openRouterSelected && config.capabilities?.reasoningMode !== undefined;
 }
 
 /** API-key owner for the route ModelFactory will use for this model. */
@@ -96,5 +98,12 @@ export function shouldRouteModelThroughOpenRouter(
   useOpenRouter: boolean,
 ): boolean {
   if (config.requiresResponsesAPI) return false;
-  return isOpenRouterAccessSelected(config, useOpenRouter);
+  const openRouterSelected = isOpenRouterAccessSelected(config, useOpenRouter);
+  if (config.provider !== ModelProvider.GLM) return openRouterSelected;
+  return (
+    resolveGlmRoute({
+      baseUrl: config.baseUrl,
+      useOpenRouter: openRouterSelected,
+    }).route === 'openrouter'
+  );
 }

@@ -1,5 +1,8 @@
 // Local imports
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { resolveGlmRoute } from '@model/glmRouting';
+import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   decideRunModel,
   type RunModelCandidate,
@@ -8,7 +11,7 @@ import {
 import type { ModelOptionData } from '@shared/schemas';
 import { isModelOptionAvailable } from '@shared/schemas';
 import { assertNever, unique } from '@utils/core';
-import { getGLMCodingPlan } from '@utils/config/providerConfig';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
@@ -126,16 +129,23 @@ function formatModelAccessStatus(model: ModelOptionData): string {
 
 export function formatModelStatusForCli(model: CliModelAccess): string {
   if (model.model.provider === 'kimiCode') return 'api: Kimi Code subscription';
-  // GLM models route through the Coding Plan endpoint when the toggle is on.
-  // Gate on the resolved provider-key route (not just provider + toggle): the
-  // coding-plan path only applies to the direct GLM endpoint, never to an
-  // OpenRouter route, which stays reported as its own key status.
   if (
     model.model.provider === 'glm' &&
-    model.model.availability === 'provider-key' &&
-    getGLMCodingPlan()
+    model.model.availability === 'provider-key'
   ) {
-    return 'api: GLM Coding Plan';
+    const config = getRuntimeModelConfig(model.model.value);
+    if (config) {
+      const route = resolveGlmRoute({
+        baseUrl: config.baseUrl,
+        useOpenRouter: shouldRouteModelThroughOpenRouter(
+          config,
+          getUseOpenRouter(),
+        ),
+      });
+      if (route.route === 'official-coding-plan') {
+        return 'api: GLM Coding Plan';
+      }
+    }
   }
   return `api: ${model.status}`;
 }
