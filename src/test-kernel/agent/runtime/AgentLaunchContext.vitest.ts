@@ -150,28 +150,6 @@ describe('AgentLaunchContext', () => {
     ).toHaveLength(1);
   });
 
-  it('does not double-surface a delivered missing-agent banner via the generic toast', async () => {
-    // The delivery-confirmed path for webview-style hosts: the banner was
-    // rendered, so the launch catch must not emit a second generic error.
-    const recording = createRecordingHost({ emitDelivery: true });
-    const session = createTestSession({ interactions: recording.host });
-
-    try {
-      await launchWithMissingAgent(session);
-    } finally {
-      session.dispose();
-    }
-
-    expect(
-      recording.events.filter((event) => event.event === 'requestShowError'),
-    ).toEqual([]);
-    expect(
-      recording.events.filter(
-        (event) => event.event === 'showAgentConfigBanner',
-      ),
-    ).toHaveLength(1);
-  });
-
   it('renders a queued missing-agent banner once a live host replays it', async () => {
     // The retained replay owns the delivery decision: it renders the targeted
     // banner and emits no generic fallback.

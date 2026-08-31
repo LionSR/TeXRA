@@ -62,7 +62,7 @@ const PromptStringSchema = z.string().refine((value) => value.trim() !== '', {
 // settings) that this loader does not consume. The prompts block is strict so
 // a misspelled key (e.g. `retryPromt`) fails the load instead of being
 // stripped and silently replaced by the built-in fallback.
-export const ParsedCreatorYamlSchema = z.object({
+const ParsedCreatorYamlSchema = z.object({
   prompts: z.strictObject({
     systemPrompt: PromptStringSchema,
     userRequest: PromptStringSchema,
