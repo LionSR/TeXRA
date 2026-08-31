@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { AgentCategorySchema } from './agent';
 import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { RunIdentitySchema } from './runIdentity';
-import { WorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
+import { PersistedWorkflowExecutionSnapshotSchema } from './workflowExecutionSnapshot';
 
 /**
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
@@ -106,7 +106,7 @@ export const ExecutionMetaCoreSchema = z.object({
 /** Execution metadata stored alongside config at launch time. */
 export const ExecutionMetaSchema = ExecutionMetaCoreSchema.extend({
   /** Canonical execution state for a detached workflow run. */
-  workflow: WorkflowExecutionSnapshotSchema.optional(),
+  workflow: PersistedWorkflowExecutionSnapshotSchema.optional(),
 });
 
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;

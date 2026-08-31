@@ -8,6 +8,7 @@ import {
 import {
   clearStoreCache,
   getExecutionStore,
+  writeWorkflowExecutionSnapshot,
   type ExecutionKVStore,
 } from '@agent/storage';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
@@ -83,6 +84,153 @@ describe('workflow-script persistence', () => {
       journal: [{ result: 'result:first' }, { result: 'result:second' }],
     });
     expect(restartedRunner).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['live queued', 'active', 'queued', false],
+    ['terminal completed', 'completed', 'completed', true],
+  ] as const)(
+    'reads a marker-free historical %s call',
+    async (_name, lifecycle, status, terminal) => {
+      const store = getExecutionStore(executionId);
+      const timestamp = '2026-08-30T00:00:00.000Z';
+      const timestamps = {
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        ...(terminal && { completedAt: timestamp }),
+      };
+      await store.write('meta', {
+        timestamp,
+        workflow: {
+          lifecycle,
+          stages: [],
+          calls: [
+            {
+              id: 'historical-call',
+              label: 'Historical call',
+              agent: 'legacy-agent',
+              files: { input: [], context: [], media: [] },
+              attempts: [],
+              status,
+              timestamps,
+            },
+          ],
+          timestamps,
+        },
+      });
+
+      await expect(store.readMetaStrict()).resolves.toMatchObject({
+        workflow: { calls: [{ status }] },
+      });
+    },
+  );
+
+  it.each([
+    ['explicit issue without kind', { issued: true, kind: undefined }],
+    [
+      'live call with completedAt',
+      {
+        status: 'running',
+        timestamps: {
+          createdAt: '2026-08-30T00:00:00.000Z',
+          updatedAt: '2026-08-30T00:00:00.000Z',
+          completedAt: '2026-08-30T00:00:00.000Z',
+        },
+      },
+    ],
+    ['completed call with error', { error: 'not a failure' }],
+  ] as const)(
+    'rejects writing a workflow snapshot with %s',
+    async (_name, callPatch) => {
+      const store = getExecutionStore(executionId);
+      const timestamp = '2026-08-30T00:00:00.000Z';
+      await store.writeMeta({ timestamp });
+      const live = 'status' in callPatch && callPatch.status === 'running';
+      const workflow = {
+        lifecycle: live ? 'active' : 'completed',
+        stages: [],
+        calls: [
+          {
+            id: 'current-call',
+            label: 'Current call',
+            issued: true,
+            kind: 'document',
+            files: { input: [], context: [], media: [] },
+            attempts: [],
+            status: 'completed',
+            timestamps: {
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              completedAt: timestamp,
+            },
+            ...callPatch,
+          },
+        ],
+        timestamps: {
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          ...(!live && { completedAt: timestamp }),
+        },
+      } as unknown as WorkflowExecutionSnapshot;
+
+      await expect(
+        Promise.resolve().then(() =>
+          writeWorkflowExecutionSnapshot(executionId, workflow),
+        ),
+      ).rejects.toThrow();
+      await expect(store.readMetaStrict()).resolves.not.toHaveProperty(
+        'workflow',
+      );
+    },
+  );
+
+  it('parses and relaunches a prior cancelled snapshot with an error', async () => {
+    const store = getExecutionStore(executionId);
+    const cancelledScript = `export const meta = {
+  name: 'cancelled-compatibility',
+  description: 'relaunches a prior cancelled checkpoint',
+}
+return await agent('resume cancelled call', { id: 'cancelled-call' })`;
+    const completed = await runWorkflowScript({
+      script: cancelledScript,
+      runAgent: async () => 'prior result',
+    });
+    const priorSnapshot = structuredClone(completed.snapshot) as unknown as {
+      lifecycle: string;
+      error?: string;
+      calls: Array<Record<string, unknown>>;
+    };
+    priorSnapshot.lifecycle = 'cancelled';
+    priorSnapshot.error = 'Workflow cancelled.';
+    priorSnapshot.calls[0]!.status = 'cancelled';
+    priorSnapshot.calls[0]!.error =
+      'Workflow cancelled before this call completed.';
+    await store.write('meta', {
+      timestamp: '2026-08-30T00:00:00.000Z',
+      workflow: priorSnapshot,
+    });
+
+    const persisted = await store.readMetaStrict();
+    expect(persisted?.workflow?.calls[0]).toMatchObject({
+      status: 'cancelled',
+    });
+    expect(persisted?.workflow?.calls[0]).not.toHaveProperty('error');
+    if (!persisted?.workflow) throw new Error('Expected persisted workflow');
+
+    const runner = vi.fn(async () => 'resumed result');
+    const relaunched = await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'cancelled-compatibility',
+      script: cancelledScript,
+      initialSnapshot: persisted.workflow,
+      runAgent: runner,
+    });
+
+    expect(runner).toHaveBeenCalledOnce();
+    expect(relaunched.result).toBe('resumed result');
+    expect(relaunched.snapshot.calls[0]).toMatchObject({ status: 'completed' });
+    const serialized = JSON.parse(JSON.stringify(relaunched.snapshot));
+    expect(serialized.calls[0]).not.toHaveProperty('error');
   });
 
   it('persists and hydrates runtime-valid unbounded snapshot fields', async () => {

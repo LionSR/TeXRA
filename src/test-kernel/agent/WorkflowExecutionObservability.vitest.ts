@@ -472,6 +472,11 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
 
     const terminal = finalSnapshot(snapshots);
     expect(terminal.lifecycle).toBe('cancelled');
+    expect(terminal.error).toBe('cancelled');
+    expect(terminal.calls[0]?.error).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(terminal)).calls[0]).not.toHaveProperty(
+      'error',
+    );
     const terminalCounts = deriveWorkflowCounts(terminal.calls);
     expect(terminalCounts.cancelled).toBe(1);
     expect(terminalCounts.running + terminalCounts.queued).toBe(0);

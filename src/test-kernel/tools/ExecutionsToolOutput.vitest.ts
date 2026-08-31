@@ -510,6 +510,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(output.includes('"childStreamId": "writer#222222222222"'));
     assert.ok(output.includes('"model": "historical-model"'));
     assert.ok(output.includes('"costUsd": 0.2'));
+    assert.ok(output.includes('"error": "Failure '));
     assert.ok(!output.includes('"number": 1'));
     assert.ok(!output.includes('private full instruction'));
     assert.ok(!output.includes('stage-tail'));
@@ -519,6 +520,47 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     assert.ok(!output.includes('file-tail'));
     assert.ok(output.length < 20_000);
     assert.ok((await getExecutionStore(executionId).readMeta())?.workflow);
+  });
+
+  it('keeps cancellation reasons on the aggregate and omits per-call error', async () => {
+    const executionId = await registerWorkflowExecution('cancelled-summary');
+    const timestamp = new Date().toISOString();
+    await writeWorkflowExecutionSnapshot(executionId, {
+      lifecycle: 'cancelled',
+      stages: [],
+      calls: [
+        {
+          id: 'cancelled-call',
+          label: 'Cancelled call',
+          issued: true,
+          kind: 'document',
+          files: { input: [], context: [], media: [] },
+          attempts: [],
+          status: 'cancelled',
+          timestamps: {
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            completedAt: timestamp,
+          },
+        },
+      ],
+      error: 'Workflow cancelled by user.',
+      timestamps: {
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        completedAt: timestamp,
+      },
+    });
+
+    const result = await new ExecutionsTool().call({
+      path: `/executions/${executionId}`,
+    });
+    const output = result.output ?? '';
+
+    assert.equal(result.status, 'executed');
+    assert.ok(output.includes('"error": "Workflow cancelled by user."'));
+    assert.ok(output.includes('"status": "cancelled"'));
+    assert.equal(output.match(/"error":/g)?.length, 1);
   });
 
   it('keeps a failed call ahead of newer completed current-stage calls when bounded', async () => {

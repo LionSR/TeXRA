@@ -3,6 +3,7 @@ import {
   WORKFLOW_CALL_STATUS,
   WORKFLOW_EXECUTION_LIFECYCLE,
   type WorkflowCallIdentity,
+  type WorkflowCallKind,
   type WorkflowExecutionCall,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
@@ -14,7 +15,7 @@ interface WorkflowCallDefinition {
   readonly id: string;
   readonly label: string;
   readonly phase?: string;
-  readonly kind: WorkflowExecutionCall['kind'];
+  readonly kind: WorkflowCallKind;
   readonly agent?: string;
   /** Model the script declared for this call; the host may still substitute. */
   readonly model?: string;
@@ -134,13 +135,16 @@ export class WorkflowExecutionState {
     active.completedAt = undefined;
     this.#snapshot.currentStageId = active.id;
     this.#snapshot.lifecycle = WORKFLOW_EXECUTION_LIFECYCLE.ACTIVE;
-    for (const call of this.#snapshot.calls) {
+    for (const [index, call] of this.#snapshot.calls.entries()) {
       if (
         call.stageId === active.id &&
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
-        call.status = WORKFLOW_CALL_STATUS.PLANNED;
-        call.timestamps.updatedAt = transitionAt;
+        this.#snapshot.calls[index] = {
+          ...call,
+          status: WORKFLOW_CALL_STATUS.PLANNED,
+          timestamps: { ...call.timestamps, updatedAt: transitionAt },
+        };
       }
     }
     this.#emit();
@@ -246,8 +250,18 @@ export class WorkflowExecutionState {
    */
   settleCall(
     id: string,
-    patch: Pick<WorkflowExecutionCall, 'status'> &
-      Partial<Pick<WorkflowExecutionCall, 'error'>>,
+    patch:
+      | {
+          readonly status: typeof WORKFLOW_CALL_STATUS.FAILED;
+          readonly error: string;
+        }
+      | {
+          readonly status:
+            | typeof WORKFLOW_CALL_STATUS.CACHED
+            | typeof WORKFLOW_CALL_STATUS.CANCELLED
+            | typeof WORKFLOW_CALL_STATUS.COMPLETED
+            | typeof WORKFLOW_CALL_STATUS.SKIPPED;
+        },
   ): void {
     const call = this.#call(id);
     this.updateCall(id, {
@@ -354,33 +368,52 @@ export class WorkflowExecutionState {
     this.#snapshot.timestamps.completedAt = completedAt;
     if (error) this.#snapshot.error = error;
     const sweepSettledStageIds = new Set<string>();
-    for (const call of this.#snapshot.calls) {
-      const latestAttempt = call.attempts.at(-1);
-      if (latestAttempt && latestAttempt.completedAt === undefined) {
-        latestAttempt.completedAt = completedAt;
-      }
+    for (const [index, call] of this.#snapshot.calls.entries()) {
+      const attempts = call.attempts.map((attempt, attemptIndex) =>
+        attemptIndex === call.attempts.length - 1 &&
+        attempt.completedAt === undefined
+          ? { ...attempt, completedAt }
+          : attempt,
+      );
+      const timestamps = {
+        ...call.timestamps,
+        updatedAt: completedAt,
+        completedAt,
+      };
       if (
         call.status === WORKFLOW_CALL_STATUS.PLANNED ||
         call.status === WORKFLOW_CALL_STATUS.STAGE_BLOCKED
       ) {
-        call.status = WORKFLOW_CALL_STATUS.SKIPPED;
-        call.settledBySweep = true;
         if (call.stageId) sweepSettledStageIds.add(call.stageId);
-        call.timestamps.completedAt = completedAt;
-        call.timestamps.updatedAt = completedAt;
+        this.#snapshot.calls[index] = {
+          ...call,
+          attempts,
+          status: WORKFLOW_CALL_STATUS.SKIPPED,
+          settledBySweep: true,
+          timestamps,
+        };
       } else if (
         call.status === WORKFLOW_CALL_STATUS.QUEUED ||
         call.status === WORKFLOW_CALL_STATUS.RUNNING
       ) {
-        call.status =
-          lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
-            ? WORKFLOW_CALL_STATUS.CANCELLED
-            : WORKFLOW_CALL_STATUS.FAILED;
-        call.settledBySweep = true;
         if (call.stageId) sweepSettledStageIds.add(call.stageId);
-        call.error ??= WORKFLOW_CALL_UNFINISHED_NOTE;
-        call.timestamps.completedAt = completedAt;
-        call.timestamps.updatedAt = completedAt;
+        this.#snapshot.calls[index] =
+          lifecycle === WORKFLOW_EXECUTION_LIFECYCLE.CANCELLED
+            ? {
+                ...call,
+                attempts,
+                status: WORKFLOW_CALL_STATUS.CANCELLED,
+                settledBySweep: true,
+                timestamps,
+              }
+            : {
+                ...call,
+                attempts,
+                status: WORKFLOW_CALL_STATUS.FAILED,
+                settledBySweep: true,
+                error: WORKFLOW_CALL_UNFINISHED_NOTE,
+                timestamps,
+              };
       }
     }
     for (const stage of this.#snapshot.stages) {
@@ -487,6 +520,17 @@ function totalAttemptCost(
 }
 
 /** Whether a hydrated call's prior result can be replayed as-is. */
+type ReusableWorkflowExecutionCall = Extract<
+  WorkflowExecutionCall,
+  { readonly status: 'completed' | 'cached' }
+>;
+
+function isReusableCall(
+  call: WorkflowExecutionCall,
+): call is ReusableWorkflowExecutionCall {
+  return isReusableStatus(call.status);
+}
+
 function isReusableStatus(status: WorkflowExecutionCall['status']): boolean {
   return (
     status === WORKFLOW_CALL_STATUS.COMPLETED ||
@@ -505,35 +549,6 @@ function closeOpenAttempts(
   );
 }
 
-/**
- * Live-attempt fields a recovered non-reusable call must forget, keyed to its
- * original creation time. A reusable call spreads nothing and keeps everything
- * it settled with.
- */
-function resetRecoveredLiveFields(
-  prior: WorkflowExecutionCall,
-  reusable: boolean,
-  recoveryAt: string,
-) {
-  return (
-    !reusable && {
-      // Not yet issued by this attempt: the script re-issues (and re-stamps)
-      // every invocation fact of each call it reaches.
-      issued: undefined,
-      kind: undefined,
-      agent: undefined,
-      childExecutionId: undefined,
-      childStreamId: undefined,
-      model: undefined,
-      error: undefined,
-      timestamps: {
-        createdAt: prior.timestamps.createdAt,
-        updatedAt: recoveryAt,
-      },
-    }
-  );
-}
-
 function hydrate(
   fresh: WorkflowExecutionSnapshot,
   persisted: WorkflowExecutionSnapshot | undefined,
@@ -547,37 +562,56 @@ function hydrate(
   snapshot.calls = snapshot.calls.map((call) => {
     const prior = priorById.get(call.id);
     if (!prior) return call;
-    const reusable = isReusableStatus(prior.status);
     const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
+    if (isReusableCall(prior)) {
+      return {
+        ...prior,
+        label: call.label,
+        stageId: call.stageId,
+        attempts,
+        costUsd: totalAttemptCost(attempts),
+      };
+    }
+    if (
+      call.status !== WORKFLOW_CALL_STATUS.PLANNED &&
+      call.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED
+    ) {
+      throw new Error(`Fresh workflow call ${call.id} is not a plan stub.`);
+    }
     return {
-      ...prior,
-      label: call.label,
-      stageId: call.stageId,
-      // Reusable completed/cached calls keep their resolved file lists. The
-      // fresh meta.tasks stub has empty arrays; overwriting would flush blank
-      // files on the constructor emit before the script re-issues those calls.
-      // Non-reusable interrupted calls take the fresh plan (issueCall fills
-      // files when the call is relaunched).
-      files: reusable ? prior.files : call.files,
+      ...call,
       attempts,
       costUsd: totalAttemptCost(attempts),
-      status: reusable ? prior.status : call.status,
-      ...resetRecoveredLiveFields(prior, reusable, recoveryAt),
+      timestamps: {
+        createdAt: prior.timestamps.createdAt,
+        updatedAt: recoveryAt,
+      },
     };
   });
   for (const prior of persisted.calls) {
-    if (!freshIds.has(prior.id)) {
-      const reusable = isReusableStatus(prior.status);
-      const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
+    if (freshIds.has(prior.id)) continue;
+    const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
+    if (isReusableCall(prior)) {
       snapshot.calls.push({
         ...prior,
         stageId: undefined,
         attempts,
         costUsd: totalAttemptCost(attempts),
-        status: reusable ? prior.status : WORKFLOW_CALL_STATUS.PLANNED,
-        ...resetRecoveredLiveFields(prior, reusable, recoveryAt),
       });
+      continue;
     }
+    snapshot.calls.push({
+      id: prior.id,
+      label: prior.label,
+      files: prior.files,
+      attempts,
+      costUsd: totalAttemptCost(attempts),
+      status: WORKFLOW_CALL_STATUS.PLANNED,
+      timestamps: {
+        createdAt: prior.timestamps.createdAt,
+        updatedAt: recoveryAt,
+      },
+    });
   }
   return snapshot;
 }
