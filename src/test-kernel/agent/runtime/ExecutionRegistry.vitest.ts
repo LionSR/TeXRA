@@ -1607,8 +1607,30 @@ describe('executionRegistry', () => {
         ),
       );
       expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
+        kind: 'no_session',
+        streamStatus: STREAM_PHASE.CANCELLED,
+      });
+      seedStreamStatusForTest(streamStatus, parentStreamId, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+      expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
         kind: 'queue',
       });
+      seedStreamStatusForTest(streamStatus, parentStreamId, {
+        phase: STREAM_PHASE.CANCELLED,
+      });
+      const releaseNativeChild = registry.reserveChildActivation({
+        executionId: 'exec-follow-up-native-child-test' as ExecutionId,
+        parentStreamId,
+        childStreamId: 'stream-follow-up-native-child-test' as StreamTabId,
+        interrupt: vi.fn(),
+        detach: vi.fn(),
+        isDetached: () => false,
+      });
+      expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
+        kind: 'queue',
+      });
+      releaseNativeChild();
     } finally {
       registry.dispose();
     }

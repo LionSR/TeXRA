@@ -501,26 +501,16 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('refuses follow-ups for a completed parent while a child-stream loop is still running', async () => {
-    const { childStreamId, executionId } = loopIds(
-      'completed-parent-child-stream',
-    );
+    const { executionId } = loopIds('completed-parent-child-stream');
     const { strategy, resolveTurn } = createFakeStrategy();
-    const sourceStream = createChildStream(executionId, PARENT_STREAM_ID, {
+    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
       description: 'Keep a background child running',
       config: childStreamConfig,
     });
-    session.executions.untrack(executionId);
-    const childStream: NonNullable<
-      ChildRunLoopParams<FakeTurn>['childStream']
-    > = {
-      logger: sourceStream.logger,
-      waitForInput: vi.fn(),
-      beginTurn: vi.fn(),
-      failTurn: vi.fn(),
-      finalize: vi.fn(async () => {}),
-    };
+    const { childStreamId } = childStream;
+    trackedExecutionIds.add(executionId);
     const loop = startLoop({ childStreamId, executionId }, strategy, {
       childStream,
     });
@@ -556,6 +546,49 @@ describe('childRunLoop E2E fixtures', () => {
       await resolveTurn(1, { kind: 'terminal', value: 'done' });
       await loop.completion;
     }
+  });
+
+  it('does not deliver child-stream progress or results after detachment', async () => {
+    const { executionId } = loopIds('detached-child-stream');
+    const turn = pDefer<FakeTurn>();
+    const launchStarted = pDefer<void>();
+    let notifyProgress: ChildRunPorts['notify'] = () => {};
+    const strategy = createTerminalStrategy(
+      'Detached child stream',
+      (ports) => {
+        notifyProgress = ports.notify;
+        launchStarted.resolve();
+        return turn.promise;
+      },
+    );
+    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
+      streamPrefix: 'codex',
+      run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+      description: 'Detach a background child',
+      config: childStreamConfig,
+    });
+    const { childStreamId } = childStream;
+    trackedExecutionIds.add(executionId);
+    const loop = startLoop({ childStreamId, executionId }, strategy, {
+      childStream,
+    });
+    await launchStarted.promise;
+
+    notifyProgress({ kind: 'started' });
+    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetStreamId: PARENT_STREAM_ID,
+        mode: 'live_notification',
+      }),
+    );
+    mocks.deliverChildRunFollowUp.mockClear();
+
+    session.executions.detachActiveChildren(PARENT_STREAM_ID);
+    notifyProgress({ kind: 'started' });
+    turn.resolve({ kind: 'terminal', value: 'done' });
+    await loop.completion;
+
+    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('persists without parent delivery in persist-only mode', async () => {

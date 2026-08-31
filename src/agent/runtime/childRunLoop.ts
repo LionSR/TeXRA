@@ -282,11 +282,10 @@ export interface ChildRunStrategy<TTurn> {
   ): ResultMeta | undefined | Promise<ResultMeta | undefined>;
 
   /**
-   * Where a turn's delivery should be sent. Defaults to the run's static
-   * `parentStreamId` when omitted. Native strategies track the live run
-   * handle's `deliveryTargetStreamId`, which goes `undefined` once the child
-   * is detached from its orchestrator (see `AgentExecutionHandle.detach`), so
-   * a detached child's results stop routing to the old parent.
+   * Where a turn's delivery should be sent. Native strategies track their
+   * per-turn handle directly. Child-stream loops omit this and the driver reads
+   * their persistent handle's live `deliveryTargetStreamId`, which goes
+   * `undefined` once the child is detached from its orchestrator.
    */
   resolveDeliveryTarget?(): StreamTabId | undefined;
 
@@ -582,19 +581,18 @@ async function persistTurnStateBestEffort(
 }
 
 /**
- * Where this turn's output goes. A strategy without `resolveDeliveryTarget`
- * (agent-CLI) always delivers to the run's static parent. A strategy that HAS
- * one (native) may return `undefined` — meaning the child was detached from its
- * orchestrator (see `AgentExecutionHandle.detach`) — which must skip delivery
- * entirely, not silently fall back to the old parent.
+ * Where this turn's output goes. Native strategies resolve their per-turn
+ * handle; child-stream loops receive their persistent handle's live target.
+ * Either may return `undefined` after detachment, which must skip delivery
+ * entirely rather than silently falling back to the old parent.
  */
 function resolveDeliveryTarget<TTurn>(
   strategy: ChildRunStrategy<TTurn>,
-  parentStreamId: StreamTabId,
+  childStreamTarget: StreamTabId | undefined,
 ): StreamTabId | undefined {
   return strategy.resolveDeliveryTarget
     ? strategy.resolveDeliveryTarget()
-    : parentStreamId;
+    : childStreamTarget;
 }
 
 /**
@@ -622,7 +620,6 @@ interface PendingChildDelivery {
 async function deliverTurn<TTurn>(params: {
   strategy: ChildRunStrategy<TTurn>;
   executionId: ExecutionId;
-  parentStreamId: StreamTabId;
   logger: AgentTrace;
   turn: TTurn | null;
   turnRef: ChildTurnRef;
@@ -630,6 +627,7 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
+  defaultDeliveryTarget: StreamTabId | undefined;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
@@ -637,7 +635,6 @@ async function deliverTurn<TTurn>(params: {
   const {
     strategy,
     executionId,
-    parentStreamId,
     logger,
     turn,
     turnRef,
@@ -645,6 +642,7 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
+    defaultDeliveryTarget,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -698,7 +696,7 @@ async function deliverTurn<TTurn>(params: {
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
-  const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
+  const targetStreamId = resolveDeliveryTarget(strategy, defaultDeliveryTarget);
   if (!targetStreamId) {
     logger.warn(
       'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
@@ -880,7 +878,12 @@ export function startChildRunLoop<TTurn>(
         return;
       }
       if (strategy.deliveryMode === 'persistOnly' || activationDetached) return;
-      const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
+      const targetStreamId = resolveDeliveryTarget(
+        strategy,
+        childStream
+          ? runSession.executions.getHandle(executionId)?.deliveryTargetStreamId
+          : parentStreamId,
+      );
       if (!targetStreamId) return;
       const msg = formatSubagentProgress(executionId, agentName, update);
       void deliverChildRunFollowUp({
@@ -1004,7 +1007,10 @@ export function startChildRunLoop<TTurn>(
         const delivery = await deliverTurn({
           strategy,
           executionId,
-          parentStreamId,
+          defaultDeliveryTarget: childStream
+            ? runSession.executions.getHandle(executionId)
+                ?.deliveryTargetStreamId
+            : parentStreamId,
           logger,
           turn,
           turnRef,
