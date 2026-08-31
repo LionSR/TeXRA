@@ -33,6 +33,7 @@ describe('Moonshot base URL region resolution', () => {
     expect(
       resolveBaseUrl({
         route: 'custom',
+        provider: ModelProvider.MOONSHOT,
         url: 'https://api.kimi.com/coding/v1',
       }),
     ).toBe('https://api.kimi.com/coding/v1');

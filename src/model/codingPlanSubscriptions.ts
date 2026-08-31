@@ -1,6 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
 
 import { hasUsableApiKey } from '@model/apiProviders';
+import { resolveGlmRoute } from '@model/glmRouting';
 import {
   isKimiCodeRoute,
   resolveKimiCodeRoutingFacts,
@@ -18,7 +19,6 @@ import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   getGLMCodingPlan,
-  getProviderEndpoint,
   getPreferKimiCode,
   getUseOpenRouter,
   setGLMCodingPlan,
@@ -35,16 +35,19 @@ export interface CodingPlanSubscriptionRuntime {
 
 async function isGlmCodingPlanActive(modelId: string): Promise<boolean> {
   const config = await resolveRuntimeModelConfig(modelId);
-  if (
-    config?.provider !== ModelProvider.GLM ||
-    !getGLMCodingPlan() ||
-    shouldRouteModelThroughOpenRouter(config, getUseOpenRouter()) ||
-    config.baseUrl != null ||
-    getProviderEndpoint('glm') !== ''
-  ) {
-    return false;
-  }
-  return hasUsableApiKey(platform().secrets, 'glm');
+  if (config?.provider !== ModelProvider.GLM) return false;
+
+  const route = resolveGlmRoute({
+    baseUrl: config.baseUrl,
+    useOpenRouter: shouldRouteModelThroughOpenRouter(
+      config,
+      getUseOpenRouter(),
+    ),
+  });
+  return (
+    route.route === 'official-coding-plan' &&
+    hasUsableApiKey(platform().secrets, 'glm')
+  );
 }
 
 /**
