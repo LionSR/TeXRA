@@ -376,8 +376,12 @@ type InteractionsRequestOptions = {
   fetchOptions: RequestInit;
 };
 
+type GoogleInteractionsHttpClient = {
+  request(request: Request): Promise<Response>;
+};
 type GoogleInteractionsSdkClient = {
-  _httpClient: { request(request: Request): Promise<Response> };
+  _httpClient: GoogleInteractionsHttpClient;
+  _options: { http_client: GoogleInteractionsHttpClient };
 };
 type GoogleInteractionsClientInternals = {
   getClient(apiVersion?: string): GoogleInteractionsSdkClient;
@@ -390,7 +394,10 @@ function installLongRunningInteractionsTransport(client: GoogleGenAI): void {
   const getClient = interactions.getClient.bind(interactions);
   interactions.getClient = (apiVersion?: string) => {
     const sdk = getClient(apiVersion);
-    sdk._httpClient = { request: longRunningGoogleInteractionsFetch };
+    const httpClient = { request: longRunningGoogleInteractionsFetch };
+    sdk._httpClient = httpClient;
+    // Streaming lazily constructs sdk.interactions from this option object.
+    sdk._options.http_client = httpClient;
     return sdk;
   };
 }

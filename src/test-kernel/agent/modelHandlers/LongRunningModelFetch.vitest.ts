@@ -21,8 +21,12 @@ vi.mock('undici', async (importOriginal) => {
 // Local imports
 import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
 import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
-import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
+import {
+  longRunningGoogleInteractionsFetch,
+  longRunningModelFetch,
+} from '@platform/defaults/longRunningModelTransport';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import type { GoogleGenAI } from '@google/genai';
 
 interface ComposedDispatcherStub {
   readonly baseDispatch: Dispatcher['dispatch'];
@@ -57,6 +61,55 @@ function stubOkResponse(): void {
   transportMocks.undiciFetch.mockResolvedValueOnce(
     new Response(null, { status: 204 }),
   );
+}
+
+class GoogleTransportProbe extends ModelHandlerGoogleInteractions {
+  protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
+    return {
+      apiKey: 'test-key',
+      baseUrl: null,
+      route: 'api-key',
+    };
+  }
+}
+
+async function createGoogleTransportClient(): Promise<GoogleGenAI> {
+  const handler = new GoogleTransportProbe(
+    buildTestModelConfig({
+      name: 'google-transport-probe',
+      label: 'Google transport probe',
+      fullName: 'gemini-test',
+      shortName: 'gemini-test',
+      provider: ModelProvider.GOOGLE,
+      contextWindow: 4096,
+    }),
+  );
+  return handler.getClient();
+}
+
+function stubGoogleBody(
+  path: string,
+  options: { body?: string; signal?: AbortSignal } = {},
+) {
+  const input = new Request(
+    `https://generativelanguage.googleapis.com/${path}`,
+    options.signal ? { signal: options.signal } : undefined,
+  );
+  const addListener = vi.spyOn(input.signal, 'addEventListener');
+  const removeListener = vi.spyOn(input.signal, 'removeEventListener');
+  const sourceCancel = vi.fn();
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        if (options.body === undefined) return;
+        controller.enqueue(new TextEncoder().encode(options.body));
+        controller.close();
+      },
+      cancel: sourceCancel,
+    }),
+  );
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+  return { input, addListener, removeListener, sourceCancel };
 }
 
 describe('long-running model transport', () => {
@@ -104,26 +157,7 @@ describe('long-running model transport', () => {
 
   it('enforces header and body-inactivity deadlines at the pinned Google SDK fetch boundary', async () => {
     vi.useFakeTimers();
-    class GoogleTransportProbe extends ModelHandlerGoogleInteractions {
-      protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
-        return {
-          apiKey: 'test-key',
-          baseUrl: null,
-          route: 'api-key',
-        };
-      }
-    }
-    const handler = new GoogleTransportProbe(
-      buildTestModelConfig({
-        name: 'google-transport-probe',
-        label: 'Google transport probe',
-        fullName: 'gemini-test',
-        shortName: 'gemini-test',
-        provider: ModelProvider.GOOGLE,
-        contextWindow: 4096,
-      }),
-    );
-    const client = await handler.getClient();
+    const client = await createGoogleTransportClient();
     const requests: Request[] = [];
     let resolveLongHeaders: ((response: Response) => void) | undefined;
     let longBody: ReadableStreamDefaultController<Uint8Array> | undefined;
@@ -249,6 +283,190 @@ describe('long-running model transport', () => {
     expect(finalRequest.signal.aborted).toBe(true);
     expect(finalRequest.signal.reason).toBe(reason);
     await userCancellationRejection;
+  });
+
+  it('cleans up after normal source stream consumption', async () => {
+    vi.useFakeTimers();
+    const caller = new AbortController();
+    const { input, addListener, removeListener, sourceCancel } = stubGoogleBody(
+      'success',
+      { body: '{"ok":true}', signal: caller.signal },
+    );
+
+    const response = await longRunningGoogleInteractionsFetch(input);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+
+    expect(addListener).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(sourceCancel).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cleans up its timer and caller abort listener after fetch failure', async () => {
+    vi.useFakeTimers();
+    const caller = new AbortController();
+    const input = new Request(
+      'https://generativelanguage.googleapis.com/fetch-failure',
+      { signal: caller.signal },
+    );
+    const addListener = vi.spyOn(input.signal, 'addEventListener');
+    const removeListener = vi.spyOn(input.signal, 'removeEventListener');
+    const failure = new Error('fetch failed');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(failure));
+
+    await expect(longRunningGoogleInteractionsFetch(input)).rejects.toBe(
+      failure,
+    );
+
+    expect(addListener).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels the source reader and cleans up after a body timeout', async () => {
+    vi.useFakeTimers();
+    const { input, removeListener, sourceCancel } =
+      stubGoogleBody('body-timeout');
+
+    const response = await longRunningGoogleInteractionsFetch(input);
+    const body = response.text();
+    const rejection = expect(body).rejects.toMatchObject({
+      name: 'TimeoutError',
+    });
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+    await rejection;
+    await vi.waitFor(() => expect(sourceCancel).toHaveBeenCalledOnce());
+
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels the source reader and cleans up when the caller aborts during the body', async () => {
+    vi.useFakeTimers();
+    const caller = new AbortController();
+    const { input, removeListener, sourceCancel } = stubGoogleBody(
+      'abort-body',
+      {
+        signal: caller.signal,
+      },
+    );
+
+    const response = await longRunningGoogleInteractionsFetch(input);
+    const body = response.text();
+    const rejection = expect(body).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    const reason = new DOMException('caller cancelled', 'AbortError');
+    caller.abort(reason);
+    await rejection;
+    await vi.waitFor(() => expect(sourceCancel).toHaveBeenCalledWith(reason));
+
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels the source reader and cleans up when the consumer cancels the stream', async () => {
+    vi.useFakeTimers();
+    const { input, removeListener, sourceCancel } =
+      stubGoogleBody('cancel-stream');
+
+    const response = await longRunningGoogleInteractionsFetch(input);
+    const reason = new Error('consumer stopped');
+    await response.body?.cancel(reason);
+
+    expect(sourceCancel).toHaveBeenCalledWith(reason);
+    expect(removeListener).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('routes every Google Interactions request through the long-running HTTP seam', async () => {
+    vi.useFakeTimers();
+    const client = await createGoogleTransportClient();
+    const interactions = client.interactions as unknown as {
+      getClient(apiVersion?: string): {
+        _httpClient: { request(request: Request): Promise<Response> };
+      };
+    };
+    const installedGetClient = interactions.getClient.bind(interactions);
+    const routeClients: Array<{
+      apiVersion: string | undefined;
+      request: ReturnType<typeof vi.fn>;
+    }> = [];
+    interactions.getClient = (apiVersion?: string) => {
+      const sdk = installedGetClient(apiVersion);
+      expect(sdk._httpClient.request).toBe(longRunningGoogleInteractionsFetch);
+      const request = vi.spyOn(sdk._httpClient, 'request');
+      routeClients.push({ apiVersion, request });
+      return sdk;
+    };
+
+    const requests: Request[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const request = input as Request;
+        requests.push(request);
+        if (requests.length === 1) {
+          return new Response(
+            'data: {"event_type":"interaction.completed","interaction":{"id":"streamed","status":"completed","outputs":[]}}\n\n',
+            { headers: { 'content-type': 'text/event-stream' } },
+          );
+        }
+        const responses = [
+          { id: 'created', status: 'completed' },
+          { id: 'retrieved', status: 'completed' },
+          { id: 'cancelled', status: 'cancelled' },
+        ];
+        return new Response(
+          JSON.stringify({ ...responses[requests.length - 2], outputs: [] }),
+          { headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+
+    const stream = await client.interactions.create(
+      { model: 'gemini-test', input: [], stream: true },
+      { maxRetries: 0 },
+    );
+    const events = [];
+    for await (const event of stream) events.push(event);
+    await expect(
+      client.interactions.create(
+        {
+          model: 'gemini-test',
+          input: [],
+          stream: false,
+          api_version: 'v1alpha',
+        },
+        { maxRetries: 0 },
+      ),
+    ).resolves.toMatchObject({ id: 'created', status: 'completed' });
+    await expect(
+      client.interactions.get('retrieved', {}, { maxRetries: 0 }),
+    ).resolves.toMatchObject({ id: 'retrieved', status: 'completed' });
+    await expect(
+      client.interactions.cancel('cancelled', {}, { maxRetries: 0 }),
+    ).resolves.toMatchObject({ id: 'cancelled', status: 'cancelled' });
+
+    expect(events).toEqual([
+      expect.objectContaining({ event_type: 'interaction.completed' }),
+    ]);
+    expect(routeClients.map(({ apiVersion }) => apiVersion)).toEqual([
+      undefined,
+      'v1alpha',
+      undefined,
+      undefined,
+    ]);
+    expect(
+      routeClients.map(({ request }) => request.mock.calls.length),
+    ).toEqual([1, 1, 1, 1]);
+    expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+      '/v1beta/interactions',
+      '/v1alpha/interactions',
+      '/v1beta/interactions/retrieved',
+      '/v1beta/interactions/cancelled/cancel',
+    ]);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('translates OpenAI multipart uploads for package Undici', async () => {
