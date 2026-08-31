@@ -66,7 +66,7 @@ describe('multi-agent-tab preset card keyboard activation', () => {
     const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
     expect(cards.length).toBe(AGENT_MODE_PRESETS.length);
     for (const card of cards) {
-      expect(card).toBeInstanceOf(HTMLButtonElement);
+      expect(card.tagName).toBe('BUTTON');
       expect(card.getAttribute('type')).toBe('button');
     }
   });
@@ -75,8 +75,8 @@ describe('multi-agent-tab preset card keyboard activation', () => {
     const element = await mount();
 
     const firstCard = element.shadowRoot?.querySelector('.preset-card');
-    expect(firstCard).toBeInstanceOf(HTMLButtonElement);
-    (firstCard as HTMLButtonElement).click();
+    expect(firstCard?.tagName).toBe('BUTTON');
+    (firstCard as HTMLElement).click();
 
     expect(appliedPresetIds()).toEqual([AGENT_MODE_PRESETS[0]!.id]);
   });

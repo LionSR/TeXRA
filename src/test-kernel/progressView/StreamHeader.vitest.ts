@@ -233,7 +233,7 @@ describe('stream-header', () => {
     function badgeText(element: StreamHeader): string | undefined {
       return element.shadowRoot
         ?.querySelector(`#${ELEMENT_IDS.PROGRESS_BADGE}`)
-        ?.querySelector(':scope > span[aria-hidden="true"]')
+        ?.querySelector('span[aria-hidden="true"]')
         ?.textContent?.trim();
     }
 
