@@ -20,7 +20,7 @@ export interface CompiledPdfArtifact {
   latestPdf: RunStorageFileLocation;
 }
 
-export interface PublishCompiledPdfOptions {
+interface PublishCompiledPdfOptions {
   runDirectory: string;
   executionId: ExecutionId;
   round: number;

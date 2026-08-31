@@ -59,7 +59,7 @@ import {
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
-export interface RunToolUseFlowInput extends BaseFlowContextInit {
+interface RunToolUseFlowInput extends BaseFlowContextInit {
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
@@ -100,7 +100,7 @@ export interface RunToolUseFlowInput extends BaseFlowContextInit {
   onFlowRecordDisposition?: (disposition: 'preserve' | 'delete') => void;
 }
 
-export interface RunToolUseFlowResult {
+interface RunToolUseFlowResult {
   outcome: RunOutcome | typeof STREAM_PHASE.WAITING;
   response?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
@@ -140,7 +140,7 @@ export interface ToolUseFlowContext {
  * flow owns the pairing: every `attach` is followed by exactly one `detach`,
  * including when `attach` itself throws after wiring part of the host up.
  */
-export interface ToolUseFlowAttachment {
+interface ToolUseFlowAttachment {
   attach(context: ToolUseFlowContext): void;
   detach(context: ToolUseFlowContext): void;
 }

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports
-import type { CompileCheckContext } from '@agent/implementations/flows/reflection/output/compileCheck';
+import type { runCompileCheck } from '@agent/implementations/flows/reflection/output/compileCheck';
 import type { OutputState } from '@agent/implementations/flows/reflection/output/outputState';
 import type {
   ExecutionId,
@@ -51,7 +51,7 @@ export function outputFile(
 export function compileContext(
   executionId: ExecutionId,
   outputState: OutputState,
-): CompileCheckContext {
+): Parameters<typeof runCompileCheck>[0] {
   return {
     fileService: new TaskRunFileService(executionId),
     outputState,

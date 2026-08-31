@@ -35,7 +35,7 @@ import {
 } from './compiledPdfArtifacts';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
-export interface CompileCheckContext {
+interface CompileCheckContext {
   fileService: TaskRunFileService;
   outputState: OutputState;
   logger: AgentTrace;
@@ -45,7 +45,7 @@ export interface CompileCheckContext {
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
-export interface CompileCheckResult {
+interface CompileCheckResult {
   artifacts: CompiledPdfArtifact[];
   /** Absent when no check ran at all, which is not the same as zero failures. */
   compileResult?: CompileResult;
