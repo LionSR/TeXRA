@@ -352,6 +352,8 @@ export class MainViewProvider
   }
 
   protected override cleanupView(): void {
+    const webview = this.getWebviewView()?.webview;
+    if (webview) this._progressViewProvider?.invalidateWebviewDocument(webview);
     this._messageDisposable?.dispose();
     this._messageDisposable = undefined;
     this.mainWebviewReady = false;
@@ -423,6 +425,7 @@ export class MainViewProvider
     // Guard provider availability before mutating any state.
     if (mode === SIDEBAR_VIEWS.PROGRESS && !this._progressViewProvider) return;
 
+    this._progressViewProvider?.invalidateWebviewDocument(webviewView.webview);
     setActiveSidebarView(mode);
     this._messageDisposable?.dispose();
     // Any HTML swap invalidates the previous document's ready handshake.

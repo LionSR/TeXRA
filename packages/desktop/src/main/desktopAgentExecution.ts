@@ -866,24 +866,26 @@ export class DesktopProgressBridge {
         }
       },
       applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
-      applyPolishResult: (result) =>
-        applyFollowUpPolishResult(result, this.followUpPorts),
-      onPolishError: async (stream, error) => {
-        const message = toErrorMessage(error);
-        this.postToRenderer({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-          stream,
-          kind: 'polishError',
-          text: null,
-          error: message,
-        });
-        this.logger.error(`Error polishing follow-up: ${message}`, {
-          data: toLogData(error),
-        });
-        await this.options.host.showErrorMessage(
-          `Error polishing follow-up: ${message}`,
-        );
-      },
+      capturePolishReporter: () => ({
+        applyResult: (result) =>
+          applyFollowUpPolishResult(result, this.followUpPorts),
+        reportError: async (stream, error) => {
+          const message = toErrorMessage(error);
+          this.postToRenderer({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+            stream,
+            kind: 'polishError',
+            text: null,
+            error: message,
+          });
+          this.logger.error(`Error polishing follow-up: ${message}`, {
+            data: toLogData(error),
+          });
+          await this.options.host.showErrorMessage(
+            `Error polishing follow-up: ${message}`,
+          );
+        },
+      }),
       postToRenderer: (message) => this.postToRenderer(message),
       restoreProposalConfig: async (proposal) => {
         await this.agentProposalController.restoreProposalConfig(proposal);

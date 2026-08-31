@@ -127,6 +127,10 @@ function createActions(
 function createSecondTierActions(
   overrides: Partial<ProgressViewSecondTierActions> = {},
 ): ProgressViewSecondTierActions {
+  const polishReporter = {
+    applyResult: vi.fn(),
+    reportError: vi.fn(),
+  };
   return {
     workflowActions: {
       diffStream: vi.fn(),
@@ -156,8 +160,7 @@ function createSecondTierActions(
     })),
     restoreRunConfig: vi.fn(),
     applyFollowUpPlan: vi.fn(),
-    applyPolishResult: vi.fn(),
-    onPolishError: vi.fn(),
+    capturePolishReporter: vi.fn(() => polishReporter),
     postToRenderer: vi.fn(),
     restoreProposalConfig: vi.fn(),
     retry: {
@@ -824,6 +827,7 @@ describe('createProgressViewSecondTierHandlers', () => {
     const actions = createSecondTierActions({
       getRunMetadata: vi.fn().mockReturnValue({}),
     });
+    const reporter = actions.capturePolishReporter();
     const handlers = createProgressViewSecondTierHandlers(actions);
 
     await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP])({
@@ -833,18 +837,22 @@ describe('createProgressViewSecondTierHandlers', () => {
     });
 
     expect(actions.followUpPolish.polishFollowUp).not.toHaveBeenCalled();
-    expect(actions.applyPolishResult).not.toHaveBeenCalled();
+    expect(reporter.applyResult).not.toHaveBeenCalled();
   });
 
   it('awaits polish error reporting', async () => {
     const polishFailure = new Error('polish failed');
     const reportingFailure = new Error('reporting failed');
+    const reportError = vi.fn().mockRejectedValue(reportingFailure);
     const actions = createSecondTierActions({
       getRunMetadata: vi.fn().mockReturnValue({ config: {} }),
       followUpPolish: {
         polishFollowUp: vi.fn().mockRejectedValue(polishFailure),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],
-      onPolishError: vi.fn().mockRejectedValue(reportingFailure),
+      capturePolishReporter: vi.fn(() => ({
+        applyResult: vi.fn(),
+        reportError,
+      })),
     });
     const handlers = createProgressViewSecondTierHandlers(actions);
 
@@ -855,15 +863,15 @@ describe('createProgressViewSecondTierHandlers', () => {
         text: 'Improve this',
       }),
     ).rejects.toBe(reportingFailure);
-    expect(actions.onPolishError).toHaveBeenCalledWith(
-      'stream-1',
-      polishFailure,
-    );
+    expect(reportError).toHaveBeenCalledWith('stream-1', polishFailure);
   });
 
   it('reports polish stages around the controller call', async () => {
     const order: string[] = [];
     const polishResult = { kind: 'skipped' };
+    const applyResult = vi.fn(async () => {
+      order.push('apply');
+    });
     const actions = createSecondTierActions({
       getRunMetadata: vi.fn().mockReturnValue({ config: {} }),
       followUpPolish: {
@@ -872,9 +880,10 @@ describe('createProgressViewSecondTierHandlers', () => {
           return polishResult;
         }),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],
-      applyPolishResult: vi.fn(async () => {
-        order.push('apply');
-      }),
+      capturePolishReporter: vi.fn(() => ({
+        applyResult,
+        reportError: vi.fn(),
+      })),
       onPolishProgress: vi.fn((message: string) => {
         order.push(`progress:${message}`);
       }),
@@ -893,7 +902,7 @@ describe('createProgressViewSecondTierHandlers', () => {
       'progress:Applying changes...',
       'apply',
     ]);
-    expect(actions.applyPolishResult).toHaveBeenCalledWith(polishResult);
+    expect(applyResult).toHaveBeenCalledWith(polishResult);
   });
 
   it('polishes without a progress reporter when the host has none', async () => {
@@ -904,6 +913,7 @@ describe('createProgressViewSecondTierHandlers', () => {
         polishFollowUp: vi.fn().mockResolvedValue(polishResult),
       } as unknown as ProgressViewSecondTierActions['followUpPolish'],
     });
+    const reporter = actions.capturePolishReporter();
     const handlers = createProgressViewSecondTierHandlers(actions);
 
     await assertSupported(handlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP])({
@@ -912,7 +922,7 @@ describe('createProgressViewSecondTierHandlers', () => {
       text: 'Improve this',
     });
 
-    expect(actions.applyPolishResult).toHaveBeenCalledWith(polishResult);
-    expect(actions.onPolishError).not.toHaveBeenCalled();
+    expect(reporter.applyResult).toHaveBeenCalledWith(polishResult);
+    expect(reporter.reportError).not.toHaveBeenCalled();
   });
 });

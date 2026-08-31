@@ -7,6 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import type { ProgressFollowUpSubmitArgs } from '@controllers/progressView/progressFollowUpSubmit';
+import {
+  ProgressFollowUpPolishController,
+  type ProgressFollowUpPolishResult,
+} from '@controllers/progressView/ProgressFollowUpPolishController';
 import * as logger from '@logger/logUtils';
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -25,7 +29,19 @@ const mocks = vi.hoisted(() => ({
   safeExecuteCommand: vi.fn(),
   savePastedImageBase64: vi.fn(),
   submitProgressFollowUp: vi.fn(),
+  withProgress: vi.fn(
+    (_options: unknown, task: (progress: { report(): void }) => unknown) =>
+      task({ report: vi.fn() }),
+  ),
 }));
+
+vi.mock('vscode', async (importOriginal) => {
+  const vscode = await importOriginal<typeof import('vscode')>();
+  return {
+    ...vscode,
+    window: { ...vscode.window, withProgress: mocks.withProgress },
+  };
+});
 
 vi.mock('@frontend/system/commandUtils', () => ({
   safeExecuteCommand: mocks.safeExecuteCommand,
@@ -41,7 +57,7 @@ vi.mock('@utils/files/pastedImageUtils', () => ({
 
 function createWebviewView(): vscode.WebviewView {
   return {
-    webview: { postMessage: vi.fn() },
+    webview: { postMessage: vi.fn().mockResolvedValue(true) },
   } as unknown as vscode.WebviewView;
 }
 
@@ -102,6 +118,7 @@ function createProgressViewProvider(): ProgressViewProviderFake {
     snapshots,
     pickValidActiveStream: vi.fn(() => ''),
   };
+  const documentIdentities = new WeakMap<vscode.Webview, object>();
   return {
     state,
     backend: {
@@ -116,6 +133,14 @@ function createProgressViewProvider(): ProgressViewProviderFake {
       clearStream: vi.fn(),
       clearAll: vi.fn(),
     },
+    captureWebviewDocument: vi.fn((webview: vscode.Webview) => {
+      const identity = documentIdentities.get(webview) ?? {};
+      documentIdentities.set(webview, identity);
+      return () => documentIdentities.get(webview) === identity;
+    }),
+    invalidateWebviewDocument: vi.fn((webview: vscode.Webview) => {
+      documentIdentities.delete(webview);
+    }),
     getPendingAgentProposal: vi.fn(),
     markWebviewReady: vi.fn(),
     popOutToEditor: vi.fn(),
@@ -237,6 +262,111 @@ describe('progress-view onboarding refresh wiring', () => {
       expect.objectContaining({
         command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
       }),
+    );
+  });
+
+  it('returns follow-up polish only to its unchanged origin document', async () => {
+    const holdNextProgress = (): (() => void) => {
+      let start: () => void = () => undefined;
+      mocks.withProgress.mockImplementationOnce(
+        (_options, task) =>
+          new Promise((resolve) => {
+            start = () => resolve(task({ report: vi.fn() }));
+          }),
+      );
+      return () => start();
+    };
+    const startProgress = holdNextProgress();
+    let finishPolish: (result: ProgressFollowUpPolishResult) => void = () =>
+      undefined;
+    const polishFollowUp = vi
+      .spyOn(ProgressFollowUpPolishController.prototype, 'polishFollowUp')
+      .mockImplementationOnce(
+        () =>
+          new Promise<ProgressFollowUpPolishResult>((resolve) => {
+            finishPolish = resolve;
+          }),
+      );
+    const provider = createProgressViewProvider();
+    vi.mocked(provider.state.snapshots.getRunMetadata).mockReturnValue({
+      config: createWorkflowConfig(),
+    });
+    const handler = createMessageHandler(provider);
+    const sidebar = createWebviewView();
+    const panel = createWebviewView();
+
+    const polishing = handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+        stream: 'originating-surface',
+        text: 'make this clearer',
+      },
+      sidebar,
+    );
+    await vi.waitFor(() => {
+      expect(mocks.withProgress).toHaveBeenCalledOnce();
+    });
+
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
+      panel,
+    );
+    startProgress();
+    await vi.waitFor(() => {
+      expect(polishFollowUp).toHaveBeenCalledOnce();
+    });
+    const update = {
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+      stream: 'originating-surface' as StreamTabId,
+      kind: 'polished' as const,
+      text: 'A clearer follow-up',
+    };
+    finishPolish({ kind: 'updated', update });
+    await polishing;
+    await vi.waitFor(() => {
+      expect(sidebar.webview.postMessage).toHaveBeenCalledWith(update);
+    });
+    expect(panel.webview.postMessage).not.toHaveBeenCalledWith(update);
+
+    const startReplacementProgress = holdNextProgress();
+    polishFollowUp.mockImplementationOnce(
+      () =>
+        new Promise<ProgressFollowUpPolishResult>((resolve) => {
+          finishPolish = resolve;
+        }),
+    );
+    const replacementPolishing = handler.handleMessage(
+      {
+        command: PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP,
+        stream: 'originating-surface',
+        text: 'try another revision',
+      },
+      sidebar,
+    );
+    await vi.waitFor(() => {
+      expect(mocks.withProgress).toHaveBeenCalledTimes(2);
+    });
+
+    provider.invalidateWebviewDocument(sidebar.webview);
+    await handler.handleMessage(
+      { command: PROGRESS_VIEW_COMMANDS.WEBVIEW_READY, view: 'progress' },
+      panel,
+    );
+    startReplacementProgress();
+    await vi.waitFor(() => {
+      expect(polishFollowUp).toHaveBeenCalledTimes(2);
+    });
+    const replacementUpdate = {
+      ...update,
+      text: 'A replacement-document revision',
+    };
+    finishPolish({ kind: 'updated', update: replacementUpdate });
+    await replacementPolishing;
+    await Promise.resolve();
+
+    expect(sidebar.webview.postMessage).toHaveBeenCalledTimes(1);
+    expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+      replacementUpdate,
     );
   });
 

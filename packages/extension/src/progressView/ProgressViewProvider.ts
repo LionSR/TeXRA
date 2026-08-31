@@ -84,6 +84,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     placement: 'sidebar',
     ready: false,
   };
+  /** Current progress document identity for each reusable VS Code webview. */
+  private readonly documentIdentities = new WeakMap<vscode.Webview, object>();
   private readonly logger: AgentTrace;
 
   private _mainViewProvider?: MainViewProvider;
@@ -207,6 +209,26 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
   public async refreshOnboardingFunnel(): Promise<void> {
     await this._mainViewProvider?.refreshOnboardingFunnel();
+  }
+
+  public override setupWebviewContent(
+    view: vscode.WebviewView | vscode.WebviewPanel,
+  ): vscode.Disposable {
+    this.documentIdentities.set(view.webview, {});
+    return super.setupWebviewContent(view);
+  }
+
+  /** Capture whether this exact progress document still occupies its webview. */
+  public captureWebviewDocument(webview: vscode.Webview): () => boolean {
+    const identity = this.documentIdentities.get(webview);
+    return () =>
+      identity !== undefined &&
+      this.documentIdentities.get(webview) === identity;
+  }
+
+  /** Invalidate a progress document before its webview is reused or disposed. */
+  public invalidateWebviewDocument(webview: vscode.Webview): void {
+    this.documentIdentities.delete(webview);
   }
 
   /** The sidebar stopped showing progress content; its handshake is void. */
@@ -402,6 +424,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   private releaseEditorTarget(options: { disposePanel?: boolean } = {}): void {
     const target = this.target;
     if (target?.placement !== 'editor') return;
+    this.invalidateWebviewDocument(target.panel.webview);
     this.target = undefined;
     try {
       target.disposables.dispose();
