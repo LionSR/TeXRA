@@ -46,11 +46,8 @@ import {
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
-import { WorkPlanReader, workPlanReaderTitle } from './panes/WorkPlanReader';
-import {
-  TranscriptReader,
-  transcriptReaderTitle,
-} from './panes/TranscriptReader';
+import { WorkPlanReader } from './panes/WorkPlanReader';
+import { TranscriptReader } from './panes/TranscriptReader';
 import { WorkflowPopup } from './panes/WorkflowPopup';
 import { InputBar, type InputBarHandle } from './panes/InputBar';
 import { ConversationRegion } from './panes/ConversationRegion';
@@ -110,7 +107,6 @@ import { focusedChildFollowUpRoute } from './state/focusedChildFollowUp';
 import {
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
-  type ChildListValue,
 } from './state/childListSelection';
 import { streamLabelForId, streamTreeViews } from './state/streamViews';
 import { useSignal } from './state/useSignal';
@@ -426,15 +422,14 @@ export function App(props: AppProps): React.JSX.Element {
       ),
     [childListTarget, pendingSummaries, rootStreamId],
   );
-  const childListValues = useMemo<readonly ChildListValue[]>(
+  const childListValues = useMemo<readonly StreamTabId[]>(
     () => sessionViews.map((session) => session.id),
     [sessionViews],
   );
   const childListAvailable = childListValues.length > 0;
-  const selectedChildStreamId = selectedChildValue;
   const selectedChildKillable =
-    selectedChildStreamId !== undefined &&
-    activeSubagentExecutionIds.has(selectedChildStreamId);
+    selectedChildValue !== undefined &&
+    activeSubagentExecutionIds.has(selectedChildValue);
   useEffect(() => {
     dispatchChildListSelection({
       kind: 'reconcile',
@@ -519,13 +514,11 @@ export function App(props: AppProps): React.JSX.Element {
         ) : null;
       case 'transcriptReader': {
         if (foregroundReader?.kind !== 'transcript') return null;
-        const title = transcriptReaderTitle(
-          streamLabelForId({
-            childRosters,
-            parentStream,
-            streamId: foregroundReader.streamId,
-          }),
-        );
+        const label = streamLabelForId({
+          childRosters,
+          parentStream,
+          streamId: foregroundReader.streamId,
+        });
         return (
           <TranscriptReader
             availableRows={availableRows}
@@ -540,7 +533,7 @@ export function App(props: AppProps): React.JSX.Element {
               }
             }}
             streamId={foregroundReader.streamId}
-            title={title}
+            title={`Transcript: ${label}`}
           />
         );
       }
@@ -574,13 +567,11 @@ export function App(props: AppProps): React.JSX.Element {
       }
       case 'workPlanReader': {
         if (foregroundReader?.kind !== 'workPlan') return null;
-        const title = workPlanReaderTitle(
-          streamLabelForId({
-            childRosters,
-            parentStream,
-            streamId: foregroundReader.streamId,
-          }),
-        );
+        const label = streamLabelForId({
+          childRosters,
+          parentStream,
+          streamId: foregroundReader.streamId,
+        });
         return (
           <WorkPlanReader
             availableRows={availableRows}
@@ -592,7 +583,7 @@ export function App(props: AppProps): React.JSX.Element {
             loading={foregroundReader.loading === true}
             onClose={closeForegroundReader}
             streamId={foregroundReader.streamId}
-            title={title}
+            title={`Work plan: ${label}`}
           />
         );
       }
@@ -876,7 +867,6 @@ export function App(props: AppProps): React.JSX.Element {
           childListFocused,
           sessionViews,
           selectedChildValue,
-          selectedChildStreamId,
           streams,
           subagentExecutionLabels,
           activeSubagentExecutionIds,

@@ -135,10 +135,6 @@ function hydrateRowHeadline(
   }
 }
 
-export function transcriptReaderTitle(label: string | undefined): string {
-  return label ? `Transcript: ${label}` : 'Transcript';
-}
-
 export function TranscriptReader({
   availableRows,
   executionLabels,

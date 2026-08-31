@@ -38,15 +38,13 @@ import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
   STREAM_PHASE,
-  WORKFLOW_TASK_STATUS_LABEL,
   type ExecutionId,
   type StreamPhase,
   type StreamStage,
   type StreamTabId,
   type TokenUsageStats,
-  type WorkflowCallProgress,
 } from '@shared/schemas';
-import type { PhaseRow, WorkflowTaskRow } from '@shared/transcript';
+import type { PhaseRow } from '@shared/transcript';
 import { formatWorkflowPhaseHeading } from '@shared/copy/workflowCall';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import {
@@ -171,27 +169,6 @@ function phaseEntry(
     heading: formatWorkflowPhaseHeading({ phaseLabel: label, ...overrides }),
     phaseLabel: label,
     ...overrides,
-  };
-}
-
-/** `settlementSeqNo` is the durable printable order the recorder assigns; a
- *  task row that has one is settled on arrival. */
-function workflowTaskEntry(
-  id: string,
-  line: string,
-  call: WorkflowCallProgress,
-  settlementSeqNo?: number,
-): WorkflowTaskRow {
-  return {
-    id,
-    kind: 'workflowTask',
-    timestamp: 0,
-    level: 'info',
-    ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
-    call,
-    line,
-    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
-    metadataParts: [],
   };
 }
 

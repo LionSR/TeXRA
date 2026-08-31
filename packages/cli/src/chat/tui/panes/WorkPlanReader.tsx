@@ -88,10 +88,6 @@ export function workPlanReaderLayout({
   };
 }
 
-export function workPlanReaderTitle(label: string | undefined): string {
-  return label ? `Work plan: ${label}` : 'Work plan';
-}
-
 /** `available` marks the fields this reader may present as facts; a field it
  *  omits is presented, an unavailable one is masked. */
 export function formatWorkPlanReaderText(

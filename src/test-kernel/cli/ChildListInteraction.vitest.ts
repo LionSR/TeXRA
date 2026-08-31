@@ -3,12 +3,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SubagentList } from '@cli/chat/tui/panes/SubagentList';
-import type { ChildListValue } from '@cli/chat/tui/state/childListSelection';
-import { emptySlice, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import type { StreamView } from '@cli/chat/tui/state/streamViews';
 import { POINTER } from '@cli/tui/ui/glyphs';
-import { type StreamTabId, type WorkflowCallProgress } from '@shared/schemas';
-import type { PhaseRow, WorkflowTaskRow } from '@shared/transcript';
+import { type StreamTabId } from '@shared/schemas';
 import {
   loadInk,
   renderInteractive,
@@ -17,7 +14,6 @@ import {
   type InkRenderHandles,
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
-import { workflowPhaseGrouping } from '@test/support/transcriptRowFixtures';
 
 const root = 'root' as StreamTabId;
 const child = 'child' as StreamTabId;
@@ -42,76 +38,31 @@ function waitForInput(stdin: FakeStdin): Promise<void> {
  */
 function controlledList(
   React: any,
-  initial: ChildListValue,
+  initial: StreamTabId,
   props: Record<string, unknown>,
 ): {
   Harness: () => any;
-  current: () => ChildListValue;
+  current: () => StreamTabId;
 } {
   let selected = initial;
   function Harness() {
     const [value, setValue] = React.useState(selected) as [
-      ChildListValue,
-      (next: ChildListValue) => void,
+      StreamTabId,
+      (next: StreamTabId) => void,
     ];
     return React.createElement(SubagentList, {
       ...props,
-      onSelectionChange: (next: ChildListValue) => {
-        (
-          props.onSelectionChange as ((v: ChildListValue) => void) | undefined
-        )?.(next);
+      onSelectionChange: (next: StreamTabId) => {
+        (props.onSelectionChange as ((v: StreamTabId) => void) | undefined)?.(
+          next,
+        );
         selected = next;
         setValue(next);
       },
       selectedValue: value,
-      // `App` resolves the highlighted row to a stream once and hands the
-      // result down; a plain session row resolves to its own stream.
-      selectedChildStreamId:
-        value ?? (props.selectedChildStreamId as StreamTabId | undefined),
     });
   }
   return { Harness, current: () => selected };
-}
-
-function workflowRootSlice(rows: StreamSlice['entries']): StreamSlice {
-  const { taskGroups, entries } = workflowPhaseGrouping(rows);
-  return {
-    ...emptySlice(root),
-    taskGroups,
-    entries,
-  };
-}
-
-function phaseRow(
-  id: string,
-  phaseLabel: string,
-  phaseIndex: number,
-  phaseTotal: number,
-): PhaseRow {
-  return {
-    kind: 'phase',
-    id,
-    timestamp: 0,
-    level: 'info',
-    heading: phaseLabel,
-    phaseLabel,
-    phaseIndex,
-    phaseTotal,
-  };
-}
-
-function taskRow(id: string, call: WorkflowCallProgress): WorkflowTaskRow {
-  const statusLabel = call.status === 'running' ? 'Running' : 'Planned';
-  return {
-    kind: 'workflowTask',
-    id,
-    timestamp: 0,
-    level: 'info',
-    call,
-    line: `${statusLabel}: ${call.label}`,
-    statusLabel,
-    metadataParts: [],
-  };
 }
 
 describe('CLI child list interaction', () => {

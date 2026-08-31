@@ -4,20 +4,16 @@ import {
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
   type ChildListSelectionState,
-  type ChildListValue,
 } from '@cli/chat/tui/state/childListSelection';
 import type { StreamTabId } from '@shared/schemas';
 
 const main = 'main' as StreamTabId;
 const strategy = 'strategy' as StreamTabId;
 const analysis = 'analysis' as StreamTabId;
-const mainValue = main;
-const strategyValue = strategy;
-const analysisValue = analysis;
 
 function reconcileSelection(
   state: ChildListSelectionState,
-  values: readonly ChildListValue[],
+  values: readonly StreamTabId[],
   activeStreamId: StreamTabId | undefined,
 ): ChildListSelectionState {
   return reduceChildListSelection(state, {
@@ -31,67 +27,59 @@ describe('CLI child list selection', () => {
   it('preserves a selection across list focus and row reordering', () => {
     let state = reconcileSelection(
       INITIAL_CHILD_LIST_SELECTION,
-      [mainValue, strategyValue, analysisValue],
+      [main, strategy, analysis],
       main,
     );
     state = reduceChildListSelection(state, { kind: 'focus' });
     state = reduceChildListSelection(state, {
       kind: 'highlight',
-      value: analysisValue,
+      value: analysis,
     });
-    state = reconcileSelection(
-      state,
-      [strategyValue, analysisValue, mainValue],
-      main,
-    );
+    state = reconcileSelection(state, [strategy, analysis, main], main);
 
     expect(state).toEqual({
       focused: true,
-      selectedValue: analysisValue,
+      selectedValue: analysis,
     });
   });
 
   it('preserves selection while hidden and restores it when rows return', () => {
     const selected: ChildListSelectionState = {
       focused: true,
-      selectedValue: strategyValue,
+      selectedValue: strategy,
     };
     const hidden = reconcileSelection(selected, [], main);
-    const restored = reconcileSelection(
-      hidden,
-      [mainValue, strategyValue],
-      main,
-    );
+    const restored = reconcileSelection(hidden, [main, strategy], main);
 
     expect(hidden).toBe(selected);
-    expect(restored.selectedValue).toBe(strategyValue);
+    expect(restored.selectedValue).toBe(strategy);
   });
 
   it('selects the owner when lifecycle completion changes the active stream', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue },
+      { focused: true, selectedValue: strategy },
       {
         kind: 'syncActiveStream',
         streamId: main,
-        values: [mainValue, strategyValue],
+        values: [main, strategy],
       },
     );
 
     expect(state).toEqual({
       focused: true,
-      selectedValue: mainValue,
+      selectedValue: main,
     });
   });
 
   it('preserves identity when active-stream sync keeps the same row', () => {
     const hidden: ChildListSelectionState = {
       focused: true,
-      selectedValue: mainValue,
+      selectedValue: main,
     };
     const state = reduceChildListSelection(hidden, {
       kind: 'syncActiveStream',
       streamId: main,
-      values: [mainValue, strategyValue],
+      values: [main, strategy],
     });
 
     expect(state).toBe(hidden);
@@ -99,11 +87,11 @@ describe('CLI child list selection', () => {
 
   it('clears a stale row when the active stream is not in the projected list', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: strategyValue },
+      { focused: true, selectedValue: strategy },
       {
         kind: 'syncActiveStream',
         streamId: main,
-        values: [analysisValue],
+        values: [analysis],
       },
     );
 
@@ -119,61 +107,57 @@ describe('CLI child list selection', () => {
         focused: true,
         selectedValue: 'gone' as StreamTabId,
       },
-      [analysisValue, mainValue],
+      [analysis, main],
       main,
     );
-    expect(state.selectedValue).toBe(mainValue);
+    expect(state.selectedValue).toBe(main);
 
-    state = reconcileSelection(
-      state,
-      [analysisValue, strategyValue],
-      undefined,
-    );
-    expect(state.selectedValue).toBe(analysisValue);
+    state = reconcileSelection(state, [analysis, strategy], undefined);
+    expect(state.selectedValue).toBe(analysis);
   });
 
   it('does not preselect a row while the active root is absent from the list', () => {
     let state = reconcileSelection(
       INITIAL_CHILD_LIST_SELECTION,
-      [analysisValue],
+      [analysis],
       main,
     );
     expect(state.selectedValue).toBeUndefined();
 
     state = reduceChildListSelection(state, {
       kind: 'focus',
-      value: analysisValue,
+      value: analysis,
     });
     expect(state).toEqual({
       focused: true,
-      selectedValue: analysisValue,
+      selectedValue: analysis,
     });
   });
 
   it('returns input after a stream is focused', () => {
     const state = reduceChildListSelection(
-      { focused: true, selectedValue: analysisValue },
+      { focused: true, selectedValue: analysis },
       { kind: 'focusStream', streamId: strategy },
     );
     expect(state).toEqual({
       focused: false,
-      selectedValue: strategyValue,
+      selectedValue: strategy,
     });
   });
 
   it('changes only the highlighted row without opening a detail block', () => {
     let state = reduceChildListSelection(
-      { focused: false, selectedValue: mainValue },
+      { focused: false, selectedValue: main },
       { kind: 'focus' },
     );
     state = reduceChildListSelection(state, {
       kind: 'highlight',
-      value: strategyValue,
+      value: strategy,
     });
 
     expect(state).toEqual({
       focused: true,
-      selectedValue: strategyValue,
+      selectedValue: strategy,
     });
   });
 });
