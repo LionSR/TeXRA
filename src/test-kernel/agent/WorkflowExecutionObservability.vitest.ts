@@ -149,6 +149,51 @@ describe('workflow execution snapshot call schema', () => {
     ).toBe(true);
   });
 
+  const issuedStatusCases = [
+    ['planned', liveTimestamps, {}],
+    ['queued', liveTimestamps, {}],
+    ['running', liveTimestamps, {}],
+    ['completed', terminalTimestamps, {}],
+    ['failed', terminalTimestamps, { error: 'failed' }],
+    ['cancelled', terminalTimestamps, {}],
+    ['skipped', terminalTimestamps, {}],
+    ['cached', terminalTimestamps, {}],
+  ] as const;
+
+  it.each(issuedStatusCases)(
+    'rejects explicitly issued %s without kind',
+    (status, timestamps, statusFacts) => {
+      expect(
+        WorkflowExecutionSnapshotSchema.safeParse(
+          snapshotWithCall({
+            ...baseCall,
+            ...statusFacts,
+            issued: true,
+            status,
+            timestamps,
+          }),
+        ).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each(issuedStatusCases)(
+    'accepts legacy %s with both issue markers absent',
+    (status, timestamps, statusFacts) => {
+      expect(
+        WorkflowExecutionSnapshotSchema.safeParse(
+          snapshotWithCall({
+            ...baseCall,
+            ...statusFacts,
+            agent: 'legacy-agent',
+            status,
+            timestamps,
+          }),
+        ).success,
+      ).toBe(true);
+    },
+  );
+
   it.each([
     [
       'error on a completed call',

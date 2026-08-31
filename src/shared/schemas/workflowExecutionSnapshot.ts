@@ -133,39 +133,42 @@ function requireKindWhenExplicitlyIssued(
   }
 }
 
-const WorkflowExecutionPlannedCallSchema =
-  WorkflowExecutionIssuedCallSchema.extend({
-    status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
-    timestamps: WorkflowExecutionLiveTimestampsSchema,
-  }).superRefine(requireKindWhenExplicitlyIssued);
+function issuedCallVariant<Shape extends z.ZodRawShape>(shape: Shape) {
+  return WorkflowExecutionIssuedCallSchema.extend(shape).superRefine(
+    requireKindWhenExplicitlyIssued,
+  );
+}
 
-const WorkflowExecutionSkippedCallSchema =
-  WorkflowExecutionIssuedCallSchema.extend({
-    status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
-    settledBySweep: z.literal(true).optional(),
-    timestamps: WorkflowExecutionTerminalTimestampsSchema,
-  }).superRefine((call, context) => {
-    requireKindWhenExplicitlyIssued(call, context);
-    const hasLegacyIssuedFacts =
-      call.kind !== undefined ||
-      call.agent !== undefined ||
-      call.model !== undefined ||
-      call.childExecutionId !== undefined ||
-      call.childStreamId !== undefined ||
-      call.attempts.length > 0 ||
-      call.timestamps.startedAt !== undefined;
-    if (
-      call.issued === undefined &&
-      !hasLegacyIssuedFacts &&
-      call.settledBySweep !== true
-    ) {
-      context.addIssue({
-        code: 'custom',
-        path: ['settledBySweep'],
-        message: 'An unissued skipped workflow call must be sweep-settled.',
-      });
-    }
-  });
+const WorkflowExecutionPlannedCallSchema = issuedCallVariant({
+  status: z.literal(WORKFLOW_CALL_STATUS.PLANNED),
+  timestamps: WorkflowExecutionLiveTimestampsSchema,
+});
+
+const WorkflowExecutionSkippedCallSchema = issuedCallVariant({
+  status: z.literal(WORKFLOW_CALL_STATUS.SKIPPED),
+  settledBySweep: z.literal(true).optional(),
+  timestamps: WorkflowExecutionTerminalTimestampsSchema,
+}).superRefine((call, context) => {
+  const hasLegacyIssuedFacts =
+    call.kind !== undefined ||
+    call.agent !== undefined ||
+    call.model !== undefined ||
+    call.childExecutionId !== undefined ||
+    call.childStreamId !== undefined ||
+    call.attempts.length > 0 ||
+    call.timestamps.startedAt !== undefined;
+  if (
+    call.issued === undefined &&
+    !hasLegacyIssuedFacts &&
+    call.settledBySweep !== true
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['settledBySweep'],
+      message: 'An unissued skipped workflow call must be sweep-settled.',
+    });
+  }
+});
 
 /**
  * Canonical persisted state of one workflow-script call. Status owns the
@@ -179,31 +182,31 @@ const WorkflowExecutionCallSchema = z
       status: z.literal(WORKFLOW_CALL_STATUS.STAGE_BLOCKED),
       timestamps: WorkflowExecutionLiveTimestampsSchema,
     }),
-    WorkflowExecutionIssuedCallSchema.extend({
+    issuedCallVariant({
       status: z.literal(WORKFLOW_CALL_STATUS.QUEUED),
       timestamps: WorkflowExecutionLiveTimestampsSchema,
     }),
-    WorkflowExecutionIssuedCallSchema.extend({
+    issuedCallVariant({
       status: z.literal(WORKFLOW_CALL_STATUS.RUNNING),
       timestamps: WorkflowExecutionLiveTimestampsSchema,
     }),
-    WorkflowExecutionIssuedCallSchema.extend({
+    issuedCallVariant({
       status: z.literal(WORKFLOW_CALL_STATUS.COMPLETED),
       timestamps: WorkflowExecutionTerminalTimestampsSchema,
     }),
-    WorkflowExecutionIssuedCallSchema.extend({
+    issuedCallVariant({
       status: z.literal(WORKFLOW_CALL_STATUS.FAILED),
       settledBySweep: z.literal(true).optional(),
       error: z.string(),
       timestamps: WorkflowExecutionTerminalTimestampsSchema,
     }),
-    WorkflowExecutionIssuedCallSchema.extend({
+    issuedCallVariant({
       status: z.literal(WORKFLOW_CALL_STATUS.CANCELLED),
       settledBySweep: z.literal(true).optional(),
       timestamps: WorkflowExecutionTerminalTimestampsSchema,
     }),
     WorkflowExecutionSkippedCallSchema,
-    WorkflowExecutionIssuedCallSchema.extend({
+    issuedCallVariant({
       status: z.literal(WORKFLOW_CALL_STATUS.CACHED),
       timestamps: WorkflowExecutionTerminalTimestampsSchema,
     }),
