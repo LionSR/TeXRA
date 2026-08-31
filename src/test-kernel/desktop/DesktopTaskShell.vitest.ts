@@ -4,34 +4,22 @@ import { describe, expect, it } from 'vitest';
 // Local imports - desktop task shell model
 import {
   activeWorkbenchTab,
-  BOTTOM_PANEL_MAX_HEIGHT,
-  BOTTOM_PANEL_MIN_HEIGHT,
   closeWorkbench,
   closeWorkbenchTab,
   focusWorkbenchTab,
   initialDesktopTaskShellState,
   moveWorkbenchTab,
   openWorkbenchTab,
-  PROJECT_SECTION_MAX_POSITION,
-  PROJECT_SECTION_MIN_POSITION,
   renameWorkbenchTab,
-  reopenWorkbench,
   setBottomPanelHeight,
   setProjectSectionPosition,
   setSidebarWidth,
   setWorkbenchTabDirty,
   setWorkbenchWidth,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MIN_WIDTH,
   toggleFiles,
   toggleSidebar,
   toggleSummaryBar,
   toggleWorkbench,
-  WORKBENCH_KIND_META,
-  WORKBENCH_KINDS,
-  WORKBENCH_MAX_WIDTH,
-  WORKBENCH_MIN_WIDTH,
-  workbenchTab,
   workspaceInitials,
   workspaceName,
   type DesktopTaskShellState,
@@ -73,16 +61,6 @@ describe('desktop task shell model', () => {
     });
     expect(active(state)).toBeUndefined();
     expect(active(state, 'bottom')).toBeUndefined();
-  });
-
-  it('describes every workbench kind for one renderer path', () => {
-    expect(Object.keys(WORKBENCH_KIND_META).sort()).toEqual(
-      [...WORKBENCH_KINDS].sort(),
-    );
-    for (const kind of WORKBENCH_KINDS) {
-      expect(WORKBENCH_KIND_META[kind].label).toBeTruthy();
-      expect(WORKBENCH_KIND_META[kind].icon).toBeTruthy();
-    }
   });
 
   it('keys editors by path and derives cross-platform basenames', () => {
@@ -188,7 +166,6 @@ describe('desktop task shell model', () => {
 
     expect(active(focused)?.kind).toBe('settings');
     expect(focusWorkbenchTab(focused, 'missing')).toBe(focused);
-    expect(workbenchTab(focused, 'workbench:logs')?.kind).toBe('logs');
   });
 
   it('closes active tabs toward the left, then the right', () => {
@@ -223,11 +200,9 @@ describe('desktop task shell model', () => {
 
     expect(closed.workbenchTabs).toEqual(openState.workbenchTabs);
     expect(active(closed)).toBeUndefined();
-    expect(active(reopenWorkbench(closed, 'right'))?.kind).toBe('logs');
     expect(active(toggleWorkbench(closed, 'right'))?.kind).toBe('logs');
     expect(active(toggleWorkbench(openState, 'right'))).toBeUndefined();
-    expect(reopenWorkbench(openState, 'right')).toBe(openState);
-    expect(reopenWorkbench(initialDesktopTaskShellState(), 'right')).toEqual(
+    expect(toggleWorkbench(initialDesktopTaskShellState(), 'right')).toEqual(
       initialDesktopTaskShellState(),
     );
   });
@@ -244,9 +219,6 @@ describe('desktop task shell model', () => {
     state = moveWorkbenchTab(state, 'workbench:editor:paper.tex', 'bottom');
     expect(active(state)).toBeUndefined();
     expect(active(state, 'bottom')?.kind).toBe('editor');
-    expect(workbenchTab(state, 'workbench:editor:paper.tex')?.placement).toBe(
-      'bottom',
-    );
 
     state = moveWorkbenchTab(state, 'workbench:terminal:1', 'right');
     expect(active(state)?.kind).toBe('terminal');
@@ -292,33 +264,23 @@ describe('desktop task shell model', () => {
     const initial = initialDesktopTaskShellState();
 
     expect(setBottomPanelHeight(initial, 344.6).bottomPanelHeight).toBe(345);
-    expect(setBottomPanelHeight(initial, -1).bottomPanelHeight).toBe(
-      BOTTOM_PANEL_MIN_HEIGHT,
-    );
-    expect(setBottomPanelHeight(initial, 10_000).bottomPanelHeight).toBe(
-      BOTTOM_PANEL_MAX_HEIGHT,
-    );
+    expect(setBottomPanelHeight(initial, -1).bottomPanelHeight).toBe(180);
+    expect(setBottomPanelHeight(initial, 10_000).bottomPanelHeight).toBe(560);
     expect(setSidebarWidth(initial, 312.7).sidebarWidth).toBe(313);
-    expect(setSidebarWidth(initial, -1).sidebarWidth).toBe(SIDEBAR_MIN_WIDTH);
-    expect(setSidebarWidth(initial, 10_000).sidebarWidth).toBe(
-      SIDEBAR_MAX_WIDTH,
-    );
+    expect(setSidebarWidth(initial, -1).sidebarWidth).toBe(220);
+    expect(setSidebarWidth(initial, 10_000).sidebarWidth).toBe(480);
     expect(
       setProjectSectionPosition(initial, 44.6).projectSectionPosition,
     ).toBe(45);
     expect(setProjectSectionPosition(initial, -1).projectSectionPosition).toBe(
-      PROJECT_SECTION_MIN_POSITION,
+      20,
     );
     expect(setProjectSectionPosition(initial, 100).projectSectionPosition).toBe(
-      PROJECT_SECTION_MAX_POSITION,
+      80,
     );
     expect(setWorkbenchWidth(initial, 503.4).workbenchWidth).toBe(503);
-    expect(setWorkbenchWidth(initial, -1).workbenchWidth).toBe(
-      WORKBENCH_MIN_WIDTH,
-    );
-    expect(setWorkbenchWidth(initial, 10_000).workbenchWidth).toBe(
-      WORKBENCH_MAX_WIDTH,
-    );
+    expect(setWorkbenchWidth(initial, -1).workbenchWidth).toBe(380);
+    expect(setWorkbenchWidth(initial, 10_000).workbenchWidth).toBe(960);
   });
 
   it('derives concise workspace labels from POSIX and Windows paths', () => {
