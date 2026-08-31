@@ -15,8 +15,7 @@
  * persist until an explicit `evict`) simply never calls {@link pruneIfEmpty},
  * and a store with no per-key generation guard (`StreamLogStore`, which
  * tracks a single store-wide revision instead) never calls
- * {@link generation}/{@link invalidateGeneration}/{@link evict}/
- * {@link evictAll}. The
+ * {@link generation}/{@link invalidateGeneration}/{@link evict}. The
  * two stores' own persistence-strategy code (per-(key,category) write
  * mutexes vs debounce+generation) is NOT part of this container and stays
  * on each store.
@@ -93,10 +92,5 @@ export class ResidentStreamRegistry<TId, TState> {
   evict(id: TId): void {
     this.invalidateGeneration(id);
     this.records.delete(id);
-  }
-
-  evictAll(): void {
-    this.generations.clear();
-    this.records.clear();
   }
 }

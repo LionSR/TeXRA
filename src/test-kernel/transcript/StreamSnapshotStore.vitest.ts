@@ -2313,8 +2313,7 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('reports and retains authoritative work-plan state after preload fails', async () => {
-    const previous = await storeWithPersistedPlan();
-    previous.evictAll();
+    await storeWithPersistedPlan();
     const readError = new Error('snapshot disk is unreadable');
     const read = StorageFS.read.bind(StorageFS);
     const readStarted = pDefer<void>();

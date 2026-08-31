@@ -196,20 +196,6 @@ describe('StagedDeletionCoordinator', () => {
     });
   });
 
-  it('reset drops in-memory ownership while on-disk staging residue still blocks a new deletion', async () => {
-    const { coordinator } = setupCoordinator();
-    await writeLivePlan();
-    await coordinator.stage(STREAM);
-
-    coordinator.reset();
-
-    expect(coordinator.bufferWrite(STREAM, PLAN_KEY, {})).toBe(false);
-    // Disk, not memory, is authoritative for an unreconciled deletion.
-    await expect(coordinator.stage(STREAM)).rejects.toThrow(
-      /unreconciled snapshot deletion/,
-    );
-  });
-
   it('reconcile restores a crash-left staged directory', async () => {
     const { coordinator } = setupCoordinator();
     const stagedDir = stagedStreamDataDir(STREAM);

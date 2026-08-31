@@ -377,7 +377,7 @@ function workPlanProvenanceOf(
  * bookkeeping, and the overlay patches. Because every field
  * for a stream lives on the same object, dropping a stream's memory is one
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
- * so `evict()`/`evictAll()` cannot drift from the field list.
+ * so `evict()` cannot drift from the field list.
  *
  * Revocable per-stream generation identities guard in-flight seed races and
  * disappear on eviction rather than retaining historical stream ids. They
@@ -1128,15 +1128,6 @@ export class StreamSnapshotStore {
     for (const key of [...this.unseededReadWarned]) {
       if (key.startsWith(`${stream}::`)) this.unseededReadWarned.delete(key);
     }
-  }
-
-  evictAll(): void {
-    this.records.evictAll();
-    this.seedQueues.clear();
-    this.writeMutexes.clear();
-    this.dirtyWrites.clear();
-    this.unseededReadWarned.clear();
-    this.deletions.reset();
   }
 
   /**

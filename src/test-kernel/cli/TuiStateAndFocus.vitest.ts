@@ -498,7 +498,6 @@ function withRunFacts(
   } finally {
     boundFactSession = undefined;
     detach();
-    snapshots.evictAll();
   }
 }
 
@@ -3376,7 +3375,6 @@ describe('sessionSignalsAdapter run facts', () => {
       expect(activeStreamId.get()).toBeUndefined();
     } finally {
       detach();
-      snapshots.evictAll();
     }
   });
 
@@ -3429,7 +3427,7 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('invalidates a hydrated artifact memo on a live work-plan fact', () => {
+  it('invalidates a hydrated artifact memo on a live work-plan fact', async () => {
     const streamId = 'hydrated-artifact-memo' as StreamTabId;
     const previousTodos: TodoItem[] = [
       {
@@ -3475,7 +3473,7 @@ describe('sessionSignalsAdapter run facts', () => {
       expect(readStreamArtifacts(streamId)?.todos).toEqual(nextTodos);
     } finally {
       detach();
-      session.snapshots.evictAll();
+      await session.snapshots.load([]);
     }
   });
 

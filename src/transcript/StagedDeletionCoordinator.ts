@@ -186,14 +186,6 @@ export class StagedDeletionCoordinator {
     }
   }
 
-  /** Drop every deletion state, settling anyone awaiting a staged transaction. */
-  reset(): void {
-    for (const state of this.deletionStates.values()) {
-      if (state.kind === 'staging') state.resolveSettled();
-    }
-    this.deletionStates.clear();
-  }
-
   /**
    * Repair every stream left in a failed rollback, returning the failures so
    * the store's `flush()` can report them alongside its own.
