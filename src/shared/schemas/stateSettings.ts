@@ -491,7 +491,7 @@ const CORE_SETTING_ROWS: Record<
     default: false,
     title: 'Google background responses',
     description:
-      'Run long-running Google workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
+      'Run Google workflow generations as background Interactions (submit + poll). When this and the Google streaming toggle are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The Google streaming toggle avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
@@ -499,7 +499,7 @@ const CORE_SETTING_ROWS: Record<
       provider: 'google',
       label: 'Background responses',
       description:
-        'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
+        'Run workflow generations as background Interactions (submit + poll). When this and the Google streaming toggle are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The Google streaming toggle avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     },
   }),
   'model.useBackgroundResponses': modelProviderToggle({
