@@ -1730,18 +1730,6 @@
       "name": "runStreamedTurn"
     },
     {
-      "file": "src/tools/delegation/inBandSubagentExecution.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "SubagentReconciliationError"
-    },
-    {
-      "file": "src/tools/delegation/inBandSubagentExecution.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "InBandSubagentExecutionOptions"
-    },
-    {
       "file": "src/tools/delegation/subagentResults.ts",
       "category": "production-dead",
       "kind": "exports",

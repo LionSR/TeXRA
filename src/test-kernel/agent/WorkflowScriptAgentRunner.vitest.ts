@@ -9,10 +9,7 @@ import {
   createWorkflowScriptAgentRunner,
   fingerprintWorkflowAgentDependencies,
 } from '@tools/delegation/workflowScriptAgentRunner';
-import {
-  SubagentDurabilityError,
-  SubagentReconciliationError,
-} from '@tools/delegation/inBandSubagentExecution';
+import { SubagentDurabilityError } from '@tools/delegation/inBandSubagentExecution';
 
 const mocks = vi.hoisted(() => ({
   executeStableSubagentInBand: vi.fn(),
@@ -40,16 +37,9 @@ vi.mock('@tools/delegation/inBandSubagentExecution', () => {
       this.name = 'SubagentDurabilityError';
     }
   }
-  class SubagentReconciliationError extends SubagentDurabilityError {
-    constructor(message: string) {
-      super(message);
-      this.name = 'SubagentReconciliationError';
-    }
-  }
   return {
     executeStableSubagentInBand: mocks.executeStableSubagentInBand,
     SubagentDurabilityError,
-    SubagentReconciliationError,
   };
 });
 
@@ -325,9 +315,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     expect(mocks.preparedOptions[0]).toEqual(
       expect.objectContaining({
         agentName: 'correct',
-        parentExecutionId: runExecutionId,
         parentStreamId: runStreamId,
-        signal: call.signal,
         approvalPromptsUnavailable: true,
         runtimeUnavailableTools: ['user_question'],
         configPayload: expect.objectContaining({
@@ -783,18 +771,6 @@ describe('createWorkflowScriptAgentRunner', () => {
     await expect(runner(invocation())).rejects.toThrow(
       'Workflow subagent completed without producing any output files.',
     );
-  });
-
-  it('turns durable reconciliation failures into fatal workflow aborts', async () => {
-    mocks.executeStableSubagentInBand.mockRejectedValueOnce(
-      new SubagentReconciliationError('incomplete child state'),
-    );
-    const runner = defaultRunner();
-
-    await expect(runner(invocation())).rejects.toMatchObject({
-      name: 'WorkflowRunAbortError',
-      message: 'incomplete child state',
-    });
   });
 
   it('turns manifest-write failures into fatal workflow aborts', async () => {
