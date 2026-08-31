@@ -1,0 +1,127 @@
+import * as path from 'node:path';
+
+import pMap from 'p-map';
+
+import { isFileNotFoundError } from '@common/errors';
+import { KVStore } from '@common/storage/KVStore';
+import { createLog } from '@logger/logUtils';
+import { platform } from '@platform/platform';
+import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import {
+  ExecutionIdSchema,
+  StreamTabMetaSchema,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
+import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { StorageFS } from '@utils/files/storageFS';
+import { isDirectory } from '@utils/files/fsEntryType';
+
+import { getExecutionStore } from './ExecutionKVStore';
+
+const log = createLog('ExecutionStreamOwnership');
+const OWNERSHIP_SCAN_CONCURRENCY = 8;
+const STREAM_OWNERSHIP_LOCKS_DIR = 'streamOwnershipLocks';
+
+export interface ModernStreamClaims {
+  readonly byStream: ReadonlyMap<StreamTabId, readonly ExecutionId[]>;
+  readonly unreadable: boolean;
+}
+
+async function readExecutionDirs(): Promise<[string, number][]> {
+  try {
+    return await StorageFS.readDir(RUNS_STORAGE_DIR);
+  } catch (error) {
+    if (isFileNotFoundError(error)) return [];
+    throw error;
+  }
+}
+
+/** Read current execution-metadata stream claims without migration policy. */
+export async function readModernStreamClaims(): Promise<ModernStreamClaims> {
+  let unreadable = false;
+  const matches = (
+    await pMap(
+      await readExecutionDirs(),
+      async ([name, type]): Promise<
+        readonly [StreamTabId, ExecutionId] | undefined
+      > => {
+        if (!isDirectory(type)) return undefined;
+        const executionId = ExecutionIdSchema.safeParse(name);
+        if (!executionId.success) return undefined;
+        try {
+          const meta = await getExecutionStore(
+            executionId.data,
+          ).readMetaStrict();
+          return meta?.streamId ? [meta.streamId, executionId.data] : undefined;
+        } catch (error) {
+          unreadable = true;
+          log.warn(
+            `Could not read execution metadata while checking stream ownership: ${toErrorMessage(error)}`,
+            { data: { executionId: executionId.data, error } },
+          );
+          return undefined;
+        }
+      },
+      { concurrency: OWNERSHIP_SCAN_CONCURRENCY },
+    )
+  ).filter(
+    (match): match is readonly [StreamTabId, ExecutionId] =>
+      match !== undefined,
+  );
+  const byStream = new Map<StreamTabId, ExecutionId[]>();
+  for (const [streamId, executionId] of matches) {
+    const claims = byStream.get(streamId);
+    if (claims) claims.push(executionId);
+    else byStream.set(streamId, [executionId]);
+  }
+  return { byStream, unreadable };
+}
+
+/** Read the exact sidecar owner for one stream, rejecting malformed evidence. */
+export async function readStreamSidecarOwner(
+  streamId: StreamTabId,
+): Promise<ExecutionId | undefined> {
+  const raw = await new KVStore(streamDataDir(streamId)).read(
+    STREAM_DATA_KEYS.META,
+  );
+  if (raw === undefined) return undefined;
+  return StreamTabMetaSchema.parse(raw).executionId;
+}
+
+/** Serialize ownership validation and mutation for one persisted stream. */
+export function runWithExecutionStreamOwnershipFence<T>(
+  streamId: StreamTabId,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const lockPath = path.join(
+    platform().storage.getStoragePath(),
+    STREAM_OWNERSHIP_LOCKS_DIR,
+    encodeURIComponent(streamId),
+  );
+  return platform().fileLocks.runExclusive(lockPath, operation);
+}
+
+/** Reject a new metadata claim when persisted evidence names another owner. */
+export async function assertExecutionStreamClaimAvailable(
+  streamId: StreamTabId,
+  executionId: ExecutionId,
+): Promise<void> {
+  const [claims, sidecarOwner] = await Promise.all([
+    readModernStreamClaims(),
+    readStreamSidecarOwner(streamId),
+  ]);
+  const claimedByAnotherExecution = (claims.byStream.get(streamId) ?? []).some(
+    (claimant) => claimant !== executionId,
+  );
+  if (
+    claims.unreadable ||
+    claimedByAnotherExecution ||
+    (sidecarOwner !== undefined && sidecarOwner !== executionId)
+  ) {
+    throw new Error(
+      `Stream ${streamId} already has another or unreadable persisted execution owner.`,
+    );
+  }
+}

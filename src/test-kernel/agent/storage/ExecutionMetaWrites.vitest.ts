@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { finalizeRun, getExecutionStore } from '@agent/storage';
-import { writeSessionDescription } from '@agent/storage/executionLifecycle';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  registerExecution,
+  writeSessionDescription,
+} from '@agent/storage/executionLifecycle';
+import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import { readExecutionMeta } from '@agent/storage/executionMetaPersistence';
 import { KVStore } from '@common/storage/KVStore';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
+  AgentCategory,
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
@@ -108,6 +114,59 @@ describe('execution metadata updates', () => {
     } finally {
       release.resolve();
       readDir.mockRestore();
+    }
+  });
+
+  it('serializes legacy healing with a competing registration for the same stream', async () => {
+    const legacyId = 'bbb006' as ExecutionId;
+    const competingId = 'bbb007' as ExecutionId;
+    const streamId = 'shared-registration-stream' as StreamTabId;
+    const legacyStore = getExecutionStore(legacyId);
+    await legacyStore.writeMeta({ timestamp: new Date(0).toISOString() });
+    await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, {
+      executionId: legacyId,
+    });
+    const writeStarted = createDeferred();
+    const releaseWrite = createDeferred();
+    const originalWriteMeta = legacyStore.writeMeta.bind(legacyStore);
+    const writeMeta = vi
+      .spyOn(legacyStore, 'writeMeta')
+      .mockImplementationOnce(async (meta) => {
+        writeStarted.resolve();
+        await releaseWrite.promise;
+        return originalWriteMeta(meta);
+      });
+    const config = AgentConfigSchema.parse({
+      agent: 'assistant',
+      model: 'deepseekT',
+      agentCategory: AgentCategory.ToolUse,
+    });
+
+    try {
+      const healing = readExecutionMeta(legacyId);
+      await writeStarted.promise;
+      const registration = registerExecution(
+        competingId,
+        config,
+        config.agent,
+        {
+          streamId,
+          identity: { kind: 'agent', agent: config.agent },
+        },
+      );
+      releaseWrite.resolve();
+
+      await expect(healing).resolves.toMatchObject({ streamId });
+      await expect(registration).rejects.toThrow(
+        'already has another or unreadable persisted execution owner',
+      );
+      await expect(
+        getExecutionStore(competingId).readMeta(),
+      ).resolves.toBeNull();
+    } finally {
+      releaseWrite.resolve();
+      writeMeta.mockRestore();
+      await releaseOwnedExecutionLease(competingId).catch(() => undefined);
     }
   });
 

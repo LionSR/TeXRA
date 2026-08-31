@@ -11,6 +11,8 @@ import {
   listExecutionStreamReferences,
   readExecutionStreamIndex,
 } from '@agent/storage/executionListing';
+import { registerExecution } from '@agent/storage/executionLifecycle';
+import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import {
   createExecutionMetaReader,
   readExecutionMeta,
@@ -24,6 +26,7 @@ import * as logger from '@logger/logUtils';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { createExecutionAdjacentStreamCleanup } from '@transcript/adjacentStreamCleanup';
 import {
@@ -316,6 +319,56 @@ describe('execution listing normalization', () => {
       await expect(
         new KVStore(streamDataDir(streamId)).exists(STREAM_DATA_KEYS.META),
       ).resolves.toBe(true);
+    }
+  });
+
+  it('keeps cleanup ownership fenced against a competing stream registration', async () => {
+    const owner = 'f9892114' as ExecutionId;
+    const competing = 'f9892115' as ExecutionId;
+    const streamId = 'cleanup-registration-race' as StreamTabId;
+    await getExecutionStore(owner).writeMeta({
+      timestamp: '2026-08-30T00:00:00.000Z',
+      streamId,
+    });
+    await writeStreamMeta(streamId, { executionId: owner });
+    const cleanupStarted = createDeferred();
+    const releaseCleanup = createDeferred();
+    const cleanupExecution = createExecutionAdjacentStreamCleanup({
+      deleteAdjacentStreamState: async () => {
+        cleanupStarted.resolve();
+        await releaseCleanup.promise;
+        await StorageFS.delete(streamDataDir(streamId), { recursive: true });
+      },
+    });
+    const competingConfig = config('assistant');
+
+    try {
+      const cleanup = cleanupExecution(owner);
+      await cleanupStarted.promise;
+      let registrationSettled = false;
+      const registration = registerExecution(
+        competing,
+        competingConfig,
+        competingConfig.agent,
+        {
+          streamId,
+          identity: { kind: 'agent', agent: competingConfig.agent },
+        },
+      ).finally(() => {
+        registrationSettled = true;
+      });
+      await Promise.resolve();
+      expect(registrationSettled).toBe(false);
+      releaseCleanup.resolve();
+
+      await expect(cleanup).resolves.toBeUndefined();
+      await expect(registration).rejects.toThrow(
+        'already has another or unreadable persisted execution owner',
+      );
+      await expect(getExecutionStore(competing).readMeta()).resolves.toBeNull();
+    } finally {
+      releaseCleanup.resolve();
+      await releaseOwnedExecutionLease(competing).catch(() => undefined);
     }
   });
 

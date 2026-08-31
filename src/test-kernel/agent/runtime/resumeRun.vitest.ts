@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
+import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -244,6 +245,17 @@ describe('resumeRun tool-use queue ownership', () => {
       resumeRun(EXECUTION, { session, executeWorkflow }),
     ).rejects.toThrow('failed');
     expect(session.followUps.getAll(STREAM)).toEqual(['keep me']);
+  });
+
+  it('does not relabel lease loss after healing as foreign ownership', async () => {
+    const session = createSession();
+    resumeToolUseFromResumeDataMock.mockRejectedValueOnce(
+      new ExecutionLeaseLostError(EXECUTION),
+    );
+
+    await expect(
+      resumeRun(EXECUTION, { session, executeWorkflow }),
+    ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
   });
 
   it('replays a completed-child result that races a failed recovery', async () => {

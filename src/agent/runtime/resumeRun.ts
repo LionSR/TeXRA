@@ -194,6 +194,9 @@ async function resumeRunWithRecoveryProvenance(
     streamId = meta?.streamId;
   } catch (error) {
     abandonSupplied();
+    if (error instanceof ExecutionLeaseLostError) {
+      return { failed: 'owned_elsewhere' };
+    }
     return refusalFor(error) ?? Promise.reject(error);
   }
   // FK-first: current rows use the registration edge directly. A historical
@@ -299,10 +302,7 @@ function releaseUnstartedRecovery(
 
 /** Expected ownership and session refusals a host words; anything else rejects. */
 function refusalFor(error: unknown): ResumeRunResult | undefined {
-  if (
-    error instanceof ExecutionLeaseActiveError ||
-    error instanceof ExecutionLeaseLostError
-  ) {
+  if (error instanceof ExecutionLeaseActiveError) {
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {

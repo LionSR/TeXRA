@@ -32,6 +32,10 @@ import {
   releaseOwnedExecutionLease,
   runWithExecutionLeaseWriteFence,
 } from './executionLease';
+import {
+  assertExecutionStreamClaimAvailable,
+  runWithExecutionStreamOwnershipFence,
+} from './executionStreamOwnership';
 
 const log = createLog('ExecutionLifecycle');
 
@@ -70,23 +74,31 @@ export async function getPersistedUserFollowUpSupport(
 
 const metaWriteLocks = new KeyedMutex<ExecutionId>();
 
+/** Serialize a metadata mutation behind this execution's lease fence. */
+export function runWithExecutionMetaWriteFence<T>(
+  executionId: ExecutionId,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return metaWriteLocks.runExclusive(executionId, () =>
+    runWithExecutionLeaseWriteFence(executionId, operation),
+  );
+}
+
 /** Run a fenced read-modify-write cycle on an execution's metadata. */
-export function updateExecutionMeta(
+function updateExecutionMeta(
   executionId: ExecutionId,
   updater: (existing: ExecutionMeta) => Partial<ExecutionMeta>,
 ): Promise<ExecutionMeta> {
-  return metaWriteLocks.runExclusive(executionId, () =>
-    runWithExecutionLeaseWriteFence(executionId, async () => {
-      const store = getExecutionStore(executionId);
-      const existing = await store.readMeta();
-      if (!existing) {
-        throw new Error(`Execution metadata not found for ${executionId}`);
-      }
-      const updated = { ...existing, ...updater(existing) };
-      await store.writeMeta(updated);
-      return updated;
-    }),
-  );
+  return runWithExecutionMetaWriteFence(executionId, async () => {
+    const store = getExecutionStore(executionId);
+    const existing = await store.readMeta();
+    if (!existing) {
+      throw new Error(`Execution metadata not found for ${executionId}`);
+    }
+    const updated = { ...existing, ...updater(existing) };
+    await store.writeMeta(updated);
+    return updated;
+  });
 }
 
 /** Persist the workflow runner's canonical execution snapshot on its run. */
@@ -136,41 +148,44 @@ export async function registerExecution(
   } = options;
   await acquireFreshExecutionLease(executionId);
   try {
-    const timestamp = new Date().toISOString();
-    const store = getExecutionStore(executionId);
-    const meta: RegisteredExecutionMeta = {
-      schemaVersion: 1,
-      timestamp,
-      streamId,
-      identity,
-      userFollowUpSupport:
-        userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      parentExecutionId,
-      ...(description ? { description } : {}),
-    };
-    const persistedRecord = pinExecutionWorkingDirectory(record);
+    await runWithExecutionStreamOwnershipFence(streamId, async () => {
+      await assertExecutionStreamClaimAvailable(streamId, executionId);
+      const timestamp = new Date().toISOString();
+      const store = getExecutionStore(executionId);
+      const meta: RegisteredExecutionMeta = {
+        schemaVersion: 1,
+        timestamp,
+        streamId,
+        identity,
+        userFollowUpSupport:
+          userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        parentExecutionId,
+        ...(description ? { description } : {}),
+      };
+      const persistedRecord = pinExecutionWorkingDirectory(record);
 
-    const writes: Promise<void>[] = [
-      store.writeRunRecord(persistedRecord),
-      store.writeMeta(meta),
-    ];
-    if (parentExecutionId) {
-      writes.push(
-        getExecutionStore(parentExecutionId).writeChild(executionId, {
-          agent: agentName,
-          timestamp,
-        }),
+      const writes: Promise<void>[] = [
+        store.writeRunRecord(persistedRecord),
+        store.writeMeta(meta),
+      ];
+      if (parentExecutionId) {
+        writes.push(
+          getExecutionStore(parentExecutionId).writeChild(executionId, {
+            agent: agentName,
+            timestamp,
+          }),
+        );
+      }
+
+      const results = await Promise.allSettled(writes);
+      const errors = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
       );
-    }
-
-    const results = await Promise.allSettled(writes);
-    const errors = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : [],
-    );
-    throwAggregated(
-      errors,
-      `Multiple execution registration writes failed for ${executionId}`,
-    );
+      throwAggregated(
+        errors,
+        `Multiple execution registration writes failed for ${executionId}`,
+      );
+    });
   } catch (error) {
     try {
       await releaseOwnedExecutionLease(executionId);

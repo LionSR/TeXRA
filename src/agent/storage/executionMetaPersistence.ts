@@ -5,9 +5,7 @@ import pMap from 'p-map';
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
-  ExecutionIdSchema,
   StreamTabMetaSchema,
   type ExecutionId,
   type ExecutionMeta,
@@ -27,7 +25,13 @@ import { isDirectory } from '@utils/files/fsEntryType';
 
 // Local imports
 import { getExecutionStore } from './ExecutionKVStore';
-import { updateExecutionMeta } from './executionLifecycle';
+import { runWithExecutionMetaWriteFence } from './executionLifecycle';
+import {
+  readModernStreamClaims,
+  readStreamSidecarOwner,
+  runWithExecutionStreamOwnershipFence,
+  type ModernStreamClaims,
+} from './executionStreamOwnership';
 
 const log = createLog('ExecutionStreamHealing');
 const LEGACY_SCAN_CONCURRENCY = 8;
@@ -35,11 +39,6 @@ const LEGACY_SCAN_CONCURRENCY = 8;
 interface LegacyStreamEvidence {
   readonly candidates: ReadonlyMap<ExecutionId, readonly StreamTabId[]>;
   readonly malformedExecutionIds: ReadonlySet<ExecutionId>;
-  readonly unreadable: boolean;
-}
-
-interface ModernStreamClaims {
-  readonly byStream: ReadonlyMap<StreamTabId, readonly ExecutionId[]>;
   readonly unreadable: boolean;
 }
 
@@ -121,55 +120,35 @@ async function readLegacyStreamEvidence(): Promise<LegacyStreamEvidence> {
   return { candidates, malformedExecutionIds, unreadable };
 }
 
-async function readModernStreamClaims(): Promise<ModernStreamClaims> {
-  const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
-  let unreadable = false;
-  const matches = (
-    await pMap(
-      entries,
-      async ([name, type]): Promise<
-        readonly [StreamTabId, ExecutionId] | undefined
-      > => {
-        if (!isDirectory(type)) return undefined;
-        const executionId = ExecutionIdSchema.safeParse(name);
-        if (!executionId.success) return undefined;
-        try {
-          const meta = await getExecutionStore(
-            executionId.data,
-          ).readMetaStrict();
-          return meta?.streamId ? [meta.streamId, executionId.data] : undefined;
-        } catch (error) {
-          unreadable = true;
-          log.warn(
-            `Could not read execution metadata while checking historical stream ownership: ${toErrorMessage(error)}`,
-            { data: { executionId: executionId.data, error } },
-          );
-          return undefined;
-        }
-      },
-      { concurrency: LEGACY_SCAN_CONCURRENCY },
-    )
-  ).filter(
-    (match): match is readonly [StreamTabId, ExecutionId] =>
-      match !== undefined,
-  );
-  const byStream = new Map<StreamTabId, ExecutionId[]>();
-  for (const [streamId, executionId] of matches) {
-    const claims = byStream.get(streamId);
-    if (claims) claims.push(executionId);
-    else byStream.set(streamId, [executionId]);
-  }
-  return { byStream, unreadable };
-}
-
 async function stampRecoveredStreamId(
   executionId: ExecutionId,
   streamId: StreamTabId,
-): Promise<StreamTabId> {
-  const persisted = await updateExecutionMeta(executionId, (existing) =>
-    existing.streamId ? {} : { streamId },
+  claims: ModernStreamClaims,
+): Promise<StreamTabId | undefined> {
+  return runWithExecutionMetaWriteFence(executionId, () =>
+    runWithExecutionStreamOwnershipFence(streamId, async () => {
+      const sidecarOwner = await readStreamSidecarOwner(streamId);
+      const claimedByAnotherExecution = (
+        claims.byStream.get(streamId) ?? []
+      ).some((claimant) => claimant !== executionId);
+      if (
+        claims.unreadable ||
+        sidecarOwner !== executionId ||
+        claimedByAnotherExecution
+      ) {
+        return undefined;
+      }
+
+      const store = getExecutionStore(executionId);
+      const existing = await store.readMeta();
+      if (!existing) {
+        throw new Error(`Execution metadata not found for ${executionId}`);
+      }
+      if (existing.streamId) return existing.streamId;
+      await store.writeMeta({ ...existing, streamId });
+      return streamId;
+    }),
   );
-  return persisted.streamId ?? streamId;
 }
 
 /**
@@ -216,15 +195,14 @@ function createLegacyExecutionStreamHealer(): (
 
     modernClaims ??= readModernStreamClaims();
     const claims = await modernClaims;
-    const claimedByAnotherExecution = (
-      claims.byStream.get(candidates[0]) ?? []
-    ).some((claimant) => claimant !== executionId);
-    if (claims.unreadable || claimedByAnotherExecution) {
-      return { streamId: undefined, ownershipUnknown: true };
-    }
+    const streamId = await stampRecoveredStreamId(
+      executionId,
+      candidates[0],
+      claims,
+    );
     return {
-      streamId: await stampRecoveredStreamId(executionId, candidates[0]),
-      ownershipUnknown: false,
+      streamId,
+      ownershipUnknown: streamId === undefined,
     };
   };
 }
@@ -244,6 +222,11 @@ export interface ExecutionMetaReader {
   readStrict(executionId: ExecutionId): Promise<ExecutionMeta | null>;
   /** Validate persisted stream claims before destructive adjacent cleanup. */
   readForDeletion(executionId: ExecutionId): Promise<ExecutionMeta | null>;
+  /** Keep stream ownership fenced from validation through destructive commit. */
+  withStreamForDeletion(
+    executionId: ExecutionId,
+    operation: (streamId: StreamTabId) => Promise<void>,
+  ): Promise<void>;
 }
 
 /**
@@ -274,6 +257,14 @@ export function createExecutionMetaReader(): ExecutionMetaReader {
     }
     return recovery.streamId ? { ...meta, streamId: recovery.streamId } : meta;
   };
+  const readForDeletion = async (
+    executionId: ExecutionId,
+  ): Promise<ExecutionMeta | null> =>
+    normalize(
+      executionId,
+      await getExecutionStore(executionId).readMetaStrict(),
+      'deletion',
+    );
   return {
     read: async (executionId) =>
       normalize(
@@ -287,12 +278,19 @@ export function createExecutionMetaReader(): ExecutionMetaReader {
         await getExecutionStore(executionId).readMetaStrict(),
         'strict',
       ),
-    readForDeletion: async (executionId) =>
-      normalize(
-        executionId,
-        await getExecutionStore(executionId).readMetaStrict(),
-        'deletion',
-      ),
+    readForDeletion,
+    withStreamForDeletion: async (executionId, operation) => {
+      const meta = await readForDeletion(executionId);
+      const streamId = meta?.streamId;
+      if (!streamId) return;
+      await runWithExecutionStreamOwnershipFence(streamId, async () => {
+        const recovery = await healLegacyStreamId(executionId, meta, true);
+        if (recovery.ownershipUnknown || recovery.streamId !== streamId) {
+          throw new ExecutionStreamOwnershipUnknownError(executionId);
+        }
+        await operation(streamId);
+      });
+    },
   };
 }
 

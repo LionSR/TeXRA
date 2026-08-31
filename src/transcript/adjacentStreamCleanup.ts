@@ -112,9 +112,9 @@ export function createExecutionAdjacentStreamCleanup(
   const metaReader = createExecutionMetaReader();
   return async (executionId) => {
     try {
-      const meta = await metaReader.readForDeletion(executionId);
-      if (!meta?.streamId) return;
-      await cleanup.deleteAdjacentStreamState(meta.streamId);
+      await metaReader.withStreamForDeletion(executionId, (streamId) =>
+        cleanup.deleteAdjacentStreamState(streamId),
+      );
     } catch (error) {
       throw new Error(
         `Execution ${executionId}'s transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,
