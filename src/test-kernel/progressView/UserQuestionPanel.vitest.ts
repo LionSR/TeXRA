@@ -172,6 +172,7 @@ describe('user-question-panel', () => {
     const radioGroup = element.shadowRoot?.querySelector(
       'wa-radio-group',
     ) as HTMLElement & { value?: string };
+    expect(radioGroup.getAttribute('label')).toBe('Choose one answer');
     radioGroup.value = 'No';
     dispatchChange(radioGroup);
     await element.updateComplete;

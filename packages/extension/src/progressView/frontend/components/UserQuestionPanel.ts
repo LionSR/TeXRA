@@ -106,14 +106,16 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
     return html`
       <fieldset class="user-question-request__question">
         <legend class="user-question-request__heading">
-          ${
-            question.header
-              ? html`<span class="user-question-request__header">
-                  ${question.header}
-                </span>`
-              : nothing
-          }
-          <span>${question.question}</span>
+          <span class="user-question-request__heading-content">
+            ${
+              question.header
+                ? html`<span class="user-question-request__header">
+                    ${question.header}
+                  </span>`
+                : nothing
+            }
+            <span>${question.question}</span>
+          </span>
         </legend>
         <div class="user-question-request__options">
           ${
@@ -126,7 +128,7 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
                 )
               : html`
                   <wa-radio-group
-                    label=${question.question}
+                    label="Choose one answer"
                     .value=${
                       this.freeText[question.question]?.trim()
                         ? ''

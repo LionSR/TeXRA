@@ -24,16 +24,20 @@ export const userQuestionPanelStyles: CSSResult = css`
   }
 
   .user-question-request__heading {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: ${sp.small};
     max-inline-size: 100%;
     padding: 0;
     color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-normal);
     overflow-wrap: anywhere;
+  }
+
+  .user-question-request__heading-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: ${sp.small};
+    max-inline-size: 100%;
   }
 
   .user-question-request__header {
@@ -59,9 +63,9 @@ export const userQuestionPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  /* Web Awesome requires its label API to name the internal radio group. The
-     fieldset legend is the visible label, so keep the duplicate text available
-     only to assistive technology. */
+  /* Web Awesome requires its label API to name the internal radio group. Keep
+     the short action cue available to assistive technology without repeating
+     the question already supplied by the outer fieldset legend. */
   wa-radio-group::part(form-control-label) {
     position: absolute;
     width: 1px;
