@@ -169,14 +169,88 @@ function workflowCardsInTranscriptOrder(
   );
 }
 
-/** One run-wide attempt identity, selected before any phase is tallied. */
+interface AttemptBoundary {
+  readonly attemptId: string;
+  readonly timestamp: number;
+  readonly stableKey: string;
+  readonly seqNo?: number;
+}
+
+function usableSeqNo(seqNo: number | undefined): number | undefined {
+  return seqNo !== undefined && Number.isSafeInteger(seqNo) && seqNo > 0
+    ? seqNo
+    : undefined;
+}
+
+function laterAttemptBoundaryByTime(
+  left: AttemptBoundary | undefined,
+  right: AttemptBoundary,
+): AttemptBoundary {
+  if (!left) return right;
+  if (right.timestamp !== left.timestamp) {
+    return right.timestamp > left.timestamp ? right : left;
+  }
+  return right.stableKey > left.stableKey ? right : left;
+}
+
+/**
+ * One run-wide attempt identity, selected before any phase is tallied.
+ * Sequenced cards first elect their newest wire fact without consulting wall
+ * clocks. Legacy cards and phase boundaries elect by time with a stable key;
+ * the two generation winners then use that same fallback chronology. There is
+ * no causal key that can order a legacy fact against a sequenced one, so clock
+ * skew across that boundary remains inherently ambiguous, but this staged fold
+ * is deterministic and cannot form the mixed-comparator cycles a sort can.
+ */
 function latestWorkflowAttemptId(
   cards: readonly WorkflowTaskRow[],
+  taskGroups: readonly TaskGroup[],
   plan: WorkflowRunModelInput['plan'],
 ): string | undefined {
   if (plan && 'attemptId' in plan) return plan.attemptId;
-  return cards.findLast((row) => row.call.attemptId !== undefined)?.call
-    .attemptId;
+
+  let sequenced: AttemptBoundary | undefined;
+  let fallback: AttemptBoundary | undefined;
+  for (const row of cards) {
+    const attemptId = row.call.attemptId;
+    if (attemptId === undefined) continue;
+    const seqNo = usableSeqNo(row.seqNo);
+    const boundary: AttemptBoundary = {
+      attemptId,
+      timestamp: row.timestamp,
+      stableKey: `card:${row.id}`,
+      ...(seqNo !== undefined ? { seqNo } : {}),
+    };
+    if (seqNo === undefined) {
+      fallback = laterAttemptBoundaryByTime(fallback, boundary);
+    } else {
+      const previousSeqNo = sequenced?.seqNo;
+      if (
+        previousSeqNo === undefined ||
+        seqNo > previousSeqNo ||
+        (seqNo === previousSeqNo &&
+          laterAttemptBoundaryByTime(sequenced, boundary) === boundary)
+      ) {
+        sequenced = boundary;
+      }
+    }
+  }
+  for (const group of taskGroups) {
+    if (group.kind !== 'phase' || group.attemptId === undefined) continue;
+    fallback = laterAttemptBoundaryByTime(fallback, {
+      attemptId: group.attemptId,
+      timestamp: group.startTime,
+      stableKey: `phase:${group.id}`,
+    });
+  }
+
+  if (!fallback) return sequenced?.attemptId;
+  if (!sequenced) return fallback.attemptId;
+  return laterAttemptBoundaryByTime(sequenced, fallback).attemptId;
+}
+
+function phaseLogicalIdentity(phase: MutablePhase): string {
+  return `${phase.heading.phaseLabel}\u0000${phase.heading.phaseIndex ?? 'unknown'}`;
 }
 
 function tallyOf(
@@ -292,9 +366,13 @@ export function workflowRunModel(
   // cards in with the one actually running.
   const cards = workflowCardsInTranscriptOrder(input.rows);
   // The latest plan marker is definitive even before the attempt issues a
-  // card. Traces predating plan markers fall back to the last tagged card in
-  // true transcript order, including cards issued outside a phase.
-  const latestAttemptId = latestWorkflowAttemptId(cards, input.plan);
+  // card. Without one, the fallback elects from sequenced cards plus timed
+  // legacy cards and phase openings, including calls issued outside a phase.
+  const latestAttemptId = latestWorkflowAttemptId(
+    cards,
+    input.taskGroups,
+    input.plan,
+  );
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -321,14 +399,20 @@ export function workflowRunModel(
   }
   // Phase ownership handles the call-less case that card references cannot:
   // an explicitly superseded empty phase is stale. Untagged empty phases are
-  // preserved for mixed-version traces: an old untagged call-less phase is
-  // indistinguishable from a current one without inventing host-local state.
+  // preserved for mixed-version traces unless the latest attempt opened the
+  // same title/index, which is the only evidence that the untagged copy is old.
+  const latestOwnedPhaseIdentities = new Set(
+    phases
+      .filter((phase) => phase.attemptId === latestAttemptId)
+      .map(phaseLogicalIdentity),
+  );
   const opened = phases.filter(
     (phase) =>
       phase.tasks.length > 0 ||
       latestAttemptId === undefined ||
-      phase.attemptId === undefined ||
-      phase.attemptId === latestAttemptId,
+      phase.attemptId === latestAttemptId ||
+      (phase.attemptId === undefined &&
+        !latestOwnedPhaseIdentities.has(phaseLogicalIdentity(phase))),
   );
   const ordered = [
     ...(input.plan

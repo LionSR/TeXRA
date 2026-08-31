@@ -233,6 +233,64 @@ describe('workflow run model', () => {
     expect(model.phases.map((phase) => phase.key)).toStrictEqual([current.id]);
   });
 
+  it('deduplicates an untagged empty phase when the latest attempt owns its identity', () => {
+    const oldMap = {
+      ...phaseGroup('Map', 0, 1),
+      id: 'old-map',
+    };
+    const currentMap = {
+      ...phaseGroup('Map', 0, 1),
+      id: 'current-map',
+      attemptId: 'a2',
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [oldMap, currentMap],
+      rows: [],
+      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
+      currentMap.id,
+    ]);
+  });
+
+  it('uses a call-less tagged phase as the latest fallback boundary', () => {
+    const oldMap = {
+      ...phaseGroup('Map', 0, 2),
+      id: 'old-map',
+      startTime: 10,
+      attemptId: 'a1',
+    };
+    const currentReview = {
+      ...phaseGroup('Review', 1, 2),
+      id: 'current-review',
+      startTime: 30,
+      attemptId: 'a2',
+    };
+    const oldCard = {
+      ...taskRow({ id: 'old-card', phase: 'Map', attemptId: 'a1' }),
+      groupId: oldMap.id,
+      seqNo: 10,
+      timestamp: 20,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [oldMap, currentReview],
+      rows: [oldCard],
+      plan: undefined,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks).toStrictEqual([]);
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
+      currentReview.id,
+    ]);
+  });
+
   it('orders mixed-generation cards by the shared transcript fallback', () => {
     const oldChild = {
       ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
@@ -256,6 +314,38 @@ describe('workflow run model', () => {
 
     expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
       'resumed-root',
+    ]);
+  });
+
+  it('selects an attempt deterministically across clock-skewed row generations', () => {
+    const oldChild = {
+      ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
+      seqNo: 10,
+      timestamp: 300,
+    };
+    const currentChild = {
+      ...taskRow({ id: 'current-child', phase: 'Map', attemptId: 'a2' }),
+      seqNo: 20,
+      timestamp: 100,
+    };
+    const currentLegacyRoot = {
+      ...taskRow({ id: 'current-legacy-root', attemptId: 'a2' }),
+      timestamp: 200,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [],
+      // Root-first input plus 300 > 200 > 100 creates a cycle for pairwise
+      // seqNo/timestamp sorting. Attempt selection must not depend on that sort.
+      rows: [currentLegacyRoot, currentChild, oldChild],
+      plan: undefined,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks.map((row) => row.call.id).toSorted()).toStrictEqual([
+      'current-child',
+      'current-legacy-root',
     ]);
   });
 

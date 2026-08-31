@@ -10,8 +10,10 @@ import {
   ToolUseLogSchema,
   type StreamLogEntry,
   type StreamTabId,
+  type TaskGroup,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createTempDirPlatform,
@@ -124,6 +126,34 @@ describe('attachTranscriptRecorder stage kind (issue #7267)', () => {
 
     expect(runEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(dataOf(runEntry).kind).toBe('run');
+  });
+
+  it('persists and projects phase attempt ownership through stage end', () => {
+    const { trace, row } = attachRecorder();
+    trace.emit({
+      type: 'workflow.plan',
+      attemptId: 'attempt-2',
+      phases: [{ title: 'Review' }],
+      tasks: [],
+    });
+
+    const phase = trace.openStage('Review', {
+      kind: 'phase',
+      index: 0,
+      total: 1,
+    });
+    phase.end();
+
+    const entry = row(phase.id)!;
+    expect(entry).toMatchObject({
+      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
+      data: { attemptId: 'attempt-2' },
+    });
+    const groups: TaskGroup[] = [];
+    expect(upsertTaskGroupFromStreamLog(groups, new Map(), entry)).toBe(true);
+    expect(groups).toMatchObject([
+      { id: phase.id, attemptId: 'attempt-2', status: STREAM_PHASE.COMPLETED },
+    ]);
   });
 
   it('preserves phase position metadata on the terminal row', () => {
