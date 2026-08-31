@@ -2539,6 +2539,19 @@ describe('CLI transcript state', () => {
       ],
     }));
     const logger = runTrace(child1);
+    logger.openStage('Stale phase', {
+      id: 'compact-stale-phase',
+      kind: 'phase',
+    });
+    logger.info('Stale task', {
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      data: {
+        id: 'stale-task',
+        label: 'Stale task',
+        phase: 'Stale phase',
+        status: 'cached',
+      },
+    });
     logger.openStage('Old phase', {
       id: 'compact-old-phase',
       kind: 'phase',
@@ -2609,6 +2622,7 @@ describe('CLI transcript state', () => {
     );
     expect(JSON.stringify(entries)).not.toContain('Compact operational');
     expect(JSON.stringify(entries)).not.toContain('compact-old-phase');
+    expect(JSON.stringify(entries)).not.toContain('compact-stale-phase');
   });
 
   it('keeps the runtime description while the latest line follows the transcript', () => {

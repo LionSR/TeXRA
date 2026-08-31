@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkflowPopup } from '@cli/chat/tui/panes/WorkflowPopup';
+import { retainedWorkflowPopupProjection } from '@cli/chat/tui/state/transcriptFold';
 import {
   emptySlice,
   type WorkflowPopupView,
@@ -14,7 +15,7 @@ import type {
   TaskGroup,
   WorkflowCallProgress,
 } from '@shared/schemas';
-import type { WorkflowTaskRow } from '@shared/transcript';
+import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -53,14 +54,15 @@ function taskRow(
 
 async function renderPopup(
   taskGroups: readonly TaskGroup[],
-  rows: readonly WorkflowTaskRow[],
+  rows: readonly TranscriptRow[],
   availableRows: number,
 ) {
   const slice = { ...emptySlice(ROOT), taskGroups, entries: rows };
+  const retained = retainedWorkflowPopupProjection(slice);
   const model = workflowRunModel({
-    taskGroups,
-    rows,
-    plan: undefined,
+    taskGroups: retained.taskGroups,
+    rows: retained.rows,
+    plan: retained.plan,
     runSettled: false,
     childProgress: new Map(),
   });
@@ -101,7 +103,16 @@ describe('workflow popup', () => {
           kind: 'phase',
         },
       ],
-      [],
+      [
+        {
+          kind: 'phase',
+          id: 'phase-current',
+          timestamp: 0,
+          level: 'info',
+          heading: 'Explore',
+          phaseLabel: 'Explore',
+        },
+      ],
       20,
     );
     try {

@@ -42,6 +42,7 @@ import {
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
+import { retainedWorkflowPopupProjection } from '@cli/chat/tui/state/transcriptFold';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   AgentCategory,
@@ -53,6 +54,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { transcriptText, type TranscriptRow } from '@shared/transcript';
+import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -224,19 +226,70 @@ afterEach(() => {
 });
 
 describe('CLI workflow-script child-stream transcript', () => {
-  it('loads a complete workflow projection for its popup and Ctrl-T log', async () => {
+  it('keeps the popup bounded while its full-transcript lease is active', async () => {
     const runTrace = openRunTrace(STREAM_ID);
-    for (let index = 0; index < 2_001; index++) {
+    runTrace.trace.emit({
+      type: 'workflow.plan',
+      attemptId: 'attempt-current',
+      phases: [{ title: 'Stale' }, { title: 'Repeated' }, { title: 'Future' }],
+      tasks: [
+        { id: 'stale-call', label: 'Stale call', phase: 'Stale' },
+        {
+          id: 'retained-call-1998',
+          label: 'Retained call 1998',
+          phase: 'Repeated',
+        },
+        { id: 'future-call', label: 'Future call', phase: 'Future' },
+      ],
+    });
+    runTrace.trace.info('Old workflow detail', {
+      messageType: MESSAGE_TYPES.DEFAULT,
+    });
+    const stalePhase = runTrace.trace.openStage('Stale', {
+      id: 'stale-phase',
+      kind: 'phase',
+      index: 0,
+      total: 3,
+    });
+    runTrace.trace.emit({
+      type: 'workflow.call',
+      logId: 'stale-task',
+      stageId: stalePhase.id,
+      call: {
+        id: 'stale-call',
+        label: 'Stale call',
+        phase: 'Stale',
+        status: 'completed',
+        attemptId: 'attempt-current',
+      },
+    });
+    stalePhase.end('completed');
+
+    const referencedPhase = runTrace.trace.openStage('Repeated', {
+      id: 'referenced-phase',
+      kind: 'phase',
+      index: 1,
+      total: 3,
+    });
+    for (let index = 0; index < 1_999; index++) {
       runTrace.trace.emit({
         type: 'workflow.call',
-        logId: `task-${index}`,
+        logId: `retained-task-${index}`,
+        stageId: referencedPhase.id,
         call: {
-          id: `call-${index}`,
-          label: `Call ${index}`,
+          id: `retained-call-${index}`,
+          label: `Retained call ${index}`,
+          phase: 'Repeated',
           status: 'planned',
+          attemptId: 'attempt-current',
         },
       });
     }
+    referencedPhase.end('completed');
+    runTrace.trace.openStage('Repeated', {
+      id: 'empty-phase',
+      kind: 'phase',
+    });
     runTrace.trace.info('Full workflow log detail', {
       messageType: MESSAGE_TYPES.DEFAULT,
     });
@@ -245,7 +298,10 @@ describe('CLI workflow-script child-stream transcript', () => {
 
     syncStreamLog(defaultSession(), STREAM_ID);
     expect(streamEntries()).toHaveLength(2_000);
-    expect(streamEntries().some((row) => row.id === 'task-0')).toBe(false);
+    expect(streamEntries().some((row) => row.id === 'stale-phase')).toBe(false);
+    expect(streamEntries().some((row) => row.id === 'referenced-phase')).toBe(
+      false,
+    );
 
     // Exercise the roster-first interval: the parent already classifies this
     // child as a workflow, but the child's own run metadata has not landed.
@@ -268,14 +324,65 @@ describe('CLI workflow-script child-stream transcript', () => {
     const dispose = subscribeStreamLog(defaultSession());
     try {
       openWorkflowPopup(STREAM_ID);
-      await waitFor(() => streamEntries().length === 2_002);
-      expect(streamEntries().some((row) => row.id === 'task-0')).toBe(true);
+      await waitFor(() => streamEntries().length === 2_005);
+      expect(streamEntries().some((row) => row.id === 'stale-phase')).toBe(
+        true,
+      );
       expect(streamEntries().map(transcriptRowHeadline)).toContain(
         'Full workflow log detail',
       );
 
+      const slice = streamSlice()!;
+      expect(slice.taskGroups.map((group) => group.id)).toEqual([
+        'stale-phase',
+        'referenced-phase',
+        'empty-phase',
+      ]);
+      const retained = retainedWorkflowPopupProjection(slice);
+      const model = workflowRunModel({
+        taskGroups: retained.taskGroups,
+        rows: retained.rows,
+        workflowAttemptId: slice.workflowAttemptId,
+        plan: retained.plan,
+        runSettled: false,
+        childProgress: new Map(),
+      });
+      expect(retained.rows).toHaveLength(2_000);
+      expect(retained.plan?.phases.map((phase) => phase.title)).toEqual([
+        'Repeated',
+        'Future',
+      ]);
+      expect(retained.plan?.tasks.map((task) => task.id)).toEqual([
+        'retained-call-1998',
+        'future-call',
+      ]);
+      expect(model.phases.map((phase) => phase.key)).toEqual([
+        'empty-phase',
+        'declared-Future',
+        'referenced-phase',
+      ]);
+      expect(model.phases.map((phase) => phase.heading.phaseLabel)).toEqual([
+        'Repeated',
+        'Future',
+        'Repeated',
+      ]);
+      expect(model.phases.map((phase) => phase.tasks.length)).toEqual([
+        0, 0, 1_999,
+      ]);
+      expect(model.tasks.some((row) => row.call.id === 'stale-call')).toBe(
+        false,
+      );
+
+      seedWorkflowStreamMeta();
       openTranscriptReader(STREAM_ID);
-      await waitFor(() => streamEntries().length === 2_002);
+      syncStreamLog(defaultSession(), STREAM_ID);
+      await waitFor(() => streamEntries().length === 2_005);
+      expect(streamEntries().map(transcriptRowHeadline)).toContain(
+        'Old workflow detail',
+      );
+      expect(streamEntries().map(transcriptRowHeadline)).toContain(
+        'Full workflow log detail',
+      );
 
       closeForegroundReader();
       await waitFor(() => streamEntries().length === 2_000);

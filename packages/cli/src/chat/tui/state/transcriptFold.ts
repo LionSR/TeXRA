@@ -709,13 +709,36 @@ export function applyStreamChanges(
   return { taskGroups, workflowAttemptId, workflowPlan, compaction };
 }
 
+/** Phase groups represented inside the already-retained dashboard rows.
+ *  Stable row/group ids preserve a phase whose divider crossed the cutoff but
+ *  whose task did not, without making this helper another retention owner. */
+function retainedWorkflowTaskGroups(
+  taskGroups: readonly TaskGroup[],
+  rows: readonly TranscriptRow[],
+): readonly TaskGroup[] {
+  const retainedPhaseIds = new Set<string>();
+  for (const row of rows) {
+    if (row.kind === 'phase') retainedPhaseIds.add(row.id);
+    else if (row.kind === 'workflowTask' && row.groupId !== undefined) {
+      retainedPhaseIds.add(row.groupId);
+    }
+  }
+  return taskGroups.filter(
+    (group) => group.kind !== 'phase' || retainedPhaseIds.has(group.id),
+  );
+}
+
 /** The bounded dashboard + local-row selection for an unfocused workflow
  *  stream, with the count of leading rows the promotion has already printed
  *  (the selection preserves order, so promoted rows stay a prefix of it). */
 export function compactWorkflowEntries(
   items: readonly TranscriptFoldItem[],
   finalizedFrontier: number,
-): { rows: TranscriptRow[]; finalizedFrontier: number } {
+): {
+  rows: TranscriptRow[];
+  finalizedFrontier: number;
+  dashboardTruncated: boolean;
+} {
   let dashboardCount = 0;
   for (const item of items) {
     if (
@@ -743,5 +766,102 @@ export function compactWorkflowEntries(
     if (index < finalizedFrontier && promoted === rows.length) promoted += 1;
     rows.push(row);
   }
-  return { rows, finalizedFrontier: promoted };
+  return {
+    rows,
+    finalizedFrontier: promoted,
+    dashboardTruncated: dashboardCount > MAX_COMPACT_WORKFLOW_DASHBOARD_ENTRIES,
+  };
+}
+
+/** The popup's dashboard projection, kept bounded even while its presentation
+ *  lease makes the slice expose the complete transcript to Ctrl-T. */
+export function retainedWorkflowPopupProjection(input: {
+  readonly entries: readonly TranscriptRow[];
+  readonly taskGroups: readonly TaskGroup[];
+  readonly workflowPlan: WorkflowPlanMarker | undefined;
+  readonly transcriptFold?: TranscriptFoldState;
+}): {
+  readonly rows: readonly TranscriptRow[];
+  readonly taskGroups: readonly TaskGroup[];
+  readonly plan: WorkflowPlanMarker | undefined;
+} {
+  const fold = input.transcriptFold;
+  const fullRows = fold?.hydrated
+    ? fold.items.map((item) => item.rendered)
+    : input.entries;
+  const compact = fold?.hydrated
+    ? compactWorkflowEntries(fold.items, fold.finalizedFrontier)
+    : {
+        rows: input.entries,
+        finalizedFrontier: 0,
+        dashboardTruncated: false,
+      };
+  const taskGroups = retainedWorkflowTaskGroups(input.taskGroups, compact.rows);
+  const retainedPhaseIds = new Set(
+    taskGroups
+      .filter((group) => group.kind === 'phase')
+      .map((group) => group.id),
+  );
+  const phaseGroupWasDropped = input.taskGroups.some(
+    (group) => group.kind === 'phase' && !retainedPhaseIds.has(group.id),
+  );
+  if (
+    !input.workflowPlan ||
+    (!compact.dashboardTruncated && !phaseGroupWasDropped)
+  ) {
+    return { rows: compact.rows, taskGroups, plan: input.workflowPlan };
+  }
+
+  const attemptId = input.workflowPlan.attemptId;
+  // An opened plan phase's index pins the cutoff in declared-plan order. Keep
+  // that phase and every still-unopened phase after it, but do not let an
+  // earlier dropped phase come back through the plan union.
+  const allIndexedPhases = input.taskGroups.filter(
+    (
+      group,
+    ): group is TaskGroup & {
+      readonly index: number;
+    } =>
+      group.kind === 'phase' &&
+      group.index !== undefined &&
+      (group.attemptId === undefined || group.attemptId === attemptId),
+  );
+  const retainedIndexes = allIndexedPhases
+    .filter((group) => retainedPhaseIds.has(group.id))
+    .map((group) => group.index);
+  const openedIndexes = allIndexedPhases.map((group) => group.index);
+  let firstPlanIndex = 0;
+  if (retainedIndexes.length > 0) {
+    firstPlanIndex = Math.min(...retainedIndexes);
+  } else if (openedIndexes.length > 0) {
+    firstPlanIndex = Math.max(...openedIndexes) + 1;
+  }
+  const phases = input.workflowPlan.phases.slice(firstPlanIndex);
+  const phaseTitles = new Set(phases.map((phase) => phase.title));
+  // A plan task that already issued outside the retained rows must not return
+  // as Declared. Tasks that have not issued yet remain visible.
+  const issuedIds = new Set(
+    fullRows.flatMap((row) =>
+      row.kind === 'workflowTask' && row.call.attemptId === attemptId
+        ? [row.call.id]
+        : [],
+    ),
+  );
+  const retainedIds = new Set(
+    compact.rows.flatMap((row) =>
+      row.kind === 'workflowTask' && row.call.attemptId === attemptId
+        ? [row.call.id]
+        : [],
+    ),
+  );
+  const tasks = input.workflowPlan.tasks.filter(
+    (task) =>
+      (!issuedIds.has(task.id) || retainedIds.has(task.id)) &&
+      (task.phase === undefined || phaseTitles.has(task.phase)),
+  );
+  return {
+    rows: compact.rows,
+    taskGroups,
+    plan: { ...input.workflowPlan, phases, tasks },
+  };
 }
