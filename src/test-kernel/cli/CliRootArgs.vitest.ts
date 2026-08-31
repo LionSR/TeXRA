@@ -1326,7 +1326,9 @@ describe('runCli usage output stream routing', () => {
       'configure autonomous goal mode and auto-approval scope',
     );
     expect(stdout).toContain('/login, /logout');
-    expect(stdout).toContain('ChatGPT or TeXRA account');
+    expect(stdout).toContain(
+      'manage ChatGPT, Grok, and your TeXRA account sign-ins',
+    );
     expect(stdout).toContain(
       "open the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
     );

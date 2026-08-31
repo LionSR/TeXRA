@@ -14,8 +14,24 @@ import {
   unsupportedLoginProviderMessage,
 } from '@cli/runtime/loginOptions';
 import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 describe('CLI login arguments (texra login)', () => {
+  it('uses account-specific grammar for TeXRA sign-in copy', () => {
+    expect(RESEARCHER_ACCESS_AUTH.signInLabel).toBe(
+      'Sign in to your TeXRA account',
+    );
+    expect(RESEARCHER_ACCESS_AUTH.signOutDescription).toBe(
+      'Sign out of your TeXRA account',
+    );
+    expect(RESEARCHER_ACCESS_AUTH.signedIn('user@example.edu')).toBe(
+      'Signed in to your TeXRA account as user@example.edu.',
+    );
+    expect(RESEARCHER_ACCESS_AUTH.signedOut).toBe(
+      'Signed out of your TeXRA account.',
+    );
+  });
+
   it('marks bare texra login as using the fallback provider', () => {
     expect(loginInitFromArgs({})).toMatchObject({
       provider: 'github',

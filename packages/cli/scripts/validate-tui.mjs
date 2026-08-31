@@ -524,7 +524,7 @@ const SCENARIOS = [
       'Prefer GLM Coding Plan',
       'Off · key configured',
       'Sign out of ChatGPT',
-      'Sign in with TeXRA acco',
+      'Sign in to your TeXRA a',
       'Esc back',
     ],
     unexpect: [
@@ -1505,7 +1505,7 @@ const SCENARIOS = [
       '/auth',
       'Show signed-in accounts and active model access',
       '/login',
-      'Sign in to ChatGPT, Grok, or TeXRA account',
+      'Sign in with ChatGPT or Grok, or sign in to your TeXRA account',
       '/logout',
       'Sign out of one account or all accounts',
       '/approval',

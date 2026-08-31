@@ -497,7 +497,7 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-out' },
       }),
       expect.objectContaining({
-        label: 'Sign out of TeXRA account',
+        label: 'Sign out of your TeXRA account',
         description: 'researcher@example.com',
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
@@ -519,7 +519,7 @@ describe('CLI orchestration items', () => {
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
       expect.objectContaining({
-        label: 'Sign in with TeXRA account',
+        label: 'Sign in to your TeXRA account',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
@@ -546,7 +546,7 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
       }),
       expect.objectContaining({
-        label: 'Sign in with TeXRA account',
+        label: 'Sign in to your TeXRA account',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
