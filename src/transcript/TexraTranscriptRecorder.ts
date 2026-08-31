@@ -166,7 +166,7 @@ interface StreamSinkState {
 type StageMetadata = Pick<
   Extract<AgentEvent, { type: 'stage.start' }>,
   'kind' | 'index' | 'total'
->;
+> & { readonly attemptId?: string };
 
 /**
  * Subscribe to a trace and route every event into the StreamLogStore for the
@@ -324,6 +324,7 @@ export function attachTranscriptRecorder(
   // rely on that distinction to tell a root run's terminal status apart from
   // a round's (see toStreamLifecycleStatus in packages/trace-viewer).
   const stageMetadata = new Map<string, StageMetadata>();
+  let workflowAttemptId: string | undefined;
   const workflowCallEntries = new Set<string>();
   const activeToolEntries = new Map<string, ToolUseLog>();
   let transcriptBoundaryClosed = false;
@@ -439,6 +440,9 @@ export function attachTranscriptRecorder(
         case 'stage.start': {
           const metadata = {
             ...(event.kind !== undefined ? { kind: event.kind } : {}),
+            ...(event.kind === 'phase' && workflowAttemptId !== undefined
+              ? { attemptId: workflowAttemptId }
+              : {}),
             ...(event.index !== undefined ? { index: event.index } : {}),
             ...(event.total !== undefined ? { total: event.total } : {}),
           } satisfies StageMetadata;
@@ -541,6 +545,7 @@ export function attachTranscriptRecorder(
         }
 
         case 'workflow.plan': {
+          workflowAttemptId = event.attemptId;
           // Display strings pass through record-time redaction like every
           // stage label and card the recorder persists; ids stay verbatim.
           const marker = {

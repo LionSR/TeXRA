@@ -123,17 +123,78 @@ describe('workflow run model', () => {
     });
   });
 
-  it('scopes cards and phases to the newest attempt', () => {
-    const model = modelOf(
-      ['Map'],
-      [
-        { id: 'legacy', phase: 'Map', status: 'failed' },
-        { id: 'old', phase: 'Map', status: 'failed', attemptId: 'a1' },
-        { id: 'new', phase: 'Map', attemptId: 'a2' },
-      ],
-    );
-    expect(model.tasks.map((row) => row.call.id)).toStrictEqual(['new']);
-    expect(model.phases[0]?.tally.failed).toBe(0);
+  it('scopes resumed calls and phase boundaries to the newest attempt', () => {
+    const oldMap = {
+      ...phaseGroup('Map', 0, 2),
+      id: 'old-map',
+      attemptId: 'a1',
+    };
+    const oldEmpty = {
+      ...phaseGroup('Review', 1, 2),
+      id: 'old-review',
+      attemptId: 'a1',
+    };
+    const newMap = {
+      ...phaseGroup('Map', 0, 2),
+      id: 'new-map',
+      attemptId: 'a2',
+    };
+    const newEmpty = {
+      ...phaseGroup('Review', 1, 2),
+      id: 'new-review',
+      attemptId: 'a2',
+    };
+    const old = {
+      ...taskRow({
+        id: 'old-failure',
+        phase: 'Map',
+        status: 'failed',
+        attemptId: 'a1',
+      }),
+      groupId: oldMap.id,
+      seqNo: 10,
+    };
+    const resumedPhase = {
+      ...taskRow({
+        id: 'resumed-phase',
+        phase: 'Map',
+        status: 'completed',
+        attemptId: 'a2',
+      }),
+      groupId: newMap.id,
+      seqNo: 30,
+    };
+    const resumedUngrouped = {
+      ...taskRow({ id: 'resumed-unphased', attemptId: 'a2' }),
+      seqNo: 40,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [oldMap, oldEmpty, newMap, newEmpty],
+      // A tree renderer can present root rows before child rows. seqNo remains
+      // the transcript authority regardless of that input arrangement.
+      rows: [resumedUngrouped, resumedPhase, old],
+      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
+      'resumed-phase',
+      'resumed-unphased',
+    ]);
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([
+      newMap.id,
+      newEmpty.id,
+      `unphased-${resumedUngrouped.id}`,
+    ]);
+    expect(model.tally).toStrictEqual({
+      done: 1,
+      total: 2,
+      running: 1,
+      failed: 0,
+      declared: 0,
+    });
   });
 
   it('leads a phase with what needs attention and collapses the rest into counted groups', () => {

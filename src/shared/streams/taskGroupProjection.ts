@@ -91,6 +91,9 @@ export function upsertTaskGroupFromStreamLog(
       status: startStatus,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
       ...taskGroupStageMetadata(payload.kind, payload.index),
+      ...(payload.attemptId !== undefined
+        ? { attemptId: payload.attemptId }
+        : {}),
       ...(payload.total !== undefined ? { total: payload.total } : {}),
     };
 
@@ -116,6 +119,9 @@ export function upsertTaskGroupFromStreamLog(
       status,
       ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
       ...taskGroupStageMetadata(payload.kind, payload.index),
+      ...(payload.attemptId !== undefined
+        ? { attemptId: payload.attemptId }
+        : {}),
       ...(payload.total !== undefined ? { total: payload.total } : {}),
       ...(endTime !== undefined ? { endTime } : {}),
     });

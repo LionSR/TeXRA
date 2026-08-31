@@ -18,6 +18,8 @@ export const TaskGroupSchema = z.strictObject({
   status: TaskGroupStatusSchema,
   parentGroupId: z.string().optional(),
   kind: StageKindSchema.optional(),
+  /** Workflow-script projection attempt that opened this phase. */
+  attemptId: z.string().min(1).optional(),
   index: taskGroupIndexField.optional(),
   total: taskGroupTotalField.optional(),
 });
@@ -51,6 +53,7 @@ export type TaskGroup = z.infer<typeof TaskGroupSchema>;
 const groupLogPayloadFields = {
   status: z.union([TaskGroupStatusSchema, EndGroupStatusSchema]).optional(),
   kind: StageKindSchema.optional(),
+  attemptId: z.string().min(1).optional(),
   index: taskGroupIndexField.optional(),
   total: taskGroupTotalField.optional(),
   name: z.string().optional(),
@@ -68,6 +71,7 @@ export const TraceGroupLogPayloadSchema = z.looseObject({
   ...groupLogPayloadFields,
   status: groupLogPayloadFields.status.catch(undefined),
   kind: groupLogPayloadFields.kind.catch(undefined),
+  attemptId: groupLogPayloadFields.attemptId.catch(undefined),
   index: groupLogPayloadFields.index.catch(undefined),
   total: groupLogPayloadFields.total.catch(undefined),
   name: groupLogPayloadFields.name.catch(undefined),
