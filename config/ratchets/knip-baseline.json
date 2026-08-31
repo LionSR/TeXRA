@@ -536,18 +536,6 @@
       "name": "isCliFetchStackLog"
     },
     {
-      "file": "packages/cli/src/commands/_helpers/runInstructions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatCliRunFileInstruction"
-    },
-    {
-      "file": "packages/cli/src/commands/_helpers/runInstructions.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatUnavailableApprovalInstruction"
-    },
-    {
       "file": "packages/cli/src/commands/agents.ts",
       "category": "production-dead",
       "kind": "exports",
