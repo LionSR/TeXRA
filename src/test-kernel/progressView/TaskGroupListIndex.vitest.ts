@@ -749,6 +749,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
           label: `Queued ${id}`,
           phase: 'Map',
           status: 'queued',
+          attemptId: 'attempt-1',
         }),
       ),
       workflowTaskRow('phase-map', 'live', 6, {
@@ -756,6 +757,7 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         label: 'Running now',
         phase: 'Map',
         status: 'running',
+        attemptId: 'attempt-1',
         childStreamId: 'researcher@gpt#live',
       }),
     ];

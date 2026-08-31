@@ -25,6 +25,7 @@ import {
   type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
+import { compareBySeqNo } from '@shared/streams/streamOrdering';
 import {
   TOKENS_GENERATED,
   workflowPhaseHeadingOfGroup,
@@ -158,23 +159,22 @@ function workflowCardsInTranscriptOrder(
   const cards = rows.filter(
     (row): row is WorkflowTaskRow => row.kind === 'workflowTask',
   );
-  return cards.every((row) => row.seqNo !== undefined)
-    ? cards.toSorted((left, right) => left.seqNo! - right.seqNo!)
-    : cards;
+  return cards.toSorted((left, right) =>
+    compareBySeqNo(
+      left,
+      right,
+      (row) => row.seqNo,
+      (row) => row.timestamp,
+    ),
+  );
 }
 
 /** One run-wide attempt identity, selected before any phase is tallied. */
 function latestWorkflowAttemptId(
   cards: readonly WorkflowTaskRow[],
-  taskGroups: readonly TaskGroup[],
   plan: WorkflowRunModelInput['plan'],
 ): string | undefined {
-  const hasAttemptOwnership =
-    cards.some((row) => row.call.attemptId !== undefined) ||
-    taskGroups.some((group) => group.attemptId !== undefined);
-  if (hasAttemptOwnership && plan && 'attemptId' in plan) {
-    return plan.attemptId;
-  }
+  if (plan && 'attemptId' in plan) return plan.attemptId;
   return cards.findLast((row) => row.call.attemptId !== undefined)?.call
     .attemptId;
 }
@@ -294,11 +294,7 @@ export function workflowRunModel(
   // The latest plan marker is definitive even before the attempt issues a
   // card. Traces predating plan markers fall back to the last tagged card in
   // true transcript order, including cards issued outside a phase.
-  const latestAttemptId = latestWorkflowAttemptId(
-    cards,
-    input.taskGroups,
-    input.plan,
-  );
+  const latestAttemptId = latestWorkflowAttemptId(cards, input.plan);
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -324,12 +320,14 @@ export function workflowRunModel(
     unphased.tasks.push(row);
   }
   // Phase ownership handles the call-less case that card references cannot:
-  // an empty phase opened only by a superseded attempt is still stale. A
-  // current card keeps an untagged phase from a mixed-version transcript.
+  // an explicitly superseded empty phase is stale. Untagged empty phases are
+  // preserved for mixed-version traces: an old untagged call-less phase is
+  // indistinguishable from a current one without inventing host-local state.
   const opened = phases.filter(
     (phase) =>
       phase.tasks.length > 0 ||
       latestAttemptId === undefined ||
+      phase.attemptId === undefined ||
       phase.attemptId === latestAttemptId,
   );
   const ordered = [

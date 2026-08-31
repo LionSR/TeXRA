@@ -85,7 +85,13 @@ function modelOf(
     taskGroups: phases.map((name, index) =>
       phaseGroup(name, index, phases.length),
     ),
-    rows: tasks.map(taskRow),
+    rows: tasks.map((task) =>
+      taskRow(
+        task.attemptId === undefined && options.plan
+          ? { ...task, attemptId: options.plan.attemptId }
+          : task,
+      ),
+    ),
     plan: options.plan,
     runSettled: options.runSettled ?? false,
     childProgress: options.childProgress ?? new Map(),
@@ -195,6 +201,62 @@ describe('workflow run model', () => {
       failed: 0,
       declared: 0,
     });
+  });
+
+  it('uses a new plan boundary before its calls or tagged phases arrive', () => {
+    const stale = {
+      ...phaseGroup('Old', 0, 2),
+      id: 'old-empty',
+      attemptId: 'a1',
+    };
+    const current = {
+      ...phaseGroup('Current', 1, 2),
+      id: 'current-empty',
+    };
+    const staleUntaggedCard = {
+      ...taskRow({ id: 'old-call', phase: 'Old', status: 'failed' }),
+      groupId: stale.id,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [stale, current],
+      rows: [staleUntaggedCard],
+      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks).toStrictEqual([]);
+    // Explicit old ownership is actionable. Missing ownership is not: mixed-
+    // version traces cannot distinguish an old call-less phase from this
+    // genuinely current one, so the compatible choice is to preserve it.
+    expect(model.phases.map((phase) => phase.key)).toStrictEqual([current.id]);
+  });
+
+  it('orders mixed-generation cards by the shared transcript fallback', () => {
+    const oldChild = {
+      ...taskRow({ id: 'old-child', phase: 'Map', attemptId: 'a1' }),
+      seqNo: 10,
+      timestamp: 10,
+    };
+    const resumedRoot = {
+      ...taskRow({ id: 'resumed-root', attemptId: 'a2' }),
+      timestamp: 20,
+    };
+
+    const model = workflowRunModel({
+      taskGroups: [],
+      // Tree pre-order places the newer root row before the older grouped
+      // child. Mixed-generation rows fall back to timestamps, not input order.
+      rows: [resumedRoot, oldChild],
+      plan: undefined,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
+      'resumed-root',
+    ]);
   });
 
   it('leads a phase with what needs attention and collapses the rest into counted groups', () => {
