@@ -302,6 +302,20 @@ export async function runPersistedWorkflowScriptWithProgress(
         status === 'failed' ||
         status === 'cancelled' ||
         (status === 'skipped' && !call.settledBySweep));
+    const hasInvocationFacts =
+      call.kind !== undefined ||
+      call.agent !== undefined ||
+      call.model !== undefined ||
+      call.childExecutionId !== undefined ||
+      call.childStreamId !== undefined ||
+      call.attempts.length > 0 ||
+      call.timestamps.startedAt !== undefined;
+    const includeFiles =
+      call.issued === true ||
+      (call.status !== WORKFLOW_CALL_STATUS.PLANNED &&
+        call.status !== WORKFLOW_CALL_STATUS.STAGE_BLOCKED &&
+        call.status !== WORKFLOW_CALL_STATUS.SKIPPED) ||
+      hasInvocationFacts;
     const identity = {
       id: call.id,
       label: call.label,
@@ -309,16 +323,12 @@ export async function runPersistedWorkflowScriptWithProgress(
       ...(call.childStreamId !== undefined
         ? { childStreamId: call.childStreamId }
         : {}),
-      // The invocation facts a card carries once the script has issued the
-      // call, read from the snapshot call — the one owner — so a declared stub
-      // never looks like a resolved call. Kind, unlike the newer issued marker,
-      // is also present on marker-free historical issued calls.
-      ...(call.kind !== undefined && {
-        kind: call.kind,
-        ...(call.agent !== undefined && { agent: call.agent }),
-        ...(call.model !== undefined && { model: call.model }),
-        files: call.files,
-      }),
+      // Project only invocation facts the snapshot owns. Historical issued
+      // calls may carry any subset and predate both explicit markers.
+      ...(call.kind !== undefined && { kind: call.kind }),
+      ...(call.agent !== undefined && { agent: call.agent }),
+      ...(call.model !== undefined && { model: call.model }),
+      ...(includeFiles && { files: call.files }),
       ...(attemptCounts && { attemptNumber: call.attempts.length }),
     };
     switch (call.status) {

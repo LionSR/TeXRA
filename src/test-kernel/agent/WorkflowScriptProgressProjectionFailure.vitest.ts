@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
 import type { PersistedWorkflowScriptRunOptions } from '@agent/workflowScript';
-import type { WorkflowExecutionSnapshot } from '@shared/schemas';
+import { PersistedWorkflowExecutionSnapshotSchema } from '@shared/schemas';
 import { runPersistedWorkflowScriptWithProgress } from '@tools/delegation/workflowScriptRun';
 
 const mocks = vi.hoisted(() => ({
@@ -14,75 +14,53 @@ vi.mock('@agent/workflowScript', async (importOriginal) => ({
   runPersistedWorkflowScript: mocks.runPersistedWorkflowScript,
 }));
 
-function snapshot(
-  lifecycle: 'waiting' | 'active',
-  status: 'planned' | 'running',
-): WorkflowExecutionSnapshot {
-  return {
-    stages: [
-      {
-        id: 'stage-review',
-        title: 'Review',
-        order: 0,
-        lifecycle,
-      },
-    ],
+function snapshot(status: 'planned' | 'running', markerFree = false) {
+  const timestamp = '2026-08-15T20:00:00.000Z';
+  const active = status === 'running';
+  return PersistedWorkflowExecutionSnapshotSchema.parse({
+    lifecycle: active ? 'active' : 'waiting',
+    stages: [],
     calls: [
       {
         id: 'retry-review',
         label: 'Retry review',
-        stageId: 'stage-review',
         status,
-        // The engine stamps the call issued when the script reaches it.
-        ...(lifecycle === 'active' && { issued: true }),
+        ...(active &&
+          (markerFree
+            ? { agent: 'historical-agent' }
+            : { issued: true, kind: 'document' })),
         attempts: [],
-        files: {},
-        timestamps: {
-          createdAt: '2026-08-15T20:00:00.000Z',
-          updatedAt: '2026-08-15T20:00:00.000Z',
-        },
+        files: { input: [], context: [], media: [] },
+        timestamps: { createdAt: timestamp, updatedAt: timestamp },
       },
     ],
-  } as unknown as WorkflowExecutionSnapshot;
+    timestamps: { createdAt: timestamp, updatedAt: timestamp },
+  });
 }
 
 describe('workflow-script projection failure recovery', () => {
   it('projects a marker-free issued call after a fold fails before projection', async () => {
-    const construction = snapshot('waiting', 'planned');
-    const issued = snapshot('active', 'planned');
-    const running = snapshot('active', 'running');
-    const call = running.calls[0]!;
-    delete call.issued;
-    Object.assign(call, {
-      kind: 'document',
-      agent: 'projection-agent',
-      model: 'projection-model',
-      files: { input: [], context: [], media: [] },
-    });
+    const construction = snapshot('planned');
+    const running = snapshot('running', true);
     mocks.runPersistedWorkflowScript.mockImplementationOnce(
       async (options: PersistedWorkflowScriptRunOptions) => {
         options.onTransition?.(construction);
-        options.onTransition?.(issued);
         options.onTransition?.(running);
         await options.onSnapshot?.(running);
         return { snapshot: running } as never;
       },
     );
 
-    const emit = vi.fn();
+    const emit = vi.fn().mockImplementationOnce(() => {
+      throw new Error('trace projection unavailable');
+    });
     const warn = vi.fn();
-    const openStage = vi
-      .fn()
-      .mockImplementationOnce(() => {
-        throw new Error('trace projection unavailable');
-      })
-      .mockReturnValue({ id: 'trace-review', end: vi.fn() });
     const trace = {
       activeStageId: vi.fn(),
       emit,
       info: vi.fn(),
       warn,
-      openStage,
+      openStage: vi.fn(),
     } as unknown as AgentTrace;
 
     await runPersistedWorkflowScriptWithProgress(trace, {
@@ -96,26 +74,23 @@ describe('workflow-script projection failure recovery', () => {
       expect.stringContaining('trace projection unavailable'),
       expect.anything(),
     );
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'workflow.call',
-        call: expect.objectContaining({
-          id: 'retry-review',
-          status: 'running',
-          kind: 'document',
-          agent: 'projection-agent',
-          model: 'projection-model',
-          files: { input: [], context: [], media: [] },
-        }),
-      }),
-    );
+    const projected = emit.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.call?.status === 'running');
+    expect(projected?.call).toStrictEqual({
+      id: 'retry-review',
+      label: 'Retry review',
+      status: 'running',
+      agent: 'historical-agent',
+      files: { input: [], context: [], media: [] },
+      attemptId: expect.any(String),
+    });
   });
 
   it("retains a retried call's attempt number when the backstop terminalizes it", async () => {
-    const construction = snapshot('waiting', 'planned');
-    const issued = snapshot('active', 'planned');
-    const running = snapshot('active', 'running');
-    for (const state of [construction, issued, running]) {
+    const construction = snapshot('planned');
+    const running = snapshot('running');
+    for (const state of [construction, running]) {
       const call = state.calls[0];
       if (call) {
         call.attempts = [
@@ -133,7 +108,6 @@ describe('workflow-script projection failure recovery', () => {
     mocks.runPersistedWorkflowScript.mockImplementationOnce(
       async (options: PersistedWorkflowScriptRunOptions) => {
         options.onTransition?.(construction);
-        options.onTransition?.(issued);
         options.onTransition?.(running);
         await options.onSnapshot?.(running);
         return { snapshot: running } as never;
