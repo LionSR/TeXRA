@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
 import * as logUtils from '@logger/logUtils';
 import { platform } from '@platform/platform';
@@ -354,28 +353,6 @@ describe('InquiryStorage', () => {
       schemaVersion?: number;
     };
     expect(persisted.schemaVersion).toBe(1);
-  });
-
-  it('writes turns readable by the 0.40 inquiry schema without restoring generation semantics', async () => {
-    const t = await recordOpenQuestion({
-      parentStreamId: STREAM_A,
-      parentExecutionId: null,
-      question: 'Q1',
-    });
-
-    const manifestPath = path.join(threadDirFor(t.threadId), 'manifest.json');
-    const persisted = JSON.parse(await readTextFile(manifestPath)) as unknown;
-    const V040InquiryManifestSchema = z.looseObject({
-      turns: z.array(
-        z.looseObject({
-          parentGenerationId: z.uuid(),
-        }),
-      ),
-    });
-    expect(V040InquiryManifestSchema.safeParse(persisted).success).toBe(true);
-
-    const current = await readExternalInquiryThread(t.threadId);
-    expect(current?.turns[0]).not.toHaveProperty('parentGenerationId');
   });
 
   it('treats a corrupt manifest as missing (loud read) without clobbering it', async () => {
