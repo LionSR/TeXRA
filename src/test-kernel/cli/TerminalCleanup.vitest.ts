@@ -22,6 +22,7 @@ import {
   rootRunStreamId,
 } from '@cli/chat/tui/state/cliState';
 import {
+  cleanupTerminalModes,
   installTerminalRestoreOnExit,
   restoreTuiInputModes,
   supportsTerminalJobControl,
@@ -358,6 +359,26 @@ describe('installTerminalTitleUpdates', () => {
     await flushTitleUpdate();
     expectLastTitle('{T}·evil]0;pwned');
     capableUpdates.dispose();
+  });
+});
+
+describe('cleanupTerminalModes', () => {
+  it('clears iTerm progress after resetting terminal modes', () => {
+    cleanupTerminalModes('iTerm.app');
+
+    expect(writeSync).toHaveBeenLastCalledWith(
+      1,
+      '\x1b[?1000;1003;1006l\x1b[<u\x1b[?2004l\x1b[?25h\x1b]9;4;0\x07',
+    );
+  });
+
+  it('only resets terminal modes outside iTerm', () => {
+    cleanupTerminalModes('Apple_Terminal');
+
+    expect(writeSync).toHaveBeenLastCalledWith(
+      1,
+      '\x1b[?1000;1003;1006l\x1b[<u\x1b[?2004l\x1b[?25h',
+    );
   });
 });
 
