@@ -109,6 +109,7 @@ describe('sidebar surface ownership', () => {
   let progressViewProvider: {
     setupWebviewContent: ReturnType<typeof vi.fn>;
     resetSidebarReady: ReturnType<typeof vi.fn>;
+    invalidateWebviewDocument: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -125,6 +126,7 @@ describe('sidebar surface ownership', () => {
         return { dispose: vi.fn() };
       }),
       resetSidebarReady: vi.fn(),
+      invalidateWebviewDocument: vi.fn(),
     };
     provider.setProgressViewProvider(
       progressViewProvider as unknown as ProgressViewProvider,

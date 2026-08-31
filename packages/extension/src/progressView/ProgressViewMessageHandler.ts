@@ -350,6 +350,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       // extension only wraps it in a VS Code progress notification and feeds
       // the shared handler's stage reports into it.
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: async (data) => {
+        const reporter = secondTierActions.capturePolishReporter();
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -361,6 +362,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             try {
               await secondTierHandlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP](
                 data,
+                reporter,
               );
             } finally {
               if (polishProgress === progress) polishProgress = undefined;
@@ -839,21 +841,32 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   /**
-   * Capture a result route that never falls through to a replacement surface.
-   * A missing, disposed, or rejecting target makes the result undeliverable;
+   * Capture a result route that never falls through to a replacement surface
+   * or document. A missing, replaced, disposed, or rejecting target is undeliverable;
    * diagnose that at debug without turning completed work into a run failure.
    */
   private captureResultPost(
     resultName: string,
   ): (message: ProgressViewOutboundMessage) => void {
     const source = this.getActiveView()?.webview;
+    const isSourceDocumentCurrent = source
+      ? this.provider.captureWebviewDocument(source)
+      : () => false;
     return (message) => {
       if (!source) {
         this.log.debug(`${resultName} is undeliverable: target is unavailable`);
         return;
       }
       void Promise.resolve()
-        .then(() => source.postMessage(message))
+        .then(() => {
+          if (!isSourceDocumentCurrent()) {
+            this.log.debug(
+              `${resultName} is undeliverable: target document was replaced`,
+            );
+            return true;
+          }
+          return source.postMessage(message);
+        })
         .then(
           (delivered) => {
             if (!delivered) {

@@ -658,8 +658,10 @@ export function createProgressViewSecondTierHandlers(
     },
 
     // ── Follow-up polish ──
-    [CMD.POLISH_FOLLOW_UP]: async (data) => {
-      const reporter = deps.capturePolishReporter();
+    [CMD.POLISH_FOLLOW_UP]: async (
+      data,
+      reporter = deps.capturePolishReporter(),
+    ) => {
       await deps.preload?.(data.stream);
       const config = deps.getRunMetadata(data.stream).config;
       if (!config) {
