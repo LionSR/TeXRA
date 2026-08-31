@@ -2,6 +2,8 @@ import { writeSync } from 'node:fs';
 
 import { kittyFlags } from 'ink';
 
+import { cliEnvValue } from '../runtime/cliContext';
+
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
 // cursor visibility (25h). The TUI deliberately never enters the alternate
@@ -52,7 +54,7 @@ export function cleanupTerminalModes(): void {
   // TERM_PROGRAM is fixed for the process, so the writer owns the emulator
   // check rather than having it threaded through the exit controller.
   writeTerminalSequence(
-    process.env.TERM_PROGRAM === 'iTerm.app'
+    cliEnvValue('TERM_PROGRAM') === 'iTerm.app'
       ? `${RESET_TERMINAL_MODES}${CLEAR_ITERM_PROGRESS}`
       : RESET_TERMINAL_MODES,
   );
