@@ -468,6 +468,11 @@ export function createProgressViewCommandHandlers(
 
 // ── Second-tier handler deps ──────────────────────────────────────────────
 
+interface ProgressViewPolishReporter {
+  applyResult(result: ProgressFollowUpPolishResult): Promise<void>;
+  reportError(stream: StreamTabId, error: unknown): void | Promise<void>;
+}
+
 export interface ProgressViewSecondTierActions {
   /** Shared controllers (host-neutral; created once per host with injected deps). */
   readonly workflowActions: ProgressWorkflowActionsController;
@@ -497,21 +502,18 @@ export interface ProgressViewSecondTierActions {
   readonly restoreRunConfig: (config: AgentConfig) => Promise<void>;
   /** Resolve a follow-up plan (plan kinds map to host-specific execution). */
   readonly applyFollowUpPlan: (plan: ProgressFollowUpPlan) => Promise<void>;
-  /** Render a polish result (update renderer + show host messages). */
-  readonly applyPolishResult: (
-    result: ProgressFollowUpPolishResult,
-  ) => Promise<void>;
+  /**
+   * Capture the polish-result route before preload or model work yields. The
+   * extension has two progress surfaces, so resolving the active renderer when
+   * polishing finishes can overwrite a different composer's draft.
+   */
+  readonly capturePolishReporter: () => ProgressViewPolishReporter;
   /**
    * Report a polish stage to the user. Hosts with a progress surface (the
    * extension feeds a `vscode.window.withProgress` notification) implement it;
    * hosts without one leave it unset.
    */
   readonly onPolishProgress?: (message: string) => void;
-  /** Handle a polish controller exception (post error to renderer + log + host message). */
-  readonly onPolishError: (
-    stream: StreamTabId,
-    error: unknown,
-  ) => void | Promise<void>;
   /** Post a message to the renderer. */
   readonly postToRenderer: (message: ProgressViewOutboundMessage) => void;
   /** Restore an agent proposal config into the main view (delegates to agentProposalController). */
@@ -657,11 +659,12 @@ export function createProgressViewSecondTierHandlers(
 
     // ── Follow-up polish ──
     [CMD.POLISH_FOLLOW_UP]: async (data) => {
+      const reporter = deps.capturePolishReporter();
       await deps.preload?.(data.stream);
       const config = deps.getRunMetadata(data.stream).config;
       if (!config) {
         // Same port the polish failures use, rather than a silent return.
-        await deps.onPolishError(
+        await reporter.reportError(
           data.stream,
           new Error('This run has no saved configuration to polish against.'),
         );
@@ -675,9 +678,9 @@ export function createProgressViewSecondTierHandlers(
           runConfig: config,
         });
         deps.onPolishProgress?.('Applying changes...');
-        await deps.applyPolishResult(result);
+        await reporter.applyResult(result);
       } catch (error) {
-        await deps.onPolishError(data.stream, error);
+        await reporter.reportError(data.stream, error);
       }
     },
 

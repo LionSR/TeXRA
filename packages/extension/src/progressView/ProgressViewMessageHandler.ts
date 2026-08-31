@@ -45,6 +45,7 @@ import type {
   GettingStartedAction,
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
+  ProgressViewOutboundMessage,
   StreamTabId,
 } from '@shared/schemas';
 import {
@@ -256,12 +257,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.runViewCommand('texra.restoreState', [config]);
       },
       applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
-      applyPolishResult: (result) =>
-        applyFollowUpPolishResult(result, this.followUpPorts),
+      capturePolishReporter: () => {
+        const post = this.captureResultPost('Follow-up polish result');
+        const ports = { ...this.followUpPorts, post };
+        return {
+          applyResult: (result) => applyFollowUpPolishResult(result, ports),
+          reportError: (stream, error) =>
+            this.reportPolishError(stream, error, post),
+        };
+      },
       onPolishProgress: (message) => {
         polishProgress?.report({ message });
       },
-      onPolishError: (stream, error) => this.reportPolishError(stream, error),
       postToRenderer: (message) => {
         this.postToActiveView(message);
       },
@@ -536,32 +543,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       followUp: {
         captureAdmissionReporter: () => {
-          const source = this.getActiveView()?.webview;
+          const post = this.captureResultPost('Follow-up admission result');
           return (stream, accepted) => {
-            if (!source) return;
-            void Promise.resolve(
-              source.postMessage({
-                command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
-                stream,
-                accepted,
-              }),
-            ).then(
-              (delivered) => {
-                if (!delivered) {
-                  this.log.debug(
-                    'Follow-up result target did not accept the message',
-                  );
-                }
-              },
-              (error: unknown) => {
-                this.log.debug(
-                  'Follow-up result target is no longer attached',
-                  {
-                    data: error,
-                  },
-                );
-              },
-            );
+            post({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+              stream,
+              accepted,
+            });
           };
         },
         reportImageSaveError: (_image, error) => {
@@ -850,10 +838,48 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
+  /**
+   * Capture a result route that never falls through to a replacement surface.
+   * A missing, disposed, or rejecting target makes the result undeliverable;
+   * diagnose that at debug without turning completed work into a run failure.
+   */
+  private captureResultPost(
+    resultName: string,
+  ): (message: ProgressViewOutboundMessage) => void {
+    const source = this.getActiveView()?.webview;
+    return (message) => {
+      if (!source) {
+        this.log.debug(`${resultName} is undeliverable: target is unavailable`);
+        return;
+      }
+      void Promise.resolve()
+        .then(() => source.postMessage(message))
+        .then(
+          (delivered) => {
+            if (!delivered) {
+              this.log.debug(
+                `${resultName} is undeliverable: target did not accept the message`,
+              );
+            }
+          },
+          (error: unknown) => {
+            this.log.debug(
+              `${resultName} is undeliverable: target is no longer attached`,
+              { data: error },
+            );
+          },
+        );
+    };
+  }
+
   /** Post the polish failure to the renderer, surface it, and log it. */
-  private reportPolishError(stream: StreamTabId, error: unknown): void {
+  private reportPolishError(
+    stream: StreamTabId,
+    error: unknown,
+    post: (message: ProgressViewOutboundMessage) => void,
+  ): void {
     const errorMsg = toErrorMessage(error);
-    this.postToActiveView({
+    post({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
       stream,
       kind: 'polishError',
