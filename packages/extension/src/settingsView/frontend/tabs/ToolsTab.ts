@@ -166,10 +166,6 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
 
-  private handleRecheck(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
-  }
-
   private handleApprovalPolicyChange = (e: Event): void => {
     const policy = parseTexraApprovalPolicy(readSelectValue(e));
     if (policy) postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
@@ -292,7 +288,8 @@ export class ToolsTab extends LitElement {
             text: 'Re-check',
             kind: 'secondary',
             appearance: 'outlined',
-            onClick: () => this.handleRecheck(),
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
           })}
         </div>
         ${this.renderApprovalSettings()}

@@ -70,10 +70,6 @@ function compactRowPriority(row: CompactTodosPlanRow): number {
   }
 }
 
-function representedSourceRows(row: CompactTodosPlanRow): number {
-  return row.kind === 'completedSummary' ? row.count : 1;
-}
-
 export function compactTodosPlanRows({
   maxRows,
   plan,
@@ -142,7 +138,11 @@ export function compactTodosPlanRows({
   return {
     hiddenCount: compactRows
       .filter((row) => !rows.includes(row))
-      .reduce((count, row) => count + representedSourceRows(row), 0),
+      .reduce(
+        (count, row) =>
+          count + (row.kind === 'completedSummary' ? row.count : 1),
+        0,
+      ),
     rows,
   };
 }

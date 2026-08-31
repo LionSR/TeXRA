@@ -80,12 +80,17 @@ export function installCliPipeErrorHandlers(): void {
   }
 }
 
+function openStream(key: StreamKey): (typeof process)[StreamKey] | undefined {
+  if (closed[key]) return undefined;
+  const stream = process[key];
+  return stream.destroyed ? undefined : stream;
+}
+
 // CLI output is best effort: throwing from an async write callback would bypass
 // the command error boundary and can crash the process.
 function writeRaw(key: StreamKey, text: string): void {
-  if (closed[key]) return;
-  const stream = process[key];
-  if (stream.destroyed) return;
+  const stream = openStream(key);
+  if (!stream) return;
   try {
     stream.write(text, (error) => {
       if (error) closed[key] = true;
@@ -96,9 +101,8 @@ function writeRaw(key: StreamKey, text: string): void {
 }
 
 function writeRawAndWait(key: StreamKey, text: string): Promise<void> {
-  if (closed[key]) return Promise.resolve();
-  const stream = process[key];
-  if (stream.destroyed) return Promise.resolve();
+  const stream = openStream(key);
+  if (!stream) return Promise.resolve();
   return new Promise<void>((resolve) => {
     try {
       stream.write(text, (error) => {

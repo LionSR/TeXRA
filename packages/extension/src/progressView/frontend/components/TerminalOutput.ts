@@ -1,5 +1,5 @@
 // Third-party imports
-import { LitElement, css, html, unsafeCSS } from 'lit';
+import { LitElement, css, html, unsafeCSS, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
@@ -308,7 +308,7 @@ export class TerminalOutput extends LitElement {
     });
   }
 
-  override render() {
+  override render(): TemplateResult {
     return html`<div class="terminal-container"></div>`;
   }
 }

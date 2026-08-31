@@ -16,7 +16,10 @@ import { SETTINGS_VIEW_CMD, type SettingsMessageFor } from '@shared/schemas';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
 
-import type { SettingsHandlerContext } from './SettingsHandlerContext';
+import {
+  withHandlerErrorHandling,
+  type SettingsHandlerContext,
+} from './SettingsHandlerContext';
 
 /** Memory-settings handler delegate. */
 export class MemoryHandlers {
@@ -52,48 +55,44 @@ export class MemoryHandlers {
   async handleOpenMemoryFile(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE>,
   ): Promise<void> {
-    try {
-      const resolvedPath = resolveMemoryStoragePath(data.storagePath);
-      const absolutePath = StorageFS.fullPath(resolvedPath);
-      const fileUri = vscode.Uri.file(absolutePath);
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to open memory file',
+      async () => {
+        const resolvedPath = resolveMemoryStoragePath(data.storagePath);
+        const absolutePath = StorageFS.fullPath(resolvedPath);
+        const fileUri = vscode.Uri.file(absolutePath);
 
-      // Open markdown files in preview mode (read-only rendered view)
-      if (hasExtension(absolutePath, '.md')) {
-        await safeExecuteCommand(
-          'markdown.showPreview',
-          [fileUri],
-          this.viewName,
-        );
-      } else {
-        const doc = await vscode.workspace.openTextDocument(fileUri);
-        await vscode.window.showTextDocument(doc, { preview: false });
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to open memory file',
-        error,
-      );
-    }
+        // Open markdown files in preview mode (read-only rendered view)
+        if (hasExtension(absolutePath, '.md')) {
+          await safeExecuteCommand(
+            'markdown.showPreview',
+            [fileUri],
+            this.viewName,
+          );
+        } else {
+          const doc = await vscode.workspace.openTextDocument(fileUri);
+          await vscode.window.showTextDocument(doc, { preview: false });
+        }
+      },
+    );
   }
 
   async handleOpenMemoryFolder(): Promise<void> {
-    try {
-      const resolvedPath = resolveMemoryStoragePath();
-      await StorageFS.ensureDir(resolvedPath);
-      const absolutePath = StorageFS.fullPath(resolvedPath);
-      await safeExecuteCommand(
-        'revealFileInOS',
-        [vscode.Uri.file(absolutePath)],
-        this.viewName,
-      );
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        'Failed to open memory folder',
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      'Failed to open memory folder',
+      async () => {
+        const resolvedPath = resolveMemoryStoragePath();
+        await StorageFS.ensureDir(resolvedPath);
+        const absolutePath = StorageFS.fullPath(resolvedPath);
+        await safeExecuteCommand(
+          'revealFileInOS',
+          [vscode.Uri.file(absolutePath)],
+          this.viewName,
+        );
+      },
+    );
   }
 
   async handleDeleteMemory(
@@ -115,19 +114,15 @@ export class MemoryHandlers {
   }
 
   async setMemoryPinned(storagePath: string, pinned: boolean): Promise<void> {
-    try {
-      await this.settingsHost.setMemoryPinned(
-        storagePath,
-        pinned,
-        this.ctx.postMessageToActiveWebview,
-      );
-    } catch (error) {
-      const action = pinned ? 'pin' : 'unpin';
-      await showLoggedErrorMessage(
-        this.ctx.channel,
-        `Failed to ${action} memory`,
-        error,
-      );
-    }
+    await withHandlerErrorHandling(
+      this.ctx,
+      `Failed to ${pinned ? 'pin' : 'unpin'} memory`,
+      () =>
+        this.settingsHost.setMemoryPinned(
+          storagePath,
+          pinned,
+          this.ctx.postMessageToActiveWebview,
+        ),
+    );
   }
 }

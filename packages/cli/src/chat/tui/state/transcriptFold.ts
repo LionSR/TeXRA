@@ -871,10 +871,9 @@ export function retainedWorkflowPopupProjection(input: {
   // A plan task that already issued outside the retained rows must not return
   // as Declared. Tasks that have not issued yet remain visible. After eviction,
   // use the bounded issued-id snapshot captured before the full fold was reset.
-  const issuedIds = fold?.hydrated
-    ? issuedWorkflowPlanTaskIds(fullRows, input.workflowPlan)
-    : (fold?.retainedWorkflowIssuedTaskIds ??
-      issuedWorkflowPlanTaskIds(fullRows, input.workflowPlan));
+  const issuedIds =
+    (fold?.hydrated ? undefined : fold?.retainedWorkflowIssuedTaskIds) ??
+    issuedWorkflowPlanTaskIds(fullRows, input.workflowPlan);
   const retainedIds = issuedWorkflowPlanTaskIds(
     compact.rows,
     input.workflowPlan,

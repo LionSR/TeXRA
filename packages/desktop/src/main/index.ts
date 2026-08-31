@@ -1011,7 +1011,6 @@ function createWindow(options: {
         // Idempotent: returns the in-flight/initialized registry so a kickoff
         // racing the startup `loadAgents()` cannot hit "Could not find agent:
         // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-        const { loadAgents } = await import('@agent/index');
         await loadAgents();
         const preparation = prepareMainViewExecutionRequest(message);
         if (!preparation.valid) {

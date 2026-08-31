@@ -202,8 +202,6 @@ export function createDesktopCommandPalette({
         event.preventDefault();
         executeActiveCommand();
         break;
-      default:
-        break;
     }
   };
 

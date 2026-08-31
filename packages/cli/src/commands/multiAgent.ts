@@ -21,7 +21,6 @@ import {
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
-  type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import {
   loadCliMultiAgentPresetPlanSet,
@@ -45,10 +44,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliToolUseConfig } from '../runtime/runExecution';
-import {
-  toolUseResultText,
-  type CliToolUseRunResult,
-} from '../runtime/terminalStatus';
+import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 interface MultiAgentRunInit {
@@ -76,44 +72,6 @@ function formatAttachedFileList(
       return spec === '-' ? '- Standard input' : `- ${JSON.stringify(spec)}`;
     }),
   ].join('\n');
-}
-
-/** Preserve the user's launch input without copying model-only directives. */
-function formatMultiAgentDisplayInstruction(
-  instruction: string,
-  inputFiles: readonly string[],
-  contextFiles: readonly string[],
-): string {
-  if (instruction) return instruction;
-
-  return [
-    formatAttachedFileList('Attached input files:', inputFiles),
-    formatAttachedFileList('Attached read-only context files:', contextFiles),
-  ]
-    .filter(filterNotNullish)
-    .join('\n\n');
-}
-
-function writeMultiAgentRunResult(
-  context: CliContext,
-  plan: CliMultiAgentPresetRunPlan,
-  result: CliToolUseRunResult,
-): void {
-  const payload = {
-    preset: {
-      id: plan.preset.id,
-      name: plan.preset.name,
-      source: plan.preset.source,
-    },
-    rootAgent: plan.rootAgent?.name,
-    result,
-  };
-
-  emitCliResult(context, {
-    json: payload,
-    ndjson: { kind: 'multi-agent-result', ...payload },
-    text: toolUseResultText(result),
-  });
 }
 
 async function runMultiAgentList(context: CliContext): Promise<number> {
@@ -226,11 +184,19 @@ export async function runMultiAgentPreset(
         );
       }
 
-      const displayInstruction = formatMultiAgentDisplayInstruction(
-        instruction,
-        init.inputFiles,
-        init.contextFiles,
-      );
+      // Preserve the user's launch input without copying the model-only
+      // directive assembled into config.instruction below.
+      const displayInstruction =
+        instruction ||
+        [
+          formatAttachedFileList('Attached input files:', init.inputFiles),
+          formatAttachedFileList(
+            'Attached read-only context files:',
+            init.contextFiles,
+          ),
+        ]
+          .filter(filterNotNullish)
+          .join('\n\n');
       const config: AgentConfigPayload = {
         agent: rootAgent.name,
         model,
@@ -260,7 +226,20 @@ export async function runMultiAgentPreset(
       });
       if (!execution.ok) return execution.exitCode;
 
-      writeMultiAgentRunResult(runContext, plan, execution.result);
+      const payload = {
+        preset: {
+          id: plan.preset.id,
+          name: plan.preset.name,
+          source: plan.preset.source,
+        },
+        rootAgent: plan.rootAgent?.name,
+        result: execution.result,
+      };
+      emitCliResult(runContext, {
+        json: payload,
+        ndjson: { kind: 'multi-agent-result', ...payload },
+        text: toolUseResultText(execution.result),
+      });
 
       return execution.exitCode;
     },

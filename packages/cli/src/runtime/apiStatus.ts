@@ -179,22 +179,6 @@ export async function loadCliDetailedAccountStatusLines(
     ),
   ]);
   const codingPlanUsage = new Map(codingPlanUsageEntries);
-  const routes = {
-    chatGpt: {
-      preferred: access.preferences.chatGpt === 'on',
-      account: formatAccountStatus(
-        access.chatGptSignedIn,
-        access.chatGptAccountLabel,
-      ),
-    },
-    grok: {
-      preferred: access.preferences.grok === 'on',
-      account: formatAccountStatus(
-        access.grokSignedIn,
-        access.grokAccountLabel,
-      ),
-    },
-  };
   const lines: string[] = [];
   const withUsage = (
     line: string,
@@ -207,19 +191,19 @@ export async function loadCliDetailedAccountStatusLines(
 
   const chatGptLine = formatModelPreferenceLine(
     'ChatGPT',
-    routes.chatGpt.preferred,
+    access.preferences.chatGpt === 'on',
     access.chatGptSignedIn,
     'sign in required',
-    routes.chatGpt.account,
+    formatAccountStatus(access.chatGptSignedIn, access.chatGptAccountLabel),
   );
   if (chatGptLine) lines.push(withUsage(chatGptLine, chatGptUsage));
 
   const grokLine = formatModelPreferenceLine(
     'Grok',
-    routes.grok.preferred,
+    access.preferences.grok === 'on',
     access.grokSignedIn,
     'sign in required',
-    routes.grok.account,
+    formatAccountStatus(access.grokSignedIn, access.grokAccountLabel),
   );
   if (grokLine) lines.push(grokLine);
 

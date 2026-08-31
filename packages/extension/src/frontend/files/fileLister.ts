@@ -17,7 +17,6 @@ const log = createLog('FileLister');
 
 export class FileLister {
   public static initialize(context: vscode.ExtensionContext): void {
-    getFileLister();
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() =>
         getFileLister().refresh(),

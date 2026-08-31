@@ -35,9 +35,7 @@ export function workflowInputGlobOptions(
 }
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
-  return path.isAbsolute(candidate)
-    ? path.resolve(candidate)
-    : path.resolve(cwd, candidate);
+  return path.resolve(cwd, candidate);
 }
 
 function normalizeCliInputPath(candidate: string, cwd: string): string {

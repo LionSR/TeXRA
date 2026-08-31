@@ -145,11 +145,8 @@ export class FileManager {
         vscode.window.showInformationMessage('Choose a base file first.');
         return;
       }
-      const baseFileStem = path.basename(baseFile, path.extname(baseFile));
-      const currentFileStem = path.basename(
-        currentOpenFile,
-        path.extname(currentOpenFile),
-      );
+      const baseFileStem = getFileStem(baseFile);
+      const currentFileStem = getFileStem(currentOpenFile);
       if (
         !currentFileStem.startsWith(baseFileStem) ||
         currentFileStem === baseFileStem

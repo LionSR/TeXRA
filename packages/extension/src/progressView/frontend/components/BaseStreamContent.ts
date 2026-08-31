@@ -31,8 +31,6 @@ import {
   type StreamContextValue,
 } from '../streamContexts';
 
-// Local imports - types
-
 // Side-effect imports - sibling components shared by both stream-content
 // containers (registered once, consumed by the render helpers below)
 import './RequestPanels';

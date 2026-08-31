@@ -21,12 +21,10 @@ const log = createLog(CHANNEL);
 
 function observeNotification(
   notification: Thenable<unknown>,
-  kind: 'information' | 'error',
+  label: 'Information' | 'Error',
 ): void {
   void Promise.resolve(notification).catch((err: unknown) => {
-    log.warn(
-      `${kind[0].toUpperCase()}${kind.slice(1)} notification failed: ${toErrorMessage(err)}`,
-    );
+    log.warn(`${label} notification failed: ${toErrorMessage(err)}`);
   });
 }
 
@@ -85,14 +83,14 @@ export async function handleExecute(
   if (launch.status === 'error') {
     observeNotification(
       vscode.window.showErrorMessage(launch.message),
-      'error',
+      'Error',
     );
     return;
   }
   if (launch.infoMessage) {
     observeNotification(
       vscode.window.showInformationMessage(launch.infoMessage),
-      'information',
+      'Information',
     );
   }
   const { preparation } = launch;

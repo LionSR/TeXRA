@@ -96,7 +96,7 @@ export class SettingsViewProvider extends BaseWebviewProvider {
       );
     }
 
-    if (tab != null && this._view) {
+    if (tab != null) {
       await this._view.webview.postMessage({
         command: SETTINGS_VIEW_COMMANDS.SET_TAB,
         tab,

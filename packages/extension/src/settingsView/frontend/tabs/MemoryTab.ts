@@ -43,41 +43,30 @@ export class MemoryTab extends LitElement {
   @property({ attribute: false }) items: MemoryViewItem[] = [];
   @property({ attribute: false }) enabled = false;
 
-  private handleRefresh = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA);
-  };
-
-  private handleOpenFolder = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER);
-  };
-
-  private renderActions(): TemplateResult {
-    return html`<div
-      class="memory-actions"
-      role="group"
-      aria-label="Saved memory actions"
-    >
-      ${renderLabeledActionButton({
-        icon: 'rotate-right',
-        text: 'Refresh memories',
-        kind: 'secondary',
-        appearance: 'outlined',
-        onClick: this.handleRefresh,
-      })}
-      ${renderLabeledActionButton({
-        icon: 'folder-open',
-        text: 'Open memory folder',
-        kind: 'secondary',
-        appearance: 'outlined',
-        onClick: this.handleOpenFolder,
-      })}
-    </div>`;
-  }
-
   override render(): TemplateResult {
     return html`
       <div class="memory-view-container tab-content-container">
-        ${this.renderActions()}
+        <div
+          class="memory-actions"
+          role="group"
+          aria-label="Saved memory actions"
+        >
+          ${renderLabeledActionButton({
+            icon: 'rotate-right',
+            text: 'Refresh memories',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () => postMessage(SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA),
+          })}
+          ${renderLabeledActionButton({
+            icon: 'folder-open',
+            text: 'Open memory folder',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
+          })}
+        </div>
         ${renderStateSettingToggleRow({
           key: GlobalStateKey.MEMORY_ENABLED,
           checked: this.enabled,

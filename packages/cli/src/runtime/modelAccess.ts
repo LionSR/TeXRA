@@ -183,7 +183,7 @@ export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
   const models = await computeModelOptionsData(options.models);
-  return models.map((model) => toCliModelAccess(model));
+  return models.map(toCliModelAccess);
 }
 
 export function findCliModelAccessEntry(
@@ -245,7 +245,7 @@ function formatCliModelRecovery(entry: CliModelAccess): string | undefined {
 
   switch (availability) {
     case 'missing-key':
-      return `${startSentence(DEFAULT_CONFIGURE_KEY_ACTION)}.`;
+      return formatCliNoAvailableModelsRecovery();
     case 'provider-key':
     case 'openrouter-key':
       return undefined;

@@ -11,19 +11,15 @@ export interface GoalModeFormProps {
   readonly onClose: () => void;
 }
 
-function toggleDescription(enabled: boolean): string {
-  return enabled
-    ? 'On · commands, file edits, and delegated work; other prompts still ask'
-    : 'Off · commands only; edits and other prompts still ask';
-}
-
 /** Goal-mode reference and its session-local approval-scope toggle. */
 export function GoalModeForm(props: GoalModeFormProps): React.JSX.Element {
   const items: ReadonlyArray<SelectItem<boolean>> = [
     {
       value: !props.autoApproveAll,
       label: 'Auto-approve all goal work',
-      description: toggleDescription(props.autoApproveAll),
+      description: props.autoApproveAll
+        ? 'On · commands, file edits, and delegated work; other prompts still ask'
+        : 'Off · commands only; edits and other prompts still ask',
     },
   ];
   return (

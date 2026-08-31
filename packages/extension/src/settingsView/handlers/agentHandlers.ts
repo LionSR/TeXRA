@@ -316,11 +316,10 @@ export class AgentHandlers {
             presentation: {
               chooseTeamAvailability: (prompt) =>
                 this.chooseTeamAvailability(prompt),
-              showInfoMessage: (message) => {
+              showInfoMessage: async (message) => {
                 void vscode.window.showInformationMessage(message);
-                return Promise.resolve();
               },
-              showErrorMessage: (message) => {
+              showErrorMessage: async (message) => {
                 void showLoggedMessage(this.ctx.channel, message).catch(
                   (err: unknown) => {
                     this.ctx.log.warn(
@@ -328,7 +327,6 @@ export class AgentHandlers {
                     );
                   },
                 );
-                return Promise.resolve();
               },
             },
             refreshAfterApply: (selectedToolUseAgent) =>
@@ -339,9 +337,7 @@ export class AgentHandlers {
     );
   }
 
-  async handleSaveAgentModePreset(
-    _data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SAVE_AGENT_MODE_PRESET>,
-  ): Promise<void> {
+  async handleSaveAgentModePreset(): Promise<void> {
     await withHandlerErrorHandling(
       this.ctx,
       'Failed to save agent team',
