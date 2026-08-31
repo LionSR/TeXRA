@@ -38,9 +38,11 @@ import {
   runIdentityDisplayName,
   type ActiveChildInfo,
   type InquiryThreadUpdatedEvent,
+  type StreamTabId,
 } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { childElapsedMs } from '@shared/streams/childElapsed';
+import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
 import {
   formatPhaseStageLabel,
   formatStreamStatusLabel,
@@ -55,6 +57,8 @@ import '@progressView/frontend/components/ToolTimer';
 
 // Local imports - contexts
 import {
+  childProgressContext,
+  EMPTY_CHILD_PROGRESS,
   EMPTY_INQUIRY_THREADS,
   EMPTY_PHASE_STAGE_MAP,
   EMPTY_STREAM_BY_ID,
@@ -243,6 +247,11 @@ export class BackgroundTasksPanel extends LitElement {
   @consume({ context: inquiryThreadsContext, subscribe: true })
   @state()
   private inquiries: InquiryThreadUpdatedEvent[] = EMPTY_INQUIRY_THREADS;
+
+  @consume({ context: childProgressContext, subscribe: true })
+  @state()
+  private childProgress: ReadonlyMap<StreamTabId, ChildRunProgress> =
+    EMPTY_CHILD_PROGRESS;
 
   /** Current phase per stream — a workflow-script run's row is otherwise
    *  indistinguishable at minute 2 and minute 38 of the same run. */
@@ -483,7 +492,10 @@ export class BackgroundTasksPanel extends LitElement {
                 >`
             : nothing
         }
-        ${renderChildElapsed(child)}
+        ${renderChildElapsed(
+          child,
+          this.childProgress.get(childStreamId)?.runStartedAt,
+        )}
         <wa-badge
           class="task-status"
           variant=${badge.variant}
@@ -505,22 +517,24 @@ export class BackgroundTasksPanel extends LitElement {
 }
 
 /**
- * Elapsed reading for one roster row, derived from the row's own timestamps —
- * the roster carries no rendered duration. A live row hands its start stamp to
- * the shared `<tool-timer>`, which owns the tick; paused rows show no elapsed
- * reading, matching the CLI. A retained row's window is closed by `finishedAt`,
- * so its reading is fixed and needs no clock read.
+ * Elapsed reading for one roster row. A live row uses the child's current
+ * active-phase start from the status plane and hands it to `<tool-timer>`,
+ * which owns the tick. A retained row uses the roster's handle-generation
+ * window, closed by `finishedAt`, so its reading is fixed.
  */
 function renderChildElapsed(
   child: ActiveChildInfo,
+  runStartedAt: number | undefined,
 ): TemplateResult | typeof nothing {
-  if (child.startedAt === undefined) return nothing;
   if (child.finishedAt === undefined) {
-    if (child.status !== STREAM_PHASE.RUNNING) return nothing;
+    if (child.status !== STREAM_PHASE.RUNNING || runStartedAt === undefined) {
+      return nothing;
+    }
     return html`<span class="task-elapsed"
-      >(<tool-timer .startTime=${child.startedAt}></tool-timer>)</span
+      >(<tool-timer .startTime=${runStartedAt}></tool-timer>)</span
     >`;
   }
+  if (child.startedAt === undefined) return nothing;
   const elapsedMs = childElapsedMs(child, child.finishedAt);
   return elapsedMs === undefined
     ? nothing

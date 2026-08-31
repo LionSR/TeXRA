@@ -9,8 +9,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type {
   InquiryThreadUpdatedEvent,
   PermissionPayload,
+  StreamTabId,
 } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
+import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
 
 // Local imports - progress view
 import {
@@ -23,6 +25,8 @@ import {
 } from '../progressState';
 import {
   archivedContext,
+  childProgressContext,
+  EMPTY_CHILD_PROGRESS,
   EMPTY_INQUIRY_THREADS,
   EMPTY_LOG_CONTEXT,
   EMPTY_PHASE_STAGE_MAP,
@@ -90,6 +94,13 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   @state()
   private streamLogContextValue: StreamLogContextValue = EMPTY_LOG_CONTEXT;
 
+  @provide({ context: childProgressContext })
+  @state()
+  private childProgressContextValue: ReadonlyMap<
+    StreamTabId,
+    ChildRunProgress
+  > = EMPTY_CHILD_PROGRESS;
+
   @provide({ context: permissionsContext })
   @state()
   private permissionsContextValue: PermissionPayload[] = [];
@@ -126,6 +137,7 @@ export class StreamConversation extends SignalWatcher(LitElement) {
   protected override willUpdate(): void {
     this.streamContextValue = streamContext$.get();
     this.streamLogContextValue = logContext$.get();
+    this.childProgressContextValue = this.streamLogContextValue.childProgress;
     this.permissionsContextValue = permissions$.get();
     this.streamByIdContextValue = streamById$.get();
     this.inquiryThreadsContextValue = activeInquiries$.get();

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { BackgroundTasksPanel } from '@progressView/frontend/components/BackgroundTasksPanel';
 import type {
+  childProgressContext as ChildProgressContext,
   inquiryThreadsContext as InquiryThreadsContext,
   phaseStagesContext as PhaseStagesContext,
 } from '@progressView/frontend/streamContexts';
@@ -23,6 +24,7 @@ interface StyledBackgroundTasksPanelConstructor extends CustomElementConstructor
 // and the context definitions can only be imported after the test DOM globals
 // are installed (that is what useLitComponentTestDom's hook does).
 let ContextProviderCtor: typeof ContextProvider;
+let childProgressContext: typeof ChildProgressContext;
 let inquiryThreadsContext: typeof InquiryThreadsContext;
 let phaseStagesContext: typeof PhaseStagesContext;
 
@@ -69,7 +71,7 @@ async function mountPanel(
 describe('background-tasks-panel', () => {
   useLitComponentTestDom(async () => {
     ({ ContextProvider: ContextProviderCtor } = await import('@lit/context'));
-    ({ inquiryThreadsContext, phaseStagesContext } =
+    ({ childProgressContext, inquiryThreadsContext, phaseStagesContext } =
       await import('@progressView/frontend/streamContexts'));
     await import('@progressView/frontend/components/BackgroundTasksPanel');
   });
@@ -101,7 +103,7 @@ describe('background-tasks-panel', () => {
     expect(rule?.style.borderRadius).toBe('0px');
   });
 
-  it('lists a retained finished subagent as a named row, not a count', async () => {
+  it('uses the roster generation window for a retained finished row', async () => {
     const element = await mountPanel([
       subagentRow({ executionId: 'exec-1', startedAt: 1_000 }),
       subagentRow({
@@ -134,6 +136,36 @@ describe('background-tasks-panel', () => {
     expect(shadow.textContent).not.toMatch(/All \d+ subagents completed/);
 
     element.remove();
+  });
+
+  it('uses child runStartedAt for a live row timer', async () => {
+    const element = createPanel();
+    element.subagents = [
+      subagentRow({
+        executionId: 'exec-live-timer',
+        childStreamId: 'child-live-timer',
+        startedAt: 1_000,
+      }),
+    ];
+    const container = document.createElement('div');
+    document.body.append(container);
+    new ContextProviderCtor(container, {
+      context: childProgressContext,
+      initialValue: new Map([
+        [
+          'child-live-timer' as StreamTabId,
+          { runStartedAt: 5_000, toolCallCount: 0 },
+        ],
+      ]),
+    }).hostConnected();
+    container.append(element);
+    await element.updateComplete;
+
+    const timer = element.shadowRoot?.querySelector('tool-timer') as
+      (HTMLElement & { startTime: number }) | null;
+    expect(timer?.startTime).toBe(5_000);
+
+    container.remove();
   });
 
   it('labels a running workflow-script row with its current phase', async () => {

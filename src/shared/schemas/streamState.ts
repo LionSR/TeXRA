@@ -38,7 +38,11 @@ export const ActiveChildInfoSchema = z.object({
    * `StreamStatus` vocabulary and there is nothing to normalize here.
    */
   status: StreamPhaseSchema.optional(),
-  /** Epoch milliseconds when the child execution began. */
+  /**
+   * Epoch milliseconds when the current child handle generation was created.
+   * Kept on the wire for live and retained roster rows; live active-phase
+   * elapsed time comes from the child stream's `runStartedAt` instead.
+   */
   startedAt: z.int().positive().optional(),
   /**
    * Epoch milliseconds when the child left its parent's active roster.
