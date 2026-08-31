@@ -146,37 +146,23 @@ export function runWithValidatedExecutionStreamDeletion<T>(
     return operation();
   }
   return runWithExecutionStreamOwnershipFence(streamId, async () => {
-    const [claims, sidecarOwner] = await Promise.all([
-      readModernStreamClaims(),
-      readStreamSidecarOwner(streamId),
-    ]);
-    const streamClaims = claims.byStream.get(streamId) ?? [];
+    const sidecarOwner = await readStreamSidecarOwner(streamId);
     let valid: boolean;
     if (executionId) {
-      const ownerMeta =
-        streamClaims.length === 0 && sidecarOwner === executionId
-          ? await getExecutionStore(executionId).readMetaStrict()
-          : null;
+      const ownerMeta = await getExecutionStore(executionId).readMetaStrict();
       valid =
-        !claims.unreadable &&
-        ((streamClaims.length === 1 &&
-          streamClaims[0] === executionId &&
-          (sidecarOwner === undefined || sidecarOwner === executionId)) ||
-          (streamClaims.length === 0 &&
-            sidecarOwner === executionId &&
-            ownerMeta?.streamId !== undefined &&
-            ownerMeta.streamId !== streamId));
+        ownerMeta?.streamId !== undefined &&
+        (sidecarOwner === executionId ||
+          (sidecarOwner === undefined && ownerMeta.streamId === streamId));
     } else {
       const sidecarOwnerMeta = sidecarOwner
         ? await getExecutionStore(sidecarOwner).readMetaStrict()
         : null;
       valid =
-        !claims.unreadable &&
-        streamClaims.length === 0 &&
-        (sidecarOwner === undefined ||
-          sidecarOwnerMeta === null ||
-          (sidecarOwnerMeta.streamId !== undefined &&
-            sidecarOwnerMeta.streamId !== streamId));
+        sidecarOwner === undefined ||
+        sidecarOwnerMeta === null ||
+        (sidecarOwnerMeta.streamId !== undefined &&
+          sidecarOwnerMeta.streamId !== streamId);
     }
     if (!valid) {
       throw new Error(
@@ -194,18 +180,8 @@ export async function assertExecutionStreamClaimAvailable(
   streamId: StreamTabId,
   executionId: ExecutionId,
 ): Promise<void> {
-  const [claims, sidecarOwner] = await Promise.all([
-    readModernStreamClaims(),
-    readStreamSidecarOwner(streamId),
-  ]);
-  const claimedByAnotherExecution = (claims.byStream.get(streamId) ?? []).some(
-    (claimant) => claimant !== executionId,
-  );
-  if (
-    claims.unreadable ||
-    claimedByAnotherExecution ||
-    (sidecarOwner !== undefined && sidecarOwner !== executionId)
-  ) {
+  const sidecarOwner = await readStreamSidecarOwner(streamId);
+  if (sidecarOwner !== undefined && sidecarOwner !== executionId) {
     throw new Error(
       `Stream ${streamId} already has another or unreadable persisted execution owner.`,
     );

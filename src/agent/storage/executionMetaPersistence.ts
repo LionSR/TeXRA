@@ -220,7 +220,7 @@ class ExecutionStreamOwnershipUnknownError extends Error {
   }
 }
 
-export interface ExecutionMetaReader {
+interface ExecutionMetaReader {
   read(executionId: ExecutionId): Promise<ExecutionMeta | null>;
   readStrict(executionId: ExecutionId): Promise<ExecutionMeta | null>;
   /** Validate persisted stream claims before destructive adjacent cleanup. */
@@ -241,6 +241,8 @@ export interface ExecutionMetaReader {
  * Compatibility reader introduced by #11337 on 2026-08-31 for released-host
  * rows written before 2026-08-01. Remove on or after 2026-11-01, once those
  * workspace records leave the three-month supported recovery window.
+ *
+ * @internal Storage-only operation scope; never expose through the host barrel.
  */
 export function createExecutionMetaReader(
   readClaims: () => Promise<ModernStreamClaims> = readModernStreamClaims,
@@ -295,6 +297,14 @@ export function createExecutionMetaReader(
   };
 }
 
+/** Build one storage-owned batch of fenced execution-stream deletions. */
+export function createExecutionStreamDeletionBatch(
+  operation: (streamId: StreamTabId) => Promise<void>,
+): (executionId: ExecutionId) => Promise<void> {
+  const reader = createExecutionMetaReader();
+  return (executionId) => reader.withStreamForDeletion(executionId, operation);
+}
+
 /** Read and normalize one execution metadata record within storage. */
 export function readExecutionMeta(
   executionId: ExecutionId,
@@ -305,9 +315,10 @@ export function readExecutionMeta(
 /** Resolve the durable execution→stream edge and its normalized metadata. */
 export async function readExecutionStreamReference(
   executionId: ExecutionId,
-): Promise<
-  { readonly streamId: StreamTabId; readonly meta: ExecutionMeta } | null
-> {
+): Promise<{
+  readonly streamId: StreamTabId;
+  readonly meta: ExecutionMeta;
+} | null> {
   const meta = await readExecutionMeta(executionId);
   return meta?.streamId ? { streamId: meta.streamId, meta } : null;
 }

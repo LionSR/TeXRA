@@ -49,6 +49,7 @@ export {
 } from './executionListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export {
+  createExecutionStreamDeletionBatch,
   readExecutionStreamId,
   readExecutionStreamReference,
 } from './executionMetaPersistence';

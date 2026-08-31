@@ -25,8 +25,8 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/shared/desktopShellMessages';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import type { AgentResumePort } from '@platform/interfaces';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   AgentCategory,
   LOG_LEVELS,

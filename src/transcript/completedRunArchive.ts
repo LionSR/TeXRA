@@ -4,10 +4,7 @@
  * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
  * execution→stream mapping.
  */
-import {
-  readExecutionStreamReference,
-  type TodoEntry,
-} from '@agent/storage';
+import { readExecutionStreamReference, type TodoEntry } from '@agent/storage';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import { KVStore } from '@common/storage/KVStore';

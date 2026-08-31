@@ -60,8 +60,8 @@ vi.mock('@agent/storage', async () => {
       readWorkspaceFiles: mocks.readWorkspaceFiles,
     })),
     listExecutions: mocks.listExecutions,
-    readExecutionStreamId: vi.fn(async () =>
-      (await mocks.readMeta())?.streamId,
+    readExecutionStreamId: vi.fn(
+      async () => (await mocks.readMeta())?.streamId,
     ),
     readExecutionStreamReference: vi.fn(async () => {
       const meta = await mocks.readMeta();
