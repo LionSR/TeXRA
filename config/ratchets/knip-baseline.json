@@ -1064,12 +1064,6 @@
       "name": "workbenchTab"
     },
     {
-      "file": "src/agent/implementations/agentCreator/agentCreatorFlow.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ParsedCreatorYamlSchema"
-    },
-    {
       "file": "packages/extension/src/commands/extensionCommandHandlers.ts",
       "category": "production-dead",
       "kind": "exports",

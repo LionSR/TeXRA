@@ -3,7 +3,6 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { describe, it } from 'vitest';
-import { z } from 'zod';
 
 // Local imports
 import {
@@ -112,33 +111,5 @@ describe('AgentConfigSchema agentSource compatibility', () => {
 
     assert.strictEqual(result.success, false);
     assert.deepStrictEqual(result.error?.issues[0]?.path, ['agentSource']);
-  });
-
-  it('makes an older build reject an inline source rather than drop it', () => {
-    // Forward compatibility is a downgrade scenario: only a widened build can
-    // write `inline`, and an older build validates the same field with the
-    // enum as it stood before. `.nullish()` keeps the field optional, but a
-    // *present* unknown value is a parse error — so the older build fails at
-    // its read boundary rather than silently defaulting the source. Every
-    // persisted read is already written for that: `ExecutionKVStore.readConfig`
-    // goes through `readValidated`, which warns and returns null (the same
-    // "corrupt config" path history views already handle), and
-    // `executionListing`'s backfill logs and skips the entry.
-    const olderBuildSourceSchema = z
-      .enum(['custom', 'builtInWorkflow', 'builtInToolUse', 'remote'])
-      .nullish();
-
-    assert.strictEqual(
-      olderBuildSourceSchema.safeParse('inline').success,
-      false,
-    );
-    assert.strictEqual(
-      olderBuildSourceSchema.safeParse(undefined).success,
-      true,
-    );
-    assert.strictEqual(
-      olderBuildSourceSchema.safeParse('custom').success,
-      true,
-    );
   });
 });

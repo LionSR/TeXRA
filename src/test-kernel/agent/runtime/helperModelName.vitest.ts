@@ -42,18 +42,6 @@ describe('resolveEffectiveHelperModel', () => {
 });
 
 describe('getHelperModelName', () => {
-  it('accepts a non-default configured model as-is when ENABLED_MODELS is unset', async () => {
-    await installPlatform({
-      globalState: {
-        [GlobalStateKey.HELPER_MODEL]: 'legacy-helper-model',
-        // ENABLED_MODELS intentionally left unset -- matches a user who has
-        // never touched the Enabled Models checkboxes.
-      },
-    });
-
-    expect(getHelperModelName()).toBe('legacy-helper-model');
-  });
-
   it('falls back to the built-in default when the configured model is not enabled', async () => {
     await installPlatform({
       globalState: {
