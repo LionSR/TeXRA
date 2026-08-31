@@ -91,14 +91,8 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
 
 const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
 
-/** Parsed path components for display */
-interface ParsedPath {
-  dir: string;
-  basename: string;
-}
-
 /** Parse a path into directory and basename components */
-function parsePath(path: string): ParsedPath {
+function parsePath(path: string): { dir: string; basename: string } {
   const normalized = normalizeFilePath(path);
   // With no slash, lastIndexOf is -1 and the dir slice already yields the
   // fallback: '' for dir.
@@ -242,7 +236,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     // A per-round disclosure only earns its chrome when there are multiple
     // rounds to tell apart; a single round renders its files directly.
     if (this.sortedRounds.length === 1) {
-      return html`${rows}`;
+      return rows;
     }
 
     return html`

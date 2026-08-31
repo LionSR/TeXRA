@@ -17,18 +17,16 @@ type UnavailableReason = Extract<
   { state: 'unavailable' }
 >['reason'];
 
-const UNAVAILABLE_DETAILS: Record<UnavailableReason, string | undefined> = {
-  invalid_credentials: 'The provider rejected the configured credentials.',
-  malformed_response: 'The provider returned usage data TeXRA could not read.',
-  missing_credentials: undefined,
-  request_failed: undefined,
-};
-
 function unavailableDetail(reason: UnavailableReason): string {
-  return (
-    UNAVAILABLE_DETAILS[reason] ??
-    'The provider usage request failed. Try refreshing again shortly.'
-  );
+  switch (reason) {
+    case 'invalid_credentials':
+      return 'The provider rejected the configured credentials.';
+    case 'malformed_response':
+      return 'The provider returned usage data TeXRA could not read.';
+    case 'missing_credentials':
+    case 'request_failed':
+      return 'The provider usage request failed. Try refreshing again shortly.';
+  }
 }
 
 @customElement('subscription-usage-row')

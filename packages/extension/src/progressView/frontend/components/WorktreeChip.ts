@@ -65,10 +65,6 @@ export class WorktreeChip extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     if (!this.info) return nothing;
-    return this.renderBranch();
-  }
-
-  private renderBranch(): TemplateResult | typeof nothing {
     const branch = this.info.branch ?? this.worktreeLabel();
     if (!branch) return nothing;
     const branchKind = this.info.branch ? 'Branch' : 'Worktree';

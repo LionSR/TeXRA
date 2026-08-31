@@ -1391,18 +1391,6 @@ const shortcutBootstrap = createDesktopShortcutBootstrap({
   },
 });
 
-/**
- * Install the keyboard shortcuts, the command palette and the accelerator-hint
- * subscription, exactly once. Driven from `completeBootstrap` rather than
- * module scope so a shell that recovers from a bootstrap failure gets them
- * too: the previous `const` was gated on `bootstrapFailed` and could never be
- * re-evaluated, leaving a recovered shell with no shortcuts and a permanently
- * inert command palette while the startup panel still advertised cmd/ctrl+K.
- */
-function ensureShortcutRegistry(): void {
-  shortcutBootstrap.ensure();
-}
-
 function openCommandPalette(): void {
   shortcutBootstrap.open();
 }
@@ -1556,7 +1544,9 @@ function wireConversation(): void {
 function completeBootstrap(): void {
   wireRailTabs();
   wireConversation();
-  ensureShortcutRegistry();
+  // Runs here rather than at module scope so a shell recovering from a
+  // bootstrap failure re-installs shortcuts too; every step is idempotent.
+  shortcutBootstrap.ensure();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
   postWebviewReady();
   if (hasWorkspace) void editorPane.refresh();

@@ -324,10 +324,7 @@ function buildStyledLines(
   const elide = options.elide !== false;
   const isBashKind = toolDisplayKind(toolUse.toolName) === 'bash';
 
-  const budget =
-    options.width === undefined
-      ? MAX_HEADER_PREVIEW
-      : toolHeaderPreviewBudget(options.width, model.headerLabel);
+  const budget = toolHeaderPreviewBudget(options.width, model.headerLabel);
   const preview =
     budget > 0 && headerPreview
       ? truncateSummaryToWidth(headerPreview, budget)

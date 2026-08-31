@@ -180,7 +180,7 @@ export class LatexSettingsHandlers {
         await this.ctx.withActiveWebview((w) =>
           this.sendLatexSettingsStatus(w),
         );
-        const verb = data.reset ? 'reset' : 'applied';
+        const verb = reset ? 'reset' : 'applied';
         void vscode.window.showInformationMessage(
           data.field
             ? `LaTeX setting ${verb}`

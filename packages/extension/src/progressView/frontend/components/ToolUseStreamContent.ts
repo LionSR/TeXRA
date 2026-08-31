@@ -113,14 +113,14 @@ export class ToolUseStreamContent extends BaseStreamContent {
     state: ToolUseStreamState,
     streamInfo: StreamTabInfo,
   ): TemplateResult {
-    const visible = !composerVisible(state, streamInfo);
-    const message = visible
+    const showBanner = !composerVisible(state, streamInfo);
+    const message = showBanner
       ? streamStatusTooltip(state, RUN_ENDED_MESSAGE)
       : nothing;
 
     return html`<div
       class=${
-        visible
+        showBanner
           ? 'conversation-composer-banner'
           : 'conversation-composer-banner conversation-composer-banner--empty'
       }

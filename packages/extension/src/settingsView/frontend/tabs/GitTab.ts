@@ -174,19 +174,13 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
 
-  private handleAuthorNameChange(event: Event): void {
-    const target = event.target as WaInput | null;
-    const name = target?.value?.trim();
-    if (name) {
-      postStateSetting(WorkspaceStateKey.GIT_AUTHOR_NAME, name);
-    }
-  }
-
-  private handleAuthorEmailChange(event: Event): void {
-    const target = event.target as WaInput | null;
-    const email = target?.value?.trim();
-    if (email) {
-      postStateSetting(WorkspaceStateKey.GIT_AUTHOR_EMAIL, email);
+  private handleIdentityInputChange(
+    event: Event,
+    key: WorkspaceStateKey,
+  ): void {
+    const value = (event.target as WaInput | null)?.value?.trim();
+    if (value) {
+      postStateSetting(key, value);
     }
   }
 
@@ -408,7 +402,11 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         spellcheck="false"
                         .value=${this.authorName}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
-                        @change=${this.handleAuthorNameChange}
+                        @change=${(event: Event) =>
+                          this.handleIdentityInputChange(
+                            event,
+                            WorkspaceStateKey.GIT_AUTHOR_NAME,
+                          )}
                       ></wa-input>
                     </div>
                     <div class="input-row">
@@ -425,7 +423,11 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         dir="ltr"
                         .value=${this.authorEmail}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
-                        @change=${this.handleAuthorEmailChange}
+                        @change=${(event: Event) =>
+                          this.handleIdentityInputChange(
+                            event,
+                            WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+                          )}
                       ></wa-input>
                     </div>
                   </div>

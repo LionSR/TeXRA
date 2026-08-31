@@ -315,8 +315,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       resetCustomAgentDir: () => this.agentHandlers.handleResetCustomAgentDir(),
       applyAgentModePreset: (message) =>
         this.agentHandlers.handleApplyAgentModePreset(message),
-      saveAgentModePreset: (message) =>
-        this.agentHandlers.handleSaveAgentModePreset(message),
+      saveAgentModePreset: () => this.agentHandlers.handleSaveAgentModePreset(),
       deleteAgentModePreset: (message) =>
         this.agentHandlers.handleDeleteAgentModePreset(message),
       getGitHubTokenStatus: () =>

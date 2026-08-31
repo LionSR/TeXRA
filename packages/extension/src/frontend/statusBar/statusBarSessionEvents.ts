@@ -20,18 +20,16 @@ export function subscribeStatusBarSessionEvents({
 }: StatusBarSessionEventOptions): () => void {
   const disposeStatus = session.events.subscribeStatus(onStatusChanged);
 
-  const disposeUsage = session.events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'run') return;
-      if (sessionEvent.event.type !== 'usage') return;
+  const disposeUsage = session.events.subscribeRunFacts(
+    ({ event }) => {
       // The runtime publishes the in-flight status before usage for a round;
       // usage for a stream not in flight cannot change the projected total,
       // so stale async events skip the refresh.
-      if (session.status.isInFlight(sessionEvent.event.payload.streamId)) {
+      if (session.status.isInFlight(event.payload.streamId)) {
         onUsageChanged();
       }
     },
-    { scope: 'run', types: ['usage'] },
+    { types: ['usage'] },
   );
 
   return () => {

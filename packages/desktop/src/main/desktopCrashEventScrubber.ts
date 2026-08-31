@@ -4,12 +4,16 @@ import type { ErrorEvent } from '@sentry/electron/main';
 
 const REDACTED_PATH = '<redacted-path>';
 
+function scrubString(value: string, scrubbers: readonly RegExp[]): string {
+  return scrubbers.reduce(
+    (current, scrubber) => current.replace(scrubber, REDACTED_PATH),
+    value,
+  );
+}
+
 function scrubValue(value: unknown, scrubbers: readonly RegExp[]): unknown {
   if (typeof value === 'string') {
-    return scrubbers.reduce(
-      (current, scrubber) => current.replace(scrubber, REDACTED_PATH),
-      value,
-    );
+    return scrubString(value, scrubbers);
   }
   if (Array.isArray(value)) {
     return value.map((item) => scrubValue(item, scrubbers));
@@ -17,10 +21,7 @@ function scrubValue(value: unknown, scrubbers: readonly RegExp[]): unknown {
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [
-        scrubbers.reduce(
-          (current, scrubber) => current.replace(scrubber, REDACTED_PATH),
-          key,
-        ),
+        scrubString(key, scrubbers),
         scrubValue(entry, scrubbers),
       ]),
     );

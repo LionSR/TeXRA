@@ -277,9 +277,7 @@ export function orderedStaticTranscriptEntries(
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
 
-  const ordered = inSettlementOrder(candidates);
-
-  return ordered.map(({ entry }) => entry);
+  return inSettlementOrder(candidates).map(({ entry }) => entry);
 }
 
 /**

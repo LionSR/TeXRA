@@ -245,7 +245,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         class="agent-list-pane"
         role="region"
         aria-label="Agents"
-        @keydown=${(e: KeyboardEvent) => this.handleListKeydown(e)}
+        @keydown=${this.handleListKeydown}
       >
         ${orderedSources.map((source) => {
           const agents = groups.get(source)!;

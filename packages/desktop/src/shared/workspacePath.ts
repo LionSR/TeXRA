@@ -30,7 +30,6 @@ export function withWorkspacePathArg(
   const nextArgs: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg == null) continue;
     if (isDesktopProtocolUrl(arg)) continue;
     if (isWorkspacePathFlag(arg)) {
       const value = argv[index + 1];

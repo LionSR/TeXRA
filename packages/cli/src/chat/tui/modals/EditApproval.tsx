@@ -146,10 +146,12 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       }
       // `feedbackWasCompactRef` is only ever latched while feedback mode is
       // open and cleared on the way out, so it already implies the transition.
-      if (!active && feedbackWasCompactRef.current) {
-        setFeedbackExitCount((count) => count + 1);
+      if (!active) {
+        if (feedbackWasCompactRef.current) {
+          setFeedbackExitCount((count) => count + 1);
+        }
+        feedbackWasCompactRef.current = false;
       }
-      if (!active) feedbackWasCompactRef.current = false;
       setFeedbackMode(active);
     },
     [feedbackDiffIsCompact, feedbackValue],

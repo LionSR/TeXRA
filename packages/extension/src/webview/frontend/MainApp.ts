@@ -166,10 +166,6 @@ export class MainApp extends MainAppBase {
   // bodies, plus the two handlers bound at two template sites each. Everything
   // else binds inline at its template site.
 
-  private readonly onSignInFromBanner = (): void => {
-    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
-  };
-
   private readonly onOnboardingOpenGettingStarted = (): void => {
     postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED);
   };
@@ -194,18 +190,6 @@ export class MainApp extends MainAppBase {
    * multi-agent settings section. */
   private readonly onOpenMultiAgentSettings = (): void => {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
-  };
-
-  private readonly onLatexDiffsToggle = ({
-    detail,
-  }: CustomEvent<LatexDiffsToggleDetail>): void => {
-    latexdiffsVisible$.set(detail.visible);
-  };
-
-  private readonly onInstructionInput = ({
-    detail,
-  }: CustomEvent<InstructionChangeDetail>): void => {
-    setInstruction(detail.value);
   };
 
   override connectedCallback(): void {
@@ -438,7 +422,10 @@ export class MainApp extends MainAppBase {
           detail,
         }: CustomEvent<WorkingDirectoryChangeDetail>) =>
           changeWorkingDirectory(detail.value)}
-        @instruction-input=${this.onInstructionInput}
+        @instruction-input=${({
+          detail,
+        }: CustomEvent<InstructionChangeDetail>) =>
+          setInstruction(detail.value)}
         @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
           runPanelAction(detail.action)}
         @execute=${() => sendExecuteMessage()}
@@ -474,7 +461,7 @@ export class MainApp extends MainAppBase {
           postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, {
             tool: detail.tool,
           })}
-        @sign-in=${this.onSignInFromBanner}
+        @sign-in=${() => postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER)}
         @dismiss-login=${this.onDismissLogin}
         @dismiss-getting-started=${this.onDismissGettingStarted}
         @getting-started-action=${({
@@ -610,7 +597,10 @@ export class MainApp extends MainAppBase {
           .commit=${commit$.get()}
           .commitOptions=${fo.commit}
           .isGitRepo=${isGitRepo$.get()}
-          @latexdiffs-toggle=${this.onLatexDiffsToggle}
+          @latexdiffs-toggle=${({
+            detail,
+          }: CustomEvent<LatexDiffsToggleDetail>) =>
+            latexdiffsVisible$.set(detail.visible)}
           @latexdiffs-action=${({
             detail,
           }: CustomEvent<LatexDiffsActionDetail>) =>

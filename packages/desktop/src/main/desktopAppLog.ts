@@ -67,6 +67,10 @@ export function readDesktopLogSnapshot(options: {
     options.workspacePath == null
       ? undefined
       : normalizeFilePath(options.workspacePath);
+  const redactedPath = redactDesktopLogText(
+    normalizeFilePath(path),
+    workspacePath,
+  );
   try {
     const buffer = readFileSync(path);
     const truncated = buffer.length > maxBytes;
@@ -74,13 +78,13 @@ export function readDesktopLogSnapshot(options: {
       ? buffer.subarray(buffer.length - maxBytes)
       : buffer;
     return {
-      path: redactDesktopLogText(normalizeFilePath(path), workspacePath),
+      path: redactedPath,
       truncated,
       text: redactDesktopLogText(excerpt.toString('utf8'), workspacePath),
     };
   } catch (error) {
     return {
-      path: redactDesktopLogText(normalizeFilePath(path), workspacePath),
+      path: redactedPath,
       truncated: false,
       text: redactDesktopLogText(
         format('Desktop log is not available: %s', error),

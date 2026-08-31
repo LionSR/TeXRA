@@ -255,7 +255,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   applyStreamDescription(streamId: StreamTabId, description: string): void {
     if (this.rootStreamTerminal) return;
-    if (this.isRootStream(streamId)) {
+    if (this.rootStreamId === streamId) {
       this.rootPhaseText = description;
     } else if (
       !this.liveChildren().some((child) => child.childStreamId === streamId)
@@ -272,19 +272,11 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     return this.rootStreamId === streamId;
   }
 
-  private isRootStream(streamId: StreamTabId): boolean {
-    return this.rootStreamId === streamId;
-  }
-
   /** Live (not yet retired) children of the root run, from the shared roster. */
   private liveChildren(): readonly ActiveChildInfo[] {
     if (this.rootStreamTerminal || !this.rootStreamId) return [];
     const roster = this.state?.getStreamState(this.rootStreamId)?.subagents;
     return roster?.filter((child) => child.finishedAt === undefined) ?? [];
-  }
-
-  private childDescription(streamId: StreamTabId): string | undefined {
-    return this.state?.getStreamMetadata(streamId).description;
   }
 
   private render(force = false): void {
@@ -364,7 +356,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const elapsed = formatElapsed(now - runStartedAt);
     const children = this.liveChildren();
     const describe = (child: ActiveChildInfo): string | undefined =>
-      this.childDescription(child.childStreamId);
+      this.state?.getStreamMetadata(child.childStreamId).description;
     const nameOnlySubagents = formatActiveChildren(children, describe, 0);
     if (nameOnlySubagents) {
       const descriptionColumns = this.descriptionColumnBudget(

@@ -26,18 +26,18 @@ function rowTime(row: TranscriptRow): number {
   return row.timestamp;
 }
 
-/** The wall-clock fallback order key for a task-group child. */
-function groupStartTime(group: TaskGroup): number {
-  return group.startTime;
-}
-
 /** Wire append sequence when both rows carry one, wall-clock otherwise. */
 function compareRows(a: TranscriptRow, b: TranscriptRow): number {
   return compareBySeqNo(a, b, (row) => row.seqNo, rowTime);
 }
 
 function compareGroups(a: TaskGroup, b: TaskGroup): number {
-  return compareBySeqNo(a, b, () => undefined, groupStartTime);
+  return compareBySeqNo(
+    a,
+    b,
+    () => undefined,
+    (group) => group.startTime,
+  );
 }
 
 function compareTimeline(a: TimelineEntry, b: TimelineEntry): number {

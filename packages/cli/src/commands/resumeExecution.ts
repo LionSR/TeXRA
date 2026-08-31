@@ -41,14 +41,12 @@ async function workflowRecoveryInputsAreDurable(
   const cwd = config.workingDirectory || fallbackCwd;
   const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
   const checks = await Promise.all(
-    paths.map(async (inputPath) => {
-      try {
-        await fs.access(path.resolve(cwd, inputPath));
-        return true;
-      } catch {
-        return false;
-      }
-    }),
+    paths.map((inputPath) =>
+      fs.access(path.resolve(cwd, inputPath)).then(
+        () => true,
+        () => false,
+      ),
+    ),
   );
   return checks.every(Boolean);
 }
