@@ -1,8 +1,4 @@
-import {
-  firstBodyNumberField,
-  firstBodyStringField,
-  pickStringField,
-} from './errorInspection';
+import { matchUsageLimitMessage } from './errorInspection';
 import { detectSdkCredentialRoute } from './sdkRequestEndpoint';
 
 /**
@@ -34,13 +30,5 @@ export function parseXaiSubscriptionLimit(
   rawErrorBody: unknown,
 ): XaiSubscriptionLimit | null {
   if (detectSdkCredentialRoute(err) !== 'xai-subscription') return null;
-
-  const message =
-    firstBodyStringField(rawErrorBody, 'message') ??
-    pickStringField(err, 'message');
-  if (!message || !USAGE_LIMIT_PATTERN.test(message)) return null;
-
-  return {
-    resetsInSeconds: firstBodyNumberField(rawErrorBody, 'resets_in_seconds'),
-  };
+  return matchUsageLimitMessage(err, rawErrorBody, USAGE_LIMIT_PATTERN);
 }

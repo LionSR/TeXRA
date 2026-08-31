@@ -2551,10 +2551,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (!Array.isArray(items)) return [];
 
     const calls = items.filter(isResponseFunctionToolCallItem);
-    if (calls.length === 0) {
-      return [];
-    }
-
     return calls.map((call) => ({
       provider: 'openai-response',
       callId: call.call_id,

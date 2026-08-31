@@ -46,13 +46,37 @@ export function firstBodyStringField(
 }
 
 /** First finite-number `key` field across the body candidates. */
-export function firstBodyNumberField(
+function firstBodyNumberField(
   rawErrorBody: unknown,
   key: string,
 ): number | undefined {
   return errorBodyCandidates(rawErrorBody)
     .map((candidate) => pickNumberField(candidate, key))
     .find((value) => value !== undefined);
+}
+
+/** Reset hint a message-matched subscription usage-limit body can report. */
+export interface UsageLimitMatch {
+  readonly resetsInSeconds?: number;
+}
+
+/** Match a subscription usage-limit phrase against the error's message — the
+ *  body `message` first, then the thrown error's own — returning the reset
+ *  hint when the phrase matches. Shared by the endpoint/route-guarded
+ *  subscription detectors (Kimi Code, SuperGrok), which differ only in their
+ *  guard and phrase. */
+export function matchUsageLimitMessage(
+  err: unknown,
+  rawErrorBody: unknown,
+  pattern: RegExp,
+): UsageLimitMatch | null {
+  const message =
+    firstBodyStringField(rawErrorBody, 'message') ??
+    pickStringField(err, 'message');
+  if (!message || !pattern.test(message)) return null;
+  return {
+    resetsInSeconds: firstBodyNumberField(rawErrorBody, 'resets_in_seconds'),
+  };
 }
 
 /** Get reason phrase, returning undefined for unknown codes (getReasonPhrase throws). */
@@ -160,15 +184,13 @@ export function detectProvider(err: unknown): string | undefined {
 }
 
 function detectProviderFromClassNames(
-  classNames: readonly (string | undefined)[],
+  classNames: readonly string[],
 ): string | undefined {
   // Match SDK class-name fragments, then normalize aliases to the canonical
   // API-provider names used by SecretManager / model handlers. This also covers
   // no-response connection errors whose provider only appears on a base SDK
   // class such as OpenAIError or AnthropicError.
-  const names = classNames
-    .filter((name): name is string => isString(name) && name.length > 0)
-    .map((name) => name.toLowerCase());
+  const names = classNames.map((name) => name.toLowerCase());
   const match = (['openai', 'anthropic', 'google', 'kimi'] as const).find(
     (provider) => names.some((name) => name.includes(provider)),
   );

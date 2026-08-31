@@ -304,7 +304,7 @@ export function annotateDelegationAvailability(
   const withAgents = replaceDelegationDescriptionBlock(
     withModels,
     AVAILABLE_AGENTS_BLOCK,
-    visibleDelegationAgentsBlock(category),
+    () => visibleDelegationAgentsBlock(category),
     { appendIfMissing: true },
   );
   return replaceDelegationDescriptionBlock(

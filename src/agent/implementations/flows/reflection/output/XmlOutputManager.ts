@@ -487,13 +487,14 @@ export class XmlOutputManager {
   ): string {
     const trimmed = content.trimEnd();
 
-    const cleaned =
-      trimmed.includes('\\begin{document}') ||
-      !trimmed.endsWith('\\end{document}')
-        ? trimmed
-        : trimmed.replace(/\\end{document}\s*$/, '').trimEnd();
-
-    if (cleaned !== trimmed) {
+    // Strip a trailing \end{document} only from a fragment; a complete
+    // document (one with \begin{document}) keeps its closing tag.
+    let cleaned = trimmed;
+    if (
+      !trimmed.includes('\\begin{document}') &&
+      trimmed.endsWith('\\end{document}')
+    ) {
+      cleaned = trimmed.replace(/\\end{document}\s*$/, '').trimEnd();
       this.logger.debug(`Removed trailing \\end{document} from ${fileName}`);
     }
 

@@ -51,18 +51,15 @@ export class ClaudeBackgroundTaskTracker {
     }
 
     const log = buildBackgroundTaskLog(tasks);
-    if (!this.active) {
-      const ref = startToolUseCard(
+    const ref =
+      this.active?.ref ??
+      startToolUseCard(
         this.logger,
         CLAUDE_BACKGROUND_TASK_TOOL_NAME,
         log.input,
       );
-      endToolUseCard(this.logger, ref, log, 'in_progress');
-      this.active = { ref, log };
-      return;
-    }
-    endToolUseCard(this.logger, this.active.ref, log, 'in_progress');
-    this.active = { ...this.active, log };
+    endToolUseCard(this.logger, ref, log, 'in_progress');
+    this.active = { ref, log };
   }
 
   /** Close the card because every query starts with an empty background set. */

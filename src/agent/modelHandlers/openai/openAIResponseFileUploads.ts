@@ -121,7 +121,7 @@ async function replaceFileDataWithUpload(
         ? Buffer.from(dataUriToBuffer(fileData).buffer)
         : Buffer.from(fileData, 'base64');
     const uploadedFile = await client.files.create({
-      file: await toFile(buffer!, filename),
+      file: await toFile(buffer, filename),
       purpose: 'assistants',
     });
 
@@ -189,7 +189,7 @@ export async function uploadToolAttachments(
       const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
       const uploadedFile = await client.files.create({
-        file: await toFile(buffer!, attachmentFilename(attachment), {
+        file: await toFile(buffer, attachmentFilename(attachment), {
           type: mimeType,
         }),
         purpose: 'assistants',

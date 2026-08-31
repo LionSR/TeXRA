@@ -41,15 +41,9 @@ export function unwrapAbortError(error: unknown): unknown {
  */
 export function isTimeoutError(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
-  if (error instanceof Error && error.name === 'TimeoutError') return true;
-  if (
-    error instanceof Error &&
-    error.name === 'AbortError' &&
-    isTimeoutError(error.cause)
-  ) {
-    return true;
-  }
-  return false;
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'TimeoutError') return true;
+  return error.name === 'AbortError' && isTimeoutError(error.cause);
 }
 
 /**

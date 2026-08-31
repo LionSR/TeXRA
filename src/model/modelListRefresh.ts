@@ -45,8 +45,6 @@ function reconcileEnabledModels(
   currentModels: readonly string[],
   addDefaults: boolean,
 ): EnabledModelReconciliation {
-  const strippedSet = new Set<string>();
-
   // Retired models are hard unavailable for everyone.
   // This sweep runs on every reconciliation, unconditionally --
   // deliberately *not* gated behind a version threshold.
@@ -60,11 +58,8 @@ function reconcileEnabledModels(
   // an existing user's enabled-models list. Running it unconditionally keeps
   // it correct across both versioning schemes, at negligible cost (the set of
   // currently-enabled models is small).
-  for (const model of currentModels) {
-    if (isRetiredModel(model)) strippedSet.add(model);
-  }
-
-  const kept = currentModels.filter((model) => !strippedSet.has(model));
+  const removed = currentModels.filter((model) => isRetiredModel(model));
+  const kept = currentModels.filter((model) => !isRetiredModel(model));
   // DEFAULT_MODELS is already resolved against the live registry --
   // resolveDefaultModels (modelOptionsBasic.ts) drops retired/deprecated
   // picks before this module ever sees them -- so the only remaining check
@@ -86,7 +81,7 @@ function reconcileEnabledModels(
   return {
     models: [...defaultOrdered, ...extras],
     added,
-    removed: [...strippedSet],
+    removed,
   };
 }
 

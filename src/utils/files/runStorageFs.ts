@@ -98,7 +98,7 @@ export async function inspectRunStorageEntry(
   const root = resolveRunStoragePath(executionId);
   const entry = resolveRunStoragePath(executionId, normalizedPath);
   const ancestors = [root];
-  for (const [index] of pathSegments.slice(0, -1).entries()) {
+  for (let index = 0; index < pathSegments.length - 1; index++) {
     ancestors.push(
       resolveRunStoragePath(executionId, ...pathSegments.slice(0, index + 1)),
     );

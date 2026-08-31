@@ -74,13 +74,11 @@ export class ResponseCycleNode extends BaseNode<
   }
 
   override async exec(prepRes: CyclePrepInput): Promise<CycleOutcome> {
-    const { context } = prepRes;
-
     const [outputAlreadyComplete, initializedMessages] =
       await this.services.modelCell.handler.initializeOutputAndPrefill(
         this.services.config,
         this.services.setting,
-        context,
+        prepRes.context,
         prepRes.workspace,
         prepRes.outputLocation,
       );

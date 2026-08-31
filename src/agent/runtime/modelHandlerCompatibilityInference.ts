@@ -25,10 +25,9 @@ export function inferPersistedFlowModelHandlerCompatibilityKey(
   shared: unknown,
 ): ModelHandlerCompatibilityKey | undefined {
   if (!isObject(shared)) return undefined;
-  const record = shared;
 
   const parsedKey = ModelHandlerCompatibilityKeySchema.nullish().safeParse(
-    record.modelHandlerCompatibilityKey,
+    shared.modelHandlerCompatibilityKey,
   );
   if (parsedKey.success && parsedKey.data) return parsedKey.data;
 

@@ -141,13 +141,8 @@ export function getWebSocketEnabled(): boolean {
 
 /**
  * Whether to route all API calls through OpenRouter. Catalog-modeled (see
- * `stateSettings.ts`); the legacy VS Code config fallback this used to carry
- * for pre-global-state-migration users was dead code — `StateStore.get(key,
- * defaultValue)` always resolves to `defaultValue` once the platform is
- * initialized, so the config fallback could only ever fire before
- * initialization, at which point `getConfig` also just returns its own
- * `defaultValue` (`false`). Removed rather than folded into
- * `readPlatformSetting()`.
+ * `stateSettings.ts`), so the default comes from the schema via the shared
+ * accessor.
  */
 export function getUseOpenRouter(): boolean {
   return readPlatformSetting<boolean>(GlobalStateKey.USE_OPENROUTER);

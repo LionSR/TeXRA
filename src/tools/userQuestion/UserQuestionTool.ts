@@ -95,13 +95,14 @@ The tool returns a JSON object whose keys are the original question texts and wh
     }
 
     const answers = UserQuestionAnswersSchema.parse(result.answers);
-    if (Object.keys(answers).length === 0) {
+    const answerCount = Object.keys(answers).length;
+    if (answerCount === 0) {
       return executed('The user submitted no answers.');
     }
 
     return executed(
       JSON.stringify({ answers }, null, 2),
-      `Answered ${Object.keys(answers).length} user question(s).`,
+      `Answered ${answerCount} user question(s).`,
     );
   }
 }

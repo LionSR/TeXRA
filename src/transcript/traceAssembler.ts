@@ -34,10 +34,10 @@ export async function assembleTrace(
     resolveStreamForExecution(executionId),
     executionStore.readRunRecord(),
   ]);
-  const snapshotStore = new StreamSnapshotStore();
   if (!config) return { status: 'config_missing' };
   if (!resolution) return { status: 'streamLogs_missing' };
   const { streamId, meta } = resolution;
+  const snapshotStore = new StreamSnapshotStore();
 
   // A call-scoped read-only store seeded with just this stream avoids
   // reloading a live host's session, scanning the whole streamLogs

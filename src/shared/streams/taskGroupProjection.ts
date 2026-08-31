@@ -74,6 +74,14 @@ export function upsertTaskGroupFromStreamLog(
   }
 
   const payload = entry.data;
+  const lifecycleFields = {
+    ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
+    ...taskGroupStageMetadata(payload.kind, payload.index),
+    ...(payload.attemptId !== undefined
+      ? { attemptId: payload.attemptId }
+      : {}),
+    ...(payload.total !== undefined ? { total: payload.total } : {}),
+  };
 
   if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
     // GROUP_START only carries the native status vocabulary because the run
@@ -89,12 +97,7 @@ export function upsertTaskGroupFromStreamLog(
       name,
       startTime: entry.timestamp,
       status: startStatus,
-      ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...taskGroupStageMetadata(payload.kind, payload.index),
-      ...(payload.attemptId !== undefined
-        ? { attemptId: payload.attemptId }
-        : {}),
-      ...(payload.total !== undefined ? { total: payload.total } : {}),
+      ...lifecycleFields,
     };
 
     if (groupIndex === -1) {
@@ -117,12 +120,7 @@ export function upsertTaskGroupFromStreamLog(
       name,
       startTime: entry.timestamp,
       status,
-      ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-      ...taskGroupStageMetadata(payload.kind, payload.index),
-      ...(payload.attemptId !== undefined
-        ? { attemptId: payload.attemptId }
-        : {}),
-      ...(payload.total !== undefined ? { total: payload.total } : {}),
+      ...lifecycleFields,
       ...(endTime !== undefined ? { endTime } : {}),
     });
   } else {

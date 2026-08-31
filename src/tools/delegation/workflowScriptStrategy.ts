@@ -251,6 +251,17 @@ export function createWorkflowScriptStrategy(
         [...attemptJournalByKey.values()].toSorted(
           (left, right) => left.index - right.index,
         );
+      // Settle only entries consumed by this invocation: the durable union may
+      // hold superseded or malformed untouched recovery history, and baseline
+      // history is irrelevant to this invocation's cost and delivered files.
+      const settleAttempt = (
+        snapshot: WorkflowExecutionSnapshot | undefined,
+      ): void => {
+        const journal = attemptJournal();
+        const costUsd = attemptCost.total(journal);
+        ports.recordCost(costUsd);
+        settleSummary({ journal, snapshot }, costUsd);
+      };
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
@@ -304,13 +315,8 @@ export function createWorkflowScriptStrategy(
           },
         });
       } catch (runError) {
-        // Settle only entries consumed by this invocation. The durable union
-        // may contain superseded or malformed untouched recovery history.
         try {
-          const journal = attemptJournal();
-          const costUsd = attemptCost.total(journal);
-          ports.recordCost(costUsd);
-          settleSummary({ journal, snapshot: lastSnapshot }, costUsd);
+          settleAttempt(lastSnapshot);
         } catch (settlementError) {
           // The run error is what the caller must see, so settlement cannot
           // rethrow. Live candidates recorded through the loop remain billed;
@@ -328,12 +334,7 @@ export function createWorkflowScriptStrategy(
         unregisterControls?.();
       }
 
-      // The attempt-local journal supplies missing/lower completed-call
-      // fallback and delivered files. Durable baseline history is irrelevant.
-      const journal = attemptJournal();
-      const costUsd = attemptCost.total(journal);
-      ports.recordCost(costUsd);
-      settleSummary({ journal, snapshot: run.snapshot }, costUsd);
+      settleAttempt(run.snapshot);
       return run;
     },
 

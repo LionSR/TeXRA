@@ -271,8 +271,7 @@ interface TransientBackgroundRetrievalState {
 function isStaleInteractionChainError(error: unknown): boolean {
   const status = detectStatusCode(error);
   const message = errorMessageOf(error);
-  const rawCode = (error as { code?: unknown })?.code;
-  const code = typeof rawCode === 'string' ? rawCode : '';
+  const code = pickStringField(error, 'code') ?? '';
 
   const mentionsPreviousInteractionId = /previous_interaction_id/i.test(
     message,

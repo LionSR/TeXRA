@@ -17,13 +17,9 @@ export {
   InvalidAgentTeamError,
 } from '../roster/AgentRosterController';
 
-export {
-  // Types
-  type AgentEntry,
-} from './agentEntry';
+export type { AgentEntry } from './agentEntry';
 
 export {
-  // Core functions
   loadAgents,
   registerInlineAgents,
   getAgent,

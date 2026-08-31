@@ -268,6 +268,8 @@ export async function finalizeRun(
   input: FinalizeExecutionInput,
 ): Promise<FinalizeExecutionResult> {
   const { executionId, outcome, flowRecord, keepExistingOutcome } = input;
+  const deleteFlowRecord = (): Promise<void> =>
+    getExecutionStore(executionId).delete(flowKey(executionId));
   const failed = (
     error: unknown,
     outcomePersisted: boolean,
@@ -294,7 +296,7 @@ export async function finalizeRun(
     // checkpoint is deleted only on request, never to fail closed.
     if (flowRecord === 'delete') {
       try {
-        await getExecutionStore(executionId).delete(flowKey(executionId));
+        await deleteFlowRecord();
       } catch (deleteError) {
         return failed(
           new AggregateError(
@@ -310,7 +312,7 @@ export async function finalizeRun(
 
   if (flowRecord === 'delete') {
     try {
-      await getExecutionStore(executionId).delete(flowKey(executionId));
+      await deleteFlowRecord();
     } catch (error) {
       return failed(error, true);
     }

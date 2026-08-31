@@ -154,9 +154,6 @@ interface TurnResult {
   errorMessage?: string;
 }
 
-const INVALID_FORK_SESSION_MESSAGE =
-  'Claude Code fork did not create a distinct session';
-
 function claudeCostLines(turn: TurnResult): string[] | undefined {
   return typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0
     ? [`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`]
@@ -285,7 +282,10 @@ export async function runStreamedTurn(params: {
     (!sessionId || sessionId === params.resumeSessionId)
   ) {
     isError = true;
-    errorMessage = [errorMessage, INVALID_FORK_SESSION_MESSAGE]
+    errorMessage = [
+      errorMessage,
+      'Claude Code fork did not create a distinct session',
+    ]
       .filter(isNonEmptyString)
       .join('\n');
   }

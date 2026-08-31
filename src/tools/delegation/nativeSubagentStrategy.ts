@@ -452,6 +452,7 @@ export function createNativeSubagentStrategy(
         const result = turn
           ? toDeliveryResult(turn, params.executionId)
           : lastResult;
+        const wallTimeMs = Date.now() - params.startedAt;
         const failureOptions = {
           parentExecutionId: params.parentExecutionId,
           cause: lastErr ?? error,
@@ -461,7 +462,7 @@ export function createNativeSubagentStrategy(
             params.agentName,
             params.config.agentCategory,
             result,
-            Date.now() - params.startedAt,
+            wallTimeMs,
             failureOptions,
           );
         } catch (buildError) {
@@ -475,7 +476,7 @@ export function createNativeSubagentStrategy(
             params.agentName,
             params.config.agentCategory,
             undefined,
-            Date.now() - params.startedAt,
+            wallTimeMs,
             failureOptions,
           );
         }

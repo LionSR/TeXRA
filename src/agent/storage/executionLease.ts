@@ -651,8 +651,10 @@ export async function runWithExecutionLeaseWriteFence<T>(
   const key = ownershipKey(root, executionId);
   if (maintenanceExecutions.getStore()?.has(key)) return operation();
   const lease = ownedLeases.get(key);
-  if (lease?.releasing) throw new ExecutionLeaseLostError(executionId);
-  if (lease) return runWithValidatedOwnership(lease, operation);
+  if (lease) {
+    if (lease.releasing) throw new ExecutionLeaseLostError(executionId);
+    return runWithValidatedOwnership(lease, operation);
+  }
   // Unleased writers in this process take turns, so that two of them never
   // refuse each other over the maintenance claim the first one holds.
   // `runOnPerKeyQueue` also drops the idle queue when the operation throws,

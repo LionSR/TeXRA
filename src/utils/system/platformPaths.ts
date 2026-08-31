@@ -51,6 +51,18 @@ function globDescending(pattern: string): string[] {
 }
 
 /**
+ * `~/bin` plus Claude Code's native-installer `~/.local/bin` — the one its docs
+ * recommend. A GUI-launched app does not inherit the shell profile that would
+ * normally put these on PATH.
+ */
+function pushHomeBinDirs(dirs: string[]): void {
+  const home = process.env.HOME;
+  if (home) {
+    dirs.push(path.join(home, 'bin'), path.join(home, '.local', 'bin'));
+  }
+}
+
+/**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
  * Internal helper used by extendEnvPath and findToolInCommonPaths.
@@ -71,14 +83,7 @@ function getExtraDirs(): string[] {
     );
     // MiKTeX on macOS: app bundle and default symlink targets
     dirs.push('/Applications/MiKTeX Console.app/Contents/bin');
-    const macHome = process.env.HOME;
-    if (macHome) {
-      dirs.push(path.join(macHome, 'bin'));
-      // Claude Code's native installer — the one its docs recommend — installs
-      // here, and a GUI-launched app does not inherit the shell profile that
-      // would normally put it on PATH.
-      dirs.push(path.join(macHome, '.local', 'bin'));
-    }
+    pushHomeBinDirs(dirs);
   } else if (platform === 'win32') {
     dirs.push(
       'C:\\Program Files\\MiKTeX\\miktex\\bin\\x64',
@@ -181,15 +186,7 @@ function getExtraDirs(): string[] {
       '/snap/bin', // Ubuntu snap packages
       '/home/linuxbrew/.linuxbrew/bin',
     );
-    // MiKTeX on Linux: per-user symlink directory for private installs
-    const linuxHome = process.env.HOME;
-    if (linuxHome) {
-      dirs.push(path.join(linuxHome, 'bin'));
-      // Claude Code's native installer — the one its docs recommend — installs
-      // here, and a GUI-launched app does not inherit the shell profile that
-      // would normally put it on PATH.
-      dirs.push(path.join(linuxHome, '.local', 'bin'));
-    }
+    pushHomeBinDirs(dirs);
   }
 
   const texBinPatterns =

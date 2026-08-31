@@ -359,17 +359,11 @@ function withShortModelName(config: ModelConfig): ModelConfig {
 function withCompatibilityRoutingMode(
   config: ModelConfig,
   compatibilityKey: ModelHandlerCompatibilityKey,
-): ModelConfig {
+): ResolvedModelConfig {
   if (compatibilityKey === 'ModelHandlerOpenRouterNative') {
     return { ...config, openRouterOnly: true };
   }
-
-  const routed: ResolvedModelConfig = {
-    ...config,
-    openRouterOnly: false,
-    forceDirectProvider: true,
-  };
-  return routed;
+  return { ...config, openRouterOnly: false, forceDirectProvider: true };
 }
 
 /**

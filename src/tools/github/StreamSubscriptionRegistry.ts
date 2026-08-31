@@ -196,9 +196,9 @@ export class StreamSubscriptionRegistry<K extends string, Input> {
     const detach = session.followUps.onRelease((streamId) => {
       const bound = this.perStream.get(streamId);
       if (!bound) return;
-      const owned = [...bound].filter(([, binding]) => {
-        return binding.owner === session;
-      });
+      const owned = [...bound].filter(
+        ([, binding]) => binding.owner === session,
+      );
       if (owned.length === 0) return;
       for (const [key] of owned) bound.delete(key);
       if (bound.size === 0) this.perStream.delete(streamId);

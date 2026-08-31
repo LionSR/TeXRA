@@ -18,29 +18,24 @@ export function normalizeAgentSettingTools(
   channel: string,
 ): AgentSettingInput {
   if (!Array.isArray(settings.tools)) return settings;
+  const tools = settings.tools.map((tool) =>
+    typeof tool === 'string' ? { name: tool } : tool,
+  );
   // Latent silent-failure trap: the shared settings schema accepts `tools:`
   // for every category, but a workflow (reflection) run only *sends* the
   // definitions to the provider — a returned tool call is never dispatched.
   // Say so at load time instead of letting the agent author discover it from
   // a model that keeps asking for a tool that never answers.
-  if (
-    settings.agentCategory === AgentCategory.Workflow &&
-    settings.tools.length > 0
-  ) {
+  if (settings.agentCategory === AgentCategory.Workflow && tools.length > 0) {
     // The channel is caller-threaded (local and remote loaders report on their
     // own), so bind at call scope rather than freezing one at module load.
     createLog(channel).warn(
-      `Workflow-category agent declares tools: [${settings.tools
-        .map((tool) => (typeof tool === 'string' ? tool : tool.name))
+      `Workflow-category agent declares tools: [${tools
+        .map((tool) => tool.name)
         .join(
           ', ',
         )}]. Workflow runs never dispatch tool calls, so these are inert; remove tools: or make the agent toolUse.`,
     );
   }
-  return {
-    ...settings,
-    tools: settings.tools.map((tool) =>
-      typeof tool === 'string' ? { name: tool } : tool,
-    ),
-  };
+  return { ...settings, tools };
 }

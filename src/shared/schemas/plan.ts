@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { StreamTabIdSchema } from './identifiers';
+import type { StreamTabId } from './identifiers';
 
 /**
  * A plan is a plain objective document: what to achieve, the intended
@@ -23,8 +23,12 @@ export const PlanSchema = z.strictObject({
 });
 export type Plan = z.infer<typeof PlanSchema>;
 
-const UpdatePlanPayloadSchema = z.strictObject({
-  streamId: StreamTabIdSchema,
-  plan: PlanSchema.nullable(),
-});
-export type UpdatePlanPayload = z.infer<typeof UpdatePlanPayloadSchema>;
+/**
+ * Payload for a plan update. Declared as a plain type, not a schema: nothing
+ * ever parses it — producers build the shape and consumers read it — so a Zod
+ * schema would own no boundary.
+ */
+export interface UpdatePlanPayload {
+  streamId: StreamTabId;
+  plan: Plan | null;
+}

@@ -517,18 +517,6 @@ function turnDeliveryId(turnRef: ChildTurnRef): string {
 type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
 
 /**
- * Resolve the loop's termination cause without a nested ternary.
- */
-function resolveLoopTerminationCause(
-  interrupted: boolean,
-  turnFailed: boolean,
-): ChildLoopTerminationCause {
-  if (interrupted) return 'interrupted';
-  if (turnFailed) return 'turn_failed';
-  return 'terminal';
-}
-
-/**
  * Structured turn-lifecycle diagnostic (#9531): ties the execution, the turn's
  * logical identity, the follow-up queue owner/generation, and the interruption
  * cause into one event so a resumed/interrupted child's state is auditable.
@@ -1110,13 +1098,16 @@ export function startChildRunLoop<TTurn>(
       // acceptance record cannot land after the retry's newer turn state.
       await turnStateWrites.onIdle();
       detachLoopInterrupt?.();
+      let terminationCause: ChildLoopTerminationCause = 'terminal';
+      if (loop.isInterrupted()) {
+        terminationCause = 'interrupted';
+      } else if (sawTurnFailure) {
+        terminationCause = 'turn_failed';
+      }
       emitTurnDiagnostic(logger, 'loop.terminated', {
         executionId,
         queueOwner: queueLease,
-        interruptionCause: resolveLoopTerminationCause(
-          loop.isInterrupted(),
-          sawTurnFailure,
-        ),
+        interruptionCause: terminationCause,
       });
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
       releaseSessionOwnershipOnce();

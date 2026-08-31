@@ -8,33 +8,33 @@ export interface AuthCallbackUriParts {
   query?: string;
 }
 
+interface AuthCallbackCodeParseSuccess {
+  success: true;
+  code: string;
+}
+
 interface AuthCallbackParseError {
   success: false;
   error: string;
   isAuthError?: boolean;
 }
 
-function getAuthCallbackBasePath(path: string): string {
-  return path.split('?')[0];
-}
+export type AuthCallbackCodeParseResult =
+  AuthCallbackCodeParseSuccess | AuthCallbackParseError;
 
 export function isAuthCallbackPath(path: string): boolean {
   return AUTH_CALLBACK_PATHS.includes(
-    getAuthCallbackBasePath(path) as (typeof AUTH_CALLBACK_PATHS)[number],
+    path.split('?')[0] as (typeof AUTH_CALLBACK_PATHS)[number],
   );
-}
-
-function getQueryFromPath(path: string): string {
-  const queryStart = path.indexOf('?');
-  return queryStart === -1 ? '' : path.slice(queryStart + 1);
 }
 
 /** Extract the PKCE authorization code or auth error from a callback query. */
 export function parseAuthCallbackCode(
   uri: AuthCallbackUriParts,
 ): AuthCallbackCodeParseResult {
+  const queryStart = uri.path.indexOf('?');
   const queryParams = new URLSearchParams(
-    uri.query || getQueryFromPath(uri.path),
+    uri.query || (queryStart === -1 ? '' : uri.path.slice(queryStart + 1)),
   );
   const getParam = (name: string): string | null => queryParams.get(name);
 
@@ -52,11 +52,3 @@ export function parseAuthCallbackCode(
     ? { success: true, code }
     : { success: false, error: 'Missing authorization code in callback' };
 }
-
-interface AuthCallbackCodeParseSuccess {
-  success: true;
-  code: string;
-}
-
-export type AuthCallbackCodeParseResult =
-  AuthCallbackCodeParseSuccess | AuthCallbackParseError;

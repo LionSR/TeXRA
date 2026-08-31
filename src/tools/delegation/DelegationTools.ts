@@ -61,8 +61,7 @@ import {
   type WorkflowAgentInput,
 } from './inputFields';
 
-const LOG_CHANNEL = 'delegation';
-const log = createLog(LOG_CHANNEL);
+const log = createLog('delegation');
 
 /**
  * Deliver a terminal error to the orchestrator when a resumed subagent's wake

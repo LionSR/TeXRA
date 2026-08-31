@@ -55,8 +55,7 @@ import {
   type ChildRunLaunchOptions,
 } from './nativeSubagentStrategy';
 
-const LOG_CHANNEL = 'inBandSubagentExecution';
-const log = createLog(LOG_CHANNEL);
+const log = createLog('inBandSubagentExecution');
 
 interface InBandSubagentExecutionBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;

@@ -53,7 +53,7 @@ export async function withToolFileInteractionContext<T>(
   run: () => Promise<T> | T,
 ): Promise<T> {
   const parentStack = contextStackScope.getStore() ?? [];
-  return contextStackScope.run([...parentStack, context], async () => run());
+  return contextStackScope.run([...parentStack, context], run);
 }
 
 export function getCurrentToolCallContext(): ToolCallContext | undefined {

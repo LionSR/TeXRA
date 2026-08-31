@@ -1272,7 +1272,6 @@ export class StreamLogStore {
 
   /** Shared post-mutation bookkeeping for append/update/appendText/group-end. */
   private commitChange(streamId: StreamTabId, logInstance: StreamLog): void {
-    this.assertWritableStore('commit transcript changes');
     this.refreshSummary(streamId, logInstance);
     if (this.mode.kind === 'persistent') this.markDirty(streamId);
     this.notify(streamId);
