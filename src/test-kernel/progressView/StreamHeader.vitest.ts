@@ -233,12 +233,19 @@ describe('stream-header', () => {
     function badgeText(element: StreamHeader): string | undefined {
       return element.shadowRoot
         ?.querySelector(`#${ELEMENT_IDS.PROGRESS_BADGE}`)
+        ?.querySelector(':scope > span[aria-hidden="true"]')
         ?.textContent?.trim();
     }
 
     function badgeTooltip(element: StreamHeader): string | undefined {
       return element.shadowRoot
         ?.querySelector(`wa-tooltip[for="${ELEMENT_IDS.PROGRESS_BADGE}"]`)
+        ?.textContent?.trim();
+    }
+
+    function badgeAccessibleText(element: StreamHeader): string | undefined {
+      return element.shadowRoot
+        ?.querySelector(`#${ELEMENT_IDS.PROGRESS_BADGE} .visually-hidden`)
         ?.textContent?.trim();
     }
 
@@ -281,6 +288,7 @@ describe('stream-header', () => {
       const element = await mount(props);
 
       expect(badgeText(element)).toBe(text);
+      expect(badgeAccessibleText(element)).toBe(tooltip);
       expect(badgeTooltip(element)).toBe(tooltip);
     });
   });

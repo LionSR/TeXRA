@@ -238,14 +238,14 @@ export function buildDetailsSummary(
   const iconTemplate = renderIconOrSpinner(iconName, 'icon');
   // prettier-ignore
   const timestampTemplate = timestamp
-    ? html` <span class="timestamp" title=${timestamp.tooltip}>${timestamp.display}</span>`
+    ? html` <span class="timestamp" title=${timestamp.tooltip}><bdi dir="ltr">${timestamp.display}</bdi></span>`
     : nothing;
   const copyTemplate = copyButton
     ? buildCopyButton(copyButton.title, copyButton)
     : nothing;
   const extraTemplate = extraContent ?? nothing;
   // prettier-ignore
-  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass}>${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
+  return html`<div slot="summary" class="details-summary">${iconTemplate} <span class=${labelClass} dir="auto">${label}</span>${extraTemplate}${timestampTemplate}${copyTemplate}</div>`;
 }
 
 /**
@@ -258,8 +258,10 @@ export function buildFileLinkSpan(
   content: unknown,
   options: { startLine?: number } = {},
 ): TemplateResult {
+  const lineSuffix = options.startLine ? `:${options.startLine}` : '';
+  const accessibleName = `Open ${filePath}${lineSuffix}`;
   // prettier-ignore
-  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0">${content}</span>`;
+  return html`<span class="file-link clickable-link" data-file=${filePath} data-file-line=${ifDefined(options.startLine)} role="button" tabindex="0" aria-label=${accessibleName} dir="auto">${content}</span>`;
 }
 
 /** Build the `<li>` rows for a file-list banner. The summary line above them
@@ -283,7 +285,7 @@ export function buildFileListRender(
     // worth labelling sets `sourceDisplay`, so no host needs a fallback to
     // spell it out.
     // prettier-ignore
-    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, fileName)}${file.varName ? html` <span class="file-var">[${file.varName}]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(${file.sourceDisplay})</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, ${formatBytes(loaded.sizeBytes)}]</span>` : ''}</li>`;
+    return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, <bdi dir="ltr">${formatBytes(loaded.sizeBytes)}</bdi>]</span>` : ''}</li>`;
   })}`;
 }
 
@@ -357,9 +359,9 @@ export function buildCodeBlock(
   // prettier-ignore
   const languageBadge = showLanguage ? html`<span class="code-block-language">${LANGUAGE_LABELS[language] ?? (language || 'Text')}</span>` : nothing;
   // prettier-ignore
-  const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy to clipboard" aria-label="Copy to clipboard" @click=${(event: Event) => copyFromClick(event, text, 'copied')}>${waIcon('copy')}</wa-button>` : nothing;
+  const copyButton = showCopy ? html`<wa-button class="code-block-copy" appearance="plain" variant="neutral" size="s" type="button" title="Copy code" aria-label="Copy code" @click=${(event: Event) => copyFromClick(event, text, 'copied')}>${waIcon('copy')}</wa-button>` : nothing;
   // prettier-ignore
-  const codeTemplate = html`<pre class=${classMap(preClasses)}><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
+  const codeTemplate = html`<pre class=${classMap(preClasses)} dir="ltr"><code>${isHighlighted ? unsafeHTML(highlighted) : text}</code></pre>`;
   // prettier-ignore
   const headerTemplate = showHeader ? html`<div class="code-block-header">${languageBadge}${copyButton}</div>` : nothing;
   // prettier-ignore
@@ -386,9 +388,13 @@ export function buildFileLinkWithLines(
         : `:${startLine}`;
   }
 
-  return buildFileLinkSpan(filePath, html`${waIcon('file')} ${displayText}`, {
-    startLine,
-  });
+  return buildFileLinkSpan(
+    filePath,
+    html`${waIcon('file')} <bdi dir="auto">${displayText}</bdi>`,
+    {
+      startLine,
+    },
+  );
 }
 
 // ============================================================================
@@ -402,7 +408,7 @@ export function buildMemoryPathDisplay(
   if (!memoryPath) return nothing;
   const fileName = getBasename(memoryPath) || memoryPath;
   // prettier-ignore
-  return html`<span class="memory-path">${waIcon('database')} ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
+  return html`<span class="memory-path">${waIcon('database')} <bdi dir="auto">${fileName}</bdi> <span class="file-source">(<bdi dir="auto">${memoryPath}</bdi>)</span></span>`;
 }
 
 // ============================================================================
@@ -415,7 +421,7 @@ export function buildExecutionsPathDisplay(
 ): TemplateResult | typeof nothing {
   if (!execPath) return nothing;
   // prettier-ignore
-  return html`<span class="memory-path">${waIcon('clock-rotate-left')} ${execPath}</span>`;
+  return html`<span class="memory-path">${waIcon('clock-rotate-left')} <bdi dir="auto">${execPath}</bdi></span>`;
 }
 
 // ============================================================================
@@ -447,15 +453,15 @@ function generateInlineDiff(oldText: string, newText: string): TemplateResult {
         `painting it as a whole replacement.`,
     );
     // prettier-ignore
-    return html`<span class="diff-inline-del">${oldText}</span><span class="diff-inline-add">${newText}</span>`;
+    return html`<del class="diff-inline-del" dir="auto">${oldText}</del><ins class="diff-inline-add" dir="auto">${newText}</ins>`;
   }
 
   return html`${parts.map((part) => {
     if (part.removed) {
-      return html`<span class="diff-inline-del">${part.value}</span>`;
+      return html`<del class="diff-inline-del" dir="auto">${part.value}</del>`;
     }
     if (part.added) {
-      return html`<span class="diff-inline-add">${part.value}</span>`;
+      return html`<ins class="diff-inline-add" dir="auto">${part.value}</ins>`;
     }
     return part.value;
   })}`;
@@ -468,5 +474,5 @@ export function buildEditDiffSection(
 ): TemplateResult {
   const diffContent = generateInlineDiff(oldString, newString);
   // prettier-ignore
-  return html`<div class="edit-diff-container"><pre class="diff-inline-view">${diffContent}</pre></div>`;
+  return html`<div class="edit-diff-container"><pre class="diff-inline-view" dir="auto">${diffContent}</pre></div>`;
 }

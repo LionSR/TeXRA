@@ -43,7 +43,12 @@ function callMetadata(
   parts: readonly string[],
 ): TemplateResult | typeof nothing {
   return parts.length > 0
-    ? html`<span class="workflow-task-meta">${parts.join(' · ')}</span>`
+    ? html`<span class="workflow-task-meta"
+        >${parts.map(
+          (part, index) =>
+            html`${index === 0 ? nothing : ' · '}<bdi dir="auto">${part}</bdi>`,
+        )}</span
+      >`
     : nothing;
 }
 
@@ -58,7 +63,7 @@ export function formatWorkflowDeclaredTaskTemplate(
     >
       <span class="workflow-task-icon">${waIcon('circle')}</span>
       <span class="workflow-task-body">
-        <span class="workflow-task-title">${task.label}</span>
+        <bdi class="workflow-task-title" dir="auto">${task.label}</bdi>
       </span>
       <span class="workflow-task-status"
         >${WORKFLOW_TASK_STATUS_LABEL.declared}</span
@@ -96,18 +101,21 @@ export function formatWorkflowCallTemplate(
       data-group-id=${row.groupId ?? ''}
       role=${hasChildStream ? 'button' : nothing}
       tabindex=${hasChildStream ? '0' : nothing}
+      aria-label=${
+        hasChildStream ? `${call.label}, ${row.statusLabel}. Open run` : nothing
+      }
       @click=${hasChildStream ? openChildStream : nothing}
       @keydown=${hasChildStream ? handleKeydown : nothing}
     >
       <span class="workflow-task-icon">${statusIcon(call)}</span>
       <span class="workflow-task-body">
-        <span class="workflow-task-title">${call.label}</span>
+        <bdi class="workflow-task-title" dir="auto">${call.label}</bdi>
         ${callMetadata([...row.metadataParts, ...liveParts])}
         ${
           detail
             ? html`<span
                 class=${`workflow-task-detail workflow-task-detail--${detail.kind}`}
-                >${detail.text}</span
+                ><bdi dir="auto">${detail.text}</bdi></span
               >`
             : nothing
         }
