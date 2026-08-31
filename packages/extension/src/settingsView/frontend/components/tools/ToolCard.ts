@@ -321,7 +321,10 @@ export class ToolCard extends LitElement {
   }
 
   private renderGuide(): TemplateResult | typeof nothing {
-    if (!this.item.requiresSetup || this.item.installActions.length === 0) {
+    if (
+      !this.item.requiresSetup ||
+      this.item.installActions.every((action) => action.kind === 'extension')
+    ) {
       return nothing;
     }
 
