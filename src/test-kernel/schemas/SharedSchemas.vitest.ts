@@ -7,6 +7,7 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
   createStreamState,
+  GoalStateSchema,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
   SETTINGS_TAB_PANEL_NAMES,
@@ -231,36 +232,13 @@ describe('tool-use stream goal state', () => {
     expect(state).not.toHaveProperty('goalObjective');
   });
 
-  it.each([
-    { goal: { active: false, objective: 'impossible' } },
-    {
-      goal: { active: true, status: 'active', objective: 'canonical' },
-      goalActive: true,
-      goalStatus: 'paused',
-      goalObjective: 'legacy',
-    },
-  ])('rejects invalid or mixed goal state %#', (partial) => {
-    expect(() =>
-      createStreamState(AgentCategory.ToolUse, partial as never),
-    ).toThrow();
-  });
-
-  it('normalizes historical flattened goal fields at the construction boundary', () => {
-    const state = createStreamState(AgentCategory.ToolUse, {
-      goalActive: true,
-      goalStatus: 'paused',
-      goalObjective: 'Resume after review',
-    } as never);
-
-    expect(state).toMatchObject({
-      goal: {
-        active: true,
+  it('rejects fields from the other canonical union branch', () => {
+    expect(
+      GoalStateSchema.safeParse({
+        active: false,
         status: 'paused',
-        objective: 'Resume after review',
-      },
-    });
-    expect(state).not.toHaveProperty('goalActive');
-    expect(state).not.toHaveProperty('goalStatus');
-    expect(state).not.toHaveProperty('goalObjective');
+        objective: 'impossible',
+      }).success,
+    ).toBe(false);
   });
 });
