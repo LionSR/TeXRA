@@ -51,6 +51,7 @@ import {
   compactWorkflowEntries,
   createTranscriptFoldState,
   isFullLogChildStream,
+  issuedWorkflowPlanTaskIds,
   latestConversationLine,
   newFoldChangeFlags,
   resetTranscriptFoldState,
@@ -546,7 +547,14 @@ export function releaseInactiveStreamTranscript(
   store.requestEviction(streamId);
   const fold = slice.transcriptFold;
   if (fold) {
+    const retainedWorkflowIssuedTaskIds = fold.hydrated
+      ? issuedWorkflowPlanTaskIds(
+          fold.items.map((item) => item.rendered),
+          slice.workflowPlan,
+        )
+      : fold.retainedWorkflowIssuedTaskIds;
     resetTranscriptFoldState(fold);
+    fold.retainedWorkflowIssuedTaskIds = retainedWorkflowIssuedTaskIds;
     fold.taskGroupProjection = undefined;
     fold.compactionProjection = undefined;
     fold.workflowAttemptId = undefined;
