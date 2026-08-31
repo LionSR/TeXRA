@@ -119,9 +119,9 @@ interface OpenedLatexdiffResult {
 }
 
 /**
- * Open and build one generated diff, returning the path, the resolved
- * location, and whether the viewer may be scheduled for it. The path alone is
- * not enough: an external `compileLatex2Pdf` failure can produce a generated
+ * Open and build one generated diff, returning its resolved location and
+ * whether the viewer may be scheduled for it. A generated path alone is not
+ * enough: an external `compileLatex2Pdf` failure can produce a generated
  * file whose PDF is not viewer-ready.
  */
 async function openLatexdiffResult(

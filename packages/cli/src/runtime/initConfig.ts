@@ -41,11 +41,6 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
   };
 }
 
-/** Stable, pretty JSON with a trailing newline (matches editor/formatter output). */
-function serializeInitConfig(config: InitConfigShape): string {
-  return `${JSON.stringify(config, null, 2)}\n`;
-}
-
 /** `false` only for a genuinely absent path; any other failure (EACCES, EIO)
  *  propagates instead of being reported as "absent". */
 export async function pathExists(filePath: string): Promise<boolean> {
@@ -76,7 +71,8 @@ export async function writeInitConfig(
   config: InitConfigShape,
 ): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeInitFileAtomic(filePath, serializeInitConfig(config));
+  // Stable, pretty JSON with a trailing newline (matches editor/formatter output).
+  await writeInitFileAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 /**

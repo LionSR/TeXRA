@@ -124,15 +124,9 @@ const inquiries$ = select(appState, (s) => s.inquiries);
 // Derived computeds: only re-evaluate when selector inputs propagate.
 // ---------------------------------------------------------------------------
 
-// Not exported: every consumer now reads topLevelStreams$ (rail, palette,
-// sidebar count) so a child call/edit-approval stream is never mistaken for
-// a top-level task (#11511 family). Kept as topLevelStreams$'s own
-// intermediate step below.
-const streams$ = new Signal.Computed(() => [...streamById$.get().values()]);
-
 /** Top-level streams: the tab list, with child streams excluded. */
 export const topLevelStreams$ = new Signal.Computed(() =>
-  streams$.get().filter((stream) => !stream.parentStreamId),
+  [...streamById$.get().values()].filter((stream) => !stream.parentStreamId),
 );
 
 /**

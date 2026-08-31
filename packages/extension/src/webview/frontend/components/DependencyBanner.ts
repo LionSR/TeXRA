@@ -11,6 +11,17 @@ import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';
 
+function getToolLabel(tool: string): string {
+  switch (tool) {
+    case 'gm':
+      return 'GraphicsMagick';
+    case 'magick':
+      return 'ImageMagick';
+    default:
+      return tool;
+  }
+}
+
 @customElement('dependency-banner')
 export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> {
   static override styles = [
@@ -52,17 +63,6 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
     this.dispatchEvent(MainViewEvents.openInstallGuide({ tool }));
   }
 
-  private getToolLabel(tool: string): string {
-    switch (tool) {
-      case 'gm':
-        return 'GraphicsMagick';
-      case 'magick':
-        return 'ImageMagick';
-      default:
-        return tool;
-    }
-  }
-
   override render(): TemplateResult {
     const missing = this.state.missingTools ?? [];
     const tools = missing.flatMap((tool) =>
@@ -84,7 +84,7 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
                 tools,
                 (tool) => tool,
                 (tool) => {
-                  const label = this.getToolLabel(tool);
+                  const label = getToolLabel(tool);
 
                   return html`
                     <li class="dependency-item">

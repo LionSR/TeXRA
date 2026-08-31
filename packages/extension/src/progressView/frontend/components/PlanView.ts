@@ -54,14 +54,9 @@ export class PlanView extends CollapsiblePanel {
     return this.renderCollapsibleDetails({
       id: ELEMENT_IDS.PLAN_VIEW_CONTAINER,
       summary: 'Plan',
+      // Kept to one line so the pre-wrap document gets no template whitespace.
       // prettier-ignore
-      body: html`<div class="plan-body">${this.renderDocument(this.plan.objective)}</div>`,
+      body: html`<div class="plan-body"><div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-document">${this.plan.objective}</div></div>`,
     });
-  }
-
-  /** Kept to one line so the pre-wrap body gets no template whitespace. */
-  private renderDocument(text: string): TemplateResult {
-    // prettier-ignore
-    return html`<div id=${ELEMENT_IDS.PLAN_VIEW} class="plan-document">${text}</div>`;
   }
 }

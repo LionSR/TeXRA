@@ -820,14 +820,11 @@ export class LaTeXTab extends LitElement {
     try {
       parsed = JSON.parse(source);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Invalid JSON.';
-      control.setCustomValidity(message);
+      const detail = error instanceof Error ? error.message : undefined;
+      control.setCustomValidity(detail ?? 'Invalid JSON.');
       this.replacementJsonErrors = {
         ...this.replacementJsonErrors,
-        [field]:
-          error instanceof Error
-            ? `Enter valid JSON. ${error.message}`
-            : 'Enter valid JSON.',
+        [field]: detail ? `Enter valid JSON. ${detail}` : 'Enter valid JSON.',
       };
       return;
     }

@@ -290,13 +290,8 @@ export class ProgressApp extends ProgressAppBase {
     }
     const view = event.detail.name === 'launcher' ? 'main' : 'progress';
     const tabs = event.currentTarget as MutableWaTabGroup;
-    if (view === 'main' && placement.get() === 'editor') {
-      this.focusLauncherSidebar(tabs);
-      return;
-    }
     if (view === 'main') {
-      postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
-      this.resetProgressTab(tabs);
+      this.focusLauncherSidebar(tabs);
       return;
     }
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });

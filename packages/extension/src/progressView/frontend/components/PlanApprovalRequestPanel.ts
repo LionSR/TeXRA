@@ -62,8 +62,10 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
 
     return this.renderRequestShell({
       prefix: 'plan-approval-request',
+      // Kept to one line so the pre-wrap body gets no template whitespace.
+      // prettier-ignore
       details: html`
-        ${this.renderObjective(plan.objective)}
+        <div class="plan-approval-request__objective" dir="auto">${plan.objective}</div>
         ${
           goalEnabled
             ? html`<div class="plan-approval-request__goal-explanation">
@@ -87,12 +89,6 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
           })
         : nothing,
     });
-  }
-
-  /** Kept to one line so the pre-wrap body gets no template whitespace. */
-  private renderObjective(text: string): TemplateResult {
-    // prettier-ignore
-    return html`<div class="plan-approval-request__objective" dir="auto">${text}</div>`;
   }
 }
 

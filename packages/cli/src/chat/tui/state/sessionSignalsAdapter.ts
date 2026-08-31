@@ -225,10 +225,8 @@ export function attachSessionSignalsAdapter(
           presentStream(ownerStreamId);
         }
       }
-      // Roster phase-merge, tombstone gating, and eviction requests.
-      applier.handleSessionFact(fact);
-      return;
     }
+    // Roster phase-merge, tombstone gating, and eviction requests.
     applier.handleSessionFact(fact);
     if (fact.type === 'setActiveStream') {
       const streamId = fact.payload.streamId;

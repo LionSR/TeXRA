@@ -41,10 +41,6 @@ function wrappedRows(text: string, width: number): number {
   return wrapAnsiToWidth(text, clampModalWidth(width)).split('\n').length;
 }
 
-function fileGroupText(label: string, files: readonly string[]): string {
-  return formatAgentProposalFileGroup(label, files, FILE_LIMIT);
-}
-
 interface MetadataSegment {
   readonly text: string;
   readonly bold?: boolean;
@@ -73,7 +69,11 @@ function fileGroupLine(group: {
   readonly label: string;
   readonly files: readonly string[];
 }): MetadataLine {
-  const text = fileGroupText(group.label, group.files);
+  const text = formatAgentProposalFileGroup(
+    group.label,
+    group.files,
+    FILE_LIMIT,
+  );
   const prefix = `${group.label}: `;
   return {
     segments: [

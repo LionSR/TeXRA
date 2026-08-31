@@ -315,9 +315,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
 
 /** Apply syntax highlighting to code if language is supported. Returns HTML string for unsafeHTML. */
 function highlightCode(text: string, language: string): string {
-  const isHighlightable = language && language !== 'plaintext';
-  if (!isHighlightable || !hljs.getLanguage(language)) {
-    // Return plain text - will be escaped by Lit
+  if (!language || language === 'plaintext' || !hljs.getLanguage(language)) {
     return text;
   }
   try {

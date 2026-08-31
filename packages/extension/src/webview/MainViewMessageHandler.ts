@@ -146,10 +146,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private handleDebugModeRequest(): void {
-    const debugMode = isDebugModeEnabled();
     this.postToActiveView({
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
-      debugMode,
+      debugMode: isDebugModeEnabled(),
     });
   }
 
