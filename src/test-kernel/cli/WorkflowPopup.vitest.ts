@@ -5,7 +5,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkflowPopup } from '@cli/chat/tui/panes/WorkflowPopup';
-import { retainedWorkflowTaskGroups } from '@cli/chat/tui/state/transcriptFold';
+import {
+  createTranscriptFoldState,
+  retainedWorkflowPopupProjection,
+} from '@cli/chat/tui/state/transcriptFold';
 import {
   emptySlice,
   type WorkflowPopupView,
@@ -58,10 +61,11 @@ async function renderPopup(
   availableRows: number,
 ) {
   const slice = { ...emptySlice(ROOT), taskGroups, entries: rows };
+  const retained = retainedWorkflowPopupProjection(slice);
   const model = workflowRunModel({
-    taskGroups: retainedWorkflowTaskGroups(taskGroups, rows),
-    rows,
-    plan: undefined,
+    taskGroups: retained.taskGroups,
+    rows: retained.rows,
+    plan: retained.plan,
     runSettled: false,
     childProgress: new Map(),
   });
@@ -122,6 +126,149 @@ describe('workflow popup', () => {
     }
   });
 
+  it('keeps the retained dashboard bounded while the full log is loaded', () => {
+    const staleTask = {
+      ...taskRow('stale-call', 'completed', 'Stale'),
+      id: 'stale-task',
+      groupId: 'stale-phase',
+      call: {
+        ...taskRow('stale-call', 'completed', 'Stale').call,
+        attemptId: 'attempt-current',
+      },
+    };
+    const retainedTasks = Array.from({ length: 1_999 }, (_, index) => {
+      const row = taskRow(`retained-call-${index}`, 'running', 'Repeated');
+      return {
+        ...row,
+        id: `retained-task-${index}`,
+        groupId: 'referenced-phase',
+        call: { ...row.call, attemptId: 'attempt-current' },
+      };
+    });
+    const fullRows: TranscriptRow[] = [
+      {
+        kind: 'phase',
+        id: 'stale-phase',
+        timestamp: 0,
+        level: 'info',
+        heading: 'Stale',
+        phaseLabel: 'Stale',
+      },
+      staleTask,
+      {
+        kind: 'phase',
+        id: 'referenced-phase',
+        timestamp: 1,
+        level: 'info',
+        heading: 'Repeated',
+        phaseLabel: 'Repeated',
+      },
+      ...retainedTasks,
+      {
+        kind: 'phase',
+        id: 'empty-phase',
+        timestamp: 2,
+        level: 'info',
+        heading: 'Repeated',
+        phaseLabel: 'Repeated',
+      },
+    ];
+    const transcriptFold = createTranscriptFoldState();
+    transcriptFold.hydrated = true;
+    transcriptFold.items.push(
+      ...fullRows.map((rendered, index) => ({
+        rendered,
+        sortSeq: index,
+        tieBreak: 0,
+        rank: 1 as const,
+      })),
+    );
+    const retained = retainedWorkflowPopupProjection({
+      ...emptySlice(ROOT),
+      entries: fullRows,
+      transcriptFold,
+      taskGroups: [
+        {
+          id: 'stale-phase',
+          name: 'Stale',
+          startTime: 0,
+          status: 'completed',
+          kind: 'phase',
+          attemptId: 'attempt-current',
+          index: 0,
+          total: 3,
+        },
+        {
+          id: 'referenced-phase',
+          name: 'Repeated',
+          startTime: 1,
+          status: 'completed',
+          kind: 'phase',
+          attemptId: 'attempt-current',
+          index: 1,
+          total: 3,
+        },
+        {
+          id: 'empty-phase',
+          name: 'Repeated',
+          startTime: 2,
+          status: 'running',
+          kind: 'phase',
+          attemptId: 'attempt-current',
+        },
+      ],
+      workflowPlan: {
+        kind: 'workflowPlan',
+        attemptId: 'attempt-current',
+        phases: [
+          { title: 'Stale' },
+          { title: 'Repeated' },
+          { title: 'Future' },
+        ],
+        tasks: [
+          { id: 'stale-call', label: 'Stale call', phase: 'Stale' },
+          {
+            id: 'retained-call-1998',
+            label: 'Retained call 1998',
+            phase: 'Repeated',
+          },
+          { id: 'future-call', label: 'Future call', phase: 'Future' },
+        ],
+      },
+    });
+    const model = workflowRunModel({
+      taskGroups: retained.taskGroups,
+      rows: retained.rows,
+      plan: retained.plan,
+      runSettled: false,
+      childProgress: new Map(),
+    });
+
+    expect(retained.rows).toHaveLength(2_000);
+    expect(retained.plan?.phases.map((phase) => phase.title)).toEqual([
+      'Repeated',
+      'Future',
+    ]);
+    expect(retained.plan?.tasks.map((task) => task.id)).toEqual([
+      'retained-call-1998',
+      'future-call',
+    ]);
+    expect(model.phases.map((phase) => phase.key)).toEqual([
+      'empty-phase',
+      'declared-Future',
+      'referenced-phase',
+    ]);
+    expect(model.phases.map((phase) => phase.heading.phaseLabel)).toEqual([
+      'Repeated',
+      'Future',
+      'Repeated',
+    ]);
+    expect(model.phases.map((phase) => phase.tasks.length)).toEqual([
+      0, 0, 1_999,
+    ]);
+    expect(model.tasks.some((row) => row.call.id === 'stale-call')).toBe(false);
+  });
+
   it('windows a big phase to the row budget with attention rows first', async () => {
     const rows = [
       taskRow('bad', 'failed'),
@@ -156,61 +303,6 @@ describe('workflow popup', () => {
       expect(firstRunning).toBeGreaterThan(failedLine);
       // 13 attention rows cannot all fit; the list says how many are below.
       expect(stdout.output).toMatch(/… \d+ more/);
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('navigates only phases represented by retained rows', async () => {
-    const { instance, stdin, onViewChange, stdout } = await renderPopup(
-      [
-        {
-          id: 'phase-stale',
-          name: 'Stale',
-          startTime: 0,
-          status: 'completed',
-          kind: 'phase',
-        },
-        {
-          id: 'phase-referenced',
-          name: 'Repeated',
-          startTime: 1,
-          status: 'running',
-          kind: 'phase',
-        },
-        {
-          id: 'phase-empty',
-          name: 'Repeated',
-          startTime: 2,
-          status: 'running',
-          kind: 'phase',
-        },
-      ],
-      [
-        {
-          ...taskRow('kept', 'running', 'Repeated'),
-          groupId: 'phase-referenced',
-        },
-        {
-          kind: 'phase',
-          id: 'phase-empty',
-          timestamp: 2,
-          level: 'info',
-          heading: 'Repeated',
-          phaseLabel: 'Repeated',
-        },
-      ],
-      20,
-    );
-    try {
-      await waitFor(() => stdout.output.includes('kept'));
-      expect(stdout.output).not.toContain('Stale');
-      stdin.write('\u001b[C');
-      await waitFor(() => onViewChange.mock.calls.length > 0);
-      expect(onViewChange).toHaveBeenLastCalledWith({
-        phaseIndex: 1,
-        selectedKey: undefined,
-      });
     } finally {
       instance.unmount();
     }

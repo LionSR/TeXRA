@@ -89,7 +89,7 @@ import {
   streamPhaseFor,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
-import { retainedWorkflowTaskGroups } from './state/transcriptFold';
+import { retainedWorkflowPopupProjection } from './state/transcriptFold';
 import {
   activeSubagentsFor,
   childRosters as childRostersSignal,
@@ -381,14 +381,12 @@ export function App(props: AppProps): React.JSX.Element {
         costUsd: usage?.cost,
       });
     }
+    const retained = retainedWorkflowPopupProjection(workflowPopupRoot);
     return workflowRunModel({
-      taskGroups: retainedWorkflowTaskGroups(
-        workflowPopupRoot.taskGroups,
-        workflowPopupRoot.entries,
-      ),
-      rows: workflowPopupRoot.entries,
+      taskGroups: retained.taskGroups,
+      rows: retained.rows,
       workflowAttemptId: workflowPopupRoot.workflowAttemptId,
-      plan: workflowPopupRoot.workflowPlan,
+      plan: retained.plan,
       runSettled: workflowPopupRunSettled,
       childProgress,
     });
