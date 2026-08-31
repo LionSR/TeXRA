@@ -10,6 +10,7 @@ import type { XmlOutputManager } from './output/XmlOutputManager';
 
 export interface ReflectionServices extends BaseFlowContextInit {
   readonly setting: AgentWorkflowSetting;
+  readonly getRejectOnCompileFailure: () => boolean;
   readonly outputState: OutputState;
   readonly xmlManager: XmlOutputManager;
   readonly diffManager: LatexDiffManager;

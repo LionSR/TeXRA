@@ -8,8 +8,9 @@
  * each host applies this pure mapper in its `session.onResult` consumer,
  * presenting the returned payload through its existing
  * `requestShowInstruction` / `requestShowError` path. Subagent results and
- * non-actionable outcomes (abort, success) return `null` (no toast),
- * preserving the lifecycle's `!isSubagent` gating.
+ * outcomes without provider/runtime error metadata return `null` (no toast).
+ * Outcome-only domain failures use their own diagnostics, such as workflow
+ * compile rows and retained artifacts, rather than a generic duplicate toast.
  *
  * `attachTerminalResultToast` wires that mapper to a session for hosts that
  * present through {@link SessionHostInteractions} (CLI, desktop, extension). The
@@ -45,7 +46,8 @@ const MISSING_API_KEY_MESSAGE =
 
 /**
  * Map a terminal `result` event to the toast a host should present, or `null`
- * when none applies (subagent runs, success, user aborts, unclassified errors).
+ * when none applies (subagent runs, outcome-only domain failures, success, or
+ * user aborts).
  */
 function terminalResultToast(event: ResultEvent): TerminalResultToast | null {
   if (event.isSubagent || !event.error) return null;

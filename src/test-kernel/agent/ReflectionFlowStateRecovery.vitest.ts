@@ -31,8 +31,9 @@ import {
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { testModelCell } from './modelCellTestUtils';
 import { reflectionFlowShared } from './progressTestUtils';
@@ -64,6 +65,7 @@ async function runPersistedReflectionFlow(
   executionId: ExecutionId,
   streamId: StreamTabId,
   logger: RunReflectionFlowInput['logger'] = noopTrace,
+  options: { rounds?: number; aborted?: boolean } = {},
 ): Promise<Awaited<ReturnType<typeof runReflectionFlow>>> {
   const session = createTestSession();
   const runScope = createRunScope({
@@ -71,7 +73,10 @@ async function runPersistedReflectionFlow(
     executionId,
     agentName: CONFIG.agent,
     session,
-    signal: AbortSignal.abort(),
+    signal:
+      options.aborted === false
+        ? new AbortController().signal
+        : AbortSignal.abort(),
   });
   const modelCell = createModelCell();
   const context = createRunContext({ runScope, modelCell });
@@ -81,7 +86,10 @@ async function runPersistedReflectionFlow(
       runReflectionFlow({
         config: CONFIG,
         runScope,
-        setting: SETTING,
+        setting:
+          options.rounds === undefined
+            ? SETTING
+            : AgentWorkflowSettingSchema.parse({ rounds: options.rounds }),
         prompt: PROMPT,
         logger,
         parentStage: logger.openStage('Reflection flow recovery test'),
@@ -96,12 +104,16 @@ async function runPersistedReflectionFlow(
   }
 }
 
-function recoveryCase(name: string) {
+function recoveryCase(
+  name: string,
+  options: { rounds?: number; aborted?: boolean } = {},
+) {
   const executionId = `reflection-flow-${name}` as ExecutionId;
   const streamId = `workflow@gpt54#reflection-flow-${name}` as StreamTabId;
   return {
     key: flowKey(executionId),
-    run: () => runPersistedReflectionFlow(executionId, streamId),
+    run: () =>
+      runPersistedReflectionFlow(executionId, streamId, noopTrace, options),
     store: getExecutionStore(executionId),
   };
 }
@@ -244,6 +256,161 @@ describe('runReflectionFlow persisted-state recovery', () => {
     });
     expect(await store.read(key)).toEqual(flowRecord(legacyShared));
   });
+
+  const syntheticCompileError = {
+    message:
+      'Automatic LaTeX compilation failed after the final workflow round.',
+    userRetryable: false,
+  };
+
+  it('promotes context-only legacy rejection and fails at the same cap', async () => {
+    const { key, run, store } = recoveryCase('legacy-context-same-cap', {
+      aborted: false,
+    });
+    await store.write(
+      key,
+      flowRecord(
+        reflectionFlowShared({
+          totalRounds: 1,
+          compileFailureContext: 'legacy compile failure',
+        }),
+      ),
+    );
+
+    const result = await run();
+    expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
+    expect(result.error).toBeUndefined();
+    const shared = ReflectionFlowStateSchema.parse(
+      (await store.read<FlowRecord>(key))?.shared,
+    );
+    expect(shared.unresolvedCompileRejection).toBe(true);
+    expect(shared.lastError).toBeUndefined();
+  });
+
+  it('removes the legacy synthetic error but still fails at the same cap', async () => {
+    const { key, run, store } = recoveryCase('legacy-error-same-cap', {
+      aborted: false,
+    });
+    await store.write(
+      key,
+      flowRecord(
+        reflectionFlowShared({
+          totalRounds: 1,
+          compileFailureContext: 'legacy compile failure',
+          lastError: syntheticCompileError,
+        }),
+      ),
+    );
+
+    const result = await run();
+    expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
+    expect(result.error).toBeUndefined();
+    const shared = ReflectionFlowStateSchema.parse(
+      (await store.read<FlowRecord>(key))?.shared,
+    );
+    expect(shared.unresolvedCompileRejection).toBe(true);
+    expect(shared.lastError).toBeUndefined();
+  });
+
+  it('preserves a genuine runtime error even with legacy rejection evidence', async () => {
+    const { key, run, store } = recoveryCase('legacy-context-provider-error', {
+      aborted: false,
+    });
+    const providerError = {
+      message: 'Provider request failed',
+      userRetryable: true,
+      statusCode: 503,
+    };
+    await store.write(
+      key,
+      flowRecord(
+        reflectionFlowShared({
+          totalRounds: 1,
+          compileFailureContext: 'legacy compile failure',
+          lastError: providerError,
+        }),
+      ),
+    );
+
+    await expect(run()).resolves.toMatchObject({
+      outcome: RUN_OUTCOME.FAILED,
+      error: providerError,
+    });
+    const stored = await store.read<FlowRecord>(key);
+    expect(ReflectionFlowStateSchema.parse(stored?.shared).lastError).toEqual(
+      providerError,
+    );
+  });
+
+  it.each([
+    { name: 'context-only', lastError: undefined },
+    { name: 'synthetic-error', lastError: syntheticCompileError },
+  ])(
+    'normalizes $name legacy rejection when the cap is raised',
+    async ({ name, lastError }) => {
+      const { key, run, store } = recoveryCase(`legacy-${name}-raised-cap`, {
+        rounds: 2,
+      });
+      await store.write(
+        key,
+        flowRecord(
+          reflectionFlowShared({
+            totalRounds: 1,
+            compileFailureContext: 'legacy compile failure',
+            lastError,
+          }),
+        ),
+      );
+
+      const result = await run();
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(result.error).toBeUndefined();
+      const shared = ReflectionFlowStateSchema.parse(
+        (await store.read<FlowRecord>(key))?.shared,
+      );
+      expect(shared.totalRounds).toBe(2);
+      expect(shared.unresolvedCompileRejection).toBe(true);
+      expect(shared.lastError).toBeUndefined();
+    },
+  );
+
+  it.each([
+    { name: 'context-only', lastError: undefined },
+    { name: 'synthetic-error', lastError: syntheticCompileError },
+  ])(
+    'clears $name legacy rejection when rejection is disabled',
+    async ({ name, lastError }) => {
+      await installPlatform({
+        workspacePath: '/workspace',
+        workspaceState: {
+          [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
+        },
+      });
+      const { key, run, store } = recoveryCase(`legacy-${name}-disabled`, {
+        aborted: false,
+      });
+      await store.write(
+        key,
+        flowRecord(
+          reflectionFlowShared({
+            totalRounds: 1,
+            compileFailureContext: 'legacy compile failure',
+            lastError,
+          }),
+        ),
+      );
+
+      const result = await run();
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(result.error).toBeUndefined();
+      const shared = ReflectionFlowStateSchema.parse(
+        (await store.read<FlowRecord>(key))?.shared,
+      );
+      expect(shared.compileFailureContext).toBeUndefined();
+      expect(shared.unresolvedCompileRejection).toBeUndefined();
+      expect(shared.lastError).toBeUndefined();
+    },
+  );
 
   it('clears a persisted cancellation latch when resuming a workflow', async () => {
     const { key, run, store } = recoveryCase('cancelled-latch');

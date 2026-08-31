@@ -209,7 +209,8 @@ export class OutputNode extends BaseNode<
     prepRes: OutputPrepInput,
     execRes: OutputExecResult,
   ): Promise<string | undefined> {
-    const { logger, outputState, runScope } = this.services;
+    const { logger, outputState, runScope, getRejectOnCompileFailure } =
+      this.services;
     const { streamId } = runScope;
     const interactions = runScope.session.interactions;
     const { outputLocation, currentRound, endTurn } = prepRes;
@@ -277,24 +278,17 @@ export class OutputNode extends BaseNode<
 
     // Project the canonical live collection into PersistedFlow's cloned state.
     shared.roundOutputs = roundsToPersisted(outputState);
-    const compileFailureContext =
-      execRes.compileResult &&
-      readPlatformSetting<boolean>(
-        WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-      )
+    if (execRes.compileResult) {
+      const compileFailureContext = getRejectOnCompileFailure()
         ? formatCompileFailureRoundContext(execRes.compileResult)
         : undefined;
-    if (compileFailureContext) {
-      shared.compileFailureContext = compileFailureContext;
-      if (!runScope.signal.aborted && currentRound + 1 >= shared.totalRounds) {
-        shared.lastError = {
-          message:
-            'Automatic LaTeX compilation failed after the final workflow round.',
-          userRetryable: false,
-        };
+      if (compileFailureContext) {
+        shared.compileFailureContext = compileFailureContext;
+        shared.unresolvedCompileRejection = true;
+      } else {
+        delete shared.compileFailureContext;
+        delete shared.unresolvedCompileRejection;
       }
-    } else {
-      delete shared.compileFailureContext;
     }
 
     return FlowTransition.DEFAULT;

@@ -57,8 +57,11 @@ export const ReflectionFlowStateSchema = z.object({
   /** Provider-message format used by the persisted `context` messages. */
   modelHandlerCompatibilityKey: ModelHandlerCompatibilityKeySchema.nullish(),
 
-  /** Compile-failure context injected into the next configured round. */
+  /** One-shot compile-failure feedback injected into the next round prompt. */
   compileFailureContext: z.string().optional(),
+
+  /** Rejected compile result awaiting an explicit successful compile. */
+  unresolvedCompileRejection: z.boolean().optional(),
 });
 
 /** Shared state type for reflection flow nodes. */

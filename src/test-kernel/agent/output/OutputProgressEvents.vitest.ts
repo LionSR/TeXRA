@@ -96,12 +96,15 @@ function createOutputNode(
   logger: AgentTrace = noopTrace,
   outputState = createOutputState(),
   signal?: AbortSignal,
+  rejectOnCompileFailure = true,
+  getRejectOnCompileFailure = () => rejectOnCompileFailure,
 ): OutputNode {
   return new OutputNode().setServices({
     streamId,
     runScope: testRunScope(streamId, { interactions: host, signal }),
     logger,
     outputState,
+    getRejectOnCompileFailure,
   } as unknown as ReflectionServices);
 }
 
@@ -142,6 +145,7 @@ function runOutputPost(
 function compileContextCase(
   streamId: string,
   signal?: AbortSignal,
+  rejectOnCompileFailure = true,
 ): {
   outputNode: OutputNode;
   fixture: ReturnType<typeof createCompileFailureFixture>;
@@ -155,6 +159,7 @@ function compileContextCase(
       noopTrace,
       createOutputState(),
       signal,
+      rejectOnCompileFailure,
     ),
     fixture: createCompileFailureFixture(),
     shared: { roundOutputs: [] } as unknown as ReflectionFlowShared,
@@ -250,7 +255,11 @@ describe('output progress events', () => {
           rejectOnCompileFailure,
       },
     });
-    const { outputNode, fixture, shared } = compileContextCase(streamId);
+    const { outputNode, fixture, shared } = compileContextCase(
+      streamId,
+      undefined,
+      rejectOnCompileFailure,
+    );
 
     await runOutputPost(
       outputNode,
@@ -273,12 +282,54 @@ describe('output progress events', () => {
         'previous workflow round was rejected',
       );
       expect(shared.compileFailureContext).toContain('! Missing $ inserted.');
+      expect(shared.unresolvedCompileRejection).toBe(true);
     } else {
       expect(shared.compileFailureContext).toBeUndefined();
+      expect(shared.unresolvedCompileRejection).toBeUndefined();
     }
   });
 
-  it('clears stale compile failure context after a successful compile result', async () => {
+  it('does not retroactively reject a compile result handled while policy is disabled', async () => {
+    const policy = { enabled: false };
+    const { host } = createRecordingHost();
+    const outputNode = createOutputNode(
+      'stream:compile-context-live-policy',
+      host,
+      noopTrace,
+      createOutputState(),
+      undefined,
+      true,
+      () => policy.enabled,
+    );
+    const fixture = createCompileFailureFixture();
+    const shared = {
+      roundOutputs: [],
+      compileFailureContext: 'old context',
+      unresolvedCompileRejection: true,
+    } as unknown as ReflectionFlowShared;
+
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileResult: fixture.compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+    policy.enabled = true;
+
+    expect(shared.compileFailureContext).toBeUndefined();
+    expect(shared.unresolvedCompileRejection).toBeUndefined();
+  });
+
+  it('clears durable compile rejection after an explicit successful compile result', async () => {
     const { outputNode, fixture } = compileContextCase(
       'stream:compile-context-ok',
     );
@@ -286,6 +337,7 @@ describe('output progress events', () => {
     const shared = {
       roundOutputs: [],
       compileFailureContext: 'old context',
+      unresolvedCompileRejection: true,
     } as unknown as ReflectionFlowShared;
 
     await runOutputPost(
@@ -305,24 +357,19 @@ describe('output progress events', () => {
     );
 
     expect(shared.compileFailureContext).toBeUndefined();
+    expect(shared.unresolvedCompileRejection).toBeUndefined();
   });
 
   it.each([
     {
-      name: 'sets the final compile failure when the run is active',
+      name: 'records durable final compile rejection when the run is active',
       aborted: false,
-      expectedLastError: {
-        message:
-          'Automatic LaTeX compilation failed after the final workflow round.',
-        userRetryable: false,
-      },
     },
     {
-      name: 'does not overwrite cancellation with the final compile failure',
+      name: 'records durable final compile rejection when cancellation races',
       aborted: true,
-      expectedLastError: undefined,
     },
-  ])('$name', async ({ aborted, expectedLastError }) => {
+  ])('$name', async ({ aborted }) => {
     await installPlatform({
       workspaceState: {
         [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: true,
@@ -357,10 +404,39 @@ describe('output progress events', () => {
       },
     );
 
-    expect(shared.lastError).toEqual(expectedLastError);
+    expect(shared.lastError).toBeUndefined();
+    expect(shared.unresolvedCompileRejection).toBe(true);
     expect(shared.compileFailureContext).toContain(
       'previous workflow round was rejected',
     );
+  });
+
+  it('preserves durable rejection when a later round has no compile result', async () => {
+    const { outputNode, fixture } = compileContextCase(
+      'stream:compile-context-missing',
+    );
+    const shared = {
+      roundOutputs: [],
+      unresolvedCompileRejection: true,
+    } as unknown as ReflectionFlowShared;
+
+    await runOutputPost(
+      outputNode,
+      shared,
+      {
+        outputLocation: fixture.outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        summary: fixture.summary,
+        compileResult: undefined,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.unresolvedCompileRejection).toBe(true);
   });
 
   it.each([

@@ -548,12 +548,11 @@ export async function runFlowWithLifecycle(
       ...arm,
     });
   /**
-   * The single owner of a failed run's exit, entered from both arms below: a
-   * flow that reported FAILED on its result (`carried`, whose structured error
-   * arrives recovered onto `err`) and an exception that escaped the runner
-   * without one. Classification, the run log, the terminal `result` event's
-   * error facts, subagent delivery, and the `AgentError` a root caller sees all
-   * happen here, so a carried failure is exactly as loud as a thrown one.
+   * The single owner of provider/runtime failure exits, entered from both arms
+   * below: a flow carrying structured error metadata and an exception that
+   * escaped the runner. Outcome-only domain failures bypass classification and
+   * finalize through the ordinary terminal-result path without a fabricated
+   * RetryErrorInfo.
    */
   const finalizeFailedRun = async (
     err: unknown,
@@ -732,10 +731,9 @@ export async function runFlowWithLifecycle(
       });
       return result;
     }
-    // A flow that failed reports it on the result it returns, together with the
-    // response, files, and cost it did produce. That is a failed run, not a
-    // successful one with an error field, so it exits through the same owner an
-    // escaped exception does.
+    // Provider/runtime failures carry structured error metadata and use the
+    // classified failure path. A domain failure may report FAILED without this
+    // field and is finalized below as an outcome-only terminal result.
     if (result.error) {
       return await finalizeFailedRun(toFlowFailureError(result.error), result);
     }

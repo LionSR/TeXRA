@@ -6,6 +6,10 @@ import type {
   ToolPolicy,
 } from '@agent/core/flows/BaseFlowServices';
 import { activeModelHandlerCompatibilityKey } from '@agent/runtime/ModelFactory';
+import {
+  hasPersistedCompileRejection,
+  isLegacySyntheticFinalCompileError,
+} from '@agent/runtime/persistedCompileRejection';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
@@ -32,6 +36,8 @@ import {
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
 } from '@shared/constants/workflowOutput';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -88,9 +94,9 @@ export interface RunReflectionFlowResult {
   outcome: RunOutcome;
   totalCostUsd?: number;
   /**
-   * The structured provider error behind a FAILED outcome. The run reports its
-   * failure here rather than by throwing, so the rounds it did produce travel
-   * with it.
+   * Structured provider/runtime error behind a FAILED outcome, when present.
+   * A rejected compile is an outcome-only domain failure whose diagnostics are
+   * carried by roundOutputs instead.
    */
   error?: RetryErrorInfo;
 }
@@ -126,6 +132,10 @@ export async function runReflectionFlow(
     runScope,
   } = input;
   const { streamId, executionId } = runScope;
+  const getRejectOnCompileFailure = () =>
+    readPlatformSetting<boolean>(
+      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+    );
   const resolvedSetting = await resolveWorkflowSettingTools(
     setting,
     input.toolPolicy,
@@ -178,6 +188,7 @@ export async function runReflectionFlow(
   const services: ReflectionServices = {
     ...input,
     setting: resolvedSetting,
+    getRejectOnCompileFailure,
     outputState,
     xmlManager,
     diffManager,
@@ -222,6 +233,25 @@ export async function runReflectionFlow(
     }
 
     shared = validated.data;
+    // Before the durable marker existed, prompt feedback was the only persisted
+    // evidence of rejection. Promote it once so an interrupted legacy repair
+    // does not silently complete after PrepareContext consumes the feedback.
+    const hasCompileRejection = hasPersistedCompileRejection(shared);
+    if (
+      hasCompileRejection &&
+      shared.unresolvedCompileRejection === undefined
+    ) {
+      shared.unresolvedCompileRejection = true;
+    }
+    // PR #11624 represented a final compile verdict as a provider-like error.
+    // Remove only that exact synthetic shape when compile-rejection evidence is
+    // present. Genuine provider and runtime errors remain durable.
+    if (
+      hasCompileRejection &&
+      isLegacySyntheticFinalCompileError(shared.lastError)
+    ) {
+      delete shared.lastError;
+    }
     // A keyless legacy record gets the active handler's key stamped here;
     // model-based inference for such records lives at SessionResumeRetrieval.
     shared = stampCompatibilityKey(shared, compatibilityKey);
@@ -272,6 +302,7 @@ export async function runReflectionFlow(
     {
       parentStage,
       sharedSchema: ReflectionFlowStateSchema,
+      getRejectOnCompileFailure,
       callbacks: {
         createRoundStage: (roundIndex, parent, shared) =>
           logger.openStage(`r${roundIndex}`, {

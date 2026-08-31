@@ -765,6 +765,58 @@ describe('CLI workflow run command', () => {
     });
   });
 
+  it.each([
+    {
+      label: '--output',
+      init: { output: 'polished.tex' },
+      destination: (root: string) => path.join(root, 'polished.tex'),
+    },
+    {
+      label: '--output-dir',
+      init: { outputDir: 'out' },
+      destination: (root: string) => path.join(root, 'out', 'paper.tex'),
+    },
+  ])(
+    'keeps failed output in run storage and preserves the requested $label destination',
+    async ({ init, destination }) => {
+      await withTempDir('texra-workflow-', async (root) => {
+        const generated = await writeGeneratedOutput(root);
+        const outputSummary = runOutputSummary(
+          generated,
+          path.join(root, 'paper.tex'),
+        );
+        mockWorkflowExecution(
+          workflowExecution('exec-failed-output', {
+            outcome: RUN_OUTCOME.FAILED,
+            outputs: [outputSummary],
+          }),
+          true,
+        );
+        const target = destination(root);
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        await fs.writeFile(target, 'keep-me');
+
+        const exitCode = await runWorkflow(
+          init,
+          createRunCommandCliContext({ cwd: root }),
+        );
+
+        expect(exitCode).toBe(CliExitCode.AgentError);
+        await expect(fs.readFile(target, 'utf8')).resolves.toBe('keep-me');
+        const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+        expect(emission?.json).toMatchObject({
+          outcome: RUN_OUTCOME.FAILED,
+          outputs: [outputSummary],
+          runDirectory: '/tmp/runs/exec-failed-output',
+        });
+        expect(emission?.json).not.toHaveProperty('copiedOutput');
+        expect(emission?.json).not.toHaveProperty('copiedOutputs');
+        expect(emission?.text).toContain('FAILED');
+        expect(emission?.text).toContain('/tmp/runs/exec-failed-output');
+      });
+    },
+  );
+
   it('leaves a pre-existing --output destination untouched for a cancelled run', async () => {
     await withTempDir('texra-workflow-', async (root) => {
       const destination = path.join(root, 'polished.tex');
@@ -970,6 +1022,53 @@ describe('CLI workflow run command', () => {
         kind: 'checkpoint',
         flowRecord: {
           shared: { lastError: { message: 'provider failed' } },
+          cursor: { nextNodeId: 'start' },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects recovery advertising for terminal unresolved compile rejection', async () => {
+    await runWorkflow();
+    const canAdvertise =
+      mocks.executeCliConfig.mock.calls[0]?.[2]
+        .canAdvertiseInterruptedExecution;
+
+    expect(
+      canAdvertise?.({
+        kind: 'checkpoint',
+        flowRecord: {
+          shared: {
+            currentRound: 1,
+            totalRounds: 2,
+            unresolvedCompileRejection: true,
+          },
+          cursor: { nextNodeId: 'start' },
+        },
+      }),
+    ).toBe(false);
+    expect(
+      canAdvertise?.({
+        kind: 'checkpoint',
+        flowRecord: {
+          shared: {
+            currentRound: 0,
+            totalRounds: 2,
+            unresolvedCompileRejection: true,
+          },
+          cursor: { nextNodeId: 'start' },
+        },
+      }),
+    ).toBe(true);
+    expect(
+      canAdvertise?.({
+        kind: 'checkpoint',
+        flowRecord: {
+          shared: {
+            currentRound: 1,
+            totalRounds: 2,
+            compileFailureContext: 'legacy compile failure',
+          },
           cursor: { nextNodeId: 'start' },
         },
       }),

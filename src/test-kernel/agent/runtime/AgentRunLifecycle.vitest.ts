@@ -1056,6 +1056,50 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
+  it('finalizes an outcome-only failure without fabricating provider error facts', async () => {
+    const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
+      'outcome-only-failure',
+    );
+    const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+    const emit = vi.spyOn(ctx.logger, 'emit');
+    const onError = vi.fn();
+
+    try {
+      const carriedResult = toolUseResult(
+        executionId,
+        streamId,
+        RUN_OUTCOME.FAILED,
+      );
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => carriedResult,
+        { isSubagent: true, onError },
+      );
+
+      expect(result).toEqual(carriedResult);
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith({
+        executionId,
+        outcome: RUN_OUTCOME.FAILED,
+        flowRecord: 'preserve',
+      });
+      expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_PHASE.FAILED);
+      const resultEvent = emit.mock.calls
+        .map(([event]) => event)
+        .find((event) => event.type === 'result');
+      expect(resultEvent).toMatchObject({
+        type: 'result',
+        outcome: RUN_OUTCOME.FAILED,
+      });
+      expect(resultEvent).not.toHaveProperty('error');
+      expect(onError).not.toHaveBeenCalled();
+    } finally {
+      emit.mockRestore();
+      defaultSession().executions.untrack(executionId);
+      clearStreamStatusForTest(streamStatus, streamId);
+    }
+  });
+
   it('projects a thrown abort as cancelled on its own stage outcome', async () => {
     const { executionId, streamId, streamStatus, ctx } = lifecycleFixture(
       'outcome-thrown-abort',

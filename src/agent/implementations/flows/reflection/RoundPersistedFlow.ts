@@ -22,6 +22,7 @@ import { BaseNode } from '@agent/node';
 import type { ExecutionKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
 import { PersistedFlow } from '@agent/node/persistedFlow';
+import { isTerminalPersistedCompileRejection } from '@agent/runtime/persistedCompileRejection';
 import {
   RUN_OUTCOME,
   type RetryErrorInfo,
@@ -52,8 +53,11 @@ export interface RoundAwareState {
   /** Set by nodes when execution fails. Skips round completion callbacks. */
   lastError?: RetryErrorInfo;
 
-  /** Output rejection carried into the next configured round, if one remains. */
+  /** One-shot output-rejection feedback for the next configured round. */
   compileFailureContext?: string;
+
+  /** Durable compile rejection awaiting an explicit successful compile. */
+  unresolvedCompileRejection?: boolean;
 }
 
 // ============================================================================
@@ -99,20 +103,23 @@ export class RoundPersistedFlow<
 > extends PersistedFlow<S, Svc> {
   private readonly callbacks: RoundCallbacks<S>;
   private readonly parentStage: StageHandle | null;
+  private readonly getRejectOnCompileFailure: () => boolean;
   private currentRoundStage: StageHandle | null = null;
 
   constructor(
     start: BaseNode,
     kv: ExecutionKVStore,
-    options?: {
+    options: {
       callbacks?: RoundCallbacks<S>;
       parentStage?: StageHandle | null;
       sharedSchema?: z.ZodType<S>;
+      getRejectOnCompileFailure: () => boolean;
     },
   ) {
-    super(start, kv, undefined, options?.sharedSchema);
-    this.callbacks = options?.callbacks ?? {};
-    this.parentStage = options?.parentStage ?? null;
+    super(start, kv, undefined, options.sharedSchema);
+    this.callbacks = options.callbacks ?? {};
+    this.parentStage = options.parentStage ?? null;
+    this.getRejectOnCompileFailure = options.getRejectOnCompileFailure;
   }
 
   /**
@@ -142,6 +149,10 @@ export class RoundPersistedFlow<
     let currentShared = (await this.getShared()) ?? shared;
 
     try {
+      // Disabling rejection is an explicit acceptance decision. Clear both the
+      // durable verdict and any unconsumed prompt feedback before the cap guard.
+      await this.normalizeCompileRejectionPolicy(currentShared);
+
       // A persisted cursor may point into a legacy extra repair round, or the
       // configured total may have been lowered since persistence. In either
       // case the hard round limit takes precedence over resuming that cursor.
@@ -162,7 +173,9 @@ export class RoundPersistedFlow<
         currentShared = await this.executeRoundSteps();
       }
 
-      // Determine final outcome
+      // Re-read policy at terminal resolution. A setting change during the
+      // final repair round is an explicit acceptance even without a compile.
+      await this.normalizeCompileRejectionPolicy(currentShared);
       outcome = this.resolveOutcome(currentShared);
     } finally {
       this.currentRoundStage?.end(outcome);
@@ -206,13 +219,24 @@ export class RoundPersistedFlow<
     return shared.currentRound + 1 < shared.totalRounds;
   }
 
+  /** Apply current compile-rejection policy and persist explicit acceptance. */
+  private async normalizeCompileRejectionPolicy(shared: S): Promise<void> {
+    if (
+      this.getRejectOnCompileFailure() ||
+      (!shared.unresolvedCompileRejection && !shared.compileFailureContext)
+    ) {
+      return;
+    }
+    delete shared.unresolvedCompileRejection;
+    delete shared.compileFailureContext;
+    await this.setShared(shared);
+  }
+
   /** Derive the canonical RunOutcome from the current round state. */
   private resolveOutcome(shared: S): RunOutcome {
     return deriveRunOutcome({
       failed: Boolean(
-        shared.lastError ||
-        (shared.compileFailureContext &&
-          shared.currentRound + 1 >= shared.totalRounds),
+        shared.lastError || isTerminalPersistedCompileRejection(shared),
       ),
       cancelled: this.callbacks.signal?.aborted || !shared.continueRounds,
     });
