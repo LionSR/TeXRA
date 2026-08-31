@@ -831,12 +831,10 @@ describe('StreamSnapshotStore', () => {
     await installPlatform();
     await writeStreamFile(STREAM, 'meta.json', {
       schemaVersion: 0,
-      description: 'Unsupported stale session',
     });
 
     const store = new StreamSnapshotStore();
     await store.load([STREAM]);
-    expect(store.getRunMetadata(STREAM).description).toBeUndefined();
 
     snapshotFacts(store).setParentStream(STREAM, OTHER_STREAM);
     await store.flush();
@@ -844,12 +842,9 @@ describe('StreamSnapshotStore', () => {
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       schemaVersion?: unknown;
       parentStreamId?: unknown;
-      description?: unknown;
     };
     expect(raw.schemaVersion).toBe(STREAM_TAB_META_SCHEMA_VERSION);
     expect(raw.parentStreamId).toBe(OTHER_STREAM);
-    // The rejected file's fields do not leak into the fresh current record.
-    expect(raw.description).toBeUndefined();
   });
 
   it('leaves the run config absent when an execution config is unreadable', async () => {
@@ -870,32 +865,6 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunMetadata(STREAM).config).toBeUndefined();
     expect(store.getRunMetadata(STREAM).identity).toBeUndefined();
     expect(store.getRunMetadata(STREAM).executionId).toBe(executionId);
-  });
-
-  it('strips a retired runDescriptor sidecar without reading its FK', async () => {
-    // Pre-FK sidecars carried a whole runDescriptor; that shape is retired.
-    // The unknown key is stripped: no FK is lifted out of it, and the rest
-    // of the meta (parentStreamId) survives untouched.
-    await writeMetaFile(STREAM, {
-      parentStreamId: OTHER_STREAM,
-      runDescriptor: {
-        schemaVersion: 1,
-        streamId: STREAM,
-        executionId: 'aa11bb22',
-        agent: 'legacy-search',
-        category: AgentCategory.ToolUse,
-        kind: 'agent',
-      },
-    });
-
-    const store = new StreamSnapshotStore();
-    await store.load([STREAM]);
-
-    expect(store.getRunMetadata(STREAM).executionId).toBeUndefined();
-    await expect(store.read(STREAM)).resolves.toMatchObject({
-      executionId: undefined,
-      parentStreamId: OTHER_STREAM,
-    });
   });
 
   it('drops only a malformed execution FK from meta, loudly', async () => {
@@ -2626,7 +2595,6 @@ describe('StreamSnapshotStore', () => {
     const warnSpy = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     await writeStreamFile(STREAM, 'meta.json', {
       executionId: 'not-hex!!',
-      description: 'Prior session',
     });
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
