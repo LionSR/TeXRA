@@ -1,5 +1,5 @@
 /**
- * Format-agnostic intermediate representation schemas for chat export.
+ * Format-agnostic intermediate representation types for chat export.
  *
  * These describe the `ExportNode` produced by normalization and consumed by
  * every format spec (markdown, LaTeX). The HTML export path uses
@@ -8,39 +8,35 @@
  * without pulling in `openai/*`, `@agent/modelHandlers/openai/*`, or
  * `@google/genai`.
  *
- * Zod schemas are the single source of truth; types are derived with `z.infer`.
- * The one cross-module dependency is the canonical web-search entry schema
- * from `@agent/types/ServerTools`, whose provider SDK imports are type-only,
- * so the neutrality note above still holds.
+ * These types describe an in-process representation rather than a validation
+ * boundary. The one cross-module dependency is the canonical web-search
+ * result type from `@agent/types/ServerTools`, whose provider SDK imports are
+ * type-only, so the neutrality note above still holds.
  */
 
-import { z } from 'zod';
-
-import { WebSearchResultEntrySchema } from '@agent/types/ServerTools';
+import type { WebSearchResult } from '@agent/types/ServerTools';
 import type { MediaAttachmentKind } from '@shared/schemas';
 
 // ============================================================
 // Export configuration (caller-supplied)
 // ============================================================
 
-const ExportConfigSchema = z.object({
-  agent: z.string().optional(),
-  model: z.string().optional(),
-  instruction: z.string().optional(),
-  inputFiles: z.array(z.string()).optional(),
-  mediaFiles: z.array(z.string()).optional(),
-  contextFiles: z.array(z.string()).optional(),
-  outputFiles: z.array(z.string()).optional(),
-});
-export type ExportConfig = z.infer<typeof ExportConfigSchema>;
+export interface ExportConfig {
+  agent?: string;
+  model?: string;
+  instruction?: string;
+  inputFiles?: string[];
+  mediaFiles?: string[];
+  contextFiles?: string[];
+  outputFiles?: string[];
+}
 
-const ChatExportInputSchema = z.object({
-  timestamp: z.string(),
-  description: z.string().optional(),
-  config: ExportConfigSchema,
-  messages: z.array(z.unknown()),
-});
-export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
+export interface ChatExportInput {
+  timestamp: string;
+  description?: string;
+  config: ExportConfig;
+  messages: unknown[];
+}
 
 // ============================================================
 // Intermediate representation — format-agnostic
@@ -48,13 +44,13 @@ export type ChatExportInput = z.infer<typeof ChatExportInputSchema>;
 
 /**
  * One rendered search hit in the exported document: the title/url projection
- * of the canonical provider result entry ({@link WebSearchResultEntrySchema}
- * in `@agent/types/ServerTools`). Domain never reaches the export IR.
+ * of the canonical provider result entry ({@link WebSearchResult} in
+ * `@agent/types/ServerTools`). Domain never reaches the export IR.
  */
-const ExportWebSearchResultSchema = WebSearchResultEntrySchema.pick({
-  title: true,
-  url: true,
-});
+type ExportWebSearchResult = Pick<
+  WebSearchResult['results'][number],
+  'title' | 'url'
+>;
 
 /**
  * Attachment kinds a renderer must be able to label. Kept in step with the
@@ -62,55 +58,35 @@ const ExportWebSearchResultSchema = WebSearchResultEntrySchema.pick({
  * exported document describe the same attachment, so a kind added there must
  * also gain a label in every format spec.
  */
-const EXPORT_ATTACHMENT_TYPES = [
-  'image',
-  'document',
-] as const satisfies readonly MediaAttachmentKind[];
+export type ExportAttachmentType = MediaAttachmentKind;
 
-export type ExportAttachmentType = (typeof EXPORT_ATTACHMENT_TYPES)[number];
+export type UserPart =
+  | { type: 'text'; text: string }
+  | { type: 'attachment'; attachmentType: ExportAttachmentType };
 
-const UserPartSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), text: z.string() }),
-  z.object({
-    type: z.literal('attachment'),
-    attachmentType: z.enum(EXPORT_ATTACHMENT_TYPES),
-  }),
-]);
-export type UserPart = z.infer<typeof UserPartSchema>;
-
-const ExportNodeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
-  z.object({ kind: z.literal('assistant-text'), text: z.string() }),
-  z.object({
-    kind: z.literal('tool-call'),
-    name: z.string(),
-    input: z.string(),
-  }),
-  z.object({ kind: z.literal('tool-result'), text: z.string() }),
-  z.object({ kind: z.literal('web-search'), query: z.string() }),
-  z.object({
-    kind: z.literal('web-search-results'),
-    results: z.array(ExportWebSearchResultSchema),
-  }),
-  z.object({
-    kind: z.literal('web-fetch'),
-    url: z.string().optional(),
-    title: z.string().optional(),
-    content: z.string().optional(),
-  }),
-]);
-export type ExportNode = z.infer<typeof ExportNodeSchema>;
+export type ExportNode =
+  | { kind: 'user-message'; parts: UserPart[] }
+  | { kind: 'assistant-text'; text: string }
+  | { kind: 'tool-call'; name: string; input: string }
+  | { kind: 'tool-result'; text: string }
+  | { kind: 'web-search'; query: string }
+  | { kind: 'web-search-results'; results: ExportWebSearchResult[] }
+  | {
+      kind: 'web-fetch';
+      url?: string;
+      title?: string;
+      content?: string;
+    };
 
 // ============================================================
 // Document metadata
 // ============================================================
 
-const DocumentMetaSchema = z.object({
-  date: z.string(),
-  agent: z.string().optional(),
-  model: z.string().optional(),
-  description: z.string().optional(),
-  instruction: z.string().optional(),
-  files: z.array(z.tuple([z.string(), z.string()])),
-});
-export type DocumentMeta = z.infer<typeof DocumentMetaSchema>;
+export interface DocumentMeta {
+  date: string;
+  agent?: string;
+  model?: string;
+  description?: string;
+  instruction?: string;
+  files: Array<[string, string]>;
+}

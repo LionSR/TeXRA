@@ -126,10 +126,10 @@ describe('InquiryStorage', () => {
       suggestSearch: false,
     });
 
-    expect(opened.manifest.status).toBe('open');
-    expect(opened.manifest.parentStreamId).toBe(STREAM_A);
-    expect(opened.manifest.turns).toHaveLength(1);
-    expect(opened.turn.suggestSearch).toBe(false);
+    expect(opened.status).toBe('open');
+    expect(opened.parentStreamId).toBe(STREAM_A);
+    expect(opened.turns).toHaveLength(1);
+    expect(opened.turns.at(-1)?.suggestSearch).toBe(false);
 
     const open = await listThreadsByStatus({ status: 'open', scope: 'all' });
     expect(open).toHaveLength(1);
@@ -140,8 +140,10 @@ describe('InquiryStorage', () => {
       answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
     });
     expect(answered).not.toBeNull();
-    expect(answered!.manifest.status).toBe('answered');
-    expect(answered!.turn.answer).toBe('C = (n(n-2))^{-1} * ω_n^{2/n}');
+    expect(answered!.status).toBe('answered');
+    expect(answered!.turns.at(-1)).toMatchObject({
+      answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
+    });
 
     const stillOpen = await listThreadsByStatus({
       status: 'open',
@@ -194,9 +196,9 @@ describe('InquiryStorage', () => {
       question: 'Q2 (follow-up)',
     });
 
-    expect(followUp.manifest.status).toBe('open');
-    expect(followUp.manifest.turns).toHaveLength(2);
-    expect(followUp.turn.question).toBe('Q2 (follow-up)');
+    expect(followUp.status).toBe('open');
+    expect(followUp.turns).toHaveLength(2);
+    expect(followUp.turns.at(-1)?.question).toBe('Q2 (follow-up)');
   });
 
   it('keeps first-turn draft context valid for hydrated new inquiries', async () => {
@@ -282,7 +284,7 @@ describe('InquiryStorage', () => {
       parentExecutionId: null,
       question: 'Q2 from B',
     });
-    expect(fromB.manifest.parentStreamId).toBe(STREAM_B);
+    expect(fromB.parentStreamId).toBe(STREAM_B);
 
     const openOnA = await listThreadsByStatus({
       status: 'open',

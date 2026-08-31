@@ -281,7 +281,7 @@ export class ExternalInquiryTool extends defineTool({
       data: input.question.slice(0, 100),
     });
 
-    const persisted = await recordOpenQuestion({
+    const manifest = await recordOpenQuestion({
       threadId: input.thread_id ?? undefined,
       parentStreamId: streamId,
       parentExecutionId: executionId ?? null,
@@ -293,7 +293,6 @@ export class ExternalInquiryTool extends defineTool({
     // Use the manifest recordOpenQuestion just wrote under the thread lock —
     // a re-read would only reintroduce the write/read race the continuation
     // injectors already avoid via writer snapshots.
-    const manifest = persisted.manifest;
 
     // Register the asking stream without switching the active view: hosts
     // own presentation focus (the extension/desktop progress views badge the
@@ -310,9 +309,9 @@ export class ExternalInquiryTool extends defineTool({
       },
     });
     const permission: ExternalInquiryPermission = {
-      requestId: persisted.threadId, // legacy field — panel addresses by threadId now
+      requestId: manifest.threadId, // legacy field — panel addresses by threadId now
       question: input.question,
-      threadId: persisted.threadId,
+      threadId: manifest.threadId,
       context: questionContext,
       suggestSearch,
       attachFiles,
@@ -330,7 +329,7 @@ export class ExternalInquiryTool extends defineTool({
     await interaction;
 
     // Background Tasks panel: announce the open thread.
-    const summary = await getThreadSummary(persisted.threadId);
+    const summary = await getThreadSummary(manifest.threadId);
     if (summary) {
       ownerSession.events.emit({
         scope: 'session',
@@ -344,13 +343,13 @@ export class ExternalInquiryTool extends defineTool({
     const message =
       'Question dispatched to the user. The tool returned without waiting. ' +
       'You will be woken with a continuation message when an answer arrives. ' +
-      `Do NOT re-dispatch on thread_id=${persisted.threadId}. ` +
+      `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
       'If your next step depends on this answer, end your turn now; ' +
       'otherwise proceed with independent work.';
 
     return executed(
-      `status: dispatched\nthread_id: ${persisted.threadId}\n\n${message}`,
-      `Inquiry dispatched (${persisted.threadId})`,
+      `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
+      `Inquiry dispatched (${manifest.threadId})`,
     );
   }
 

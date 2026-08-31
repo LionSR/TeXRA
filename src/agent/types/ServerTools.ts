@@ -39,7 +39,7 @@ const log = createLog('ServerTools');
  * Schema for a single web search result entry.
  * Normalized across all providers.
  */
-export const WebSearchResultEntrySchema = z.object({
+const WebSearchResultEntrySchema = z.object({
   /** URL of the search result */
   url: z.string(),
   /** Title of the page */

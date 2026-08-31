@@ -107,18 +107,6 @@ export type ExternalInquiryThreadManifest = z.infer<
   typeof ExternalInquiryThreadManifestSchema
 >;
 
-interface PersistedOpenTurn {
-  threadId: InquiryThreadId;
-  manifest: ExternalInquiryThreadManifest;
-  turn: OpenInquiryTurn;
-}
-
-interface PersistedAnsweredTurn {
-  threadId: InquiryThreadId;
-  manifest: ExternalInquiryThreadManifest;
-  turn: AnsweredInquiryTurn;
-}
-
 // ============================================================================
 // Per-thread write lock
 // ============================================================================
@@ -213,11 +201,6 @@ function normalizeSessionLinks(links?: string[] | null): string[] | undefined {
 // Open / answer / drop helpers
 // ============================================================================
 
-interface OpenTurnUpdate<T> {
-  manifest: ExternalInquiryThreadManifest;
-  result: T;
-}
-
 /**
  * Read a thread manifest under its lock, require the last turn to be open,
  * and replace it via `update`. Returns null without calling `update` if the
@@ -225,14 +208,17 @@ interface OpenTurnUpdate<T> {
  * the shared guard behind `recordAnswerForOpenTurn` and
  * `persistOpenTurnDraft`.
  */
-async function withOpenTurnUpdate<T>(
+async function withOpenTurnUpdate(
   threadId: InquiryThreadId,
   update: (
     existing: ExternalInquiryThreadManifest,
     lastTurn: OpenInquiryTurn,
     timestamp: string,
-  ) => Promise<OpenTurnUpdate<T> | null> | OpenTurnUpdate<T> | null,
-): Promise<{ manifest: ExternalInquiryThreadManifest; result: T } | null> {
+  ) =>
+    | Promise<ExternalInquiryThreadManifest | null>
+    | ExternalInquiryThreadManifest
+    | null,
+): Promise<ExternalInquiryThreadManifest | null> {
   return threadMutex.runExclusive(threadId, async () => {
     const existing = await readThreadManifest(threadId);
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
@@ -243,11 +229,11 @@ async function withOpenTurnUpdate<T>(
     if (lastTurn.kind !== 'open') return null;
 
     const timestamp = new Date().toISOString();
-    const outcome = await update(existing, lastTurn, timestamp);
-    if (!outcome) return null;
+    const nextManifest = await update(existing, lastTurn, timestamp);
+    if (!nextManifest) return null;
 
-    await writeThreadManifest(outcome.manifest);
-    return { manifest: outcome.manifest, result: outcome.result };
+    await writeThreadManifest(nextManifest);
+    return nextManifest;
   });
 }
 
@@ -271,7 +257,7 @@ export async function recordOpenQuestion(params: {
   context?: string;
   suggestSearch?: boolean;
   attachFiles?: string[];
-}): Promise<PersistedOpenTurn> {
+}): Promise<ExternalInquiryThreadManifest> {
   const threadId = params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
 
   return threadMutex.runExclusive(threadId, async () => {
@@ -332,7 +318,7 @@ export async function recordOpenQuestion(params: {
 
     await writeThreadManifest(nextManifest);
 
-    return { threadId, manifest: nextManifest, turn };
+    return nextManifest;
   });
 }
 
@@ -347,8 +333,8 @@ export async function recordAnswerForOpenTurn(params: {
   threadId: InquiryThreadId;
   answer: string;
   sessionLinks?: string[] | null;
-}): Promise<PersistedAnsweredTurn | null> {
-  const outcome = await withOpenTurnUpdate(
+}): Promise<ExternalInquiryThreadManifest | null> {
+  return withOpenTurnUpdate(
     params.threadId,
     (existing, lastTurn, timestamp) => {
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
@@ -370,17 +356,9 @@ export async function recordAnswerForOpenTurn(params: {
         turns: [...existing.turns.slice(0, -1), answeredTurn],
       };
 
-      return { manifest: nextManifest, result: answeredTurn };
+      return nextManifest;
     },
   );
-
-  if (!outcome) return null;
-
-  return {
-    threadId: params.threadId,
-    manifest: outcome.manifest,
-    turn: outcome.result,
-  };
 }
 
 /**
@@ -389,9 +367,8 @@ export async function recordAnswerForOpenTurn(params: {
  * overwrite an `answered` status (which would emit a contradictory
  * dropped continuation and corrupt the audit trail).
  *
- * Returns the just-written manifest on success so callers can pass
- * it to the continuation injector without a re-read (symmetric with
- * `recordAnswerForOpenTurn`'s `PersistedAnsweredTurn.manifest`).
+ * Returns the just-written manifest on success so callers can pass it to the
+ * continuation injector without a re-read, matching `recordAnswerForOpenTurn`.
  * Returns `null` when the drop was a no-op (already answered/dropped
  * or not found).
  */
@@ -438,7 +415,7 @@ export async function persistOpenTurnDraft(params: {
       turns: [...existing.turns.slice(0, -1), nextTurn],
     };
 
-    return { manifest: nextManifest, result: undefined };
+    return nextManifest;
   });
 }
 
