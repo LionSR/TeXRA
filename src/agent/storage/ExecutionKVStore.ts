@@ -29,7 +29,11 @@ import {
 import { byString, filterNotNull, normalizeFilePath } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { ResultMetaSchema, type ResultMeta } from './resultMeta';
+import {
+  PersistedResultMetaSchema,
+  ResultMetaSchema,
+  type ResultMeta,
+} from './resultMeta';
 import { runWithExecutionLeaseWriteFence } from './executionLease';
 
 // ============================================================================
@@ -339,7 +343,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
    */
   async readResultMeta(): Promise<ResultMeta | null> {
     const [record, meta] = await Promise.all([
-      this.readValidated(KEYS.RESULT_META, ResultMetaSchema),
+      this.readValidated(KEYS.RESULT_META, PersistedResultMetaSchema),
       this.readMeta(),
     ]);
     if (!record) return null;

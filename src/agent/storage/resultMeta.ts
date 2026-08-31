@@ -7,7 +7,12 @@ import {
   type AgentFinalResult,
 } from '@agent/runtime/AgentFinalResult';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
-import { ExecutionIdSchema, type RunOutcome } from '@shared/schemas';
+import {
+  ExecutionIdSchema,
+  PersistedRetryErrorInfoSchema,
+  type RunOutcome,
+} from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 const BackgroundBashResultMetaSchema = z.strictObject({
   producer: z.literal('backgroundBash'),
@@ -49,6 +54,20 @@ export const ResultMetaSchema = z.discriminatedUnion('producer', [
 ]);
 
 export type ResultMeta = z.infer<typeof ResultMetaSchema>;
+
+/** Persisted result-meta reader for failed records written before the canonical
+ * provider classification shipped. Remove after 2026-11-30, when those files
+ * have aged out. Writers and AgentFinalResultSchema remain canonical-only. */
+export const PersistedResultMetaSchema = z.preprocess((value) => {
+  if (!isObject(value) || !isObject(value.result)) return value;
+  const error = value.result.error;
+  if (error === undefined) return value;
+
+  const parsed = PersistedRetryErrorInfoSchema.safeParse(error);
+  return parsed.success
+    ? { ...value, result: { ...value.result, error: parsed.data } }
+    : value;
+}, ResultMetaSchema);
 
 /** Remove persistence-only producer context from the public result value. */
 export function unwrapResultMeta(

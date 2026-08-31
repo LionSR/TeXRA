@@ -170,6 +170,35 @@ describe('ExecutionKVStore meta read shims', () => {
     );
   });
 
+  it('normalizes legacy failed result metadata at the persisted reader', async () => {
+    const id = 'legacy-failed-result-meta' as ExecutionId;
+    await getExecutionStore(id).write('result-meta', {
+      producer: 'subagent',
+      agentName: 'reviewer',
+      wallTimeMs: 20,
+      result: {
+        category: 'toolUse',
+        outcome: RUN_OUTCOME.FAILED,
+        response: '',
+        files: [],
+        cost: 0.1,
+        error: {
+          message: 'legacy exhausted credential',
+          userRetryable: true,
+          exhaustionReason: 'upstream-credit',
+        },
+      },
+    });
+
+    await expect(getExecutionStore(id).readResultMeta()).resolves.toMatchObject(
+      {
+        result: {
+          error: { classification: { kind: 'upstream-credit' } },
+        },
+      },
+    );
+  });
+
   it('keeps a producer failure signal when the execution completed', async () => {
     const id = 'terminal-outcome-keeps-failure' as ExecutionId;
     await getExecutionStore(id).write(
