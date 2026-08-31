@@ -197,9 +197,11 @@ describe('stream-header', () => {
     it('anchors the goal chip tooltip via wa-tooltip[for], not a native title', async () => {
       const element = await mount({
         state: baseState({
-          goalActive: true,
-          goalStatus: 'active',
-          goalObjective: 'ship the fix',
+          goal: {
+            active: true,
+            status: 'active',
+            objective: 'ship the fix',
+          },
         }),
       });
 

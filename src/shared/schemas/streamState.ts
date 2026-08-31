@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { GoalStatusSchema } from './goal';
+import { GoalStateSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
 import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
@@ -193,9 +193,7 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   bashBypass: z.boolean().optional(),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
-  goalActive: z.boolean().optional(),
-  goalStatus: GoalStatusSchema.optional(),
-  goalObjective: z.string().optional(),
+  goal: GoalStateSchema.prefault({ active: false }),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),
 });

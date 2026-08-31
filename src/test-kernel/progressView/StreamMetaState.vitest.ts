@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { logHandlers } from '@progressView/frontend/slices/logSlice';
+import { permissionHandlers } from '@progressView/frontend/slices/permissionSlice';
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
 import { syncHandlers } from '@progressView/frontend/slices/syncSlice';
 import {
@@ -189,6 +190,27 @@ function metadataPatchMessage(
 describe('stream meta frontend state', () => {
   beforeEach(() => {
     resetProgressState();
+  });
+
+  it('transitions one canonical goal through active, paused, and inactive states', () => {
+    const streamId = 'goal-stream' as StreamTabId;
+    const state = createInitialState();
+    registerStream(state, streamId, { agentCategory: AgentCategory.ToolUse });
+    state.streamStates.set(streamId, createStreamState(AgentCategory.ToolUse));
+    const getState = seedState(state);
+
+    for (const goal of [
+      { active: true, status: 'active' as const, objective: 'Ship it' },
+      { active: true, status: 'paused' as const, objective: 'Ship it' },
+      { active: false },
+    ]) {
+      dispatch(permissionHandlers, {
+        command: PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED,
+        stream: streamId,
+        ...goal,
+      });
+      expect(getState().streamStates.get(streamId)).toMatchObject({ goal });
+    }
   });
 
   it('excludes child streams from the top-level stream list', () => {
