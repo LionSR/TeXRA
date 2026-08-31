@@ -1038,14 +1038,105 @@ return 'guest success'`,
     // stored one.
     expect(retryRunner).toHaveBeenCalledTimes(1);
     expect(evolved.result).toEqual(['v1:first', 'v2:changed']);
-    await expect(
-      readWorkflowScriptCheckpoint(
-        getExecutionStore(executionId),
-        'stable-call',
-      ),
-    ).resolves.toMatchObject({
-      script: expect.stringContaining(`agent('changed')`),
+    const checkpoint = await readWorkflowScriptCheckpoint(
+      getExecutionStore(executionId),
+      'stable-call',
+    );
+    expect(checkpoint?.script).toContain(`agent('changed')`);
+    expect(checkpoint?.journal).toHaveLength(2);
+    expect(checkpoint?.journal.map((entry) => entry.index)).toEqual([0, 1]);
+    expect(checkpoint?.journal.map((entry) => entry.result)).toEqual([
+      'v1:first',
+      'v2:changed',
+    ]);
+  });
+
+  it('keeps a failed revision union for resume, then compacts on success', async () => {
+    const store = getExecutionStore(executionId);
+    await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'revision-failure',
+      script,
+      runAgent: async ({ prompt }) => `v1:${prompt}`,
     });
+    const revised = script.replace(`agent('second')`, `agent('changed')`);
+    const failingRevision = revised.replace(
+      'return [first, second]',
+      `throw new Error('revision failed')`,
+    );
+
+    await expect(
+      runPersistedWorkflowScript({
+        store,
+        checkpointId: 'revision-failure',
+        script: failingRevision,
+        runAgent: async ({ prompt }) => `v2:${prompt}`,
+      }),
+    ).rejects.toThrow('revision failed');
+
+    const failed = await readWorkflowScriptCheckpoint(
+      store,
+      'revision-failure',
+    );
+    expect(failed?.journal.map((entry) => entry.result)).toEqual([
+      'v1:first',
+      'v1:second',
+      'v2:changed',
+    ]);
+    expect(failed?.journal.map((entry) => entry.index)).toEqual([0, 1, 1]);
+
+    const resumedRunner = vi.fn(() => Promise.reject(new Error('must replay')));
+    await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'revision-failure',
+      script: revised,
+      runAgent: resumedRunner,
+    });
+    expect(resumedRunner).not.toHaveBeenCalled();
+    const completed = await readWorkflowScriptCheckpoint(
+      store,
+      'revision-failure',
+    );
+    expect(completed?.journal.map((entry) => entry.result)).toEqual([
+      'v1:first',
+      'v2:changed',
+    ]);
+    expect(completed?.journal.map((entry) => entry.index)).toEqual([0, 1]);
+  });
+
+  it('bounds prompt and dependency revisions to the successful invocation', async () => {
+    const store = getExecutionStore(executionId);
+    const promptScript = (revision: number) =>
+      `${script.replace(`agent('second')`, `agent('revision-${revision}')`)}`;
+    for (let revision = 0; revision < 4; revision += 1) {
+      await runPersistedWorkflowScript({
+        store,
+        checkpointId: 'prompt-revisions',
+        script: promptScript(revision),
+        runAgent: async ({ prompt }) => prompt,
+      });
+      await expect(
+        readWorkflowScriptCheckpoint(store, 'prompt-revisions'),
+      ).resolves.toMatchObject({ journal: [{ index: 0 }, { index: 1 }] });
+    }
+
+    const dependencyScript = `export const meta = {
+  name: 'dependency-revisions',
+  description: 'bounds dependency fingerprint revisions',
+}
+return await agent('edit', { inputFiles: ['paper.tex'] })`;
+    for (let revision = 0; revision < 4; revision += 1) {
+      await runPersistedWorkflowScript({
+        store,
+        checkpointId: 'dependency-revisions',
+        script: dependencyScript,
+        fingerprintAgentDependencies: async () => `revision-${revision}`,
+        runAgent: async () => revision,
+      });
+      await expect(
+        readWorkflowScriptCheckpoint(store, 'dependency-revisions'),
+      ).resolves.toMatchObject({ journal: [{ index: 0, result: revision }] });
+    }
   });
 
   it('replays a call that moved because a sibling was inserted before it', async () => {
