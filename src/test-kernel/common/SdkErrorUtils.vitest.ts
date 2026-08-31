@@ -44,6 +44,8 @@ import {
 import { sdkErrorKindFromStatusCode } from '@common/errors/sdkError/sdkErrorKinds';
 import {
   ErrorLogDataSchema,
+  PersistedRetryErrorInfoSchema,
+  ProviderErrorPartialSchema,
   RetryErrorInfoSchema,
   toRetryErrorInfo,
 } from '@shared/schemas';
@@ -883,6 +885,14 @@ describe('isPreviousResponseIdError', () => {
 });
 
 describe('provider error schemas', () => {
+  it('rejects legacy classifications on live partial transport', () => {
+    expect(
+      ProviderErrorPartialSchema.safeParse({
+        exhaustionReason: 'upstream-credit',
+      }).success,
+    ).toBe(false);
+  });
+
   it('normalizes every legacy classification into one canonical discriminant', () => {
     const cases = [
       [{ exhaustionReason: 'upstream-credit' }, 'upstream-credit'],
@@ -898,7 +908,7 @@ describe('provider error schemas', () => {
     ] as const;
 
     for (const [legacy, kind] of cases) {
-      const parsed = RetryErrorInfoSchema.parse({
+      const parsed = PersistedRetryErrorInfoSchema.parse({
         message: 'legacy persisted error',
         retryable: true,
         ...legacy,
@@ -909,11 +919,12 @@ describe('provider error schemas', () => {
       expect('exhaustionReason' in parsed).toBe(false);
       expect('missingApiKey' in parsed).toBe(false);
       expect('contextWindow' in parsed).toBe(false);
+      expect(RetryErrorInfoSchema.safeParse(parsed).success).toBe(true);
     }
   });
 
   it('preserves legacy marker precedence while rejecting malformed classifications', () => {
-    const contradictoryLegacy = ErrorLogDataSchema.parse({
+    const contradictoryLegacy = PersistedRetryErrorInfoSchema.parse({
       message: 'old record with overlapping markers',
       userRetryable: true,
       exhaustionReason: 'upstream-credit',
@@ -925,7 +936,7 @@ describe('provider error schemas', () => {
     });
 
     expect(() =>
-      RetryErrorInfoSchema.parse({
+      PersistedRetryErrorInfoSchema.parse({
         message: 'malformed legacy marker',
         userRetryable: false,
         missingApiKey: false,
@@ -939,7 +950,7 @@ describe('provider error schemas', () => {
       }),
     ).toThrow();
     expect(() =>
-      RetryErrorInfoSchema.parse({
+      PersistedRetryErrorInfoSchema.parse({
         message: 'mixed canonical and legacy classifications',
         userRetryable: false,
         classification: { kind: 'context-window' },
@@ -1055,26 +1066,19 @@ describe('attachProviderError end-to-end', () => {
     expect(normalizeProviderError(wrapper)).toBe(retryInfo);
   });
 
-  it('migrates legacy fields on a cached ProviderError instead of returning them unchanged', () => {
-    // Simulates a cached error attached before the retryable/exhaustion-flag
-    // migration ran — e.g. a resumed tool-use flow's raw persisted
-    // `lastError`, which bypasses the schema-level migration on that resume
-    // path (parseToolUseShared parses the persisted shape directly).
-    const legacyCached = {
-      message: 'legacy relay-limit record',
-      retryable: true,
-      isCredentialExhausted: true,
+  it('ignores malformed current ProviderError metadata', () => {
+    const malformed = {
+      message: 'mixed provider metadata',
+      userRetryable: true,
+      classification: { kind: 'context-window' },
+      missingApiKey: true,
     } as unknown as ProviderError;
-
-    const err = new Error(legacyCached.message);
-    attachProviderError(err, legacyCached);
+    const err = new Error(malformed.message);
+    attachProviderError(err, malformed);
 
     const recovered = normalizeProviderError(err);
 
-    expect(recovered.userRetryable).toBe(true);
-    expect(recovered.classification).toStrictEqual({ kind: 'relay-limit' });
-    expect('retryable' in recovered).toBe(false);
-    expect('isCredentialExhausted' in recovered).toBe(false);
-    expect(recovered.classification).toBeDefined();
+    expect(recovered).not.toBe(malformed);
+    expect(recovered.classification).toBeUndefined();
   });
 });

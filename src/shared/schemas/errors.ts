@@ -78,15 +78,12 @@ export type ProviderErrorClassification = z.infer<
 >;
 
 /**
- * Normalizes persisted provider errors at their parse/cache boundary. Older
+ * Normalizes persisted provider errors at the storage readers below. Older
  * records carried independent classification markers; preserve their original
  * runtime precedence (missing API key, context window, then exhaustion) while
  * exposing only the canonical classification downstream.
- *
- * Compatibility reader retained for unversioned stream logs written before
- * 2026-08-31. Remove after 2026-11-30, when those records have aged out.
  */
-export function normalizeLegacyProviderErrorFields(value: unknown): unknown {
+function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return value;
   }
@@ -185,7 +182,10 @@ const ProviderErrorObjectSchema = z.object({
    *  at runtime, so size enforcement is the producer's responsibility. */
   partialText: z.string().optional(),
 });
-export type ProviderError = z.infer<typeof ProviderErrorObjectSchema>;
+/** Canonical current ProviderError metadata. Unknown fields are rejected so
+ * legacy or mixed records cannot enter the runtime metadata cache. */
+export const ProviderErrorSchema = ProviderErrorObjectSchema.strict();
+export type ProviderError = z.infer<typeof ProviderErrorSchema>;
 
 /** Context about where/when the error occurred */
 const ErrorContextSchema = z.object({
@@ -194,7 +194,9 @@ const ErrorContextSchema = z.object({
 });
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
-/** Complete error log data - combines provider error with context */
+/** Complete error log data, including the compatibility reader for unversioned
+ * stream logs written before the canonical classification shipped. Remove the
+ * preprocess after 2026-11-30, when those records have aged out. */
 export const ErrorLogDataSchema = z.preprocess(
   normalizeLegacyProviderErrorFields,
   ProviderErrorObjectSchema.extend({
@@ -207,11 +209,9 @@ export const ErrorLogDataSchema = z.preprocess(
 );
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
-/** Provider error with all fields optional for event transport */
-export const ProviderErrorPartialSchema = z.preprocess(
-  normalizeLegacyProviderErrorFields,
-  ProviderErrorObjectSchema.partial(),
-);
+/** Canonical provider error with all fields optional for event transport. */
+export const ProviderErrorPartialSchema =
+  ProviderErrorObjectSchema.partial().strict();
 export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 
 /** Recover the actionable exhaustion reason from the canonical classification. */
@@ -241,11 +241,18 @@ export function isCredentialExhausted(
  * with `.omit()` keeps it from drifting out of sync with
  * `ProviderErrorObjectSchema` as new error fields are added.
  */
-export const RetryErrorInfoSchema = z.preprocess(
-  normalizeLegacyProviderErrorFields,
-  ProviderErrorObjectSchema.omit({ rawErrorBody: true }),
-);
+export const RetryErrorInfoSchema = ProviderErrorObjectSchema.omit({
+  rawErrorBody: true,
+}).strict();
 export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
+
+/** Persisted retry-state reader for records written before the canonical
+ * classification shipped. Remove after 2026-11-30, when those records have
+ * aged out. Current runtime and IPC schemas must remain migration-free. */
+export const PersistedRetryErrorInfoSchema = z.preprocess(
+  normalizeLegacyProviderErrorFields,
+  RetryErrorInfoSchema,
+);
 
 /** Project a full ProviderError onto the retry-state record by dropping the
  *  bulky `rawErrorBody`; every other field carries over unchanged. */

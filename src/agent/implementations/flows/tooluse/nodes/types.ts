@@ -18,7 +18,10 @@ import {
 } from '@agent/types/ProviderMessage';
 import { ModelHandlerCompatibilityKeySchema } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { FollowUpQueueBatchItem } from '@agent/followUp/FollowUpQueue';
-import { JsonValueSchema, RetryErrorInfoSchema } from '@shared/schemas';
+import {
+  JsonValueSchema,
+  PersistedRetryErrorInfoSchema,
+} from '@shared/schemas';
 
 const StateSlicesSchema = z.object({
   runStateSnapshot: AgentRunStateSnapshotSchema,
@@ -60,7 +63,7 @@ export const ToolUseRunSharedSchema = z.object({
   systemPrompt: z.string().optional(),
   userCancelledRetry: z.boolean().optional(),
   /** Distinguishes failure from cancellation during resume. */
-  lastError: RetryErrorInfoSchema.optional(),
+  lastError: PersistedRetryErrorInfoSchema.optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });

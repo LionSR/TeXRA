@@ -1,4 +1,8 @@
-import { type ProviderError, type StreamDiagnostics } from '@shared/schemas';
+import {
+  ProviderErrorSchema,
+  type ProviderError,
+  type StreamDiagnostics,
+} from '@shared/schemas';
 import { isObject, isString } from '@utils/core';
 
 import { causeChain } from '../errorPredicates';
@@ -126,8 +130,11 @@ export const attachErrorPresentationClaimed =
   errorPresentationClaimedMarker.attach;
 export const hasErrorPresentationClaimed = errorPresentationClaimedMarker.has;
 
-export const providerErrorMetadata =
-  createErrorMetadata<ProviderError>('providerError');
+export const providerErrorMetadata = createErrorMetadata<ProviderError>(
+  'providerError',
+  (value): value is ProviderError =>
+    ProviderErrorSchema.safeParse(value).success,
+);
 
 /** Cache a structured ProviderError on any object so downstream error
  *  formatters can recover it without sniffing the message string. */

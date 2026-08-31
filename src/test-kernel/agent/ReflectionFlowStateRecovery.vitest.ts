@@ -257,6 +257,25 @@ describe('runReflectionFlow persisted-state recovery', () => {
     expect(await store.read(key)).toEqual(flowRecord(legacyShared));
   });
 
+  it('normalizes a legacy provider classification at the persisted state reader', () => {
+    const legacyLastError = {
+      message: 'legacy upstream credit record',
+      userRetryable: true,
+      isCredentialExhausted: true,
+      isUpstreamCreditDepleted: true,
+    };
+
+    const shared = ReflectionFlowStateSchema.parse(
+      reflectionFlowShared({ lastError: legacyLastError }),
+    );
+
+    expect(shared.lastError?.classification).toStrictEqual({
+      kind: 'upstream-credit',
+    });
+    expect('isCredentialExhausted' in (shared.lastError ?? {})).toBe(false);
+    expect(legacyLastError.isCredentialExhausted).toBe(true);
+  });
+
   const syntheticCompileError = {
     message:
       'Automatic LaTeX compilation failed after the final workflow round.',

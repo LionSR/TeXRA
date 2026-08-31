@@ -15,7 +15,6 @@ import {
   type ProviderErrorClassification,
   type RetryErrorInfo,
   getExhaustionReason,
-  normalizeLegacyProviderErrorFields,
   toRetryErrorInfo,
 } from '@shared/schemas';
 import {
@@ -340,14 +339,14 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     quotaLimit?.exhaustionReason ??
     (isUpstreamCreditDepleted ? 'upstream-credit' : undefined);
   const isCredentialExhausted = exhaustionReason !== undefined;
-  const markerClassification: ProviderErrorClassification | undefined =
-    hasMissingApiKeyErrorMarker(err)
-      ? { kind: 'missing-api-key' }
-      : hasContextWindowErrorMarker(err)
-        ? { kind: 'context-window' }
-        : exhaustionReason !== undefined
-          ? { kind: exhaustionReason }
-          : undefined;
+  let markerClassification: ProviderErrorClassification | undefined;
+  if (hasMissingApiKeyErrorMarker(err)) {
+    markerClassification = { kind: 'missing-api-key' };
+  } else if (hasContextWindowErrorMarker(err)) {
+    markerClassification = { kind: 'context-window' };
+  } else if (exhaustionReason !== undefined) {
+    markerClassification = { kind: exhaustionReason };
+  }
 
   // Terminal failures (user abort, local disk-full): never retryable and never
   // a credential affordance. Carries diagnostics but deliberately opts
@@ -473,18 +472,11 @@ export function formatProviderHttpError(err: unknown): ProviderError {
 export function normalizeProviderError(err: unknown): ProviderError {
   const cached = findInCauseChain(err, providerErrorMetadata.detect);
   if (cached) {
-    // A cached error may have been attached before the legacy retryable/
-    // exhaustion-flag migration ran (e.g. a resumed flow's raw persisted
-    // `lastError`, which bypasses the schema-level migration on the resume
-    // path) — run the same migration fresh errors get so callers never read
-    // legacy field names off a cached value.
-    const normalized = normalizeLegacyProviderErrorFields(
-      cached,
-    ) as ProviderError;
-    // Migrate the normalized error from a deeper cause onto the wrapper so
-    // later reads skip both the chain walk and this normalization.
-    providerErrorMetadata.attach(err, normalized);
-    return normalized;
+    // Cache metadata is canonical and validated by providerErrorMetadata.
+    // Copy a value found on a deeper cause onto the wrapper so later reads can
+    // skip the cause-chain walk.
+    providerErrorMetadata.attach(err, cached);
+    return cached;
   }
 
   // Compute fresh but DO NOT cache the result: a caller may format an error for
