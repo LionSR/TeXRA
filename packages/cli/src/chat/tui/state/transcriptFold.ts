@@ -709,6 +709,25 @@ export function applyStreamChanges(
   return { taskGroups, workflowAttemptId, workflowPlan, compaction };
 }
 
+/** Phase groups represented inside the already-retained dashboard rows.
+ *  Stable row/group ids preserve a phase whose divider crossed the cutoff but
+ *  whose task did not, without making this helper another retention owner. */
+export function retainedWorkflowTaskGroups(
+  taskGroups: readonly TaskGroup[],
+  rows: readonly TranscriptRow[],
+): readonly TaskGroup[] {
+  const retainedPhaseIds = new Set<string>();
+  for (const row of rows) {
+    if (row.kind === 'phase') retainedPhaseIds.add(row.id);
+    else if (row.kind === 'workflowTask' && row.groupId !== undefined) {
+      retainedPhaseIds.add(row.groupId);
+    }
+  }
+  return taskGroups.filter(
+    (group) => group.kind !== 'phase' || retainedPhaseIds.has(group.id),
+  );
+}
+
 /** The bounded dashboard + local-row selection for an unfocused workflow
  *  stream, with the count of leading rows the promotion has already printed
  *  (the selection preserves order, so promoted rows stay a prefix of it). */

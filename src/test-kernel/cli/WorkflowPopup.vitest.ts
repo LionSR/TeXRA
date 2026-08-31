@@ -5,6 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkflowPopup } from '@cli/chat/tui/panes/WorkflowPopup';
+import { retainedWorkflowTaskGroups } from '@cli/chat/tui/state/transcriptFold';
 import {
   emptySlice,
   type WorkflowPopupView,
@@ -14,7 +15,7 @@ import type {
   TaskGroup,
   WorkflowCallProgress,
 } from '@shared/schemas';
-import type { WorkflowTaskRow } from '@shared/transcript';
+import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import { workflowRunModel } from '@shared/streams/workflowRunModel';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
@@ -53,12 +54,12 @@ function taskRow(
 
 async function renderPopup(
   taskGroups: readonly TaskGroup[],
-  rows: readonly WorkflowTaskRow[],
+  rows: readonly TranscriptRow[],
   availableRows: number,
 ) {
   const slice = { ...emptySlice(ROOT), taskGroups, entries: rows };
   const model = workflowRunModel({
-    taskGroups,
+    taskGroups: retainedWorkflowTaskGroups(taskGroups, rows),
     rows,
     plan: undefined,
     runSettled: false,
@@ -101,7 +102,16 @@ describe('workflow popup', () => {
           kind: 'phase',
         },
       ],
-      [],
+      [
+        {
+          kind: 'phase',
+          id: 'phase-current',
+          timestamp: 0,
+          level: 'info',
+          heading: 'Explore',
+          phaseLabel: 'Explore',
+        },
+      ],
       20,
     );
     try {
@@ -146,6 +156,61 @@ describe('workflow popup', () => {
       expect(firstRunning).toBeGreaterThan(failedLine);
       // 13 attention rows cannot all fit; the list says how many are below.
       expect(stdout.output).toMatch(/… \d+ more/);
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('navigates only phases represented by retained rows', async () => {
+    const { instance, stdin, onViewChange, stdout } = await renderPopup(
+      [
+        {
+          id: 'phase-stale',
+          name: 'Stale',
+          startTime: 0,
+          status: 'completed',
+          kind: 'phase',
+        },
+        {
+          id: 'phase-referenced',
+          name: 'Repeated',
+          startTime: 1,
+          status: 'running',
+          kind: 'phase',
+        },
+        {
+          id: 'phase-empty',
+          name: 'Repeated',
+          startTime: 2,
+          status: 'running',
+          kind: 'phase',
+        },
+      ],
+      [
+        {
+          ...taskRow('kept', 'running', 'Repeated'),
+          groupId: 'phase-referenced',
+        },
+        {
+          kind: 'phase',
+          id: 'phase-empty',
+          timestamp: 2,
+          level: 'info',
+          heading: 'Repeated',
+          phaseLabel: 'Repeated',
+        },
+      ],
+      20,
+    );
+    try {
+      await waitFor(() => stdout.output.includes('kept'));
+      expect(stdout.output).not.toContain('Stale');
+      stdin.write('\u001b[C');
+      await waitFor(() => onViewChange.mock.calls.length > 0);
+      expect(onViewChange).toHaveBeenLastCalledWith({
+        phaseIndex: 1,
+        selectedKey: undefined,
+      });
     } finally {
       instance.unmount();
     }

@@ -50,7 +50,10 @@ import {
   visibleSubagentRows,
 } from '@cli/chat/tui/state/childExecutions';
 import { syncStreamLog } from '@cli/chat/tui/state/subscribeStreamLog';
-import { advanceSettledPrefixIndex } from '@cli/chat/tui/state/transcriptFold';
+import {
+  advanceSettledPrefixIndex,
+  retainedWorkflowTaskGroups,
+} from '@cli/chat/tui/state/transcriptFold';
 import { activeTranscriptViewport } from '@cli/chat/tui/state/transcriptViewportMode';
 import { attachSessionSignalsAdapter } from '@cli/chat/tui/state/sessionSignalsAdapter';
 import {
@@ -2539,6 +2542,19 @@ describe('CLI transcript state', () => {
       ],
     }));
     const logger = runTrace(child1);
+    logger.openStage('Stale phase', {
+      id: 'compact-stale-phase',
+      kind: 'phase',
+    });
+    logger.info('Stale task', {
+      messageType: MESSAGE_TYPES.WORKFLOW_TASK,
+      data: {
+        id: 'stale-task',
+        label: 'Stale task',
+        phase: 'Stale phase',
+        status: 'cached',
+      },
+    });
     logger.openStage('Old phase', {
       id: 'compact-old-phase',
       kind: 'phase',
@@ -2609,6 +2625,19 @@ describe('CLI transcript state', () => {
     );
     expect(JSON.stringify(entries)).not.toContain('Compact operational');
     expect(JSON.stringify(entries)).not.toContain('compact-old-phase');
+    expect(JSON.stringify(entries)).not.toContain('compact-stale-phase');
+
+    const retainedWithPhaseReference = entries.map((entry) =>
+      entry.kind === 'workflowTask' && entry.call.id === 'task-3'
+        ? { ...entry, groupId: 'compact-old-phase' }
+        : entry,
+    );
+    expect(
+      retainedWorkflowTaskGroups(
+        streams.get().get(child1)?.taskGroups ?? [],
+        retainedWithPhaseReference,
+      ).map(({ id }) => id),
+    ).toEqual(['compact-old-phase', 'compact-new-phase']);
   });
 
   it('keeps the runtime description while the latest line follows the transcript', () => {

@@ -89,6 +89,7 @@ import {
   streamPhaseFor,
 } from './state/cliState';
 import { appendLocalAssistantTranscript } from './state/transcript';
+import { retainedWorkflowTaskGroups } from './state/transcriptFold';
 import {
   activeSubagentsFor,
   childRosters as childRostersSignal,
@@ -381,7 +382,10 @@ export function App(props: AppProps): React.JSX.Element {
       });
     }
     return workflowRunModel({
-      taskGroups: workflowPopupRoot.taskGroups,
+      taskGroups: retainedWorkflowTaskGroups(
+        workflowPopupRoot.taskGroups,
+        workflowPopupRoot.entries,
+      ),
       rows: workflowPopupRoot.entries,
       workflowAttemptId: workflowPopupRoot.workflowAttemptId,
       plan: workflowPopupRoot.workflowPlan,
