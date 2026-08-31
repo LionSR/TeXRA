@@ -71,7 +71,7 @@ The **Providers & Models** view is the single home for model access, provider
 API keys, provider behavior, model visibility, and retry settings. Account
 connections that stand in for a provider key live in the **Account** group,
 under **Subscriptions**: ChatGPT, Grok, Kimi Code, the GLM Coding Plan, and
-Copilot. Researcher Access sign-in also sits in that group, under **Account &
+Copilot. TeXRA account sign-in also sits in that group, under **Account &
 Usage**. It unlocks the hosted research-agent catalog and does not supply
 model access.
 

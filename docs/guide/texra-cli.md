@@ -148,7 +148,7 @@ provider's models, and `/api status` prints how each model will be paid for.
 provider API key as a CI secret and export it in the pipeline environment.
 With a provider key set, `texra run …` needs no other credentials.
 
-**Sign in to TeXRA (Researcher Access)** to use the hosted research-agent
+**Sign in to your TeXRA account** to use the hosted research-agent
 catalog. Remote agents then resolve by name like any local agent. Sign-in does
 not supply model access; runs still use the credentials above.
 

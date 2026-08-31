@@ -344,7 +344,7 @@ function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
   return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
 }
 
-/** Launcher-row summary: Researcher Access ahead of the access summary. */
+/** Launcher-row summary: TeXRA account ahead of the access summary. */
 export function formatCliAccountAccessSummary(
   status: CliModelAccessStatus,
 ): string {

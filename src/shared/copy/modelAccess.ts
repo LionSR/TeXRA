@@ -6,7 +6,7 @@
  * import these strings instead of paraphrasing the internal enum values,
  * which stay wire identifiers and never reach the screen.
  *
- * "Researcher Access" is the program you sign in to; that copy lives in
+ * "TeXRA account" is the account you sign in to; that copy lives in
  * `onboarding.ts`.
  */
 

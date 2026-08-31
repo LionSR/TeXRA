@@ -345,7 +345,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     );
   });
 
-  it('delegates Researcher Access sign-in and sign-out without stale posts', async () => {
+  it('delegates TeXRA account sign-in and sign-out without stale posts', async () => {
     const fixture = await createFixture();
 
     await assertSupported(fixture.controller.profileHandlers.signIn)({
