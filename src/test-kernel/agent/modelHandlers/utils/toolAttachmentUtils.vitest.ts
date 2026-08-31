@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - utils
 import {
-  checkToolResultTextLimit,
   formatToolResultAsText,
   formatToolResultTextWithAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
@@ -25,69 +24,6 @@ function oversizedText(): { head: string; tail: string; text: string } {
     text: head + 'x'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH) + tail,
   };
 }
-
-describe('checkToolResultTextLimit', () => {
-  it('returns null for text within limit', () => {
-    const text = 'a'.repeat(1000);
-    expect(checkToolResultTextLimit(text)).toBeNull();
-  });
-
-  it('returns null for text exactly at limit', () => {
-    const text = 'a'.repeat(MAX_TOOL_RESULT_TEXT_LENGTH);
-    expect(checkToolResultTextLimit(text)).toBeNull();
-  });
-
-  it('keeps head and tail with an elision marker for text exceeding limit', () => {
-    const { head, tail, text } = oversizedText();
-
-    const result = checkToolResultTextLimit(text);
-    expect(result).not.toBeNull();
-    const truncated = result!;
-    expect(truncated).toContain('Tool result too large');
-    expect(truncated).toContain('characters elided');
-    // Head/tail content survives; the elided middle does not.
-    expect(truncated.startsWith('Tool result too large')).toBe(true);
-    expect(truncated).toContain(
-      head.slice(0, TOOL_RESULT_TRUNCATION_HEAD_CHARS),
-    );
-    expect(truncated).toContain(tail.slice(-TOOL_RESULT_TRUNCATION_TAIL_CHARS));
-    expect(truncated).not.toContain('x'.repeat(1000));
-  });
-
-  it('respects custom max length', () => {
-    const text = 'a'.repeat(150);
-    expect(checkToolResultTextLimit(text, 200)).toBeNull();
-    const error = checkToolResultTextLimit(text, 100);
-    expect(error).not.toBeNull();
-    const replacement = error!;
-    expect(replacement).toContain('Tool result too large');
-    // The whole point of maxLength is to bound context size — the replacement
-    // itself must never exceed the requested limit, even though the default
-    // head/tail budgets (4,000 / 50,000 chars) are far larger than 100.
-    expect(replacement.length).toBeLessThanOrEqual(100);
-  });
-
-  it('bounds the replacement by maxLength even when default head/tail budgets would overshoot it', () => {
-    const text = 'a'.repeat(10_000);
-    const maxLength = 500;
-    const error = checkToolResultTextLimit(text, maxLength);
-    expect(error).not.toBeNull();
-    expect(error!.length).toBeLessThanOrEqual(maxLength);
-  });
-
-  it('always elides a positive count when the head budget alone would cover the whole text', () => {
-    // text.length is only slightly over maxLength, and well under the
-    // hardcoded head budget (TOOL_RESULT_TRUNCATION_HEAD_CHARS = 4,000) — the
-    // near-boundary case where an unscaled head budget would swallow the
-    // entire text, leaving a nonsensical "0 characters elided" marker.
-    const text = 'a'.repeat(1500);
-    const maxLength = 1000;
-    const error = checkToolResultTextLimit(text, maxLength);
-    expect(error).not.toBeNull();
-    expect(error!.length).toBeLessThanOrEqual(maxLength);
-    expect(error!).not.toContain('[... 0 characters elided');
-  });
-});
 
 describe('formatToolResultAsText', () => {
   it.each([
@@ -150,6 +86,7 @@ describe('formatToolResultAsText', () => {
     expect(result).toContain('HEAD_MARKER_');
     expect(result).toContain('TAIL_MARKER_');
     expect(result).not.toContain('x'.repeat(1000));
+    expect(result.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_TEXT_LENGTH);
   });
 
   it('returns normal result when within limit', () => {

@@ -1184,12 +1184,6 @@
       "name": "rewriteCodexRequestBody"
     },
     {
-      "file": "src/agent/modelHandlers/utils/toolAttachmentUtils.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "checkToolResultTextLimit"
-    },
-    {
       "file": "src/agent/node/persistedFlow.ts",
       "category": "production-dead",
       "kind": "exports",
