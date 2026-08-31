@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file.
   consolidated skills display. Skills are off by default until you enable the
   master skills switch.
 
+### Bug Fixes
+
+- **Older saved runs recover their session links** — runs created by TeXRA
+  versions before August 2026 can be resumed, indexed, and deleted with their
+  associated session data when the saved relationship is unambiguous.
+
 ## [0.40.6] - 2026-08-28
 
 ### Shared (all surfaces)

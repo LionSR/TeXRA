@@ -6,15 +6,22 @@ import {
   isUserVisibleExecution,
   listExecutions,
 } from '@agent/storage';
-import { listExecutionStreamReferences } from '@agent/storage/executionListing';
+import {
+  listExecutionStreamReferences,
+  readExecutionStreamIndex,
+} from '@agent/storage/executionListing';
+import { recoverLegacyExecutionStreamId } from '@agent/storage/executionStreamHealing';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
+import { StorageFS } from '@utils/files/storageFS';
 
 function config(agent: string): AgentConfig {
   return AgentConfigSchema.parse({
@@ -43,6 +50,13 @@ async function writeExecution(
       : {}),
   });
   if (agentConfig) await store.writeRunRecord(agentConfig);
+}
+
+async function writeStreamMeta(
+  streamId: StreamTabId,
+  meta: unknown,
+): Promise<void> {
+  await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, meta);
 }
 
 describe('execution listing normalization', () => {
@@ -99,6 +113,93 @@ describe('execution listing normalization', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it('writes through one confirmed legacy sidecar match', async () => {
+    const executionId = 'f9892101' as ExecutionId;
+    const streamId = 'legacy-stream' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    await writeStreamMeta(streamId, { executionId });
+
+    await expect(recoverLegacyExecutionStreamId(executionId)).resolves.toBe(
+      streamId,
+    );
+    await expect(
+      getExecutionStore(executionId).readMeta(),
+    ).resolves.toMatchObject({ streamId });
+  });
+
+  it.each([
+    {
+      name: 'ambiguous matches',
+      sidecars: [
+        ['legacy-a', {}],
+        ['legacy-b', {}],
+      ] as const,
+    },
+    {
+      name: 'no match',
+      sidecars: [['unrelated', { executionId: 'f9892199' }]] as const,
+    },
+    {
+      name: 'a malformed matching sidecar',
+      sidecars: [
+        ['valid', {}],
+        ['malformed', { parentStreamId: 42 }],
+      ] as const,
+    },
+  ])('leaves legacy metadata unstamped for $name', async ({ sidecars }) => {
+    const executionId = 'f9892102' as ExecutionId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    for (const [streamId, fields] of sidecars) {
+      await writeStreamMeta(streamId as StreamTabId, {
+        executionId,
+        ...fields,
+      });
+    }
+
+    await expect(
+      recoverLegacyExecutionStreamId(executionId),
+    ).resolves.toBeUndefined();
+    expect(
+      (await getExecutionStore(executionId).readMeta())?.streamId,
+    ).toBeUndefined();
+  });
+
+  it('does not scan sidecars for a modern row', async () => {
+    const executionId = 'f9892103' as ExecutionId;
+    const streamId = 'modern-stream' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-08-30T00:00:00.000Z',
+      streamId,
+    });
+    const readDir = vi.spyOn(StorageFS, 'readDir');
+
+    try {
+      await expect(recoverLegacyExecutionStreamId(executionId)).resolves.toBe(
+        streamId,
+      );
+      expect(readDir).not.toHaveBeenCalled();
+    } finally {
+      readDir.mockRestore();
+    }
+  });
+
+  it('includes a safely healed legacy row in the stream index', async () => {
+    const executionId = 'f9892104' as ExecutionId;
+    const streamId = 'indexed-legacy-stream' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    await writeStreamMeta(streamId, { executionId });
+
+    const index = await readExecutionStreamIndex();
+
+    expect(index.byStream.get(streamId)).toBe(executionId);
   });
 
   it('sees metadata replaced by another host after an earlier listing', async () => {

@@ -38,6 +38,7 @@ import {
   runWithInactiveExecutionLease,
   type LeaseReapPolicy,
 } from './executionLease';
+import { recoverLegacyExecutionStreamId } from './executionStreamHealing';
 
 const log = createLog('ExecutionListing');
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
@@ -154,9 +155,9 @@ export interface ExecutionStreamReferenceListing {
 /**
  * List execution→stream references recorded in readable execution metadata.
  *
- * This deliberately does not infer ownership for metadata without `streamId`,
- * or for malformed metadata. Those rows are retained: the sweep's only safe
- * deletion authority is the registered execution→stream edge itself.
+ * A pre-#9520 row without `streamId` gets one chance to recover a unique,
+ * well-formed sidecar match and stamp it durably. Ambiguous or malformed
+ * evidence remains unlinked, so the sweep still acts only on an authored edge.
  *
  * With `checkpointedOnly`, only executions that still hold a resume
  * checkpoint (flow record) are listed; the existence check runs before the
@@ -182,8 +183,10 @@ export async function listExecutionStreamReferences(
           return null;
         }
         const meta = await store.readMetaStrict();
-        if (!meta?.streamId) return null;
-        return { executionId, streamId: meta.streamId };
+        if (!meta) return null;
+        const streamId =
+          meta.streamId ?? (await recoverLegacyExecutionStreamId(executionId));
+        return streamId ? { executionId, streamId } : null;
       } catch (error) {
         const cause = toErrorMessage(error);
         unreadable.set(executionId, cause);

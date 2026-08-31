@@ -19,6 +19,7 @@ import {
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { recoverLegacyExecutionStreamId } from '@agent/storage/executionStreamHealing';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   AgentCategory,
@@ -181,15 +182,18 @@ async function resumeRunWithRecoveryProvenance(
   const store = getExecutionStore(executionId);
   let config: Awaited<ReturnType<typeof store.readConfig>>;
   let meta: Awaited<ReturnType<typeof store.readMeta>>;
+  let streamId: StreamTabId | undefined;
   try {
     [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
+    streamId =
+      meta?.streamId ??
+      (meta ? await recoverLegacyExecutionStreamId(executionId) : undefined);
   } catch (error) {
     abandonSupplied();
     throw error;
   }
-  // FK-first: the stream id stamped at registration is the reproduction
-  // contract. A row without one has no persisted stream to continue.
-  const streamId = meta?.streamId;
+  // FK-first: current rows use the registration edge directly. A historical
+  // row gets only the unique, confirmed sidecar recovery above.
   if (!config || !streamId) {
     abandonSupplied();
     return REFUSED;

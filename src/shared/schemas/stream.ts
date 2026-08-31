@@ -97,8 +97,9 @@ export const ExecutionMetaCoreSchema = z.object({
   description: z.string().optional(),
   /**
    * The transcript stream this execution's data lives under — the ONE
-   * execution→stream mapping, written at registration. A row without one has
-   * no persisted stream; nothing re-derives it from names or scans.
+   * execution→stream mapping, written at registration. Pre-#9520 rows may
+   * recover one unique confirmed sidecar edge and stamp it here once; runtime
+   * consumers still read only this field.
    */
   streamId: StreamTabIdSchema.optional(),
 });

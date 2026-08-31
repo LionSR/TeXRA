@@ -84,6 +84,19 @@ function enqueueMetaUpdate(
   });
 }
 
+/** Stamp a confirmed pre-#9520 stream edge without replacing a concurrent writer. */
+export async function writeLegacyExecutionStreamId(
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): Promise<StreamTabId> {
+  let persistedStreamId = streamId;
+  await enqueueMetaUpdate(executionId, (existing) => {
+    persistedStreamId = existing.streamId ?? streamId;
+    return existing.streamId ? {} : { streamId };
+  });
+  return persistedStreamId;
+}
+
 /** Persist the workflow runner's canonical execution snapshot on its run. */
 export function writeWorkflowExecutionSnapshot(
   executionId: ExecutionId,

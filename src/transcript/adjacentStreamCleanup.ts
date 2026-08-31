@@ -14,6 +14,7 @@
  * history deletion while leaving transcript or snapshot state behind.
  */
 import { getExecutionStore } from '@agent/storage';
+import { recoverLegacyExecutionStreamId } from '@agent/storage/executionStreamHealing';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -115,8 +116,11 @@ export async function cleanupExecutionAdjacentStreamState(
 ): Promise<void> {
   try {
     const meta = await getExecutionStore(executionId).readMetaStrict();
-    if (!meta?.streamId) return;
-    await cleanup.deleteAdjacentStreamState(meta.streamId);
+    const streamId =
+      meta?.streamId ??
+      (meta ? await recoverLegacyExecutionStreamId(executionId) : undefined);
+    if (!streamId) return;
+    await cleanup.deleteAdjacentStreamState(streamId);
   } catch (error) {
     throw new Error(
       `Execution ${executionId}'s transcript/snapshot sidecars could not be cleaned up: ${toErrorMessage(error)}`,
