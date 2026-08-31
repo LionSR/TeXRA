@@ -8,6 +8,7 @@ import {
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
+import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import {
   abortableSlashCommand,
@@ -30,7 +31,11 @@ export async function applyCliProviderApiKey(
 ): Promise<string | undefined> {
   await saveProviderApiKey(provider, key);
   refreshSubscriptionPreferenceViews();
-  if (provider !== 'kimiCode') return undefined;
+  const codingPlan = codingPlanForApiProvider(provider);
+  if (!codingPlan) return undefined;
+  if (!codingPlan.exclusiveCredential) {
+    return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' with \`/api ${codingPlan.cliProvider}\` or in \`/config\` to use ${codingPlan.displayName}.`;
+  }
   // The coding-only models route through the subscription automatically;
   // dual-backend K3 needs the opt-in switch, which is only discoverable if
   // we name it here.
