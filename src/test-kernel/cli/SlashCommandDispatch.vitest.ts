@@ -68,7 +68,7 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
@@ -860,7 +860,7 @@ describe('handleTuiSlashCommand', () => {
     expect(signOutSupabase).toHaveBeenCalledOnce();
     expect(signOutChatGpt.mock.calls).toEqual([['chatgpt'], ['grok']]);
     const entry = lastEntryText();
-    expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
+    expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
     expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain('ChatGPT subscription disabled for Codex models.');
     expect(entry).not.toContain('\n');
@@ -897,7 +897,7 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
-    expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
+    expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
     expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
   });
 
@@ -913,7 +913,7 @@ describe('handleTuiSlashCommand', () => {
 
     expect(handled).toBe(true);
     const entry = lastEntryText();
-    expect(entry).toContain(`Signed out of ${RESEARCHER_ACCESS.label}.`);
+    expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
     expect(entry).toContain('Signed out of ChatGPT.');
     expect(entry).toContain(
       'ChatGPT subscription preference could not be disabled: Config write failed',

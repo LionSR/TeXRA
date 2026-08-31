@@ -3,7 +3,6 @@ import { defineCommand } from 'citty';
 import { DEFAULT_OAUTH_PROVIDER, isOAuthProvider } from '@auth/config';
 import type { SupabaseSession } from '@auth/SupabaseSession';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -112,7 +111,7 @@ function emitLoginResult(context: CliContext, session: SupabaseSession): void {
   emitCliResult(context, {
     json: payload,
     ndjson: { kind: 'auth', ...payload },
-    text: `Signed in as ${session.account.label}.`,
+    text: RESEARCHER_ACCESS_AUTH.signedIn(session.account.label),
   });
 }
 
@@ -160,7 +159,7 @@ export const loginCommand = withUsageSections(
   defineCliCommand({
     meta: {
       name: 'login',
-      description: `Sign in with ${RESEARCHER_ACCESS.label}`,
+      description: RESEARCHER_ACCESS_AUTH.signInLabel,
     },
     args: {
       ...GLOBAL_ARGS,
@@ -202,11 +201,8 @@ export const loginCommand = withUsageSections(
       rows: [
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
-        ['texra login', `sign in with ${RESEARCHER_ACCESS.label}`],
-        [
-          'texra login --device',
-          `sign in to ${RESEARCHER_ACCESS.label} over SSH`,
-        ],
+        ['texra login', RESEARCHER_ACCESS_AUTH.signInExample],
+        ['texra login --device', RESEARCHER_ACCESS_AUTH.deviceSignInExample],
       ],
     },
   ],

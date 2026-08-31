@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Breaking Changes
+
+- **Do not share current inquiry storage with TeXRA 0.40.0-0.40.5** — current
+  inquiry manifests no longer include the per-turn file paths those versions
+  require, and current builds no longer write the corresponding sidecar files.
+  TeXRA 0.40.6 accepts the manifest shape, but cross-version answer delivery is
+  not supported; finish or drop open inquiries before switching versions.
+
 ### Features
 
 - **Use longer ChatGPT subscription context windows** — the TUI, extension,
