@@ -47,7 +47,6 @@ export class ToolUseCycleNode extends BaseNode<
       messages: shared.messages,
       runState: shared.stateSlices.runStateSnapshot,
       workspaceState,
-      cycleStartLastResponse: workspaceState.assembly.lastResponse,
       userChannels: shared.stateSlices.userChannels,
       systemPrompt: shared.systemPrompt,
     };
@@ -70,7 +69,7 @@ export class ToolUseCycleNode extends BaseNode<
     }
 
     // A cycle is one user turn. Scrub any assembly strings accepted from a
-    // persisted snapshot before model work starts, but never between this
+    // persisted snapshot before handling the turn, but never between this
     // cycle's tool rounds where they carry continuation state.
     prepRes.workspaceState.assembly.lastResponse = '';
     prepRes.workspaceState.assembly.accumulatedOutput = '';
@@ -204,18 +203,10 @@ export class ToolUseCycleNode extends BaseNode<
       workspaceSnapshot,
       userChannels: prepRes.userChannels,
     };
-    const assemblyResponse = prepRes.workspaceState.assembly.lastResponse;
     const cycleResponse =
       execRes.outcome === 'skipped'
         ? undefined
-        : (execRes.response ??
-          // The assembly fallback exists for text written during THIS cycle
-          // (the failure-path copy in exec). A value unchanged since prep is
-          // a previous turn's response — an answerless cycle must not return
-          // it as its result (#9531).
-          (assemblyResponse !== prepRes.cycleStartLastResponse
-            ? assemblyResponse
-            : undefined));
+        : (execRes.response ?? prepRes.workspaceState.assembly.lastResponse);
     if (cycleResponse) {
       this.services.onCycleResponse?.(cycleResponse);
     }

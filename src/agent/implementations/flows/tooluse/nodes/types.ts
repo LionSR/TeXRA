@@ -104,15 +104,6 @@ export interface CyclePrepResult {
   userChannels: UserVariableChannels;
   messages: ProviderMessage[];
   shouldSkipCycle: boolean;
-  /**
-   * `assembly.lastResponse` as captured when this cycle prepared — the
-   * historical baseline. `ToolUseCycleNode.post()` may fall back to assembly
-   * text only when it differs from this value, i.e. when the text was written
-   * during this cycle (e.g. the failure-path copy in `exec`). An unchanged
-   * value is a previous turn's response, and an answerless cycle must not
-   * return it as its result (#9531).
-   */
-  cycleStartLastResponse: string;
   systemPrompt?: string;
 }
 
