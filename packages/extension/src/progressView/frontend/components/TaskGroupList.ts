@@ -693,13 +693,15 @@ export class TaskGroupList extends LitElement {
    * lines — follow in transcript order. Superseded phase groups do not reach
    * this path: the shared model is the authority for which attempt is visible.
    */
-  private renderGroupBody(node: GroupTree): TemplateResult {
+  private renderGroupBody(node: GroupTree, isRoot: boolean): TemplateResult {
     const phase = this.phaseModels.get(node.group.id);
-    const rows = phase
+    const workflowPhase =
+      phase ?? (isRoot ? this.model?.unphasedPhase : undefined);
+    const rows = workflowPhase
       ? node.rows.filter((row) => row.kind !== 'workflowTask')
       : node.rows;
     return html`${
-      phase ? this.renderPhaseRows(phase) : nothing
+      workflowPhase ? this.renderPhaseRows(workflowPhase) : nothing
     }${this.renderRowEntries(rows, `group:${node.group.id}`)}${repeat(
       node.children,
       (c) => c.group.id,
@@ -732,7 +734,7 @@ export class TaskGroupList extends LitElement {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
-            ${this.renderRunBand(node)} ${this.renderGroupBody(node)}
+            ${this.renderRunBand(node)} ${this.renderGroupBody(node, true)}
           </div>
         </div>
       `;
@@ -761,7 +763,7 @@ export class TaskGroupList extends LitElement {
           ${this.renderGroupHeader(node)}
         </div>
         <div id=${contentId} class="log-group-content">
-          ${expanded ? this.renderGroupBody(node) : nothing}
+          ${expanded ? this.renderGroupBody(node, false) : nothing}
         </div>
       </wa-details>
     `;

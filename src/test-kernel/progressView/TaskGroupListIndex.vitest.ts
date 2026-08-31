@@ -90,7 +90,7 @@ function runGroup(name: string, overrides: Partial<TaskGroup> = {}): TaskGroup {
 }
 
 function workflowTaskRow(
-  groupId: string,
+  groupId: string | undefined,
   id: string,
   timestamp: number,
   data: WorkflowCallProgress,
@@ -103,7 +103,7 @@ function workflowTaskRow(
     text: data.id,
     timestamp,
     level,
-    groupId,
+    ...(groupId === undefined ? {} : { groupId }),
     messageType: MESSAGE_TYPES.WORKFLOW_TASK,
     data,
   });
@@ -698,6 +698,19 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
         status: 'running',
         attemptId: 'a2',
       }),
+      workflowTaskRow(run.id, 'stale-unphased', 6, {
+        id: 'stale-unphased',
+        label: 'Stale unphased call',
+        status: 'failed',
+        error: 'old attempt',
+        attemptId: 'a1',
+      }),
+      workflowTaskRow(run.id, 'current-unphased', 7, {
+        id: 'current-unphased',
+        label: 'Current unphased call',
+        status: 'running',
+        attemptId: 'a2',
+      }),
     ];
 
     const list = await renderList([run, oldMap, currentMap], rows, {
@@ -707,7 +720,9 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
     expect(groupHeader(list, oldMap.id)).toBeNull();
     expect(groupHeader(list, currentMap.id)).not.toBeNull();
     expect(list.shadowRoot?.textContent).not.toContain('Stale failure');
+    expect(list.shadowRoot?.textContent).not.toContain('Stale unphased call');
     expect(list.shadowRoot?.textContent).toContain('Current call');
+    expect(list.shadowRoot?.textContent).toContain('Current unphased call');
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

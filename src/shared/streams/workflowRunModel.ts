@@ -126,6 +126,8 @@ export interface WorkflowRunModel {
   readonly phases: readonly WorkflowPhaseModel[];
   /** Every card of the newest attempt, in transcript order. */
   readonly tasks: readonly WorkflowTaskRow[];
+  /** Current-attempt cards issued outside a phase, when any. */
+  readonly unphasedPhase: WorkflowPhaseModel | undefined;
   readonly tally: WorkflowTally;
   /** The child stream a card may open, by row id: its `childStreamId` when
    *  that card is the stream's only claimant. A stream two cards claim is
@@ -449,8 +451,10 @@ export function workflowRunModel(
   }
   // Phase ownership handles the call-less case that card references cannot:
   // an explicitly superseded empty phase is stale. Untagged empty phases are
-  // preserved for mixed-version traces unless the latest attempt opened the
-  // same title/index, which is the only evidence that the untagged copy is old.
+  // preserved for traces written before phase ownership shipped on 2026-08-31
+  // unless the latest attempt opened the same title/index, which is the only
+  // evidence that the untagged copy is old. Retire this compatibility branch
+  // after 2026-11-30, when those pre-ownership traces leave support.
   const latestOwnedPhaseIdentities = new Set(
     phases
       .filter((phase) => phase.attemptId === latestAttemptId)
@@ -490,13 +494,18 @@ export function workflowRunModel(
     (sum, phase) => sum + phase.declaredTasks.length,
     0,
   );
+  const phaseModels = ordered.map((phase) => ({
+    ...phase,
+    tally: tallyOf(phase.tasks, phase.declaredTasks.length),
+    cells: phase.tasks.map((row) => row.call.status),
+  }));
   return {
-    phases: ordered.map((phase) => ({
-      ...phase,
-      tally: tallyOf(phase.tasks, phase.declaredTasks.length),
-      cells: phase.tasks.map((row) => row.call.status),
-    })),
+    phases: phaseModels,
     tasks,
+    unphasedPhase:
+      unphased === undefined
+        ? undefined
+        : phaseModels[ordered.indexOf(unphased)],
     tally: tallyOf(tasks, declaredTotal),
     childStreamOf,
     liveOf,
