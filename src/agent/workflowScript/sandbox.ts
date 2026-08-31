@@ -20,9 +20,6 @@ import { z } from 'zod';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local imports - workflow scripts
-import { WorkflowScriptParseError } from './parseScript';
-
 export interface SandboxHostBridge {
   /** Async primitives. Arguments and results cross as JSON text only. */
   asyncFns: Record<string, (args: unknown[]) => Promise<string | undefined>>;
@@ -388,7 +385,7 @@ export async function runScriptInSandbox(
           options.filename,
         );
       } catch (error) {
-        throw new WorkflowScriptParseError(
+        throw new Error(
           `Workflow script syntax error: ${toErrorMessage(error)}`,
         );
       }

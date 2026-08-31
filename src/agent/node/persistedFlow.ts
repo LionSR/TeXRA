@@ -140,11 +140,6 @@ export async function readPersistedFlowRecord(
   return parsed.data;
 }
 
-function stampFlowRecordSchemaVersion<T extends FlowRecord>(flow: T): T {
-  flow.schemaVersion = FLOW_RECORD_SCHEMA_VERSION;
-  return flow;
-}
-
 /**
  * Stamps the active handler's compatibility key onto a keyless legacy shared
  * record so {@link PersistedFlow.ensureRecord} never sees a stale legacy
@@ -510,10 +505,8 @@ export class PersistedFlow<
   private async persistRecord(flow: FlowRecord, shared: S): Promise<void> {
     this.cachedRecord = null;
     flow.shared = this.serializeShared(shared);
-    await this.kv.write(
-      flowKey(this.runId),
-      stampFlowRecordSchemaVersion(flow),
-    );
+    flow.schemaVersion = FLOW_RECORD_SCHEMA_VERSION;
+    await this.kv.write(flowKey(this.runId), flow);
     this.cachedRecord = flow;
     this.cachedSharedTrusted = true;
     await this.fireProjection(shared);

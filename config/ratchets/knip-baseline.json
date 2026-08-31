@@ -1241,12 +1241,6 @@
       "file": "src/agent/workflowScript/persistence.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "WorkflowScriptPersistenceError"
-    },
-    {
-      "file": "src/agent/workflowScript/persistence.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "writeWorkflowScriptCheckpoint"
     },
     {

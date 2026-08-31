@@ -71,13 +71,6 @@ export interface WorkflowScriptCheckpoint {
   readonly journal: WorkflowJournalEntry[];
 }
 
-export class WorkflowScriptPersistenceError extends Error {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'WorkflowScriptPersistenceError';
-  }
-}
-
 export interface PersistedWorkflowScriptRunOptions extends Omit<
   WorkflowScriptRunOptions,
   'script' | 'journal' | 'onJournalEntry'
@@ -141,10 +134,9 @@ export async function readWorkflowScriptCheckpoint(
 
   const parsed = WorkflowScriptCheckpointSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new WorkflowScriptPersistenceError(
-      `Workflow checkpoint ${checkpointId} is malformed.`,
-      { cause: parsed.error },
-    );
+    throw new Error(`Workflow checkpoint ${checkpointId} is malformed.`, {
+      cause: parsed.error,
+    });
   }
   const checkpoint = parsed.data;
   return {
@@ -171,7 +163,7 @@ export async function writeWorkflowScriptCheckpoint(
       journal: orderedJournal(checkpoint.journal).map(encodeJournalEntry),
     });
   } catch (error) {
-    throw new WorkflowScriptPersistenceError(
+    throw new Error(
       `Workflow checkpoint ${checkpointId} cannot be persisted.`,
       { cause: error },
     );
@@ -215,7 +207,7 @@ async function runPersistedWorkflowScriptLocked(
   // an args-driven branch taken again later still replays.
   const script = requestedScript ?? prior?.script;
   if (script === undefined) {
-    throw new WorkflowScriptPersistenceError(
+    throw new Error(
       `Workflow checkpoint ${checkpointId} does not exist; a script is required for the first run.`,
     );
   }
@@ -225,7 +217,7 @@ async function runPersistedWorkflowScriptLocked(
   try {
     encodedRequestedArgs = encodeJsonValue(requestedArgs);
   } catch (error) {
-    throw new WorkflowScriptPersistenceError(
+    throw new Error(
       `Workflow checkpoint ${checkpointId} arguments cannot be persisted.`,
       { cause: error },
     );

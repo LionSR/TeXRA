@@ -11,10 +11,7 @@ import {
   type ExecutionKVStore,
 } from '@agent/storage';
 import { workflowScriptCheckpointKvKey } from '@agent/workflowScript/checkpointKey';
-import {
-  WorkflowScriptPersistenceError,
-  writeWorkflowScriptCheckpoint,
-} from '@agent/workflowScript/persistence';
+import { writeWorkflowScriptCheckpoint } from '@agent/workflowScript/persistence';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import {
   WorkflowExecutionSnapshotSchema,
@@ -851,7 +848,7 @@ return 'guest success'`,
     await store.write(workflowScriptCheckpointKvKey('corrupt'), null);
     await expect(
       readWorkflowScriptCheckpoint(store, 'corrupt'),
-    ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
+    ).rejects.toThrow('Workflow checkpoint corrupt is malformed.');
     await expect(
       writeWorkflowScriptCheckpoint(store, 'invalid-write', {
         script,
@@ -865,7 +862,7 @@ return 'guest success'`,
           },
         ],
       }),
-    ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
+    ).rejects.toThrow('Workflow checkpoint invalid-write cannot be persisted.');
   });
 
   it('accepts script drift: unchanged calls replay, changed calls re-run', async () => {
@@ -1118,7 +1115,9 @@ return [first, args.topic]`;
         args: { invalid: () => undefined },
         runAgent: runner,
       }),
-    ).rejects.toBeInstanceOf(WorkflowScriptPersistenceError);
+    ).rejects.toThrow(
+      'Workflow checkpoint invalid-args arguments cannot be persisted.',
+    );
     expect(runner).not.toHaveBeenCalled();
     await expect(
       readWorkflowScriptCheckpoint(store, 'invalid-args'),

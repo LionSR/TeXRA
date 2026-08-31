@@ -8,13 +8,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { WorkflowScriptMetaSchema, type WorkflowScriptMeta } from './types';
 
-export class WorkflowScriptParseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'WorkflowScriptParseError';
-  }
-}
-
 export interface ParsedWorkflowScript {
   meta: WorkflowScriptMeta;
   /** Script source with the meta `export` keyword stripped, sandbox-ready. */
@@ -36,9 +29,7 @@ function parseProgram(source: string): Program {
       allowReturnOutsideFunction: true,
     });
   } catch (error) {
-    throw new WorkflowScriptParseError(
-      `Invalid workflow script syntax: ${toErrorMessage(error)}`,
-    );
+    throw new Error(`Invalid workflow script syntax: ${toErrorMessage(error)}`);
   }
 }
 
@@ -113,14 +104,14 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
   const program = parseProgram(source);
 
   if (rejectsModuleLoading(program)) {
-    throw new WorkflowScriptParseError(
+    throw new Error(
       'Workflow scripts cannot import modules; use only the injected primitives (agent, parallel, log, phase, args, files).',
     );
   }
 
   const metaDeclaration = exportedMetaDeclaration(program);
   if (!metaDeclaration) {
-    throw new WorkflowScriptParseError(
+    throw new Error(
       'Workflow script must begin with `export const meta = { name, description, ... }` (only whitespace/comments may precede it).',
     );
   }
@@ -143,15 +134,13 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
       { timeout: 250 },
     );
   } catch (error) {
-    throw new WorkflowScriptParseError(
+    throw new Error(
       `meta must be a pure object literal: ${toErrorMessage(error)}`,
     );
   }
   const parsed = WorkflowScriptMetaSchema.safeParse(rawMeta);
   if (!parsed.success) {
-    throw new WorkflowScriptParseError(
-      `Invalid workflow meta: ${z.prettifyError(parsed.error)}`,
-    );
+    throw new Error(`Invalid workflow meta: ${z.prettifyError(parsed.error)}`);
   }
 
   const body =
