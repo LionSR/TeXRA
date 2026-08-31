@@ -11,12 +11,10 @@ function parseEnumSetting<T extends string>(
   values: readonly T[],
   fallback: T,
 ): (raw: unknown) => T {
-  const known = values as readonly string[];
-  return (raw: unknown): T => {
-    if (typeof raw !== 'string') return fallback;
-    if (known.includes(raw)) return raw as T;
-    return fallback;
-  };
+  return (raw: unknown): T =>
+    typeof raw === 'string' && (values as readonly string[]).includes(raw)
+      ? (raw as T)
+      : fallback;
 }
 
 /** Valid Codex sandbox modes. */

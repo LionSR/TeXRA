@@ -1,5 +1,4 @@
 import { createLog } from '@logger/logUtils';
-import type { FileLocation } from '@shared/schemas';
 import { filterNotNull, filterNotNullish, ensureArray } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
@@ -19,11 +18,9 @@ const CHINESE_PACKAGES = [
   'ctexbook',
 ];
 
-async function hasChinesePackages(
-  fileLocation: FileLocation,
-): Promise<boolean> {
+async function hasChinesePackages(absolutePath: string): Promise<boolean> {
   try {
-    const content = await AbsoluteFS.read(fileLocation.absolutePath);
+    const content = await AbsoluteFS.read(absolutePath);
     return CHINESE_PACKAGES.some(
       (pkg) =>
         content.includes(`\\usepackage{${pkg}}`) ||
@@ -49,10 +46,9 @@ interface TexcountResult {
 
 /** Returns why the file cannot be counted, or null when it is countable. */
 async function rejectionReason(
-  fileLocation: FileLocation,
+  filePath: string,
   channel: string,
 ): Promise<string | null> {
-  const filePath = fileLocation.absolutePath;
   const log = createLog(channel);
   if (!(await AbsoluteFS.exists(filePath))) {
     const reason = `File ${filePath} does not exist.`;
@@ -119,8 +115,8 @@ async function getIndividualCounts(
 ): Promise<{ outputs: string[]; errors: string[] }> {
   const results = await Promise.all(
     paths.map(async (filePath) => {
-      const fileLocation = pathToLocation(filePath);
-      const reason = await rejectionReason(fileLocation, channel);
+      const absolutePath = pathToLocation(filePath).absolutePath;
+      const reason = await rejectionReason(absolutePath, channel);
       if (reason) {
         return { output: null, error: reason };
       }
@@ -129,7 +125,7 @@ async function getIndividualCounts(
       if (includeReferenced) {
         args.push('-inc');
       }
-      if (await hasChinesePackages(fileLocation)) {
+      if (await hasChinesePackages(absolutePath)) {
         args.push('-ch-only');
       }
       args.push(filePath);
@@ -140,9 +136,10 @@ async function getIndividualCounts(
         filePath,
         signal,
       );
-      return stdout
-        ? { output: `TeX Count Results for ${filePath}:\n${stdout}`, error }
-        : { output: null, error };
+      return {
+        output: stdout ? `TeX Count Results for ${filePath}:\n${stdout}` : null,
+        error,
+      };
     }),
   );
 
@@ -163,8 +160,8 @@ async function getSummedCount(
   let enableChineseMode = false;
 
   for (const filePath of paths) {
-    const fileLocation = pathToLocation(filePath);
-    const reason = await rejectionReason(fileLocation, channel);
+    const absolutePath = pathToLocation(filePath).absolutePath;
+    const reason = await rejectionReason(absolutePath, channel);
     if (reason) {
       errors.push(reason);
       continue;
@@ -172,7 +169,7 @@ async function getSummedCount(
 
     validPaths.push(filePath);
 
-    if (!enableChineseMode && (await hasChinesePackages(fileLocation))) {
+    if (!enableChineseMode && (await hasChinesePackages(absolutePath))) {
       enableChineseMode = true;
       log.debug(
         `Chinese packages detected in ${filePath}, enabling Chinese character counting`,

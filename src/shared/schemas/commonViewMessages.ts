@@ -41,11 +41,9 @@ export const WebviewReadyMessageSchema = z.object({
   view: z.enum(['main', 'progress', 'settings']).nullish(),
 });
 
-const SwitchViewTargetSchema = z.enum(['main', 'progress', 'dashboard']);
-
 export const SwitchViewMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.SWITCH_VIEW),
-  view: SwitchViewTargetSchema,
+  view: z.enum(['main', 'progress', 'dashboard']),
   openInEditor: z.boolean().nullish(),
 });
 

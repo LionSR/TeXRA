@@ -369,20 +369,18 @@ export class SessionState {
     const current = this._ephemeralState.get(stream)?.execution;
     if (!current) return;
 
-    const retainedSubagents = current.subagents.filter(
-      (child) => child.finishedAt !== undefined,
+    const liveSubagents = current.subagents.filter(
+      (child) => child.finishedAt === undefined,
     );
     const needsReset =
-      retainedSubagents.length > 0 ||
+      liveSubagents.length !== current.subagents.length ||
       current.conversationProgress.toolCallCount !== 0 ||
       current.stage !== undefined;
 
     if (needsReset) {
       this.getOrCreateEphemeral(stream).execution = {
         ...current,
-        subagents: current.subagents.filter(
-          (child) => child.finishedAt === undefined,
-        ),
+        subagents: liveSubagents,
         conversationProgress: { toolCallCount: 0 },
         stage: undefined,
       };

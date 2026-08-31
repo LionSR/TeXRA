@@ -126,7 +126,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this.storage = init.storage;
     this.policy = init.policy;
     this.client = init.client;
-    this.now = init.now ?? (() => Date.now());
+    this.now = init.now ?? Date.now;
     this.errorType = init.errorType;
   }
 

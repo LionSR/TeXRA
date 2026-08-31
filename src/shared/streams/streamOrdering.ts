@@ -39,7 +39,8 @@ export function compareBySeqNo<T>(
   return fallbackTimeOf(a) - fallbackTimeOf(b);
 }
 
-function usableSequence(seqNo: number | undefined): number | undefined {
+/** A `seqNo` only orders rows when it is a positive safe integer. */
+export function usableSequence(seqNo: number | undefined): number | undefined {
   return seqNo !== undefined && Number.isSafeInteger(seqNo) && seqNo > 0
     ? seqNo
     : undefined;

@@ -58,7 +58,6 @@ function buildTree(collections: BbtCollection[]): CollectionNode[] {
   const nodeMap = new Map<string, CollectionNode>();
   const roots: CollectionNode[] = [];
 
-  // Create all nodes
   for (const c of collections) {
     nodeMap.set(c.key, { key: c.key, name: c.name, children: [] });
   }
@@ -174,7 +173,6 @@ export class ZoteroCollectionsTool extends defineTool({
       );
     }
 
-    // Filter by library name if specified
     const normalizedLibrary = library?.toLowerCase();
     const targetLibraries = normalizedLibrary
       ? libraries.filter((lib) => lib.name.toLowerCase() === normalizedLibrary)

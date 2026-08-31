@@ -185,7 +185,6 @@ export class ZoteroSearchTool extends defineTool({
         )
       : null;
 
-    // Format results
     const items = result.map((item) => {
       const base = formatSearchResult(item);
       if (!collectionMap) return base;

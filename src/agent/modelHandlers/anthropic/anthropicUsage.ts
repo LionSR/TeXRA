@@ -18,7 +18,7 @@ const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
 const CACHE_CREATION_COST_MULTIPLIER_1H = 2.0;
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-export interface AnthropicPricingConfig {
+interface AnthropicPricingConfig {
   inputPrice: number;
   outputPrice: number;
   supportsPromptCaching: boolean;

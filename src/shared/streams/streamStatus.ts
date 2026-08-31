@@ -1,19 +1,4 @@
-/**
- * Whether a workflow-script run has ended, as the shared workflow run model
- * reads it (`runSettled`): a known status that is neither running nor
- * waiting. An unknown status is not "ended" — a plan-only phase must not
- * vanish before the stream's first status has arrived. Both hosts call this,
- * so neither can drift.
- */
-export function workflowRunSettled(
-  phase: StreamLifecycleStatus | undefined,
-): boolean {
-  return phase !== undefined && !isInFlightPhase(phase);
-}
-/**
- * Stream status constants shared across agent runtime and UI layers.
- */
-// Local imports - shared schemas
+/** Stream status constants shared across agent runtime and UI layers. */
 import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
@@ -116,6 +101,19 @@ export function isInFlightPhase(
   phase: StreamLifecycleStatus | undefined,
 ): boolean {
   return phase === STREAM_PHASE.RUNNING || phase === STREAM_PHASE.WAITING;
+}
+
+/**
+ * Whether a workflow-script run has ended, as the shared workflow run model
+ * reads it (`runSettled`): a known status that is neither running nor
+ * waiting. An unknown status is not "ended" — a plan-only phase must not
+ * vanish before the stream's first status has arrived. Both hosts call this,
+ * so neither can drift.
+ */
+export function workflowRunSettled(
+  phase: StreamLifecycleStatus | undefined,
+): boolean {
+  return phase !== undefined && !isInFlightPhase(phase);
 }
 
 export function canAcquireStreamReservation(

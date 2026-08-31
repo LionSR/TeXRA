@@ -303,14 +303,13 @@ export async function initializeChatMessages<T extends MessageLike>(
 
   // Add final user request: into the user message just pushed, or as its own
   // 'system'-role message when the model requires intermediate dev messages.
-  const requestRole = capabilities.supportsIntermDevMsgs ? 'system' : 'user';
-  if (requestRole === 'user') {
-    userMessageContent.push({ type: 'text', text: userRequest });
-  } else {
+  if (capabilities.supportsIntermDevMsgs) {
     messages.push({
-      role: requestRole,
+      role: 'system',
       content: [{ type: 'text', text: userRequest }],
     } as T);
+  } else {
+    userMessageContent.push({ type: 'text', text: userRequest });
   }
 
   return messages;

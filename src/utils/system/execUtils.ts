@@ -338,7 +338,7 @@ export async function executeCommand(
     if (Array.isArray(command)) {
       const [cmd, ...args] = command;
       if (!options.quiet) {
-        log.debug(`Running command: ${shellQuote([cmd, ...args])}`);
+        log.debug(`Running command: ${shellQuote(command)}`);
       }
       subprocess = execa(cmd, args, {
         ...execaOptions,
@@ -491,7 +491,7 @@ export function executeCommandSync(
     };
     const log = createLog(options.channel ?? CHANNEL);
     if (!options.quiet) {
-      log.debug(`Running command: ${shellQuote([cmd, ...args])}`);
+      log.debug(`Running command: ${shellQuote(command)}`);
     }
     const result = execaSync(cmd, args, execaOptions);
     const stdout = (result.stdout as string) ?? '';

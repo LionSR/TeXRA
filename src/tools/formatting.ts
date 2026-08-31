@@ -3,8 +3,6 @@ import { z } from 'zod';
 import type { ToolFileAttachment } from '@shared/schemas';
 import { clamp } from '@utils/core';
 
-// Local imports
-
 /** Canonical 1-based inclusive line range for tool view_range fields. */
 export const ViewRangeSchema = z
   .tuple([z.int().min(1), z.int().min(1)])

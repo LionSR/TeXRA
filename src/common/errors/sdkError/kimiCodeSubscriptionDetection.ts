@@ -1,10 +1,6 @@
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
-import {
-  firstBodyNumberField,
-  firstBodyStringField,
-  pickStringField,
-} from './errorInspection';
+import { matchUsageLimitMessage } from './errorInspection';
 import { detectSdkRequestBaseURL } from './sdkRequestEndpoint';
 
 /**
@@ -52,13 +48,5 @@ export function parseKimiCodeSubscriptionLimit(
   rawErrorBody: unknown,
 ): KimiCodeSubscriptionLimit | null {
   if (!isKimiCodeEndpointError(err)) return null;
-
-  const message =
-    firstBodyStringField(rawErrorBody, 'message') ??
-    pickStringField(err, 'message');
-  if (!message || !USAGE_LIMIT_PATTERN.test(message)) return null;
-
-  return {
-    resetsInSeconds: firstBodyNumberField(rawErrorBody, 'resets_in_seconds'),
-  };
+  return matchUsageLimitMessage(err, rawErrorBody, USAGE_LIMIT_PATTERN);
 }

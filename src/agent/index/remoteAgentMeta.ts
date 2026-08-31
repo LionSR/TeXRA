@@ -48,16 +48,17 @@ export async function loadRemoteAgents(): Promise<AgentEntry[]> {
     const metaCache = getPersistedRemoteAgentMeta();
 
     return remotes.map((remote) => {
-      const isToolUse = remote.agentCategory === AgentCategory.ToolUse;
       const cached = metaCache[remote.name];
-      const dbTools = remote.tools?.length ? remote.tools : undefined;
       return {
         name: remote.name,
         source: 'remote' as const,
         path: '',
-        category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
+        category:
+          remote.agentCategory === AgentCategory.ToolUse
+            ? AgentCategory.ToolUse
+            : AgentCategory.Workflow,
         description: remote.description ?? undefined,
-        tools: dbTools ?? cached?.tools,
+        tools: remote.tools?.length ? remote.tools : cached?.tools,
         defaultOutputFiles: cached?.defaultOutputFiles,
       };
     });

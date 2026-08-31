@@ -1,12 +1,12 @@
 // Local imports
 import type { RegexReplacementCategory as RegexReplacementCategoryName } from '@shared/constants/replacementCategories';
 
-import { RegexReplacementCategory, ReplacementFunction } from './types';
 import {
   FENCED_LATEX_BLOCK_PATTERN_INLINE,
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
 import { createPatterns } from './helpers';
+import type { RegexReplacementCategory, ReplacementFunction } from './types';
 
 const EQUATION_ENVIRONMENT_PATTERN =
   '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';

@@ -65,13 +65,6 @@ interface CompileFixerInput {
   executionId?: string;
 }
 
-/** The compile-fixer planner is workflow-only; tool-use runs have no plan. */
-function asWorkflowConfig(
-  config: AgentConfig | undefined,
-): AgentConfig | undefined {
-  return config?.agentCategory === AgentCategory.Workflow ? config : undefined;
-}
-
 export class ProgressFollowUpController {
   constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
 
@@ -99,7 +92,11 @@ export class ProgressFollowUpController {
   async planCompileFixer(
     input: CompileFixerInput,
   ): Promise<ProgressFollowUpPlan> {
-    const workflowConfig = asWorkflowConfig(input.runConfig);
+    // The compile-fixer planner is workflow-only; tool-use runs have no plan.
+    const workflowConfig =
+      input.runConfig?.agentCategory === AgentCategory.Workflow
+        ? input.runConfig
+        : undefined;
     if (!workflowConfig) {
       return {
         kind: 'warning',
@@ -154,15 +151,6 @@ export class ProgressFollowUpController {
     };
   }
 
-  private hasEnabledModel(
-    modelOptions: readonly ProgressFollowUpModelOption[],
-    model: string,
-  ): boolean {
-    return modelOptions.some(
-      (option) => option.value === model && !option.disabled,
-    );
-  }
-
   private selectWorkflowModel(
     workflowConfig: AgentConfig,
     modelOptions: readonly ProgressFollowUpModelOption[],
@@ -179,7 +167,10 @@ export class ProgressFollowUpController {
           reason: 'access-list-default',
         },
       ],
-      (model) => this.hasEnabledModel(modelOptions, model),
+      (model) =>
+        modelOptions.some(
+          (option) => option.value === model && !option.disabled,
+        ),
     );
     if (!decision || decision.unavailable) return null;
     return decision.model;

@@ -347,9 +347,10 @@ export function replaceMathUnicode(text: string): string {
   }
 
   // Handle inline math with $ ... $
-  return text.replaceAll(/\$(.*?)\$/g, (_, p1: string) => {
-    return `$${convertMathContent(p1)}$`;
-  });
+  return text.replaceAll(
+    /\$(.*?)\$/g,
+    (_, p1: string) => `$${convertMathContent(p1)}$`,
+  );
 }
 
 /**

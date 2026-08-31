@@ -44,8 +44,7 @@ import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 // Shared utilities
 // ============================================================================
 
-const LOG_CHANNEL = 'childRunLoop';
-const log = createLog(LOG_CHANNEL);
+const log = createLog('childRunLoop');
 
 /**
  * One compact trace line per child progress update, for the in-band arm where

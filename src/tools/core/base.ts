@@ -85,8 +85,8 @@ export abstract class BaseTool<T> implements ITool {
       return {
         status: 'error',
         error: message || 'Tool execution failed.',
-        ...(summary !== undefined ? { summary } : {}),
-        ...(diagnostics !== undefined ? { diagnostics } : {}),
+        ...(summary !== undefined && { summary }),
+        ...(diagnostics !== undefined && { diagnostics }),
       };
     }
   }

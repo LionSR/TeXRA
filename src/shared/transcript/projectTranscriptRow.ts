@@ -44,6 +44,7 @@ import type {
   ErrorRow,
   ErrorRowDetail,
   LoadedMediaRef,
+  LogRow,
   StatItem,
   StreamingTextRow,
   TranscriptRow,
@@ -95,6 +96,13 @@ function rowBase(entry: StreamLogEntry): TranscriptRowBase {
 
 function entryText(entry: StreamLogEntry): TranscriptText {
   return transcriptText(entry.text ?? '');
+}
+
+/** A plain log row, or no row when the entry has no visible text. */
+function projectLogRow(entry: StreamLogEntry): LogRow | undefined {
+  const text = entryText(entry);
+  if (!text.oneLine.trim()) return undefined;
+  return { ...rowBase(entry), kind: 'log', text };
 }
 
 function isStreamingPayload(data: unknown): boolean {
@@ -335,17 +343,11 @@ export function projectTranscriptRow(
 
   if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
     if (ctx.projectLifecycleToTaskGroups) return undefined;
-    const text = entryText(entry);
-    if (!text.oneLine.trim()) return undefined;
-    return { ...rowBase(entry), kind: 'log', text };
+    return projectLogRow(entry);
   }
 
   const messageType = entry.messageType;
-  if (messageType === undefined) {
-    const text = entryText(entry);
-    if (!text.oneLine.trim()) return undefined;
-    return { ...rowBase(entry), kind: 'log', text };
-  }
+  if (messageType === undefined) return projectLogRow(entry);
 
   switch (messageType) {
     case MESSAGE_TYPES.MODEL_RESPONSE:
@@ -559,11 +561,8 @@ export function projectTranscriptRow(
       };
     }
 
-    case MESSAGE_TYPES.DEFAULT: {
-      const text = entryText(entry);
-      if (!text.oneLine.trim()) return undefined;
-      return { ...rowBase(entry), kind: 'log', text };
-    }
+    case MESSAGE_TYPES.DEFAULT:
+      return projectLogRow(entry);
 
     // ── No row ──────────────────────────────────────────────────────────
     // A compaction lifecycle row is not a row of its own: the correlated

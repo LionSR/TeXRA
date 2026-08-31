@@ -177,13 +177,10 @@ export class StreamStatusMachine {
     const fromReservation = entry?.kind === 'reserved';
     const previousState = fromReservation ? entry.rollbackTo : entry?.state;
     const from = previousState?.phase;
-    let tableFrom: StreamPhase | undefined;
-    if (!fromReservation) {
-      tableFrom = from;
-    } else if (to === STREAM_PHASE.RUNNING) {
-      tableFrom = undefined;
-    } else {
-      tableFrom = STREAM_PHASE.RUNNING;
+    let tableFrom = from;
+    if (fromReservation) {
+      tableFrom =
+        to === STREAM_PHASE.RUNNING ? undefined : STREAM_PHASE.RUNNING;
     }
     if (!canTransitionStreamPhase(tableFrom, to, cause)) return false;
 

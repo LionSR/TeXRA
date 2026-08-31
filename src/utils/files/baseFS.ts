@@ -10,10 +10,10 @@ import {
 } from '@common/errors';
 
 // Platform imports
-import { FileType, type FileStat } from '@platform/interfaces';
+import { type FileStat } from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { isFile } from './fsEntryType';
+import { isFile, isSymlink } from './fsEntryType';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -225,10 +225,7 @@ export abstract class BaseFS {
     target: string,
   ): Promise<boolean> {
     const stats = await this.statIfExists(target);
-    return (
-      stats !== undefined &&
-      (stats.type & FileType.SymbolicLink) === FileType.SymbolicLink
-    );
+    return stats !== undefined && isSymlink(stats.type);
   }
 
   // ===== Sync Methods =====

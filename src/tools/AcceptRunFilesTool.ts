@@ -31,7 +31,7 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { filterNotNull } from '@utils/core';
+import { filterNotNull, filterNotNullish } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
@@ -288,7 +288,7 @@ Parameters map directly to subagent-result delivery attributes:
         firstUserRejectionPath,
         firstPolicyDenialPath,
         firstCancellationPath,
-      ].filter((path) => path !== undefined);
+      ].filter(filterNotNullish);
       const summaryPath =
         presentFirstPaths.length > 1
           ? 'multiple files'

@@ -107,8 +107,7 @@ export async function buildFileAttachment({
   const { path, display } = resolved
     ? { path: resolved, display: toPosixPath(resolved.relative) }
     : resolveAndFormat(filePath);
-  const exists = await WorkspaceFS.exists(path.fsPath);
-  if (!exists) {
+  if (!(await WorkspaceFS.exists(path.fsPath))) {
     throw new ToolError(`Attachment not found: ${display}`);
   }
 

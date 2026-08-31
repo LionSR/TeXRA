@@ -104,8 +104,7 @@ export function createChildStream(
     options.reservedWriter,
   );
   let traceDisposed = false;
-  let removeSpillFlusher = (): void => {};
-  removeSpillFlusher = session.useArtifactFlusher(async () => {
+  const removeSpillFlusher = session.useArtifactFlusher(async () => {
     await runTrace.flushSpills();
     if (traceDisposed) removeSpillFlusher();
   });

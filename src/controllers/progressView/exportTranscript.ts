@@ -18,8 +18,7 @@ import {
   type LatexExportResult,
 } from './ChatExportController';
 
-const TRANSCRIPT_EXPORT_FORMATS = ['html', 'md', 'tex'] as const;
-export type TranscriptExportFormat = (typeof TRANSCRIPT_EXPORT_FORMATS)[number];
+export type TranscriptExportFormat = 'html' | 'md' | 'tex';
 
 export type TranscriptExportOpenKind = 'text' | 'pdf' | 'external';
 
