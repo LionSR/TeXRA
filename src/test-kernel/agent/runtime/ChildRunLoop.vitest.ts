@@ -527,7 +527,7 @@ describe('childRunLoop E2E fixtures', () => {
     });
     const { childStreamId } = childStream;
     trackedExecutionIds.add(executionId);
-    const loop = startLoop({ childStreamId, executionId }, strategy, {
+    const completion = startLoop({ childStreamId, executionId }, strategy, {
       childStream,
     });
     const tryResumeStream = vi.fn(async () => false);
@@ -602,7 +602,7 @@ describe('childRunLoop E2E fixtures', () => {
       session.executions.detachActiveChildren(PARENT_STREAM_ID);
       notifyProgress({ kind: 'started' });
       formattedDelivery.resolve('delivered:done');
-      await loop.completion;
+      await completion;
 
       expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
     } finally {
@@ -610,7 +610,7 @@ describe('childRunLoop E2E fixtures', () => {
       session.executions.detachActiveChildren(PARENT_STREAM_ID);
       turn.resolve({ kind: 'terminal', value: 'done' });
       formattedDelivery.resolve('delivered:done');
-      await loop.completion;
+      await completion;
     }
   });
 
