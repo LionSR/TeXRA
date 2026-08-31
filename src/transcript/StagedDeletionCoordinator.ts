@@ -20,7 +20,7 @@
  *   `flush()`.
  *
  * It reaches the snapshot store only through {@link StagedDeletionHost} — the
- * store keeps ownership of records, write mutexes, and stream versions, and
+ * store keeps ownership of records, write mutexes, and stream generations, and
  * this coordinator never inspects them.
  */
 

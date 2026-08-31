@@ -484,7 +484,7 @@ export class StreamSnapshotStore {
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
    * behind that rename; this store keeps the records, write mutexes, and
-   * stream versions it reaches back for through {@link StagedDeletionHost}.
+   * stream generations it reaches back for through {@link StagedDeletionHost}.
    */
   private readonly deletions = new StagedDeletionCoordinator({
     queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
