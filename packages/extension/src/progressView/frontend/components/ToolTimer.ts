@@ -1,7 +1,14 @@
 /** Live elapsed-time timer for in-progress tool calls. */
 
 // Third-party imports
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports
@@ -48,8 +55,15 @@ export class ToolTimer extends LitElement {
     }
   }
 
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('startTime')) this._update();
+  }
+
   private _update(): void {
-    if (!this.startTime) return;
+    if (this.startTime <= 0) {
+      this._elapsed = '';
+      return;
+    }
     // Lit's default `hasChanged` is `!==`, so an unchanged string schedules
     // no update on its own.
     this._elapsed = formatDuration(Date.now() - this.startTime);
@@ -60,9 +74,16 @@ export class ToolTimer extends LitElement {
     if (this.timeoutMs > 0) {
       const limit = formatDuration(this.timeoutMs);
       // prettier-ignore
-      return html`<span class="timer">${this._elapsed}<span class="timer-limit"> / ${limit}</span></span>`;
+      return html`<span class="timer" role="timer" aria-live="off" aria-label=${`Elapsed time: ${this._elapsed} of ${limit}`} dir="ltr">${this._elapsed}<span class="timer-limit"> / ${limit}</span></span>`;
     }
-    return html`<span class="timer">${this._elapsed}</span>`;
+    return html`<span
+      class="timer"
+      role="timer"
+      aria-live="off"
+      aria-label=${`Elapsed time: ${this._elapsed}`}
+      dir="ltr"
+      >${this._elapsed}</span
+    >`;
   }
 }
 

@@ -18,7 +18,6 @@ import '@progressView/frontend/components/UserMessage';
 
 // Third-party imports - Lit template utilities
 import { html, type TemplateResult } from 'lit';
-import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
@@ -92,9 +91,17 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const hasDetails = row.details.length > 0;
   const rawContent = detailText || summaryText;
 
-  // Build modular template parts to avoid overly long single-line templates
+  // Do not expose a disclosure control when the row has nothing to reveal.
+  // The level icon supplies a non-color error cue for the static row.
+  if (!hasDetails) {
+    const levelIcon = buildLevelIcon('error');
+    // prettier-ignore
+    return html`<div class="log-line" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class="message-error">${summaryText}</span></div>`;
+  }
+
+  // Build modular template parts to avoid overly long single-line templates.
   // prettier-ignore
-  const detailTemplate = when(hasDetails, () => html`<pre class="error-details">${detailText}</pre>`);
+  const detailTemplate = html`<pre class="error-details">${detailText}</pre>`;
   // prettier-ignore
   const contentTemplate = html`<div class="banner-content log-entry-content banner-content--error">${detailTemplate}</div>`;
   // prettier-ignore
@@ -103,20 +110,12 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
   // built here because its title carries the formatted timestamp.
   // prettier-ignore
   const copyButton = buildCopyButton('Copy error details', {
-    hidden: !hasDetails,
     content: rawContent,
   });
-  // Toggle chevron now comes from <wa-details>'s built-in disclosure icon
-  // (::part(icon)); banner-details--no-toggle hides that part when there's
-  // nothing to expand, replacing the old inline visibility:hidden style.
   // prettier-ignore
   const summaryTemplate = html`<div slot="summary" class="details-summary">${waIcon('circle-exclamation', { className: 'icon' })}${labelSpan}${copyButton}</div>`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap({
-    'banner-details': true,
-    'banner-details--error': true,
-    'banner-details--no-toggle': !hasDetails,
-  })} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="start" class="banner-details banner-details--error" data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}>${summaryTemplate}${contentTemplate}</wa-details>`;
 }
 
 /**
