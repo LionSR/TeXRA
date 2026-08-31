@@ -31,7 +31,7 @@ type PendingFileRequest =
 
 interface PendingFileRequestEntry {
   readonly request: PendingFileRequest;
-  readonly timeout: ReturnType<typeof setTimeout>;
+  readonly timeout?: ReturnType<typeof setTimeout>;
 }
 
 const pendingFileRequests = new Map<string, PendingFileRequestEntry>();
@@ -41,11 +41,16 @@ function registerFileRequest(
   request: PendingFileRequest,
   send: () => void,
 ): void {
-  const timeout = setTimeout(() => {
-    takePendingFileRequest(requestId)?.reject(
-      new Error('The desktop file request timed out.'),
-    );
-  }, FILE_REQUEST_TIMEOUT_MS);
+  // The main process cannot cancel an in-flight write. Keep waiting for its
+  // response so a retry cannot race and later be overwritten by that write.
+  const timeout =
+    request.kind === 'write'
+      ? undefined
+      : setTimeout(() => {
+          takePendingFileRequest(requestId)?.reject(
+            new Error('The desktop file request timed out.'),
+          );
+        }, FILE_REQUEST_TIMEOUT_MS);
   pendingFileRequests.set(requestId, { request, timeout });
   try {
     send();
