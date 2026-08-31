@@ -8,7 +8,7 @@ import {
   useChinaRegion,
 } from '@utils/config/providerConfig';
 
-export type GlmRoute =
+type GlmRoute =
   | { readonly route: 'model-custom'; readonly baseUrl: string }
   | { readonly route: 'openrouter'; readonly baseUrl: string }
   | { readonly route: 'provider-custom'; readonly baseUrl: string }
