@@ -1,5 +1,6 @@
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ModelProvider } from 'llm-zoo';
 import OpenAI from 'openai';
 import { FormData as UndiciFormData, type Dispatcher } from 'undici';
 
@@ -18,7 +19,10 @@ vi.mock('undici', async (importOriginal) => {
 });
 
 // Local imports
+import { ModelHandlerGoogleInteractions } from '@agent/modelHandlers/google/modelHandlerGoogleInteractions';
+import type { ResolvedClientCredential } from '@agent/types/ModelHandlerContracts';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
+import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 interface ComposedDispatcherStub {
   readonly baseDispatch: Dispatcher['dispatch'];
@@ -58,6 +62,8 @@ function stubOkResponse(): void {
 describe('long-running model transport', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('applies long timeouts through the host dispatcher for a native Request', async () => {
@@ -94,6 +100,155 @@ describe('long-running model transport', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('enforces header and body-inactivity deadlines at the pinned Google SDK fetch boundary', async () => {
+    vi.useFakeTimers();
+    class GoogleTransportProbe extends ModelHandlerGoogleInteractions {
+      protected override async resolveClientCredential(): Promise<ResolvedClientCredential> {
+        return {
+          apiKey: 'test-key',
+          baseUrl: null,
+          route: 'api-key',
+        };
+      }
+    }
+    const handler = new GoogleTransportProbe(
+      buildTestModelConfig({
+        name: 'google-transport-probe',
+        label: 'Google transport probe',
+        fullName: 'gemini-test',
+        shortName: 'gemini-test',
+        provider: ModelProvider.GOOGLE,
+        contextWindow: 4096,
+      }),
+    );
+    const client = await handler.getClient();
+    const requests: Request[] = [];
+    let resolveLongHeaders: ((response: Response) => void) | undefined;
+    let longBody: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const request = input as Request;
+      requests.push(request);
+      if (requests.length === 1) {
+        return new Promise<Response>((_resolve, reject) => {
+          request.signal.addEventListener(
+            'abort',
+            () => reject(request.signal.reason),
+            { once: true },
+          );
+        });
+      }
+      if (requests.length === 2) {
+        return new Promise<Response>((resolve) => {
+          resolveLongHeaders = resolve;
+        });
+      }
+      if (requests.length === 3) {
+        return Promise.resolve(
+          new Response(new ReadableStream<Uint8Array>(), {
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        request.signal.addEventListener(
+          'abort',
+          () => reject(request.signal.reason),
+          { once: true },
+        );
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const params = {
+      model: 'gemini-test',
+      input: [
+        {
+          type: 'user_input' as const,
+          content: [{ type: 'text' as const, text: 'hello' }],
+        },
+      ],
+      stream: false as const,
+    };
+    const options = { maxRetries: 0 };
+
+    const missingHeaders = client.interactions.create(params, options);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const headerRejection = expect(missingHeaders).rejects.toThrow();
+    expect(requests[0]).toBeInstanceOf(Request);
+    expect(fetchMock.mock.calls[0]).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(requests[0].signal.reason).toMatchObject({ name: 'TimeoutError' });
+    await headerRejection;
+
+    const longUnary = client.interactions.create(params, options);
+    let longUnarySettled = false;
+    void longUnary.then(
+      () => {
+        longUnarySettled = true;
+      },
+      () => {
+        longUnarySettled = true;
+      },
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(9 * 60 * 1000);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        longBody = controller;
+      },
+    });
+    resolveLongHeaders?.(
+      new Response(body, {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    await Promise.resolve();
+
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    longBody?.enqueue(new TextEncoder().encode('{"id":'));
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    longBody?.enqueue(new TextEncoder().encode('"int_long",'));
+    expect(longUnarySettled).toBe(false);
+    expect(requests[1].signal.aborted).toBe(false);
+
+    longBody?.enqueue(
+      new TextEncoder().encode('"status":"completed","outputs":[]}'),
+    );
+    longBody?.close();
+    await expect(longUnary).resolves.toMatchObject({
+      id: 'int_long',
+      status: 'completed',
+    });
+
+    const inactiveBody = client.interactions.create(params, options);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    const inactivityRejection = expect(inactiveBody).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+    expect(requests[2].signal.reason).toMatchObject({ name: 'TimeoutError' });
+    await inactivityRejection;
+
+    const callerAbort = new AbortController();
+    const dispatcherMarker = {};
+    const userCancelled = client.interactions.create(params, {
+      maxRetries: 0,
+      fetchOptions: {
+        signal: callerAbort.signal,
+        dispatcher: dispatcherMarker,
+      } as RequestInit,
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    const finalRequest = requests[3] as Request & { dispatcher?: unknown };
+    expect(finalRequest).toBeInstanceOf(Request);
+    expect(fetchMock.mock.calls[3]).toHaveLength(1);
+    expect(finalRequest.dispatcher).toBeUndefined();
+
+    const userCancellationRejection = expect(userCancelled).rejects.toThrow();
+    const reason = new DOMException('cancelled by user', 'AbortError');
+    callerAbort.abort(reason);
+    expect(finalRequest.signal.aborted).toBe(true);
+    expect(finalRequest.signal.reason).toBe(reason);
+    await userCancellationRejection;
   });
 
   it('translates OpenAI multipart uploads for package Undici', async () => {

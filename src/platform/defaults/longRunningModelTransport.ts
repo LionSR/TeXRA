@@ -12,6 +12,121 @@ const MODEL_STREAM_INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MODEL_RESPONSE_HEADERS_TIMEOUT_MS = 10 * 60 * 1000;
 type UploadCompatibleFetch = typeof fetch & { Response: typeof Response };
 
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  if (typeof timer === 'object' && 'unref' in timer) timer.unref();
+}
+
+/**
+ * Native fetch policy for the Google Interactions client's request-local HTTP
+ * seam. The SDK has already built the final Request by this point.
+ */
+export async function longRunningGoogleInteractionsFetch(
+  input: Request,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let disposed = false;
+
+  const clearTimer = () => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    clearTimer();
+    input.signal.removeEventListener('abort', onCallerAbort);
+  };
+  const armTimer = (timeoutMs: number, message: string) => {
+    clearTimer();
+    if (controller.signal.aborted || disposed) return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      controller.abort(new DOMException(message, 'TimeoutError'));
+    }, timeoutMs);
+    unrefTimer(timer);
+  };
+  const onCallerAbort = () => controller.abort(input.signal.reason);
+
+  if (input.signal.aborted) onCallerAbort();
+  else input.signal.addEventListener('abort', onCallerAbort, { once: true });
+  armTimer(
+    MODEL_RESPONSE_HEADERS_TIMEOUT_MS,
+    'Model response headers were not received within 10 minutes',
+  );
+
+  let response: Response;
+  try {
+    response = await globalThis.fetch(
+      new Request(input, { signal: controller.signal }),
+    );
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+  clearTimer();
+
+  if (!response.body) {
+    dispose();
+    return response;
+  }
+
+  const reader = response.body.getReader();
+  const body = new ReadableStream<Uint8Array>({
+    async pull(streamController) {
+      armTimer(
+        MODEL_STREAM_INACTIVITY_TIMEOUT_MS,
+        'Model response body was inactive for 30 minutes',
+      );
+      let rejectForAbort: (() => void) | undefined;
+      const aborted = new Promise<never>((_resolve, reject) => {
+        rejectForAbort = () => reject(controller.signal.reason);
+        if (controller.signal.aborted) rejectForAbort();
+        else {
+          controller.signal.addEventListener('abort', rejectForAbort, {
+            once: true,
+          });
+        }
+      });
+      try {
+        const result = await Promise.race([reader.read(), aborted]);
+        if (result.done) {
+          dispose();
+          streamController.close();
+        } else {
+          streamController.enqueue(result.value);
+        }
+      } catch (error) {
+        dispose();
+        streamController.error(error);
+        void reader.cancel(error).catch(() => undefined);
+      } finally {
+        clearTimer();
+        if (rejectForAbort) {
+          controller.signal.removeEventListener('abort', rejectForAbort);
+        }
+      }
+    },
+    async cancel(reason) {
+      dispose();
+      await reader.cancel(reason);
+    },
+  });
+  const wrapped = new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+  Object.defineProperties(wrapped, {
+    redirected: { value: response.redirected },
+    type: { value: response.type },
+    url: { value: response.url },
+  });
+  return wrapped;
+}
+
 /**
  * Detect a WHATWG ReadableStream without `instanceof`. A stream constructed
  * in another realm (worker_threads, a second vendored `node:stream/web`)
@@ -138,7 +253,7 @@ const withLongStreamTimeouts =
 /** Composes the host's current dispatcher (proxy policy stays host-owned) with
  *  the long-stream timeouts. Composed per call so a runtime proxy change is
  *  honored by the next request. */
-export function composeLongRunningModelDispatcher(): Dispatcher {
+function composeLongRunningModelDispatcher(): Dispatcher {
   return getGlobalDispatcher().compose(withLongStreamTimeouts);
 }
 

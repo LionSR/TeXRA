@@ -49,7 +49,7 @@ import {
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
+import { longRunningGoogleInteractionsFetch } from '@platform/defaults/longRunningModelTransport';
 import {
   type FileLocation,
   type MediaAttachmentKind,
@@ -376,6 +376,25 @@ type InteractionsRequestOptions = {
   fetchOptions: RequestInit;
 };
 
+type GoogleInteractionsSdkClient = {
+  _httpClient: { request(request: Request): Promise<Response> };
+};
+type GoogleInteractionsClientInternals = {
+  getClient(apiVersion?: string): GoogleInteractionsSdkClient;
+};
+
+/** Install the pinned SDK's request-local HTTP seam on every API-version client. */
+function installLongRunningInteractionsTransport(client: GoogleGenAI): void {
+  const interactions =
+    client.interactions as unknown as GoogleInteractionsClientInternals;
+  const getClient = interactions.getClient.bind(interactions);
+  interactions.getClient = (apiVersion?: string) => {
+    const sdk = getClient(apiVersion);
+    sdk._httpClient = { request: longRunningGoogleInteractionsFetch };
+    return sdk;
+  };
+}
+
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
   Usage | null,
@@ -665,13 +684,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // `{ attempts: 1 }` — switches apiCall into a pRetry wrapper that converts
     // non-ok responses into bare Errors with no status field, blinding the
     // route gate's 429/5xx classification for Google.
+    const googleClient = new GoogleGenAI({
+      apiKey: credential.apiKey,
+      httpOptions: {
+        baseUrl: credential.baseUrl ?? undefined,
+      },
+    });
+    installLongRunningInteractionsTransport(googleClient);
     const client = this.rememberClientCredentialRoute(
-      new GoogleGenAI({
-        apiKey: credential.apiKey,
-        httpOptions: {
-          baseUrl: credential.baseUrl ?? undefined,
-        },
-      }),
+      googleClient,
       credential.route,
       credential.apiKey,
     );
@@ -1780,22 +1801,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * client defaults to its own 4-retry backoff, which `httpOptions`-level
    * retry settings do not govern. Abort is wired via `fetchOptions.signal`
    * (GoogleGenAIRequestOptions has no top-level abortSignal field). The
-   * dispatcher threads the shared 30-minute stream-inactivity budget through
-   * the SDK's typed fetchOptions seam — `dispatcher` is undici's non-standard
-   * RequestInit extension honored by Node's fetch but absent from the DOM lib
-   * types this repo compiles against, hence the cast. Verified against
-   * @google/genai 2.12.0 (fetchOptions spreads into the Request init and
-   * survives the SDK's clone/rewrap); re-verify the seam on SDK bumps.
+   * request-local HTTP client observes native fetch response resolution and
+   * applies the shared header/body-inactivity policy without relying on
+   * non-standard RequestInit fields that the SDK drops while rebuilding.
    */
   private interactionsRequestOptions(
     signal?: AbortSignal,
   ): InteractionsRequestOptions {
     return {
       maxRetries: 0,
-      fetchOptions: {
-        ...(signal ? { signal } : {}),
-        dispatcher: composeLongRunningModelDispatcher(),
-      } as RequestInit,
+      fetchOptions: signal ? { signal } : {},
     };
   }
 
