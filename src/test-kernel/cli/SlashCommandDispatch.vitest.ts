@@ -819,7 +819,7 @@ describe('handleTuiSlashCommand', () => {
 
     expect(save).toHaveBeenCalledWith('glm', 'glm-secret');
     expect(notice).toBe(
-      "Tip: this key uses the regular GLM endpoint by default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
+      "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
     );
   });
 
