@@ -7,11 +7,7 @@ import {
   formatToolResultTextWithAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
-import {
-  MAX_TOOL_RESULT_TEXT_LENGTH,
-  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
-  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
-} from '@agent/modelHandlers/contextManagementConstants';
+import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/modelHandlers/contextManagementConstants';
 import type { ToolFileAttachment } from '@shared/schemas';
 
 /** Head and tail well over their truncation budgets, with an elidable middle. */
