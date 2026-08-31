@@ -436,6 +436,7 @@ export async function executeAgent(
         runExecutionId,
         runStreamId,
         config,
+        ctx.resolvedAgentDescription,
         runSession,
         ctx.runScope.signal,
       );

@@ -104,9 +104,7 @@ describe('executeSubagent childStreamId derivation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.startChildRunLoop.mockReturnValue({
-      completion: Promise.resolve(),
-    });
+    mocks.startChildRunLoop.mockReturnValue(Promise.resolve());
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.tryUseRunContext.mockReturnValue({
       executionId: 'parent-exec',
@@ -184,9 +182,7 @@ describe('executeSubagent childStreamId derivation', () => {
 
   it('logs a detached run-loop rejection through the childRunLoop channel log', async () => {
     const lateFailure = new Error('late subagent finalization failed');
-    mocks.startChildRunLoop.mockReturnValue({
-      completion: Promise.reject(lateFailure),
-    });
+    mocks.startChildRunLoop.mockReturnValue(Promise.reject(lateFailure));
 
     await expect(runDefaultSubagent()).resolves.toMatchObject({
       status: 'executed',

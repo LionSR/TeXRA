@@ -361,11 +361,6 @@ export interface ChildRunLoopParams<TTurn> {
   readonly afterArtifactsDrained?: () => void | Promise<void>;
 }
 
-export interface ChildRunLoopHandle {
-  /** Settles after terminal delivery, finalization, and artifact release. */
-  readonly completion: Promise<void>;
-}
-
 /**
  * Interrupt handler attached to the child's execution handle for the child's
  * whole lifetime, so the stop button always finds a live target — including
@@ -766,7 +761,7 @@ async function submitPendingDelivery(
  */
 export function startChildRunLoop<TTurn>(
   params: ChildRunLoopParams<TTurn>,
-): ChildRunLoopHandle {
+): Promise<void> {
   const {
     childStream,
     childStreamId,
@@ -1236,12 +1231,10 @@ export function startChildRunLoop<TTurn>(
   } catch (error) {
     throw unwindSetup(error);
   }
-  return {
-    completion: completion.catch((error: unknown) => {
-      // Refused before `run` began (the registry disposed, or a storage-root
-      // change holds the lifecycle): `run`'s own unwinding never ran.
-      if (runStarted) throw error;
-      throw unwindSetup(error);
-    }),
-  };
+  return completion.catch((error: unknown) => {
+    // Refused before `run` began (the registry disposed, or a storage-root
+    // change holds the lifecycle): `run`'s own unwinding never ran.
+    if (runStarted) throw error;
+    throw unwindSetup(error);
+  });
 }

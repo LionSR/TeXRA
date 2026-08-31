@@ -12,6 +12,7 @@ import {
   MESSAGE_TYPES,
   type OutputFileInfo,
   type RoundIndexed,
+  type RunStorageFileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -21,10 +22,7 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  publishCompiledPdfArtifact,
-  type CompiledPdfArtifact,
-} from './compiledPdfArtifacts';
+import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
 import {
   getWorkflowAutoCompileTimeoutMs,
   resolveWorkspaceSourceDir,
@@ -40,7 +38,7 @@ interface DiffOutputDirectory {
 
 type SingleDiffOutcome = {
   diffResult: DiffResult;
-  artifact: CompiledPdfArtifact | null;
+  artifact: RunStorageFileLocation | null;
 };
 
 export class LatexDiffManager {
@@ -111,8 +109,8 @@ export class LatexDiffManager {
   async handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
-  ): Promise<CompiledPdfArtifact[]> {
-    const execute = async (): Promise<CompiledPdfArtifact[]> => {
+  ): Promise<RunStorageFileLocation[]> {
+    const execute = async (): Promise<RunStorageFileLocation[]> => {
       if (!(await checkToolInstalled('latexdiff'))) {
         this.logger.warn(
           'Skipping latexdiff operations - latexdiff not installed',
@@ -148,7 +146,7 @@ export class LatexDiffManager {
       });
 
       const aggregated: DiffResult[] = [];
-      const artifacts: CompiledPdfArtifact[] = [];
+      const artifacts: RunStorageFileLocation[] = [];
       const collect = (outcome: SingleDiffOutcome | null): void => {
         if (!outcome) return;
         aggregated.push(outcome.diffResult);
@@ -371,7 +369,7 @@ export class LatexDiffManager {
     pdfStemSuffix: string,
   ): Promise<{
     diffLocation: FileLocation;
-    artifact: CompiledPdfArtifact | null;
+    artifact: RunStorageFileLocation | null;
   } | null> {
     if (!result.success) {
       return null;

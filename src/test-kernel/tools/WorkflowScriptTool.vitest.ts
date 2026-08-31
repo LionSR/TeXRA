@@ -239,9 +239,7 @@ beforeEach(async () => {
     result: { action: 'approve' },
     autoApproved: false,
   });
-  mocks.startChildRunLoop.mockReturnValue({
-    completion: Promise.resolve(),
-  });
+  mocks.startChildRunLoop.mockReturnValue(Promise.resolve());
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((name) => {
     if (name === 'missing-agent') {
       throw new Error(
@@ -395,9 +393,7 @@ return null`;
 
   it('owns a detached run completion rejection without delivering a second error', async () => {
     const lateFailure = new Error('late finalization failed');
-    mocks.startChildRunLoop.mockReturnValueOnce({
-      completion: Promise.reject(lateFailure),
-    });
+    mocks.startChildRunLoop.mockReturnValueOnce(Promise.reject(lateFailure));
 
     const result = await callTool();
 

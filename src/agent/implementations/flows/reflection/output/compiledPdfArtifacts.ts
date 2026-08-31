@@ -15,11 +15,6 @@ import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 
-export interface CompiledPdfArtifact {
-  pdf: RunStorageFileLocation;
-  latestPdf: RunStorageFileLocation;
-}
-
 interface PublishCompiledPdfOptions {
   runDirectory: string;
   executionId: ExecutionId;
@@ -77,7 +72,7 @@ async function copyArtifactFile(
 
 export async function publishCompiledPdfArtifact(
   options: PublishCompiledPdfOptions,
-): Promise<CompiledPdfArtifact | null> {
+): Promise<RunStorageFileLocation | null> {
   let stats;
   try {
     stats = await platform().fs.stat(options.compiledPdfPath);
@@ -107,16 +102,9 @@ export async function publishCompiledPdfArtifact(
   await copyArtifactFile(options.compiledPdfPath, roundAbsolutePath);
   await copyArtifactFile(roundAbsolutePath, latestAbsolutePath);
 
-  return {
-    pdf: createRunStorageLocation(
-      roundAbsolutePath,
-      roundRelativePath,
-      options.executionId,
-    ),
-    latestPdf: createRunStorageLocation(
-      latestAbsolutePath,
-      latestRelativePath,
-      options.executionId,
-    ),
-  };
+  return createRunStorageLocation(
+    latestAbsolutePath,
+    latestRelativePath,
+    options.executionId,
+  );
 }

@@ -57,7 +57,6 @@ import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
 import {
   startChildRunLoop,
-  type ChildRunLoopHandle,
   type ChildRunLoopParams,
   type ChildRunPorts,
   type ChildRunStrategy,
@@ -235,7 +234,7 @@ function startLoop(
   ids: { childStreamId: StreamTabId; executionId: ExecutionId },
   strategy: ChildRunStrategy<FakeTurn>,
   extras: Partial<ChildRunLoopParams<FakeTurn>> = {},
-): ChildRunLoopHandle {
+): Promise<void> {
   return startChildRunLoop({
     ...ids,
     parentStreamId: PARENT_STREAM_ID,
@@ -473,7 +472,7 @@ describe('childRunLoop E2E fixtures', () => {
       });
 
     try {
-      const handle = startLoop({ childStreamId, executionId }, strategy);
+      const completion = startLoop({ childStreamId, executionId }, strategy);
       await writeStarted.promise;
       // Interrupt the loop through its parent lineage: no turn handle is
       // tracked in this fixture, so the stop reaches the loop via its
@@ -487,7 +486,7 @@ describe('childRunLoop E2E fixtures', () => {
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
       writeBarrier.resolve();
-      await handle.completion;
+      await completion;
       expect(writeTurnState).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledWith(
         session,
@@ -503,13 +502,13 @@ describe('childRunLoop E2E fixtures', () => {
     const { childStreamId, executionId } = loopIds('persist-only');
     const { strategy, resolveTurn } = createFakeStrategy();
 
-    const handle = startLoop(
+    const completion = startLoop(
       { childStreamId, executionId },
       { ...strategy, deliveryMode: 'persistOnly' },
       { parentStreamId: 'headless-parent' as StreamTabId },
     );
     await resolveTurn(1, { kind: 'terminal', value: 'saved' });
-    await handle.completion;
+    await completion;
 
     expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
       executionId,
@@ -536,11 +535,11 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     try {
-      await startLoop(ids, createTerminalStrategy('First attempt')).completion;
+      await startLoop(ids, createTerminalStrategy('First attempt'));
       expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
 
       await expect(
-        startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
+        startLoop(ids, createTerminalStrategy('Retry attempt')),
       ).resolves.toBeUndefined();
       expect(admissions).toEqual(['delivered_live', 'delivered_live']);
       const delivered = session.followUps.queue(parentLease).drainItems();
@@ -1142,11 +1141,9 @@ describe('childRunLoop E2E fixtures', () => {
       () => 'delivered',
     );
 
-    const { completion } = startLoop(
-      loopIds('workflow-attempt-cost'),
-      strategy,
-      { recordCost },
-    );
+    const completion = startLoop(loopIds('workflow-attempt-cost'), strategy, {
+      recordCost,
+    });
 
     await expect(completion).resolves.toBeUndefined();
     expect(recordCost).toHaveBeenCalledOnce();
@@ -1177,7 +1174,7 @@ describe('childRunLoop E2E fixtures', () => {
       );
       const recordCost = vi.fn(observe);
 
-      const { completion } = startLoop(
+      const completion = startLoop(
         loopIds(`${failure}-cost-observer`),
         strategy,
         { recordCost },

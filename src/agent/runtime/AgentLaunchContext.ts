@@ -69,6 +69,8 @@ import type {
 const logger = createLog('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
+  /** Description from the exact registry entry selected for this launch. */
+  resolvedAgentDescription?: string;
   usageMonitor: UsageMonitor;
   parentStage: StageHandle;
   attachedMemoryMisses: AttachedMemoryMiss[];
@@ -507,6 +509,7 @@ async function assembleAgentLaunchContext(
   );
   return {
     config,
+    resolvedAgentDescription: resolution.entry.description,
     setting,
     prompt,
     modelCell,

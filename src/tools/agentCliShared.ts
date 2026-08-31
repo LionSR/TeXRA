@@ -548,7 +548,7 @@ export function startAgentCliLoop<TTurn>(
     },
   };
 
-  const { completion } = startChildRunLoop({
+  const completion = startChildRunLoop({
     childStream,
     childStreamId,
     parentStreamId,

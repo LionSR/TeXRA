@@ -285,7 +285,7 @@ describe('NativeSubagentStrategy', () => {
       }),
     );
 
-    const { completion } = startChildRunLoop({
+    const completion = startChildRunLoop({
       childStreamId: CHILD_STREAM_ID,
       parentStreamId: params.parentStreamId,
       executionId: params.executionId,
@@ -316,7 +316,7 @@ describe('NativeSubagentStrategy', () => {
       });
     });
 
-    const { completion } = startChildRunLoop({
+    const completion = startChildRunLoop({
       childStreamId: CHILD_STREAM_ID,
       parentStreamId: params.parentStreamId,
       executionId: params.executionId,
