@@ -62,12 +62,10 @@ export class PlanApprovalRequestPanel extends BaseApprovalPanel<'planApproval'> 
 
     return this.renderRequestShell({
       prefix: 'plan-approval-request',
-      // The objective div stays on one line so the pre-wrap body gets no
-      // template whitespace.
+      // Kept to one line so the pre-wrap body gets no template whitespace.
+      // prettier-ignore
       details: html`
-        <div class="plan-approval-request__objective" dir="auto">
-          ${plan.objective}
-        </div>
+        <div class="plan-approval-request__objective" dir="auto">${plan.objective}</div>
         ${
           goalEnabled
             ? html`<div class="plan-approval-request__goal-explanation">
