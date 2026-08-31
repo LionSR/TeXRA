@@ -178,6 +178,9 @@ describe('createWorkflowScriptStrategy', () => {
     expect(ports.recordCost).toHaveBeenCalledWith(0);
     const delivery = await strategy.formatDelivery(turn, 0);
     expect(delivery).toContain('Using saved result');
+    expect(delivery).toContain(
+      '"files":[{"path":"paper.tex","added":12,"removed":8}]',
+    );
   });
 
   it('passes JSON arguments through and formats a zero-call result', async () => {
@@ -304,6 +307,59 @@ throw new Error('script failed after replay')`;
     expect(errText).toContain('"phaseCount":0');
     expect(errText).toContain('"taskDone":1');
     expect(errText).toContain('"taskTotal":1');
+  });
+
+  it('settles failures from the touched journal without stale entries', async () => {
+    const name = 'attempt-local-settlement';
+    const baselineScript = `export const meta = {
+  name: '${name}',
+  description: 'seeds stale recovery entries',
+}
+await agent('stale file')
+return await agent('malformed stale')`;
+    const staleResult: AgentFinalResult = {
+      ...finalResult,
+      outputs: [{ ...finalResult.outputs[0], relativePath: 'stale.tex' }],
+    };
+    await runPersistedWorkflowScript({
+      store: getExecutionStore(executionId),
+      checkpointId: checkpointIdFor(name),
+      script: baselineScript,
+      runAgent: async ({ prompt }) =>
+        prompt === 'stale file' ? staleResult : { malformed: true },
+    });
+    clearStoreCache();
+
+    const currentResult: AgentFinalResult = {
+      ...finalResult,
+      cost: 0.25,
+      outputs: [{ ...finalResult.outputs[0], relativePath: 'current.tex' }],
+    };
+    const ports = fakePorts();
+    const strategy = createWorkflowScriptStrategy(
+      strategyParams({
+        name,
+        script: `export const meta = {
+  name: '${name}',
+  description: 'fails after current work',
+}
+await agent('current file')
+throw new Error('current revision failed')`,
+        createRunAgent: (hooks) => async (invocation) => {
+          hooks.onCost(invocation, currentResult.cost);
+          return currentResult;
+        },
+      }),
+    );
+
+    await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
+      'current revision failed',
+    );
+    expect(ports.recordCost.mock.calls).toEqual([[0.25], [0.25]]);
+    const errText = await strategy.formatError(null, new Error('boom'));
+    expect(errText).toContain('current.tex');
+    expect(errText).not.toContain('stale.tex');
+    expect(errText).toContain('"costUsd":0.25');
   });
 
   it('keeps the delivery summary at the last persisted snapshot when snapshot writes fail', async () => {
