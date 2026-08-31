@@ -22,11 +22,7 @@ import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { DisposableStore } from '@platform/disposable';
 import { platform } from '@platform/platform';
-import type {
-  AgentProposalPermission,
-  ProgressViewOutboundMessage,
-  StreamTabId,
-} from '@shared/schemas';
+import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import {
   formatActiveStreamRetention,
   formatStreamDeletionRetention,
@@ -101,7 +97,13 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     this.backend = new ProgressBackend({
       session: runtimeSession,
       storage: platform().workspaceState,
-      sendMessage: (message) => this.sendToActiveProgressWebview(message),
+      sendMessage: async (message) => {
+        const webview = this.getActiveWebview();
+        if (!webview) return false;
+        // Delivery failures belong to WebviewBridge's retry path or the
+        // backend's best-effort refresh path, so let postMessage reject.
+        return webview.postMessage(message);
+      },
       hasTarget: () => this.getActiveWebview() !== undefined,
       getStreamControls: getProgressStreamControls,
       getUnsupportedCommands: () =>
@@ -109,7 +111,8 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       reportTranscriptLoadError: (error, stream) =>
         this.reportTranscriptLoadError(error, stream),
       approvals: {
-        canSend: () => this.canSendToWebview(),
+        canSend: () =>
+          this.target?.ready === true && this.renderer.isAvailable(),
         logger: this.logger,
       },
       lifecycle: {
@@ -246,14 +249,11 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     // A handshake from a surface that no longer holds the target describes
     // content that has since been swapped away; it has nothing to sync.
     if (!target) return;
-    if ((target.placement === 'editor') !== this.isPanelView(view)) return;
+    const isEditorView = 'viewColumn' in view;
+    if ((target.placement === 'editor') !== isEditorView) return;
 
     target.ready = true;
     this.syncFullView();
-    await this.replayPendingPrompts();
-  }
-
-  private async replayPendingPrompts(): Promise<void> {
     if (!this.renderer.isAvailable()) return;
 
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
@@ -264,10 +264,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     requestId: string,
   ): AgentProposalPermission | undefined {
     return this.backend.approvalHandlers.proposal.get(requestId);
-  }
-
-  private canSendToWebview(): boolean {
-    return this.target?.ready === true && this.renderer.isAvailable();
   }
 
   public isViewVisible(): boolean {
@@ -422,22 +418,5 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     // Otherwise progress messages would be routed to the launcher webview.
     if (getActiveSidebarView() !== SIDEBAR_VIEWS.PROGRESS) return undefined;
     return this._mainViewProvider?.getWebviewView()?.webview;
-  }
-
-  private async sendToActiveProgressWebview(
-    message: ProgressViewOutboundMessage,
-  ): Promise<boolean> {
-    const webview = this.getActiveWebview();
-    if (!webview) return false;
-    // Delivery failures are reported by the two callers that own them
-    // (`WebviewBridge.deliver` logs and retries the frame; `ProgressBackend`
-    // drops best-effort view refreshes), so this must not swallow them here.
-    return webview.postMessage(message);
-  }
-
-  private isPanelView(
-    view: vscode.WebviewView | vscode.WebviewPanel,
-  ): view is vscode.WebviewPanel {
-    return 'viewColumn' in view;
   }
 }
