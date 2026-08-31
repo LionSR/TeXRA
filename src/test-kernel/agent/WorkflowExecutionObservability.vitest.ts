@@ -7,6 +7,7 @@ import type {
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
+  PersistedWorkflowExecutionSnapshotSchema,
   WorkflowExecutionSnapshotSchema,
   deriveWorkflowCounts,
   type ExecutionId,
@@ -199,6 +200,28 @@ describe('workflow execution snapshot call schema', () => {
   ])('rejects %s', (_name, call) => {
     expect(
       WorkflowExecutionSnapshotSchema.safeParse(snapshotWithCall(call)).success,
+    ).toBe(false);
+  });
+
+  it('normalizes only the prior persisted cancelled error shape', () => {
+    const priorCancelled = snapshotWithCall({
+      ...issuedCall,
+      status: 'cancelled',
+      error: 'Workflow cancelled before this call completed.',
+      timestamps: terminalTimestamps,
+    });
+
+    expect(
+      WorkflowExecutionSnapshotSchema.safeParse(priorCancelled).success,
+    ).toBe(false);
+    expect(
+      PersistedWorkflowExecutionSnapshotSchema.parse(priorCancelled).calls[0],
+    ).not.toHaveProperty('error');
+
+    const malformed = structuredClone(priorCancelled);
+    malformed.calls[0]!.costUsd = -1;
+    expect(
+      PersistedWorkflowExecutionSnapshotSchema.safeParse(malformed).success,
     ).toBe(false);
   });
 });
@@ -635,6 +658,9 @@ return await agent('cancel secret', { label: 'Cancelled task' })`,
     const terminal = finalSnapshot(snapshots);
     expect(terminal.lifecycle).toBe('cancelled');
     expect(terminal.calls[0]?.error).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(terminal)).calls[0]).not.toHaveProperty(
+      'error',
+    );
     const terminalCounts = deriveWorkflowCounts(terminal.calls);
     expect(terminalCounts.cancelled).toBe(1);
     expect(terminalCounts.running + terminalCounts.queued).toBe(0);

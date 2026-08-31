@@ -21,8 +21,8 @@ import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   ExecutionMetaCoreSchema,
   ExecutionMetaSchema,
+  PersistedWorkflowExecutionSnapshotSchema,
   RUN_OUTCOME,
-  WorkflowExecutionSnapshotSchema,
   type ExecutionId,
   type ExecutionMeta,
 } from '@shared/schemas';
@@ -254,9 +254,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
       return null;
     }
 
-    const workflow = WorkflowExecutionSnapshotSchema.optional().safeParse(
-      (raw as { workflow?: unknown }).workflow,
-    );
+    const workflow =
+      PersistedWorkflowExecutionSnapshotSchema.optional().safeParse(
+        (raw as { workflow?: unknown }).workflow,
+      );
     if (!workflow.success) {
       log.warn(
         `Failed to parse execution ${this.executionId} meta.json workflow: ${toErrorMessage(

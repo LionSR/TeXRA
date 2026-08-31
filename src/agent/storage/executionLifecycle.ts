@@ -13,6 +13,7 @@ import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
+  WorkflowExecutionSnapshotSchema,
   type ExecutionId,
   type ExecutionMeta,
   type RegisteredExecutionMeta,
@@ -88,7 +89,8 @@ export function writeWorkflowExecutionSnapshot(
   executionId: ExecutionId,
   workflow: WorkflowExecutionSnapshot,
 ): Promise<void> {
-  return enqueueMetaUpdate(executionId, () => ({ workflow }));
+  const canonical = WorkflowExecutionSnapshotSchema.parse(workflow);
+  return enqueueMetaUpdate(executionId, () => ({ workflow: canonical }));
 }
 
 interface RegisterExecutionOptions {

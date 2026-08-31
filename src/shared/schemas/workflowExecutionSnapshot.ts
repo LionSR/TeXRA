@@ -395,3 +395,50 @@ export const WorkflowExecutionSnapshotSchema = z
 export type WorkflowExecutionSnapshot = z.infer<
   typeof WorkflowExecutionSnapshotSchema
 >;
+
+const LegacyCancelledCallWithErrorSchema = z.looseObject({
+  status: z.literal(WORKFLOW_CALL_STATUS.CANCELLED),
+  error: z.string(),
+});
+
+const LegacyCancelledWorkflowExecutionSnapshotSchema = z
+  .strictObject({
+    lifecycle: z.unknown(),
+    currentStageId: z.unknown().optional(),
+    stages: z.unknown(),
+    calls: z.array(z.unknown()),
+    error: z.unknown().optional(),
+    timestamps: z.unknown(),
+  })
+  .refine(
+    (snapshot) =>
+      snapshot.calls.some(
+        (call) => LegacyCancelledCallWithErrorSchema.safeParse(call).success,
+      ),
+    { path: ['calls'] },
+  )
+  .transform((snapshot) => ({
+    ...snapshot,
+    calls: snapshot.calls.map((call) => {
+      const legacy = LegacyCancelledCallWithErrorSchema.safeParse(call);
+      if (!legacy.success) return call;
+      const { error: _legacyError, ...canonical } = legacy.data;
+      return canonical;
+    }),
+  }))
+  .pipe(WorkflowExecutionSnapshotSchema);
+
+/**
+ * Storage reader for cancelled calls written immediately before the
+ * status-discriminated call schema landed (#11670). That writer attached an
+ * error string to cancellation, while the canonical cancelled variant does
+ * not: parse the prior shape and drop only that field.
+ *
+ * Compatibility reader, not a contract: delete this schema and use
+ * {@link WorkflowExecutionSnapshotSchema} directly once every release that
+ * wrote the prior shape is three months old, on or after 2026-11-30.
+ */
+export const PersistedWorkflowExecutionSnapshotSchema = z.union([
+  WorkflowExecutionSnapshotSchema,
+  LegacyCancelledWorkflowExecutionSnapshotSchema,
+]);

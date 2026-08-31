@@ -88,6 +88,57 @@ describe('workflow-script persistence', () => {
     expect(restartedRunner).not.toHaveBeenCalled();
   });
 
+  it('parses and relaunches a prior cancelled snapshot with an error', async () => {
+    const store = getExecutionStore(executionId);
+    const cancelledScript = `export const meta = {
+  name: 'cancelled-compatibility',
+  description: 'relaunches a prior cancelled checkpoint',
+}
+return await agent('resume cancelled call', { id: 'cancelled-call' })`;
+    const completed = await runWorkflowScript({
+      script: cancelledScript,
+      runAgent: async () => 'prior result',
+    });
+    const priorSnapshot = structuredClone(completed.snapshot) as unknown as {
+      lifecycle: string;
+      error?: string;
+      calls: Array<Record<string, unknown>>;
+    };
+    priorSnapshot.lifecycle = 'cancelled';
+    priorSnapshot.error = 'Workflow cancelled.';
+    priorSnapshot.calls[0]!.status = 'cancelled';
+    priorSnapshot.calls[0]!.error =
+      'Workflow cancelled before this call completed.';
+    await store.write('meta', {
+      timestamp: '2026-08-30T00:00:00.000Z',
+      workflow: priorSnapshot,
+    });
+
+    const persisted = await store.readMetaStrict();
+    expect(persisted?.workflow?.calls[0]).toMatchObject({
+      status: 'cancelled',
+    });
+    expect(persisted?.workflow?.calls[0]).not.toHaveProperty('error');
+    if (!persisted?.workflow) throw new Error('Expected persisted workflow');
+
+    const runner = vi.fn(async () => 'resumed result');
+    const relaunched = await runPersistedWorkflowScript({
+      store,
+      checkpointId: 'cancelled-compatibility',
+      script: cancelledScript,
+      initialSnapshot: persisted.workflow,
+      runAgent: runner,
+    });
+
+    expect(runner).toHaveBeenCalledOnce();
+    expect(relaunched.result).toBe('resumed result');
+    expect(relaunched.snapshot.calls[0]).toMatchObject({ status: 'completed' });
+    const serialized = WorkflowExecutionSnapshotSchema.parse(
+      JSON.parse(JSON.stringify(relaunched.snapshot)),
+    );
+    expect(serialized.calls[0]).not.toHaveProperty('error');
+  });
+
   it('persists and hydrates runtime-valid unbounded snapshot fields', async () => {
     const store = getExecutionStore(executionId);
     const longId = `call-${'i'.repeat(2_500)}`;
