@@ -500,9 +500,25 @@ describe('childRunLoop E2E fixtures', () => {
     }
   });
 
-  it('refuses follow-ups for a completed parent while a child-stream loop is still running', async () => {
-    const { executionId } = loopIds('completed-parent-child-stream');
-    const { strategy, resolveTurn } = createFakeStrategy();
+  it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {
+    const { executionId } = loopIds('follow-up-ownership');
+    const turn = pDefer<FakeTurn>();
+    const launchStarted = pDefer<void>();
+    const formatStarted = pDefer<void>();
+    const formattedDelivery = pDefer<string>();
+    let notifyProgress: ChildRunPorts['notify'] = () => {};
+    const strategy = createTerminalStrategy(
+      'Follow-up ownership',
+      (ports) => {
+        notifyProgress = ports.notify;
+        launchStarted.resolve();
+        return turn.promise;
+      },
+      () => {
+        formatStarted.resolve();
+        return formattedDelivery.promise;
+      },
+    );
     const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
       streamPrefix: 'codex',
       run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
@@ -514,17 +530,29 @@ describe('childRunLoop E2E fixtures', () => {
     const loop = startLoop({ childStreamId, executionId }, strategy, {
       childStream,
     });
-    seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
-      phase: STREAM_PHASE.COMPLETED,
-    });
     const tryResumeStream = vi.fn(async () => false);
-    const userAdmission = vi.fn();
+    const resumePort = { tryResumeStream };
+    await launchStarted.promise;
 
     try {
+      seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+      await expect(
+        submitFollowUp(PARENT_STREAM_ID, 'active parent', {
+          session,
+          resumePort,
+        }),
+      ).resolves.toEqual({ status: 'queued', wake: 'failed' });
+
+      seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
+        phase: STREAM_PHASE.COMPLETED,
+      });
+      const userAdmission = vi.fn();
       await expect(
         submitFollowUp(PARENT_STREAM_ID, 'restore me', {
           session,
-          resumePort: { tryResumeStream },
+          resumePort,
           onAdmitted: userAdmission,
         }),
       ).resolves.toMatchObject({ status: 'failed' });
@@ -533,62 +561,57 @@ describe('childRunLoop E2E fixtures', () => {
         submitFollowUp(
           PARENT_STREAM_ID,
           { text: 'late child result', origin: 'subagent_result' },
-          {
-            session,
-            resumePort: { tryResumeStream },
-            mode: 'child_delivery',
-          },
+          { session, resumePort, mode: 'child_delivery' },
         ),
       ).resolves.toMatchObject({ status: 'failed' });
-      expect(tryResumeStream).not.toHaveBeenCalled();
-      expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual([]);
+      expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual([
+        'active parent',
+      ]);
+
+      const releaseNativeChild = session.executions.reserveChildActivation({
+        executionId: 'exec-follow-up-native-child-test' as ExecutionId,
+        parentStreamId: PARENT_STREAM_ID,
+        childStreamId: 'stream-follow-up-native-child-test' as StreamTabId,
+        interrupt: vi.fn(),
+        detach: vi.fn(),
+        isDetached: () => false,
+      });
+      try {
+        await expect(
+          submitFollowUp(PARENT_STREAM_ID, 'native child result', {
+            session,
+            resumePort,
+            mode: 'child_delivery',
+          }),
+        ).resolves.toEqual({ status: 'queued', wake: 'failed' });
+      } finally {
+        releaseNativeChild();
+      }
+
+      notifyProgress({ kind: 'started' });
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetStreamId: PARENT_STREAM_ID,
+          mode: 'live_notification',
+        }),
+      );
+      mocks.deliverChildRunFollowUp.mockClear();
+
+      turn.resolve({ kind: 'terminal', value: 'done' });
+      await formatStarted.promise;
+      session.executions.detachActiveChildren(PARENT_STREAM_ID);
+      notifyProgress({ kind: 'started' });
+      formattedDelivery.resolve('delivered:done');
+      await loop.completion;
+
+      expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
     } finally {
-      await resolveTurn(1, { kind: 'terminal', value: 'done' });
+      session.followUps.terminalize(PARENT_STREAM_ID);
+      session.executions.detachActiveChildren(PARENT_STREAM_ID);
+      turn.resolve({ kind: 'terminal', value: 'done' });
+      formattedDelivery.resolve('delivered:done');
       await loop.completion;
     }
-  });
-
-  it('does not deliver child-stream progress or results after detachment', async () => {
-    const { executionId } = loopIds('detached-child-stream');
-    const turn = pDefer<FakeTurn>();
-    const launchStarted = pDefer<void>();
-    let notifyProgress: ChildRunPorts['notify'] = () => {};
-    const strategy = createTerminalStrategy(
-      'Detached child stream',
-      (ports) => {
-        notifyProgress = ports.notify;
-        launchStarted.resolve();
-        return turn.promise;
-      },
-    );
-    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
-      streamPrefix: 'codex',
-      run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-      description: 'Detach a background child',
-      config: childStreamConfig,
-    });
-    const { childStreamId } = childStream;
-    trackedExecutionIds.add(executionId);
-    const loop = startLoop({ childStreamId, executionId }, strategy, {
-      childStream,
-    });
-    await launchStarted.promise;
-
-    notifyProgress({ kind: 'started' });
-    expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
-      expect.objectContaining({
-        targetStreamId: PARENT_STREAM_ID,
-        mode: 'live_notification',
-      }),
-    );
-    mocks.deliverChildRunFollowUp.mockClear();
-
-    session.executions.detachActiveChildren(PARENT_STREAM_ID);
-    notifyProgress({ kind: 'started' });
-    turn.resolve({ kind: 'terminal', value: 'done' });
-    await loop.completion;
-
-    expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
   });
 
   it('persists without parent delivery in persist-only mode', async () => {

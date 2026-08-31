@@ -588,11 +588,11 @@ async function persistTurnStateBestEffort(
  */
 function resolveDeliveryTarget<TTurn>(
   strategy: ChildRunStrategy<TTurn>,
-  childStreamTarget: StreamTabId | undefined,
+  resolveChildStreamTarget: () => StreamTabId | undefined,
 ): StreamTabId | undefined {
   return strategy.resolveDeliveryTarget
     ? strategy.resolveDeliveryTarget()
-    : childStreamTarget;
+    : resolveChildStreamTarget();
 }
 
 /**
@@ -605,7 +605,7 @@ function resolveDeliveryTarget<TTurn>(
  * another turn (no finalize pending) may wake immediately.
  */
 interface PendingChildDelivery {
-  readonly targetStreamId: StreamTabId;
+  readonly resolveTargetStreamId: () => StreamTabId | undefined;
   readonly followUp: FollowUpQueueInput;
 }
 
@@ -627,7 +627,7 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
-  defaultDeliveryTarget: StreamTabId | undefined;
+  resolveDefaultDeliveryTarget: () => StreamTabId | undefined;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
@@ -642,7 +642,7 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
-    defaultDeliveryTarget,
+    resolveDefaultDeliveryTarget,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -696,8 +696,9 @@ async function deliverTurn<TTurn>(params: {
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
-  const targetStreamId = resolveDeliveryTarget(strategy, defaultDeliveryTarget);
-  if (!targetStreamId) {
+  const resolveTargetStreamId = (): StreamTabId | undefined =>
+    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
+  if (!resolveTargetStreamId()) {
     logger.warn(
       'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
       { data: { executionId } },
@@ -706,7 +707,7 @@ async function deliverTurn<TTurn>(params: {
   }
   if (prepareParentDelivery?.() === false) return undefined;
   return {
-    targetStreamId,
+    resolveTargetStreamId,
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -726,8 +727,16 @@ async function submitPendingDelivery(
   logger: AgentTrace,
 ): Promise<void> {
   if (!pending) return;
+  const targetStreamId = pending.resolveTargetStreamId();
+  if (!targetStreamId) {
+    logger.warn(
+      'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
+      { data: { executionId } },
+    );
+    return;
+  }
   const delivery = await deliverChildRunFollowUp({
-    targetStreamId: pending.targetStreamId,
+    targetStreamId,
     followUp: pending.followUp,
     session,
   });
@@ -737,7 +746,7 @@ async function submitPendingDelivery(
       {
         data: {
           executionId,
-          parentStreamId: pending.targetStreamId,
+          parentStreamId: targetStreamId,
           reason: delivery.reason,
         },
       },
@@ -745,7 +754,7 @@ async function submitPendingDelivery(
   } else if (delivery.wake === 'failed') {
     logger.warn(
       'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { executionId, parentStreamId: pending.targetStreamId } },
+      { data: { executionId, parentStreamId: targetStreamId } },
     );
   }
 }
@@ -869,6 +878,12 @@ export function startChildRunLoop<TTurn>(
   }
 
   const attemptId = randomUUID();
+  // Keep the child-stream handle itself, not a target snapshot. Finalization
+  // untracks the handle before terminal delivery, while detachment still
+  // mutates this object's live delivery target.
+  const childStreamHandle = childStream
+    ? runSession.executions.getHandle(executionId)
+    : undefined;
 
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -878,10 +893,9 @@ export function startChildRunLoop<TTurn>(
         return;
       }
       if (strategy.deliveryMode === 'persistOnly' || activationDetached) return;
-      const targetStreamId = resolveDeliveryTarget(
-        strategy,
+      const targetStreamId = resolveDeliveryTarget(strategy, () =>
         childStream
-          ? runSession.executions.getHandle(executionId)?.deliveryTargetStreamId
+          ? childStreamHandle?.deliveryTargetStreamId
           : parentStreamId,
       );
       if (!targetStreamId) return;
@@ -1007,10 +1021,10 @@ export function startChildRunLoop<TTurn>(
         const delivery = await deliverTurn({
           strategy,
           executionId,
-          defaultDeliveryTarget: childStream
-            ? runSession.executions.getHandle(executionId)
-                ?.deliveryTargetStreamId
-            : parentStreamId,
+          resolveDefaultDeliveryTarget: () =>
+            childStream
+              ? childStreamHandle?.deliveryTargetStreamId
+              : parentStreamId,
           logger,
           turn,
           turnRef,
