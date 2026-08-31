@@ -314,6 +314,15 @@ export async function runWorkflowScript(
   const priorEntries = new Map<string, WorkflowJournalEntry>(
     (options.journal ?? []).map((entry) => [entry.key, entry]),
   );
+  // The monotone journal can retain multiple content keys last seen at one
+  // index. Such an index cannot prove which implicit snapshot call owns the
+  // matching history, even though each journal result remains replayable.
+  const priorKeysByIndex = new Map<number, Set<string>>();
+  for (const entry of options.journal ?? []) {
+    const keys = priorKeysByIndex.get(entry.index) ?? new Set<string>();
+    keys.add(entry.key);
+    priorKeysByIndex.set(entry.index, keys);
+  }
   const journal = new Map<number, WorkflowJournalEntry>();
   const queue = new PQueue({ concurrency });
   const runAbort = new AbortController();
@@ -528,6 +537,19 @@ export async function runWorkflowScript(
       : undefined;
     let key = journalKey(prompt, callOptions, dependencyFingerprint);
     const progressId = plannedTask?.id ?? callOptions.id ?? `call-${index}`;
+    const prior = priorEntries.get(key);
+    let recoverySource:
+      | { readonly id: string; readonly journalProven: boolean }
+      | { readonly implicitIndex: number; readonly journalProven: true }
+      | undefined;
+    if (plannedTask !== undefined || callOptions.id !== undefined) {
+      recoverySource = { id: progressId, journalProven: prior !== undefined };
+    } else if (
+      prior !== undefined &&
+      priorKeysByIndex.get(prior.index)?.size === 1
+    ) {
+      recoverySource = { implicitIndex: prior.index, journalProven: true };
+    }
     if (
       callOptions.phase !== undefined &&
       executionState.currentPhaseIndex === -1
@@ -539,24 +561,27 @@ export async function runWorkflowScript(
       }
     }
     try {
-      executionState.issueCall({
-        id: progressId,
-        label,
-        phase: callOptions.phase,
-        kind:
-          callOptions.schema === undefined
-            ? WORKFLOW_CALL_KIND.DOCUMENT
-            : WORKFLOW_CALL_KIND.STRUCTURED,
-        agent: callOptions.agentName,
-        model: callOptions.model,
-        files: {
-          input: (callOptions.inputFiles ?? []).map((file) => basename(file)),
-          context: (callOptions.contextFiles ?? []).map((file) =>
-            basename(file),
-          ),
-          media: (callOptions.mediaFiles ?? []).map((file) => basename(file)),
+      executionState.issueCall(
+        {
+          id: progressId,
+          label,
+          phase: callOptions.phase,
+          kind:
+            callOptions.schema === undefined
+              ? WORKFLOW_CALL_KIND.DOCUMENT
+              : WORKFLOW_CALL_KIND.STRUCTURED,
+          agent: callOptions.agentName,
+          model: callOptions.model,
+          files: {
+            input: (callOptions.inputFiles ?? []).map((file) => basename(file)),
+            context: (callOptions.contextFiles ?? []).map((file) =>
+              basename(file),
+            ),
+            media: (callOptions.mediaFiles ?? []).map((file) => basename(file)),
+          },
         },
-      });
+        recoverySource,
+      );
     } catch (error) {
       throw contractFault(error);
     }
@@ -644,7 +669,6 @@ export async function runWorkflowScript(
 
     // `key` still holds journalKey(prompt, callOptions, dependencyFingerprint)
     // here: refreshDependencyIdentity only runs at launch time, below.
-    const prior = priorEntries.get(key);
     if (prior) {
       const { payload, normalizedResult } = journalValue(
         prior.result,
