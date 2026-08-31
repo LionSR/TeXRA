@@ -388,8 +388,11 @@ export interface WorkflowScriptRunOptions {
   onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
   /**
    * Synchronous observer for every validated result this invocation consumes,
-   * whether replayed or live. A live entry fires only after onJournalEntry has
-   * durably committed it and before the result becomes visible to the script.
+   * whether replayed or live. It fires after the call reaches its terminal
+   * cached/completed status and before the result becomes visible to the
+   * script; an onTransition throw during that status prevents both this
+   * callback and consumption. A live entry is already durably committed by
+   * onJournalEntry when this observer fires.
    */
   onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => void;
   /**
