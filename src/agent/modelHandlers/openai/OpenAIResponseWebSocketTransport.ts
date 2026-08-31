@@ -184,7 +184,7 @@ export class OpenAIResponseWebSocketTransport {
       let settled = false;
       const cleanup = (): void => {
         ws.socket.off('open', onOpen);
-        ws.socket.off('error', onError);
+        ws.socket.off('error', failHandshake);
         ws.off('error', onTopLevelError);
         signal?.removeEventListener('abort', onAbort);
       };
@@ -210,9 +210,6 @@ export class OpenAIResponseWebSocketTransport {
         });
         reject(err);
       };
-      const onError = (err: Error): void => {
-        failHandshake(err);
-      };
       const onTopLevelError = (err: WebSocketError): void => {
         failHandshake(err.cause instanceof Error ? err.cause : err);
       };
@@ -225,7 +222,7 @@ export class OpenAIResponseWebSocketTransport {
       };
 
       ws.socket.once('open', onOpen);
-      ws.socket.once('error', onError);
+      ws.socket.once('error', failHandshake);
       ws.on('error', onTopLevelError);
       signal?.addEventListener('abort', onAbort, { once: true });
     });

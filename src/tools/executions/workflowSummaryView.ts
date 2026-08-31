@@ -53,6 +53,20 @@ function workflowAttemptView(
   };
 }
 
+function compactWorkflowFiles(files: readonly string[]): {
+  sample: string[];
+  omitted?: number;
+} {
+  return {
+    sample: files
+      .slice(0, WORKFLOW_SUMMARY_MAX_FILES_PER_KIND)
+      .map((file) => compactWorkflowText(file)!),
+    ...(files.length > WORKFLOW_SUMMARY_MAX_FILES_PER_KIND && {
+      omitted: files.length - WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
+    }),
+  };
+}
+
 function workflowCallFailurePriority(status: string): number {
   // Within terminal calls, elevate failed/cancelled so the bounded projection
   // keeps the outcomes that matter for debugging (matches stage ranking).
@@ -78,30 +92,25 @@ export function workflowExecutionView(
         Number(right.stageId !== snapshot.currentStageId) ||
       right.timestamps.updatedAt.localeCompare(left.timestamps.updatedAt),
   );
+  const phasePriority = (
+    stage: WorkflowExecutionSnapshot['stages'][number],
+  ): number => {
+    if (stage.id === snapshot.currentStageId) return 0;
+    if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {
+      return 1;
+    }
+    return 2;
+  };
   const phases = snapshot.stages
-    .toSorted((left, right) => {
-      const priority = (stage: (typeof snapshot.stages)[number]): number => {
-        if (stage.id === snapshot.currentStageId) return 0;
-        if (stage.lifecycle === 'failed' || stage.lifecycle === 'cancelled') {
-          return 1;
-        }
-        return 2;
-      };
-      return priority(left) - priority(right) || right.order - left.order;
-    })
+    .toSorted(
+      (left, right) =>
+        phasePriority(left) - phasePriority(right) || right.order - left.order,
+    )
     .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
     .map(workflowPhaseView);
   const calls = byPriority
     .slice(0, WORKFLOW_SUMMARY_MAX_ENTRIES)
     .map((call) => {
-      const compactFiles = (files: readonly string[]) => ({
-        sample: files
-          .slice(0, WORKFLOW_SUMMARY_MAX_FILES_PER_KIND)
-          .map((file) => compactWorkflowText(file)!),
-        ...(files.length > WORKFLOW_SUMMARY_MAX_FILES_PER_KIND && {
-          omitted: files.length - WORKFLOW_SUMMARY_MAX_FILES_PER_KIND,
-        }),
-      });
       return {
         id: compactWorkflowText(call.id),
         label: compactWorkflowText(call.label),
@@ -111,9 +120,9 @@ export function workflowExecutionView(
         agent: compactWorkflowText(call.agent),
         model: compactWorkflowText(call.model),
         files: {
-          input: compactFiles(call.files.input),
-          context: compactFiles(call.files.context),
-          media: compactFiles(call.files.media),
+          input: compactWorkflowFiles(call.files.input),
+          context: compactWorkflowFiles(call.files.context),
+          media: compactWorkflowFiles(call.files.media),
         },
         childExecutionId: compactWorkflowText(call.childExecutionId),
         childStreamId: compactWorkflowText(call.childStreamId),

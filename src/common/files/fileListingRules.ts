@@ -61,7 +61,7 @@ export function loadFileListSettings(): FileListSettings {
 }
 
 function buildInputLikeConfig(
-  category: 'input' | 'edited',
+  category: 'input' | 'context' | 'edited',
   settings: FileListSettings,
 ): FileFilterConfig {
   return {
@@ -79,15 +79,8 @@ export function getFileListConfig(
 ): FileFilterConfig {
   switch (fileType) {
     case 'input':
-      return buildInputLikeConfig('input', settings);
     case 'context':
-      return {
-        include: getIncludedExtensions('context'),
-        excludeExtensions: settings.ignoredFileExtensions,
-        excludeDirs: settings.ignoredDirectories,
-        excludeKeywords: settings.ignoredKeywords,
-        excludeFiles: settings.ignoredInputFiles,
-      };
+      return buildInputLikeConfig(fileType, settings);
     case 'media':
       return {
         include: getIncludedExtensions('media'),

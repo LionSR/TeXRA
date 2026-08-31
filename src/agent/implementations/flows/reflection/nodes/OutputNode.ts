@@ -99,21 +99,13 @@ export class OutputNode extends BaseNode<
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
-        const roundMapping = traceFileLineage(
-          outputState,
-          diffBaseFiles,
-          currentRound,
-        );
-        mapping = roundMapping;
+        mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
         // `handleLatexdiffOfOutput` already wraps its whole body in
         // `tryOperation`, so a second recover layer here would only ever see
         // its own push.
         compiledArtifacts.push(
-          ...(await diffManager.handleLatexdiffOfOutput(
-            currentRound,
-            roundMapping,
-          )),
+          ...(await diffManager.handleLatexdiffOfOutput(currentRound, mapping)),
         );
 
         await tryOperation(async () => {

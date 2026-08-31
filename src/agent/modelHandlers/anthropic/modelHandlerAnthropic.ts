@@ -56,10 +56,7 @@ import type {
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
-import {
-  normalizeAnthropicUsage,
-  type AnthropicPricingConfig,
-} from './anthropicUsage';
+import { normalizeAnthropicUsage } from './anthropicUsage';
 import {
   getAnthropicMaxPdfPages,
   estimateTokensFromText,
@@ -1365,19 +1362,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Normalizes Anthropic usage data into a unified format. */
   normalizeUsage(rawUsage: BetaUsage, responseTimeMs: number): NormalizedUsage {
-    return normalizeAnthropicUsage(
-      rawUsage,
-      responseTimeMs,
-      this.pricingConfig(),
-    );
-  }
-
-  /** Pricing/caching inputs for the extracted usage helpers. */
-  private pricingConfig(): AnthropicPricingConfig {
-    return {
+    return normalizeAnthropicUsage(rawUsage, responseTimeMs, {
       ...this.standardPricingConfig(),
       supportsPromptCaching: this.capabilities.supportsPromptCaching,
-    };
+    });
   }
 
   protected override createAssistantMessageForAccumulatedOutput(
@@ -1676,15 +1664,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const uploadedAttachments: UploadedAnthropicAttachment[] =
       uploadResult?.uploaded ?? [];
-    const unsupportedAttachments: ToolFileAttachment[] = [];
+    const unsupportedAttachments: ToolFileAttachment[] = canUpload
+      ? [...(uploadResult?.unsupported ?? [])]
+      : [...attachments];
     const pageLimitExceeded: ToolFileAttachment[] =
       uploadResult?.pageLimitExceeded ?? [];
-
-    if (canUpload) {
-      unsupportedAttachments.push(...(uploadResult?.unsupported ?? []));
-    } else if (attachments.length > 0) {
-      unsupportedAttachments.push(...attachments);
-    }
 
     // Build tool result as plain text - JSON wastes tokens
     // Note: Anthropic handles attachments as separate content blocks, not in text

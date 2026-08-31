@@ -552,7 +552,7 @@ export class SessionHostInteractions implements HostInteractions {
   ): Promise<BashSettlement> {
     return this.enqueue<BashSettlement>(
       'bash',
-      request.streamId ?? undefined,
+      request.streamId,
       (interactions) => interactions.requestBashApproval?.(request),
       (cause) => cancellationResultFor('bash', cause),
     );

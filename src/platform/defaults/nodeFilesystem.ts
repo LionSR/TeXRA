@@ -16,25 +16,16 @@ export const nodeFilesystem: FileSystemProvider = {
     const lstats = await fs.promises.lstat(target);
     const type = await fileTypeFor(fs, lstats, target);
     // For symlinks, use stat (follows link) for size/timestamps to match
-    // vscode.workspace.fs.stat behavior. For non-symlinks, lstat === stat.
-    if (lstats.isSymbolicLink()) {
-      try {
-        const stats = await fs.promises.stat(target);
-        return {
-          type,
-          ctime: stats.ctimeMs,
-          mtime: stats.mtimeMs,
-          size: stats.size,
-        };
-      } catch {
-        // Dangling symlink — fall through to lstat metadata
-      }
-    }
+    // vscode.workspace.fs.stat behavior, falling back to lstat metadata for a
+    // dangling symlink. For non-symlinks, lstat === stat.
+    const stats = lstats.isSymbolicLink()
+      ? await fs.promises.stat(target).catch(() => lstats)
+      : lstats;
     return {
       type,
-      ctime: lstats.ctimeMs,
-      mtime: lstats.mtimeMs,
-      size: lstats.size,
+      ctime: stats.ctimeMs,
+      mtime: stats.mtimeMs,
+      size: stats.size,
     };
   },
 

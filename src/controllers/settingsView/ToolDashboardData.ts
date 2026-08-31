@@ -67,7 +67,7 @@ export function planToolTerminalAction(input: {
  */
 const BUILTIN_TOOLS: (Omit<
   ToolDashboardItem,
-  'status' | 'tools' | 'installActions'
+  'status' | 'tools' | 'installActions' | 'requiresSetup'
 > & {
   toolNames: readonly RegisteredToolName[];
 })[] = [
@@ -78,7 +78,6 @@ const BUILTIN_TOOLS: (Omit<
     description:
       'Read, write, edit files and run shell commands. Includes glob/grep search.',
     toolNames: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-    requiresSetup: false,
   },
   {
     id: 'latex-extract',
@@ -91,7 +90,6 @@ const BUILTIN_TOOLS: (Omit<
       'extract_tikz_figures',
       'extract_bib_entries',
     ],
-    requiresSetup: false,
   },
   {
     id: 'latex-diagnostics',
@@ -100,7 +98,6 @@ const BUILTIN_TOOLS: (Omit<
     description:
       'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
     toolNames: ['diagnostics'],
-    requiresSetup: false,
   },
   {
     id: 'arxiv',
@@ -109,7 +106,6 @@ const BUILTIN_TOOLS: (Omit<
     description:
       'Search arXiv papers, retrieve metadata, and download LaTeX source packages.',
     toolNames: ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source'],
-    requiresSetup: false,
   },
   {
     id: 'crossref',
@@ -118,7 +114,6 @@ const BUILTIN_TOOLS: (Omit<
     description:
       'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
     toolNames: ['crossref_search'],
-    requiresSetup: false,
   },
   {
     id: 'web',
@@ -127,7 +122,6 @@ const BUILTIN_TOOLS: (Omit<
     description:
       'Search the web and fetch or extract content from URLs. Uses native provider tools when available, and DuckDuckGo Instant Answers otherwise.',
     toolNames: ['web_search', 'web_fetch'],
-    requiresSetup: false,
   },
   {
     id: 'memory-workflow',
@@ -144,7 +138,6 @@ const BUILTIN_TOOLS: (Omit<
       'executions',
       'accept_run_files',
     ],
-    requiresSetup: false,
   },
 ];
 
@@ -175,6 +168,7 @@ export async function buildToolDashboardItems(
     tools: toolNames.map((name) => ({ name })),
     status: 'available' as const,
     installActions: [],
+    requiresSetup: false,
   }));
 
   const results = cachedResults ?? (await runExternalToolChecks());

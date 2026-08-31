@@ -38,18 +38,11 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
  * They stay distinct context labels (rather than collapsing to one) because
  * the label is what lands in the emitted trace message, and because a future
  * change to this policy (e.g. making `toolAttachment` failures stricter)
- * should be a one-line change to `shouldFailRound`/`CONTEXT_SEVERITY`, not a
- * re-audit of every call site.
+ * should be a one-line change to the fail-vs-warn check or `CONTEXT_SEVERITY`,
+ * not a re-audit of every call site.
  */
 export type MediaAttachmentContext =
   'initial' | 'followUp' | 'insert' | 'toolAttachment';
-
-/** The only place that decides fail-vs-warn for a media/attachment failure. */
-function shouldFailRound(
-  context: MediaAttachmentContext,
-): context is 'initial' {
-  return context === 'initial';
-}
 
 const CONTEXT_LABEL: Record<MediaAttachmentContext, string> = {
   initial: 'initial message',
@@ -97,7 +90,9 @@ export function reportMediaAttachmentFailure(
   err: unknown,
   detail?: string,
 ): void {
-  if (shouldFailRound(context)) {
+  // The only fail-vs-warn decision point: `initial` fails the round loudly;
+  // every other context logs and degrades to "continue without attachment".
+  if (context === 'initial') {
     throw err instanceof Error ? err : new Error(getSdkErrorMessage(err));
   }
   const suffix = detail ? ` (${detail})` : '';

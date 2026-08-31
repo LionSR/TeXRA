@@ -78,7 +78,7 @@ export class LaTeXdiffService {
   private async readDiffInputs(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
-  ): Promise<string[] | null> {
+  ): Promise<[string, string] | null> {
     try {
       return await Promise.all([
         AbsoluteFS.read(inputLocation.absolutePath),

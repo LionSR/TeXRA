@@ -413,9 +413,9 @@ export class ProgressBackend {
 
   /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
   applySessionFact(
-    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
   ): boolean {
-    return this.admitSessionFact(args[0]);
+    return this.admitSessionFact(fact);
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -639,7 +639,7 @@ export class ProgressBackend {
       activeAfterClear !== '' && remainingStreams.includes(activeAfterClear);
     const newerActivationPending =
       activationGenerationAtStart !== this.activationGeneration;
-    const newerIntentControlsSelection = this.newerIntentControlsSelection(
+    const newerIntentControls = this.newerIntentControlsSelection(
       activationGenerationAtStart,
       stream,
     );
@@ -647,8 +647,8 @@ export class ProgressBackend {
     // DELETE_STREAM. A concurrent explicit deselection is presentation intent
     // and must remain empty rather than being replaced by a fallback.
     const shouldActivateStream =
-      (selectionWasDeleted && !newerIntentControlsSelection) ||
-      (wasActive && hasVisibleActive && !newerIntentControlsSelection);
+      !newerIntentControls &&
+      (selectionWasDeleted || (wasActive && hasVisibleActive));
 
     this.postMessage({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -677,11 +677,11 @@ export class ProgressBackend {
       () => this.prepareAllStreamDeletions(),
       () => this.deleteAllStreamsNow(),
     );
-    const newerIntentControlsSelection =
+    const newerIntentControls =
       this.newerIntentControlsSelection(activationGeneration);
     try {
       await this.lifecycle.rebuildRenderedStreams({
-        syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
+        syncActiveStream: !outcome.allDeleted && !newerIntentControls,
       });
     } catch (error) {
       log.warn('Failed to rebuild rendered streams after bulk deletion', {
@@ -763,12 +763,8 @@ export class ProgressBackend {
   load(): Promise<void> {
     return this.enqueueStorageOperation(async () => {
       await this.session.waitUntilReady();
-      await this.loadPresentationState();
+      await this.state.load(this.stateOwnership);
     });
-  }
-
-  private loadPresentationState(): Promise<void> {
-    return this.state.load(this.stateOwnership);
   }
 
   /**
@@ -790,23 +786,11 @@ export class ProgressBackend {
     prepare: () => Promise<P>,
     work: (prepared: P) => Promise<T>,
   ): Promise<T> {
-    let prepared!: P;
-    let publishPreparation!: (value: PromiseLike<void>) => void;
-    const preparation = new Promise<void>((resolve) => {
-      publishPreparation = resolve;
-    });
-    const operation = this.enqueueStorageOperation(async () => {
-      await preparation;
-      return work(prepared);
-    });
-    const pendingPreparation = Promise.resolve().then(async () => {
-      prepared = await prepare();
-    });
+    const preparation = Promise.resolve().then(prepare);
     // If an earlier queue entry is still running, attach a rejection handler
     // until this operation reaches the same promise.
     void preparation.catch(() => undefined);
-    publishPreparation(pendingPreparation);
-    return operation;
+    return this.enqueueStorageOperation(() => preparation.then(work));
   }
 
   /**

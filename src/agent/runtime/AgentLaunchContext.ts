@@ -287,10 +287,10 @@ async function assembleAgentLaunchContext(
     fullConfig.agentSource,
   );
   input.signal?.throwIfAborted();
-  // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
-  // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
-  // Workflow when absent), so `setting.agentCategory` is always populated here —
-  // a second `ensureAgentCategoryForSource` pass would be a guaranteed no-op.
+  // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
+  // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
+  // (to Workflow when absent), so `setting.agentCategory` is always populated
+  // here — a second defaulting pass would be a guaranteed no-op.
   const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
   input.signal?.throwIfAborted();
 

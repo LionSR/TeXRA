@@ -1,11 +1,5 @@
+import { filterNotNullish } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
-
-/** Joins non-empty parts (in order) with "and", dropping undefined slots. */
-function joinCountedParts(parts: ReadonlyArray<string | undefined>): string {
-  return parts
-    .filter((part): part is string => part !== undefined)
-    .join(' and ');
-}
 
 export function formatCliHistoryDeletionSummary(counts: {
   readonly deleted: number;
@@ -38,7 +32,7 @@ export function formatStreamDeletionRetention(
   activeCount: number,
   failedCount: number,
 ): string {
-  const reasons = joinCountedParts([
+  const reasons = [
     activeCount > 0
       ? formatResultCount(activeCount, 'active stream')
       : undefined,
@@ -49,6 +43,6 @@ export function formatStreamDeletionRetention(
           'streams that could not be deleted',
         )
       : undefined,
-  ]);
-  return `Kept ${reasons}.`;
+  ].filter(filterNotNullish);
+  return `Kept ${reasons.join(' and ')}.`;
 }

@@ -136,13 +136,11 @@ async function queueAgentCliFollowUp(
   // A queued follow-up whose wake failed is still queued: it is delivered
   // when the agent is resumed, so the caller must not offer it again.
   const wakeFailed = result.status === 'queued' && result.wake === 'failed';
+  const followUpLine = wakeFailed
+    ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
+    : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
   return executed(
-    [
-      wakeFailed
-        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
-        : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
-      `Execution ID: ${stored.executionId}`,
-    ].join('\n'),
+    [followUpLine, `Execution ID: ${stored.executionId}`].join('\n'),
     `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
   );
 }

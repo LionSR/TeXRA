@@ -1,13 +1,5 @@
 import { roundTo } from '@utils/core';
 
-/** Raw percentage of the context window consumed by `tokens`. */
-function computeUtilizationPercent(
-  tokens: number,
-  contextWindow: number,
-): number {
-  return (tokens / contextWindow) * 100;
-}
-
 /**
  * Rounded percentage of the context window consumed by `tokens`. Single
  * source for the rounded log/display value so every surface reports the same
@@ -18,5 +10,5 @@ export function roundedUtilizationPercent(
   contextWindow: number,
   decimals = 1,
 ): number {
-  return roundTo(computeUtilizationPercent(tokens, contextWindow), decimals);
+  return roundTo((tokens / contextWindow) * 100, decimals);
 }

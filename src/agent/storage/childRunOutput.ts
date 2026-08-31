@@ -55,17 +55,20 @@ export async function resolveChildRunOutput(
     reference.executionId,
     reference.relativePath,
   );
-  if (entry.kind === 'file') return entry.location;
-  if (entry.kind === 'symlink') return undefined;
-  if (entry.kind === 'missing') {
-    throw new Error(
-      `Declared output ${reference.relativePath} is missing from execution ${reference.executionId}.`,
-    );
+  switch (entry.kind) {
+    case 'file':
+      return entry.location;
+    case 'symlink':
+      return undefined;
+    case 'missing':
+      throw new Error(
+        `Declared output ${reference.relativePath} is missing from execution ${reference.executionId}.`,
+      );
+    case 'invalid':
+      throw new Error(`Invalid declared workflow output: ${entry.reason}`);
+    default:
+      throw new Error(
+        `Declared output ${reference.relativePath} is not a regular file.`,
+      );
   }
-  if (entry.kind === 'invalid') {
-    throw new Error(`Invalid declared workflow output: ${entry.reason}`);
-  }
-  throw new Error(
-    `Declared output ${reference.relativePath} is not a regular file.`,
-  );
 }

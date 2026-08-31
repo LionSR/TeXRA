@@ -30,7 +30,6 @@ import {
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
-const THREADS_DIR = EXTERNAL_INQUIRY_THREADS_DIR;
 const QUESTION_PREVIEW_CHARS = 200;
 const logger = createLog('ExternalInquiryStorage');
 
@@ -118,7 +117,7 @@ const threadMutex = new KeyedMutex<string>();
 // ============================================================================
 
 function threadDir(threadId: InquiryThreadId): string {
-  return path.join(THREADS_DIR, threadId);
+  return path.join(EXTERNAL_INQUIRY_THREADS_DIR, threadId);
 }
 
 function threadManifestPath(threadId: InquiryThreadId): string {
@@ -478,12 +477,12 @@ function manifestToSummary(
 async function listAllManifests(): Promise<ExternalInquiryThreadManifest[]> {
   // A missing threads directory means no threads. Operational storage
   // failures must remain observable instead of masquerading as empty history.
-  const entries = await GlobalStorageFS.readDir(THREADS_DIR).catch(
-    (error: unknown): [string, number][] => {
-      if (isFileNotFoundError(error)) return [];
-      throw error;
-    },
-  );
+  const entries = await GlobalStorageFS.readDir(
+    EXTERNAL_INQUIRY_THREADS_DIR,
+  ).catch((error: unknown): [string, number][] => {
+    if (isFileNotFoundError(error)) return [];
+    throw error;
+  });
 
   const reads = entries.flatMap(([name, type]) => {
     if (!isDirectory(type)) return [];

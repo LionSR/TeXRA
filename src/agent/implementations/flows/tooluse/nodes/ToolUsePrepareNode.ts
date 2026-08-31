@@ -58,7 +58,9 @@ export class ToolUsePrepareNode extends BaseNode<
         logger,
         promptOptions,
       );
-    const systemMessage = buildSystemText(systemPrompt, instructionSuffix);
+    const systemMessage = systemPrompt
+      ? `${systemPrompt}\n${instructionSuffix}`
+      : instructionSuffix;
 
     if (resumeShared) {
       // The persisted messages are used verbatim -- including `messages[0]`
@@ -161,18 +163,4 @@ export class ToolUsePrepareNode extends BaseNode<
 
     return FlowTransition.DEFAULT;
   }
-}
-
-/**
- * Combine the system prompt with the instruction suffix into the single text
- * block used for the system message. Falls back to the suffix alone when there
- * is no system prompt.
- */
-function buildSystemText(
-  systemPrompt: string,
-  instructionSuffix: string,
-): string {
-  return systemPrompt
-    ? `${systemPrompt}\n${instructionSuffix}`
-    : instructionSuffix;
 }

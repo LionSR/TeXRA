@@ -10,8 +10,8 @@ import type { ProviderMessage } from './ProviderMessage';
  * of its own, so it can never drift from the base class: adding, renaming, or
  * retyping a member there is automatically reflected here, and a base-class
  * signature change breaks exactly one place (the class) instead of two. Only
- * members consumers
- * actually call through this port are picked. Omitted members are reached
+ * members consumers actually call through this port are picked. Omitted
+ * members are reached
  * through the concrete class instead: this includes internal-only helpers
  * such as `supportsReasoningLevelOverride`, plus
  * `extractResponse`, which `helperModel` calls on its concrete handler.

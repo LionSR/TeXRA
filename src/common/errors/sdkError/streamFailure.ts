@@ -45,9 +45,7 @@ export function handleStreamingFailure(
 ): never {
   hooks.finalizeOnError?.();
   const partialTail = hooks.partialTail();
-  const decorated = hooks.decorateError
-    ? hooks.decorateError(err, partialTail)
-    : err;
+  const decorated = hooks.decorateError?.(err, partialTail) ?? err;
   attachPartialText(decorated, partialTail);
   throw decorated;
 }

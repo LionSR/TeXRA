@@ -135,17 +135,17 @@ export async function applyStateSettingUpdate(
       ? resetSetting(write.entry, ports.stores, ports.host)
       : writeSetting(write.entry, write.value, ports.stores, ports.host));
     if (write.entry.key === TEXRA_APPROVAL_POLICY_CONFIG_KEY) {
-      ports.onApprovalPolicyChanged?.(
+      // A reset clears only the workspace layer, so a surviving global value
+      // is what the session must run (issue #9749).
+      const policy =
         write.kind === 'reset'
-          ? // A reset clears only the workspace layer, so a surviving global
-            // value is what the session must run (issue #9749).
-            (readSetting(
+          ? (readSetting(
               write.entry,
               ports.stores,
               ports.host,
             ) as TexraApprovalPolicy)
-          : (write.value as TexraApprovalPolicy),
-      );
+          : (write.value as TexraApprovalPolicy);
+      ports.onApprovalPolicyChanged?.(policy);
     }
     return { kind: 'applied', entry: write.entry };
   } catch (error) {

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { AttachedMemoryMissSchema } from '@agent/types/AttachedMemory';
+import {
+  AttachedMemoryMissSchema,
+  type AttachedMemoryMiss,
+} from '@agent/types/AttachedMemory';
 import type { ExecutionId, RunOutcome, StreamTabId } from '@shared/schemas';
 import {
   CompileFailureSummarySchema,
@@ -108,7 +111,7 @@ export function buildTerminalFlowResult(
   outcome: RunOutcome,
   executionId: ExecutionId,
   streamId: StreamTabId,
-  memoryMisses?: z.infer<typeof AttachedMemoryMissSchema>[],
+  memoryMisses?: AttachedMemoryMiss[],
 ): AgentFlowResult {
   const meta = {
     executionId,

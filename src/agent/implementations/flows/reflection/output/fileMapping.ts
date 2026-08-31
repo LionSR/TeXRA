@@ -32,32 +32,31 @@ export function createFileMapping(
   const normalizeName = roundAware
     ? (name: string) => name.split('_r')[0]
     : (name: string) => name;
+  const baseNameOf = (filePath: string): string =>
+    normalizeName(path.parse(path.basename(filePath)).name);
+
+  // Source names do not depend on the target, so derive them once up front.
+  const sources = sourceFiles.map((sourceFile) => {
+    const sourcePath = fileLocationDisplayPath(sourceFile);
+    return { sourcePath, sourceName: baseNameOf(sourcePath) };
+  });
 
   for (const target of targetFiles) {
     const targetPath = fileLocationDisplayPath(target);
     const targetBaseName = path.basename(targetPath);
-    const targetName = normalizeName(path.parse(targetBaseName).name);
+    const targetName = baseNameOf(targetPath);
 
     let bestMatchSourcePath: string | null = null;
     let bestMatchScore = 0;
 
-    for (const sourceFile of sourceFiles) {
-      const sourcePath = fileLocationDisplayPath(sourceFile);
-      const sourceName = normalizeName(
-        path.parse(path.basename(sourcePath)).name,
-      );
+    for (const { sourcePath, sourceName } of sources) {
+      const matches =
+        matchStrategy === 'basename'
+          ? sourceName === targetName
+          : targetBaseName.includes(sourceName);
 
-      let matchScore = 0;
-      if (matchStrategy === 'basename') {
-        if (sourceName === targetName) {
-          matchScore = sourceName.length;
-        }
-      } else if (targetBaseName.includes(sourceName)) {
-        matchScore = sourceName.length;
-      }
-
-      if (matchScore > bestMatchScore) {
-        bestMatchScore = matchScore;
+      if (matches && sourceName.length > bestMatchScore) {
+        bestMatchScore = sourceName.length;
         bestMatchSourcePath = sourcePath;
       }
     }
@@ -70,6 +69,8 @@ export function createFileMapping(
   return fileMapping;
 }
 
+const TEX_EXTENSION_REGEX = /\.tex$/i;
+
 /**
  * Update \input commands in output files to reference new file paths.
  *
@@ -77,8 +78,6 @@ export function createFileMapping(
  * @param outputFiles Output file paths
  * @param logger Optional logger for debug messages
  */
-const TEX_EXTENSION_REGEX = /\.tex$/i;
-
 export async function replaceInputCommands(
   baseFiles: FileLocation[],
   outputFiles: FileLocation[],

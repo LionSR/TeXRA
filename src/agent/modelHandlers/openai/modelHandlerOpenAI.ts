@@ -573,9 +573,11 @@ export class ModelHandlerOpenAI<
     if (!convertContentToString && !this.mergeConsecutiveRoles) {
       return undefined;
     }
+    // Both flags default to false in normalizeOpenAIMessageContent, so
+    // passing them explicitly is the same as omitting the disabled ones.
     return {
-      ...(convertContentToString ? { convertContentToString: true } : {}),
-      ...(this.mergeConsecutiveRoles ? { mergeConsecutiveRoles: true } : {}),
+      convertContentToString,
+      mergeConsecutiveRoles: this.mergeConsecutiveRoles,
     };
   }
 

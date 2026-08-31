@@ -92,16 +92,12 @@ function workflowJournalEntryCost(entry: WorkflowJournalEntry): number {
   return result.data.cost;
 }
 
-type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
-
 /**
  * Keys are unique per run (the engine faults duplicates), so the key alone
  * identifies an attempt; a replayed entry re-journaled at a new index still
  * matches the attempt that produced it.
  */
-function workflowAttemptIdentity(invocation: WorkflowAttemptIdentity): string {
-  return invocation.key;
-}
+type WorkflowAttemptIdentity = Pick<WorkflowAgentInvocation, 'index' | 'key'>;
 
 interface WorkflowAttemptCostTracker {
   /** Record one physical child attempt and return this tool invocation's live total. */
@@ -137,20 +133,18 @@ export function createWorkflowAttemptCostTracker(): WorkflowAttemptCostTracker {
   return {
     record: (invocation, costUsd) => {
       observedTotalUsd += costUsd;
-      const identity = workflowAttemptIdentity(invocation);
-      const attempts = attemptsByIdentity.get(identity) ?? [];
+      const attempts = attemptsByIdentity.get(invocation.key) ?? [];
       attempts.push(costUsd);
-      attemptsByIdentity.set(identity, attempts);
+      attemptsByIdentity.set(invocation.key, attempts);
       return observedTotalUsd;
     },
     total: (finalJournal) => {
       const journalIdentities = new Set<string>();
       let totalUsd = 0;
       for (const entry of finalJournal) {
-        const identity = workflowAttemptIdentity(entry);
-        journalIdentities.add(identity);
+        journalIdentities.add(entry.key);
         const journalCostUsd = workflowJournalEntryCost(entry);
-        const attempts = attemptsByIdentity.get(identity);
+        const attempts = attemptsByIdentity.get(entry.key);
         if (!attempts || attempts.length === 0) continue;
         for (const discardedCostUsd of attempts.slice(0, -1)) {
           totalUsd += discardedCostUsd;
@@ -227,7 +221,7 @@ export async function runPersistedWorkflowScriptWithProgress(
   /**
    * Open a phase stage once the run reaches it and answer the stage rows
    * emitted from there belong to. Callers that only need the phase opened
-   * ignore the return: `emitCall` resolves a card's group itself.
+   * ignore the return.
    */
   const openPhaseStage = (phase: string | undefined): string | undefined =>
     phase ? phaseFor(phase).handle.id : parentStageId;
@@ -250,10 +244,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       // Stable trace identity for this call within its run stream.
       logId: `workflow-task-${projectionId}-${call.id}`,
       call: card,
-      stageId:
-        card.phase === undefined
-          ? parentStageId
-          : phaseFor(card.phase).handle.id,
+      stageId: openPhaseStage(card.phase),
     });
   };
   const markPhaseFailed = (title: string | undefined): void => {

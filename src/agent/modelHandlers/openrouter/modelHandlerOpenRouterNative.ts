@@ -283,14 +283,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         // starts fire (if ever) at the first reasoning/content delta.
         thinking = this.createThinkingStream();
         output = this.createOutputStream();
-        const thinkingStream = thinking;
-        const outputStream = output;
 
         for await (const chunk of stream) {
           const { contentDelta, reasoningDelta } =
             aggregator.consumeChunk(chunk);
-          if (reasoningDelta) thinkingStream.append(reasoningDelta);
-          if (contentDelta) outputStream.append(contentDelta);
+          if (reasoningDelta) thinking.append(reasoningDelta);
+          if (contentDelta) output.append(contentDelta);
         }
 
         const response = aggregator.buildResponse();

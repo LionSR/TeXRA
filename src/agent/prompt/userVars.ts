@@ -580,8 +580,9 @@ export function getToolFlags(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
 ): ToolFlagVars {
-  const hasTool = (name: string) =>
-    agentSetting.tools.some((tool) => tool.name === name);
+  function hasTool(name: string): boolean {
+    return agentSetting.tools.some((tool) => tool.name === name);
+  }
 
   const flags: ToolFlagVars = {
     CODEX_GUIDANCE: hasTool('codex') ? TOOL_GUIDANCE.codex : '',

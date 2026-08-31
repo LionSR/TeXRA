@@ -371,8 +371,9 @@ export class WorkflowExecutionState {
     const call = this.#call(id);
     const attempt = call.attempts.at(-1);
     if (attempt && attempt.completedAt === undefined) {
-      attempt.completedAt = now();
-      call.timestamps.updatedAt = now();
+      const settledAt = now();
+      attempt.completedAt = settledAt;
+      call.timestamps.updatedAt = settledAt;
       this.#emit();
     }
     return true;
@@ -543,18 +544,7 @@ function totalAttemptCost(
     : undefined;
 }
 
-/** Whether a hydrated call's prior result can be replayed as-is. */
-type ReusableWorkflowExecutionCall = Extract<
-  WorkflowExecutionCall,
-  { readonly status: 'completed' | 'cached' }
->;
-
-function isReusableCall(
-  call: WorkflowExecutionCall,
-): call is ReusableWorkflowExecutionCall {
-  return isReusableStatus(call.status);
-}
-
+/** Whether a hydrated call's status means its prior result can be replayed as-is. */
 function isReusableStatus(status: WorkflowExecutionCall['status']): boolean {
   return (
     status === WORKFLOW_CALL_STATUS.COMPLETED ||
@@ -581,7 +571,7 @@ function recoverCall(
 ): WorkflowExecutionCall {
   if (!prior) return fresh;
   const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
-  if (isReusableCall(prior) || journalProven) {
+  if (isReusableStatus(prior.status) || journalProven) {
     return {
       ...prior,
       id: fresh.id,
@@ -624,7 +614,7 @@ function hydrate(
   for (const prior of persisted.calls) {
     if (freshIds.has(prior.id)) continue;
     const attempts = closeOpenAttempts(prior.attempts, recoveryAt);
-    if (isReusableCall(prior)) {
+    if (isReusableStatus(prior.status)) {
       snapshot.calls.push({
         ...prior,
         stageId: undefined,

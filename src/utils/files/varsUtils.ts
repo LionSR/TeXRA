@@ -20,7 +20,7 @@ export interface FileVarValue {
 export async function setVarFromFile(
   filePath: string,
   varName: string,
-  absolute: boolean = false,
+  absolute = false,
 ): Promise<FileVarValue | null> {
   try {
     const content = absolute

@@ -17,7 +17,7 @@
  * {@link ANTHROPIC_SERVER_TOOL_BLOCK_TYPES} (`@agent/types/ServerTools`) and
  * are imported here for classification, not duplicated.
  */
-import { ANTHROPIC_SERVER_TOOL_BLOCK_TYPES } from '@agent/types/ServerTools';
+import { ANTHROPIC_SERVER_TOOL_BLOCK_TYPES } from './ServerTools';
 
 export const CONVERSATION_BLOCK_TYPES = Object.freeze({
   // Anthropic and Google GenAI extended-thinking / thought blocks.
@@ -83,7 +83,11 @@ export function classifyProviderMessageBlockType(
   // `Object.prototype`, so a provider block typed `'toString'` or
   // `'constructor'` would otherwise return a function into consumer switches
   // that `assertNever` on anything unrecognized.
-  return typeof type === 'string' && Object.hasOwn(CATEGORY_BY_BLOCK_TYPE, type)
-    ? CATEGORY_BY_BLOCK_TYPE[type as keyof typeof CATEGORY_BY_BLOCK_TYPE]
-    : undefined;
+  if (
+    typeof type !== 'string' ||
+    !Object.hasOwn(CATEGORY_BY_BLOCK_TYPE, type)
+  ) {
+    return undefined;
+  }
+  return CATEGORY_BY_BLOCK_TYPE[type as keyof typeof CATEGORY_BY_BLOCK_TYPE];
 }

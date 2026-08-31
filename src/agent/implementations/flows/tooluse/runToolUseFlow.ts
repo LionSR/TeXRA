@@ -381,7 +381,6 @@ export async function runToolUseFlow(
   let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
   let files: string[] | undefined;
   let totalCostUsd: number | undefined;
-  let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
   let resumeStartupPreservation:
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
@@ -434,7 +433,7 @@ export async function runToolUseFlow(
 
   try {
     liveAttachment.attach();
-    attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
+    const attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (signal.aborted && input.resume) {

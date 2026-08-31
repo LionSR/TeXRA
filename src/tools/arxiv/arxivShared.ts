@@ -13,7 +13,7 @@ type ArxivEntry = Awaited<ReturnType<typeof arxivClient.execute>>[number];
 // ============================================================================
 
 /** Base arXiv paper metadata shared between search and metadata tools. */
-export interface ArxivPaperBase {
+interface ArxivPaperBase {
   id: string | null;
   doi: string | null;
   title: string;

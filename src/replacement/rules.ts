@@ -16,7 +16,7 @@ import {
   generateSectionSpacingFixes,
   generateXmlLatexConversions,
 } from '@replacement/helpers';
-import { NonRegexReplacementCategory } from '@replacement/types';
+import type { NonRegexReplacementCategory } from '@replacement/types';
 import type { NonRegexReplacementCategory as NonRegexReplacementCategoryName } from '@shared/constants/replacementCategories';
 
 export const CHARACTER_REPLACEMENTS: NonRegexReplacementCategory = {

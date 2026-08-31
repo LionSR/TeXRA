@@ -77,11 +77,7 @@ export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
 
     const effort = this.getEffectiveReasoningEffort();
     const normalized = effort
-      ? normalizeSupportedReasoningEffort(
-          effort,
-          supported,
-          this.capabilities.reasoningEffort,
-        )
+      ? this.normalizeReasoningEffort(effort)
       : this.capabilities.reasoningEffort;
     return normalized === ReasoningEffort.NONE
       ? { type: 'disabled' }

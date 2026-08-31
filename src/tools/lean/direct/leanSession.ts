@@ -58,7 +58,6 @@ export interface LeanSessionOptions {
 }
 
 export class LeanSession {
-  private child?: ChildProcessWithoutNullStreams;
   private spawned?: ChildProcessWithoutNullStreams;
   private rpc?: JsonRpcConnection;
   private closeWait?: Promise<void>;
@@ -88,11 +87,9 @@ export class LeanSession {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    const child = this.child;
     const spawned = this.spawned;
     const rpc = this.rpc;
     const closeWait = this.closeWait;
-    this.child = undefined;
     this.spawned = undefined;
     this.rpc = undefined;
     this.readyPromise = undefined;
@@ -100,7 +97,7 @@ export class LeanSession {
     this.openFiles.clear();
     unregisterLeanServer(this.id);
     try {
-      if (rpc && child) {
+      if (rpc && spawned) {
         try {
           await pTimeout(rpc.request('shutdown'), {
             milliseconds: SHUTDOWN_TIMEOUT_MS,
@@ -204,7 +201,6 @@ export class LeanSession {
         cause: error,
       });
     }
-    this.child = child;
     this.spawned = child;
     this.closeWait = new Promise<void>((resolve) => {
       child.once('close', () => resolve());
@@ -217,7 +213,6 @@ export class LeanSession {
       finalized = true;
       this.options.onExit?.();
       updateLeanServer(this.id, { status, errorMessage: message });
-      this.child = undefined;
       this.rpc?.dispose(message ?? 'Lean server stopped');
       this.rpc = undefined;
       this.readyPromise = undefined;

@@ -153,11 +153,7 @@ export interface ServerToolExtractionResult {
 
 /** Shared shape check: a non-null object whose `type` matches the given tag. */
 function hasBlockType(value: unknown, type: string): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { type?: string }).type === type
-  );
+  return isObject(value) && value.type === type;
 }
 
 /** Type guard for Anthropic server tool use block. */
@@ -431,15 +427,14 @@ export function extractAnthropicWebFetchResults(
     const fetchUrl = urlMap.get(block.tool_use_id) ?? '';
 
     if (isWebFetchBlock(block.content)) {
-      // Successful fetch
-      const fields = extractWebFetchResultFields(block);
+      const fields = webFetchBlockFields(block.content);
       results.push({
-        url: fields?.url || fetchUrl,
-        title: fields?.title,
+        url: fields.url || fetchUrl,
+        title: fields.title,
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'completed',
-        content: fields?.content,
+        content: fields.content,
       });
     } else {
       // Error result — block.content is narrowed to WebFetchToolResultErrorBlock

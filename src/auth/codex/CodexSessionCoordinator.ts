@@ -92,14 +92,13 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
 
 export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexSession> {
   constructor(init: CodexSessionCoordinatorInit) {
-    const client = init.client ?? {
-      exchangeAuthorizationCode: defaultExchange,
-      refreshTokens: defaultRefresh,
-    };
     super({
       storage: init.storage,
       policy: CODEX_POLICY,
-      client,
+      client: init.client ?? {
+        exchangeAuthorizationCode: defaultExchange,
+        refreshTokens: defaultRefresh,
+      },
       now: init.now,
       errorType: CodexAuthError,
     });
