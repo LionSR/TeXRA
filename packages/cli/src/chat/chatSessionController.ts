@@ -5,7 +5,11 @@
 import pDefer from 'p-defer';
 import PQueue from 'p-queue';
 
-import { ExecutionLeaseActiveError, getExecutionStore } from '@agent/storage';
+import {
+  ExecutionLeaseActiveError,
+  getExecutionStore,
+  readExecutionMeta,
+} from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
@@ -525,7 +529,7 @@ export function createChatSessionController(
       const store = getExecutionStore(id);
       const [config, meta] = await Promise.all([
         store.readConfig(),
-        store.readMeta(),
+        readExecutionMeta(id),
       ]);
       const streamId = meta?.streamId;
       let failure: string | undefined;

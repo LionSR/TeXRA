@@ -47,6 +47,7 @@ export {
   isUserVisibleExecution,
 } from './executionListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
+export { readExecutionMeta } from './executionMetaPersistence';
 export { formatConversationMessage } from './conversationFormat';
 export {
   ExecutionLeaseActiveError,

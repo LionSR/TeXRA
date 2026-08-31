@@ -66,9 +66,9 @@ export async function runResumeExecution(
   await initInteractiveCliPlatform({ ...context, quietLogs: true });
 
   const store = getExecutionStore(id);
-  let config, meta;
+  let config;
   try {
-    [config, meta] = await Promise.all([store.readConfig(), store.readMeta()]);
+    config = await store.readConfig();
   } catch (error) {
     writeTextStderr(loadFailureMessage(id, error));
     return CliExitCode.AgentError;
@@ -98,13 +98,6 @@ export async function runResumeExecution(
     case 'resumable':
       break;
   }
-  // FK-first: the stream id stamped at registration is the reproduction
-  // contract. A row without one has no persisted stream to continue.
-  if (!meta?.streamId) {
-    writeTextStderr(describeFollowUpFailure('finished'));
-    return CliExitCode.Usage;
-  }
-
   // Tool-use resume reopens the interactive TUI, so headless callers are
   // rejected before resume-state loading. Workflow resume runs headless and
   // skips this gate entirely.

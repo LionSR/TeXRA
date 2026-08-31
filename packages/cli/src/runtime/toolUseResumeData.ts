@@ -4,7 +4,7 @@ import {
   retrieveSessionResumeData,
   type AgentConfig,
 } from '@agent/runtime';
-import { getExecutionStore } from '@agent/storage';
+import { readExecutionMeta } from '@agent/storage';
 import { createLog } from '@logger/logUtils';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -18,10 +18,7 @@ async function readCliSessionResumeData(
   id: ExecutionId,
   config: AgentConfig,
 ): Promise<CliSessionResumeData | null> {
-  // FK-first: the stream id stamped on execution metadata at registration is
-  // the reproduction contract — never re-derived from agent/model. A row
-  // without a stamped stream id has no persisted stream and is not resumable.
-  const streamId = (await getExecutionStore(id).readMeta())?.streamId;
+  const streamId = (await readExecutionMeta(id))?.streamId;
   if (!streamId) return null;
   return (await retrieveSessionResumeData(streamId, id, config)) ?? null;
 }

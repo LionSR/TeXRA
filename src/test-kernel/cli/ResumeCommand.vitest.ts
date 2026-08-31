@@ -14,9 +14,16 @@ import {
 } from '@agent/storage/executionLease';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { ExecutionId, ExecutionMeta } from '@shared/schemas';
+import { KVStore } from '@common/storage/KVStore';
+import type { ExecutionId, ExecutionMeta, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  streamDataDir,
+} from '@transcript/streamDataPaths';
+import { StorageFS } from '@utils/files/storageFS';
 
 const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),
@@ -68,8 +75,8 @@ vi.mock('@cli/chat/tui/runChatTui', () => ({
   runChat: mocks.runChat,
 }));
 
-const EXECUTION_ID = 'exec-1' as ExecutionId;
-const STREAM_ID = 'planner#exec-1';
+const EXECUTION_ID = 'e86441' as ExecutionId;
+const STREAM_ID = 'planner#exec-1' as StreamTabId;
 
 const TOOL_USE_CONFIG = AgentConfigSchema.parse({
   agent: 'planner',
@@ -147,6 +154,9 @@ async function stubWorkflowResume(config: AgentConfig): Promise<void> {
 describe('runResumeExecution', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    await StorageFS.delete(STREAM_DATA_DIR, { recursive: true }).catch(
+      () => undefined,
+    );
     mocks.initInteractiveCliPlatform.mockResolvedValue(undefined);
     mocks.initializeCliTranscriptSession.mockResolvedValue({
       session: {
@@ -216,6 +226,35 @@ describe('runResumeExecution', () => {
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith('correct', 'run');
     expect(mocks.runChat).not.toHaveBeenCalled();
+  });
+
+  it('resumes a historical workflow after the metadata boundary heals its stream', async () => {
+    await seedExecution({
+      config: WORKFLOW_CONFIG,
+      meta: META_WITHOUT_STREAM_ID,
+    });
+    await new KVStore(streamDataDir(STREAM_ID)).write(STREAM_DATA_KEYS.META, {
+      executionId: EXECUTION_ID,
+    });
+    mocks.retrieveSessionResumeData.mockResolvedValue({
+      type: 'workflow',
+      agentConfig: WORKFLOW_CONFIG,
+      executionId: EXECUTION_ID,
+    });
+
+    await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(0);
+
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
+      STREAM_ID,
+      EXECUTION_ID,
+      WORKFLOW_CONFIG,
+      expect.any(Object),
+    );
+    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalled();
+    await expect(
+      getExecutionStore(EXECUTION_ID).readMeta(),
+    ).resolves.toMatchObject({ streamId: STREAM_ID });
   });
 
   it('restores an absolute persisted workflow output directory', async () => {
@@ -356,18 +395,21 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports a row without a stamped stream id as finished', async () => {
+  it('defers tool-use stream normalization to the resumed TUI session', async () => {
     await seedExecution({
       config: TOOL_USE_CONFIG,
       meta: META_WITHOUT_STREAM_ID,
     });
 
-    await expect(run(cliContext())).resolves.toBe(2);
+    await expect(run(cliContext())).resolves.toBe(0);
 
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
+    expect(mocks.runChat).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        initialResume: { id: EXECUTION_ID, config: TOOL_USE_CONFIG },
+      }),
     );
-    expect(mocks.runChat).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
 
   it('reports a run with no checkpoint as finished', async () => {

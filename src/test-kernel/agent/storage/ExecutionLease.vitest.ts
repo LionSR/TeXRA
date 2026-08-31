@@ -8,6 +8,8 @@ import {
   finalizeRun,
   getExecutionStore,
 } from '@agent/storage';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import {
   deleteAllExecutions,
   deleteExecution,
@@ -27,10 +29,17 @@ import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import { KVStore } from '@common/storage/KVStore';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { platform } from '@platform/platform';
-import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_OUTCOME,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   deadOwner,
   displaceLease,
@@ -44,6 +53,11 @@ import {
   writeOrphanedLease,
 } from '@test/support/executionLeaseFixtures';
 import type { FakeProcesses } from '@test/support/FakePlatform';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  streamDataDir,
+} from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
 const ownedExecutionIds = new Set<ExecutionId>();
@@ -103,6 +117,7 @@ afterEach(async () => {
     recursive: true,
   }).catch(() => {});
   await StorageFS.delete('executions', { recursive: true }).catch(() => {});
+  await StorageFS.delete(STREAM_DATA_DIR, { recursive: true }).catch(() => {});
   clearStoreCache();
 });
 
@@ -121,6 +136,40 @@ describe('cross-process execution leases', () => {
       executionId,
     });
     expect(await StorageFS.exists(`executions/${executionId}`)).toBe(true);
+  });
+
+  it('classifies legacy healing blocked by a live foreign owner as owned elsewhere', async () => {
+    const executionId = 'a8644f' as ExecutionId;
+    const streamId = 'foreign-owned-legacy-stream' as StreamTabId;
+    const config = AgentConfigSchema.parse({
+      agent: 'assistant',
+      model: 'deepseekT',
+      instruction: 'Resume the historical run.',
+      agentCategory: AgentCategory.ToolUse,
+      workingDirectory: '/workspace',
+    });
+    const store = getExecutionStore(executionId);
+    await store.writeMeta({ timestamp: '2026-07-31T00:00:00.000Z' });
+    await store.writeRunRecord(config);
+    await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, {
+      executionId,
+    });
+    await writeForeignLease(executionId);
+    const session = createTestSession();
+
+    try {
+      await expect(
+        resumeRun(executionId, {
+          session,
+          executeWorkflow: async () => undefined,
+        }),
+      ).resolves.toEqual({ failed: 'owned_elsewhere' });
+      await expect(store.readMeta()).resolves.toEqual(
+        expect.not.objectContaining({ streamId: expect.any(String) }),
+      );
+    } finally {
+      session.dispose();
+    }
   });
 
   it('takes over an orphaned lease whose owner is provably dead', async () => {

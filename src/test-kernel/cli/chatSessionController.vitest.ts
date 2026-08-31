@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
   getExecutionStore: vi.fn(),
+  readExecutionMeta: vi.fn(),
   setCliHelperModel: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   presentationHostClose: vi.fn(),
@@ -43,6 +44,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,
+  readExecutionMeta: mocks.readExecutionMeta,
   ExecutionLeaseActiveError: class ExecutionLeaseActiveError extends Error {},
 }));
 
@@ -296,6 +298,7 @@ function installResumeExecutionStore(
     readConfig: async () => config,
     readMeta: async () => (streamId ? { streamId } : null),
   });
+  mocks.readExecutionMeta.mockResolvedValue(streamId ? { streamId } : null);
 }
 
 /**
@@ -1117,6 +1120,32 @@ describe('createChatSessionController', () => {
     configRead.resolve(null);
     await resumed;
     expect(session.runCompleted).toBe(true);
+  });
+
+  it('resumes a historical row through normalized execution metadata', async () => {
+    const config = makeResumeConfig();
+    mocks.getExecutionStore.mockReturnValue({
+      readConfig: async () => config,
+      readMeta: async () => ({ timestamp: '2026-07-31T00:00:00.000Z' }),
+    });
+    mocks.readExecutionMeta.mockResolvedValue({
+      timestamp: '2026-07-31T00:00:00.000Z',
+      streamId: 'stream-resume',
+    });
+    const session = makeSession();
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
+    );
+
+    await ctrl.resume('legacy-resume' as ExecutionId);
+    await session.runPromise;
+
+    expect(mocks.readExecutionMeta).toHaveBeenCalledWith('legacy-resume');
+    expect(session.streamId).toBe('stream-resume');
+    expect(mocks.resumeRun).toHaveBeenCalledWith(
+      'legacy-resume',
+      expect.any(Object),
+    );
   });
 
   it('retains the configuration of a manually resumed conversation', async () => {

@@ -4,8 +4,15 @@ import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
 import { readCliResumeDataForListing } from '@cli/runtime/toolUseResumeData';
-import type { ExecutionId } from '@shared/schemas';
+import { KVStore } from '@common/storage/KVStore';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { reflectionFlowShared } from '@test/agent/progressTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  streamDataDir,
+} from '@transcript/streamDataPaths';
 import { StorageFS } from '@utils/files/storageFS';
 
 setupPlatform({ workspacePath: '/workspace/cli-resume-listing' });
@@ -31,9 +38,37 @@ afterEach(async () => {
   await StorageFS.delete('executions', { recursive: true }).catch(
     () => undefined,
   );
+  await StorageFS.delete(STREAM_DATA_DIR, { recursive: true }).catch(
+    () => undefined,
+  );
 });
 
 describe('CLI listing resume data', () => {
+  it('advertises a historical row after healing its exact sidecar edge', async () => {
+    const executionId = 'c86441' as ExecutionId;
+    const streamId = 'historical-listing-stream' as StreamTabId;
+    await getExecutionStore(executionId).writeMeta({
+      timestamp: '2026-07-31T00:00:00.000Z',
+    });
+    await writeFlowRecord(
+      executionId,
+      reflectionFlowShared({ currentRound: 1 }),
+    );
+    await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, {
+      executionId,
+    });
+
+    await expect(
+      readCliResumeDataForListing(executionId, config),
+    ).resolves.toMatchObject({
+      type: 'workflow',
+      executionId,
+    });
+    await expect(
+      getExecutionStore(executionId).readMeta(),
+    ).resolves.toMatchObject({ streamId });
+  });
+
   it.each([
     [
       'the unresolved rejection marker',

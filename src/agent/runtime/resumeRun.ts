@@ -17,7 +17,10 @@ import {
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
+import {
+  ExecutionLeaseActiveError,
+  ExecutionLeaseLostError,
+} from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import { readExecutionMeta } from '@agent/storage/executionMetaPersistence';
 import type { RecoveryContinuation } from '@platform/interfaces';
@@ -191,7 +194,7 @@ async function resumeRunWithRecoveryProvenance(
     streamId = meta?.streamId;
   } catch (error) {
     abandonSupplied();
-    throw error;
+    return refusalFor(error) ?? Promise.reject(error);
   }
   // FK-first: current rows use the registration edge directly. A historical
   // row gets only the unique, confirmed sidecar recovery above.
@@ -294,9 +297,12 @@ function releaseUnstartedRecovery(
   session.followUps.release(current, 'recoverable');
 }
 
-/** The two expected launch failures a host words; anything else rejects. */
+/** Expected ownership and session refusals a host words; anything else rejects. */
 function refusalFor(error: unknown): ResumeRunResult | undefined {
-  if (error instanceof ExecutionLeaseActiveError) {
+  if (
+    error instanceof ExecutionLeaseActiveError ||
+    error instanceof ExecutionLeaseLostError
+  ) {
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {
