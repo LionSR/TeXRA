@@ -111,7 +111,10 @@ export interface TranscriptFoldState {
    *  residency is released, and die with the slice like everything here. */
   taskGroupProjection?: TaskGroupProjectionState;
   compactionProjection?: CompactionProjectionState;
-  /** The newest `workflowPlan` marker folded so far (last wins). */
+  /** Attempt boundary from the newest `workflowPlan` marker, even when its
+   *  declared-plan body is malformed. */
+  workflowAttemptId?: string;
+  /** The newest valid `workflowPlan` marker folded so far (last wins). */
   workflowPlan?: WorkflowPlanMarker;
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
@@ -157,9 +160,11 @@ export interface StreamSlice {
   readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
-  /** The newest attempt's declared phases and tasks, from the transcript's
-   *  `workflowPlan` marker; undefined until a workflow-script run records
-   *  one. What the dashboard lists that the run has not reached yet. */
+  /** Attempt boundary from the newest transcript marker, independently of
+   *  whether its declared-plan body was readable. */
+  readonly workflowAttemptId: string | undefined;
+  /** The newest attempt's declared phases and tasks, from a valid transcript
+   *  `workflowPlan` marker. What the dashboard lists but has not reached yet. */
   readonly workflowPlan: WorkflowPlanMarker | undefined;
   /** CLI-only live status: the newest meaningful transcript line for this
    *  stream, recomputed on every log sync. Fills the stream-list summary slot
@@ -201,6 +206,7 @@ export function emptySlice(streamId: StreamTabId): StreamSlice {
     streamId,
     latestLine: undefined,
     taskGroups: [],
+    workflowAttemptId: undefined,
     workflowPlan: undefined,
     thinkingActive: false,
     compactingActive: false,

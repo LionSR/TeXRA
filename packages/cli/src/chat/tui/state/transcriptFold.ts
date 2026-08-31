@@ -218,10 +218,14 @@ function projectTaskGroupsIncrementally(
 function projectWorkflowPlanIncrementally(
   fold: TranscriptFoldState,
   entries: readonly StreamLogEntry[],
-): WorkflowPlanMarker | undefined {
+): {
+  readonly workflowAttemptId: string | undefined;
+  readonly workflowPlan: WorkflowPlanMarker | undefined;
+} {
   for (const entry of entries) {
     const marker = workflowMarkerOf(entry);
     if (!marker) continue;
+    fold.workflowAttemptId = marker.attemptId;
     if (marker.kind === 'malformedPlan') {
       // An unreadable plan is an unknown plan, not the previous attempt's.
       logger.warn(
@@ -232,7 +236,10 @@ function projectWorkflowPlanIncrementally(
       fold.workflowPlan = marker.plan;
     }
   }
-  return fold.workflowPlan;
+  return {
+    workflowAttemptId: fold.workflowAttemptId,
+    workflowPlan: fold.workflowPlan,
+  };
 }
 
 function projectCompactionIncrementally(
@@ -670,12 +677,16 @@ export function applyStreamChanges(
   ctx: FoldContext,
 ): {
   taskGroups: readonly TaskGroup[];
+  workflowAttemptId: string | undefined;
   workflowPlan: WorkflowPlanMarker | undefined;
   compaction: CompactionActivityProjection;
 } {
   const changed = mergeChangedBySeqNo(dirtied, appended);
   const taskGroups = projectTaskGroupsIncrementally(state, changed);
-  const workflowPlan = projectWorkflowPlanIncrementally(state, changed);
+  const { workflowAttemptId, workflowPlan } = projectWorkflowPlanIncrementally(
+    state,
+    changed,
+  );
   const compaction = projectCompactionIncrementally(
     state,
     ctx.log,
@@ -695,7 +706,7 @@ export function applyStreamChanges(
   // Promote only after the merged order is final: "is there a later entry"
   // and `<Static>` append order are both defined on the final stream order.
   advanceSettledPrefix(state, ctx.streamFinal);
-  return { taskGroups, workflowPlan, compaction };
+  return { taskGroups, workflowAttemptId, workflowPlan, compaction };
 }
 
 /** The bounded dashboard + local-row selection for an unfocused workflow

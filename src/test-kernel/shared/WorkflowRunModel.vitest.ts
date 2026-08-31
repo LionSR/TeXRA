@@ -343,7 +343,7 @@ describe('workflow run model', () => {
       childProgress: new Map(),
     });
 
-    expect(model.tasks.map((row) => row.call.id).toSorted()).toStrictEqual([
+    expect(model.tasks.map((row) => row.call.id)).toStrictEqual([
       'current-child',
       'current-legacy-root',
     ]);
@@ -556,10 +556,16 @@ describe('workflow run model', () => {
       phases: [{ title: 'Map' }],
       tasks: [],
     };
-    expect(workflowMarkerOf(entry(plan))).toStrictEqual({ kind: 'plan', plan });
-    expect(workflowMarkerOf(entry({ kind: 'workflowPlan' }))?.kind).toBe(
-      'malformedPlan',
-    );
+    expect(workflowMarkerOf(entry(plan))).toStrictEqual({
+      kind: 'plan',
+      attemptId: 'a',
+      plan,
+    });
+    expect(
+      workflowMarkerOf(
+        entry({ kind: 'workflowPlan', attemptId: 'new', phases: 'broken' }),
+      ),
+    ).toMatchObject({ kind: 'malformedPlan', attemptId: 'new' });
     expect(workflowMarkerOf(entry({ kind: 'somethingElse' }))).toBeUndefined();
   });
 });

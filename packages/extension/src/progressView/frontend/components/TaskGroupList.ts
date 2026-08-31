@@ -177,8 +177,11 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) streamStatus: StreamLifecycleStatus | null =
     null;
 
-  /** The newest attempt's declared workflow plan; with the groups, rows, and
-   *  status it is the shared run model's whole input. */
+  /** Newest workflow-attempt boundary, even if its plan body was malformed. */
+  @property({ attribute: false }) workflowAttemptId: string | undefined =
+    undefined;
+
+  /** The newest attempt's valid declared workflow plan. */
   @property({ attribute: false }) workflowPlan: WorkflowPlanMarker | undefined =
     undefined;
 
@@ -287,6 +290,7 @@ export class TaskGroupList extends LitElement {
       groupsChanged ||
       rowsChanged ||
       changedProperties.has('rowGeneration') ||
+      changedProperties.has('workflowAttemptId') ||
       changedProperties.has('workflowPlan') ||
       changedProperties.has('childProgress') ||
       changedProperties.has('streamStatus')
@@ -351,11 +355,13 @@ export class TaskGroupList extends LitElement {
 
   private rebuildRunModel(): void {
     const model =
+      this.workflowAttemptId !== undefined ||
       this.workflowPlan !== undefined ||
       this.groups.some((group) => group.kind === 'phase')
         ? workflowRunModel({
             taskGroups: this.groups,
             rows: this.rows,
+            workflowAttemptId: this.workflowAttemptId,
             plan: this.workflowPlan,
             runSettled: workflowRunSettled(this.streamStatus ?? undefined),
             childProgress: this.childProgress,
@@ -684,9 +690,8 @@ export class TaskGroupList extends LitElement {
   /**
    * Rows of a group followed by its child groups. A phase's cards come from
    * the model (`renderPhaseRows`); its other rows — the script's own log
-   * lines — follow in transcript order. A phase the model does not hold (one
-   * whose every card belonged to a superseded attempt) keeps its rows as
-   * plain history.
+   * lines — follow in transcript order. Superseded phase groups do not reach
+   * this path: the shared model is the authority for which attempt is visible.
    */
   private renderGroupBody(node: GroupTree): TemplateResult {
     const phase = this.phaseModels.get(node.group.id);
@@ -708,6 +713,13 @@ export class TaskGroupList extends LitElement {
     isRoot = false,
   ): TemplateResult | typeof nothing {
     const { group } = node;
+    if (
+      group.kind === 'phase' &&
+      this.model !== null &&
+      !this.phaseModels.has(group.id)
+    ) {
+      return nothing;
+    }
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 

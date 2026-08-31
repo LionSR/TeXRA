@@ -25,7 +25,6 @@ import {
   type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
-import { compareBySeqNo } from '@shared/streams/streamOrdering';
 import {
   TOKENS_GENERATED,
   workflowPhaseHeadingOfGroup,
@@ -45,8 +44,16 @@ import {
 
 /** What an `INTERNAL` transcript entry says about the workflow run. */
 export type WorkflowMarker =
-  | { readonly kind: 'plan'; readonly plan: WorkflowPlanMarker }
-  | { readonly kind: 'malformedPlan'; readonly error: string };
+  | {
+      readonly kind: 'plan';
+      readonly attemptId: string;
+      readonly plan: WorkflowPlanMarker;
+    }
+  | {
+      readonly kind: 'malformedPlan';
+      readonly attemptId?: string;
+      readonly error: string;
+    };
 
 function internalMarkerKind(data: unknown): unknown {
   return typeof data === 'object' && data !== null
@@ -72,9 +79,24 @@ export function workflowMarkerOf(
   }
   if (internalMarkerKind(entry.data) !== 'workflowPlan') return undefined;
   const parsed = WorkflowPlanMarkerSchema.safeParse(entry.data);
-  return parsed.success
-    ? { kind: 'plan', plan: parsed.data }
-    : { kind: 'malformedPlan', error: parsed.error.message };
+  if (parsed.success) {
+    return {
+      kind: 'plan',
+      attemptId: parsed.data.attemptId,
+      plan: parsed.data,
+    };
+  }
+  // Recover only the attempt boundary. The plan body remains unknown unless
+  // the full strict marker schema succeeds, so malformed phases/tasks never
+  // enter declared-plan rendering while a valid id still scopes stale rows.
+  const attemptId = WorkflowPlanMarkerSchema.shape.attemptId.safeParse(
+    (entry.data as { readonly attemptId?: unknown }).attemptId,
+  );
+  return {
+    kind: 'malformedPlan',
+    ...(attemptId.success ? { attemptId: attemptId.data } : {}),
+    error: parsed.error.message,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +154,10 @@ export interface WorkflowRunModelInput {
   readonly taskGroups: readonly TaskGroup[];
   /** The stream's rows; the model picks the `workflowTask` ones. */
   readonly rows: readonly TranscriptRow[];
-  /** The newest attempt's declared plan, if the transcript recorded one. */
+  /** The newest attempt boundary recovered from its transcript marker, even
+   *  when that marker's declared-plan body is malformed. */
+  readonly workflowAttemptId?: string;
+  /** The newest attempt's declared plan, if the transcript recorded a valid one. */
   readonly plan: WorkflowDeclaredPlan | WorkflowPlanMarker | undefined;
   /** True once the run has ended: plan-only phases it never reached are then
    *  nothing to show (the projection's settle sweep has housed every declared
@@ -152,21 +177,43 @@ interface MutablePhase {
   declaredTasks: readonly WorkflowCallIdentity[];
 }
 
-/** Cards in wire order, even when a caller collected a group tree pre-order. */
+function compareCardFallback(
+  left: WorkflowTaskRow,
+  right: WorkflowTaskRow,
+): number {
+  return left.timestamp - right.timestamp;
+}
+
+/**
+ * Cards in deterministic transcript order, even when a caller collected a
+ * group tree pre-order. Sequence and legacy rows are each ordered by their
+ * own chronology, then kept as generation blocks ordered by their newest
+ * facts. No causal key exists between generations, so this cannot recover an
+ * interleaving across clock skew, but unlike a pairwise seq/time fallback it
+ * is transitive and independent of input tree order except for truly
+ * indistinguishable equal-time legacy facts, whose stable input order remains
+ * the compatibility tie-break.
+ */
 function workflowCardsInTranscriptOrder(
   rows: readonly TranscriptRow[],
 ): WorkflowTaskRow[] {
-  const cards = rows.filter(
-    (row): row is WorkflowTaskRow => row.kind === 'workflowTask',
+  const sequenced: WorkflowTaskRow[] = [];
+  const legacy: WorkflowTaskRow[] = [];
+  for (const row of rows) {
+    if (row.kind !== 'workflowTask') continue;
+    (usableSeqNo(row.seqNo) === undefined ? legacy : sequenced).push(row);
+  }
+  sequenced.sort(
+    (left, right) =>
+      usableSeqNo(left.seqNo)! - usableSeqNo(right.seqNo)! ||
+      compareCardFallback(left, right),
   );
-  return cards.toSorted((left, right) =>
-    compareBySeqNo(
-      left,
-      right,
-      (row) => row.seqNo,
-      (row) => row.timestamp,
-    ),
-  );
+  legacy.sort(compareCardFallback);
+  if (sequenced.length === 0) return legacy;
+  if (legacy.length === 0) return sequenced;
+  return compareCardFallback(sequenced.at(-1)!, legacy.at(-1)!) <= 0
+    ? [...sequenced, ...legacy]
+    : [...legacy, ...sequenced];
 }
 
 interface AttemptBoundary {
@@ -206,7 +253,9 @@ function latestWorkflowAttemptId(
   cards: readonly WorkflowTaskRow[],
   taskGroups: readonly TaskGroup[],
   plan: WorkflowRunModelInput['plan'],
+  markerAttemptId: string | undefined,
 ): string | undefined {
+  if (markerAttemptId !== undefined) return markerAttemptId;
   if (plan && 'attemptId' in plan) return plan.attemptId;
 
   let sequenced: AttemptBoundary | undefined;
@@ -372,6 +421,7 @@ export function workflowRunModel(
     cards,
     input.taskGroups,
     input.plan,
+    input.workflowAttemptId,
   );
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins

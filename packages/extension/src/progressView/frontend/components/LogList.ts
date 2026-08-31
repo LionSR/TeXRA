@@ -65,6 +65,7 @@ const LogListStateSchema = z.object({
 /** Cached per-stream data and DOM state */
 interface CachedStream {
   groups: TaskGroup[];
+  workflowAttemptId: string | undefined;
   workflowPlan: WorkflowPlanMarker | undefined;
   childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   entries: StreamLogEntry[];
@@ -133,6 +134,7 @@ export class LogList extends LitElement {
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
+      entry.workflowAttemptId = this.streamContext.workflowAttemptId;
       entry.workflowPlan = this.streamContext.workflowPlan;
       entry.childProgress = this.streamContext.childProgress;
       entry.entries = this.streamContext.entries;
@@ -170,6 +172,7 @@ export class LogList extends LitElement {
           ${ref(data.ref)}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
+          .workflowAttemptId=${data.workflowAttemptId}
           .workflowPlan=${data.workflowPlan}
           .childProgress=${data.childProgress}
           .entries=${data.entries}
@@ -241,6 +244,7 @@ export class LogList extends LitElement {
 
     const createdEntry: CachedStream = {
       groups: [],
+      workflowAttemptId: undefined,
       workflowPlan: undefined,
       childProgress: new Map(),
       entries: [],

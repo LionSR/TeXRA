@@ -49,6 +49,7 @@ type TaskGroupListInternals = HTMLElement & {
   isToolUse: boolean;
   terminal: boolean;
   toggleStates: ToggleStateStore | null;
+  workflowAttemptId: string | undefined;
   workflowPlan: WorkflowPlanMarker | undefined;
   childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   updateComplete: Promise<boolean>;
@@ -143,6 +144,7 @@ function renderList(
   rows: TranscriptRow[],
   options: {
     toggleStates?: ToggleStateStore;
+    workflowAttemptId?: string;
     workflowPlan?: WorkflowPlanMarker;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
@@ -658,6 +660,54 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       'reviewer@claude-opus-4#child-1',
       'reviewer@claude-opus-4#child-1',
     ]);
+  });
+
+  it('hides superseded phase headers and failed cards after a resume', async () => {
+    const run = runGroup('Run: workflow');
+    const oldMap = createGroup('old-map', STREAM_PHASE.FAILED, {
+      name: 'Map',
+      startTime: 2,
+      parentGroupId: 'run',
+      kind: 'phase',
+      attemptId: 'a1',
+      index: 0,
+      total: 1,
+    });
+    const currentMap = createGroup('current-map', STREAM_PHASE.RUNNING, {
+      name: 'Map',
+      startTime: 4,
+      parentGroupId: 'run',
+      kind: 'phase',
+      attemptId: 'a2',
+      index: 0,
+      total: 1,
+    });
+    const rows: TranscriptRow[] = [
+      workflowTaskRow(oldMap.id, 'stale-failure', 3, {
+        id: 'stale',
+        label: 'Stale failure',
+        phase: 'Map',
+        status: 'failed',
+        error: 'old attempt',
+        attemptId: 'a1',
+      }),
+      workflowTaskRow(currentMap.id, 'current-call', 5, {
+        id: 'current',
+        label: 'Current call',
+        phase: 'Map',
+        status: 'running',
+        attemptId: 'a2',
+      }),
+    ];
+
+    const list = await renderList([run, oldMap, currentMap], rows, {
+      workflowAttemptId: 'a2',
+    });
+
+    expect(groupHeader(list, oldMap.id)).toBeNull();
+    expect(groupHeader(list, currentMap.id)).not.toBeNull();
+    expect(list.shadowRoot?.textContent).not.toContain('Stale failure');
+    expect(list.shadowRoot?.textContent).toContain('Current call');
   });
 
   it('omits the (i/n) suffix when a phase group carries no counts', async () => {

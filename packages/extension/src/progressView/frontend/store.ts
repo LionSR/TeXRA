@@ -46,11 +46,9 @@ export interface StreamLogs {
   taskGroupIndex: Map<string, number>;
   /** Correlated context-compaction lifecycle projected into stable rows. */
   compactionProjection: CompactionActivityProjection;
-  /**
-   * The newest attempt's declared workflow plan, folded from the
-   * `workflowPlan` markers (newest wins) the same way the CLI folds them;
-   * one input of the shared workflow run model the board paints.
-   */
+  /** Newest workflow-attempt boundary, even if its plan body was malformed. */
+  workflowAttemptId: string | undefined;
+  /** The newest valid declared workflow plan. */
   workflowPlan: WorkflowPlanMarker | undefined;
   /**
    * Existing row indices updated by the most recent backend delta.
@@ -71,6 +69,7 @@ function createEmptyStreamLogs(): StreamLogs {
     rowIndex: new Map(),
     taskGroupIndex: new Map(),
     compactionProjection: createCompactionActivityProjection(),
+    workflowAttemptId: undefined,
     workflowPlan: undefined,
     updatedRowIndices: [],
     updatedRowBaseGeneration: 0,
