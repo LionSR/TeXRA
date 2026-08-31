@@ -2,7 +2,7 @@
 
 const MIN_GITHUB_ACCOUNT_AGE_DAYS = 30;
 
-// Disposable mailbox providers observed farming the Researcher Access Program.
+// Disposable mailbox providers observed farming TeXRA account sign-ups.
 const DISPOSABLE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'atomicmail.io',
   'tempmail.com',
@@ -70,8 +70,8 @@ const BLOCKED_DOMAIN_POLICIES: readonly {
     domains: PRIVACY_RELAY_EMAIL_DOMAINS,
     reasonPrefix: 'privacy-relay-domain',
     userMessage: (domain) =>
-      `Sign-up via "${domain}" is currently not accepted for the Researcher ` +
-      'Access Program due to repeated abuse. Please sign in with a GitHub ' +
+      `Sign-up via "${domain}" is currently not accepted for a TeXRA account ` +
+      'due to repeated abuse. Please sign in with a GitHub ' +
       'account that uses your primary institutional or long-term personal ' +
       'email address. If this is your only email and you are a legitimate ' +
       'researcher, contact contact@texra.ai for an exception.',

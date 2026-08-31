@@ -296,7 +296,7 @@ set -a; . .env; set +a
 texra doctor
 ```
 
-If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models. `texra auth login` is the separate sign-in for your TeXRA account (Researcher Access):
+If you prefer not to manage keys, connect a provider subscription instead. A ChatGPT subscription unlocks the Codex models, and a Grok (xAI SuperGrok) subscription unlocks the xAI models. `texra auth login` separately signs in to your TeXRA account:
 
 ```bash
 texra auth chatgpt login

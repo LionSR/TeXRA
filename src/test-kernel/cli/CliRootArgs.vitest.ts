@@ -1326,7 +1326,7 @@ describe('runCli usage output stream routing', () => {
       'configure autonomous goal mode and auto-approval scope',
     );
     expect(stdout).toContain('/login, /logout');
-    expect(stdout).toContain('ChatGPT or Researcher Access');
+    expect(stdout).toContain('ChatGPT or TeXRA account');
     expect(stdout).toContain(
       "open the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",
     );
@@ -1388,13 +1388,13 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).not.toContain('texra status');
   });
 
-  it('shows ChatGPT and Researcher examples in login help', async () => {
+  it('shows ChatGPT and TeXRA account examples in login help', async () => {
     let result = await runCli(['login', '--help']);
     expectOk(result);
     expect(stdout).toContain('EXAMPLES');
     expect(stdout).toContain('texra auth chatgpt login');
     expect(stdout).toContain('texra login');
-    expect(stdout).toContain('Researcher Access');
+    expect(stdout).toContain('TeXRA account');
 
     stdout = '';
     stderr = '';

@@ -5,7 +5,7 @@
  * the CLI account & access surfaces, slash-command descriptions, login
  * handlers, the extension's subscription settings section, and the
  * auth-failure hints that quote a toggle by name cannot paraphrase each
- * other. "Researcher Access" itself is owned by `onboarding.ts` — this module
+ * other. "TeXRA account" itself is owned by `onboarding.ts` — this module
  * imports it rather than restating the name.
  *
  * Wire identifiers (`texra`, `chatgpt`, `grok`) stay internal.
@@ -77,7 +77,7 @@ export const ACCOUNT_OUTCOME = {
 } as const;
 
 /**
- * Researcher Access fields that only the account surfaces need. The program
+ * TeXRA account fields that only the account surfaces need. The account
  * name itself stays on {@link RESEARCHER_ACCESS} in `onboarding.ts`.
  */
 export const RESEARCHER_ACCESS_AUTH = {

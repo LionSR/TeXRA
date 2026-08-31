@@ -499,7 +499,7 @@
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Choose how TeXRA should sign in",
-            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nSigning in to TeXRA (Researcher Access) separately unlocks the hosted research-agent catalog, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)",
+            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nSigning in to your TeXRA account separately unlocks the hosted research-agent catalog, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the API key configuration view"

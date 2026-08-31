@@ -108,7 +108,7 @@ function assertTexraScopedKey(key: string): void {
   }
 }
 
-/** Researcher Access status shared by every host. */
+/** TeXRA account status shared by every host. */
 export async function getSetupAuthStatus(): Promise<{
   authenticated: boolean;
   remoteAgentCatalogAvailable: boolean;

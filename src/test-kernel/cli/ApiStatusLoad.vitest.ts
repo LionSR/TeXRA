@@ -514,7 +514,7 @@ describe('loadCliApiStatus', () => {
         'Kimi Code preference: Off · key required to enable',
         'GLM Coding Plan preference: Off · key required to enable',
         'Otherwise: Your own API keys',
-        'Researcher Access: signed in as texra@example.com',
+        'TeXRA account: signed in as texra@example.com',
       ],
     });
     expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
