@@ -122,6 +122,7 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
+import { throwAggregated } from '@utils/core';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -492,14 +493,31 @@ async function withRunFacts(
     transcripts: StreamLogStore.ephemeral('TUI session signals test'),
   });
   const detach = attachSessionSignalsAdapter(session);
+  const failures: unknown[] = [];
   boundFactSession = session;
   try {
     await body(hub, session);
+  } catch (error) {
+    failures.push(error);
   } finally {
     boundFactSession = undefined;
-    detach();
-    await snapshots.load([]);
+    try {
+      detach();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await snapshots.flush();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await snapshots.load([]);
+    } catch (error) {
+      failures.push(error);
+    }
   }
+  throwAggregated(failures, 'TUI run-fact test and cleanup failed');
 }
 
 afterEach(() => {

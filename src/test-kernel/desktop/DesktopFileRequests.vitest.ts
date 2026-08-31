@@ -35,25 +35,29 @@ describe('desktop file requests', () => {
   });
 
   it('rejects immediately and unregisters when posting throws', async () => {
-    mocks.postMessage.mockImplementationOnce(() => {
-      throw new Error('desktop bridge unavailable');
-    });
+    vi.useFakeTimers();
+    try {
+      mocks.postMessage.mockImplementationOnce(() => {
+        throw new Error('desktop bridge unavailable');
+      });
 
-    const read = requestFileRead('main.tex');
-    const request = mocks.postMessage.mock.calls[0]?.[1] as
-      { requestId: string } | undefined;
-    if (!request) throw new Error('Expected a desktop file request');
+      const read = requestFileRead('main.tex');
+      const request = mocks.postMessage.mock.calls[0]?.[1] as
+        { requestId: string } | undefined;
+      if (!request) throw new Error('Expected a desktop file request');
 
-    await expect(read).rejects.toThrow('desktop bridge unavailable');
-    expect(takePendingFileRequest(request.requestId)).toBeUndefined();
+      await expect(read).rejects.toThrow('desktop bridge unavailable');
+      expect(takePendingFileRequest(request.requestId)).toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('clears the timeout when a read response resolves', async () => {
     vi.useFakeTimers();
     try {
       const read = requestFileRead('main.tex');
-      const rejected = vi.fn();
-      void read.catch(rejected);
       const request = mocks.postMessage.mock.calls[0]?.[1] as
         { requestId: string } | undefined;
       if (!request) throw new Error('Expected a desktop file request');
@@ -65,9 +69,6 @@ describe('desktop file requests', () => {
       pending.resolve('contents');
 
       await expect(read).resolves.toBe('contents');
-      expect(vi.getTimerCount()).toBe(0);
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(rejected).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
