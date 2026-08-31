@@ -1,3 +1,5 @@
+import { LRUCache } from 'lru-cache';
+
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { lookupApiKey } from '@model/apiProviders';
 import { platform } from '@platform/platform';
@@ -68,11 +70,6 @@ interface SubscriptionUsageServiceInit {
   readonly requestTimeoutMs?: number;
 }
 
-interface CacheEntry {
-  readonly snapshot: SubscriptionUsageSnapshot;
-  readonly expiresAt: number;
-}
-
 interface SubscriptionUsageAdapter {
   readonly resolveVariant?: () => boolean | string | Promise<boolean | string>;
   readonly fetch: (
@@ -110,7 +107,7 @@ export class SubscriptionUsageService {
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   >;
-  private readonly cache = new Map<string, CacheEntry>();
+  private readonly cache: LRUCache<string, SubscriptionUsageSnapshot>;
   private readonly pending = new Map<
     string,
     Promise<SubscriptionUsageSnapshot>
@@ -123,6 +120,14 @@ export class SubscriptionUsageService {
     this.cacheTtlMs = init.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.adapters = this.createAdapters();
+    this.cache = new LRUCache({
+      max: 64,
+      ttl: this.cacheTtlMs,
+      // The default resolution debounces perf.now() via a real setTimeout,
+      // which ignores the injected clock (this.now) entirely in tests.
+      ttlResolution: 0,
+      perf: { now: this.now },
+    });
   }
 
   /** Provider transports are adapters; caching and failure policy stay common. */
@@ -198,7 +203,7 @@ export class SubscriptionUsageService {
       this.pending.delete(key);
     } else {
       const cached = this.cache.get(key);
-      if (cached && cached.expiresAt > this.now()) return cached.snapshot;
+      if (cached) return cached;
     }
 
     const inFlight = this.pending.get(key);
@@ -210,10 +215,7 @@ export class SubscriptionUsageService {
     // accepted stale read on a read-only usage display.
     const request = this.fetchUsage(provider, variant).then((snapshot) => {
       if (this.pending.get(key) === request) {
-        this.cache.set(key, {
-          snapshot,
-          expiresAt: this.now() + this.cacheTtlMs,
-        });
+        this.cache.set(key, snapshot);
       }
       return snapshot;
     });
