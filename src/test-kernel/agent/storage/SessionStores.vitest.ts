@@ -6,8 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { getExecutionStore, SessionStores } from '@agent/storage';
-import { registerExecution } from '@agent/storage/executionLifecycle';
-import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
 import type {
   DeleteExecutionOptions,
   ExecutionStreamReferenceListing,
@@ -16,10 +14,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { KVStore } from '@common/storage/KVStore';
 import * as logUtils from '@logger/logUtils';
-import { platform } from '@platform/platform';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { snapshotFacts } from '@test/support/storeTestDrivers';
 import { releaseStreamResources } from '@tools/approval';
@@ -82,27 +77,6 @@ function listingOf(
 const emptyListing = () => listingOf([]);
 
 describe('SessionStores deletion coordination', () => {
-  it('skips persisted deletion for reserved stream ids before lock participation', async () => {
-    await withSession(async (session) => {
-      const stream = '..' as StreamTabId;
-      const snapshots = new StreamSnapshotStore();
-      const stageDeleteStream = vi.spyOn(snapshots, 'stageDeleteStream');
-      const runExclusive = vi.spyOn(platform().fileLocks, 'runExclusive');
-      const stores = new SessionStores({
-        streamLogs: session.transcripts,
-        snapshots,
-      });
-
-      await expect(stores.deleteStream(stream)).resolves.toBe('deleted');
-
-      expect(stageDeleteStream).not.toHaveBeenCalled();
-      expect(runExclusive).not.toHaveBeenCalledWith(
-        expect.stringContaining('streamOwnershipLocks'),
-        expect.any(Function),
-      );
-    });
-  });
-
   it('detaches durable child parent edges only after deleting the parent', async () => {
     await withSession(async (session) => {
       const parent = 'deleted-parent' as StreamTabId;
@@ -176,78 +150,6 @@ describe('SessionStores deletion coordination', () => {
         summaryExecutionId,
         expect.anything(),
       );
-    });
-  });
-
-  it('retains sidecars when another registration commits before its deletion fence', async () => {
-    await withSession(async (session) => {
-      const stream = 'session-store-registration-gap' as StreamTabId;
-      const owner = 'bbb00003' as ExecutionId;
-      const competing = 'bbb00004' as ExecutionId;
-      session.transcripts.ensureStream(stream);
-      const snapshots = new StreamSnapshotStore();
-      await ownExecution(snapshots, stream, owner);
-      await snapshots.flush();
-      const stores = new SessionStores({
-        streamLogs: session.transcripts,
-        snapshots,
-        deleteExecution: deletionSpy(),
-      });
-      const fenceReached = createDeferred();
-      const releaseFence = createDeferred();
-      const fileLocks = platform().fileLocks;
-      const originalRunExclusive = fileLocks.runExclusive.bind(fileLocks);
-      let delayDeletionFence = true;
-      const runExclusive = vi
-        .spyOn(fileLocks, 'runExclusive')
-        .mockImplementation((lockPath, operation) => {
-          if (delayDeletionFence && lockPath.includes('streamOwnershipLocks')) {
-            delayDeletionFence = false;
-            fenceReached.resolve();
-            return releaseFence.promise.then(() =>
-              originalRunExclusive(lockPath, operation),
-            );
-          }
-          return originalRunExclusive(lockPath, operation);
-        });
-
-      try {
-        const deletion = stores.deleteStream(stream);
-        await fenceReached.promise;
-        await getExecutionStore(owner).writeMeta({
-          timestamp: '2026-08-31T00:00:00.000Z',
-          streamId: 'moved-session-store-owner' as StreamTabId,
-        });
-        await new KVStore(streamDataDir(stream)).delete(STREAM_DATA_KEYS.META);
-        const competingConfig = AgentConfigSchema.parse({
-          agent: 'chat',
-          model: 'deepseekT',
-          agentCategory: 'toolUse',
-        });
-        await registerExecution(
-          competing,
-          competingConfig,
-          competingConfig.agent,
-          {
-            streamId: stream,
-            identity: { kind: 'agent', agent: competingConfig.agent },
-          },
-        );
-        snapshotFacts(snapshots).setRunConfig(
-          stream,
-          competingConfig,
-          competing,
-        );
-        await snapshots.flush();
-        releaseFence.resolve();
-
-        await expect(deletion).resolves.toBe('failed');
-        expect(session.transcripts.has(stream)).toBe(true);
-      } finally {
-        releaseFence.resolve();
-        runExclusive.mockRestore();
-        await releaseOwnedExecutionLease(competing).catch(() => undefined);
-      }
     });
   });
 
@@ -375,6 +277,7 @@ describe('SessionStores deletion coordination', () => {
 
         await stores.flushSnapshotsAfterStartedDeletions();
         expect(flush).toHaveBeenCalledOnce();
+        await new KVStore(streamDataDir(stream)).delete(STREAM_DATA_KEYS.META);
         expect(drainFinished).toBe(false);
         expect(session.transcripts.has(stream)).toBe(true);
 

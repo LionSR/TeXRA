@@ -25,6 +25,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/shared/desktopShellMessages';
+import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import type { AgentResumePort } from '@platform/interfaces';
 import {
   AgentCategory,
@@ -71,6 +72,7 @@ import {
   type StreamLogStore,
   type StreamSnapshotStore as ProgressSnapshotStore,
 } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
 
 // Local file imports
 import {
@@ -3365,6 +3367,14 @@ describe('DesktopProgressBridge', () => {
       const streamId = 'rebound-stream-second-close' as StreamTabId;
       const executionId = 'ec00ec' as ExecutionId;
       const owner = await createProcessOwner({ streamId, executionId });
+      const { StorageFS } = await import('@utils/files/storageFS');
+      await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+      await StorageFS.ensureDir(streamDataDir(streamId));
+      await owner.getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-08-31T00:00:00.000Z',
+        streamId,
+      });
+      await owner.progressSnapshotStore.flush();
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
 
@@ -3494,6 +3504,14 @@ describe('DesktopProgressBridge', () => {
       const streamId = 'rebound-stream-delete' as StreamTabId;
       const executionId = 'ec00f9' as ExecutionId;
       const owner = await createProcessOwner({ streamId, executionId });
+      const { StorageFS } = await import('@utils/files/storageFS');
+      await StorageFS.ensureDir(resolveRunStoragePath(executionId));
+      await StorageFS.ensureDir(streamDataDir(streamId));
+      await owner.getExecutionStore(executionId).writeMeta({
+        timestamp: '2026-08-31T00:00:00.000Z',
+        streamId,
+      });
+      await owner.progressSnapshotStore.flush();
       const messagesB: unknown[] = [];
       const { bridgeB } = await owner.reopen(messagesB);
 

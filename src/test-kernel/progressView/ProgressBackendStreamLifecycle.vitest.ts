@@ -47,6 +47,7 @@ import {
   stubStreamControls,
   toolUseConfig,
   track,
+  writeExecutionConfig,
 } from './progressBackendHarness';
 
 type RecordingTarget = ReturnType<typeof createIsolatedRecordingBackend>;
@@ -497,6 +498,8 @@ describe('ProgressBackend', () => {
         executionId,
         toolUseConfig('search', 'deepseekproT'),
       );
+      await writeExecutionConfig(executionId, { streamId: stream });
+      await backend.state.flush();
       expect(session.executions.getAgentHandleByStream(stream)).toBeUndefined();
 
       const deletion = backend.deleteStream(stream);

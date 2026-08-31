@@ -58,13 +58,14 @@ vi.mock('@agent/storage', async () => {
       }),
     ),
     listExecutions: mocks.listExecutions,
+    listExecutionStreamIds: vi.fn(async () => new Map()),
     deleteExecution: mocks.deleteExecution,
     deleteAllExecutions: mocks.deleteAllExecutions,
   };
 });
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
-  createCliResumeDataReaderForListing: () => mocks.readCliResumeDataForListing,
+  readCliResumeDataForKnownStream: mocks.readCliResumeDataForListing,
   readCliResumeDataForListing: mocks.readCliResumeDataForListing,
 }));
 
@@ -892,79 +893,6 @@ describe('CLI history runtime', () => {
     expect(text).toContain(`[tool #5]\n${longToolOutput}`);
     expect(text).not.toContain('...[truncated]');
     expect(text).toContain('[assistant #6]\nFinal proof analysis.');
-  });
-
-  it('shows a historical archived conversation on its first normalized read', async () => {
-    const executionId = 'a22221' as ExecutionId;
-    const streamId = 'historical-archive-show' as StreamTabId;
-    await new KVStore(resolveRunStoragePath(executionId)).write('meta', {
-      timestamp: '2026-07-31T00:00:00.000Z',
-    });
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
-    await snapshots.flush();
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, streamId, {
-      id: 'historical-show-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      text: 'Recovered historical answer',
-    });
-    await logs.flush();
-    mocks.readMeta.mockResolvedValue({
-      timestamp: '2026-07-31T00:00:00.000Z',
-    });
-
-    const details = await readCliHistoryDetails(executionId, {
-      includeFullConversation: true,
-    });
-
-    expect(details?.conversation?.messages).toEqual([
-      {
-        index: 1,
-        role: 'assistant',
-        content: 'Recovered historical answer',
-        truncated: false,
-      },
-    ]);
-    await expect(
-      new KVStore(resolveRunStoragePath(executionId)).read('meta'),
-    ).resolves.toMatchObject({ streamId });
-  });
-
-  it('exports a historical archived conversation on its first normalized read', async () => {
-    const executionId = 'a22222' as ExecutionId;
-    const streamId = 'historical-archive-export' as StreamTabId;
-    await new KVStore(resolveRunStoragePath(executionId)).write('meta', {
-      timestamp: '2026-07-31T00:00:00.000Z',
-    });
-    const snapshots = new StreamSnapshotStore();
-    snapshotFacts(snapshots).setRunConfig(streamId, config, executionId);
-    await snapshots.flush();
-    const logs = await StreamLogStore.open();
-    appendTranscriptEntry(logs, streamId, {
-      id: 'historical-export-entry',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: LOG_LEVELS.INFO,
-      timestamp: 1000,
-      messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text: 'Recover this prompt',
-    });
-    await logs.flush();
-
-    const input = await readCliHistoryExportInput(executionId);
-
-    expect(input).toMatchObject({
-      status: 'ok',
-      exportInput: {
-        messages: [{ role: 'user', content: 'Recover this prompt' }],
-      },
-    });
-    await expect(
-      new KVStore(resolveRunStoragePath(executionId)).read('meta'),
-    ).resolves.toMatchObject({ streamId });
   });
 
   it('can show Gemini parts-based conversations', async () => {

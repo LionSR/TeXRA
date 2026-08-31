@@ -1,8 +1,11 @@
+// Node imports
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
 
+// Third-party imports
 import pMap from 'p-map';
 
+// Internal imports
 import { isFileNotFoundError } from '@common/errors';
 import { KVStore } from '@common/storage/KVStore';
 import { createLog } from '@logger/logUtils';
@@ -23,6 +26,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
+// Local imports
 import { getExecutionStore } from './ExecutionKVStore';
 
 const log = createLog('ExecutionStreamOwnership');
@@ -48,11 +52,13 @@ async function readExecutionDirs(): Promise<[string, number][]> {
 }
 
 /** Read current execution-metadata stream claims without migration policy. */
-export async function readModernStreamClaims(): Promise<ModernStreamClaims> {
+export async function readModernStreamClaims(
+  entries?: readonly [string, number][],
+): Promise<ModernStreamClaims> {
   let unreadable = false;
   const matches = (
     await pMap(
-      await readExecutionDirs(),
+      entries ?? (await readExecutionDirs()),
       async ([name, type]): Promise<
         readonly [StreamTabId, ExecutionId] | undefined
       > => {
@@ -147,11 +153,19 @@ export function runWithValidatedExecutionStreamDeletion<T>(
     const streamClaims = claims.byStream.get(streamId) ?? [];
     let valid: boolean;
     if (executionId) {
+      const ownerMeta =
+        streamClaims.length === 0 && sidecarOwner === executionId
+          ? await getExecutionStore(executionId).readMetaStrict()
+          : null;
       valid =
         !claims.unreadable &&
-        streamClaims.length === 1 &&
-        streamClaims[0] === executionId &&
-        sidecarOwner === executionId;
+        ((streamClaims.length === 1 &&
+          streamClaims[0] === executionId &&
+          (sidecarOwner === undefined || sidecarOwner === executionId)) ||
+          (streamClaims.length === 0 &&
+            sidecarOwner === executionId &&
+            ownerMeta?.streamId !== undefined &&
+            ownerMeta.streamId !== streamId));
     } else {
       const sidecarOwnerMeta = sidecarOwner
         ? await getExecutionStore(sidecarOwner).readMetaStrict()

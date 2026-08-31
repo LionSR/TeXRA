@@ -39,6 +39,7 @@ import {
   type LeaseReapPolicy,
 } from './executionLease';
 import { createExecutionMetaReader } from './executionMetaPersistence';
+import { readModernStreamClaims } from './executionStreamOwnership';
 
 const log = createLog('ExecutionListing');
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
@@ -173,7 +174,9 @@ export async function listExecutionStreamReferences(
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
   const unreadable = new Map<ExecutionId, string>();
-  const metaReader = createExecutionMetaReader();
+  const metaReader = createExecutionMetaReader(() =>
+    readModernStreamClaims(entries),
+  );
   const results = await pMap(
     executionDirs,
     async (executionId): Promise<ExecutionStreamReference | null> => {
@@ -234,6 +237,16 @@ export async function listExecutionStreamReferences(
  * updates it synchronously) and fall back to this scan for non-resident
  * streams; the retired sidecar-FK and summary-mirror read ladders are gone.
  */
+/** Resolve execution→stream edges in one storage-owned batch operation. */
+export async function listExecutionStreamIds(): Promise<
+  ReadonlyMap<ExecutionId, StreamTabId>
+> {
+  const { references } = await listExecutionStreamReferences();
+  return new Map(
+    references.map(({ executionId, streamId }) => [executionId, streamId]),
+  );
+}
+
 export async function readExecutionStreamIndex(): Promise<{
   /** Streams named by a readable `ExecutionMeta.streamId`. */
   readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;

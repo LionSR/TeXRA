@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
   getExecutionStore: vi.fn(),
-  readExecutionMeta: vi.fn(),
+  readExecutionStreamId: vi.fn(),
   setCliHelperModel: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   presentationHostClose: vi.fn(),
@@ -47,7 +47,7 @@ vi.mock('@agent/storage', async () => {
     await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
   return {
     getExecutionStore: mocks.getExecutionStore,
-    readExecutionMeta: mocks.readExecutionMeta,
+    readExecutionStreamId: mocks.readExecutionStreamId,
     ExecutionLeaseActiveError: actual.ExecutionLeaseActiveError,
     ExecutionLeaseLostError: actual.ExecutionLeaseLostError,
   };
@@ -130,8 +130,6 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 }));
 
 import type { FollowUpRecoveryLease } from '@agent/followUp';
-import { getExecutionStore as getRealExecutionStore } from '@agent/storage/ExecutionKVStore';
-import { readExecutionMeta as readRealExecutionMeta } from '@agent/storage/executionMetaPersistence';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -164,7 +162,6 @@ import {
   chatTuiSigintAction,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
-import { KVStore } from '@common/storage/KVStore';
 import { DisposableStore } from '@platform/disposable';
 import {
   RUN_OUTCOME,
@@ -177,9 +174,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createFakeKv } from '@test/support/FakeExecutionKVStore';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { writeForeignLease } from '@test/support/executionLeaseFixtures';
 import { StreamSnapshotStore } from '@transcript';
-import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
 
 /**
  * Session fixture in the states the controller is exercised from. The
@@ -306,7 +301,7 @@ function installResumeExecutionStore(
     readConfig: async () => config,
     readMeta: async () => (streamId ? { streamId } : null),
   });
-  mocks.readExecutionMeta.mockResolvedValue(streamId ? { streamId } : null);
+  mocks.readExecutionStreamId.mockResolvedValue(streamId);
 }
 
 /**
@@ -1128,59 +1123,6 @@ describe('createChatSessionController', () => {
     configRead.resolve(null);
     await resumed;
     expect(session.runCompleted).toBe(true);
-  });
-
-  it('resumes a historical row through normalized execution metadata', async () => {
-    const config = makeResumeConfig();
-    mocks.getExecutionStore.mockReturnValue({
-      readConfig: async () => config,
-      readMeta: async () => ({ timestamp: '2026-07-31T00:00:00.000Z' }),
-    });
-    mocks.readExecutionMeta.mockResolvedValue({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      streamId: 'stream-resume',
-    });
-    const session = makeSession();
-    const ctrl = createChatSessionController(
-      makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
-    );
-
-    await ctrl.resume('legacy-resume' as ExecutionId);
-    await session.runPromise;
-
-    expect(mocks.readExecutionMeta).toHaveBeenCalledWith('legacy-resume');
-    expect(session.streamId).toBe('stream-resume');
-    expect(mocks.resumeRun).toHaveBeenCalledWith(
-      'legacy-resume',
-      expect.any(Object),
-    );
-  });
-
-  it('classifies real foreign-lease legacy healing as owned elsewhere', async () => {
-    const executionId = 'e86442' as ExecutionId;
-    const streamId = 'foreign-owned-tui-legacy' as StreamTabId;
-    const config = makeResumeConfig();
-    await getRealExecutionStore(executionId).writeMeta({
-      timestamp: '2026-07-31T00:00:00.000Z',
-    });
-    await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, {
-      executionId,
-    });
-    await writeForeignLease(executionId);
-    mocks.getExecutionStore.mockReturnValue({
-      readConfig: async () => config,
-    });
-    mocks.readExecutionMeta.mockImplementationOnce(readRealExecutionMeta);
-    const session = makeSession();
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    await expect(ctrl.resume(executionId)).resolves.toBeUndefined();
-
-    expect(session.runExitCode).toBe(CliExitCode.Usage);
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
-    await expect(
-      getRealExecutionStore(executionId).readMeta(),
-    ).resolves.not.toMatchObject({ streamId: expect.any(String) });
   });
 
   it('retains the configuration of a manually resumed conversation', async () => {

@@ -42,15 +42,15 @@ export {
   type ExecutionListingEntry,
   createLatexExecutionDiscovery,
   listExecutions,
+  listExecutionStreamIds,
   deleteExecution,
   deleteAllExecutions,
   isUserVisibleExecution,
 } from './executionListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
 export {
-  createExecutionMetaReader,
-  readExecutionMeta,
-  type ExecutionMetaReader,
+  readExecutionStreamId,
+  readExecutionStreamReference,
 } from './executionMetaPersistence';
 export { formatConversationMessage } from './conversationFormat';
 export {

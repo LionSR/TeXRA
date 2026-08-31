@@ -157,7 +157,9 @@ async function stampRecoveredStreamId(
  * Evidence is loaded lazily, so modern reads never scan compatibility data and
  * a bulk operation pays for at most one sidecar and one execution scan.
  */
-function createLegacyExecutionStreamHealer(): (
+function createLegacyExecutionStreamHealer(
+  readClaims: () => Promise<ModernStreamClaims>,
+): (
   executionId: ExecutionId,
   meta: ExecutionMeta,
   validateModernClaims: boolean,
@@ -169,7 +171,7 @@ function createLegacyExecutionStreamHealer(): (
       if (!validateModernClaims) {
         return { streamId: meta.streamId, ownershipUnknown: false };
       }
-      modernClaims ??= readModernStreamClaims();
+      modernClaims ??= readClaims();
       const claims = await modernClaims;
       const claimedByAnotherExecution = (
         claims.byStream.get(meta.streamId) ?? []
@@ -194,7 +196,7 @@ function createLegacyExecutionStreamHealer(): (
       };
     }
 
-    modernClaims ??= readModernStreamClaims();
+    modernClaims ??= readClaims();
     const claims = await modernClaims;
     const streamId = await stampRecoveredStreamId(
       executionId,
@@ -240,8 +242,10 @@ export interface ExecutionMetaReader {
  * rows written before 2026-08-01. Remove on or after 2026-11-01, once those
  * workspace records leave the three-month supported recovery window.
  */
-export function createExecutionMetaReader(): ExecutionMetaReader {
-  const healLegacyStreamId = createLegacyExecutionStreamHealer();
+export function createExecutionMetaReader(
+  readClaims: () => Promise<ModernStreamClaims> = readModernStreamClaims,
+): ExecutionMetaReader {
+  const healLegacyStreamId = createLegacyExecutionStreamHealer(readClaims);
   const normalize = async (
     executionId: ExecutionId,
     meta: ExecutionMeta | null,
@@ -291,9 +295,26 @@ export function createExecutionMetaReader(): ExecutionMetaReader {
   };
 }
 
-/** Read and normalize one execution metadata record. */
+/** Read and normalize one execution metadata record within storage. */
 export function readExecutionMeta(
   executionId: ExecutionId,
 ): Promise<ExecutionMeta | null> {
   return createExecutionMetaReader().read(executionId);
+}
+
+/** Resolve the durable execution→stream edge and its normalized metadata. */
+export async function readExecutionStreamReference(
+  executionId: ExecutionId,
+): Promise<
+  { readonly streamId: StreamTabId; readonly meta: ExecutionMeta } | null
+> {
+  const meta = await readExecutionMeta(executionId);
+  return meta?.streamId ? { streamId: meta.streamId, meta } : null;
+}
+
+/** Resolve the durable execution→stream edge for a single host operation. */
+export async function readExecutionStreamId(
+  executionId: ExecutionId,
+): Promise<StreamTabId | undefined> {
+  return (await readExecutionStreamReference(executionId))?.streamId;
 }

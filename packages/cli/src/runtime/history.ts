@@ -9,6 +9,7 @@ import {
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
+  listExecutionStreamIds,
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type AgentExecutionListingEntry,
@@ -47,7 +48,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from './cliContext';
 import {
-  createCliResumeDataReaderForListing,
+  readCliResumeDataForKnownStream,
   readCliResumeDataForListing,
 } from './toolUseResumeData';
 import {
@@ -158,14 +159,16 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
-  const entries = await listExecutions();
+  const [entries, streamIds] = await Promise.all([
+    listExecutions(),
+    listExecutionStreamIds(),
+  ]);
   // Every row costs a resumability probe plus an optional resume-data read.
   // One at a time makes a long history crawl; all at once opens one file
   // handle burst per run, so keep it bounded. `pMap` preserves input order.
-  const readResumeData = createCliResumeDataReaderForListing();
   return pMap(
     entries.filter(isUserVisibleExecution),
-    (entry) => toCliHistoryEntry(entry, readResumeData),
+    (entry) => toCliHistoryEntry(entry, streamIds.get(entry.id)),
     { concurrency: HISTORY_ENTRY_CONCURRENCY },
   );
 }
@@ -537,12 +540,16 @@ export function formatCliHistoryDetailsText(
 
 async function toCliHistoryEntry(
   entry: AgentExecutionListingEntry,
-  readResumeData: ReturnType<typeof createCliResumeDataReaderForListing>,
+  streamId: ExecutionMeta['streamId'],
 ): Promise<CliHistoryEntry> {
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumeData = await readResumeData(entry.id, config);
+  const resumeData = await readCliResumeDataForKnownStream(
+    entry.id,
+    streamId,
+    config,
+  );
   return {
     id: entry.id,
     timestamp: entry.timestamp,

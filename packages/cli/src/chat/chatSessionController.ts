@@ -9,7 +9,7 @@ import {
   ExecutionLeaseActiveError,
   ExecutionLeaseLostError,
   getExecutionStore,
-  readExecutionMeta,
+  readExecutionStreamId,
 } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -531,11 +531,10 @@ export function createChatSessionController(
       // the config the TUI adopts before the run. Workflow runs resume
       // headless through `texra resume`, not inside a chat.
       const store = getExecutionStore(id);
-      const [config, meta] = await Promise.all([
+      const [config, streamId] = await Promise.all([
         store.readConfig(),
-        readExecutionMeta(id),
+        readExecutionStreamId(id),
       ]);
-      const streamId = meta?.streamId;
       let failure: string | undefined;
       if (!config || !streamId) {
         failure = `Execution not found: ${id}`;

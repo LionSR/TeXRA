@@ -4,12 +4,13 @@ import {
   retrieveSessionResumeData,
   type AgentConfig,
 } from '@agent/runtime';
-import {
-  createExecutionMetaReader,
-  type ExecutionMetaReader,
-} from '@agent/storage';
+import { readExecutionStreamId } from '@agent/storage';
 import { createLog } from '@logger/logUtils';
-import { AgentCategory, type ExecutionId } from '@shared/schemas';
+import {
+  AgentCategory,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('CliToolUseResumeData');
@@ -18,12 +19,10 @@ type CliSessionResumeData = NonNullable<
 >;
 
 async function readCliSessionResumeData(
-  reader: ExecutionMetaReader,
   id: ExecutionId,
+  streamId: StreamTabId,
   config: AgentConfig,
 ): Promise<CliSessionResumeData | null> {
-  const streamId = (await reader.read(id))?.streamId;
-  if (!streamId) return null;
   return (await retrieveSessionResumeData(streamId, id, config)) ?? null;
 }
 
@@ -38,33 +37,42 @@ async function readCliSessionResumeData(
  * executing right now also has a flow record and no outcome, and
  * `texra resume` would refuse it anyway.
  */
-export function createCliResumeDataReaderForListing(): (
+export async function readCliResumeDataForKnownStream(
   id: ExecutionId,
+  streamId: StreamTabId | undefined,
   config: AgentConfig,
-) => Promise<CliSessionResumeData | null> {
-  const reader = createExecutionMetaReader();
-  return async (id, config) => {
-    try {
-      if ((await classifyRun(id)).kind !== 'resumable') return null;
-      if (
-        config.agentCategory === AgentCategory.Workflow &&
-        (await hasTerminalPersistedCompileRejection(id))
-      ) {
-        return null;
-      }
-      return await readCliSessionResumeData(reader, id, config);
-    } catch (error) {
-      logger.debug(
-        `Ignoring unreadable resume data for history entry ${id}: ${toErrorMessage(error)}`,
-      );
+): Promise<CliSessionResumeData | null> {
+  try {
+    if (!streamId || (await classifyRun(id)).kind !== 'resumable') return null;
+    if (
+      config.agentCategory === AgentCategory.Workflow &&
+      (await hasTerminalPersistedCompileRejection(id))
+    ) {
       return null;
     }
-  };
+    return await readCliSessionResumeData(id, streamId, config);
+  } catch (error) {
+    logger.debug(
+      `Ignoring unreadable resume data for history entry ${id}: ${toErrorMessage(error)}`,
+    );
+    return null;
+  }
 }
 
-export function readCliResumeDataForListing(
+export async function readCliResumeDataForListing(
   id: ExecutionId,
   config: AgentConfig,
 ): Promise<CliSessionResumeData | null> {
-  return createCliResumeDataReaderForListing()(id, config);
+  try {
+    return await readCliResumeDataForKnownStream(
+      id,
+      await readExecutionStreamId(id),
+      config,
+    );
+  } catch (error) {
+    logger.debug(
+      `Ignoring unreadable resume data for history entry ${id}: ${toErrorMessage(error)}`,
+    );
+    return null;
+  }
 }

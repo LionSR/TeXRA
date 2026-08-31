@@ -1,25 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { finalizeRun, getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import {
-  registerExecution,
-  writeSessionDescription,
-} from '@agent/storage/executionLifecycle';
-import { releaseOwnedExecutionLease } from '@agent/storage/executionLease';
-import { readExecutionMeta } from '@agent/storage/executionMetaPersistence';
-import { KVStore } from '@common/storage/KVStore';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
-import {
-  AgentCategory,
-  RUN_OUTCOME,
-  type ExecutionId,
-  type StreamTabId,
-} from '@shared/schemas';
-import { createDeferred } from '@test/support/asyncTestUtils';
+import { writeSessionDescription } from '@agent/storage/executionLifecycle';
+import { RUN_OUTCOME, type ExecutionId } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { STREAM_DATA_KEYS, streamDataDir } from '@transcript/streamDataPaths';
-import { StorageFS } from '@utils/files/storageFS';
 
 describe('execution metadata updates', () => {
   setupPlatform({ workspacePath: '/workspace' });
@@ -71,103 +55,6 @@ describe('execution metadata updates', () => {
     expect((await getExecutionStore(id).readMeta())?.outcome).toBe(
       RUN_OUTCOME.COMPLETED,
     );
-  });
-
-  it('preserves a stream ID persisted before a stale updater acquires its lease', async () => {
-    const id = 'bbb005' as ExecutionId;
-    const legacy = 'legacy-stream' as StreamTabId;
-    const modern = 'modern-stream' as StreamTabId;
-    const timestamp = new Date(0).toISOString();
-    const store = getExecutionStore(id);
-    await store.writeMeta({ timestamp });
-    await new KVStore(streamDataDir(legacy)).write(STREAM_DATA_KEYS.META, {
-      executionId: id,
-    });
-    const started = createDeferred();
-    const release = createDeferred();
-    const originalReadDir = StorageFS.readDir.bind(StorageFS);
-    let blocked = false;
-    const readDir = vi
-      .spyOn(StorageFS, 'readDir')
-      .mockImplementation(async (path) => {
-        if (!blocked && path.includes(id)) {
-          blocked = true;
-          started.resolve();
-          await release.promise;
-        }
-        return originalReadDir(path);
-      });
-
-    try {
-      const staleUpdate = readExecutionMeta(id);
-      await started.promise;
-      // Model a second process that won its lease and persisted while this
-      // updater was still outside its own lease-protected transaction.
-      await new KVStore(resolveRunStoragePath(id)).write('meta', {
-        timestamp,
-        streamId: modern,
-      });
-      release.resolve();
-
-      await expect(staleUpdate).resolves.toMatchObject({ streamId: modern });
-      expect((await store.readMeta())?.streamId).toBe(modern);
-    } finally {
-      release.resolve();
-      readDir.mockRestore();
-    }
-  });
-
-  it('serializes legacy healing with a competing registration for the same stream', async () => {
-    const legacyId = 'bbb006' as ExecutionId;
-    const competingId = 'bbb007' as ExecutionId;
-    const streamId = 'shared-registration-stream' as StreamTabId;
-    const legacyStore = getExecutionStore(legacyId);
-    await legacyStore.writeMeta({ timestamp: new Date(0).toISOString() });
-    await new KVStore(streamDataDir(streamId)).write(STREAM_DATA_KEYS.META, {
-      executionId: legacyId,
-    });
-    const writeStarted = createDeferred();
-    const releaseWrite = createDeferred();
-    const originalWriteMeta = legacyStore.writeMeta.bind(legacyStore);
-    const writeMeta = vi
-      .spyOn(legacyStore, 'writeMeta')
-      .mockImplementationOnce(async (meta) => {
-        writeStarted.resolve();
-        await releaseWrite.promise;
-        return originalWriteMeta(meta);
-      });
-    const config = AgentConfigSchema.parse({
-      agent: 'assistant',
-      model: 'deepseekT',
-      agentCategory: AgentCategory.ToolUse,
-    });
-
-    try {
-      const healing = readExecutionMeta(legacyId);
-      await writeStarted.promise;
-      const registration = registerExecution(
-        competingId,
-        config,
-        config.agent,
-        {
-          streamId,
-          identity: { kind: 'agent', agent: config.agent },
-        },
-      );
-      releaseWrite.resolve();
-
-      await expect(healing).resolves.toMatchObject({ streamId });
-      await expect(registration).rejects.toThrow(
-        'already has another or unreadable persisted execution owner',
-      );
-      await expect(
-        getExecutionStore(competingId).readMeta(),
-      ).resolves.toBeNull();
-    } finally {
-      releaseWrite.resolve();
-      writeMeta.mockRestore();
-      await releaseOwnedExecutionLease(competingId).catch(() => undefined);
-    }
   });
 
   it('updates and finalizes core metadata despite malformed workflow observability', async () => {

@@ -333,8 +333,8 @@ describe('ProgressBackend cleanup', () => {
 
   it('preserves a stream created after bulk cleanup starts', async () => {
     const { backend } = createIsolatedRecordingBackend();
-    const existing = toolStreamAndExecution('bulk-existing');
-    const fresh = toolStreamAndExecution('bulk-fresh');
+    const existing = toolStreamAndExecution('b01c-e015');
+    const fresh = toolStreamAndExecution('b01c-f235');
     await seedOwnedStream(backend, existing, { load: true });
 
     let releaseList!: () => void;
@@ -371,6 +371,7 @@ describe('ProgressBackend cleanup', () => {
     expect(backend.state.streamLogs.has(existing.stream)).toBe(false);
     expect(backend.state.streamLogs.has(fresh.stream)).toBe(true);
 
+    await seedOwnedStream(backend, fresh);
     await backend.state.clearAll();
   });
 
@@ -380,7 +381,7 @@ describe('ProgressBackend cleanup', () => {
     const deleted = toolStreamAndExecution('de1e7ed6966');
     const { backend } = createIsolatedRecordingBackend();
     for (const ids of [failed, incomplete, deleted]) {
-      registerStream(backend, ids);
+      await seedOwnedStream(backend, ids);
     }
     const deleteExecutionSpy = vi
       .spyOn(executionDeleter(backend), 'deleteExecution')
@@ -415,8 +416,7 @@ describe('ProgressBackend cleanup', () => {
   it('does not retain bulk-deleted streams after the transcript commit point', async () => {
     const { stream, executionId } = toolStreamAndExecution('b69660');
     const { backend } = createIsolatedRecordingBackend();
-    registerStream(backend, { stream, executionId });
-    await writeExecutionConfig(executionId);
+    await seedOwnedStream(backend, { stream, executionId });
     const forgetManySpy = vi
       .spyOn(GoalStore, 'forgetMany')
       .mockRejectedValueOnce(new Error('goal index is locked'));
@@ -444,7 +444,8 @@ describe('ProgressBackend cleanup', () => {
     const { backend } = createIsolatedRecordingBackend();
     registerStream(backend, { stream: failedStream, executionId });
     registerStream(backend, { stream: deletedStream, executionId });
-    await writeExecutionConfig(executionId);
+    await writeExecutionConfig(executionId, { streamId: deletedStream });
+    await backend.state.flush();
     const deleteTranscript = backend.state.streamLogs.delete.bind(
       backend.state.streamLogs,
     );

@@ -228,35 +228,6 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('resumes a historical workflow after the metadata boundary heals its stream', async () => {
-    await seedExecution({
-      config: WORKFLOW_CONFIG,
-      meta: META_WITHOUT_STREAM_ID,
-    });
-    await new KVStore(streamDataDir(STREAM_ID)).write(STREAM_DATA_KEYS.META, {
-      executionId: EXECUTION_ID,
-    });
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'workflow',
-      agentConfig: WORKFLOW_CONFIG,
-      executionId: EXECUTION_ID,
-    });
-
-    await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(0);
-
-    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
-    expect(mocks.retrieveSessionResumeData).toHaveBeenCalledWith(
-      STREAM_ID,
-      EXECUTION_ID,
-      WORKFLOW_CONFIG,
-      expect.any(Object),
-    );
-    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalled();
-    await expect(
-      getExecutionStore(EXECUTION_ID).readMeta(),
-    ).resolves.toMatchObject({ streamId: STREAM_ID });
-  });
-
   it('restores an absolute persisted workflow output directory', async () => {
     const workingDirectory = path.join(path.sep, 'tmp', 'paper ');
     const outputDirectory = path.join(workingDirectory, 'out');

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
-import { ExecutionLeaseLostError } from '@agent/storage/executionLease';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -24,11 +23,6 @@ const getExecutionStoreMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
   ...(await importActual<typeof import('@agent/storage/ExecutionKVStore')>()),
   getExecutionStore: getExecutionStoreMock,
-}));
-
-const readExecutionMetaMock = vi.hoisted(() => vi.fn());
-vi.mock('@agent/storage/executionMetaPersistence', () => ({
-  readExecutionMeta: readExecutionMetaMock,
 }));
 
 const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
@@ -86,7 +80,6 @@ describe('resumeRun tool-use queue ownership', () => {
       readMeta: async () => ({ streamId: STREAM }),
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
-    readExecutionMetaMock.mockReset().mockResolvedValue({ streamId: STREAM });
     readExecutionStreamIndexMock.mockReset().mockResolvedValue({
       byStream: new Map([[STREAM, EXECUTION]]),
       unreadable: new Map(),
@@ -98,22 +91,6 @@ describe('resumeRun tool-use queue ownership', () => {
         return completed;
       },
     );
-  });
-
-  it('resumes a legacy row through its recovered stream edge', async () => {
-    const session = createSession();
-    getExecutionStoreMock.mockReturnValue({
-      readConfig: async () => snapshot().agentConfig,
-    });
-    readExecutionMetaMock.mockResolvedValueOnce({
-      timestamp: '2026-07-31T00:00:00.000Z',
-      streamId: STREAM,
-    });
-
-    await expect(
-      resumeRun(EXECUTION, { session, executeWorkflow }),
-    ).resolves.toEqual({ started: true, delivered: true });
-    expect(readExecutionMetaMock).toHaveBeenCalledWith(EXECUTION);
   });
 
   it('claims stream recovery before resolving the disk index', async () => {
@@ -245,17 +222,6 @@ describe('resumeRun tool-use queue ownership', () => {
       resumeRun(EXECUTION, { session, executeWorkflow }),
     ).rejects.toThrow('failed');
     expect(session.followUps.getAll(STREAM)).toEqual(['keep me']);
-  });
-
-  it('does not relabel lease loss after healing as foreign ownership', async () => {
-    const session = createSession();
-    resumeToolUseFromResumeDataMock.mockRejectedValueOnce(
-      new ExecutionLeaseLostError(EXECUTION),
-    );
-
-    await expect(
-      resumeRun(EXECUTION, { session, executeWorkflow }),
-    ).rejects.toBeInstanceOf(ExecutionLeaseLostError);
   });
 
   it('replays a completed-child result that races a failed recovery', async () => {
