@@ -25,10 +25,10 @@ export const ONBOARDING_CHOICE_CHATGPT = {
 } as const;
 
 /**
- * The academic program you sign in to for the hosted research-agent catalog.
+ * The TeXRA account you sign in to for the hosted research-agent catalog.
  */
 export const RESEARCHER_ACCESS = {
-  label: 'Researcher Access',
+  label: 'TeXRA account',
 } as const;
 
 /**

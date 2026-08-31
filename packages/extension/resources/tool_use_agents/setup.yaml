@@ -208,7 +208,7 @@ prompts:
       - After either model-credential path, re-probe and tell the user
         which credential is now active. If neither ChatGPT subscription
         access nor a usable key is present, do not advance to phase I.
-      - **Researcher Access (optional remote-agent catalog):** this does
+      - **TeXRA account (optional remote-agent catalog):** this does
         not provide model access or satisfy phase D. Once a runnable-model
         credential is in place, offer it when the user wants hosted remote
         agents such as the orchestrator. Extension: `invoke_command` with
@@ -281,7 +281,7 @@ prompts:
          nothing is overwritten unchecked. If they explicitly ask for
          an end-to-end pass across the whole paper, delegate to the
          remote `orchestrator` tool-use agent via `delegate_agent`
-         (needs Researcher Access sign-in). When in doubt, ask one
+         (needs TeXRA account sign-in). When in doubt, ask one
          clarifying question rather than guessing. Pass `model` only if
          the user asked for one. Do not invent file paths: the
          user-supplied path or the just-created sample / cloned /

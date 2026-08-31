@@ -53,7 +53,7 @@ describe('InvokeCommandTool allowlist', () => {
     assert.deepEqual(invocations[0].args, []);
   });
 
-  it('allows the Researcher Access sign-in command', async () => {
+  it('allows the TeXRA account sign-in command', async () => {
     const { tool, invocations } = setupTool();
 
     await tool.call({ command: AUTH_COMMANDS.SIGN_IN });

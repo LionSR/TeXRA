@@ -57,7 +57,7 @@ TeXRA panel offers the main access choices:
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip Signing in to TeXRA
-**TeXRA: Sign In** is separate from model access: a TeXRA account (Researcher Access) unlocks the hosted
+**TeXRA: Sign In** is separate from model access: your TeXRA account unlocks the hosted
 research-agent catalog (remote agents such as the orchestrator), and those agents still run on the credential
 you configured above. Read the [Remote agents guide](./remote-agents.md).
 :::
