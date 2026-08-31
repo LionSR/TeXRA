@@ -1,11 +1,9 @@
-import { EventEmitter } from 'node:events';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { installDesktopLifecycleComposition } from '@desktop/main/desktopLifecycleComposition';
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { normalizeFilePath } from '@utils/core';
@@ -60,52 +58,6 @@ function expectOrderedAfter(
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
-
-  it('installs window lifecycle handling on the created BrowserWindow webContents', () => {
-    const webContents = new EventEmitter();
-    const disposeRendererResources = vi.fn();
-    const discard = { preventDefault: vi.fn() };
-
-    installDesktopLifecycleComposition({
-      window: {
-        window: { webContents },
-        workspaceIpc: { disposeRendererResources },
-        showDiscardDialog: () => 1,
-        isFatalShutdownRequested: () => false,
-        clearPendingWorkspaceRelaunch: vi.fn(),
-        clearContinueQuitAfterWindowClose: vi.fn(),
-      },
-    });
-
-    webContents.emit('will-prevent-unload', discard);
-    expect(discard.preventDefault).toHaveBeenCalledOnce();
-    webContents.emit('did-navigate');
-    expect(disposeRendererResources).not.toHaveBeenCalled();
-    webContents.emit('did-navigate');
-    expect(disposeRendererResources).toHaveBeenCalledOnce();
-  });
-
-  it('installs before-quit lifecycle shutdown on the Electron app', async () => {
-    const app = new EventEmitter() as EventEmitter & { quit(): void };
-    app.quit = vi.fn();
-    const runShutdown = vi.fn(async () => {});
-    const beforeQuit = { preventDefault: vi.fn() };
-
-    installDesktopLifecycleComposition({
-      beforeQuit: {
-        app,
-        getMainWindow: () => null,
-        lifecycle: { runShutdown },
-        continueAfterWindowClose: vi.fn(),
-      },
-    });
-
-    expect(app.listenerCount('before-quit')).toBe(1);
-    app.emit('before-quit', beforeQuit);
-    await vi.waitFor(() => expect(runShutdown).toHaveBeenCalledOnce());
-    expect(beforeQuit.preventDefault).toHaveBeenCalledOnce();
-    expect(app.quit).toHaveBeenCalledOnce();
-  });
 
   async function createResourceTree(resourcesPath: string): Promise<void> {
     await Promise.all([

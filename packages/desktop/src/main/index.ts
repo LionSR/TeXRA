@@ -78,7 +78,10 @@ import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { handoffDesktopWorkspaceRelaunchFromMainProcess } from './desktopWorkspaceRelaunch.js';
-import { installDesktopLifecycleComposition } from './desktopLifecycleComposition.js';
+import {
+  bootstrapDesktopWindowLifecycle,
+  installDesktopBeforeQuitWiring,
+} from './desktopWindowLifecycle.js';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
@@ -1144,27 +1147,25 @@ function createWindow(options: {
   // reading of it: Chromium emits it after the renderer's beforeunload handler
   // observes a dirty Monaco buffer and refuses the unload, so every close path
   // (quit, workspace switch, window close) asks here and nowhere else.
-  installDesktopLifecycleComposition({
-    window: {
-      window,
-      workspaceIpc,
-      showDiscardDialog: () =>
-        dialog.showMessageBoxSync(window, {
-          type: 'warning',
-          buttons: ['Keep Editing', 'Discard Changes'],
-          defaultId: 0,
-          cancelId: 0,
-          title: 'Unsaved Changes',
-          message: 'This workspace has unsaved editor changes.',
-          detail: 'Discard the changes and continue?',
-        }),
-      isFatalShutdownRequested: isFatalDesktopShutdownRequested,
-      clearPendingWorkspaceRelaunch: () => {
-        pendingWorkspaceRelaunch = undefined;
-      },
-      clearContinueQuitAfterWindowClose: () => {
-        continueQuitAfterWindowClose = undefined;
-      },
+  bootstrapDesktopWindowLifecycle({
+    webContents: window.webContents,
+    workspaceIpc,
+    showDiscardDialog: () =>
+      dialog.showMessageBoxSync(window, {
+        type: 'warning',
+        buttons: ['Keep Editing', 'Discard Changes'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Unsaved Changes',
+        message: 'This workspace has unsaved editor changes.',
+        detail: 'Discard the changes and continue?',
+      }),
+    isFatalShutdownRequested: isFatalDesktopShutdownRequested,
+    clearPendingWorkspaceRelaunch: () => {
+      pendingWorkspaceRelaunch = undefined;
+    },
+    clearContinueQuitAfterWindowClose: () => {
+      continueQuitAfterWindowClose = undefined;
     },
   });
   const mainViewIpc = installDesktopMainViewIpc(window, {
@@ -1358,14 +1359,12 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
         // listener proceeds with the ordinary shutdown chain.
-        installDesktopLifecycleComposition({
-          beforeQuit: {
-            app,
-            getMainWindow: () => mainWindow,
-            lifecycle,
-            continueAfterWindowClose: (continueQuit) => {
-              continueQuitAfterWindowClose = continueQuit;
-            },
+        installDesktopBeforeQuitWiring({
+          app,
+          getMainWindow: () => mainWindow,
+          lifecycle,
+          continueAfterWindowClose: (continueQuit) => {
+            continueQuitAfterWindowClose = continueQuit;
           },
         });
 
