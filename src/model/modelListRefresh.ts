@@ -58,7 +58,9 @@ function reconcileEnabledModels(
   // an existing user's enabled-models list. Running it unconditionally keeps
   // it correct across both versioning schemes, at negligible cost (the set of
   // currently-enabled models is small).
-  const removed = currentModels.filter((model) => isRetiredModel(model));
+  const removed = [
+    ...new Set(currentModels.filter((model) => isRetiredModel(model))),
+  ];
   const kept = currentModels.filter((model) => !isRetiredModel(model));
   // DEFAULT_MODELS is already resolved against the live registry --
   // resolveDefaultModels (modelOptionsBasic.ts) drops retired/deprecated
