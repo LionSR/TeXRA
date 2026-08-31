@@ -12,13 +12,12 @@ import type {
   PermissionPayload,
   ProgressViewOutboundHandlerRegistry,
 } from '@shared/schemas';
-import { deriveGoalState } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 
 import { clearInquiryDraft } from './inquiryDraftState';
 import { permissions$ } from '../progressState';
-import { goalToStateFields, updateToolUseState } from '../stateUtils';
+import { updateToolUseState } from '../stateUtils';
 import { permissionId } from '../permissionState';
 
 // ============================================================
@@ -107,14 +106,15 @@ export const permissionHandlers = {
   },
 
   [PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED]: (data) => {
-    const goal = deriveGoalState({
-      goalActive: data.active,
-      goalStatus: data.status,
-      goalObjective: data.objective,
-    });
     updateToolUseState(data.stream, (prev) =>
       create(prev, (draft) => {
-        Object.assign(draft, goalToStateFields(goal));
+        draft.goal = data.active
+          ? {
+              active: true,
+              status: data.status ?? 'active',
+              objective: data.objective ?? '',
+            }
+          : { active: false };
       }),
     );
   },

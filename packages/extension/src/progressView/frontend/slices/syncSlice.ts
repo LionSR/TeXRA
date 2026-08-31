@@ -6,11 +6,7 @@ import {
   type StreamContentRenderPayload,
 } from '@shared/schemas';
 // Local imports
-import {
-  goalToStateFields,
-  updateToolUseState,
-  updateWorkflowState,
-} from '../stateUtils';
+import { updateToolUseState, updateWorkflowState } from '../stateUtils';
 
 function activeStateFields(data: StreamContentRenderPayload) {
   if (!data.activeState) return {};
@@ -41,9 +37,6 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
-      // `controls.goal` already matches GoalStateSchema (the wire schema
-      // imports it directly from `@shared/schemas/goal`) — no need to
-      // round-trip it through deriveGoalState.
       const { goal, ...bypasses } = controls;
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
@@ -53,7 +46,7 @@ export const syncHandlers = {
         plan: workPlan.plan,
         queuedFollowUps: workPlan.queuedFollowUps,
         ...bypasses,
-        ...goalToStateFields(goal),
+        goal,
       }));
     }
   },

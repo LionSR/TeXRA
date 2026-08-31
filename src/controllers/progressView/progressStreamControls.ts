@@ -11,10 +11,9 @@ import { GoalStore } from '@tools/goal';
  * Per-stream control flags pushed to the progress view: approval bypass state
  * plus the goal chip state. A progress-view domain concept, owned here next to
  * the producer rather than inside the Lit renderer. `goal` is the same
- * canonical {@link GoalState} the wire projection (`ControlsSectionSchema`)
- * and `deriveGoalState` use, so the one production consumer
- * (`LitSessionRenderer`) can forward this return value as-is instead of
- * re-flattening and re-deriving it.
+ * canonical {@link GoalState} used by the wire projection
+ * (`ControlsSectionSchema`) and tool-use stream state, so the one production
+ * consumer (`LitSessionRenderer`) can forward this return value as-is.
  */
 interface ProgressStreamControls {
   bashBypass: boolean;

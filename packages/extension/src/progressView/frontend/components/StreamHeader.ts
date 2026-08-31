@@ -17,7 +17,6 @@ import type {
 } from '@shared/schemas';
 import {
   DEFAULT_STREAM_METADATA_STATUS,
-  deriveGoalState,
   isPlainAgentIdentity,
   isToolUseState,
   isWorkflowState,
@@ -422,11 +421,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       superYolo: Boolean(toolUse?.superYoloBypass),
       toolEdit: Boolean(toolUse?.toolEditBypass),
     };
-    const goal = deriveGoalState({
-      goalActive: toolUse?.goalActive,
-      goalStatus: toolUse?.goalStatus,
-      goalObjective: toolUse?.goalObjective,
-    });
+    const goal = toolUse?.goal ?? { active: false };
     const hasExecutionId = Boolean(this.stream.executionId);
     const identity = this.stream.identity;
     const isNativeAgentRun = isPlainAgentIdentity(identity);

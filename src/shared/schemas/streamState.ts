@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { GoalStatusSchema } from './goal';
+import { GoalStateSchema, GoalStatusSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
 import { RunIdentitySchema } from './runIdentity';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
@@ -193,12 +193,61 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   bashBypass: z.boolean().optional(),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
-  goalActive: z.boolean().optional(),
-  goalStatus: GoalStatusSchema.optional(),
-  goalObjective: z.string().optional(),
+  goal: GoalStateSchema.prefault({ active: false }),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),
 });
+
+/**
+ * Compatibility input for stream-state snapshots written before 2026-08-31.
+ * Normalize the released flattened goal fields here, at the construction
+ * boundary, so current state and every downstream consumer only see `goal`.
+ * Remove after the three-month compatibility window ends on 2026-11-30.
+ */
+const LegacyToolUseStreamStateSchema = z
+  .object({
+    goalActive: z.boolean().optional(),
+    goalStatus: GoalStatusSchema.optional(),
+    goalObjective: z.string().optional(),
+  })
+  .transform(({ goalActive, goalStatus, goalObjective }) => ({
+    goal: goalActive
+      ? {
+          active: true as const,
+          status: goalStatus ?? 'active',
+          objective: goalObjective ?? '',
+        }
+      : { active: false as const },
+  }));
+
+const ToolUseStreamStateInputSchema = z
+  .unknown()
+  .transform((input, ctx) => {
+    if (typeof input !== 'object' || input === null) return input;
+    const hasCanonicalGoal = Object.hasOwn(input, 'goal');
+    const hasLegacyGoal =
+      Object.hasOwn(input, 'goalActive') ||
+      Object.hasOwn(input, 'goalStatus') ||
+      Object.hasOwn(input, 'goalObjective');
+    if (hasCanonicalGoal && hasLegacyGoal) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Stream state cannot mix canonical and legacy goal fields',
+      });
+      return z.NEVER;
+    }
+    if (!hasLegacyGoal) return input;
+
+    const legacy = LegacyToolUseStreamStateSchema.parse(input);
+    const {
+      goalActive: _active,
+      goalStatus: _status,
+      goalObjective: _objective,
+      ...current
+    } = input as Record<string, unknown>;
+    return { ...current, ...legacy };
+  })
+  .pipe(ToolUseStreamStateSchema);
 
 export type ToolUseStreamState = z.infer<typeof ToolUseStreamStateSchema>;
 
@@ -264,7 +313,7 @@ export function createStreamState(
   partial?: Partial<StreamState>,
 ): StreamState {
   if (agentCategory === AgentCategory.ToolUse) {
-    return ToolUseStreamStateSchema.parse({
+    return ToolUseStreamStateInputSchema.parse({
       category: AgentCategory.ToolUse,
       ...partial,
     });
