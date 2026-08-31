@@ -129,7 +129,10 @@ function formatModelAccessStatus(model: ModelOptionData): string {
 
 export function formatModelStatusForCli(model: CliModelAccess): string {
   if (model.model.provider === 'kimiCode') return 'api: Kimi Code subscription';
-  if (model.model.provider === 'glm') {
+  if (
+    model.model.provider === 'glm' &&
+    model.model.availability === 'provider-key'
+  ) {
     const config = getRuntimeModelConfig(model.model.value);
     if (config) {
       const route = resolveGlmRoute({

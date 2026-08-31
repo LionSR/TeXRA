@@ -22,7 +22,7 @@ import {
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import { OPENROUTER_BASE_URL } from '@model/glmRouting';
+import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import type {
   FileLocation,
   MediaAttachmentKind,

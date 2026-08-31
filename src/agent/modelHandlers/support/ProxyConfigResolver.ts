@@ -1,10 +1,11 @@
 import { ModelProvider } from 'llm-zoo';
-import { OPENROUTER_BASE_URL, resolveGlmRoute } from '@model/glmRouting';
+import { resolveGlmRoute } from '@model/glmRouting';
+import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
+import { normalizeProviderEndpoint } from '@model/providerEndpoint';
 import {
   shouldRouteModelThroughOpenRouter,
   type ModelRoutingConfig,
 } from '@model/openRouterRouting';
-import { tryParseUrl } from '@utils/core';
 import {
   getProviderEndpoint,
   useChinaRegion,
@@ -12,16 +13,6 @@ import {
 } from '@utils/config/providerConfig';
 
 // Custom endpoints use the provider state written by the Models view.
-
-/** Normalize a URL-like string to `host/path` form (no protocol, no trailing slashes). */
-function normalizeUrl(input: string): string {
-  if (!input) return '';
-
-  const withProtocol = input.includes('://') ? input : `https://${input}`;
-  const parsed = tryParseUrl(withProtocol);
-  if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
-}
 
 /**
  * Provider default base URLs. Providers whose endpoint depends on the
@@ -122,7 +113,11 @@ export function resolveProxyEndpoint(config: ProxyConfig): {
     case 'custom': {
       config.logger?.debug(`Using custom base URL for model: ${config.url}`);
       if (config.provider === ModelProvider.GLM) {
-        return resolveGlmRoute({ baseUrl: config.url, useOpenRouter: false });
+        const route = resolveGlmRoute({
+          baseUrl: config.url,
+          useOpenRouter: false,
+        });
+        return { baseUrl: route.baseUrl };
       }
       return { baseUrl: config.url };
     }
@@ -152,7 +147,12 @@ function resolveDirectEndpoint(config: {
     if (route.route === 'provider-custom') {
       logger?.debug(`Using custom base URL for ${provider}: ${route.baseUrl}`);
     }
-    return route;
+    return {
+      baseUrl: route.baseUrl,
+      ...(route.route === 'official-coding-plan' && {
+        usageRoute: route.usageRoute,
+      }),
+    };
   }
 
   if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
@@ -161,7 +161,7 @@ function resolveDirectEndpoint(config: {
   const customUrl = getProviderEndpoint(provider);
   if (customUrl) {
     logger?.debug(`Using custom base URL for ${provider}: ${customUrl}`);
-    return { baseUrl: `https://${normalizeUrl(customUrl)}` };
+    return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
   }
 
   const baseUrl = BASE_URLS[provider];

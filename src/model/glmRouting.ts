@@ -1,13 +1,12 @@
 import { ModelProvider } from 'llm-zoo';
 
-import { tryParseUrl } from '@utils/core';
+import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
+import { normalizeProviderEndpoint } from '@model/providerEndpoint';
 import {
   getGLMCodingPlan,
   getProviderEndpoint,
   useChinaRegion,
 } from '@utils/config/providerConfig';
-
-export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
 export type GlmRoute =
   | { readonly route: 'model-custom'; readonly baseUrl: string }
@@ -23,14 +22,6 @@ export type GlmRoute =
 interface GlmRoutingConfig {
   readonly baseUrl?: string | null;
   readonly useOpenRouter: boolean;
-}
-
-/** Normalize a provider endpoint to `host/path` form (no protocol or trailing slashes). */
-function normalizeProviderEndpoint(input: string): string {
-  const withProtocol = input.includes('://') ? input : `https://${input}`;
-  const parsed = tryParseUrl(withProtocol);
-  if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
 
 /** Resolve the endpoint and usage classification for one GLM request. */

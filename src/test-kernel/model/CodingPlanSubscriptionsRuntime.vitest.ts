@@ -32,6 +32,7 @@ describe('coding-plan subscription runtime', () => {
     delete MODEL_CONFIGS.glm52.baseUrl;
     await platform().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
     await platform().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true);
+    await platform().globalState.update(GlobalStateKey.GLM_USE_CHINA, true);
     await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, true);
   });
 
@@ -39,6 +40,63 @@ describe('coding-plan subscription runtime', () => {
     expect(Object.isFrozen(codingPlanSubscriptionRuntimes)).toBe(true);
     expect(codingPlanSubscriptionRuntimes.every(Object.isFrozen)).toBe(true);
   });
+
+  it.each([
+    {
+      name: 'China Coding Plan',
+      useChina: true,
+      codingPlan: true,
+      expected: {
+        route: 'official-coding-plan',
+        baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+        usageRoute: 'glm-coding-plan-subscription',
+      },
+    },
+    {
+      name: 'global Coding Plan',
+      useChina: false,
+      codingPlan: true,
+      expected: {
+        route: 'official-coding-plan',
+        baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+        usageRoute: 'glm-coding-plan-subscription',
+      },
+    },
+    {
+      name: 'China regular API',
+      useChina: true,
+      codingPlan: false,
+      expected: {
+        route: 'official',
+        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      },
+    },
+    {
+      name: 'global regular API',
+      useChina: false,
+      codingPlan: false,
+      expected: {
+        route: 'official',
+        baseUrl: 'https://api.z.ai/api/paas/v4',
+      },
+    },
+  ])(
+    'resolves the exact $name route',
+    async ({ useChina, codingPlan, expected }) => {
+      await platform().globalState.update(GlobalStateKey.USE_OPENROUTER, false);
+      await platform().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
+      await platform().globalState.update(
+        GlobalStateKey.GLM_CODING_PLAN,
+        codingPlan,
+      );
+      await platform().globalState.update(
+        GlobalStateKey.GLM_USE_CHINA,
+        useChina,
+      );
+
+      expect(resolveGlmRoute({ useOpenRouter: false })).toEqual(expected);
+    },
+  );
 
   it.each([
     {
@@ -115,7 +173,11 @@ describe('coding-plan subscription runtime', () => {
             },
       );
 
-      expect(canonical).toMatchObject({ route, baseUrl });
+      expect(canonical).toEqual({
+        route,
+        baseUrl,
+        ...(usageRoute && { usageRoute }),
+      });
       expect(proxy).toMatchObject({ baseUrl });
       expect('usageRoute' in proxy ? proxy.usageRoute : undefined).toBe(
         usageRoute,
