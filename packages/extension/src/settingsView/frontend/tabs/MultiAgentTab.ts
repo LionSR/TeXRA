@@ -57,16 +57,27 @@ export class MultiAgentTab extends LitElement {
         gap: var(--wa-space-xs);
       }
 
-      .preset-card {
+      .preset-card-shell {
         position: relative;
+      }
+
+      .preset-card {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-3xs);
+        width: 100%;
+        height: 100%;
         padding: var(--wa-space-2xs) var(--wa-space-xs);
+        font: inherit;
+        text-align: start;
         background-color: var(--wa-color-neutral-fill-quiet);
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--border-radius);
         cursor: pointer;
+      }
+
+      .preset-card.deletable .preset-card-header {
+        padding-inline-end: var(--wa-space-xl);
       }
 
       .preset-card:hover {
@@ -151,11 +162,6 @@ export class MultiAgentTab extends LitElement {
         position: absolute;
         inset-block-start: var(--wa-space-2xs);
         inset-inline-end: var(--wa-space-2xs);
-        opacity: 0;
-        /* Destructive and invisible: a tap on the card corner must not delete a
-           team. Keyboard focus is unaffected, and focusing reveals the button
-           through :focus-within below. */
-        pointer-events: none;
         z-index: 10;
       }
 
@@ -173,12 +179,6 @@ export class MultiAgentTab extends LitElement {
         outline: var(--focus-ring-width) solid var(--wa-color-focus);
         outline-offset: var(--focus-ring-offset);
         border-radius: var(--border-radius-small);
-      }
-
-      .preset-card:hover .preset-delete-btn,
-      .preset-card:focus-within .preset-delete-btn {
-        opacity: var(--opacity-full);
-        pointer-events: auto;
       }
     `,
   ];
@@ -206,19 +206,6 @@ export class MultiAgentTab extends LitElement {
     });
   }
 
-  private handlePresetKey(event: KeyboardEvent, preset: AgentModePreset): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      // Ignore Enter/Space that bubbled up from the nested delete button —
-      // that control owns its own click/keydown activation and must not
-      // also apply the preset it's being deleted from.
-      if ((event.target as HTMLElement | null)?.closest('.preset-delete-btn')) {
-        return;
-      }
-      event.preventDefault();
-      this.handlePresetClick(preset);
-    }
-  }
-
   private handleDeletePreset(event: Event, preset: AgentModePreset): void {
     event.stopPropagation();
     postMessage(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET, {
@@ -243,68 +230,82 @@ export class MultiAgentTab extends LitElement {
     );
     const isActive = this.activePresetId === preset.id;
     return html`
-      <div
-        class=${classMap({ 'preset-card': true, active: isActive })}
-        role="button"
-        tabindex="0"
-        @click=${() => this.handlePresetClick(preset)}
-        @keydown=${(e: KeyboardEvent) => this.handlePresetKey(e, preset)}
-        title="Apply ${preset.name} team"
-      >
-        <div class="preset-card-header">
-          ${waIcon(preset.icon, { className: 'preset-card-icon' })}
-          <span class="preset-card-name">${preset.name}</span>
+      <div class="preset-card-shell" role="listitem">
+        <button
+          class=${classMap({
+            'preset-card': true,
+            active: isActive,
+            deletable,
+          })}
+          type="button"
+          aria-pressed=${isActive}
+          @click=${() => this.handlePresetClick(preset)}
+          title=${`Apply ${preset.name} team`}
+        >
+          <div class="preset-card-header">
+            ${waIcon(preset.icon, { className: 'preset-card-icon' })}
+            <span class="preset-card-name"
+              ><bdi dir="auto">${preset.name}</bdi></span
+            >
+            ${
+              isActive
+                ? html`<wa-tag
+                    class="preset-active-badge"
+                    variant="brand"
+                    size="s"
+                  >
+                    ${waIcon('check')} Active
+                  </wa-tag>`
+                : nothing
+            }
+          </div>
+          <p class="preset-card-description">
+            <bdi dir="auto">${preset.description}</bdi>
+          </p>
           ${
-            isActive
-              ? html`<wa-tag
-                  class="preset-active-badge"
-                  variant="brand"
-                  size="s"
-                >
-                  ${waIcon('check')} Active
-                </wa-tag>`
+            orchestratorAgents.length > 0
+              ? html`<div class="preset-card-orchestrators">
+                  ${orchestratorAgents.map(
+                    (name) => html`
+                      <wa-tag
+                        class="preset-agent-badge preset-agent-badge--orchestrator"
+                        variant="brand"
+                        size="s"
+                        title="${name} is the orchestrator for this team"
+                      >
+                        <span
+                          class="preset-orchestrator-icon"
+                          aria-hidden="true"
+                          >${waIcon('bullseye')}</span
+                        >
+                        <!-- The bullseye is aria-hidden and the tag's title is
+                             hover-only, so carry the orchestrator identity as
+                             (visually hidden) text. -->
+                        <span class="visually-hidden">Orchestrator:</span>
+                        <bdi dir="auto">${name}</bdi>
+                      </wa-tag>
+                    `,
+                  )}
+                </div>`
               : nothing
           }
-        </div>
-        <p class="preset-card-description">${preset.description}</p>
-        ${
-          orchestratorAgents.length > 0
-            ? html`<div class="preset-card-orchestrators">
-                ${orchestratorAgents.map(
-                  (name) => html`
-                    <wa-tag
-                      class="preset-agent-badge preset-agent-badge--orchestrator"
-                      variant="brand"
-                      size="s"
-                      title="${name} is the orchestrator for this team"
-                    >
-                      <span class="preset-orchestrator-icon" aria-hidden="true"
-                        >${waIcon('bullseye')}</span
-                      >
-                      <!-- The bullseye is aria-hidden and the tag's title is
-                           hover-only, so carry the orchestrator identity as
-                           (visually hidden) text. -->
-                      <span class="visually-hidden">Orchestrator:</span>
-                      ${name}
-                    </wa-tag>
-                  `,
-                )}
-              </div>`
-            : nothing
-        }
-        <div class="preset-card-agents">
-          ${teammateAgents.map(
-            (name) =>
-              html`<wa-tag class="preset-agent-badge" variant="neutral" size="s"
-                >${name}</wa-tag
-              >`,
-          )}
-        </div>
+          <div class="preset-card-agents">
+            ${teammateAgents.map(
+              (name) =>
+                html`<wa-tag
+                  class="preset-agent-badge"
+                  variant="neutral"
+                  size="s"
+                  ><bdi dir="auto">${name}</bdi></wa-tag
+                >`,
+            )}
+          </div>
+        </button>
         ${
           deletable
             ? renderIconActionButton({
                 icon: 'trash',
-                label: 'Delete team',
+                label: `Delete ${preset.name} team`,
                 className: 'preset-delete-btn',
                 onClick: (e) => this.handleDeletePreset(e, preset),
               })
@@ -326,7 +327,7 @@ export class MultiAgentTab extends LitElement {
           icon: 'users',
         })}
 
-        <div class="preset-grid">
+        <div class="preset-grid" role="list">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
           ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
         </div>

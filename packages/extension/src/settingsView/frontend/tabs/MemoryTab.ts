@@ -33,6 +33,7 @@ export class MemoryTab extends LitElement {
 
       .memory-actions {
         display: flex;
+        flex-wrap: wrap;
         justify-content: flex-end;
         gap: var(--wa-space-2xs);
       }
@@ -51,20 +52,23 @@ export class MemoryTab extends LitElement {
   };
 
   private renderActions(): TemplateResult {
-    return html`<div class="memory-actions">
+    return html`<div
+      class="memory-actions"
+      role="group"
+      aria-label="Saved memory actions"
+    >
       ${renderLabeledActionButton({
         icon: 'rotate-right',
-        text: 'Refresh',
+        text: 'Refresh memories',
         kind: 'secondary',
         appearance: 'outlined',
         onClick: this.handleRefresh,
       })}
       ${renderLabeledActionButton({
         icon: 'folder-open',
-        text: 'Open folder',
+        text: 'Open memory folder',
         kind: 'secondary',
         appearance: 'outlined',
-        title: 'Open memory folder in file explorer',
         onClick: this.handleOpenFolder,
       })}
     </div>`;

@@ -256,7 +256,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         this.githubTokenStatus === 'secret'
                           ? renderLabeledActionButton({
                               icon: 'trash',
-                              text: 'Remove',
+                              text: 'Remove token',
                               kind: 'danger',
                               onClick: this.handleRemoveGitHubToken,
                             })
@@ -275,7 +275,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                     <strong>How to get a token:</strong>
                     <ol>
                       <li>
-                        Click <em>Create on GitHub…</em> to open the
+                        Select <em>Create on GitHub…</em> to open the
                         token-creation page in your browser.
                       </li>
                       <li>
@@ -284,7 +284,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         usage; no write scopes needed.
                       </li>
                       <li>
-                        Pick an expiration (90 days is common) and click
+                        Pick an expiration (90 days is common) and select
                         <em>Generate token</em>.
                       </li>
                       <li>
@@ -324,8 +324,8 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                       (subscription) => html`
                         <li>
                           <div class="subscription-meta">
-                            <code class="subscription-key"
-                              >${subscription.key}</code
+                            <code class="subscription-key" dir="ltr"
+                              ><bdi>${subscription.key}</bdi></code
                             >
                             ${
                               subscription.owners.length > 0
@@ -336,11 +336,14 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                                           <div class="subscription-owner-row">
                                             <span
                                               class="subscription-owner-label"
-                                              >${owner.label}</span
+                                              ><bdi dir="auto"
+                                                >${owner.label}</bdi
+                                              ></span
                                             >
                                             ${renderLabeledActionButton({
                                               icon: 'comments',
                                               text: 'Jump to agent',
+                                              label: `Jump to ${owner.label}`,
                                               kind: 'secondary',
                                               appearance: 'outlined',
                                               onClick: () =>
@@ -364,6 +367,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                           ${renderLabeledActionButton({
                             icon: 'circle-stop',
                             text: 'Stop',
+                            label: `Stop monitoring ${subscription.key}`,
                             kind: 'secondary',
                             appearance: 'outlined',
                             onClick: () =>
@@ -399,6 +403,9 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                       <wa-input
                         id="git-author-name"
                         class="form-control-fill"
+                        name="git-author-name"
+                        autocomplete="off"
+                        spellcheck="false"
                         .value=${this.authorName}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                         @change=${this.handleAuthorNameChange}
@@ -409,6 +416,13 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                       <wa-input
                         id="git-author-email"
                         class="form-control-fill"
+                        name="git-author-email"
+                        type="email"
+                        inputmode="email"
+                        autocomplete="off"
+                        autocapitalize="off"
+                        spellcheck="false"
+                        dir="ltr"
                         .value=${this.authorEmail}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                         @change=${this.handleAuthorEmailChange}
