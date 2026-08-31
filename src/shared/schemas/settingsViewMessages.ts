@@ -445,14 +445,14 @@ const ToolInfoSchema = z.object({
 
 /** One setup action exposed by a tool dashboard card. */
 const ToolInstallActionSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('guide'), text: z.string() }),
-  z.strictObject({ kind: z.literal('url'), url: z.string() }),
+  z.strictObject({ kind: z.literal('guide'), text: z.string().min(1) }),
+  z.strictObject({ kind: z.literal('url'), url: z.url() }),
   z.strictObject({
     kind: z.literal('extension'),
-    extensionId: z.string(),
+    extensionId: z.string().min(1),
   }),
-  z.strictObject({ kind: z.literal('command'), command: z.string() }),
-  z.strictObject({ kind: z.literal('auth'), command: z.string() }),
+  z.strictObject({ kind: z.literal('command'), command: z.string().min(1) }),
+  z.strictObject({ kind: z.literal('auth'), command: z.string().min(1) }),
 ]);
 export type ToolInstallAction = z.infer<typeof ToolInstallActionSchema>;
 

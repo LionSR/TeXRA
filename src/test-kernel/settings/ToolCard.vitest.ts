@@ -66,8 +66,14 @@ describe('tool-card install actions', () => {
     expect(handler).toHaveBeenCalledOnce();
 
     for (const invalid of [
+      [{ kind: 'guide', text: '' }],
+      [{ kind: 'url', url: '' }],
+      [{ kind: 'url', url: 'not a URL' }],
       [{ kind: 'url', url: 'https://example.com', extensionId: 'extra' }],
+      [{ kind: 'extension', extensionId: '' }],
       [{ kind: 'command' }],
+      [{ kind: 'command', command: '' }],
+      [{ kind: 'auth', command: '' }],
       [{ kind: 'unknown', command: 'echo invalid' }],
     ]) {
       expect(
