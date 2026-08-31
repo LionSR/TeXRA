@@ -35,22 +35,30 @@ function snapshot(
         status,
         // The engine stamps the call issued when the script reaches it.
         ...(lifecycle === 'active' && { issued: true }),
-        attempts: [{}],
+        attempts: [],
         files: {},
         timestamps: {
           createdAt: '2026-08-15T20:00:00.000Z',
-          updatedAt: '2026-08-15T20:00:01.000Z',
+          updatedAt: '2026-08-15T20:00:00.000Z',
         },
       },
     ],
-  } as WorkflowExecutionSnapshot;
+  } as unknown as WorkflowExecutionSnapshot;
 }
 
 describe('workflow-script projection failure recovery', () => {
-  it('projects the issued call after a fold fails before projection', async () => {
+  it('projects a marker-free issued call after a fold fails before projection', async () => {
     const construction = snapshot('waiting', 'planned');
     const issued = snapshot('active', 'planned');
     const running = snapshot('active', 'running');
+    const call = running.calls[0]!;
+    delete call.issued;
+    Object.assign(call, {
+      kind: 'document',
+      agent: 'projection-agent',
+      model: 'projection-model',
+      files: { input: [], context: [], media: [] },
+    });
     mocks.runPersistedWorkflowScript.mockImplementationOnce(
       async (options: PersistedWorkflowScriptRunOptions) => {
         options.onTransition?.(construction);
@@ -94,6 +102,10 @@ describe('workflow-script projection failure recovery', () => {
         call: expect.objectContaining({
           id: 'retry-review',
           status: 'running',
+          kind: 'document',
+          agent: 'projection-agent',
+          model: 'projection-model',
+          files: { input: [], context: [], media: [] },
         }),
       }),
     );
