@@ -425,6 +425,18 @@ export function workflowRunModel(
     input.plan,
     input.workflowAttemptId,
   );
+  // Cards predate phase ownership. For an untagged legacy phase that did issue
+  // calls, those calls still prove which attempt owned the group; only a
+  // genuinely call-less untagged phase remains ambiguous.
+  const cardAttemptsByGroupId = new Map<string, Set<string>>();
+  for (const row of cards) {
+    const groupId = row.groupId;
+    const attemptId = row.call.attemptId;
+    if (groupId === undefined || attemptId === undefined) continue;
+    const attempts = cardAttemptsByGroupId.get(groupId) ?? new Set<string>();
+    attempts.add(attemptId);
+    cardAttemptsByGroupId.set(groupId, attempts);
+  }
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -466,6 +478,7 @@ export function workflowRunModel(
       latestAttemptId === undefined ||
       phase.attemptId === latestAttemptId ||
       (phase.attemptId === undefined &&
+        (cardAttemptsByGroupId.get(phase.key)?.has(latestAttemptId) ?? true) &&
         !latestOwnedPhaseIdentities.has(phaseLogicalIdentity(phase))),
   );
   const ordered = [

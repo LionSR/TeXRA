@@ -133,7 +133,6 @@ describe('workflow run model', () => {
     const oldMap = {
       ...phaseGroup('Map', 0, 2),
       id: 'old-map',
-      attemptId: 'a1',
     };
     const oldEmpty = {
       ...phaseGroup('Review', 1, 2),
@@ -143,7 +142,6 @@ describe('workflow run model', () => {
     const newMap = {
       ...phaseGroup('Map', 0, 2),
       id: 'new-map',
-      attemptId: 'a2',
     };
     const newEmpty = {
       ...phaseGroup('Review', 1, 2),
