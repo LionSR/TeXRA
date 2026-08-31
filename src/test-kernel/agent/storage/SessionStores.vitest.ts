@@ -117,7 +117,7 @@ describe('SessionStores deletion coordination', () => {
       const snapshots = new StreamSnapshotStore();
       ownExecution(snapshots, stream, sidecarExecutionId);
       await snapshots.flush();
-      snapshots.evictAll();
+      const reloadedSnapshots = new StreamSnapshotStore();
       // The authored edge: registration stamps `meta.streamId` on the
       // execution row; the stream index resolves through it, never through
       // the summary mirror.
@@ -130,7 +130,7 @@ describe('SessionStores deletion coordination', () => {
       const deleteExecution = deletionSpy();
       const stores = new SessionStores({
         streamLogs: session.transcripts,
-        snapshots,
+        snapshots: reloadedSnapshots,
         deleteExecution,
       });
 

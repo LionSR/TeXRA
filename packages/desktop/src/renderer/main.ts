@@ -135,6 +135,7 @@ import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import {
+  disposePendingFileRequests,
   requestFileRead,
   requestFileWrite,
   requestFiles,
@@ -1580,6 +1581,7 @@ window.addEventListener(
   () => {
     surfaceResizeObserver?.disconnect();
     shortcutBootstrap.dispose();
+    disposePendingFileRequests();
     editorPane.dispose();
     terminalPane.disposeAll();
   },

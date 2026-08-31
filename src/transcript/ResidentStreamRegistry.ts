@@ -13,9 +13,9 @@
  * Every capability here is opt-in per consumer: a store with no "prune once
  * every field is empty" concept (`StreamSnapshotStore`, whose records
  * persist until an explicit `evict`) simply never calls {@link pruneIfEmpty},
- * and a store with no per-key version counter (`StreamLogStore`, which
+ * and a store with no per-key generation guard (`StreamLogStore`, which
  * tracks a single store-wide revision instead) never calls
- * {@link version}/{@link bumpVersion}/{@link evict}/{@link evictAll}. The
+ * {@link generation}/{@link invalidateGeneration}/{@link evict}. The
  * two stores' own persistence-strategy code (per-(key,category) write
  * mutexes vs debounce+generation) is NOT part of this container and stays
  * on each store.
@@ -23,12 +23,12 @@
 export class ResidentStreamRegistry<TId, TState> {
   private readonly records = new Map<TId, TState>();
   /**
-   * Per-key version counters. Deliberately never deleted — not even by
-   * {@link evict}/{@link evictAll} — so a version captured before a key's
-   * record is dropped still lets an in-flight async operation detect that it
-   * raced against a later change for the same key.
+   * Revocable per-key identities captured by asynchronous work. Eviction
+   * deletes the current token; a later use of the same key receives a fresh
+   * symbol, so stale continuations remain detectable without retaining every
+   * key ever observed.
    */
-  private readonly versions = new Map<TId, number>();
+  private readonly generations = new Map<TId, symbol>();
 
   constructor(private readonly createDefault: () => TState) {}
 
@@ -71,22 +71,26 @@ export class ResidentStreamRegistry<TId, TState> {
     if (record && isEmpty(record)) this.records.delete(id);
   }
 
-  version(id: TId): number {
-    return this.versions.get(id) ?? 0;
+  generation(id: TId): symbol {
+    let generation = this.generations.get(id);
+    if (generation === undefined) {
+      generation = Symbol();
+      this.generations.set(id, generation);
+    }
+    return generation;
   }
 
-  bumpVersion(id: TId): void {
-    this.versions.set(id, this.version(id) + 1);
+  isCurrentGeneration(id: TId, generation: symbol): boolean {
+    return this.generations.get(id) === generation;
   }
 
-  /** Bump a key's version, then drop its record — the two always happen together. */
+  invalidateGeneration(id: TId): void {
+    this.generations.delete(id);
+  }
+
+  /** Revoke a key's generation, then drop its record. */
   evict(id: TId): void {
-    this.bumpVersion(id);
+    this.invalidateGeneration(id);
     this.records.delete(id);
-  }
-
-  evictAll(): void {
-    for (const id of this.records.keys()) this.bumpVersion(id);
-    this.records.clear();
   }
 }

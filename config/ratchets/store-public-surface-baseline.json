@@ -29,7 +29,6 @@
     "StreamSnapshotStore": [
       "attachSessionEvents",
       "deleteStream",
-      "evictAll",
       "flush",
       "getCompileFailures",
       "getExecutionIdMap",

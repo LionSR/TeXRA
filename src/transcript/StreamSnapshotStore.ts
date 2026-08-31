@@ -377,11 +377,12 @@ function workPlanProvenanceOf(
  * bookkeeping, and the overlay patches. Because every field
  * for a stream lives on the same object, dropping a stream's memory is one
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
- * so `evict()`/`evictAll()` cannot drift from the field list.
+ * so `evict()` cannot drift from the field list.
  *
- * Per-stream version counters (must survive eviction to keep guarding
- * in-flight seed races) live inside the shared {@link ResidentStreamRegistry}
- * container that backs `records`, not on the record itself. `writeMutexes`
+ * Revocable per-stream generation identities guard in-flight seed races and
+ * disappear on eviction rather than retaining historical stream ids. They
+ * live inside the shared {@link ResidentStreamRegistry} container that backs
+ * `records`, not on the record itself. `writeMutexes`
  * (keyed by the compound `${stream}::${key}`, not a bare stream id) stays as
  * its own map on the store — the same exclusion #7892 already carved out of
  * `perStreamStores()`.
@@ -483,12 +484,13 @@ export class StreamSnapshotStore {
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
    * behind that rename; this store keeps the records, write mutexes, and
-   * stream versions it reaches back for through {@link StagedDeletionHost}.
+   * stream generations it reaches back for through {@link StagedDeletionHost}.
    */
   private readonly deletions = new StagedDeletionCoordinator({
     queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
     cancelPendingWrites: (stream) => this.cancelPendingWritesForStream(stream),
-    bumpStreamVersion: (stream) => this.records.bumpVersion(stream),
+    invalidateStreamGeneration: (stream) =>
+      this.records.invalidateGeneration(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
     evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
@@ -615,8 +617,15 @@ export class StreamSnapshotStore {
     }
   }
 
-  private streamVersion(stream: StreamTabId): number {
-    return this.records.version(stream);
+  private streamGeneration(stream: StreamTabId): symbol {
+    return this.records.generation(stream);
+  }
+
+  private isCurrentGeneration(
+    stream: StreamTabId,
+    generation: symbol,
+  ): boolean {
+    return this.records.isCurrentGeneration(stream, generation);
   }
 
   /**
@@ -762,19 +771,19 @@ export class StreamSnapshotStore {
    */
   private queueAfterSeed(
     stream: StreamTabId,
-    version: number,
+    generation: symbol,
     apply: () => unknown,
   ): Promise<void> {
     const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
         if (!this.hasDiskProvenance(stream)) {
           try {
-            await this.readSeed(stream, version);
+            await this.readSeed(stream, generation);
           } catch (err: unknown) {
             if (!this.hasDiskProvenance(stream)) throw err;
           }
         }
-        if (this.streamVersion(stream) !== version) return;
+        if (!this.isCurrentGeneration(stream, generation)) return;
         const record = this.records.get(stream);
         if (!record || record.diskState === 'unknown') return;
         apply();
@@ -788,12 +797,15 @@ export class StreamSnapshotStore {
     return next;
   }
 
-  private async readSeed(stream: StreamTabId, version: number): Promise<void> {
-    if (this.streamVersion(stream) !== version) return;
+  private async readSeed(
+    stream: StreamTabId,
+    generation: symbol,
+  ): Promise<void> {
+    if (!this.isCurrentGeneration(stream, generation)) return;
     if (this.hasDiskProvenance(stream)) return;
     await this.retryDirtyWrites(stream);
-    if (this.streamVersion(stream) !== version) return;
-    await this.seedFromDisk(stream, version);
+    if (!this.isCurrentGeneration(stream, generation)) return;
+    await this.seedFromDisk(stream, generation);
   }
 
   /**
@@ -806,7 +818,7 @@ export class StreamSnapshotStore {
    */
   private async seedFromDisk(
     stream: StreamTabId,
-    version: number,
+    generation: symbol,
   ): Promise<void> {
     let exists: boolean;
     try {
@@ -821,11 +833,11 @@ export class StreamSnapshotStore {
       );
       exists = true;
     }
-    if (this.streamVersion(stream) !== version) return;
+    if (!this.isCurrentGeneration(stream, generation)) return;
     const data = exists
       ? await readStreamData(this.kv(stream))
       : emptyStreamData();
-    if (this.streamVersion(stream) !== version) return;
+    if (!this.isCurrentGeneration(stream, generation)) return;
     await this.applyStreamData(
       stream,
       data,
@@ -937,12 +949,12 @@ export class StreamSnapshotStore {
       return;
     }
 
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     if (overlayPatch !== undefined) {
       const { overlays } = this.getOrCreateRecord(stream);
       overlays[overlayKey] = mergePatch(overlays[overlayKey], overlayPatch);
     }
-    this.queueAfterSeed(stream, version, () => undefined);
+    this.queueAfterSeed(stream, generation, () => undefined);
   }
 
   /**
@@ -1118,15 +1130,6 @@ export class StreamSnapshotStore {
     }
   }
 
-  evictAll(): void {
-    this.records.evictAll();
-    this.seedQueues.clear();
-    this.writeMutexes.clear();
-    this.dirtyWrites.clear();
-    this.unseededReadWarned.clear();
-    this.deletions.reset();
-  }
-
   /**
    * Reconcile crash-interrupted deletions against the transcript registry.
    * A live transcript rolls its snapshot directory back. An absent transcript
@@ -1295,7 +1298,7 @@ export class StreamSnapshotStore {
       applyMeta();
       this.getOrCreateRecord(stream).metaOverlay = false;
     } else {
-      this.queueAfterSeed(stream, this.streamVersion(stream), applyMeta);
+      this.queueAfterSeed(stream, this.streamGeneration(stream), applyMeta);
     }
   }
 
@@ -1585,7 +1588,7 @@ export class StreamSnapshotStore {
     value: unknown,
   ): Promise<void> {
     const chainKey = `${stream}::${key}`;
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
     this.writeMutexes.set(chainKey, mutex);
     return mutex.runExclusive(() => {
@@ -1593,7 +1596,7 @@ export class StreamSnapshotStore {
       // write queued before that must NOT fire afterward, or a late `kv()`
       // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
       if (!this.writeMutexes.has(chainKey)) return;
-      if (this.streamVersion(stream) !== version) return;
+      if (!this.isCurrentGeneration(stream, generation)) return;
       return this.kv(stream).write(key, value);
     });
   }
@@ -1825,7 +1828,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     reportArtifactAuthority = false,
   ): Promise<void> {
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     const record = this.getOrCreateRecord(stream);
     const refreshBaseline = record.seedRefreshBaseline ?? record.diskState;
     record.seedRefreshBaseline = refreshBaseline;
@@ -1833,24 +1836,27 @@ export class StreamSnapshotStore {
     record.diskState = 'unknown';
     const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
-        if (this.streamVersion(stream) !== version) return;
+        if (!this.isCurrentGeneration(stream, generation)) return;
         await this.retryDirtyWrites(stream);
-        if (this.streamVersion(stream) !== version) return;
-        await this.seedFromDisk(stream, version);
+        if (!this.isCurrentGeneration(stream, generation)) return;
+        await this.seedFromDisk(stream, generation);
       })
       .then(
         () => {
           const current = this.records.get(stream);
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            this.streamVersion(stream) === version
+            this.isCurrentGeneration(stream, generation)
           ) {
             current.seedRefreshBaseline = undefined;
           }
         },
         (error: unknown) => {
           const current = this.records.get(stream);
-          const versionIsCurrent = this.streamVersion(stream) === version;
+          const generationIsCurrent = this.isCurrentGeneration(
+            stream,
+            generation,
+          );
           // Snapshot the surviving state BEFORE the restore below, whose
           // `persistEagerOverlays` drains the very overlays it reads.
           const resolvedRefreshBaseline =
@@ -1858,7 +1864,7 @@ export class StreamSnapshotStore {
               ? current?.diskState
               : refreshBaseline;
           const failureBaseline: DiskState | undefined =
-            reportArtifactAuthority && current && versionIsCurrent
+            reportArtifactAuthority && current && generationIsCurrent
               ? resolvedRefreshBaseline
               : undefined;
           const failureWorkPlanProvenance =
@@ -1867,7 +1873,7 @@ export class StreamSnapshotStore {
               : undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            versionIsCurrent
+            generationIsCurrent
           ) {
             current.diskState = refreshBaseline;
             current.seedRefreshBaseline = undefined;
@@ -1947,7 +1953,7 @@ export class StreamSnapshotStore {
     data: StreamData,
     provenance: Exclude<DiskState, 'unknown'>,
   ): Promise<void> {
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     const record = this.getOrCreateRecord(stream);
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
@@ -2015,7 +2021,7 @@ export class StreamSnapshotStore {
       } else {
         record.summaryMetaHydrationFallback = undefined;
       }
-      if (this.streamVersion(stream) !== version) return;
+      if (!this.isCurrentGeneration(stream, generation)) return;
       // Re-checked after the await: a `run.start` for another execution can
       // land during it, and this seed's pair belongs to the run it read.
       const liveExecutionId = record.runExecutionId;
