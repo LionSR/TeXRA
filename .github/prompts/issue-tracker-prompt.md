@@ -88,6 +88,35 @@ complex is not worth an issue; the maintainer would rather carry the
 theoretical gap than the permanent code. This rule applies even when the
 finding is technically correct.
 
+### Doomed areas and local minima
+
+A fix can be common, correct, and still wrong to file, because it patches a
+design the repository is already leaving. Two checks before filing:
+
+1. **Is the area doomed?** Look for signals that the code the finding touches
+   is slated for removal, replacement, or retirement: a `docs/proposals/` or
+   `docs/architecture/` document that names the area as being deleted or
+   superseded; an open `tracking` issue scheduling its removal; comments
+   such as "delete after", "compatibility window", "retire", "legacy", or a
+   dated tolerance; an `attic/` move; or a PR body that calls the area a
+   transitional shape. When the area is doomed, do not file a fix for it.
+   The fix dies with the area, and until then it only makes the removal
+   harder. If the finding is a real user-visible defect, mention it as a
+   comment on the tracking issue that schedules the removal instead.
+2. **Is the proposed fix a local minimum?** Ask what the right long-term
+   shape is. If the durable answer is structural (delete the seam, keep one
+   authority, drop the compatibility path, collapse two copies into one) and
+   the finding proposes a local patch instead (another guard, a second code
+   path, a special case, a wait-for-release, a parallel wiring for one more
+   host), do not file the local patch. Filing it entrenches the design and
+   invites the next patch. When the structural change is already tracked,
+   do nothing; when it is not, skip unless a human asked for it, and never
+   turn a bot's local patch into a structural proposal on your own.
+
+The pattern to avoid is the sequence "tolerate the old shape, then guard the
+guard, then wire the guard into a third host". Each step is locally
+reasonable and the sum is a codebase that cannot delete anything.
+
 Concretely, never file:
 
 - Work already completed in this pull request, or in any PR merged since.
