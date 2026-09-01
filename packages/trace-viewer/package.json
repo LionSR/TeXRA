@@ -33,7 +33,7 @@
     "pathe": "^2.0.3",
     "perfect-debounce": "^2.1.0",
     "pluralize": "^8.0.0",
-    "pretty-bytes": "^7.1.1",
+    "pretty-bytes": "^7.1.2",
     "pretty-ms": "^9.3.1",
     "serialize-error": "^13.0.1",
     "signal-polyfill": "^0.2.2",
