@@ -25,6 +25,7 @@
 import {
   classifyProviderMessageBlockType,
   CONVERSATION_BLOCK_TYPES,
+  extractBlobMimeType,
   type ProviderMessageBlockCategory,
 } from '@agent/types/ConversationBlockTypes';
 import { extractWebFetchResultFields } from '@agent/types/ServerTools';
@@ -223,10 +224,8 @@ function formatConversationBlock(
     const mimeType =
       asText(block.mimeType) ||
       asText(block.media_type) ||
-      objectStringField(block.inlineData, 'mimeType') ||
-      objectStringField(block.inlineData, 'mime_type') ||
-      objectStringField(block.fileData, 'mimeType') ||
-      objectStringField(block.fileData, 'mime_type') ||
+      extractBlobMimeType(block.inlineData) ||
+      extractBlobMimeType(block.fileData) ||
       objectStringField(block.image_url, 'mime_type') ||
       objectStringField(block.source, 'media_type');
     return isImageMimeType(mimeType)

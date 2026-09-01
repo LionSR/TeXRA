@@ -23,6 +23,7 @@ import {
 import {
   classifyProviderMessageBlockType,
   CONVERSATION_BLOCK_TYPES,
+  extractBlobMimeType,
   type ProviderMessageBlockCategory,
 } from '@agent/types/ConversationBlockTypes';
 import {
@@ -217,8 +218,7 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
   // threshold). Both expose the media type the same way.
   const blob = part.inlineData ?? part.fileData;
   if (blob && typeof blob === 'object') {
-    const { mimeType } = blob as { mimeType?: string };
-    return isImageMimeType(mimeType)
+    return isImageMimeType(extractBlobMimeType(blob))
       ? [{ type: 'image' }]
       : [{ type: 'document' }];
   }

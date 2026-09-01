@@ -17,6 +17,8 @@
  * {@link ANTHROPIC_SERVER_TOOL_BLOCK_TYPES} (`@agent/types/ServerTools`) and
  * are imported here for classification, not duplicated.
  */
+import { isObject } from '@utils/core';
+
 import { ANTHROPIC_SERVER_TOOL_BLOCK_TYPES } from './ServerTools';
 
 export const CONVERSATION_BLOCK_TYPES = Object.freeze({
@@ -90,4 +92,17 @@ export function classifyProviderMessageBlockType(
     return undefined;
   }
   return CATEGORY_BY_BLOCK_TYPE[type as keyof typeof CATEGORY_BY_BLOCK_TYPE];
+}
+
+/**
+ * Resolve the mime type off a Google GenAI `inlineData`/`fileData`-shaped
+ * blob (accepting either field casing). Shared by `googlePartToBlocks`
+ * (`@agent/export/normalizeConversation`) and `formatConversationBlock`
+ * (`@agent/storage/conversationFormat`), both of which classify the same
+ * blob shape as an image or document attachment.
+ */
+export function extractBlobMimeType(blob: unknown): string | undefined {
+  if (!isObject(blob)) return undefined;
+  const mimeType = blob.mimeType ?? blob.mime_type;
+  return typeof mimeType === 'string' ? mimeType : undefined;
 }
