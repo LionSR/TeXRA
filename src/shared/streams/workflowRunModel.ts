@@ -9,6 +9,7 @@
 // card may open which child stream, and the attention-first row order of a
 // phase. Hosts render the result; they never regroup, re-sort, or re-count.
 
+// Local imports - shared schemas and copy
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
