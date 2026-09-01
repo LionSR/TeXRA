@@ -18,6 +18,7 @@ import {
   walkMemoryDirectory,
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 import {
@@ -237,10 +238,8 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   private resolveMemoryPath(inputPath: string): string {
     try {
       return displayToStoragePath(inputPath);
-    } catch {
-      throw new ToolError(
-        `Invalid path "${inputPath}". All memory paths must start with /memories (e.g., /memories or /memories/notes.md).`,
-      );
+    } catch (error) {
+      throw new ToolError(toErrorMessage(error), { cause: error });
     }
   }
 
