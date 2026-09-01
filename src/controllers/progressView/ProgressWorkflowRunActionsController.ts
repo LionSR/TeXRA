@@ -10,7 +10,7 @@ import { AgentCategory, cloneRoundIndexed } from '@shared/schemas';
 import { unique } from '@utils/core';
 import type { StreamOutputsSource } from './streamOutputs';
 
-const log = createLog('ProgressWorkflowActions');
+const log = createLog('ProgressWorkflowRunActions');
 
 export interface WorkflowDiffRequest {
   agent: string;
