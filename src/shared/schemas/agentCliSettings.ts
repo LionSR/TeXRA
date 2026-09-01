@@ -84,6 +84,10 @@ const parseClaudeAgentModelEnum = parseEnumSetting(
  * default -- `readSetting` runs this before `schema.safeParse`, so an
  * unmapped legacy id would already look "valid" by the time the loud
  * invalid-value warning path could fire.
+ *
+ * Introduced 2026-09-01. Per AGENTS.md's compatibility-retirement policy,
+ * this branch (and its regression test) may be removed three months after
+ * Fable 5.1 shipped, i.e. on or after 2026-12-01.
  */
 export function parseClaudeAgentModel(raw: unknown): ClaudeAgentModel {
   if (raw === 'claude-fable-5') return 'claude-fable-5-1';
