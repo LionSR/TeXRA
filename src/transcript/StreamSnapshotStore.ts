@@ -16,7 +16,6 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
-import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -66,6 +65,11 @@ import { isDirectory } from '@utils/files/fsEntryType';
 
 import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
+  DirtySidecarWritesError,
+  SidecarWriteCoordinator,
+  type SidecarWriteHost,
+} from './SidecarWriteCoordinator';
+import {
   StagedDeletionCoordinator,
   type StagedDeletionHost,
   type StagedStreamSnapshotDeletion,
@@ -96,10 +100,6 @@ const EMPTY_RUN_USAGE: ReadonlyMap<string, TokenUsageStats> = new Map();
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
-/** Bound retries for writes that remain dirty. */
-const MAX_DIRTY_WRITE_RETRIES = 3;
-
-class DirtySidecarWritesError extends Error {}
 
 /**
  * Per-field provenance of one stream's work plan: whether the in-memory value
@@ -383,9 +383,9 @@ function workPlanProvenanceOf(
  * disappear on eviction rather than retaining historical stream ids. They
  * live inside the shared {@link ResidentStreamRegistry} container that backs
  * `records`, not on the record itself. `writeMutexes`
- * (keyed by the compound `${stream}::${key}`, not a bare stream id) stays as
- * its own map on the store — the same exclusion #7892 already carved out of
- * `perStreamStores()`.
+ * (keyed by the compound `${stream}::${key}`, not a bare stream id) lives in
+ * {@link SidecarWriteCoordinator} — the same exclusion #7892 already carved
+ * out of `perStreamStores()`.
  */
 interface StreamRecord {
   // -- Accumulated durable state (mirrors on-disk StreamData) --------------
@@ -449,12 +449,6 @@ interface StreamRecord {
   overlays: Partial<OverlayPatches>;
 }
 
-interface DirtySidecarWrite {
-  stream: StreamTabId;
-  key: string;
-  value: unknown;
-}
-
 export class StreamSnapshotStore {
   private readonly records = new ResidentStreamRegistry<
     StreamTabId,
@@ -483,22 +477,37 @@ export class StreamSnapshotStore {
   /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
-   * behind that rename; this store keeps the records, write mutexes, and
-   * stream generations it reaches back for through {@link StagedDeletionHost}.
+   * behind that rename; this store keeps the records and stream generations
+   * it reaches back for through {@link StagedDeletionHost} (the write mutexes
+   * live in {@link SidecarWriteCoordinator}, reached through the same host).
    */
   private readonly deletions = new StagedDeletionCoordinator({
-    queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
-    cancelPendingWrites: (stream) => this.cancelPendingWritesForStream(stream),
+    queueWrite: (stream, key, value) =>
+      this.writes.queueWrite(stream, key, value),
+    cancelPendingWrites: (stream) =>
+      this.writes.cancelPendingWritesForStream(stream),
     invalidateStreamGeneration: (stream) =>
       this.records.invalidateGeneration(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
     evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
 
-  // -- Per (stream, category) serialized write locks -------------------------
-  private readonly writeMutexes = new Map<string, Mutex>();
-  /** Latest ordinary sidecar value not yet confirmed durable, by write lock. */
-  private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
+  /**
+   * The write-durability lane: per-(stream, category) serialized write locks,
+   * dirty-write tracking, and bounded retries. It reaches back for the KV
+   * handle, the staged-deletion write buffer, and the stream-generation guard
+   * through {@link SidecarWriteHost}.
+   */
+  private readonly writes = new SidecarWriteCoordinator({
+    kvWrite: (stream, key, value) => this.kv(stream).write(key, value),
+    bufferWrite: (stream, key, value) =>
+      this.deletions.bufferWrite(stream, key, value),
+    captureDirtyWrite: (stream, key, value) =>
+      this.deletions.captureDirtyWrite(stream, key, value),
+    streamGeneration: (stream) => this.records.generation(stream),
+    isCurrentGeneration: (stream, generation) =>
+      this.records.isCurrentGeneration(stream, generation),
+  } satisfies SidecarWriteHost);
 
   /**
    * Per-stream FIFO lane (concurrency 1) that serializes seed reads and the
@@ -803,7 +812,7 @@ export class StreamSnapshotStore {
   ): Promise<void> {
     if (!this.isCurrentGeneration(stream, generation)) return;
     if (this.hasDiskProvenance(stream)) return;
-    await this.retryDirtyWrites(stream);
+    await this.writes.retryDirtyWrites(stream);
     if (!this.isCurrentGeneration(stream, generation)) return;
     await this.seedFromDisk(stream, generation);
   }
@@ -884,7 +893,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     field: RoundKeyedField,
   ): void {
-    this.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
+    this.writes.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
       ...this.records.get(stream)?.[field],
     });
   }
@@ -912,7 +921,7 @@ export class StreamSnapshotStore {
       unparsed && unparsed.size > 0
         ? { ...Object.fromEntries(unparsed), ...parsed }
         : parsed;
-    this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, payload);
+    this.writes.write(stream, STREAM_DATA_KEYS.USAGE_STATS, payload);
   }
 
   /**
@@ -1120,11 +1129,7 @@ export class StreamSnapshotStore {
   private evict(stream: StreamTabId): void {
     this.records.evict(stream);
     this.seedQueues.delete(stream);
-    for (const key of [...this.writeMutexes.keys()]) {
-      if (!key.startsWith(`${stream}::`)) continue;
-      this.writeMutexes.delete(key);
-      this.dirtyWrites.delete(key);
-    }
+    this.writes.dropStreamWrites(stream);
     for (const key of [...this.unseededReadWarned]) {
       if (key.startsWith(`${stream}::`)) this.unseededReadWarned.delete(key);
     }
@@ -1278,7 +1283,7 @@ export class StreamSnapshotStore {
         parentStreamId: next.parentStreamId,
       }),
     };
-    this.write(stream, STREAM_DATA_KEYS.META, file);
+    this.writes.write(stream, STREAM_DATA_KEYS.META, file);
   }
 
   private queueMetaPatch(
@@ -1541,7 +1546,7 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   private writeWorkPlan(stream: StreamTabId, plan: WorkPlanSnapshot): void {
-    this.write(
+    this.writes.write(
       stream,
       STREAM_DATA_KEYS.WORK_PLAN,
       PersistedWorkPlanSchema.parse({
@@ -1551,117 +1556,6 @@ export class StreamSnapshotStore {
         planSummary: plan.planSummary,
       }),
     );
-  }
-
-  private write(stream: StreamTabId, key: string, value: unknown): void {
-    // A staged deletion owns the stream's namespace, so it takes the value
-    // into its transactional buffer instead of letting it reach disk.
-    if (this.deletions.bufferWrite(stream, key, value)) return;
-    const chainKey = `${stream}::${key}`;
-    const dirty = { stream, key, value } satisfies DirtySidecarWrite;
-    this.dirtyWrites.set(chainKey, dirty);
-    void this.persistDirtyWrite(chainKey, dirty).catch((err: unknown) =>
-      log.warn(
-        `Failed to persist ${key}.json for stream ${stream}; sidecar remains dirty.`,
-        { data: err },
-      ),
-    );
-  }
-
-  private async persistDirtyWrite(
-    chainKey: string,
-    write: DirtySidecarWrite,
-  ): Promise<void> {
-    // A newer write or staged deletion can revoke this retry before it enters
-    // the per-key queue. Only the current dirty owner may recreate that queue.
-    if (this.dirtyWrites.get(chainKey) !== write) return;
-    await this.queueWrite(write.stream, write.key, write.value);
-    if (this.dirtyWrites.get(chainKey) === write) {
-      this.dirtyWrites.delete(chainKey);
-    }
-  }
-
-  /** Queue a sidecar write and expose its completion to transactional callers. */
-  private queueWrite(
-    stream: StreamTabId,
-    key: string,
-    value: unknown,
-  ): Promise<void> {
-    const chainKey = `${stream}::${key}`;
-    const generation = this.streamGeneration(stream);
-    const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
-    this.writeMutexes.set(chainKey, mutex);
-    return mutex.runExclusive(() => {
-      // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
-      // write queued before that must NOT fire afterward, or a late `kv()`
-      // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
-      if (!this.writeMutexes.has(chainKey)) return;
-      if (!this.isCurrentGeneration(stream, generation)) return;
-      return this.kv(stream).write(key, value);
-    });
-  }
-
-  private writeBelongsToStream(
-    chainKey: string,
-    stream?: StreamTabId,
-  ): boolean {
-    return stream === undefined || chainKey.startsWith(`${stream}::`);
-  }
-
-  private async waitForWrites(stream?: StreamTabId): Promise<void> {
-    await Promise.all(
-      [...this.writeMutexes]
-        .filter(([chainKey]) => this.writeBelongsToStream(chainKey, stream))
-        .map(([, mutex]) => mutex.waitForUnlock()),
-    );
-  }
-
-  private cancelPendingWritesForStream(stream: StreamTabId): Promise<void>[] {
-    const prefix = `${stream}::`;
-    const pending: Promise<void>[] = [];
-    for (const [key, mutex] of this.writeMutexes) {
-      if (!key.startsWith(prefix)) continue;
-      const dirty = this.dirtyWrites.get(key);
-      // Hand the cancelled value to a staged deletion, which keeps it buffered
-      // until the transaction settles. This loop is synchronous, so which
-      // deletion (if any) owns the stream cannot change while it runs.
-      if (dirty)
-        this.deletions.captureDirtyWrite(stream, dirty.key, dirty.value);
-      this.dirtyWrites.delete(key);
-      pending.push(mutex.waitForUnlock());
-      this.writeMutexes.delete(key);
-    }
-    return pending;
-  }
-
-  private dirtyWriteEntries(
-    stream?: StreamTabId,
-  ): [string, DirtySidecarWrite][] {
-    return [...this.dirtyWrites].filter(([chainKey]) =>
-      this.writeBelongsToStream(chainKey, stream),
-    );
-  }
-
-  private async retryDirtyWrites(stream?: StreamTabId): Promise<void> {
-    await this.waitForWrites(stream);
-
-    for (let attempt = 0; attempt < MAX_DIRTY_WRITE_RETRIES; attempt++) {
-      const dirty = this.dirtyWriteEntries(stream);
-      if (dirty.length === 0) return;
-      await Promise.allSettled(
-        dirty.map(([chainKey, write]) =>
-          this.persistDirtyWrite(chainKey, write),
-        ),
-      );
-    }
-
-    const remaining = this.dirtyWriteEntries(stream).length;
-    if (remaining > 0) {
-      throw new DirtySidecarWritesError(
-        `Sidecar writes remain dirty after ${MAX_DIRTY_WRITE_RETRIES} retries; ` +
-          `${remaining} sidecar write(s) remain dirty.`,
-      );
-    }
   }
 
   private unseenSeedChains(
@@ -1707,7 +1601,7 @@ export class StreamSnapshotStore {
     while (true) {
       await this.drainSeedChains(completedSeeds, failures);
       try {
-        await this.retryDirtyWrites();
+        await this.writes.retryDirtyWrites();
         dirtyWritesDurable = true;
       } catch (error) {
         dirtyWritesDurable = false;
@@ -1837,7 +1731,7 @@ export class StreamSnapshotStore {
     const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
         if (!this.isCurrentGeneration(stream, generation)) return;
-        await this.retryDirtyWrites(stream);
+        await this.writes.retryDirtyWrites(stream);
         if (!this.isCurrentGeneration(stream, generation)) return;
         await this.seedFromDisk(stream, generation);
       })

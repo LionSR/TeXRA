@@ -207,6 +207,120 @@ export const PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS: RegexReplacementCategory =
  * - Commands whose arguments must remain intact for compilation
  */
 
+// === Fix broken subscripts/superscripts in \DIFdel/\DIFadd commands ===
+// These patterns wrap math fragments in dollar signs to preserve math mode
+//
+// LIMITATION: These patterns only fix isolated subscript/superscript fragments.
+// If there's additional content after (like in \DIFdel{_{t-1})F_{t-1|t}(}),
+// the additional content is NOT processed to avoid overly aggressive replacements.
+//
+// TODO: Consider multi-pass processing or more sophisticated parsing for complex cases
+// with multiple math fragments within a single \DIFdel block
+//
+// The add set is intentionally the conservative subset: the braced-arithmetic
+// superscript, simple-arithmetic superscript, and single-letter fallback
+// variants are del-only pending evidence the missing cases occur in adds.
+interface DifMathFragmentFix {
+  matchFragment: string;
+  replacementTemplate: string;
+  appliesTo: 'both' | 'del';
+}
+
+const DIF_MATH_FRAGMENT_FIXES: DifMathFragmentFix[] = [
+  // Pattern 1: Numeric subscripts
+  // Example: \DIFdel{_1|}%DIFDELCMD → \DIFdel{$_1$}%DIFDELCMD
+  // Example: \DIFdel{_0)}%DIFDELCMD → \DIFdel{$_0$}%DIFDELCMD
+  // Example: \DIFadd{_1|}%DIFADDCMD → \DIFadd{$_1$}%DIFADDCMD
+  {
+    matchFragment: '_(\\d+)[\\)\\|]?',
+    replacementTemplate: '$_$1$',
+    appliesTo: 'both',
+  },
+
+  // Pattern 2: Prime symbols (derivatives)
+  // Example: \DIFdel{'_0)}%DIFDELCMD → \DIFdel{$'_0$}%DIFDELCMD
+  // Example: \DIFdel{''_t}%DIFDELCMD → \DIFdel{$''_t$}%DIFDELCMD
+  // Example: \DIFadd{'_0)}%DIFADDCMD → \DIFadd{$'_0$}%DIFADDCMD
+  {
+    matchFragment: "('+)_([a-zA-Z\\d]+)[\\)\\|]?",
+    replacementTemplate: '$$1_$2$',
+    appliesTo: 'both',
+  },
+
+  // Pattern 3: Subscript with braces and arithmetic
+  // Example: \DIFdel{_{t-1})}%DIFDELCMD → \DIFdel{$_{t-1}$}%DIFDELCMD
+  // Example: \DIFdel{_{n+2}}%DIFDELCMD → \DIFdel{$_{n+2}$}%DIFDELCMD
+  // Example: \DIFadd{_{t-1}}%DIFADDCMD → \DIFadd{$_{t-1}$}%DIFADDCMD
+  {
+    matchFragment: '_\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?',
+    replacementTemplate: '$_{$1}$',
+    appliesTo: 'both',
+  },
+
+  // Pattern 4: Simple subscript with optional arithmetic
+  // Example: \DIFdel{_{t}|}%DIFDELCMD → \DIFdel{$_t$}%DIFDELCMD
+  // Example: \DIFdel{_{k-1})}%DIFDELCMD → \DIFdel{$_{k-1}$}%DIFDELCMD
+  // Example: \DIFadd{_{k})}%DIFADDCMD → \DIFadd{$_k$}%DIFADDCMD
+  {
+    matchFragment: '_([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?',
+    replacementTemplate: '$_$1$',
+    appliesTo: 'both',
+  },
+
+  // Pattern 5: Numeric superscripts
+  // Example: \DIFdel{^2}%DIFDELCMD → \DIFdel{$^2$}%DIFDELCMD
+  // Example: \DIFdel{^{10}}%DIFDELCMD → \DIFdel{$^{10}$}%DIFDELCMD
+  // Example: \DIFadd{^2}%DIFADDCMD → \DIFadd{$^2$}%DIFADDCMD
+  {
+    matchFragment: '\\^(\\d+)[\\)\\|]?',
+    replacementTemplate: '$^$1$',
+    appliesTo: 'both',
+  },
+
+  // Pattern 6: Superscript with braces and arithmetic
+  // Example: \DIFdel{^{t-1}}%DIFDELCMD → \DIFdel{$^{t-1}$}%DIFDELCMD
+  // Example: \DIFdel{^{n+2})}%DIFDELCMD → \DIFdel{$^{n+2}$}%DIFDELCMD
+  {
+    matchFragment: '\\^\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?',
+    replacementTemplate: '$^{$1}$',
+    appliesTo: 'del',
+  },
+
+  // Pattern 7: Simple superscript with optional arithmetic
+  // Example: \DIFdel{^t|}%DIFDELCMD → \DIFdel{$^t$}%DIFDELCMD
+  // Example: \DIFdel{^{k-1}}%DIFDELCMD → \DIFdel{$^{k-1}$}%DIFDELCMD
+  {
+    matchFragment: '\\^([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?',
+    replacementTemplate: '$^$1$',
+    appliesTo: 'del',
+  },
+
+  // Pattern 8: Special cases for LaTeX commands as subscripts
+  // Example: \DIFdel{_\tf}%DIFDELCMD → \DIFdel{$_\tf$}%DIFDELCMD
+  // Example: \DIFdel{_\tauf}%DIFDELCMD → \DIFdel{$_\tauf$}%DIFDELCMD
+  // Example: \DIFdel{_{\tf-1}}%DIFDELCMD → \DIFdel{$_{\tf-1}$}%DIFDELCMD
+  // Example: \DIFadd{_\tf}%DIFADDCMD → \DIFadd{$_\tf$}%DIFADDCMD
+  // Example: \DIFadd{_{\tauf-1}}%DIFADDCMD → \DIFadd{$_{\tauf-1}$}%DIFADDCMD
+  {
+    matchFragment: '_\\{?(\\\\(?:tf|tauf)(?:[+-]\\d+)?)[\\}\\)\\|]?',
+    replacementTemplate: '$_$1$',
+    appliesTo: 'both',
+  },
+
+  // Pattern 9: Fallback for simple single-letter subscripts
+  // Example: \DIFdel{_I()}%DIFDELCMD → \DIFdel{$_I$}%DIFDELCMD
+  // Example: \DIFdel{_x|}%DIFDELCMD → \DIFdel{$_x$}%DIFDELCMD
+  {
+    matchFragment: '_([a-zA-Z])[\\(\\)\\|]?',
+    replacementTemplate: '$_$1$',
+    appliesTo: 'del',
+  },
+];
+
+function difCommandMarker(cmd: string): string {
+  return `%DIF${cmd.slice(3).toUpperCase()}CMD`;
+}
+
 // Latexdiff markup fixes using regex
 export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
   name: 'latexdiff_markup' satisfies RegexReplacementCategoryName,
@@ -218,98 +332,21 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
     '\n[ \t]*\n[ \t]*\\}\\\\end\\{(align|aligned)(\\*?)\\}%DIFAUXCMD':
       '\n}\\end{$1$2}%DIFAUXCMD',
 
-    // === Fix broken subscripts/superscripts in \DIFdel commands ===
-    // These patterns wrap math fragments in dollar signs to preserve math mode
-    //
-    // LIMITATION: These patterns only fix isolated subscript/superscript fragments.
-    // If there's additional content after (like in \DIFdel{_{t-1})F_{t-1|t}(}),
-    // the additional content is NOT processed to avoid overly aggressive replacements.
-    //
-    // TODO: Consider multi-pass processing or more sophisticated parsing for complex cases
-    // with multiple math fragments within a single \DIFdel block
-
-    // Pattern 1: Numeric subscripts
-    // Example: \DIFdel{_1|}%DIFDELCMD → \DIFdel{$_1$}%DIFDELCMD
-    // Example: \DIFdel{_0)}%DIFDELCMD → \DIFdel{$_0$}%DIFDELCMD
-    '\\\\DIFdel\\{_(\\d+)[\\)\\|]?\\}%DIFDELCMD': '\\DIFdel{$_$1$}%DIFDELCMD',
-
-    // Pattern 2: Prime symbols (derivatives)
-    // Example: \DIFdel{'_0)}%DIFDELCMD → \DIFdel{$'_0$}%DIFDELCMD
-    // Example: \DIFdel{''_t}%DIFDELCMD → \DIFdel{$''_t$}%DIFDELCMD
-    "\\\\DIFdel\\{('+)_([a-zA-Z\\d]+)[\\)\\|]?\\}%DIFDELCMD":
-      '\\DIFdel{$$1_$2$}%DIFDELCMD',
-
-    // Pattern 3: Subscript with braces and arithmetic
-    // Example: \DIFdel{_{t-1})}%DIFDELCMD → \DIFdel{$_{t-1}$}%DIFDELCMD
-    // Example: \DIFdel{_{n+2}}%DIFDELCMD → \DIFdel{$_{n+2}$}%DIFDELCMD
-    '\\\\DIFdel\\{_\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?\\}%DIFDELCMD':
-      '\\DIFdel{$_{$1}$}%DIFDELCMD',
-
-    // Pattern 4: Simple subscript with optional arithmetic
-    // Example: \DIFdel{_{t}|}%DIFDELCMD → \DIFdel{$_t$}%DIFDELCMD
-    // Example: \DIFdel{_{k-1})}%DIFDELCMD → \DIFdel{$_{k-1}$}%DIFDELCMD
-    '\\\\DIFdel\\{_([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?\\}%DIFDELCMD':
-      '\\DIFdel{$_$1$}%DIFDELCMD',
-
-    // Pattern 5: Numeric superscripts
-    // Example: \DIFdel{^2}%DIFDELCMD → \DIFdel{$^2$}%DIFDELCMD
-    // Example: \DIFdel{^{10}}%DIFDELCMD → \DIFdel{$^{10}$}%DIFDELCMD
-    '\\\\DIFdel\\{\\^(\\d+)[\\)\\|]?\\}%DIFDELCMD': '\\DIFdel{$^$1$}%DIFDELCMD',
-
-    // Pattern 6: Superscript with braces and arithmetic
-    // Example: \DIFdel{^{t-1}}%DIFDELCMD → \DIFdel{$^{t-1}$}%DIFDELCMD
-    // Example: \DIFdel{^{n+2})}%DIFDELCMD → \DIFdel{$^{n+2}$}%DIFDELCMD
-    '\\\\DIFdel\\{\\^\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?\\}%DIFDELCMD':
-      '\\DIFdel{$^{$1}$}%DIFDELCMD',
-
-    // Pattern 7: Simple superscript with optional arithmetic
-    // Example: \DIFdel{^t|}%DIFDELCMD → \DIFdel{$^t$}%DIFDELCMD
-    // Example: \DIFdel{^{k-1}}%DIFDELCMD → \DIFdel{$^{k-1}$}%DIFDELCMD
-    '\\\\DIFdel\\{\\^([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?\\}%DIFDELCMD':
-      '\\DIFdel{$^$1$}%DIFDELCMD',
-
-    // Pattern 8: Special cases for LaTeX commands as subscripts
-    // Example: \DIFdel{_\tf}%DIFDELCMD → \DIFdel{$_\tf$}%DIFDELCMD
-    // Example: \DIFdel{_\tauf}%DIFDELCMD → \DIFdel{$_\tauf$}%DIFDELCMD
-    // Example: \DIFdel{_{\tf-1}}%DIFDELCMD → \DIFdel{$_{\tf-1}$}%DIFDELCMD
-    '\\\\DIFdel\\{_\\{?(\\\\(?:tf|tauf)(?:[+-]\\d+)?)[\\}\\)\\|]?\\}%DIFDELCMD':
-      '\\DIFdel{$_$1$}%DIFDELCMD',
-
-    // Pattern 9: Fallback for simple single-letter subscripts
-    // Example: \DIFdel{_I()}%DIFDELCMD → \DIFdel{$_I$}%DIFDELCMD
-    // Example: \DIFdel{_x|}%DIFDELCMD → \DIFdel{$_x$}%DIFDELCMD
-    '\\\\DIFdel\\{_([a-zA-Z])[\\(\\)\\|]?\\}%DIFDELCMD':
-      '\\DIFdel{$_$1$}%DIFDELCMD',
-
-    // === Fix broken math fragments with \DIFadd commands ===
-    // Similar conservative patterns for \DIFadd commands
-
-    // Numeric subscripts in \DIFadd
-    // Example: \DIFadd{_1|}%DIFADDCMD → \DIFadd{$_1$}%DIFADDCMD
-    '\\\\DIFadd\\{_(\\d+)[\\)\\|]?\\}%DIFADDCMD': '\\DIFadd{$_$1$}%DIFADDCMD',
-
-    // Prime symbols in \DIFadd
-    // Example: \DIFadd{'_0)}%DIFADDCMD → \DIFadd{$'_0$}%DIFADDCMD
-    "\\\\DIFadd\\{('+)_([a-zA-Z\\d]+)[\\)\\|]?\\}%DIFADDCMD":
-      '\\DIFadd{$$1_$2$}%DIFADDCMD',
-
-    // Example: \DIFadd{_{t-1}}%DIFADDCMD → \DIFadd{$_{t-1}$}%DIFADDCMD
-    '\\\\DIFadd\\{_\\{([a-zA-Z][+-]?\\d*)\\}[\\)\\|]?\\}%DIFADDCMD':
-      '\\DIFadd{$_{$1}$}%DIFADDCMD',
-
-    // Example: \DIFadd{_{k})}%DIFADDCMD → \DIFadd{$_k$}%DIFADDCMD
-    '\\\\DIFadd\\{_([a-zA-Z](?:[+-]\\d+)?)[\\)\\|]?\\}%DIFADDCMD':
-      '\\DIFadd{$_$1$}%DIFADDCMD',
-
-    // Numeric superscripts in \DIFadd
-    // Example: \DIFadd{^2}%DIFADDCMD → \DIFadd{$^2$}%DIFADDCMD
-    '\\\\DIFadd\\{\\^(\\d+)[\\)\\|]?\\}%DIFADDCMD': '\\DIFadd{$^$1$}%DIFADDCMD',
-
-    // Special cases for LaTeX commands as subscripts in \DIFadd
-    // Example: \DIFadd{_\tf}%DIFADDCMD → \DIFadd{$_\tf$}%DIFADDCMD
-    // Example: \DIFadd{_{\tauf-1}}%DIFADDCMD → \DIFadd{$_{\tauf-1}$}%DIFADDCMD
-    '\\\\DIFadd\\{_\\{?(\\\\(?:tf|tauf)(?:[+-]\\d+)?)[\\}\\)\\|]?\\}%DIFADDCMD':
-      '\\DIFadd{$_$1$}%DIFADDCMD',
+    // Subscript/superscript fragment fixes from DIF_MATH_FRAGMENT_FIXES: all
+    // del rows first (in table order), then the add rows for the 'both'
+    // fragments, preserving the previous insertion order of this map (the
+    // engine iterates Object.entries).
+    ...createPatterns(['DIFdel', 'DIFadd'], (cmd) =>
+      DIF_MATH_FRAGMENT_FIXES.filter(
+        ({ appliesTo }) => appliesTo === 'both' || cmd === 'DIFdel',
+      ).map(({ matchFragment, replacementTemplate }): [string, string] => {
+        const marker = difCommandMarker(cmd);
+        return [
+          `\\\\${cmd}\\{${matchFragment}\\}${marker}`,
+          `\\${cmd}{${replacementTemplate}}${marker}`,
+        ];
+      }),
+    ),
 
     // Note: For commands like \bze that should not be split, use:
     // latexdiff --append-safecmd="bze,hbze" old.tex new.tex
@@ -319,9 +356,13 @@ export const LATEXDIFF_MARKUP_REPLACEMENTS: RegexReplacementCategory = {
     // The escaped tilde \~ is a tilde accent command that needs an argument.
     // Inside \DIFdel{} it should be the non-breaking space character ~.
     // Example: \DIFdel{\~}%DIFDELCMD → \DIFdel{~}%DIFDELCMD
-    '\\\\DIFdel\\{\\\\~\\}%DIFDELCMD': '\\DIFdel{~}%DIFDELCMD',
     // Example: \DIFadd{\~}%DIFADDCMD → \DIFadd{~}%DIFADDCMD
-    '\\\\DIFadd\\{\\\\~\\}%DIFADDCMD': '\\DIFadd{~}%DIFADDCMD',
+    ...createPatterns(['DIFdel', 'DIFadd'], (cmd) => [
+      [
+        `\\\\${cmd}\\{\\\\~\\}${difCommandMarker(cmd)}`,
+        `\\${cmd}{~}${difCommandMarker(cmd)}`,
+      ],
+    ]),
   },
 };
 

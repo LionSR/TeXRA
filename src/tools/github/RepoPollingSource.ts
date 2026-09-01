@@ -58,7 +58,7 @@ import {
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
-  PR_POLL_INTERVAL_MS,
+  GITHUB_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
 import {
   GhIssueCommentArraySchema,
@@ -160,7 +160,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       // MAX_CONCURRENT_REPO_SUBSCRIPTIONS repos ≈ 1,080 req/hr — well below
       // the limit even sharing with a couple of per-PR pollers.
       name: 'RepoPollingSource',
-      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
       maxConcurrent: MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
       ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
@@ -200,10 +200,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       ghGet<unknown>(pullsPath),
     ]);
 
-    // Non-throwing 200-path validation. A parse failure MUST log + return (skip
-    // this tick), NEVER throw: pollEntry() resets lastSuccessAt on a normal
-    // return, but a throw routes to handleFailure, and a generic failure that
-    // persists past maxFailureDurationMs (24 h) DETACHES the live subscription.
+    // Non-throwing 200-path validation (never throw — see validateOrSkip).
     // Skipping is safe because no parsed response has been committed yet: the
     // DedupedResource instances and PR transition/probe maps are untouched, so
     // the same window is re-evaluated idempotently next tick.

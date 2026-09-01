@@ -152,18 +152,16 @@ function formatWebSearchResultMarker(
 }
 
 /**
- * A live Anthropic `web_fetch_tool_result` block's `content` is a
+ * A `web_fetch_tool_result` block's `content` is a
  * `{type: 'web_fetch_result', url, content: {title, ...}}` object (or an
- * error object). A completed-run's transcript-sidecar archive
+ * error object). The completed-run transcript-sidecar archive
  * (`webFetchEntryToMessages` in `@transcript/completedRunArchive`)
- * reconstructs the same block type with no nested `content` at all —
- * `url`/`title`/`page_content` sit directly on the block instead. Both
- * `ExecutionsTool`'s `/conversation` endpoint and the CLI's `texra history`
- * read completed-run conversations through that archive, so this must
- * recognize both shapes; rendering either through the generic block
- * formatter would JSON-dump the fetched page's full text, so this collapses
- * whichever shape is present to a `title (url)` marker instead. Falls back
- * to `formatToolResultMarker` for the live error shape.
+ * reconstructs this same nested shape; archives written before 2026-09 used
+ * a flat shape that `extractWebFetchResultFields` normalizes at the read
+ * boundary, so this marker covers both. Rendering the block through the
+ * generic block formatter would JSON-dump the fetched page's full text, so
+ * this collapses it to a `title (url)` marker instead. Falls back to
+ * `formatToolResultMarker` for the live error shape.
  */
 function formatWebFetchResultMarker(
   block: Record<string, unknown>,

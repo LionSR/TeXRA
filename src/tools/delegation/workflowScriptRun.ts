@@ -76,7 +76,7 @@ function projectWorkflowCallStatus(
   }
 }
 
-interface PhaseStage {
+interface PhaseHandleState {
   readonly handle: StageHandle;
   failed: boolean;
 }
@@ -170,7 +170,7 @@ export async function runPersistedWorkflowScriptWithProgress(
 ): Promise<WorkflowScriptRunResult> {
   const { onActivity, ...runOptions } = options;
   const parentStageId = trace.activeStageId();
-  const phases = new Map<string, PhaseStage>();
+  const phases = new Map<string, PhaseHandleState>();
   // A deterministic workflow stream appends every relaunch to one transcript.
   // Keep one card identity through this projection's state transitions without
   // colliding with the same logical call in an earlier attempt.
@@ -202,7 +202,7 @@ export async function runPersistedWorkflowScriptWithProgress(
     title: string,
     index?: number,
     total?: number,
-  ): PhaseStage => {
+  ): PhaseHandleState => {
     const existing = phases.get(title);
     if (existing) return existing;
     const phase = {
@@ -223,7 +223,7 @@ export async function runPersistedWorkflowScriptWithProgress(
    * emitted from there belong to. Callers that only need the phase opened
    * ignore the return.
    */
-  const openPhaseStage = (phase: string | undefined): string | undefined =>
+  const openPhaseHandle = (phase: string | undefined): string | undefined =>
     phase ? phaseFor(phase).handle.id : parentStageId;
 
   const recordTerminalActivity = (call: WorkflowCallTerminalProgress): void => {
@@ -244,7 +244,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       // Stable trace identity for this call within its run stream.
       logId: `workflow-task-${projectionId}-${call.id}`,
       call: card,
-      stageId: openPhaseStage(card.phase),
+      stageId: openPhaseHandle(card.phase),
     });
   };
   const markPhaseFailed = (title: string | undefined): void => {
@@ -253,7 +253,7 @@ export async function runPersistedWorkflowScriptWithProgress(
 
   const projectLog = (event: WorkflowScriptEvent): void => {
     if (closed) return;
-    trace.info(event.message, { stageId: openPhaseStage(currentPhase) });
+    trace.info(event.message, { stageId: openPhaseHandle(currentPhase) });
     onActivity?.(event.message);
   };
 
@@ -593,7 +593,7 @@ export async function runPersistedWorkflowScriptWithProgress(
       // Open the declared phase the run never reached so the settled card
       // still lands under a header; the loop below then closes it. The card
       // keeps every issued-call fact it already showed.
-      openPhaseStage(card.phase);
+      openPhaseHandle(card.phase);
       markPhaseFailed(card.phase);
       const call: WorkflowCallTerminalProgress = {
         ...card,

@@ -172,12 +172,6 @@ export class DesktopProgressBridge {
    * excess-property checking does not apply and each port's type still narrows
    * it to the members that port declares.
    *
-   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
-   * copies every member in at runtime, so those objects carry accessors their
-   * port type does not declare. Harmless today -- nothing enumerates or
-   * serializes them -- but do not add a member here whose mere presence would
-   * change a consumer's behavior.
-   *
    * `getRunMetadata` is deliberately this class's override, not the store's:
    * it falls back to the summary mirror for the execution id.
    */
@@ -850,7 +844,8 @@ export class DesktopProgressBridge {
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
-      ...this.snapshotPort,
+      getRunMetadata: this.snapshotPort.getRunMetadata,
+      preload: this.snapshotPort.preload,
       workflowRunActions: this.workflowRunActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,

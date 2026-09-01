@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
-import { StreamTabIdSchema } from './identifiers';
+import { StreamSelectionSchema, StreamTabIdSchema } from './identifiers';
 import {
   InquiryDraftSchema,
   InquiryTranscriptTurnSchema,
@@ -17,14 +17,11 @@ import {
 } from './proposalFields';
 import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
 
-/** Optional stream ID - allows empty string when stream context is unavailable */
-const OptionalStreamIdSchema = z.union([StreamTabIdSchema, z.literal('')]);
-
 /** Common permission request fields */
 const PermissionBaseSchema = z.strictObject({
   requestId: z.string(),
   allowBypass: z.boolean(),
-  streamId: OptionalStreamIdSchema,
+  streamId: StreamSelectionSchema,
 });
 
 export const ToolEditPermissionSchema = PermissionBaseSchema.extend({

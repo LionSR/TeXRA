@@ -16,7 +16,7 @@ import { commandOnly } from '../messageFactories';
 import { GoalStatusSchema } from '../goal';
 import { AgentCategory } from '../agent';
 
-import { StreamTabIdSchema } from '../identifiers';
+import { StreamSelectionSchema, StreamTabIdSchema } from '../identifiers';
 import { StreamLogTextDeltaSchema } from '../log';
 import { StreamLogEntryBatchSchema } from '../streamLogEntry';
 import {
@@ -43,7 +43,6 @@ import { pickProjection } from './projectionShape';
 import {
   ProgressViewPlacementSchema,
   StreamScopedBaseSchema,
-  StreamSelectionSchema,
   streamScopedCommand,
 } from './data';
 

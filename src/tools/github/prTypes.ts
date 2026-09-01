@@ -98,9 +98,8 @@ export type GhCheckAnnotation = z.infer<typeof GhCheckAnnotationSchema>;
 
 /**
  * Permissive PR/issue `state`: a novel GitHub value must coerce to a known
- * value, never throw. A throw on the 200 path would strand lastSuccessAt and
- * risk the pollers' 24h detach. Anything that isn't exactly 'closed' is
- * treated as open.
+ * value, never throw — see validateOrSkip. Anything that isn't exactly
+ * 'closed' is treated as open.
  */
 const OpenClosedStateSchema = z
   .string()

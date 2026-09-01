@@ -33,7 +33,7 @@ import {
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
-  PR_POLL_INTERVAL_MS,
+  GITHUB_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
 import {
   GhIssueCommentArraySchema,
@@ -82,7 +82,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   constructor() {
     super({
       name: 'IssuePollingSource',
-      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
       maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
       ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
@@ -123,11 +123,11 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     ]);
 
     if (issueRes.status === 200) {
-      // Validate the issue payload non-throwingly. On failure, skip ONLY the
-      // issue-state check (don't advance state.etags.issue) and fall through to
-      // the independent comments fetch below — a malformed issue payload must
-      // not block comment delivery. Never throw: a throw would stall
-      // lastSuccessAt and risk the 24 h detach of a live subscription.
+      // Validate the issue payload non-throwingly (never throw on the 200
+      // path — see validateOrSkip). On failure, skip ONLY the issue-state
+      // check (don't advance state.etags.issue) and fall through to the
+      // independent comments fetch below — a malformed issue payload must
+      // not block comment delivery.
       const parsedIssue = this.validateOrSkip(
         issueRes,
         GhIssueSchema,

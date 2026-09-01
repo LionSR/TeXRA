@@ -2,6 +2,8 @@
 
 import { css, type CSSResult } from 'lit';
 
+import { dropCueStyles } from '@shared/styles/commonViewStyles';
+
 export const instructionPanelStyles: CSSResult = css`
   :host {
     display: block;
@@ -41,23 +43,7 @@ export const instructionPanelStyles: CSSResult = css`
 
   .instruction-box.drop-active::after {
     content: 'Drop to attach';
-    position: absolute;
-    inset: var(--wa-space-3xs);
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px dashed var(--wa-color-brand-fill-loud);
-    border-radius: var(--border-radius);
-    background: color-mix(
-      in srgb,
-      var(--wa-color-surface-default) 78%,
-      transparent
-    );
-    color: var(--wa-color-text-normal);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    pointer-events: none;
+    ${dropCueStyles}
   }
 
   .instruction-header {

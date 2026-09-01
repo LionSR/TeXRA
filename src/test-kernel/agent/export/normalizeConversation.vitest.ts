@@ -447,12 +447,22 @@ describe('Anthropic-style messages', () => {
       },
     },
     {
-      shape: 'archived flat',
+      shape: 'archived',
       block: {
         type: 'web_fetch_tool_result',
-        url: 'https://example.com/archived',
-        title: 'Archived Page',
-        page_content: 'Archived page content',
+        content: {
+          type: 'web_fetch_result',
+          url: 'https://example.com/archived',
+          retrieved_at: null,
+          content: {
+            type: 'document',
+            title: 'Archived Page',
+            source: {
+              type: 'text',
+              data: 'Archived page content',
+            },
+          },
+        },
       },
       expected: {
         kind: 'web-fetch' as const,
@@ -494,7 +504,11 @@ describe('Anthropic-style messages', () => {
           },
           {
             type: 'web_fetch_tool_result',
-            url: 'https://example.com/archived-without-metadata',
+            content: {
+              type: 'web_fetch_result',
+              url: 'https://example.com/archived-without-metadata',
+              retrieved_at: null,
+            },
           },
           {
             type: 'web_fetch_tool_result',

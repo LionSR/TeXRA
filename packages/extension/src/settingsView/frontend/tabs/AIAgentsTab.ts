@@ -31,7 +31,7 @@ import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSelectValue } from '@shared/utils/selectTemplates';
+import { readSelectValue } from '@shared/wa/selectTemplates';
 
 // Local imports - catalog-driven settings rows
 import {

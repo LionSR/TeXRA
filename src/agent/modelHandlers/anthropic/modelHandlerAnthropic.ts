@@ -50,8 +50,6 @@ import type {
   FileLocation,
   MediaAttachmentKind,
   StreamDiagnostics,
-  ToolFileAttachment,
-  ToolResult,
 } from '@shared/schemas';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
@@ -68,14 +66,19 @@ import {
   unknownMediaCategoryWarning,
 } from '../support/mediaClassification';
 import { toAnthropicTools } from '../toolConversion';
-import {
-  describeAttachments,
-  formatAttachmentSummaryFromNotes,
-  formatToolResultAsText,
-  uploadAndRecordToolAttachments,
-  wipeBuffer,
-} from '../utils/toolAttachmentUtils';
+import { wipeBuffer } from '../utils/toolAttachmentUtils';
 import { tagAnthropicSdkError } from './anthropicSdkError';
+import {
+  appendTextToLastAssistantMessage as appendAnthropicTextToLastAssistantMessage,
+  addMediaToUserMessage as addAnthropicMediaToUserMessage,
+  prependTextToUserMessage as prependAnthropicTextToUserMessage,
+  textBlock,
+} from './anthropicMessages';
+import {
+  createBatchedToolUseFollowUpMessages as createAnthropicBatchedToolUseFollowUpMessages,
+  type AnthropicToolResultContext,
+  type AnthropicToolResultEntry,
+} from './anthropicToolResults';
 import {
   FILES_API_BETA,
   CONTEXT_MANAGEMENT_BETA,
@@ -97,11 +100,7 @@ import {
   analyzeDocumentSources,
   replaceDocumentDataWithUploads,
 } from './anthropicDocumentHandling';
-import {
-  isSupportedImageMediaType,
-  uploadToolAttachments,
-  type UploadedAnthropicAttachment,
-} from './anthropicTools';
+import { isSupportedImageMediaType } from './anthropicTools';
 import {
   buildThinkingConfig,
   isCompactionEligibleModel,
@@ -133,9 +132,6 @@ import type {
   MessageParam,
   ContentBlockParam,
   ToolUseBlock,
-  TextBlockParam,
-  ImageBlockParam,
-  DocumentBlockParam,
   ThinkingBlockParam,
   RedactedThinkingBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
@@ -157,19 +153,9 @@ function extractPartialTextTail(
   return takeTail(text, maxChars);
 }
 
-/** Type guard for any thinking-related content block param */
-const isAnyThinkingBlockParam = (
-  block: ContentBlockParam,
-): block is ThinkingBlockParam | RedactedThinkingBlockParam =>
-  block.type === 'thinking' || block.type === 'redacted_thinking';
-
 /** Type guard for tool use blocks in Beta API responses */
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
-
-/** Type guard for text blocks in request content */
-const isTextBlockParam = (block: ContentBlockParam): block is TextBlockParam =>
-  block.type === 'text';
 
 /** Type guard for text blocks in Beta API responses */
 const isBetaTextBlock = (
@@ -211,14 +197,6 @@ function collectFileReferenceCounts(
     }
   }
   return counts;
-}
-
-/**
- * Build a text content block. The explicit return type resolves the union
- * inference, so no call site needs an `as ContentBlockParam` cast.
- */
-function textBlock(text: string): ContentBlockParam {
-  return { type: 'text', text };
 }
 
 export class ModelHandlerAnthropic extends ModelHandler<
@@ -1320,44 +1298,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     text: string,
     options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
   ): boolean {
-    let targetIndex = messages.length - 1;
-    const trailingMessage = messages.at(-1);
-
-    if (options.afterContinuationPrompt) {
-      if (!trailingMessage || trailingMessage.role !== 'user') return false;
-      if (
-        !Array.isArray(trailingMessage.content) ||
-        !this.containCutOffMessage(trailingMessage.content)
-      ) {
-        return false;
-      }
-      targetIndex = messages.length - 2;
-    }
-
-    const targetMessage = messages.at(targetIndex);
-    if (!targetMessage || targetMessage.role !== 'assistant') return false;
-
-    if (Array.isArray(targetMessage.content)) {
-      if (options.afterContinuationPrompt) {
-        const thinkingCount = targetMessage.content.filter(
-          isAnyThinkingBlockParam,
-        ).length;
-        if (thinkingCount > 0) {
-          this.logger.debug(
-            `Using ${thinkingCount} existing thinking blocks from previous message`,
-          );
-        }
-      }
-
-      targetMessage.content.push(textBlock(text));
-    } else {
-      targetMessage.content = [textBlock(options.fallbackText ?? text)];
-    }
-
-    if (options.afterContinuationPrompt) {
-      messages.pop();
-    }
-    return true;
+    return appendAnthropicTextToLastAssistantMessage(messages, text, options, {
+      logger: this.logger,
+      containCutOffMessage: (content) => this.containCutOffMessage(content),
+    });
   }
 
   /** Normalizes Anthropic usage data into a unified format. */
@@ -1589,6 +1533,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return content;
   }
 
+  /** Live bundle for the extracted tool-result builders (./anthropicToolResults). */
+  private anthropicToolResultContext(): AnthropicToolResultContext {
+    return {
+      logger: this.logger,
+      supportsToolResultFileUpload: this.supportsToolResultFileUpload,
+      canProcessToolResultAttachments: this.canProcessToolResultAttachments,
+      getTrackedPdfPageCount: () => this.getTrackedPdfPageCount(),
+      recordPdfPageCount: (fileId, pageCount) =>
+        this.uploadedPdfPageCounts.set(fileId, pageCount),
+      getMaxPdfPages: () => this.getMaxPdfPages(),
+      buildToolCallAssistantContent: (workspaceState, text) =>
+        this.buildToolCallAssistantContent(workspaceState, text),
+    };
+  }
+
   /**
    * Batched variant for parallel tool calls: one assistant message carrying
    * the original response content plus ALL tool_use blocks, then ONE user
@@ -1598,163 +1557,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * away from parallel calls (and would replay thinking blocks incorrectly).
    */
   async createBatchedToolUseFollowUpMessages(
-    entries: Array<{
-      call: AnthropicToolCall;
-      result: ToolResult;
-      attachments: ToolFileAttachment[];
-    }>,
+    entries: AnthropicToolResultEntry[],
     workspaceState: AgentWorkspaceState | undefined,
     text: string | undefined,
     client: Anthropic,
   ): Promise<MessageParam[]> {
-    if (entries.length === 0) return [];
-
-    const content = this.buildToolCallAssistantContent(workspaceState, text);
-    for (const { call } of entries) {
-      content.push({
-        type: 'tool_use',
-        id: call.callId,
-        name: call.name,
-        input: call.raw.input ?? {},
-      });
-    }
-
-    // Sequential on purpose: uploads share the PDF-page tracking state.
-    const resultBlocks: ContentBlockParam[] = [];
-    for (const { call, result, attachments } of entries) {
-      resultBlocks.push(
-        await this.buildToolResultBlock(client, call, result, attachments),
-      );
-    }
-
-    return [
-      { role: 'assistant', content },
-      { role: 'user', content: resultBlocks },
-    ];
-  }
-
-  /**
-   * Build one tool_result block, uploading attachments when supported.
-   */
-  private async buildToolResultBlock(
-    client: Anthropic,
-    call: AnthropicToolCall,
-    result: ToolResult,
-    attachments: ToolFileAttachment[],
-  ): Promise<ContentBlockParam> {
-    // Result is already sanitized by source - use the passed attachments
-    const canUpload =
-      this.supportsToolResultFileUpload && attachments.length > 0;
-
-    // This upload occurs while assembling the next turn, outside the model
-    // invocation gate. Restore the SDK's ordinary two retries for this
-    // auxiliary request; generation requests keep maxRetries: 0.
-    const { finalResult: sanitizedResult, uploadResult } =
-      await uploadAndRecordToolAttachments(result, canUpload, () =>
-        uploadToolAttachments(
-          client.withOptions({ maxRetries: AUXILIARY_MAX_RETRIES }),
-          attachments,
-          this.logger,
-          this.getTrackedPdfPageCount(),
-          (fileId, pageCount) =>
-            this.uploadedPdfPageCounts.set(fileId, pageCount),
-          this.getMaxPdfPages(),
-        ),
-      );
-
-    const uploadedAttachments: UploadedAnthropicAttachment[] =
-      uploadResult?.uploaded ?? [];
-    const unsupportedAttachments: ToolFileAttachment[] = canUpload
-      ? [...(uploadResult?.unsupported ?? [])]
-      : [...attachments];
-    const pageLimitExceeded: ToolFileAttachment[] =
-      uploadResult?.pageLimitExceeded ?? [];
-
-    // Build tool result as plain text - JSON wastes tokens
-    // Note: Anthropic handles attachments as separate content blocks, not in text
-    const toolResultContent: Array<
-      TextBlockParam | ImageBlockParam | DocumentBlockParam
-    > = [{ type: 'text', text: formatToolResultAsText(result) }];
-
-    const unsupportedNotes: string[] = [];
-
-    for (const uploaded of uploadedAttachments) {
-      const attachmentNote = `${uploaded.attachment.path ?? 'attachment'} (${uploaded.attachment.mimeType})`;
-
-      switch (uploaded.blockType) {
-        case 'image':
-          if (this.canProcessToolResultAttachments && uploaded.base64Data) {
-            toolResultContent.push({
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type:
-                  (uploaded.mediaType as Base64ImageSource['media_type']) ??
-                  'image/png',
-                data: uploaded.base64Data,
-              },
-            } as ImageBlockParam);
-          } else {
-            unsupportedNotes.push(attachmentNote);
-          }
-          break;
-
-        case 'document':
-          if (uploaded.base64Data) {
-            toolResultContent.push({
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type:
-                  (uploaded.mediaType as 'application/pdf') ??
-                  'application/pdf',
-                data: uploaded.base64Data,
-              },
-              title: basename(uploaded.attachment.path ?? 'attachment.pdf'),
-            } as DocumentBlockParam);
-          } else {
-            unsupportedNotes.push(attachmentNote);
-          }
-          break;
-
-        default:
-          unsupportedNotes.push(attachmentNote);
-      }
-    }
-
-    if (unsupportedAttachments.length > 0) {
-      unsupportedNotes.push(...describeAttachments(unsupportedAttachments));
-    }
-
-    if (pageLimitExceeded.length > 0) {
-      const remaining = this.getMaxPdfPages() - this.getTrackedPdfPageCount();
-      const names = pageLimitExceeded
-        .map((a) => a.path ?? 'attachment.pdf')
-        .join(', ');
-      toolResultContent.unshift({
-        type: 'text',
-        text: `PDF page limit reached. Could not include: ${names}. ${remaining} of ${this.getMaxPdfPages()} PDF pages remaining in this conversation. Tell the user.`,
-      });
-    }
-
-    if (unsupportedNotes.length > 0) {
-      const notesText = unsupportedNotes.join('\n');
-      toolResultContent.unshift({
-        type: 'text',
-        text: formatAttachmentSummaryFromNotes(notesText, 'metadata-fallback'),
-      });
-      if (!sanitizedResult.attachmentSummary) {
-        // Store summary without the instruction (it's in the text block above)
-        sanitizedResult.attachmentSummary = `Attachments available but returned as metadata only:\n${notesText}`;
-      }
-    }
-
-    return {
-      type: 'tool_result',
-      tool_use_id: call.callId,
-      content: toolResultContent,
-      is_error: result.status === 'error' || undefined,
-    };
+    return createAnthropicBatchedToolUseFollowUpMessages(
+      this.anthropicToolResultContext(),
+      entries,
+      workspaceState,
+      text,
+      client,
+    );
   }
 
   // =========================================================================
@@ -1765,21 +1579,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Prepend text to the last user message in the conversation.
    */
   prependTextToUserMessage(messages: MessageParam[], text: string): void {
-    if (!text.trim()) return;
-
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg) return;
-
-    if (typeof lastUserMsg.content === 'string') {
-      lastUserMsg.content = text + lastUserMsg.content;
-    } else if (Array.isArray(lastUserMsg.content)) {
-      const firstTextBlock = lastUserMsg.content.find(isTextBlockParam);
-      if (firstTextBlock) {
-        firstTextBlock.text = text + firstTextBlock.text;
-      } else {
-        lastUserMsg.content.unshift(textBlock(text));
-      }
-    }
+    prependAnthropicTextToUserMessage(messages, text);
   }
 
   /**
@@ -1789,19 +1589,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     mediaFiles: FileLocation[],
   ): Promise<MediaAttachmentKind[]> {
-    if (!mediaFiles.length || !this.capabilities.supportsVision) return [];
-
-    const lastUserMsg = messages.findLast((m) => m.role === 'user');
-    if (!lastUserMsg) return [];
-
-    const formattedMedia = await this.createMediaForRound(mediaFiles, 'insert');
-    if (formattedMedia.length === 0) return [];
-
-    if (typeof lastUserMsg.content === 'string') {
-      lastUserMsg.content = [...formattedMedia, textBlock(lastUserMsg.content)];
-    } else if (Array.isArray(lastUserMsg.content)) {
-      lastUserMsg.content.unshift(...formattedMedia);
-    }
-    return this.consumeInsertedAttachmentKinds('insert');
+    return addAnthropicMediaToUserMessage(messages, mediaFiles, {
+      supportsVision: this.capabilities.supportsVision,
+      createMediaForRound: (files) => this.createMediaForRound(files, 'insert'),
+      consumeInsertedAttachmentKinds: () =>
+        this.consumeInsertedAttachmentKinds('insert'),
+    });
   }
 }

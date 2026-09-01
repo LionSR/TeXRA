@@ -183,23 +183,32 @@ const BannerStateSchema = z.object({
 });
 export type BannerState = z.infer<typeof BannerStateSchema>;
 
-const ApiKeyBannerStateSchema = BannerStateSchema.extend({
+export const ApiKeyBannerDataSchema = z.object({
   provider: z.string().nullish(),
   requiresKey: z.boolean().nullish(),
 });
+const ApiKeyBannerStateSchema = BannerStateSchema.extend(
+  ApiKeyBannerDataSchema.shape,
+);
 export type ApiKeyBannerState = z.infer<typeof ApiKeyBannerStateSchema>;
 
-const AgentConfigBannerStateSchema = BannerStateSchema.extend({
+export const AgentConfigBannerDataSchema = z.object({
   agentName: z.string().nullish(),
   customDirSet: z.boolean().nullish(),
 });
+const AgentConfigBannerStateSchema = BannerStateSchema.extend(
+  AgentConfigBannerDataSchema.shape,
+);
 export type AgentConfigBannerState = z.infer<
   typeof AgentConfigBannerStateSchema
 >;
 
-const DependencyBannerStateSchema = BannerStateSchema.extend({
+export const DependencyBannerDataSchema = z.object({
   missingTools: z.array(z.string()).nullish(),
 });
+const DependencyBannerStateSchema = BannerStateSchema.extend(
+  DependencyBannerDataSchema.shape,
+);
 export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 
 // ============================================================

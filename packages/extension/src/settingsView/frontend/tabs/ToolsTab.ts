@@ -29,7 +29,7 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Local imports - shared schemas
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSelectValue } from '@shared/utils/selectTemplates';
+import { readSelectValue } from '@shared/wa/selectTemplates';
 import { groupBy } from '@utils/core';
 
 // Side-effect imports - register WA button, icon, and switch components

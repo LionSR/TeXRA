@@ -39,6 +39,7 @@ import {
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
@@ -192,8 +193,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       externalOpener: options.externalOpener,
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl: (provider) =>
-        this.profileController.getProviderKeyUrl(provider),
+      getProviderKeyUrl,
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {

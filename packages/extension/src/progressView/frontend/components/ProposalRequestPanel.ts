@@ -43,7 +43,7 @@ import {
   readSelectValue,
   renderAgentOptions,
   renderModelOptions,
-} from '@shared/utils/selectTemplates';
+} from '@shared/wa/selectTemplates';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';

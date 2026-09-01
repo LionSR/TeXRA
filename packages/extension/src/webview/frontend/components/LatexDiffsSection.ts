@@ -17,7 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import type { LatexDiffsActionDetail } from '@shared/schemas';
 import { compactFormControlStyles, designTokens } from '@shared/styles';
 import { buttonStyles } from '@shared/styles/controlStyles';
-import { readSelectValue } from '@shared/utils/selectTemplates';
+import { readSelectValue } from '@shared/wa/selectTemplates';
 import {
   renderIconActionButton,
   renderLabeledActionButtonParts,

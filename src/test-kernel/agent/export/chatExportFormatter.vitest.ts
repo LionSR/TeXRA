@@ -33,13 +33,25 @@ function webSearchBlock(
   };
 }
 
-/** A `web_fetch_tool_result` block in the archived flat shape. */
+/** A `web_fetch_tool_result` block in the nested live/archived shape. */
 function webFetchBlock(fields: {
   url: string;
   title: string;
   page_content: string;
 }): Record<string, unknown> {
-  return { type: 'web_fetch_tool_result', ...fields };
+  return {
+    type: 'web_fetch_tool_result',
+    content: {
+      type: 'web_fetch_result',
+      url: fields.url,
+      retrieved_at: null,
+      content: {
+        type: 'document',
+        title: fields.title,
+        source: { type: 'text', data: fields.page_content },
+      },
+    },
+  };
 }
 
 describe('chat export formatters', () => {
@@ -97,7 +109,7 @@ describe('chat export formatters', () => {
       content: 'Live export content',
     },
     {
-      shape: 'archived flat',
+      shape: 'archived',
       block: webFetchBlock({
         url: 'https://example.com/archived-export',
         title: 'Archived Export',

@@ -212,16 +212,10 @@
       "name": "formatToolDescriptionForTui"
     },
     {
-      "file": "packages/cli/src/chat/tui/input/BaseTextInput.tsx",
+      "file": "packages/cli/src/chat/tui/input/textInputDisplay.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "textInputDisplayRowCount"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/input/BaseTextInput.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "textInputDisplayWindow"
     },
     {
       "file": "packages/cli/src/chat/tui/input/textInputBindings.ts",

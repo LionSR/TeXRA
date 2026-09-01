@@ -34,7 +34,7 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { AGENT_DECORATORS } from '@shared/utils/icons';
+import { AGENT_DECORATORS } from '@shared/wa/icons';
 import { getBasename, groupBy } from '@utils/core';
 
 // Local imports - shared schemas and events

@@ -62,7 +62,6 @@ import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@shared/wa/actionButtons';
-import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
@@ -88,19 +87,10 @@ import { createEditorPane } from './editorPane';
 import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
-import {
-  taskSidebarTemplate,
-  workbenchPanelDomId,
-  workbenchTabDomId,
-  workbenchTabsTemplate,
-} from './taskShell';
+import { taskSidebarTemplate } from './taskShell';
 import {
   activeWorkbenchTab,
-  closeWorkbench,
-  closeWorkbenchTab,
-  focusWorkbenchTab,
   initialDesktopTaskShellState,
-  moveWorkbenchTab,
   openWorkbenchTab,
   renameWorkbenchTab,
   setBottomPanelHeight,
@@ -111,25 +101,19 @@ import {
   toggleFiles,
   toggleSidebar,
   toggleSummaryBar,
-  toggleWorkbench,
-  WORKBENCH_PLACEMENTS,
-  workbenchTabsForPlacement,
   workspaceInitials,
   workspaceName,
   type DesktopTaskShellState,
-  type WorkbenchKind,
-  type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopTaskShell';
-import {
-  DESKTOP_WORKSPACE_COMMANDS,
-  type DesktopEnvironmentSummary,
-} from '../shared/desktopWorkspaceMessages';
+import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
+import { createEnvironmentPopover } from './environmentPopover';
+import { createWorkbenchController } from './workbenchController';
 import {
   disposePendingFileRequests,
   requestFileRead,
@@ -220,9 +204,6 @@ function commandTitle(
 // resizable Right and Bottom panes without replacing the conversation.
 
 let shellState: DesktopTaskShellState = initialDesktopTaskShellState();
-let environmentSummary: DesktopEnvironmentSummary | undefined;
-let environmentLoading = false;
-let environmentPopoverOpen = false;
 
 function updateShell(next: DesktopTaskShellState): void {
   if (next === shellState) return;
@@ -232,7 +213,7 @@ function updateShell(next: DesktopTaskShellState): void {
   const previousWorkbenchWidth = shellState.workbenchWidth;
   shellState = next;
   rerenderShell();
-  syncBrowserViewBounds();
+  workbench.syncBrowserViewBounds();
   const activeTabChanged =
     previousActiveTabIds.right !== next.activeWorkbenchTabIds.right ||
     previousActiveTabIds.bottom !== next.activeWorkbenchTabIds.bottom;
@@ -244,35 +225,20 @@ function updateShell(next: DesktopTaskShellState): void {
   ) {
     // A new active tab is explicit user activation, so its surface may take
     // focus; a size-only change is a layout pass and must not move focus.
-    layoutVisibleSurfaces({ focus: activeTabChanged });
+    workbench.layoutVisibleSurfaces({ focus: activeTabChanged });
   }
-}
-
-/** Toggles a workbench pane, opening `emptyKind` when it holds no tabs yet. */
-function togglePlacementVisibility(
-  placement: WorkbenchPlacement,
-  emptyKind: WorkbenchKind,
-): void {
-  if (
-    !activeWorkbenchTab(shellState, placement) &&
-    workbenchTabsForPlacement(shellState, placement).length === 0
-  ) {
-    openKind(emptyKind);
-    return;
-  }
-  updateShell(toggleWorkbench(shellState, placement));
 }
 
 function toggleBottomBarVisibility(): void {
-  togglePlacementVisibility('bottom', 'terminal');
+  workbench.togglePlacementVisibility('bottom', 'terminal');
 }
 
 function toggleSidePanelVisibility(): void {
-  togglePlacementVisibility('right', 'settings');
+  workbench.togglePlacementVisibility('right', 'settings');
 }
 
 function toggleSummaryBarVisibility(): void {
-  environmentPopoverOpen = false;
+  environmentPopover.close();
   updateShell(toggleSummaryBar(shellState));
 }
 
@@ -353,11 +319,11 @@ const editorPane = createEditorPane({
   onError: (error) => console.error('TeXRA editor pane', error),
 });
 
-const pendingTerminalCommands = new Map<string, string>();
 const terminalPane = createTerminalPane({
   start: (sessionId, cols, rows) => {
-    const initialCommand = pendingTerminalCommands.get(sessionId);
-    pendingTerminalCommands.delete(sessionId);
+    // Reads the workbench controller declared below lazily: start() only fires
+    // once a terminal session opens, well after module evaluation.
+    const initialCommand = workbench.takePendingTerminalCommand(sessionId);
     postMessage(DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START, {
       sessionId,
       cols,
@@ -387,233 +353,29 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 // Editor / terminal / browser request plumbing
 // The renderer is sandboxed, so file I/O runs in the main process. The
 // promise-correlated request bridge for editor reads/writes/lists lives in
-// ./fileRequests.ts.
+// ./fileRequests.ts; workbench tab lifecycle, surface layout, and browser-view
+// bounds live in ./workbenchController.ts.
 
-/**
- * Reports the browser slot's geometry to the main process, which positions the
- * WebContentsView over it. A WebContentsView is not part of renderer layout, so
- * this runs on every render, resize, and layout change — otherwise the view
- * would float where the slot used to be.
- *
- * Only one browser view can be shown at a time: each is a separate
- * WebContentsView layered over the window, and two would need two rectangles the
- * main process tracks independently. The active browser workbench tab wins; the
- * rest render their placeholder.
- */
-function syncBrowserViewBounds(): void {
-  const tab = WORKBENCH_PLACEMENTS.map((placement) =>
-    activeWorkbenchTab(shellState, placement),
-  ).find((candidate) => candidate?.kind === 'browser');
-  if (tab?.kind !== 'browser') {
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
-    return;
-  }
-  const tabId = tab.id;
-  // Measure after layout settles; a workbench that just appeared has no box
-  // until the browser has flushed the style change.
-  requestAnimationFrame(() => {
-    const slot = document.querySelector(`[data-browser-slot="${tabId}"]`);
-    if (!slot) return;
-    const rect = slot.getBoundingClientRect();
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS, {
-      tabId,
-      bounds: {
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      },
-    });
-  });
-}
+const workbench = createWorkbenchController({
+  editorPane,
+  terminalPane,
+  reviewPane,
+  settingsView,
+  logsPane,
+  getState: () => shellState,
+  updateShell,
+  postMessage,
+});
 
-/**
- * Re-measures the active workbench surface. Monaco and xterm both render at
- * zero size if they measured while hidden. `focus` marks explicit user
- * activation (a tab was switched or opened) versus a layout pass that should
- * only re-fit surfaces.
- */
-function layoutVisibleSurfaces({
-  focus = false,
-}: { focus?: boolean } = {}): void {
-  for (const placement of WORKBENCH_PLACEMENTS) {
-    const tab = activeWorkbenchTab(shellState, placement);
-    if (!tab) continue;
-    if (tab.kind === 'editor') {
-      editorPane.layout();
-      if (tab.target) void editorPane.open(tab.target);
-    }
-    // activate() creates the terminal on first use and re-fits an existing one.
-    if (tab.kind === 'terminal') terminalPane.activate(tab.id, { focus });
-    // The main process owns the WebContentsView, so hand it the URL once.
-    if (
-      tab.kind === 'browser' &&
-      tab.target &&
-      !loadedBrowserTabs.has(tab.id)
-    ) {
-      loadedBrowserTabs.add(tab.id);
-      postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN, {
-        tabId: tab.id,
-        url: tab.target,
-      });
-    }
-  }
-}
-
-/**
- * Browser tabs whose URL has already been handed to the main process. Without
- * this the page would reload on every re-render.
- */
-const loadedBrowserTabs = new Set<string>();
-
-/** Opens a surface in its default pane with a sensible default target. */
-function openKind(kind: WorkbenchKind): void {
-  if (kind === 'terminal') {
-    updateShell(
-      openWorkbenchTab(shellState, {
-        kind,
-        target: window.texraDesktop?.workspacePath ?? '',
-      }),
-    );
-    return;
-  }
-  if (kind === 'browser') {
-    updateShell(
-      openWorkbenchTab(shellState, {
-        kind,
-        target: 'https://texra.ai/',
-        title: 'texra.ai',
-      }),
-    );
-    return;
-  }
-  if (kind === 'editor') {
-    updateShell(openWorkbenchTab(shellState, { kind }));
-    void editorPane.refresh();
-    return;
-  }
-  updateShell(openWorkbenchTab(shellState, { kind }));
-}
-
-/** Opens a visible bottom terminal and executes a settings-provided command. */
-function openTerminalCommand(initialCommand: string): void {
-  const next = openWorkbenchTab(shellState, {
-    kind: 'terminal',
-    placement: 'bottom',
-    target: window.texraDesktop?.workspacePath ?? '',
-  });
-  const terminal = activeWorkbenchTab(next, 'bottom');
-  if (terminal?.kind !== 'terminal') return;
-  pendingTerminalCommands.set(terminal.id, initialCommand);
-  updateShell(next);
-}
-
-// =============================================================================
-// Pane content
-// =============================================================================
-
-/**
- * Content for one tab. Every surface stays mounted once opened and is hidden when
- * its tab is inactive, so Monaco models, terminal scrollback, and in-flight
- * settings edits survive both tab switches and layout changes.
- *
- * The editor, terminal, settings, and logs surfaces are single shared instances,
- * so they render in whichever pane currently holds their tab — Lit moves the DOM
- * node rather than duplicating it.
- */
-function workbenchPlaceholderTemplate(): TemplateResult {
-  return renderEmptyState({
-    icon: 'file-code',
-    title: 'Choose a file',
-    body: 'Open a file from the project list to inspect or edit it beside this task.',
-    headingTag: 'h2',
-    className: 'task-workbench-placeholder',
-    iconSurfaceSize: 'l',
-  });
-}
-
-function workbenchSurfaceTemplate(content: unknown): TemplateResult {
-  return html`<div class="task-workbench-surface">${content}</div>`;
-}
-
-function workbenchContentTemplate(tab: WorkbenchTab): TemplateResult {
-  switch (tab.kind) {
-    case 'editor':
-      return tab.target
-        ? workbenchSurfaceTemplate(editorPane.element)
-        : workbenchPlaceholderTemplate();
-    case 'terminal':
-      return workbenchSurfaceTemplate(terminalPane.element);
-    case 'browser':
-      return html`<div
-        class="task-workbench-surface"
-        data-browser-slot=${tab.id}
-      ></div>`;
-    case 'review':
-      return workbenchSurfaceTemplate(reviewPane.element);
-    case 'settings':
-      return workbenchSurfaceTemplate(settingsView);
-    case 'logs':
-      return workbenchSurfaceTemplate(logsPane);
-  }
-}
-
-function disposeWorkbenchTab(tabId: string): void {
-  const tab = shellState.workbenchTabs.find((entry) => entry.id === tabId);
-  if (tab?.kind === 'browser') {
-    loadedBrowserTabs.delete(tabId);
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE, { tabId });
-  }
-  if (tab?.kind === 'terminal') {
-    pendingTerminalCommands.delete(tabId);
-    terminalPane.dispose(tabId);
-  }
-  updateShell(closeWorkbenchTab(shellState, tabId));
-}
-
-function moveTabToPlacement(
-  tabId: string,
-  placement: WorkbenchPlacement,
-): void {
-  updateShell(moveWorkbenchTab(shellState, tabId, placement));
-}
-
-function workbenchTemplate(
-  tab: WorkbenchTab,
-  placement: WorkbenchPlacement,
-): TemplateResult {
-  const placementLabel = placement === 'right' ? 'Right' : 'Bottom';
-  return html`
-    <aside
-      class="task-workbench"
-      data-placement=${placement}
-      aria-label=${`${placementLabel} workbench`}
-    >
-      ${workbenchTabsTemplate(
-        workbenchTabsForPlacement(shellState, placement),
-        shellState.activeWorkbenchTabIds[placement],
-        placement,
-        {
-          onActivate: (tabId) =>
-            updateShell(focusWorkbenchTab(shellState, tabId)),
-          onClose: disposeWorkbenchTab,
-          onHide: () => updateShell(closeWorkbench(shellState, placement)),
-          onMove: moveTabToPlacement,
-        },
-      )}
-      <div class="task-workbench-body">
-        <section
-          class="task-workbench-pane"
-          role="tabpanel"
-          id=${workbenchPanelDomId(placement)}
-          aria-labelledby=${workbenchTabDomId(tab.id)}
-        >
-          ${workbenchContentTemplate(tab)}
-        </section>
-      </div>
-    </aside>
-  `;
-}
+const environmentPopover = createEnvironmentPopover({
+  getWorkbenchTabs: () => shellState.workbenchTabs,
+  getChildStreamCount: () =>
+    [...childStreamsByParent$.get().values()].reduce(
+      (total, children) => total + children.length,
+      0,
+    ),
+  postMessage,
+});
 
 function currentTaskTitle(): string {
   // The confirmed stream id, not `displayedActiveStreamId$`: the header names
@@ -624,201 +386,6 @@ function currentTaskTitle(): string {
   const activeId = activeStreamId$.get();
   const stream = activeId ? streamById$.get().get(activeId) : undefined;
   return streamDisplayLabel(stream) || 'New task';
-}
-
-function environmentPopoverTemplate(
-  workspacePath: string | undefined,
-): TemplateResult {
-  const childCount = [...childStreamsByParent$.get().values()].reduce(
-    (total, children) => total + children.length,
-    0,
-  );
-  const terminalCount = shellState.workbenchTabs.filter(
-    (tab) => tab.kind === 'terminal',
-  ).length;
-  const sources = shellState.workbenchTabs.filter(
-    (tab) => tab.kind === 'editor' && tab.target,
-  );
-  const branchLabel =
-    environmentSummary?.branch ?? (environmentLoading ? 'Loading…' : 'Local');
-  const changedFiles = environmentSummary?.changedFiles ?? 0;
-
-  return html`
-    <wa-popover
-      class="task-environment-popover"
-      for="taskEnvironmentButton"
-      placement="bottom-end"
-      distance="6"
-      without-arrow
-      .open=${environmentPopoverOpen}
-      @wa-show=${handleEnvironmentPopoverShow}
-      @wa-hide=${handleEnvironmentPopoverHide}
-    >
-      <div class="task-environment-heading">
-        <span>Environment</span>
-        <wa-button
-          type="button"
-          class="task-environment-refresh icon-button is-size-m"
-          appearance="plain"
-          size="s"
-          aria-label="Refresh environment"
-          title="Refresh environment"
-          ?disabled=${environmentLoading}
-          @click=${requestEnvironmentSummary}
-        >
-          ${waIcon(environmentLoading ? 'spinner' : 'rotate-right')}
-        </wa-button>
-      </div>
-      <div class="task-environment-section">
-        <div class="task-environment-row">
-          <span class="task-environment-row-icon">${waIcon('plus-minus')}</span>
-          <span>Changes</span>
-          <span class="task-environment-trailing task-environment-diff">
-            <span class="is-added">+${environmentSummary?.additions ?? 0}</span>
-            <span class="is-deleted"
-              >-${environmentSummary?.deletions ?? 0}</span
-            >
-          </span>
-        </div>
-        <div class="task-environment-row">
-          <span class="task-environment-row-icon"
-            >${waIcon('folder-open')}</span
-          >
-          <span title=${workspacePath ?? ''}
-            >${workspaceName(workspacePath)}</span
-          >
-          <span class="task-environment-trailing">
-            ${changedFiles} changed
-          </span>
-        </div>
-        <div class="task-environment-row">
-          <span class="task-environment-row-icon"
-            >${waIcon('code-branch')}</span
-          >
-          <span title=${branchLabel}>${branchLabel}</span>
-          ${environmentSyncTemplate(environmentSummary)}
-        </div>
-        <div class="task-environment-row">
-          <span class="task-environment-row-icon">${waIcon('circle-dot')}</span>
-          <span>Commit or push</span>
-          <span class="task-environment-trailing">
-            ${changedFiles === 0 ? 'Clean' : `${changedFiles} pending`}
-          </span>
-        </div>
-      </div>
-
-      <div class="task-environment-section">
-        <div class="task-environment-section-title">Agents</div>
-        <div class="task-environment-row">
-          <span class="task-environment-row-icon">${waIcon('users')}</span>
-          <span>Subagents</span>
-          <span class="task-environment-trailing">
-            ${childCount === 0 ? 'None' : `${childCount} active or completed`}
-          </span>
-        </div>
-      </div>
-
-      <div class="task-environment-section">
-        <div class="task-environment-section-title">Background processes</div>
-        <div class="task-environment-row">
-          <span class="task-environment-row-icon">${waIcon('terminal')}</span>
-          <span>Background terminal</span>
-          <span class="task-environment-trailing">
-            ${terminalCount === 0 ? 'None' : terminalCount}
-          </span>
-        </div>
-      </div>
-
-      <div class="task-environment-section">
-        <div class="task-environment-section-title">Sources</div>
-        ${
-          sources.length === 0
-            ? html`
-                <div class="task-environment-row is-muted">
-                  <span class="task-environment-row-icon">
-                    ${waIcon('link')}
-                  </span>
-                  <span>No open sources</span>
-                </div>
-              `
-            : sources.slice(0, 3).map(
-                (source) => html`
-                  <div class="task-environment-row">
-                    <span class="task-environment-row-icon">
-                      ${waIcon('file-code')}
-                    </span>
-                    <span title=${source.target ?? ''}>${source.title}</span>
-                  </div>
-                `,
-              )
-        }
-        ${
-          sources.length > 3
-            ? html`
-                <div class="task-environment-more">
-                  +${sources.length - 3} more
-                </div>
-              `
-            : nothing
-        }
-      </div>
-    </wa-popover>
-  `;
-}
-
-function environmentSyncTemplate(
-  summary: DesktopEnvironmentSummary | undefined,
-): TemplateResult {
-  if (!summary?.upstream) {
-    return html`
-      <span class="task-environment-trailing is-muted">No upstream</span>
-    `;
-  }
-  if (summary.ahead === 0 && summary.behind === 0) {
-    return html`
-      <span class="task-environment-trailing is-success">
-        ${waIcon('circle-check')} Synced
-      </span>
-    `;
-  }
-  // The arrow icons are aria-hidden (decorative, see waIcon()), so role="img"
-  // gives this aria-label a host to announce words ("3 ahead, 2 behind")
-  // instead of the bare counts next to them.
-  const syncLabel = [
-    summary.ahead > 0 ? `${summary.ahead} ahead` : '',
-    summary.behind > 0 ? `${summary.behind} behind` : '',
-  ]
-    .filter(Boolean)
-    .join(', ');
-  return html`
-    <span class="task-environment-trailing" role="img" aria-label=${syncLabel}>
-      ${
-        summary.ahead > 0
-          ? html`${waIcon('arrow-up')}${summary.ahead}`
-          : nothing
-      }
-      ${
-        summary.behind > 0
-          ? html`${waIcon('arrow-down')}${summary.behind}`
-          : nothing
-      }
-    </span>
-  `;
-}
-
-function handleEnvironmentPopoverShow(): void {
-  environmentPopoverOpen = true;
-  requestEnvironmentSummary();
-}
-
-function handleEnvironmentPopoverHide(): void {
-  environmentPopoverOpen = false;
-}
-
-function requestEnvironmentSummary(): void {
-  if (environmentLoading) return;
-  environmentLoading = true;
-  postMessage(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST);
 }
 
 function taskConversationTemplate(): TemplateResult {
@@ -940,7 +507,7 @@ function taskConversationTemplate(): TemplateResult {
         </div>
         ${
           shellState.summaryBarVisible
-            ? environmentPopoverTemplate(workspacePath)
+            ? environmentPopover.template(workspacePath)
             : nothing
         }
       </header>
@@ -1030,7 +597,7 @@ function taskRightLayoutTemplate(
         ${taskConversationTemplate()}
       </div>
       <div slot="end" class="task-workbench-panel">
-        ${workbenchTemplate(rightTab, 'right')}
+        ${workbench.template(rightTab, 'right')}
       </div>
     </wa-split-panel>
   `;
@@ -1055,7 +622,7 @@ function taskMainTemplate(
       </span>
       <div slot="start" class="task-main-panel">${rightLayout}</div>
       <div slot="end" class="task-bottom-workbench-panel">
-        ${workbenchTemplate(bottomTab, 'bottom')}
+        ${workbench.template(bottomTab, 'bottom')}
       </div>
     </wa-split-panel>
   `;
@@ -1119,10 +686,10 @@ function shellTemplate(): TemplateResult {
             },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-            onOpenTerminal: () => openKind('terminal'),
-            onOpenBrowser: () => openKind('browser'),
-            onOpenSettings: () => openKind('settings'),
-            onOpenLogs: () => openKind('logs'),
+            onOpenTerminal: () => workbench.openKind('terminal'),
+            onOpenBrowser: () => workbench.openKind('browser'),
+            onOpenSettings: () => workbench.openKind('settings'),
+            onOpenLogs: () => workbench.openKind('logs'),
             onResizeProjectSection: rememberProjectSectionPosition,
           },
         )}
@@ -1138,7 +705,7 @@ function observeSurfaceResizes(): void {
   surfaceResizeObserver ??= new ResizeObserver(() => {
     editorPane.layout();
     terminalPane.layout();
-    syncBrowserViewBounds();
+    workbench.syncBrowserViewBounds();
   });
   surfaceResizeObserver.disconnect();
   for (const element of document.querySelectorAll(
@@ -1324,7 +891,7 @@ function openSettingsTab(
   tab?: ShowSettingsArgs[0],
   agentSubTab?: ShowSettingsArgs[1],
 ): void {
-  openKind('settings');
+  workbench.openKind('settings');
   if (tab == null) return;
   window.postMessage(
     buildDesktopSettingsTabMessage(tab, agentSubTab),
@@ -1338,7 +905,7 @@ function openSettingsTab(
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
-  openWorkbench: openKind,
+  openWorkbench: workbench.openKind,
   showSettings: openSettingsTab,
   showStream: switchToStream,
   openDesktopDocs: () => {
@@ -1429,7 +996,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
   isBootstrapFailed: () => bootstrapFailed,
   returnToLauncher,
-  openKind,
+  openKind: workbench.openKind,
   toggleLayoutPanel: (panel) => LAYOUT_PANEL_TOGGLES[panel](),
   onboarding: {
     show: () => startupTeamPanel.show(),
@@ -1444,7 +1011,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
     open: (message) => reviewPane.open(message),
     clear: () => reviewPane.clear(),
   },
-  disposeReviewTab: () => disposeWorkbenchTab('workbench:review'),
+  disposeReviewTab: () => workbench.disposeWorkbenchTab('workbench:review'),
   pdf: {
     open: (message) => pdfOverlay.open(message),
     close: () => pdfOverlay.close(),
@@ -1457,14 +1024,11 @@ const MESSAGE_ROUTES = createMessageRoutes({
     reportError: (sessionId, message) =>
       terminalPane.reportError(sessionId, message),
   },
-  openTerminalCommand,
+  openTerminalCommand: workbench.openTerminalCommand,
   renameBrowserTab: (tabId, title) =>
     updateShell(renameWorkbenchTab(shellState, tabId, title)),
   environment: {
-    set: (summary, loading) => {
-      environmentSummary = summary;
-      environmentLoading = loading;
-    },
+    set: (summary, loading) => environmentPopover.set(summary, loading),
     rerender: rerenderShell,
   },
 });
@@ -1482,7 +1046,7 @@ window.addEventListener('message', (event) => {
 // Keep the embedded browser aligned when the window resizes: its view is
 // positioned in absolute window coordinates, not renderer layout.
 window.addEventListener('resize', () => {
-  syncBrowserViewBounds();
+  workbench.syncBrowserViewBounds();
   editorPane.layout();
   terminalPane.layout();
 });
