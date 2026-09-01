@@ -17,7 +17,7 @@ import {
   type FollowUpApplyPorts,
 } from '@controllers/progressView/followUpApply';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
-import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
+import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 import {
@@ -96,7 +96,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly commandHandlers: ReturnType<
     typeof createProgressViewCommandHandlers
   >;
-  private readonly workflowActionsController: ProgressWorkflowActionsController;
+  private readonly workflowRunActionsController: ProgressWorkflowRunActionsController;
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
@@ -190,7 +190,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       progressTitle: 'Transcribing follow-up message',
     });
 
-    this.workflowActionsController = this.createWorkflowActionsController();
+    this.workflowRunActionsController =
+      this.createWorkflowRunActionsController();
     this.workflowFileActionsController =
       this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
@@ -247,7 +248,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const secondTierActions: ProgressViewSecondTierActions = {
       ...this.snapshotPort,
-      workflowActions: this.workflowActionsController,
+      workflowRunActions: this.workflowRunActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
@@ -650,8 +651,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await vscode.window.showTextDocument(document, { preview: false });
   }
 
-  private createWorkflowActionsController(): ProgressWorkflowActionsController {
-    return new ProgressWorkflowActionsController({
+  private createWorkflowRunActionsController(): ProgressWorkflowRunActionsController {
+    return new ProgressWorkflowRunActionsController({
       state: this.snapshotPort,
       runDiff: async (request) => {
         await this.runViewCommand('texra.runLatexdiff', [request]);

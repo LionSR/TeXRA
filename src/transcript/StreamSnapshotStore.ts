@@ -1064,7 +1064,7 @@ export class StreamSnapshotStore {
   // artifact write. **A caller that carries the result across an `await` must
   // clone it** — `applyRoundPatch` mutates these records in place, so a live
   // run can add or drop a round while the caller is suspended. See
-  // `ProgressWorkflowActionsController.diffStream`, which snapshots before the
+  // `ProgressWorkflowRunActionsController.diffStream`, which snapshots before the
   // request crosses an interactive quick pick.
   //
   // The write path still snapshots (`snapshotFromMemory`, `writeRoundKeyedField`),

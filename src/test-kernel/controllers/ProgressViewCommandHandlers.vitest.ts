@@ -132,7 +132,7 @@ function createSecondTierActions(
     reportError: vi.fn(),
   };
   return {
-    workflowActions: {
+    workflowRunActions: {
       diffStream: vi.fn(),
       runFileOperation: vi.fn(),
     },
