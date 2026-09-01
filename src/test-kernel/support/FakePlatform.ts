@@ -11,6 +11,8 @@ import {
   NO_TOOL_AVAILABILITY_HOST,
   type FileStat,
   type FileSystemProvider,
+  type ReadStreamOptions,
+  type WriteStreamOptions,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
@@ -27,6 +29,7 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
   fileTypeFor,
+  fileTypeForStatSync,
   type FileTypeProbe,
 } from '@platform/defaults/fsEntryTypeBits';
 import { getCoreSettingDefault } from '@shared/schemas';
@@ -433,6 +436,58 @@ export class FakeFileSystemProvider implements FileSystemProvider {
       );
     }
     await this.fs.promises.rename(normalizedSource, normalizedDest);
+  }
+
+  existsSync(target: string): boolean {
+    return this.fs.existsSync(normalizePath(target));
+  }
+
+  readFileSync(target: string): Uint8Array {
+    const content = this.fs.readFileSync(normalizePath(target));
+    return typeof content === 'string' ? Buffer.from(content) : content;
+  }
+
+  deleteSync(target: string): void {
+    this.fs.unlinkSync(normalizePath(target));
+  }
+
+  createDirectorySync(
+    target: string,
+    options?: { recursive?: boolean },
+  ): void {
+    this.fs.mkdirSync(normalizePath(target), options);
+  }
+
+  statSync(target: string): FileStat {
+    const stats = this.fs.statSync(normalizePath(target));
+    return {
+      type: fileTypeForStatSync(stats),
+      ctime: Number(stats.ctimeMs),
+      mtime: Number(stats.mtimeMs),
+      size: Number(stats.size),
+    };
+  }
+
+  createReadStream(
+    target: string,
+    options?: ReadStreamOptions,
+  ): ReturnType<FileSystemProvider['createReadStream']> {
+    // memfs's stream implementation behaves like node:fs's for the
+    // for-await/pipeline usage every caller relies on.
+    return this.fs.createReadStream(
+      normalizePath(target),
+      options as Parameters<IFs['createReadStream']>[1],
+    ) as unknown as ReturnType<FileSystemProvider['createReadStream']>;
+  }
+
+  createWriteStream(
+    target: string,
+    options?: WriteStreamOptions,
+  ): ReturnType<FileSystemProvider['createWriteStream']> {
+    return this.fs.createWriteStream(
+      normalizePath(target),
+      options as Parameters<IFs['createWriteStream']>[1],
+    ) as unknown as ReturnType<FileSystemProvider['createWriteStream']>;
   }
 
   exists(target: string): boolean {

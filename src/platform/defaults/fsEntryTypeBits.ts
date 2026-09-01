@@ -56,3 +56,16 @@ export async function fileTypeFor(
   if (entry.isDirectory()) return FileType.Directory;
   return FileType.Unknown;
 }
+
+/**
+ * Compute the bitmask file type for a `statSync` (not `lstatSync`) result.
+ * `stat` already follows symlinks, so unlike {@link fileTypeFor} there is no
+ * separate symlink-target resolution step.
+ */
+export function fileTypeForStatSync(
+  entry: Pick<FileTypeProbe, 'isFile' | 'isDirectory'>,
+): number {
+  if (entry.isFile()) return FileType.File;
+  if (entry.isDirectory()) return FileType.Directory;
+  return FileType.Unknown;
+}

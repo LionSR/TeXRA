@@ -1,6 +1,11 @@
 /**
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `initPlatform()`. Formerly one file per port under `interfaces/`.
+ *
+ * This file is compiled under every host's tsconfig, including projects
+ * (e.g. the desktop renderer) that carry no Node type definitions — so it
+ * must never reference `node:fs` or the ambient `NodeJS` namespace, even for
+ * members only a Node-backed implementation can honor.
  */
 import type { StreamTabId } from '@shared/schemas';
 
@@ -134,6 +139,49 @@ export interface FileSystemProvider {
     dest: string,
     options?: { overwrite?: boolean },
   ): Promise<void>;
+
+  // --- Sync and stream operations -----------------------------------------
+  // No cross-host abstraction exists for these (a synchronous call or a byte
+  // stream has no vscode.workspace.fs or browser equivalent), so only a
+  // Node-backed implementation can honor them. Every FileSystemProvider still
+  // implements them so callers reach the disk only through this port, never
+  // by importing node:fs themselves; the stream shapes below are kept
+  // deliberately minimal (see file header) rather than the real node:fs
+  // types, and a Node-backed implementation's actual return value is a real
+  // `fs.ReadStream`/`fs.WriteStream`, a structural subtype of these.
+  existsSync(path: string): boolean;
+  readFileSync(path: string): Uint8Array;
+  deleteSync(path: string): void;
+  createDirectorySync(path: string, options?: { recursive?: boolean }): void;
+  statSync(path: string): FileStat;
+  createReadStream(
+    path: string,
+    options?: ReadStreamOptions,
+  ): AsyncIterable<Uint8Array> & { destroy(error?: Error): void };
+  createWriteStream(
+    path: string,
+    options?: WriteStreamOptions,
+  ): { end(): void };
+}
+
+export interface ReadStreamOptions {
+  flags?: string;
+  encoding?: string;
+  fd?: number;
+  mode?: number;
+  autoClose?: boolean;
+  start?: number;
+  end?: number;
+  highWaterMark?: number;
+}
+
+export interface WriteStreamOptions {
+  flags?: string;
+  encoding?: string;
+  fd?: number;
+  mode?: number;
+  autoClose?: boolean;
+  start?: number;
 }
 
 // ---------------------------------------------------------------------------

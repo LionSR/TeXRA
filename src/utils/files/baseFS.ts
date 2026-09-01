@@ -1,5 +1,4 @@
 // Standard library imports
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Common imports
@@ -10,10 +9,15 @@ import {
 } from '@common/errors';
 
 // Platform imports
-import { type FileStat } from '@platform/interfaces';
+import {
+  type FileStat,
+  type ReadStreamOptions,
+  type WriteStreamOptions,
+} from '@platform/interfaces';
 import { platform } from '@platform/platform';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { isFile, isSymlink } from './fsEntryType';
+import type { ReadStream, WriteStream } from 'node:fs';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {
@@ -231,21 +235,23 @@ export abstract class BaseFS {
   // ===== Sync Methods =====
 
   public static existsSync(this: typeof BaseFS, target: string): boolean {
-    return fs.existsSync(this.preparePath(target));
+    return platform().fs.existsSync(this.preparePath(target));
   }
 
   public static readSync(this: typeof BaseFS, target: string): string {
     return normalizeLineEndings(
-      fs.readFileSync(this.preparePath(target), 'utf-8'),
+      Buffer.from(platform().fs.readFileSync(this.preparePath(target))).toString(
+        'utf-8',
+      ),
     );
   }
 
   public static readBytesSync(this: typeof BaseFS, target: string): Buffer {
-    return fs.readFileSync(this.preparePath(target));
+    return Buffer.from(platform().fs.readFileSync(this.preparePath(target)));
   }
 
   public static deleteSync(this: typeof BaseFS, target: string): void {
-    fs.unlinkSync(this.preparePath(target));
+    platform().fs.deleteSync(this.preparePath(target));
   }
 
   public static mkdirSync(
@@ -253,11 +259,11 @@ export abstract class BaseFS {
     target: string,
     options?: { recursive?: boolean },
   ): void {
-    fs.mkdirSync(this.preparePath(target), options);
+    platform().fs.createDirectorySync(this.preparePath(target), options);
   }
 
-  public static statSync(this: typeof BaseFS, target: string): fs.Stats {
-    return fs.statSync(this.preparePath(target));
+  public static statSync(this: typeof BaseFS, target: string): FileStat {
+    return platform().fs.statSync(this.preparePath(target));
   }
 
   // ===== Stream Methods =====
@@ -265,37 +271,27 @@ export abstract class BaseFS {
   public static createReadStream(
     this: typeof BaseFS,
     target: string,
-    options?:
-      | BufferEncoding
-      | (fs.ObjectEncodingOptions & {
-          flags?: string;
-          encoding?: BufferEncoding;
-          fd?: number;
-          mode?: number;
-          autoClose?: boolean;
-          start?: number;
-          end?: number;
-          highWaterMark?: number;
-        }),
-  ): fs.ReadStream {
-    return fs.createReadStream(this.preparePath(target), options);
+    options?: ReadStreamOptions,
+  ): ReadStream {
+    // The port's return type is a minimal duck-typed shape (see
+    // interfaces.ts); every real implementation is Node-backed, so this is
+    // always actually an fs.ReadStream — callers (e.g. an SDK upload param)
+    // depend on that concrete type.
+    return platform().fs.createReadStream(
+      this.preparePath(target),
+      options,
+    ) as ReadStream;
   }
 
   public static createWriteStream(
     this: typeof BaseFS,
     target: string,
-    options?:
-      | BufferEncoding
-      | (fs.ObjectEncodingOptions & {
-          flags?: string;
-          encoding?: BufferEncoding;
-          fd?: number;
-          mode?: number;
-          autoClose?: boolean;
-          start?: number;
-        }),
-  ): fs.WriteStream {
-    return fs.createWriteStream(this.preparePath(target), options);
+    options?: WriteStreamOptions,
+  ): WriteStream {
+    return platform().fs.createWriteStream(
+      this.preparePath(target),
+      options,
+    ) as WriteStream;
   }
 
   // ===== Utility helpers =====

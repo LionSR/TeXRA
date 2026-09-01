@@ -8,7 +8,14 @@ import {
   resolveArxivPaperDirectoryRelative,
 } from '@latex/arxivProcessor';
 import * as logger from '@logger/logUtils';
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+
+// Downloads/extracts write to real temp-dir paths (see tempSourceBase below),
+// so the fs port must be Node-backed rather than the suite-default in-memory
+// fake, which knows nothing about those paths.
+setupPlatform({}, { fs: nodeFilesystem });
 
 const tempDirs = useTempDirs();
 const SOURCE_URL = 'https://arxiv.org/src/2404.12175';

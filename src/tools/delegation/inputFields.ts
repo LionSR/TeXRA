@@ -11,6 +11,7 @@ import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
+import { isDirectory } from '@utils/files/fsEntryType';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
 import {
@@ -129,7 +130,7 @@ export function withToolUseSubagentHandoffInstruction(
 
 function ensureWorkingDirectoryExists(dir: string): void {
   try {
-    if (AbsoluteFS.statSync(dir).isDirectory()) return;
+    if (isDirectory(AbsoluteFS.statSync(dir).type)) return;
   } catch (e) {
     throw new Error(
       `working_directory must be an existing directory: ${toErrorMessage(e)}`,

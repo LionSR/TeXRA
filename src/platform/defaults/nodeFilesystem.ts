@@ -9,7 +9,7 @@ import writeFileAtomicLib from 'write-file-atomic';
 import { isFileNotFoundError } from '@common/errors';
 
 import { type FileSystemProvider, type FileStat } from '../interfaces';
-import { fileTypeFor } from './fsEntryTypeBits';
+import { fileTypeFor, fileTypeForStatSync } from './fsEntryTypeBits';
 
 export const nodeFilesystem: FileSystemProvider = {
   async stat(target: string): Promise<FileStat> {
@@ -150,5 +150,50 @@ export const nodeFilesystem: FileSystemProvider = {
       }
     }
     await fs.promises.rename(source, dest);
+  },
+
+  existsSync(target: string): boolean {
+    return fs.existsSync(target);
+  },
+
+  readFileSync(target: string): Uint8Array {
+    return fs.readFileSync(target);
+  },
+
+  deleteSync(target: string): void {
+    fs.unlinkSync(target);
+  },
+
+  createDirectorySync(
+    target: string,
+    options?: { recursive?: boolean },
+  ): void {
+    fs.mkdirSync(target, options);
+  },
+
+  statSync(target: string): FileStat {
+    const stats = fs.statSync(target);
+    return {
+      type: fileTypeForStatSync(stats),
+      ctime: stats.ctimeMs,
+      mtime: stats.mtimeMs,
+      size: stats.size,
+    };
+  },
+
+  createReadStream(target, options) {
+    // Cast at the boundary: `options` is the port's minimal, Node-type-free
+    // shape (see interfaces.ts), forwarded here to the real node:fs overload.
+    return fs.createReadStream(
+      target,
+      options as Parameters<typeof fs.createReadStream>[1],
+    );
+  },
+
+  createWriteStream(target, options) {
+    return fs.createWriteStream(
+      target,
+      options as Parameters<typeof fs.createWriteStream>[1],
+    );
   },
 };
