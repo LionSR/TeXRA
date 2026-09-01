@@ -6,8 +6,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/skeleton/skeleton.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { SignalWatcher } from '@shared/signals';
-import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 import {
   designTokens,
@@ -125,11 +124,7 @@ import { mainViewStyles } from './styles';
 
 registerTeXRAWebAwesomeIcons();
 
-// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
-// Safe because MainApp implements all abstract members below.
-const MainAppBase = SignalWatcher(
-  BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
-);
+const MainAppBase = signalWatcherWebviewAppBase();
 
 @customElement('main-app')
 export class MainApp extends MainAppBase {

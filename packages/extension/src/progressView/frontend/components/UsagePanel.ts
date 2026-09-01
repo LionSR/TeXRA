@@ -10,10 +10,11 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas, styles, and constants
-import type {
-  ContextStateData,
-  TokenUsageStats,
-  UsageRoute,
+import {
+  isEmptyUsage,
+  type ContextStateData,
+  type TokenUsageStats,
+  type UsageRoute,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
@@ -177,17 +178,7 @@ export class UsagePanel extends LitElement {
 
   /** Whether the usage stats have any non-zero values worth displaying. */
   private get hasUsage(): boolean {
-    const u = this.usage;
-    if (!u) return false;
-    return (
-      u.inputTokens > 0 ||
-      u.outputTokens > 0 ||
-      u.cost > 0 ||
-      (u.cacheReadInputTokens ?? 0) > 0 ||
-      (u.cacheMissInputTokens ?? 0) > 0 ||
-      (u.cacheCreationInputTokens ?? 0) > 0 ||
-      (u.reasoningTokens ?? 0) > 0
-    );
+    return this.usage != null && !isEmptyUsage(this.usage);
   }
 
   /** `ContextStateDataSchema` requires both gauge fields, so presence is all

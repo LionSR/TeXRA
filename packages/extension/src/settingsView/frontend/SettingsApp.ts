@@ -7,11 +7,8 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
-
-// Local imports - shared signals
-import { SignalWatcher } from '@shared/signals';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -125,11 +122,7 @@ registerTeXRAWebAwesomeIcons();
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
-// Safe because SettingsApp implements all abstract members below.
-const SettingsAppBase = SignalWatcher(
-  BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
-);
+const SettingsAppBase = signalWatcherWebviewAppBase();
 
 @customElement('settings-app')
 export class SettingsApp extends SettingsAppBase {
