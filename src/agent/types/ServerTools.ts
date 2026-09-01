@@ -389,6 +389,8 @@ function webFetchBlockFields(result: WebFetchBlock): WebFetchResultFields {
  * `web_fetch_result` content; archives written before 2026-09 stored
  * `url`/`title`/`page_content` flat on the block, and that legacy shape is
  * normalized here at the read boundary rather than migrated on disk.
+ * Retire the flat branch no earlier than 2026-12, when archives from before
+ * the nested-shape writer can be considered cold.
  */
 export function extractWebFetchResultFields(
   block: unknown,
