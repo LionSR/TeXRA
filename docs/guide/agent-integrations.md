@@ -84,7 +84,7 @@ delivery. The new prompt joins that Codex session as the next turn.
 
 | Setting              | Options                                                                                            | Default             | What it controls                                                              |
 | -------------------- | -------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| **Model**            | `Sonnet 5`, `Fable 5`, `Opus 5`, `Haiku 4.5`                                                       | `Sonnet 5`          | Which Claude model the delegated agent runs on. Agents may override per call. |
+| **Model**            | `Sonnet 5`, `Fable 5.1`, `Opus 5`, `Haiku 4.5`                                                     | `Sonnet 5`          | Which Claude model the delegated agent runs on. Agents may override per call. |
 | **Permission mode**  | `Prompt for risky actions`, `Auto-accept edits`, `Bypass all (dangerous)`, `Plan only (read-only)` | `Auto-accept edits` | How much the Claude Code child process may do before stopping to ask.         |
 | **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`                                                   | `High`              | How deeply Claude deliberates before acting.                                  |
 

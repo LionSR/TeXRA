@@ -11,7 +11,7 @@ describe('ClaudeAgentTool schema', () => {
     const modelDescription = parameters?.properties?.model?.description ?? '';
 
     expect(modelDescription).toContain('claude-sonnet-5');
-    expect(modelDescription).toContain('claude-fable-5');
+    expect(modelDescription).toContain('claude-fable-5-1');
     expect(modelDescription).toContain('claude-opus-5');
     expect(modelDescription).not.toContain('claude-opus-4-8');
   });

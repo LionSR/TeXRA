@@ -64,7 +64,7 @@ export const parseCodexApprovalPolicy = parseEnumSetting(
 /** Claude Code CLI model options surfaced in the picker. */
 export const ClaudeAgentModelSchema = z.enum([
   'claude-sonnet-5',
-  'claude-fable-5',
+  'claude-fable-5-1',
   'claude-opus-5',
   'claude-haiku-4-5-20251001',
 ]);

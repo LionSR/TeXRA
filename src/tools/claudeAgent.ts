@@ -115,7 +115,7 @@ const ClaudeAgentInputSchema = z
       .string()
       .nullish()
       .describe(
-        "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-5'). Defaults to user-configured model.",
+        "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5-1', 'claude-opus-5'). Defaults to user-configured model.",
       ),
     effort: ClaudeAgentEffortSchema.nullish().describe(
       'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',

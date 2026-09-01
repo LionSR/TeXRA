@@ -383,7 +383,7 @@ describe('state settings catalog', () => {
     ]);
     assert.deepEqual(labelsFor(WorkspaceStateKey.CLAUDE_AGENT_MODEL), [
       'claude-sonnet-5 — Sonnet 5',
-      'claude-fable-5 — Fable 5',
+      'claude-fable-5-1 — Fable 5.1',
       'claude-opus-5 — Opus 5',
       'claude-haiku-4-5-20251001 — Haiku 4.5',
     ]);
