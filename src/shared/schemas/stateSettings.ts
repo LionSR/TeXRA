@@ -1277,7 +1277,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
     honoredBy: CLAUDE_AGENT_HONORED_BY,
-    enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 5', 'Haiku 4.5'],
+    enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5', 'Haiku 4.5'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
   surfacedSetting({
