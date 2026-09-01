@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **Finish open inquiries before switching to TeXRA 0.40.0-0.40.5** — those
+  versions cannot read or deliver inquiry threads created or answered in
+  current builds. Finish or drop open inquiries before switching versions.
 - **Approve a multi-agent workflow as a whole** — reviewing each call, or the
   first call of each phase, is no longer an option. Skip or retry individual
   agents from live progress. Restart any 0.40.6 run you left waiting on that
