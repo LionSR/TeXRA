@@ -7,9 +7,9 @@
  * enqueued as a follow-up instruction to an existing session via the SDK's
  * `resume:` option (or via streaming-input on the live session). With
  * fork_session, it instead starts a new session from the selected session's
- * state. Each turn's
- * result is delivered back to the parent's follow-up queue, so the
- * orchestrator sees responses uniformly whether it or the user drove the turn.
+ * state. Each turn's result is delivered back to the parent's follow-up
+ * queue, so the orchestrator sees responses uniformly whether it or the user
+ * drove the turn.
  *
  * Authentication: the SDK spawns the Claude Code CLI as a subprocess, which
  * picks up whichever auth the user has configured:

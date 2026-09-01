@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 
 // Local imports - shared stream state
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER, TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';

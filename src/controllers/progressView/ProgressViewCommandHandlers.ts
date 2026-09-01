@@ -1,4 +1,3 @@
-// Local imports
 import type { DeleteStreamResult } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/state/executionRequests';

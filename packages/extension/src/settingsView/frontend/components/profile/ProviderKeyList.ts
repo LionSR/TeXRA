@@ -8,7 +8,10 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { ProviderKeyStatus, ProviderSetting } from '@shared/schemas';
 import { DEFAULT_GLOBAL_STREAMING } from '@shared/schemas';
-import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
+import {
+  PROVIDER_STATE_ENTRIES,
+  type ProviderStateEntry,
+} from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -59,7 +62,7 @@ export class ProviderKeyList extends LitElement {
    * fallback mirrors `providerConfig.entry()`: the API-key roster spells
    * OpenRouter as `openRouter` while the state registry uses `openrouter`.
    */
-  private providerStateKeys(provider: string) {
+  private providerStateKeys(provider: string): ProviderStateEntry | undefined {
     return (
       PROVIDER_STATE_ENTRIES.find((entry) => entry.id === provider) ??
       PROVIDER_STATE_ENTRIES.find(

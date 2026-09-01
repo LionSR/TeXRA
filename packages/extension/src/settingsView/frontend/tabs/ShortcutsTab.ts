@@ -26,6 +26,7 @@ import { renderSettingsBanner } from '@shared/wa/settingsBanner';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { groupBy } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 
 @customElement('shortcuts-tab')
 export class ShortcutsTab extends LitElement {
@@ -245,7 +246,7 @@ export class ShortcutsTab extends LitElement {
     const feedback =
       this.feedback ||
       (query
-        ? `${entries.length} matching ${entries.length === 1 ? 'shortcut' : 'shortcuts'}.`
+        ? `${entries.length} matching ${pluralize(entries.length, 'shortcut')}.`
         : '');
     return html`
       <div class="tab-content-container">

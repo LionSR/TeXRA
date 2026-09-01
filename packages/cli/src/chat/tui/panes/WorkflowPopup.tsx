@@ -276,10 +276,9 @@ export function WorkflowPopup({
   const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
 
   const { phases } = model;
-  const phaseIndex = Math.min(
-    Math.max(0, view.phaseIndex),
-    Math.max(0, phases.length - 1),
-  );
+  const clampPhaseIndex = (index: number): number =>
+    Math.min(Math.max(0, index), Math.max(0, phases.length - 1));
+  const phaseIndex = clampPhaseIndex(view.phaseIndex);
   const phase = phases[phaseIndex];
   const rows = useMemo(
     () =>
@@ -435,10 +434,7 @@ export function WorkflowPopup({
       return;
     }
     if (key.leftArrow || key.rightArrow) {
-      const next = Math.min(
-        Math.max(0, phaseIndex + (key.rightArrow ? 1 : -1)),
-        Math.max(0, phases.length - 1),
-      );
+      const next = clampPhaseIndex(phaseIndex + (key.rightArrow ? 1 : -1));
       if (next !== phaseIndex) {
         onViewChange({ phaseIndex: next, selectedKey: undefined });
       }

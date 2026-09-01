@@ -559,9 +559,8 @@ export class RequestPanels extends LitElement {
 
   /**
    * Rendered panel node for a permission. We match by reference rather than
-   * querying DOM order, which follows fixed section ordering
-   * (approval → bash → retry → proposal) and would target the wrong panel
-   * when mixed kinds are pending.
+   * querying DOM order, which follows the fixed SECTIONS ordering and would
+   * target the wrong panel when mixed kinds are pending.
    */
   private findPanelFor(permission: PermissionPayload): BaseRequestPanel | null {
     const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(

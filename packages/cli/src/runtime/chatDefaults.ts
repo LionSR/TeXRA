@@ -208,7 +208,7 @@ export async function resolveChatDefaults(
     ]);
     // History never changes the chat agent, so only the two config tiers can
     // supply one; the order below is the per-field fallthrough.
-    for (const defaults of [workspace, user, history]) {
+    for (const defaults of [workspace, user]) {
       if (!agent && defaults.agent) agent = defaults.agent;
     }
   }
@@ -226,9 +226,8 @@ export async function resolveChatDefaults(
   // The candidate list above only uses reasons in ChatDefaultValueSource.
   const modelSource = modelDecision?.reason as
     ChatDefaultValueSource | undefined;
-  const visibleToolUseAgents = init.visibleToolUseAgents;
   return {
-    agent: agent ?? pickDefaultToolUseAgent(visibleToolUseAgents),
+    agent: agent ?? pickDefaultToolUseAgent(init.visibleToolUseAgents),
     model: model ?? CLI_BUILTIN_DEFAULT_MODEL,
     modelSource: modelSource ?? 'builtin-default',
   };

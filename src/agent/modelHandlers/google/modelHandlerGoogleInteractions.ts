@@ -130,6 +130,38 @@ type GoogleGenAIInteraction = Omit<Interactions.Interaction, 'steps'> & {
   steps?: Step[];
 };
 
+/** Per-call options threaded to every Speakeasy Interactions request. */
+type InteractionsRequestOptions = {
+  maxRetries: number;
+  fetchOptions: RequestInit;
+};
+
+type GoogleInteractionsHttpClient = {
+  request(request: Request): Promise<Response>;
+};
+type GoogleInteractionsSdkClient = {
+  _httpClient: GoogleInteractionsHttpClient;
+  _options: { http_client: GoogleInteractionsHttpClient };
+};
+type GoogleInteractionsClientInternals = {
+  getClient(apiVersion?: string): GoogleInteractionsSdkClient;
+};
+
+/** Install the pinned SDK's request-local HTTP seam on every API-version client. */
+function installLongRunningInteractionsTransport(client: GoogleGenAI): void {
+  const interactions =
+    client.interactions as unknown as GoogleInteractionsClientInternals;
+  const getClient = interactions.getClient.bind(interactions);
+  interactions.getClient = (apiVersion?: string) => {
+    const sdk = getClient(apiVersion);
+    const httpClient = { request: longRunningGoogleInteractionsFetch };
+    sdk._httpClient = httpClient;
+    // Streaming lazily constructs sdk.interactions from this option object.
+    sdk._options.http_client = httpClient;
+    return sdk;
+  };
+}
+
 /**
  * Maps an Interactions media `resolution` literal to the chat
  * `PartMediaResolutionLevel` used by the countTokens estimate. Unknown values
@@ -369,37 +401,6 @@ interface PendingStepBuffer {
  * function-calling sequence, so this is safe; a fuller fix would need the base
  * contract to return `Step[]` (out of scope).
  */
-/** Per-call options threaded to every Speakeasy Interactions request. */
-type InteractionsRequestOptions = {
-  maxRetries: number;
-  fetchOptions: RequestInit;
-};
-
-type GoogleInteractionsHttpClient = {
-  request(request: Request): Promise<Response>;
-};
-type GoogleInteractionsSdkClient = {
-  _httpClient: GoogleInteractionsHttpClient;
-  _options: { http_client: GoogleInteractionsHttpClient };
-};
-type GoogleInteractionsClientInternals = {
-  getClient(apiVersion?: string): GoogleInteractionsSdkClient;
-};
-
-/** Install the pinned SDK's request-local HTTP seam on every API-version client. */
-function installLongRunningInteractionsTransport(client: GoogleGenAI): void {
-  const interactions =
-    client.interactions as unknown as GoogleInteractionsClientInternals;
-  const getClient = interactions.getClient.bind(interactions);
-  interactions.getClient = (apiVersion?: string) => {
-    const sdk = getClient(apiVersion);
-    const httpClient = { request: longRunningGoogleInteractionsFetch };
-    sdk._httpClient = httpClient;
-    // Streaming lazily constructs sdk.interactions from this option object.
-    sdk._options.http_client = httpClient;
-    return sdk;
-  };
-}
 
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
@@ -1833,8 +1834,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * `CreateModelInteractionParamsNonStreaming` alias) so the caller's actual
    * request-shape fields (`model`/`input`/`store`/…) survive into
    * `submitParams` below — see the comment on the sibling non-streaming
-   * `create()` call in `createResponseImpl` for why the public alias by
-   * itself would make TS pick `create()`'s most general overload.
+   * `create()` call in `dispatchGoogleInteractionsExecution` for why the public
+   * alias by itself would make TS pick `create()`'s most general overload.
    */
   private async executeBackgroundPath<
     P extends Omit<CreateModelInteractionParamsNonStreaming, 'stream'>,

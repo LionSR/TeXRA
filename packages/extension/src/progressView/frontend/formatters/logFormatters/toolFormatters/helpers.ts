@@ -26,8 +26,7 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { isObject } from '@utils/core';
 
-// Side-effect import to register <tool-timer> custom element
-import '@progressView/frontend/components/ToolTimer';
+// Side-effect import to register <terminal-output> custom element
 import '@progressView/frontend/components/TerminalOutput';
 
 // Side-effect imports - register WA components

@@ -11,7 +11,6 @@ import type { RunIdentity, StreamTabId, StreamTabInfo } from '@shared/schemas';
 import {
   focusOrderDescendants,
   streamMetadataFor,
-  visibleSubagentRows,
   type ChildRosters,
 } from './childExecutions';
 import type { StreamSlice } from './cliState';

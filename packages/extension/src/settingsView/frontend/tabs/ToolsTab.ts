@@ -5,7 +5,6 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
@@ -27,12 +26,10 @@ import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-// Local imports - shared schemas
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSelectValue } from '@shared/wa/selectTemplates';
 import { groupBy } from '@utils/core';
 
-// Side-effect imports - register WA button, icon, and switch components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';

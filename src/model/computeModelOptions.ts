@@ -29,6 +29,7 @@ import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
+  type ProviderCapabilityProfile,
 } from './providerCapabilities';
 import {
   kimiCodeEffectiveConfig,
@@ -57,7 +58,6 @@ import {
   copilotRouteForModel,
   staticModelConfigEntries,
 } from './runtimeModelRegistry';
-import type { ProviderCapabilityProfile } from './providerCapabilities';
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
 /**

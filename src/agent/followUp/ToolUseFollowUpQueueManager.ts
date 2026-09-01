@@ -186,11 +186,9 @@ export class ToolUseFollowUpQueue {
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     const owner = entry.owner;
     if (owner?.kind === 'flow') return { kind: 'delivered_live' };
-    if (owner !== undefined) return { kind: 'queued' };
-
-    if (admission === 'live_owner') {
-      // Live notifications use this path to reach WAITING parents whose
-      // retained queue will be consumed when the stream resumes.
+    // Live notifications use the live_owner path to reach WAITING parents
+    // whose retained queue will be consumed when the stream resumes.
+    if (owner !== undefined || admission === 'live_owner') {
       return { kind: 'queued' };
     }
 

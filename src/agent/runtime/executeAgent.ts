@@ -68,8 +68,7 @@ import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
-const CHANNEL = 'executeAgent';
-const logger = createLog(CHANNEL);
+const logger = createLog('executeAgent');
 
 /** A claimed execution no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {

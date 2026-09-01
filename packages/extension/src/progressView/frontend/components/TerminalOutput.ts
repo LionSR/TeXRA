@@ -303,7 +303,7 @@ export class TerminalOutput extends LitElement {
 
     // Whichever lands first wins; a promise ignores every later resolve.
     await new Promise<void>((resolve) => {
-      terminal.write(text, () => resolve());
+      terminal.write(text, resolve);
       setTimeout(() => resolve(), 100);
     });
   }

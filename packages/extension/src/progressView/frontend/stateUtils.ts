@@ -14,8 +14,7 @@ import {
 import { setStreamStateForId } from './progressState';
 
 /**
- * Update a per-round record. Handles full reset and merge semantics.
- * One run per tab — no longer keyed by runId.
+ * Update a round-keyed record. Handles full reset and merge semantics.
  */
 export function updateRounds<T>(
   current: Record<string, T[]>,

@@ -7,8 +7,7 @@
 // (`isStreamRemoved`). This module holds no state of its own: it binds the
 // adapter's `SessionState` and re-derives signal snapshots whenever the
 // adapter reports a change, so Ink components re-render off one source of
-// truth instead of a parallel fact-fold. (Collapsed from the former 692-line
-// `CHILD_STREAMS` state machine — single-substrate plan, Wave A.)
+// truth instead of a parallel fact-fold.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { StreamPhaseState } from '@agent/runtime';

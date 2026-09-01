@@ -126,7 +126,10 @@ import {
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-function operationLabel(operation: WorkflowFileOperation) {
+function operationLabel(operation: WorkflowFileOperation): {
+  verb: string;
+  gerund: string;
+} {
   return operation === 'pack'
     ? { verb: 'pack', gerund: 'packing' }
     : { verb: 'clean', gerund: 'cleaning' };

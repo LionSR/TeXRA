@@ -384,8 +384,7 @@ function workPlanProvenanceOf(
  * live inside the shared {@link ResidentStreamRegistry} container that backs
  * `records`, not on the record itself. `writeMutexes`
  * (keyed by the compound `${stream}::${key}`, not a bare stream id) lives in
- * {@link SidecarWriteCoordinator} — the same exclusion #7892 already carved
- * out of `perStreamStores()`.
+ * {@link SidecarWriteCoordinator}.
  */
 interface StreamRecord {
   // -- Accumulated durable state (mirrors on-disk StreamData) --------------

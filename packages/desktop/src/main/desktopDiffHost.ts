@@ -115,8 +115,7 @@ export function createDesktopDiffHost(
   async function drainFallbackSetups(): Promise<string[]> {
     // One deadline timer for the whole drain, aborted in the finally so an
     // early fully-drained return does not leave a live timer behind. Listed
-    // first in the race so an elapsed deadline outranks settled fallbacks,
-    // matching the old per-iteration remaining-time check.
+    // first in the race so an elapsed deadline outranks settled fallbacks.
     const abort = new AbortController();
     const deadline = sleep(
       DIFF_HOST_FALLBACK_SETUP_TIMEOUT_MS,

@@ -611,13 +611,6 @@ function harnessOrchestrationModels(): readonly CliModelAccess[] {
   }));
 }
 
-function harnessOrchestrationStatusLines(): readonly string[] {
-  return [
-    `api: ${formatCliModelAccessRouteInline('personal')}`,
-    formatCliAuthStatusLine({ authenticated: false }),
-  ];
-}
-
 if (SHOW_ORCHESTRATION) {
   const instance = render(
     <OrchestrationApp
@@ -630,7 +623,10 @@ if (SHOW_ORCHESTRATION) {
       version="0.0.0-harness"
       statusLines={
         SHOW_ORCHESTRATION_STATUS_LINES
-          ? harnessOrchestrationStatusLines()
+          ? [
+              `api: ${formatCliModelAccessRouteInline('personal')}`,
+              formatCliAuthStatusLine({ authenticated: false }),
+            ]
           : undefined
       }
       allowDefaultModelLaunch={false}
@@ -956,30 +952,23 @@ function makeBashApprovalPayload(index = 1) {
 }
 
 function makeRetryApprovalPayload(): RetryPermission {
-  if (RETRY_APPROVAL_CHATGPT) {
-    return {
-      requestId: `harness-retry-${nanoid()}`,
-      streamId: STREAM_ID,
-      operation: 'Model request',
-      model: 'harness-model',
-      errorMessage: 'ChatGPT subscription usage limit reached. Resets in 2h.',
-      errorDetails: {
-        classification: { kind: 'chatgpt-subscription' },
-        provider: 'openai',
-        statusCode: 429,
-      },
-    };
-  }
   return {
     requestId: `harness-retry-${nanoid()}`,
     streamId: STREAM_ID,
     operation: 'Model request',
     model: 'harness-model',
-    errorMessage: 'HTTP 429 Too Many Requests',
+    errorMessage: RETRY_APPROVAL_CHATGPT
+      ? 'ChatGPT subscription usage limit reached. Resets in 2h.'
+      : 'HTTP 429 Too Many Requests',
     errorDetails: {
-      // Keep this fixture interactive: upstream-credit requires an
-      // explicit user decision before changing credentials.
-      classification: { kind: 'upstream-credit' },
+      classification: {
+        // The default stays upstream-credit: that classification requires an
+        // explicit user decision before changing credentials, so this fixture
+        // remains interactive.
+        kind: RETRY_APPROVAL_CHATGPT
+          ? 'chatgpt-subscription'
+          : 'upstream-credit',
+      },
       provider: 'openai',
       statusCode: 429,
     },
@@ -1084,23 +1073,15 @@ function enqueueHarnessApproval(
 }
 
 function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
-  if (!decision.accepted) return;
-  if (decision.bypass === 'bash') {
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      bypass: { ...slice.bypass, bash: true },
-    }));
-  } else if (decision.bypass === 'toolEdit') {
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      bypass: { ...slice.bypass, toolEdit: true },
-    }));
-  } else if (decision.bypass === 'superYolo') {
-    patchStream(STREAM_ID, (slice) => ({
-      ...slice,
-      bypass: { bash: true, superYolo: true, toolEdit: true },
-    }));
-  }
+  const bypass = decision.bypass;
+  if (!decision.accepted || bypass === undefined) return;
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    bypass:
+      bypass === 'superYolo'
+        ? { bash: true, superYolo: true, toolEdit: true }
+        : { ...slice.bypass, [bypass]: true },
+  }));
 }
 
 function appendHarnessExternalInquiryDecision(
@@ -1983,10 +1964,6 @@ function markHarnessInterrupted(): void {
   }
 }
 
-function canInterruptHarnessStream(streamId: StreamTabId): boolean {
-  return isInFlightPhase(streamPhaseFor(streamId)?.phase);
-}
-
 function markHarnessStreamInterrupted(streamId: StreamTabId): void {
   clearApprovalsWhere(
     (payload) => approvalPayloadStreamId(payload) === streamId,
@@ -2066,14 +2043,6 @@ function setHarnessApprovalPolicy(policy: TexraApprovalPolicy): void {
   appendHarnessAssistantTranscript(
     `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
   );
-}
-
-function getHarnessModelSwitchDisabledReason(
-  model: string,
-): string | undefined {
-  return DISABLED_MODEL_SWITCHES.has(model)
-    ? DISABLED_MODEL_SWITCH_REASON
-    : undefined;
 }
 
 function applyHarnessApprovalPolicySelection(
@@ -2258,7 +2227,10 @@ registerBuiltinSlashCommands({
   // is pending, the same fact the status bar's `/agent` hint derives from.
   canSelectAgent: () => !rootRunPending.get(),
   canSelectModel: () => CAN_SELECT_MODEL,
-  getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
+  getModelSwitchDisabledReason: (model) =>
+    DISABLED_MODEL_SWITCHES.has(model)
+      ? DISABLED_MODEL_SWITCH_REASON
+      : undefined,
   getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) => {
@@ -2323,7 +2295,9 @@ function renderHarnessApp(): React.JSX.Element {
       onSubmit={handleHarnessSubmit}
       onKillExecution={markHarnessExecutionStopped}
       onWorkflowControl={() => undefined}
-      canInterruptStream={canInterruptHarnessStream}
+      canInterruptStream={(streamId) =>
+        isInFlightPhase(streamPhaseFor(streamId)?.phase)
+      }
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onInterruptStream={markHarnessStreamInterrupted}

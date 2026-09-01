@@ -84,10 +84,6 @@ export class LatexdiffResults extends LitElement {
         overflow-wrap: anywhere;
       }
 
-      .file-link:hover {
-        text-decoration: underline;
-      }
-
       .arrow {
         flex-shrink: 0;
       }

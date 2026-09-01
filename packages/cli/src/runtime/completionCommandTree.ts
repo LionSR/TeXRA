@@ -1,4 +1,3 @@
-// Type imports
 import { AGENT_CATEGORIES, byCategory, type ByCategory } from '@shared/schemas';
 import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
 

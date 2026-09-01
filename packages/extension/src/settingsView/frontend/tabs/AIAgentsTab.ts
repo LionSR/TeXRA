@@ -1,7 +1,8 @@
 /**
  * Integrations tab for coding agents, services, reference managers, and
  * assisted inquiries. Reuses the same `tool-card` component as the Tools tab,
- * plus the Codex-specific inline settings that used to live inside ToolsTab.
+ * plus the per-agent inline settings (Codex, Claude Agent) that used to live
+ * inside ToolsTab.
  */
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';

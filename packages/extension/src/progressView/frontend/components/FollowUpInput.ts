@@ -121,7 +121,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   });
 
   protected override willUpdate(changedProperties: PropertyValues): void {
-    // React to shouldFocus property change
     if (changedProperties.has('shouldFocus') && this.shouldFocus) {
       this.focusInput({ scrollIntoView: true }).then(() => {
         // Guard against dispatching events after disconnection
@@ -131,7 +130,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       });
     }
 
-    // React to polishedText property change
     if (changedProperties.has('polishedText') && this.polishedText !== null) {
       this.polishing = false;
       this.updateValue(this.polishedText);
@@ -142,7 +140,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       this.polishing = false;
     }
 
-    // React to transcribedText property change
     if (
       changedProperties.has('transcribedText') &&
       this.transcribedText !== null
@@ -161,7 +158,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       });
     }
 
-    // React to recording property change
     if (changedProperties.has('recording')) {
       this.recordingController.setRecording(this.recording);
     }

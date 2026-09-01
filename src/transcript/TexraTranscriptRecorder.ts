@@ -136,7 +136,8 @@ function redactLogData(data: unknown): unknown {
   }
   // Every string the hosts render beside an error row: rawMessage and
   // rawErrorBody carry provider error bodies (which can echo request URLs or
-  // Authorization headers), partialText carries truncated model output.
+  // Authorization headers), statusText is the provider's HTTP status line,
+  // partialText carries truncated model output.
   const redacted: Record<string, unknown> = { ...data };
   for (const key of [
     'message',

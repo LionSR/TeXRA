@@ -26,7 +26,6 @@ import './StreamHeader';
 // Side-effect imports - sibling components
 import './TodoList';
 import './PlanView';
-import './TaskGroupList';
 import './BackgroundTasksPanel';
 import './FollowUpInput';
 

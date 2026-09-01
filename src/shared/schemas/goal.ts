@@ -27,10 +27,10 @@ export function isGoalInFlight(
 
 /**
  * Canonical goal-state shape: status/objective only exist while a goal is
- * active. This is the one definition of that union — `outbound.ts`'s
- * SYNC_STREAM_CONTENT wire schema imports `GoalStateSchema` directly rather
- * than re-declaring the same discriminated union under a different name, so
- * there's exactly one place the shape can drift.
+ * active. This is the one definition of that union — `streamState.ts` and the
+ * progress-view projection (`projectionShape.ts`) parse it directly, so the
+ * shape has exactly one place to drift. The progress-view wire flattens it
+ * per message arm (see `outbound.ts`'s GOAL_ACTIVE_UPDATED).
  */
 export const GoalStateSchema = z.discriminatedUnion('active', [
   z.strictObject({ active: z.literal(false) }),

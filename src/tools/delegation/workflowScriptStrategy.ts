@@ -12,7 +12,6 @@
  */
 
 // Local imports
-import type { WorkflowScriptRunOptions } from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,

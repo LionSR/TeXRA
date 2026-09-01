@@ -59,12 +59,12 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
+  type SettingsTabPanelName,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
   type ToolDashboardItem,
 } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 

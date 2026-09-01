@@ -15,7 +15,6 @@ import { conversationContentStyles } from './ConversationContent.styles';
 import './StreamHeader';
 
 // Side-effect imports - sibling components
-import './TaskGroupList';
 import './FileList';
 import './BackgroundTasksPanel';
 

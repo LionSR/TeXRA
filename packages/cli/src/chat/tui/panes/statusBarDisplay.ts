@@ -272,8 +272,6 @@ function formatUsage(
   };
 }
 
-// One status-bar slot carries whichever stage this stream has (mirrors the
-// SubagentList row's `stageLabel`).
 function locationSegment(
   location: { readonly context?: string; readonly label: string } | undefined,
 ): StatusBarSegment | undefined {
@@ -289,6 +287,8 @@ function locationSegment(
   };
 }
 
+// One status-bar slot carries whichever stage this stream has (mirrors the
+// SubagentList row's `stageLabel`).
 function stageSegment(
   stage: StreamStage | undefined,
 ): StatusBarSegment | undefined {

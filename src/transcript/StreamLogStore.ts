@@ -270,8 +270,9 @@ export class StreamLogStore {
   /**
    * All per-stream resident state (heavy log, leases, load failure, pending
    * release/load, active writer) in one record per stream. See
-   * {@link StreamState}. `summaries`, `writeTombstones`, and `dirtyIds` are
-   * deliberately kept separate because they do not share this lifecycle.
+   * {@link StreamState}. `summaries`, `writeTombstones`, `releaseRequests`,
+   * and `dirtyIds` are deliberately kept separate because they do not share
+   * this lifecycle.
    */
   private readonly streams = new ResidentStreamRegistry<
     StreamTabId,
@@ -357,7 +358,8 @@ export class StreamLogStore {
   // -- StreamState record access -------------------------------------------
   // The `streams` map holds one record per resident stream. Field reads are
   // done inline (`this.streams.get(id)?.field`); only get-or-create, the
-  // empty-record prune, and the two multi-caller iterations are factored out.
+  // empty-record prune, the dirty-id snapshot, and the reload check are
+  // factored out.
 
   private ensureStreamState(streamId: StreamTabId): StreamState {
     return this.streams.getOrCreate(streamId);

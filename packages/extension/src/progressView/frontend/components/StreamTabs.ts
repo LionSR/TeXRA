@@ -535,8 +535,6 @@ export class StreamTabs extends LitElement {
       case 'toggle-children':
         this.toggleChildren(streamId);
         break;
-      default:
-        break;
     }
   }
 

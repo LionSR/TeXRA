@@ -3,15 +3,6 @@
  * Round orchestration is reflection-product policy, so this lives here and not
  * in the generic `@agent/node` engine.
  *
- * Extends PersistedFlow to centrally manage round transitions:
- * - Round counter increment (single source of truth)
- * - Round stage creation/ending
- * - Workspace reset between rounds
- *
- * After each full pass through the flow graph, the flow checks whether to
- * continue (based on continueRounds, bounds, and interruption) and loops
- * automatically — no dedicated decision node needed.
- *
  * Inheritance:
  * ```
  * Flow → PersistedFlow → RoundPersistedFlow

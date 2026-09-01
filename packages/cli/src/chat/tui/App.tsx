@@ -270,8 +270,8 @@ export function App(props: AppProps): React.JSX.Element {
     ? SESSION_LIST.choosing
     : undefined;
   const inputDisabled = appInputDisabled || childInputHidden;
-  // One gate for "the App owns the keyboard": both focus shortcuts and bare
-  // Escape were separately derived from these same three facts.
+  // One gate for "the App owns the keyboard": focus shortcuts and bare Escape
+  // both derive from these same three facts.
   const focusShortcutsActive =
     !appInputDisabled && !slashPaletteOpen && !reverseSearchOpen;
   const escapeInterruptState: EscapeInterruptState = {

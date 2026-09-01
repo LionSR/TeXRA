@@ -598,6 +598,22 @@ interface PendingChildDelivery {
 }
 
 /**
+ * A turn result with nowhere to go: the child detached from its orchestrator,
+ * so the report slot is the only place the outcome survives. Shared by the
+ * enqueue site and the deferred wake site, which resolve the target at
+ * different times.
+ */
+function warnDetachedChildDelivery(
+  logger: AgentTrace,
+  executionId: ExecutionId,
+): void {
+  logger.warn(
+    'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
+    { data: { executionId } },
+  );
+}
+
+/**
  * Format, persist, and enqueue one turn's outcome on the parent's follow-up
  * queue — the loop's single delivery site, shared by every interim and
  * terminal turn, every strategy. Returns the pending delivery for the caller
@@ -687,10 +703,7 @@ async function deliverTurn<TTurn>(params: {
   const resolveTargetStreamId = (): StreamTabId | undefined =>
     resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
   if (!resolveTargetStreamId()) {
-    logger.warn(
-      'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
-      { data: { executionId } },
-    );
+    warnDetachedChildDelivery(logger, executionId);
     return undefined;
   }
   if (prepareParentDelivery?.() === false) return undefined;
@@ -717,10 +730,7 @@ async function submitPendingDelivery(
   if (!pending) return;
   const targetStreamId = pending.resolveTargetStreamId();
   if (!targetStreamId) {
-    logger.warn(
-      'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
-      { data: { executionId } },
-    );
+    warnDetachedChildDelivery(logger, executionId);
     return;
   }
   const delivery = await deliverChildRunFollowUp({

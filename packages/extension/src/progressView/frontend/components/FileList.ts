@@ -52,8 +52,7 @@ interface FileActionOptions {
   readonly className: string;
   readonly command: string;
   readonly file: string;
-  // Unique per (round, file-index) so the button id can't collide when the
-  // same workspace path appears across rounds in one shadow root.
+  // Unique per (round, file-index); see renderFileActionButton for the id contract.
   readonly idPrefix: string;
   readonly base?: string;
   readonly prev?: string;

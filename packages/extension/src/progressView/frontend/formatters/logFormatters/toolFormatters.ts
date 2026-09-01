@@ -52,6 +52,9 @@ import {
 import { renderToolSections } from './toolFormatters/toolSections';
 import type { FormatResult } from '../baseLogFormatter';
 
+// Side-effect import - register the <tool-timer> element rendered below
+import '@progressView/frontend/components/ToolTimer';
+
 /** Header width for this surface; the model carries the preview untruncated. */
 const HEADER_PREVIEW_MAX_CHARS = 120;
 

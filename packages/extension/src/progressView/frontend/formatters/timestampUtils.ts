@@ -2,7 +2,6 @@
  * Timestamp formatting utilities for progress view formatters.
  */
 
-// DateTimeFormat options for consistent timestamp formatting
 const DATETIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: '2-digit',
