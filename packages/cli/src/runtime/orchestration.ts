@@ -136,7 +136,6 @@ export function orchestrationModelAccessView(
 
 const TEAM_DELEGATION_DENIED_DESCRIPTION =
   'Delegation blocked by "never"; use ask or yolo';
-
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
 ): CliOrchestrationItem[] {
