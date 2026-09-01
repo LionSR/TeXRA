@@ -290,6 +290,18 @@ export abstract class PollingSourceBase<
     }
   }
 
+  /**
+   * Validate a 200-path payload without ever throwing. The policy behind every
+   * poller's use of this helper: a throw on the 200 path is a defect — pollOne
+   * runs inside pollEntry's try/catch, where a throw routes to handleFailure
+   * and bumps consecutiveFailures every tick without advancing lastSuccessAt,
+   * so a persistently-odd-but-200 payload would trip the 24 h detach gate and
+   * unilaterally detach a live subscription. Validation is therefore always
+   * safeParse + warn + skip: returning normally lets pollEntry reset
+   * lastSuccessAt/consecutiveFailures, and the caller's per-site skip
+   * semantics decide what part of the tick is skipped. A 304 passes through
+   * untouched.
+   */
   protected validateOrSkip<T>(
     res: SuccessfulConditionalResponse<unknown>,
     schema: ZodType<T>,

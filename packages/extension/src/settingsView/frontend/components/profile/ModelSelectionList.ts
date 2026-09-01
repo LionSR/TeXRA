@@ -36,7 +36,7 @@ import {
 } from '@shared/constants/providers';
 
 // Local imports - profile view styles and events
-import { readSelectValue } from '@shared/utils/selectTemplates';
+import { readSelectValue } from '@shared/wa/selectTemplates';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { groupBy } from '@utils/core';
 import { postStateSetting } from '../shared/stateSettingRows';

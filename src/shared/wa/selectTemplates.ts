@@ -13,8 +13,8 @@ import type {
   TeamOptionData,
 } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { AGENT_DECORATORS, getModelProviderDecorator } from '@shared/wa/icons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { AGENT_DECORATORS, getModelProviderDecorator } from './icons';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
 /**

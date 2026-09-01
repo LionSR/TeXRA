@@ -3,11 +3,9 @@ import * as path from 'node:path';
 import { formatError, isFileNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { pathToLocation } from '@utils/files/fileLocation';
 import { executeCommand } from '@utils/system/execUtils';
-import { readPlatformSetting } from '@utils/config/platformSettings';
 import {
   buildBetweenRoundDiffSuffix,
   generateDiffFileName,
@@ -48,24 +46,7 @@ export class LaTeXdiffService {
 
   constructor(private readonly channel: string) {
     this.fileProcessor = new DiffFileProcessor();
-    // Pass a thunk so DiffCommandExecutor reads the current workspace value
-    // each time it runs a diff. Module-scope instances (in latexdiffCommands.ts
-    // and latexPreview.ts) construct before `initPlatform()` runs, so a value
-    // captured here would be permanently frozen at the default — defeating
-    // user changes to LATEXDIFF_TIMEOUT_MS.
-    this.commandExecutor = new DiffCommandExecutor(channel, () =>
-      this.getLatexdiffTimeout(),
-    );
-  }
-
-  /**
-   * Resolve the latexdiff timeout from workspace state. The service is created
-   * at module scope, but this getter runs only when a diff is invoked after
-   * platform initialization. Reading per diff also makes user updates take
-   * effect on the next invocation without rebuilding the service.
-   */
-  private getLatexdiffTimeout(): number {
-    return readPlatformSetting<number>(WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS);
+    this.commandExecutor = new DiffCommandExecutor(channel);
   }
 
   private logDiffError(context: string, err: unknown): LaTeXdiffResult {

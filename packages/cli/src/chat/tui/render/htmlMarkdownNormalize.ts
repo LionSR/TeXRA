@@ -2,7 +2,7 @@ import { summarizeEmbeddedSubagentFollowups } from '@shared/subagentFollowup';
 import {
   protectLatexMathSpansForNormalize,
   protectLatexMathSpansForNormalizeInline,
-} from '@shared/markdown/createMarkdownProcessor';
+} from '@shared/markdown/latexMathShield';
 import { clamp } from '@utils/core';
 
 // Only exact supported tag names enter the presentation grammar. Suffixes such

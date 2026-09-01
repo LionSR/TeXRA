@@ -24,8 +24,8 @@ import { clamp } from '@utils/core';
 // process. Pagination claims one unit per annotations page, so this budget
 // permits at most 3,000 annotation requests per hour, leaving room for the
 // rest of the PR polling endpoints under GitHub's primary 5,000/hour limit.
-// Keep it independent of the poll interval so tuning PR_POLL_INTERVAL_MS does
-// not silently raise the hourly ceiling.
+// Keep it independent of the poll interval so tuning
+// GITHUB_POLL_INTERVAL_MS does not silently raise the hourly ceiling.
 const MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW = 50;
 const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 60_000;
 

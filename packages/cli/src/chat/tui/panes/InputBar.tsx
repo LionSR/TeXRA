@@ -13,7 +13,8 @@ import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { BaseTextInput, textInputCappedRowCount } from '../input/BaseTextInput';
+import { BaseTextInput } from '../input/BaseTextInput';
+import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,

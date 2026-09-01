@@ -318,9 +318,19 @@ describe('completedRunArchive facade', () => {
         content: [
           {
             type: 'web_fetch_tool_result',
-            url: 'https://example.org/a',
-            title: 'Sobolev notes',
-            page_content: 'The Sobolev constant satisfies...',
+            content: {
+              type: 'web_fetch_result',
+              url: 'https://example.org/a',
+              retrieved_at: null,
+              content: {
+                type: 'document',
+                title: 'Sobolev notes',
+                source: {
+                  type: 'text',
+                  data: 'The Sobolev constant satisfies...',
+                },
+              },
+            },
           },
         ],
       },

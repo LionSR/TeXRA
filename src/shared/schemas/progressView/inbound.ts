@@ -24,11 +24,8 @@ import {
   InquirySubmitActionSchema,
 } from '../inquiry';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
-import {
-  StreamScopedBaseSchema,
-  StreamSelectionSchema,
-  streamScopedCommand,
-} from './data';
+import { StreamSelectionSchema } from '../identifiers';
+import { StreamScopedBaseSchema, streamScopedCommand } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
 

@@ -17,7 +17,10 @@ import {
 import { commandOnly, withFilesArray } from '../messageFactories';
 import { OnboardingFunnelStateSchema } from '../onboarding';
 import {
+  AgentConfigBannerDataSchema,
   AgentOptionDataSchema,
+  ApiKeyBannerDataSchema,
+  DependencyBannerDataSchema,
   ModelOptionDataSchema,
   SessionTypeSchema,
   TeamOptionDataSchema,
@@ -121,17 +124,9 @@ export const SetBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_BANNER),
   banner: MainViewBannerSchema,
   visible: z.boolean(),
-  data: z
-    .object({
-      /** apiKey banner */
-      provider: z.string().nullish(),
-      requiresKey: z.boolean().nullish(),
-      /** agentConfig banner */
-      agentName: z.string().nullish(),
-      customDirSet: z.boolean().nullish(),
-      /** dependency banner */
-      missingTools: z.array(z.string()).nullish(),
-    })
+  /** apiKey banner + agentConfig banner + dependency banner payloads */
+  data: ApiKeyBannerDataSchema.merge(AgentConfigBannerDataSchema)
+    .merge(DependencyBannerDataSchema)
     .nullish(),
 });
 

@@ -60,6 +60,33 @@ const busyIconButtonStyles: CSSResult = css`
   }
 `;
 
+/**
+ * Shared drag-over drop cue: an absolutely positioned dashed panel that
+ * overlays the drop target. Selector-less fragment — each consumer
+ * interpolates it into its own trigger rule (an element like `.drop-cue`, or
+ * a `::after` carrying its own `content` copy) and keeps its own activation
+ * affordance (outline vs border-color) beside it.
+ */
+export const dropCueStyles: CSSResult = css`
+  position: absolute;
+  inset: var(--wa-space-3xs);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-thin) dashed var(--wa-color-brand-fill-loud);
+  border-radius: var(--border-radius);
+  background: color-mix(
+    in srgb,
+    var(--wa-color-surface-default) 78%,
+    transparent
+  );
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  pointer-events: none;
+`;
+
 export const commonViewStyles: CSSResult = css`
   .view-header {
     display: flex;

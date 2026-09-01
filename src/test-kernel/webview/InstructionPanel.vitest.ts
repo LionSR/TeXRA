@@ -106,7 +106,7 @@ useLitComponentTestDom(async () => {
   // are installed (this hook's job).
   await loadInstructionPanelModules();
   ({ BROWSE_ALL_AGENTS_OPTION_VALUE, MANAGE_TEAMS_OPTION_VALUE } =
-    await import('@shared/utils/selectTemplates'));
+    await import('@shared/wa/selectTemplates'));
 });
 
 /**

@@ -518,30 +518,24 @@ export class ProgressBackend {
     }
 
     if (retainedOutcome) {
-      // Best-effort presentation repair, each failure isolated so a broken
-      // rebuild cannot suppress the retention notification and neither can
-      // make the deletion outcome disappear. The session-fact applier must
-      // still see `active`/`failed` and retire its provisional tombstone.
-      try {
-        await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
-      } catch (error) {
-        log.warn(
-          'Failed to rebuild rendered streams after a retained deletion',
-          {
-            data: { stream, retained, error },
+      await this.repairAfterDeletion({
+        syncActiveStream: true,
+        retainedNotify: {
+          activeCount: retainedOutcome === 'active' ? 1 : 0,
+          failedCount: retainedOutcome === 'failed' ? 1 : 0,
+        },
+        warnings: {
+          rebuild: {
+            message:
+              'Failed to rebuild rendered streams after a retained deletion',
+            data: { stream, retained },
           },
-        );
-      }
-      try {
-        await this.lifecycle.notifyDeletionRetained(
-          retainedOutcome === 'active' ? 1 : 0,
-          retainedOutcome === 'failed' ? 1 : 0,
-        );
-      } catch (error) {
-        log.warn('Failed to notify after a retained stream deletion', {
-          data: { stream, retained, error },
-        });
-      }
+          notify: {
+            message: 'Failed to notify after a retained stream deletion',
+            data: { stream, retained },
+          },
+        },
+      });
     }
 
     return retained;
@@ -679,30 +673,63 @@ export class ProgressBackend {
     );
     const newerIntentControls =
       this.newerIntentControlsSelection(activationGeneration);
-    try {
-      await this.lifecycle.rebuildRenderedStreams({
-        syncActiveStream: !outcome.allDeleted && !newerIntentControls,
-      });
-    } catch (error) {
-      log.warn('Failed to rebuild rendered streams after bulk deletion', {
-        data: { allDeleted: outcome.allDeleted, error },
-      });
-    }
-    if (!outcome.allDeleted) {
-      try {
-        await this.lifecycle.notifyDeletionRetained(
-          outcome.activeCount,
-          outcome.failedCount,
-        );
-      } catch (error) {
-        log.warn('Failed to notify after a retained bulk deletion', {
+    await this.repairAfterDeletion({
+      syncActiveStream: !outcome.allDeleted && !newerIntentControls,
+      retainedNotify: outcome.allDeleted
+        ? undefined
+        : {
+            activeCount: outcome.activeCount,
+            failedCount: outcome.failedCount,
+          },
+      warnings: {
+        rebuild: {
+          message: 'Failed to rebuild rendered streams after bulk deletion',
+          data: { allDeleted: outcome.allDeleted },
+        },
+        notify: {
+          message: 'Failed to notify after a retained bulk deletion',
           data: {
             activeCount: outcome.activeCount,
             failedCount: outcome.failedCount,
-            error,
           },
-        });
-      }
+        },
+      },
+    });
+  }
+
+  /**
+   * Best-effort presentation repair, each failure isolated so a broken
+   * rebuild cannot suppress the retention notification and neither can
+   * make the deletion outcome disappear. The session-fact applier must
+   * still see `active`/`failed` and retire its provisional tombstone.
+   */
+  private async repairAfterDeletion(options: {
+    syncActiveStream: boolean;
+    retainedNotify?: { activeCount: number; failedCount: number };
+    warnings: {
+      rebuild: { message: string; data: Record<string, unknown> };
+      notify: { message: string; data: Record<string, unknown> };
+    };
+  }): Promise<void> {
+    try {
+      await this.lifecycle.rebuildRenderedStreams({
+        syncActiveStream: options.syncActiveStream,
+      });
+    } catch (error) {
+      log.warn(options.warnings.rebuild.message, {
+        data: { ...options.warnings.rebuild.data, error },
+      });
+    }
+    if (!options.retainedNotify) return;
+    try {
+      await this.lifecycle.notifyDeletionRetained(
+        options.retainedNotify.activeCount,
+        options.retainedNotify.failedCount,
+      );
+    } catch (error) {
+      log.warn(options.warnings.notify.message, {
+        data: { ...options.warnings.notify.data, error },
+      });
     }
   }
 

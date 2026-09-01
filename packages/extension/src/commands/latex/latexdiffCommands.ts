@@ -18,6 +18,7 @@ import {
   type LatexdiffPackResult,
 } from '@housekeeping/packLatexdiffvc';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type {
   DiffRunResult,
   RunLatexdiffCommandConfig,
@@ -30,7 +31,7 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { CHANNEL, latexdiffService } from '@latex/latexdiff/service';
+import { latexdiffService } from '@latex/latexdiff/service';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,

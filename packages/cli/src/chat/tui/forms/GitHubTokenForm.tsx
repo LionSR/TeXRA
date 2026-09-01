@@ -9,6 +9,7 @@ import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CredentialEntryForm } from './ApiKeyEntryForm';
+import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 
 export interface GitHubTokenStatusView {
@@ -26,13 +27,11 @@ const STATUS_LABELS: Readonly<Record<GitHubTokenStatus, string>> = {
 };
 
 export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
-  if (!view.status) {
-    if (view.loading && !view.error) return 'Checking token';
-    return 'Status unavailable';
-  }
-  const label = STATUS_LABELS[view.status];
-  if (view.error) return `${label} · status unavailable`;
-  return view.loading ? `${label} · refreshing` : label;
+  return formatStatusViewSummary(
+    view,
+    'Checking token',
+    view.status === undefined ? undefined : STATUS_LABELS[view.status],
+  );
 }
 
 function buildGitHubTokenActionItems(

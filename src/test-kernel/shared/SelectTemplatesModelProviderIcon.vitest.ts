@@ -4,14 +4,14 @@ import type { ModelOptionData } from '@shared/schemas';
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 import type { TemplateResult } from 'lit';
 
-let templates: typeof import('@shared/utils/selectTemplates');
+let templates: typeof import('@shared/wa/selectTemplates');
 let renderTemplate: typeof import('lit').render;
 
 // `lit` and the module under test are imported through the harness callback,
 // after the DOM globals are patched onto globalThis: lit-html caches its
 // DOM-creation helpers off `global.document` when it is first evaluated.
 useLitComponentTestDom(async () => {
-  templates = await import('@shared/utils/selectTemplates');
+  templates = await import('@shared/wa/selectTemplates');
   ({ render: renderTemplate } = await import('lit'));
 });
 

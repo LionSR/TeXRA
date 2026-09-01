@@ -54,17 +54,7 @@ type CommandExecOptions = { channel: string; timeout: number; cwd?: string };
 export class DiffCommandExecutor {
   private readonly log = createLog(this.channel);
 
-  /**
-   * `getTimeoutMs` is read fresh on every diff invocation so user updates to
-   * `LATEXDIFF_TIMEOUT_MS` propagate to the next diff without rebuilding the
-   * service. Captured as a thunk because `LaTeXdiffService` is constructed at
-   * module scope (before `initPlatform()` runs); a captured number would
-   * permanently freeze at whatever the default was at activation-zero.
-   */
-  constructor(
-    private readonly channel: string,
-    private readonly getTimeoutMs: () => number,
-  ) {}
+  constructor(private readonly channel: string) {}
 
   async executeDiff(
     inputFile: string,
@@ -160,8 +150,13 @@ export class DiffCommandExecutor {
   ): Promise<ExecResult> {
     // Snapshot the timeout once per invocation so the value stays consistent
     // across the --flatten attempt and any retry, while still picking up any
-    // updates the user has made between successive diff runs.
-    const timeoutMs = this.getTimeoutMs();
+    // updates the user has made between successive diff runs. Reading per diff
+    // also matters because `LaTeXdiffService` is constructed at module scope
+    // (before `initPlatform()` runs); a value captured at construction would
+    // permanently freeze at whatever the default was at activation-zero.
+    const timeoutMs = readPlatformSetting<number>(
+      WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
+    );
     const execOptions: CommandExecOptions = {
       channel: this.channel,
       timeout: timeoutMs,

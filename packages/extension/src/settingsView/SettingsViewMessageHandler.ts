@@ -92,6 +92,7 @@ import {
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
+import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
@@ -156,8 +157,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       externalOpener: new VscodeExternalOpener(),
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl: (provider) =>
-        this.profileController.getProviderKeyUrl(provider),
+      getProviderKeyUrl,
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {

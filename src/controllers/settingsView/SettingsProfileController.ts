@@ -98,10 +98,6 @@ export class SettingsProfileController {
     );
   }
 
-  getProviderKeyUrl(provider: string): string | undefined {
-    return getProviderKeyUrl(provider);
-  }
-
   /**
    * Map every canonical provider id to its key status and native controls.
    */
@@ -111,7 +107,7 @@ export class SettingsProfileController {
       provider,
       displayName: this.getProviderDisplayName(provider),
       status: secretStatuses[provider] ?? 'not-set',
-      keyUrl: this.getProviderKeyUrl(provider) ?? '',
+      keyUrl: getProviderKeyUrl(provider) ?? '',
       streaming: getProviderStreaming(provider),
       customEndpoint: getProviderEndpoint(provider),
       supportsCustomEndpoint: supportsCustomEndpoint(provider),

@@ -2,7 +2,7 @@
  * Poll-based event source for GitHub PR activity.
  *
  * Each subscribed PR maintains per-resource cursors (last-seen ID) and ETags.
- * A single shared timer ticks every `PR_POLL_INTERVAL_MS` and iterates all
+ * A single shared timer ticks every `GITHUB_POLL_INTERVAL_MS` and iterates all
  * active subscriptions. Events are converted to natural-language text via
  * `formatPREvent` and dispatched to per-caller listeners.
  *
@@ -68,7 +68,7 @@ import {
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-  PR_POLL_INTERVAL_MS,
+  GITHUB_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
 import {
   isDefiniteMergeableState,
@@ -202,7 +202,7 @@ export class PRPollingSource extends PollingSourceBase<
   constructor() {
     super({
       name: 'PRPollingSource',
-      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
       maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
       ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
@@ -401,15 +401,11 @@ export class PRPollingSource extends PollingSourceBase<
     const prRes = await ghGet<GhPullRequest>(prPath, state.etags.pr);
     if (prRes.status !== 200) return true;
 
-    // Validate the state-driving PR payload. A parse failure must NOT throw:
-    // pollOne runs inside pollEntry's try/catch, and a throw here would bump
-    // consecutiveFailures every tick without advancing lastSuccessAt, so a
-    // persistently-odd-but-200 payload would detach this live subscription
-    // after the 24 h failure window. Log + skip the tick instead: returning
-    // normally lets pollEntry reset lastSuccessAt/consecutiveFailures, so the
-    // detach gate never trips. We skip BEFORE writing state.etags.pr, so the
-    // PR-detail ETag is not advanced on a bad body — the next tick re-fetches
-    // the same resource and re-validates (no strand).
+    // Validate the state-driving PR payload non-throwingly (never throw on
+    // the 200 path — see validateOrSkip). We skip BEFORE writing
+    // state.etags.pr, so the PR-detail ETag is not advanced on a bad body —
+    // the next tick re-fetches the same resource and re-validates (no
+    // strand).
     const parsed = this.validateOrSkip(
       prRes,
       GhPullRequestSchema,

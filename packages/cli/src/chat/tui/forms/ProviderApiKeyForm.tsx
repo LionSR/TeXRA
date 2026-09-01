@@ -11,6 +11,7 @@ import { providerDisplayName } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
+import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 
 type ProviderApiKeyStatuses = Partial<
@@ -65,13 +66,13 @@ function configuredProviderApiKeySummary(
 export function formatProviderApiKeySummary(
   view: ProviderApiKeyStatusView,
 ): string {
-  if (!view.statuses) {
-    if (view.loading && !view.error) return 'Checking configured keys';
-    return 'Status unavailable';
-  }
-  const summary = configuredProviderApiKeySummary(view.statuses);
-  if (view.error) return `${summary} · status unavailable`;
-  return view.loading ? `${summary} · refreshing` : summary;
+  return formatStatusViewSummary(
+    view,
+    'Checking configured keys',
+    view.statuses === undefined
+      ? undefined
+      : configuredProviderApiKeySummary(view.statuses),
+  );
 }
 
 interface ProviderApiKeyFormProps {

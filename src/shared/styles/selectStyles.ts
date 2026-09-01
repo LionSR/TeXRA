@@ -20,14 +20,14 @@ export const compactFormControlStyles: CSSResult = css`
     min-height: var(--height-control-compact);
     min-width: 0;
     padding-block: 0;
-    padding-inline: 6px;
+    padding-inline: var(--control-padding-inline);
     border: var(--border-thin) solid
       var(--wa-color-surface-border, var(--color-border));
   }
 
   wa-select::part(display-input) {
     padding-block: 1px;
-    padding-inline: 6px;
+    padding-inline: var(--control-padding-inline);
     font-size: var(--font-size-sm);
   }
 
@@ -54,7 +54,7 @@ export const compactFormControlStyles: CSSResult = css`
 
   wa-input::part(input) {
     padding-block: 1px;
-    padding-inline: 6px;
+    padding-inline: var(--control-padding-inline);
     font-size: var(--font-size-sm);
   }
 `;

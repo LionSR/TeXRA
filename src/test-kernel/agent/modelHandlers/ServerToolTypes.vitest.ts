@@ -22,6 +22,22 @@ describe('extractWebFetchResultFields', () => {
     {
       shape: 'archived',
       block: {
+        content: {
+          type: 'web_fetch_result',
+          url: 'https://example.com/archived',
+          retrieved_at: null,
+          content: {
+            title: 'Archived',
+            source: { type: 'text', data: page },
+          },
+        },
+      },
+    },
+    {
+      // Flat shape written by archives before 2026-09; normalized at the read
+      // boundary in extractWebFetchResultFields, never migrated on disk.
+      shape: 'legacy archived',
+      block: {
         url: 'https://example.com/archived',
         title: 'Archived',
         page_content: page,

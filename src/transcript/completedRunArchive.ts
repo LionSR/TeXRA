@@ -222,19 +222,28 @@ function webFetchEntryToMessages(
 ): unknown[] {
   const data = entry.data;
   if (!data.url) return [];
+  // Emit the same nested `web_fetch_result` shape a live Anthropic response
+  // carries, so every conversation consumer reads exactly one shape (#7508).
+  // Failed fetches omit title/source rather than reconstructing the error
+  // block, which keeps marker rendering identical to the live error path.
   return [
     {
       role: 'assistant',
       content: [
         {
           type: 'web_fetch_tool_result',
-          url: data.url,
-          ...(data.title !== undefined && { title: data.title }),
-          // `page_content` is the archived field name the export normalizer's
-          // web-fetch handling recognizes for this block type (#7508).
-          ...(data.content !== undefined && {
-            page_content: data.content,
-          }),
+          content: {
+            type: 'web_fetch_result',
+            url: data.url,
+            retrieved_at: null,
+            content: {
+              type: 'document',
+              ...(data.title !== undefined && { title: data.title }),
+              ...(data.content !== undefined && {
+                source: { type: 'text', data: data.content },
+              }),
+            },
+          },
         },
       ],
     },

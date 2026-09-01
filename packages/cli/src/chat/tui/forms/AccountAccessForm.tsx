@@ -44,6 +44,76 @@ type AccountAccessFormStatus =
   | { readonly state: 'loaded'; readonly overview: CliModelAccessOverview }
   | { readonly state: 'failed'; readonly message: string };
 
+interface SignInTransport {
+  readonly target: LoginFormValue;
+  readonly label: string;
+  readonly description: string;
+}
+
+type SignInProvider = 'chatgpt' | 'grok' | 'texra';
+
+interface ProviderSignInTransports {
+  readonly provider: SignInProvider;
+  readonly browser: SignInTransport;
+  readonly device: SignInTransport;
+  readonly toggleCoversBrowserSignIn: boolean;
+}
+
+const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> = [
+  {
+    provider: 'chatgpt',
+    browser: {
+      target: 'chatgpt',
+      label: CHATGPT_AUTH.signInLabel,
+      description: 'Use a ChatGPT subscription',
+    },
+    device: {
+      target: 'chatgpt --device',
+      label: CHATGPT_AUTH.deviceCodeLabel,
+      description: DEVICE_CODE_DESCRIPTION,
+    },
+    toggleCoversBrowserSignIn: true,
+  },
+  {
+    provider: 'grok',
+    browser: {
+      target: 'grok',
+      label: GROK_AUTH.signInLabel,
+      description: 'Use a Grok / SuperGrok subscription',
+    },
+    device: {
+      target: 'grok --device',
+      label: GROK_AUTH.deviceCodeLabel,
+      description: DEVICE_CODE_DESCRIPTION,
+    },
+    toggleCoversBrowserSignIn: true,
+  },
+  {
+    provider: 'texra',
+    browser: {
+      target: 'texra',
+      label: RESEARCHER_ACCESS_AUTH.signInLabel,
+      description: RESEARCHER_ACCESS_AUTH.loginDescription,
+    },
+    device: {
+      target: 'texra --device',
+      label: RESEARCHER_ACCESS_AUTH.deviceCodeLabel,
+      description: DEVICE_CODE_DESCRIPTION,
+    },
+    toggleCoversBrowserSignIn: false,
+  },
+];
+
+function signInItem(
+  transport: SignInTransport,
+): SelectItem<AccountAccessFormValue> {
+  return {
+    value: { kind: 'login' as const, target: transport.target },
+    label: transport.label,
+    description: transport.description,
+  };
+}
+
 function buildAccountAccessFormItems(
   input: CliModelAccessItemsInput,
 ): ReadonlyArray<SelectItem<AccountAccessFormValue>> {
@@ -60,36 +130,10 @@ function buildAccountAccessFormItems(
       // actions matter most exactly when account state failed to load.
       return [
         ...toggleItems,
-        {
-          value: { kind: 'login' as const, target: 'chatgpt' },
-          label: CHATGPT_AUTH.signInLabel,
-          description: 'Use a ChatGPT subscription',
-        },
-        {
-          value: { kind: 'login' as const, target: 'chatgpt --device' },
-          label: CHATGPT_AUTH.deviceCodeLabel,
-          description: DEVICE_CODE_DESCRIPTION,
-        },
-        {
-          value: { kind: 'login' as const, target: 'grok' },
-          label: GROK_AUTH.signInLabel,
-          description: 'Use a Grok / SuperGrok subscription',
-        },
-        {
-          value: { kind: 'login' as const, target: 'grok --device' },
-          label: GROK_AUTH.deviceCodeLabel,
-          description: DEVICE_CODE_DESCRIPTION,
-        },
-        {
-          value: { kind: 'login' as const, target: 'texra' },
-          label: RESEARCHER_ACCESS_AUTH.signInLabel,
-          description: RESEARCHER_ACCESS_AUTH.loginDescription,
-        },
-        {
-          value: { kind: 'login' as const, target: 'texra --device' },
-          label: RESEARCHER_ACCESS_AUTH.deviceCodeLabel,
-          description: DEVICE_CODE_DESCRIPTION,
-        },
+        ...SIGN_IN_TRANSPORTS.flatMap((entry) => [
+          signInItem(entry.browser),
+          signInItem(entry.device),
+        ]),
       ];
     }
     return toggleItems;
@@ -105,33 +149,19 @@ function buildAccountAccessFormItems(
       label: row.label,
       description: row.description,
     }));
+  const signedIn: Record<SignInProvider, boolean> = {
+    chatgpt: status.chatGptSignedIn,
+    grok: status.grokSignedIn,
+    texra: status.texraSignedIn ?? false,
+  };
   // Signed-out subscriptions get the one sign-in transport their toggle row
   // lacks (device code); the toggle itself is the browser sign-in path.
-  if (!status.chatGptSignedIn) {
-    accountItems.push({
-      value: { kind: 'login', target: 'chatgpt --device' },
-      label: CHATGPT_AUTH.deviceCodeLabel,
-      description: DEVICE_CODE_DESCRIPTION,
-    });
-  }
-  if (!status.grokSignedIn) {
-    accountItems.push({
-      value: { kind: 'login', target: 'grok --device' },
-      label: GROK_AUTH.deviceCodeLabel,
-      description: DEVICE_CODE_DESCRIPTION,
-    });
-  }
-  if (!status.texraSignedIn) {
-    accountItems.push({
-      value: { kind: 'login', target: 'texra' },
-      label: RESEARCHER_ACCESS_AUTH.signInLabel,
-      description: RESEARCHER_ACCESS_AUTH.loginDescription,
-    });
-    accountItems.push({
-      value: { kind: 'login', target: 'texra --device' },
-      label: RESEARCHER_ACCESS_AUTH.deviceCodeLabel,
-      description: DEVICE_CODE_DESCRIPTION,
-    });
+  for (const entry of SIGN_IN_TRANSPORTS) {
+    if (signedIn[entry.provider]) continue;
+    if (!entry.toggleCoversBrowserSignIn) {
+      accountItems.push(signInItem(entry.browser));
+    }
+    accountItems.push(signInItem(entry.device));
   }
   const signedInCount = [
     status.chatGptSignedIn,

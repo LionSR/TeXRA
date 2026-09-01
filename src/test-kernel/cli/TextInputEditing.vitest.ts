@@ -19,7 +19,7 @@ import {
   textInputCappedRowCount,
   textInputDisplayRowCount,
   textInputDisplayWindow,
-} from '@cli/chat/tui/input/BaseTextInput';
+} from '@cli/chat/tui/input/textInputDisplay';
 import {
   isCtrlInput,
   isEscapeInput,
