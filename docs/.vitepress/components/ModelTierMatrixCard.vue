@@ -23,13 +23,13 @@ const tiers = [
     icon: 'sparkle',
     kind: 'Complex',
     cue: 'Transformations, rewrites',
-    models: ['fable5', 'opus5T', 'gpt56', 'gemini31p'],
+    models: ['fable51', 'opus5T', 'gpt56', 'gemini31p'],
   },
   {
     icon: 'lightbulb',
     kind: 'Reasoning-heavy',
     cue: 'Deep, multi-step thinking',
-    models: ['fable5', 'sonnet5T', 'opus5T', 'deepseekT'],
+    models: ['fable51', 'sonnet5T', 'opus5T', 'deepseekT'],
   },
 ];
 </script>
