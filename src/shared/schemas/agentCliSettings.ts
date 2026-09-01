@@ -72,10 +72,23 @@ export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
 
 export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-5';
 
-export const parseClaudeAgentModel = parseEnumSetting(
+const parseClaudeAgentModelEnum = parseEnumSetting(
   ClaudeAgentModelSchema.options,
   CLAUDE_AGENT_DEFAULT_MODEL,
 );
+
+/**
+ * Claude Fable 5 was retired in favor of Fable 5.1 (identical specs/pricing,
+ * cheaper cache reads). Map a previously-persisted `claude-fable-5` forward
+ * instead of letting the enum parser silently discard it back to the
+ * default -- `readSetting` runs this before `schema.safeParse`, so an
+ * unmapped legacy id would already look "valid" by the time the loud
+ * invalid-value warning path could fire.
+ */
+export function parseClaudeAgentModel(raw: unknown): ClaudeAgentModel {
+  if (raw === 'claude-fable-5') return 'claude-fable-5-1';
+  return parseClaudeAgentModelEnum(raw);
+}
 
 /** Claude Code CLI permission modes exposed in settings. */
 export const ClaudeAgentPermissionModeSchema = z.enum([
