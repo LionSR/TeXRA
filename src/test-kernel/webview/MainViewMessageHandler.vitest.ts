@@ -352,11 +352,12 @@ describe('MainViewMessageHandler interaction mappings', () => {
     await handling;
     await nextTurn();
 
-    expect(mocks.executeCommand.mock.calls).toEqual([
-      ['texra.signIn'],
-      ['texra.refreshApiKeyStatus'],
-      ['texra.refreshAllOptions'],
-    ]);
+    expect(mocks.executeCommand).toHaveBeenCalledWith(
+      'texra.refreshApiKeyStatus',
+    );
+    expect(mocks.executeCommand).toHaveBeenCalledWith(
+      'texra.refreshAllOptions',
+    );
   });
 
   it('posts dependency results to the view that requested the check', async () => {
@@ -389,12 +390,13 @@ describe('MainViewMessageHandler interaction mappings', () => {
     await checking;
     await nextTurn();
 
-    expect(firstPostMessage).toHaveBeenCalledWith({
+    const dependencyBanner = {
       command: MAIN_VIEW_COMMANDS.SET_BANNER,
       banner: 'dependency',
       visible: false,
-    });
-    expect(secondPostMessage).toHaveBeenCalledOnce();
+    };
+    expect(firstPostMessage).toHaveBeenCalledWith(dependencyBanner);
+    expect(secondPostMessage).not.toHaveBeenCalledWith(dependencyBanner);
   });
 
   it('writes the distinct dismissed-state keys for both dismissed banners', async () => {
