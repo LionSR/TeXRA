@@ -162,7 +162,7 @@ Retrieves BibTeX records for every citation key found in the document.
 
 When you provide media files, they are handed to the model according to its capabilities:
 
-- **Vision models** (GPT-5.6, Claude Fable 5 / Opus 5 / Sonnet 5, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
+- **Vision models** (GPT-5.6, Claude Fable 5.1 / Opus 5 / Sonnet 5, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
 - **Audio models**: audio files are uploaded for transcription.
 - **Non-multimodal models**: only filenames are passed as context.
 
