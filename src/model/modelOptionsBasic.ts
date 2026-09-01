@@ -38,7 +38,7 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   // Do not lead with Gemini — Sonnet is the quality default.
   'sonnet5T',
   'opus5T',
-  'fable5',
+  'fable51',
   'gpt56',
   'gpt56-',
   'gpt56--',
