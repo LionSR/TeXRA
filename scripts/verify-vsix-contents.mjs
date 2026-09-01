@@ -11,6 +11,7 @@ import {
   EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
+  reportCheckFailures,
   requiredMonacoWorkers,
   withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
@@ -270,11 +271,7 @@ verifyDistEntrypoints(entries, failures);
 verifyNoMonacoWorkers(entries, failures);
 verifyPackagedDocs(vsixPath, entries, failures);
 
-if (failures.length > 0) {
-  console.error('VSIX content check failed:');
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
+reportCheckFailures('VSIX content check', failures);
 
 console.log(
   `VSIX content check passed for ${path.relative(rootDir, vsixPath)}`,

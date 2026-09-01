@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -8,6 +7,7 @@ import {
   EXCLUDED_TRACE_VIEWER_DIR,
   extensionManifestSnapshot,
   readJson,
+  reportCheckFailures,
   withoutCatalogDerivedContributes,
 } from './extension-package-utils.mjs';
 import { walkFiles } from './walkFiles.mjs';
@@ -286,10 +286,6 @@ verifyAssets(snapshot, failures);
 verifyBundledSkills(failures);
 verifyVscodeIgnore(snapshot, failures);
 
-if (failures.length > 0) {
-  console.error('Extension package invariant check failed:');
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
+reportCheckFailures('Extension package invariant check', failures);
 
 console.log('Extension package invariants are in sync');

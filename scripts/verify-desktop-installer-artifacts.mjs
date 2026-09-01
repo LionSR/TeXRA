@@ -3,6 +3,8 @@ import { basename, join, relative } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
+import { reportCheckFailures } from './extension-package-utils.mjs';
+
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const desktopPackageRoot =
   process.env.TEXRA_DESKTOP_INSTALLER_ROOT ??
@@ -259,11 +261,7 @@ for (const platform of getPlatformKeys()) {
   verifiedPlatforms.push(await verifyPlatformArtifacts(platform));
 }
 
-if (failures.length > 0) {
-  console.error('Desktop installer artifact check failed:');
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
+reportCheckFailures('Desktop installer artifact check', failures);
 
 for (const { requirement, matchedArtifacts } of verifiedPlatforms) {
   console.log(`${requirement.label} desktop installer artifact check passed:`);
