@@ -8,7 +8,10 @@
  * re-exported here.
  */
 export { BundledViewContentProvider } from './BaseViewContentProvider';
-export { BaseViewMessageHandler } from './BaseViewMessageHandler';
+export {
+  BaseViewMessageHandler,
+  type ViewSliceHost,
+} from './BaseViewMessageHandler';
 export { BaseWebviewProvider } from './BaseWebviewProvider';
 export {
   SIDEBAR_VIEWS,

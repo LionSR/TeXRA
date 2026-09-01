@@ -94,18 +94,14 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
    */
   private createHandlerRegistry(): MainViewInboundHandlerRegistry {
     const host: MainViewInboundHost = {
+      ...this.bindViewSliceHost(this.context),
       viewName: this.viewName,
-      channel: this.channel,
-      log: this.log,
-      context: this.context,
       refreshOnboardingFunnel: this.refreshOnboardingFunnel,
       fileManager: this.fileManager,
       diffManager: this.diffManager,
       instructionManager: this.instructionManager,
       recordingManager: this.recordingManager,
       runWithActiveView: (fn) => this.runWithActiveView(fn),
-      getActiveView: () => this.getActiveView(),
-      postToActiveView: (message) => this.postToActiveView(message),
       handleWebviewReady: () => this.handleWebviewReady(),
       handleThemeRequest: () => this.handleThemeRequest(),
       handleDebugModeRequest: () => this.handleDebugModeRequest(),

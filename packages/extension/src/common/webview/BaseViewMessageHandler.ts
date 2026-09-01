@@ -12,6 +12,32 @@ import {
 
 type CommandMessage = { command: string };
 
+/**
+ * Slice-visible face of {@link BaseViewMessageHandler}: channel, log, the
+ * VS Code extension context, and the two accessors inbound command slices
+ * and handler delegates share.
+ *
+ * Posting is the awaited {@link BaseViewMessageHandler.postMessageToActiveWebview}
+ * path, not fire-and-forget {@link BaseViewMessageHandler.postToActiveView}.
+ * Mutation follow-ups (a settings refresh after a write; hide-banner then
+ * credential refresh) depend on delivery having settled. Fire-and-forget
+ * posts stay as a protected method on the handler class for intra-class use
+ * (manager outbound, theme/debug) where ordering is not a follow-up contract.
+ *
+ * `withActiveWebview` is the shared "run with the active webview" accessor
+ * (`vscode.Webview`). View-wrapper access (`vscode.WebviewView`) stays
+ * view-specific — main-view recording needs the view, not just the webview.
+ */
+export interface ViewSliceHost {
+  readonly channel: string;
+  readonly log: Log;
+  readonly extensionContext: vscode.ExtensionContext;
+  withActiveWebview(
+    fn: (webview: vscode.Webview) => Promise<void> | void,
+  ): Promise<void>;
+  postMessageToActiveWebview(message: unknown): Promise<void>;
+}
+
 /** Type guard to check if a message has a command field */
 function isCommandMessage(
   message: unknown,
@@ -68,6 +94,20 @@ export abstract class BaseViewMessageHandler<
         data: error,
       });
     });
+  }
+
+  /** Bind the slice-visible subset of this handler for command delegates. */
+  protected bindViewSliceHost(
+    extensionContext: vscode.ExtensionContext,
+  ): ViewSliceHost {
+    return {
+      channel: this.channel,
+      log: this.log,
+      extensionContext,
+      withActiveWebview: (fn) => this.withActiveWebview(fn),
+      postMessageToActiveWebview: (message) =>
+        this.postMessageToActiveWebview(message),
+    };
   }
 
   /** Post a message to the tracked active view, if one is available. */

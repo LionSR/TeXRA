@@ -125,14 +125,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView');
 
-    const ctx: SettingsHandlerContext = {
-      channel: this.channel,
-      log: this.log,
-      extensionContext: context,
-      withActiveWebview: (fn) => this.withActiveWebview(fn),
-      postMessageToActiveWebview: (message) =>
-        this.postMessageToActiveWebview(message),
-    };
+    const ctx: SettingsHandlerContext = this.bindViewSliceHost(context);
 
     // Must build inside the constructor: the platform is initialized by
     // extension.ts during activation, so destructuring its stores at module
