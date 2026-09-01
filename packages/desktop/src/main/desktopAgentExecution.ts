@@ -43,11 +43,11 @@ import {
   type FollowUpApplyPorts,
 } from '@controllers/progressView/followUpApply';
 import {
-  ProgressWorkflowActionsController,
+  ProgressWorkflowRunActionsController,
   type WorkflowDiffRequest,
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowActionsController';
+} from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
@@ -203,7 +203,7 @@ export class DesktopProgressBridge {
    * each run's agent/model/input/output configuration from the shared snapshot
    * store and calls back into the two host-supplied operations below.
    */
-  private workflowActions!: ProgressWorkflowActionsController;
+  private workflowRunActions!: ProgressWorkflowRunActionsController;
   /** Plans compile-fix runs for a finished stream. */
   private followUpController!: ProgressFollowUpController;
   /** Rewrites follow-up text with the helper model ("Polish" in the follow-up box). */
@@ -411,7 +411,7 @@ export class DesktopProgressBridge {
     this.workflowFileActions = this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
     this.commandHandlers = this.createSharedCommandHandlers();
-    this.workflowActions = this.createWorkflowActionsController();
+    this.workflowRunActions = this.createWorkflowRunActionsController();
     this.followUpController = this.createFollowUpController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
@@ -465,7 +465,7 @@ export class DesktopProgressBridge {
   }
 
   /**
-   * Mirrors the extension's `createWorkflowActionsController`
+   * Mirrors the extension's `createWorkflowRunActionsController`
    * (`progressView/ProgressViewMessageHandler.ts`). The controller itself is
    * host-neutral; it reads each run's configuration from the same
    * `StreamSnapshotStore` both hosts share, so only the two terminal operations
@@ -473,8 +473,8 @@ export class DesktopProgressBridge {
    * `texra.pack` / `texra.clean` commands; the desktop calls the same
    * host-agnostic cores directly.
    */
-  private createWorkflowActionsController(): ProgressWorkflowActionsController {
-    return new ProgressWorkflowActionsController({
+  private createWorkflowRunActionsController(): ProgressWorkflowRunActionsController {
+    return new ProgressWorkflowRunActionsController({
       state: this.snapshotPort,
       runDiff: (request) => this.runWorkflowDiff(request),
       runFileOperation: (operation, request) =>
@@ -529,7 +529,8 @@ export class DesktopProgressBridge {
 
   private postRecordingStatus(
     status:
-      { status: 'started' | 'stopped' } | { status: 'error'; error: string },
+      | { status: 'started' | 'stopped' }
+      | { status: 'error'; error: string },
   ): void {
     this.postToRenderer({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,
@@ -851,7 +852,7 @@ export class DesktopProgressBridge {
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
       ...this.snapshotPort,
-      workflowActions: this.workflowActions,
+      workflowRunActions: this.workflowRunActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
@@ -1150,7 +1151,7 @@ export class DesktopProgressBridge {
     // -- runLatexdiffFile -> diffAcceptedFilePair -> runSharedLatexdiff ->
     // runLatexdiffForExecution -- before anything enumerates it. A workflow
     // still producing output would otherwise change the diff scope after the
-    // user began the action. Mirrors ProgressWorkflowActionsController.diffStream.
+    // user began the action. Mirrors ProgressWorkflowRunActionsController.diffStream.
     const outputsByRound = cloneRoundIndexed(
       this.state.snapshots.getOutputFiles(stream),
     );

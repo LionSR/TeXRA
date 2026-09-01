@@ -33,12 +33,12 @@ export interface WorkflowFileOperationRequest {
   executionId?: string;
 }
 
-interface ProgressWorkflowActionsState extends StreamOutputsSource {
+interface ProgressWorkflowRunActionsState extends StreamOutputsSource {
   getKnownWorkspaceOutputPaths(stream: StreamTabId): Set<string>;
 }
 
-interface ProgressWorkflowActionsControllerDeps {
-  state: ProgressWorkflowActionsState;
+interface ProgressWorkflowRunActionsControllerDeps {
+  state: ProgressWorkflowRunActionsState;
   runDiff(request: WorkflowDiffRequest): Promise<void>;
   runFileOperation(
     operation: WorkflowFileOperation,
@@ -46,8 +46,10 @@ interface ProgressWorkflowActionsControllerDeps {
   ): Promise<void>;
 }
 
-export class ProgressWorkflowActionsController {
-  constructor(private readonly deps: ProgressWorkflowActionsControllerDeps) {}
+export class ProgressWorkflowRunActionsController {
+  constructor(
+    private readonly deps: ProgressWorkflowRunActionsControllerDeps,
+  ) {}
 
   async diffStream(stream: StreamTabId): Promise<void> {
     await this.withWorkflowConfig(stream, async (config, executionId) => {

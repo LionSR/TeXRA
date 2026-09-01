@@ -38,7 +38,7 @@ import {
   type TranscriptExportPorts,
 } from './exportTranscript';
 import { submitProgressFollowUp } from './progressFollowUpSubmit';
-import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
+import type { ProgressWorkflowRunActionsController } from './ProgressWorkflowRunActionsController';
 import type { ProgressWorkflowFileActionsController } from './ProgressWorkflowFileActionsController';
 import type { ProgressAgentProposalController } from './ProgressAgentProposalController';
 import type { ProgressApiKeyRetryController } from './ProgressApiKeyRetryController';
@@ -475,7 +475,7 @@ interface ProgressViewPolishReporter {
 
 export interface ProgressViewSecondTierActions {
   /** Shared controllers (host-neutral; created once per host with injected deps). */
-  readonly workflowActions: ProgressWorkflowActionsController;
+  readonly workflowRunActions: ProgressWorkflowRunActionsController;
   readonly apiKeyRetry: ProgressApiKeyRetryController;
   readonly followUp: ProgressFollowUpController;
   readonly followUpPolish: ProgressFollowUpPolishController;
@@ -538,7 +538,7 @@ export interface ProgressViewSecondTierActions {
  * Shared second-tier progress-view command handlers used by both extension and
  * desktop.
  *
- * These handlers wrap shared controllers ({@link ProgressWorkflowActionsController},
+ * These handlers wrap shared controllers ({@link ProgressWorkflowRunActionsController},
  * {@link ProgressApiKeyRetryController}, {@link ProgressFollowUpController},
  * {@link ProgressFollowUpPolishController}) plus host-injected callbacks for
  * messaging, retry settlement, state restoration, plan/polish result
@@ -555,11 +555,12 @@ export function createProgressViewSecondTierHandlers(
 
   return {
     // ── Workflow toolbar (diff / pack / clean) ──
-    [CMD.DIFF_STREAM]: (data) => deps.workflowActions.diffStream(data.stream),
+    [CMD.DIFF_STREAM]: (data) =>
+      deps.workflowRunActions.diffStream(data.stream),
     [CMD.PACK_STREAM]: (data) =>
-      deps.workflowActions.runFileOperation(data.stream, 'pack'),
+      deps.workflowRunActions.runFileOperation(data.stream, 'pack'),
     [CMD.CLEAN_STREAM]: (data) =>
-      deps.workflowActions.runFileOperation(data.stream, 'clean'),
+      deps.workflowRunActions.runFileOperation(data.stream, 'clean'),
 
     // ── Retry ──
     [CMD.RETRY_STREAM_REQUEST]: async (data) => {
