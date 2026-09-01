@@ -157,8 +157,6 @@ export function clearLocalTranscript(): void {
   removeStream(CLI_LOCAL_STREAM_ID);
 }
 
-function resetTranscriptState(): void {
+registerCliStateResetHook(() => {
   localEntrySeq = 0;
-}
-
-registerCliStateResetHook(resetTranscriptState);
+});

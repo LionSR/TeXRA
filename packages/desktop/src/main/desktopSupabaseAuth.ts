@@ -225,9 +225,9 @@ export function createDesktopSupabaseAuth(
   const waitForCompletion = (attempt: DesktopAuthAttempt, timeoutMs: number) =>
     new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
-        attempt.settle(false);
-        if (ownsAttempt(attempt)) {
-          activeAttempt = undefined;
+        const wasOwned = ownsAttempt(attempt);
+        settleAttempt(attempt, false);
+        if (wasOwned) {
           void callbackState
             .clearAwaitingCallback(attempt.nonce)
             .catch((error: unknown) => {

@@ -9,13 +9,6 @@ import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
 import type { StreamSlice } from './cliState';
 
-// Wrapped-line memo keyed by the immutable entry object. Entries are replaced
-// (never mutated in place) when their content changes, so a hit is always
-// current, and the WeakMap needs no eviction: a replaced/discarded entry takes
-// its slot with it. One slot per entry suffices — the sole caller
-// (`TranscriptReader`) lays every entry out at one width under one labels
-// snapshot per frame, so only a resize or roster change misses, and then
-// exactly once per entry.
 const EMPTY_EXECUTION_LABELS: ExecutionLabels = new Map();
 
 interface EntryLinesMemo {
@@ -24,6 +17,13 @@ interface EntryLinesMemo {
   readonly lines: readonly string[];
 }
 
+// Wrapped-line memo keyed by the immutable entry object. Entries are replaced
+// (never mutated in place) when their content changes, so a hit is always
+// current, and the WeakMap needs no eviction: a replaced/discarded entry takes
+// its slot with it. One slot per entry suffices — the sole caller
+// (`TranscriptReader`) lays every entry out at one width under one labels
+// snapshot per frame, so only a resize or roster change misses, and then
+// exactly once per entry.
 const entryLinesCache = new WeakMap<TranscriptRow, EntryLinesMemo>();
 
 function transcriptEntryLines(
@@ -47,13 +47,6 @@ function isCompactToolEntry(
   return entry.kind === 'tool' && lines.length <= 1;
 }
 
-function isPromptToToolTurn(
-  previousEntry: TranscriptRow,
-  nextEntry: TranscriptRow,
-): boolean {
-  return previousEntry.kind === 'user' && nextEntry.kind === 'tool';
-}
-
 function shouldSeparateEntries({
   previousEntry,
   previousLines,
@@ -65,7 +58,8 @@ function shouldSeparateEntries({
   readonly nextEntry: TranscriptRow;
   readonly nextLines: readonly string[];
 }): boolean {
-  if (isPromptToToolTurn(previousEntry, nextEntry)) return false;
+  // A prompt and the tool rows of its turn read as one block.
+  if (previousEntry.kind === 'user' && nextEntry.kind === 'tool') return false;
   return !(
     isCompactToolEntry(previousEntry, previousLines) &&
     isCompactToolEntry(nextEntry, nextLines)

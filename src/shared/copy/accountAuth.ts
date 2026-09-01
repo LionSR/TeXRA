@@ -103,5 +103,5 @@ export const RESEARCHER_ACCESS_AUTH = {
     `Signed in to your ${RESEARCHER_ACCESS.label} as ${accountLabel}.`,
   signedOut: `Signed out of your ${RESEARCHER_ACCESS.label}.`,
   signOutFailedWithReason: (reason: string): string =>
-    `${RESEARCHER_ACCESS.label} sign-out failed: ${reason}`,
+    ACCOUNT_OUTCOME.signOutFailedWithReason(RESEARCHER_ACCESS.label, reason),
 } as const;

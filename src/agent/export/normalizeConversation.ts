@@ -137,6 +137,11 @@ function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
+/** Render a tool-result payload as display text: strings pass through. */
+function toolResultContentText(content: unknown): string {
+  return typeof content === 'string' ? content : prettyJson(content ?? '');
+}
+
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
   // Google GenAI: field-based Parts → type-based ContentBlocks
   if (Array.isArray(msg.parts)) {
@@ -206,10 +211,7 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
     return [
       {
         type: 'tool_result',
-        content:
-          typeof fr.response === 'string'
-            ? fr.response
-            : prettyJson(fr.response ?? ''),
+        content: toolResultContentText(fr.response),
       },
     ];
   }
@@ -330,10 +332,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         asClassifiedBlock<typeof CONVERSATION_BLOCK_TYPES.toolResult>(block);
       return {
         kind: 'tool-result',
-        text:
-          typeof toolResult.content === 'string'
-            ? toolResult.content
-            : prettyJson(toolResult.content ?? ''),
+        text: toolResultContentText(toolResult.content),
       };
     }
 

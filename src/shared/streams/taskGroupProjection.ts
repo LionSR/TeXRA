@@ -32,17 +32,6 @@ function taskGroupEndStatus(
   return value;
 }
 
-/** The optional `kind`/`index` stage metadata carried on a lifecycle row. */
-function taskGroupStageMetadata(
-  kind: TaskGroup['kind'],
-  index: number | undefined,
-): Pick<TaskGroup, 'kind' | 'index'> {
-  return {
-    ...(kind !== undefined ? { kind } : {}),
-    ...(index !== undefined ? { index } : {}),
-  };
-}
-
 /**
  * Apply one StreamLog entry to an existing task-group projection.
  *
@@ -76,7 +65,8 @@ export function upsertTaskGroupFromStreamLog(
   const payload = entry.data;
   const lifecycleFields = {
     ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-    ...taskGroupStageMetadata(payload.kind, payload.index),
+    ...(payload.kind !== undefined ? { kind: payload.kind } : {}),
+    ...(payload.index !== undefined ? { index: payload.index } : {}),
     ...(payload.attemptId !== undefined
       ? { attemptId: payload.attemptId }
       : {}),

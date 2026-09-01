@@ -318,14 +318,6 @@ function everyHost(
   };
 }
 
-/**
- * Only the webview hosts honor the setting — the reader exists in shared code
- * but its effect has no headless counterpart. The row must say why.
- */
-function webviewHosts(reader: string): SettingHonoredBy {
-  return { vscode: { reader }, desktop: { reader } };
-}
-
 type SurfacedSettingInput = Omit<
   StateSettingEntry,
   'surfaces' | 'description' | 'category'
@@ -1345,9 +1337,16 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slots: sameSlot('workspaceState'),
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
-    honoredBy: webviewHosts(
-      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
-    ),
+    honoredBy: {
+      vscode: {
+        reader:
+          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+      },
+      desktop: {
+        reader:
+          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+      },
+    },
     surfaces: { settingsView: 'latex' },
   }),
   surfacedSetting({

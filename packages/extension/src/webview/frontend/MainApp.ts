@@ -187,6 +187,11 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
   };
 
+  /** Agent settings + "Browse all agents" both open the agent config editor. */
+  private readonly onEditAgentConfig = (): void => {
+    runAgentConfigAction('edit');
+  };
+
   override connectedCallback(): void {
     super.connectedCallback();
     restorePersistedState();
@@ -424,8 +429,8 @@ export class MainApp extends MainAppBase {
         @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
           runPanelAction(detail.action)}
         @execute=${() => sendExecuteMessage()}
-        @agent-settings=${() => runAgentConfigAction('edit')}
-        @browse-all-agents=${() => runAgentConfigAction('edit')}
+        @agent-settings=${this.onEditAgentConfig}
+        @browse-all-agents=${this.onEditAgentConfig}
         @team-settings=${this.onOpenMultiAgentSettings}
         @manage-teams=${this.onOpenMultiAgentSettings}
         @model-settings=${() =>

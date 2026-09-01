@@ -978,11 +978,6 @@ const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
   summaryBar: toggleSummaryBarVisibility,
 };
 
-/**
- * Every inbound window message the shell claims, in match order: the first
- * route whose schema parses handles it. Shell routes come first, then the
- * main-process replies for the editor, terminal, and browser panes.
- */
 const MESSAGE_ROUTES = createMessageRoutes({
   saveAllFiles: () => {
     void editorPane.save();

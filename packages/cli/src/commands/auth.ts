@@ -5,6 +5,7 @@ import type { SupabaseSession } from '@auth/SupabaseSession';
 import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
+import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -34,7 +35,6 @@ import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { cliProgressWriter, emitCliResult } from './_helpers/output';
 import { chatgptAuthCommand } from './chatgptAuth';
 import { grokAuthCommand } from './grokAuth';
-import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 type LoginCommandArgs = {
   readonly providerArg?: string;

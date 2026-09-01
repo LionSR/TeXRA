@@ -40,7 +40,6 @@ import {
   requestDraftRestore,
   sessionMeta as sessionMetaSignal,
   setTransientNotice,
-  streams as streamsSignal,
 } from './state/cliState';
 import {
   focusedChildFollowUpRoute,
@@ -74,11 +73,9 @@ export function takePendingSkillActivations(
   }
 
   const entries = [...pendingSkillActivations.entries()].map(
-    ([name, activationPrompt]) => {
-      pendingSkillActivations.delete(name);
-      return { name, activationPrompt };
-    },
+    ([name, activationPrompt]) => ({ name, activationPrompt }),
   );
+  pendingSkillActivations.clear();
 
   const activations = entries
     .map(({ activationPrompt }) => activationPrompt)

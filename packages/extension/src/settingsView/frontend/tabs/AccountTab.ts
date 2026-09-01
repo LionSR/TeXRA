@@ -60,9 +60,9 @@ export class AccountTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
   };
 
-  private handleManageProviderKeys(): void {
+  private readonly handleManageProviderKeys = (): void => {
     this.dispatchEvent(createEvent('manage-provider-keys'));
-  }
+  };
 
   private renderIdentityBanner(): TemplateResult {
     const expired = this.sessionProblem === 'expired';
@@ -160,7 +160,7 @@ export class AccountTab extends LitElement {
                   text: 'Manage keys',
                   kind: 'secondary',
                   appearance: 'outlined',
-                  onClick: () => this.handleManageProviderKeys(),
+                  onClick: this.handleManageProviderKeys,
                 })}
               </div>
             </div>

@@ -136,7 +136,6 @@ export interface ExtensionCommandActions {
   extractTikzFigures(): Promise<void>;
   compileTikzFigures(): Promise<void>;
   cloneOverleafProject(): Promise<void>;
-  // Batch 4 (#3781).
   removeApiKey(): Promise<void>;
   showImportOptions(): Promise<void>;
   toggleView(): Promise<void>;
@@ -259,7 +258,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     awaitTrue(actions.compileTikzFigures()),
   [EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT]: (actions) =>
     awaitTrue(actions.cloneOverleafProject()),
-  // Batch 4 (#3781).
   'texra.removeApiKey': (actions) => awaitTrue(actions.removeApiKey()),
   'texra.showImportOptions': (actions) =>
     awaitTrue(actions.showImportOptions()),

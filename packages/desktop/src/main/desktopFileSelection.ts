@@ -19,20 +19,17 @@ import {
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
 
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
+import {
+  createDesktopErrorReporter,
+  type DesktopCommandMessage,
+  type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
 const logger = createLog('DesktopFileSelection');
 
-type MessageFor<C extends MainViewInboundMessage['command']> = Extract<
+type SelectMultipleFilesMessage = Extract<
   MainViewInboundMessage,
-  { command: C }
->;
-
-type SelectMultipleFilesMessage = MessageFor<
-  typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES
+  { command: typeof MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES }
 >;
 
 interface DesktopFileSelectionDialogOptions {
@@ -125,7 +122,7 @@ export function createDesktopFileSelection(
 ): DesktopFileSelection {
   const getWorkspacePath =
     options.getWorkspacePath ?? (() => platform().workspace.getWorkspacePath());
-  const onError = options.onError ?? defaultOnError;
+  const onError = createDesktopErrorReporter(options.onError);
 
   function runAsync(work: Promise<void>): void {
     void work.catch(onError);
@@ -257,8 +254,4 @@ export function createDesktopFileSelection(
   }
 
   return { handleMessage };
-}
-
-function defaultOnError(error: unknown): void {
-  console.error(error);
 }

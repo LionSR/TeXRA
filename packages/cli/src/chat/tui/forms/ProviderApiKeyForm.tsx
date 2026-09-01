@@ -43,7 +43,9 @@ function providerApiKeyFormLabel(provider: ApiProvider): string {
     : providerName;
 }
 
-export function buildProviderApiKeyItems(view: ProviderApiKeyStatusView) {
+export function buildProviderApiKeyItems(
+  view: ProviderApiKeyStatusView,
+): Array<{ value: ApiProvider; label: string; description: string }> {
   return API_PROVIDERS.map((provider) => ({
     value: provider,
     label: providerApiKeyFormLabel(provider),
@@ -102,9 +104,9 @@ export function ProviderApiKeyForm(
         items={
           props.statusView
             ? buildProviderApiKeyItems(props.statusView)
-            : API_PROVIDERS.map((provider) => ({
-                value: provider,
-                label: providerApiKeyFormLabel(provider),
+            : API_PROVIDERS.map((candidate) => ({
+                value: candidate,
+                label: providerApiKeyFormLabel(candidate),
               }))
         }
         description={

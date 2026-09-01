@@ -163,11 +163,7 @@ function buildAccountAccessFormItems(
     }
     accountItems.push(signInItem(entry.device));
   }
-  const signedInCount = [
-    status.chatGptSignedIn,
-    status.grokSignedIn,
-    status.texraSignedIn,
-  ].filter(Boolean).length;
+  const signedInCount = Object.values(signedIn).filter(Boolean).length;
   if (signedInCount >= 2) {
     accountItems.push({
       value: { kind: 'logout', target: 'all' },

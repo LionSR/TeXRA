@@ -26,13 +26,14 @@ import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components used by this template
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   STREAM_PHASE,
   runIdentityDisplayName,
@@ -68,9 +69,6 @@ import {
   type PhaseStageMap,
   type StreamByIdMap,
 } from '../streamContexts';
-
-// Web Awesome native components
-import '@awesome.me/webawesome/dist/components/details/details.js';
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends LitElement {

@@ -397,12 +397,19 @@ export function incrementalStaticTranscriptEntries(
   previous: StaticTranscriptScanCursor | undefined,
 ): StaticTranscriptScanResult {
   const source = entries ?? EMPTY_TRANSCRIPT_ENTRIES;
-  if (previous === undefined) {
+  // Every path that cannot trust the previous cursor (no cursor, a
+  // non-append-only change, or a suffix that sorts before what an earlier tick
+  // already printed) restarts the scan from the top and asks the caller to
+  // rebuild through the oracle.
+  function restartScan(): StaticTranscriptScanResult {
     return {
       appended: [],
       cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
       rebuild: true,
     };
+  }
+  if (previous === undefined) {
+    return restartScan();
   }
 
   const sameEntries = previous.entriesRef === source;
@@ -420,11 +427,7 @@ export function incrementalStaticTranscriptEntries(
       (previous.scannedIndex === 0 ||
         source[previous.scannedIndex - 1] === previous.lastScannedEntry));
   if (!canContinue) {
-    return {
-      appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
-      rebuild: true,
-    };
+    return restartScan();
   }
 
   const start = previous.scannedIndex;
@@ -469,11 +472,7 @@ export function incrementalStaticTranscriptEntries(
     previous.lastAppendedKey !== undefined &&
     compareTranscriptOrderKeys(first.key, previous.lastAppendedKey) < 0
   ) {
-    return {
-      appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
-      rebuild: true,
-    };
+    return restartScan();
   }
 
   return {

@@ -842,7 +842,7 @@ export class TaskGroupList extends LitElement {
 
     // Pre-output placeholder, including terminal-mode (process-agent) streams:
     // with no output the terminal buffer is empty and would render a blank
-    // <pre>, so show the same "Run is starting" / idle text instead.
+    // pane, so show the same "Run is starting" / idle text instead.
     if (
       this.rows.length === 0 &&
       this.entries.length === 0 &&

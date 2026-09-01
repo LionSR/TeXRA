@@ -78,7 +78,7 @@ import {
   buildCodexUsageStats,
 } from './codexShared';
 
-// Third-party imports
+// Third-party type imports (import/order places these after local imports)
 import type {
   RunResult,
   SandboxMode,

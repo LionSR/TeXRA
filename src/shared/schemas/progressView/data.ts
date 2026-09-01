@@ -121,9 +121,8 @@ const SafeUrlSchema = z.string().transform(sanitizeLiveLinkUrl);
  * schema is not imported here because the shared layer must not depend on the
  * agent layer. It keeps only the rendered fields, all optional because
  * persisted archives may be partial, and applies the SafeUrl sanitization
- * transform to `url` at this
- * boundary (#7230). Named for its payload so it no longer collides with the
- * agent layer's same-name schemas (#10279).
+ * transform to `url` at this boundary (#7230). Named for its payload so it no
+ * longer collides with the agent layer's same-name schemas (#10279).
  */
 const WebSearchPayloadItemSchema = z.object({
   url: SafeUrlSchema.optional(),

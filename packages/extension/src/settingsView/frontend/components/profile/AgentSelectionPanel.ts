@@ -234,6 +234,24 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
     `;
   }
 
+  private renderSetAllButton(
+    source: AgentSource,
+    sourceName: string,
+    enable: boolean,
+  ): TemplateResult {
+    const verb = enable ? 'Show' : 'Hide';
+    return html`<wa-button
+      class="agent-count-link btn-ghost is-link"
+      appearance="plain"
+      size="s"
+      @click=${() => this.handleSetAllEnabled(source, enable)}
+      title="${verb} all ${sourceName} agents"
+    >
+      ${verb} all
+      <span class="visually-hidden">${sourceName} agents</span>
+    </wa-button>`;
+  }
+
   private renderList(): TemplateResult {
     const groups = this.groupedSources;
     const orderedSources = AgentSelectionPanel.SOURCE_ORDER.filter((s) =>
@@ -258,34 +276,12 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
               <span class="agent-list-section-actions">
                 ${
                   enabledInGroup < agents.length
-                    ? html`<wa-button
-                        class="agent-count-link btn-ghost is-link"
-                        appearance="plain"
-                        size="s"
-                        @click=${() => this.handleSetAllEnabled(source, true)}
-                        title="Show all ${sourceName} agents"
-                      >
-                        Show all
-                        <span class="visually-hidden"
-                          >${sourceName} agents</span
-                        >
-                      </wa-button>`
+                    ? this.renderSetAllButton(source, sourceName, true)
                     : nothing
                 }
                 ${
                   enabledInGroup > 0
-                    ? html`<wa-button
-                        class="agent-count-link btn-ghost is-link"
-                        appearance="plain"
-                        size="s"
-                        @click=${() => this.handleSetAllEnabled(source, false)}
-                        title="Hide all ${sourceName} agents"
-                      >
-                        Hide all
-                        <span class="visually-hidden"
-                          >${sourceName} agents</span
-                        >
-                      </wa-button>`
+                    ? this.renderSetAllButton(source, sourceName, false)
                     : nothing
                 }
               </span>
