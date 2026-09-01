@@ -23,7 +23,7 @@ TeXRA supports models from multiple providers, so you can pick the strongest rea
 
 | Model ID   | Use Case                                  | Cost | Speed  |
 | :--------- | :---------------------------------------- | :--- | :----- |
-| `fable5`   | Most capable, always-on adaptive thinking | $$$$ | Slow   |
+| `fable51`  | Most capable, always-on adaptive thinking | $$$$ | Slow   |
 | `opus5T`   | Top-tier reasoning, long-horizon work     | $$$$ | Slow   |
 | `opus5`    | Most capable for agentic coding           | $$$$ | Slow   |
 | `sonnet5T` | All-rounder with reasoning                | $$$  | Medium |
@@ -31,10 +31,10 @@ TeXRA supports models from multiple providers, so you can pick the strongest rea
 | `haiku45T` | Fast with reasoning                       | $$   | Fast   |
 | `haiku45`  | Fast responses                            | $$   | Fast   |
 
-Fable 5, Opus 5, and Sonnet 5 (and the older Opus 4.6 to 4.8 and Sonnet 4.6) include the full 1M context window at standard pricing, with no opt-in or
+Fable 5.1, Opus 5, and Sonnet 5 (and the older Opus 4.6 to 4.8 and Sonnet 4.6) include the full 1M context window at standard pricing, with no opt-in or
 beta header required. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.
 
-Claude Fable 5 (`fable5`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so there is no separate `T` variant. It supports the full reasoning-effort range up to Extra High and the top Max tier, and is eligible for context compaction in tool-use mode.
+Claude Fable 5.1 (`fable51`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so there is no separate `T` variant. It supports the full reasoning-effort range up to Extra High and the top Max tier, and is eligible for context compaction in tool-use mode.
 
 Claude Opus 5 uses adaptive thinking only (extended thinking with a manual `budget_tokens` is no longer accepted). TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically: pick `opus5T` with Extra High (or the top Max tier) effort for the strongest agentic coding and long-horizon tasks. Opus 5 also supports high-resolution images for better figure, chart, and screenshot understanding. TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting to send higher-resolution figures.
 
