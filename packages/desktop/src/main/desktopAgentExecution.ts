@@ -529,8 +529,7 @@ export class DesktopProgressBridge {
 
   private postRecordingStatus(
     status:
-      | { status: 'started' | 'stopped' }
-      | { status: 'error'; error: string },
+      { status: 'started' | 'stopped' } | { status: 'error'; error: string },
   ): void {
     this.postToRenderer({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_RECORDING,

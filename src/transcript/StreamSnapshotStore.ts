@@ -529,11 +529,9 @@ export class StreamSnapshotStore {
    * this store stays the authority.
    */
   private summaryMetaSink:
-    | ((stream: StreamTabId, meta: StreamSummaryMeta) => void)
-    | undefined;
+    ((stream: StreamTabId, meta: StreamSummaryMeta) => void) | undefined;
   private summaryMetaSource:
-    | ((stream: StreamTabId) => StreamSummaryMeta | undefined)
-    | undefined;
+    ((stream: StreamTabId) => StreamSummaryMeta | undefined) | undefined;
 
   /**
    * Publish the whole current metadata view of a stream to the summary
