@@ -128,9 +128,9 @@ export function createProgressAgentProposalController(
 ): ProgressAgentProposalController {
   const { log } = port;
   return new ProgressAgentProposalController({
-    getPendingProposal: (requestId) => port.getPendingProposal(requestId),
-    restoreRunConfig: (config) => port.restoreRunConfig(config),
-    openFile: (file) => port.openFile(file),
+    getPendingProposal: port.getPendingProposal,
+    restoreRunConfig: port.restoreRunConfig,
+    openFile: port.openFile,
     settleProposal: (requestId, result) => {
       if (port.submitProposalDecision(requestId, result)) return;
       log.warn(`No pending host interaction found for proposal: ${requestId}`);
