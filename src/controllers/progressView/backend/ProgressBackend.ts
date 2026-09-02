@@ -174,8 +174,8 @@ export class ProgressBackend {
       isStreamPresented: (stream) =>
         !this.disposed &&
         (this.presentation.activeStream === stream ||
-          (this.inFlightActivationGenerations.size > 0 &&
-            this.latestActivationTarget === stream)),
+          (this.latestActivationTarget === stream &&
+            this.inFlightActivationGenerations.has(this.activationGeneration))),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -310,8 +310,7 @@ export class ProgressBackend {
     const generation = ++this.activationGeneration;
     this.latestActivationTarget = stream;
     if (!stream) {
-      const previousStream = this.presentation.activeStream;
-      this.presentation.select('');
+      const previousStream = this.selectPresentedStream('');
       this.releasePresentationLeases();
       if (this.renderer.isAvailable()) {
         this.renderer.onActiveStreamChanged('');
@@ -320,13 +319,10 @@ export class ProgressBackend {
           this.renderer.releaseStreamContent(previousStream);
         }
       }
-      if (previousStream) {
-        this.factApplier.retireSidecarIfFinishedChild(previousStream);
-      }
       return true;
     }
     if (!this.renderer.isAvailable()) {
-      this.presentation.select(stream);
+      this.selectPresentedStream(stream);
       this.releasePresentationLeases();
       return true;
     }
@@ -377,20 +373,31 @@ export class ProgressBackend {
     const previousStream = this.presentation.activeStream;
     const previousTranscriptLease = this.transcriptPresentationLease;
     this.transcriptPresentationLease = transcriptLeaseResult.value;
-    this.presentation.select(stream);
+    this.selectPresentedStream(stream);
     if (options.notifyActivation) this.renderer.onActiveStreamChanged(stream);
     this.renderer.syncStreamContent(stream);
     if (previousStream && previousStream !== stream) {
       this.renderer.releaseStreamContent(previousStream);
-      // A child the user watched through to completion was presented when it
-      // finished, so the terminal-status path deliberately kept its sidecar.
-      // Releasing the selection is the second moment that rule can become
-      // true; the applier owns it either way.
-      this.factApplier.retireSidecarIfFinishedChild(previousStream);
     }
     if (previousTranscriptLease !== transcriptLeaseResult.value)
       previousTranscriptLease?.close();
     return true;
+  }
+
+  /**
+   * Move the committed selection, and retire what it replaced. Every path
+   * that changes the selection goes through this, so a finished child that
+   * was presented — and therefore skipped by the terminal-status rule — is
+   * released exactly once, whichever path replaced it and whether or not a
+   * renderer was available at the time.
+   */
+  private selectPresentedStream(next: PresentedStreamId): PresentedStreamId {
+    const previous = this.presentation.activeStream;
+    this.presentation.select(next);
+    if (previous && previous !== next) {
+      this.factApplier.retireSidecarIfFinishedChild(previous);
+    }
+    return previous;
   }
 
   private releasePresentationLeases(): void {
