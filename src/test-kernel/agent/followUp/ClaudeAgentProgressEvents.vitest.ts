@@ -44,7 +44,7 @@ function runTurn(logger: AgentTrace) {
   return runStreamedTurn({
     prompt: 'Run lint',
     logger,
-    abortController: new AbortController(),
+    signal: new AbortController().signal,
     model: 'claude-sonnet-4-6',
     permissionMode: 'acceptEdits',
     effort: 'high',
