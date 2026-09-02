@@ -48,6 +48,7 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
@@ -922,16 +923,42 @@ describe('App foreground Escape ownership', () => {
       await waitFor(
         () =>
           currentFrame(stdout).includes('Session list') &&
-          visibleTranscriptRows() === 4,
+          visibleTranscriptRows() === 2,
       );
       expect(currentFrame(stdout)).toContain('Session list');
-      expect(visibleTranscriptRows()).toBe(4);
+      expect(visibleTranscriptRows()).toBe(2);
 
       stdin.write('\t');
       await waitFor(() => visibleTranscriptRows() === 10);
       expect(visibleTranscriptRows()).toBe(10);
       expect(currentFrame(stdout)).not.toContain('Session list');
     } finally {
+      instance.unmount();
+    }
+  });
+
+  it('shows an unreadable root as read-only', async () => {
+    seedChildHierarchy();
+    const onSubmit = vi.fn();
+    const detail = streamUnreadableMessage('checkpoint is malformed');
+    const { instance, stdin, stdout } = await renderDebugApp(
+      { ...appProps(vi.fn()), onSubmit },
+      { columns: 240, rows: 30 },
+    );
+
+    try {
+      childState.streamStatus.clearStream(ROOT);
+      childState.streamStatus.markUnavailable(ROOT, detail);
+      invalidateChildStreams();
+      await waitFor(() =>
+        currentFrame(stdout).replaceAll(/\s+/gu, ' ').includes(detail),
+      );
+
+      stdin.write('must not submit\r');
+      await sleep(30);
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      childState.streamStatus.clearStream(ROOT);
       instance.unmount();
     }
   });

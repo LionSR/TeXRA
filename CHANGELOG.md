@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file.
 - **Archive custom-agent output on Windows** — packing generated files into the
   History folder now works for custom agents.
 
+### CLI
+
+#### Bug Fixes
+
+- **Unavailable runs explain why they cannot accept input** — the composer now
+  shows when another TeXRA process holds the run or its saved state is unreadable.
+
 ## [0.40.7] - 2026-08-31
 
 ### Shared (all surfaces)
