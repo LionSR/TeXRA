@@ -1163,8 +1163,9 @@ export class StreamSnapshotStore {
    * terminal-status eviction (`StreamLogStore.requestEviction`). The next
    * read re-seeds from disk through `preload`, which every presentation path
    * performs before its synchronous reads, so nothing is lost. A record a
-   * staged deletion owns, or one that gains new seed work while this waits,
-   * stays resident: someone else is about to read or remove it.
+   * staged deletion owns, one a reader is seeding, or one that gains new seed
+   * work while this waits stays resident: someone else is about to read or
+   * remove it.
    *
    * `shouldStillEvict` is re-read after those awaits, the same shape
    * `StagedDeletionCoordinator.commit` uses: a run that relaunches this
@@ -1186,13 +1187,17 @@ export class StreamSnapshotStore {
       const record = this.records.get(stream);
       if (!record || this.deletions.owns(stream)) return;
       const { generation, seedChain } = record;
-      // A seed still running is a reader that asked for this record and will
+      // A reader-driven seed is a caller that asked for this record and will
       // read it synchronously when its `preload` resolves. Releasing it out
       // from under that caller would answer its question with an empty
-      // record, so the next release trigger collects it instead. `seedChain`
-      // outlives its work, so the queue's own pending count is the signal.
-      const seedQueue = this.seedQueues.get(stream);
-      if (seedQueue && seedQueue.pending + seedQueue.size > 0) return;
+      // record, so the next release trigger collects it instead. `refreshSeed`
+      // parks the pre-refresh disk state for exactly its own duration, so that
+      // — not the seed queue, which fact-driven mutations share, and whose
+      // work no reader is waiting on — is what names a reader.
+      if (record.seedRefreshBaseline !== undefined) return;
+      // `seedChain` is the newest queued task either path published, so
+      // awaiting it drains the queue as it stood; anything queued behind it
+      // rebinds the field and the identity check below sees that instead.
       await seedChain;
       await this.writes.retryDirtyWrites(stream);
       const current = this.records.get(stream);

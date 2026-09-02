@@ -644,6 +644,11 @@ export class SessionFactApplier {
   }: UpdateStreamDescriptionPayload): void {
     this.state.setStreamDescription(streamId, description);
     this.renderer.onStreamDescriptionChanged(streamId, description);
+    // Description generation outlives the run it describes, and writing one
+    // makes a released record resident again. The value reaches disk and the
+    // summary mirror either way, so this is another moment the rule can turn
+    // true — not a second rule.
+    this.retireSidecarIfFinishedChild(streamId);
   }
 
   private handleSetParentStream({
