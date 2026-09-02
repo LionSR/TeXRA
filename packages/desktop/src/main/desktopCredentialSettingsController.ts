@@ -11,7 +11,7 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
+import type { ExternalOpener, MessageHost, PromptHost } from '@hosts/uiHosts';
 import {
   computeModelOptionsData,
   getEnabledModels,
@@ -64,11 +64,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
       productName: string,
     ): void | Promise<void>;
   };
-  readonly notifications: {
-    showInfoMessage(message: string): Promise<void>;
-    showWarningMessage(message: string): Promise<void>;
-    showErrorMessage(message: string): Promise<void>;
-  };
+  readonly notifications: MessageHost;
   readonly auth: {
     signIn(): Promise<void>;
     signOut(): Promise<void>;
@@ -285,11 +281,11 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     error: unknown,
   ): void {
     this.options.onError(error);
-    void this.options.notifications
-      .showErrorMessage(
+    void Promise.resolve(
+      this.options.notifications.showErrorMessage(
         `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(error)}`,
-      )
-      .catch(this.options.onError);
+      ),
+    ).catch(this.options.onError);
   }
 
   private signInPresenter(displayName: string): SubscriptionSignInPresenter {

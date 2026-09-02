@@ -24,6 +24,18 @@ export interface ExternalOpener {
   openExternal(url: string): Promise<void>;
 }
 
+/**
+ * A host capable of surfacing simple, non-blocking notifications to the
+ * user. Distinct from {@link PromptHost}, which additionally supports
+ * action items and awaits the user's choice; this is fire-and-forget
+ * status reporting (a saved credential, a failed operation, a caveat).
+ */
+export interface MessageHost {
+  showInfoMessage(message: string): Promise<void> | void;
+  showWarningMessage(message: string): Promise<void> | void;
+  showErrorMessage(message: string): Promise<void> | void;
+}
+
 export type PromptMessageItem<T extends string = string> =
   | T
   | {

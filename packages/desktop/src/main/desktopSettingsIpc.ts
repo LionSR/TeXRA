@@ -8,6 +8,7 @@ import {
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
 import { appSignals } from '@eventBus/AppSignals';
+import type { MessageHost } from '@hosts/uiHosts';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import type { ConfigProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
@@ -56,7 +57,8 @@ import type { DesktopAgentSettingsController } from './desktopAgentSettingsContr
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
-export interface DesktopSettingsUiHost {
+export interface DesktopSettingsUiHost
+  extends Pick<MessageHost, 'showInfoMessage' | 'showErrorMessage'> {
   openPath(filePath: string): Promise<void>;
   /**
    * Select the stream as the window's active stream. `'unavailable'` covers a
@@ -78,8 +80,6 @@ export interface DesktopSettingsUiHost {
     prompt: string;
   }): Promise<string | undefined>;
   openExternal(url: string): Promise<void>;
-  showInfoMessage(message: string): Promise<void>;
-  showErrorMessage(message: string): Promise<void>;
   confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
   onError(error: unknown): void;
 }
@@ -122,7 +122,9 @@ export function createDesktopSettingsIpc(
   // Commands declared `unsupported(...)` in settingsHandlers below surface as
   // a visible info dialog instead of a console-only error log.
   const onError = createDesktopErrorReporter(options.ui.onError, (error) => {
-    void options.ui.showInfoMessage(error.reason).catch(options.ui.onError);
+    void Promise.resolve(options.ui.showInfoMessage(error.reason)).catch(
+      options.ui.onError,
+    );
   });
   const settingsHost = new SettingsViewHost({
     state: { workspaceState, globalState },
@@ -383,7 +385,9 @@ export function createDesktopSettingsIpc(
     // Marking a stored token as rejected would need a new status on the wire.
     appSignals.on('githubTokenInvalid', ({ message }) =>
       runAsync(
-        options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
+        Promise.resolve(
+          options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
+        ),
       ),
     ),
   );

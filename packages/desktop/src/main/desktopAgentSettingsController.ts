@@ -23,6 +23,7 @@ import {
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
+import type { MessageHost } from '@hosts/uiHosts';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -109,10 +110,10 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
     readonly canAccess: () => Promise<boolean>;
     readonly signIn: () => Promise<boolean>;
   };
-  readonly notifications: {
-    readonly showInfoMessage: (message: string) => Promise<void>;
-    readonly showErrorMessage: (message: string) => Promise<void>;
-  };
+  readonly notifications: Pick<
+    MessageHost,
+    'showInfoMessage' | 'showErrorMessage'
+  >;
 }
 
 export interface DesktopAgentSettingsController {

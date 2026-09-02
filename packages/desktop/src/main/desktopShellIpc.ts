@@ -1,3 +1,4 @@
+import type { MessageHost } from '@hosts/uiHosts';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   MainViewInboundMessage,
@@ -26,7 +27,8 @@ import {
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
 
-interface DesktopShellActionFactoryOptions {
+interface DesktopShellActionFactoryOptions
+  extends Pick<MessageHost, 'showInfoMessage'> {
   getCustomAgentDirectory(): Promise<string>;
   openExternalUrl(url: string): Promise<void>;
   openLogFolder(): Promise<void>;
@@ -42,7 +44,6 @@ interface DesktopShellActionFactoryOptions {
     commits: string[];
     isGitRepo: boolean;
   }>;
-  showInfoMessage(message: string): Promise<void> | void;
   onAsyncError?: (error: unknown) => void;
 }
 
