@@ -52,6 +52,7 @@ import {
   isModelScopedRateLimitBody,
   isUpstreamCreditDepletedBody,
   safeGetReasonPhrase,
+  type QuotaLimitInfo,
 } from './errorInspection';
 import { parseChatGptSubscriptionLimit } from './chatgptSubscriptionDetection';
 import { parseKimiCodeSubscriptionLimit } from './kimiCodeSubscriptionDetection';
@@ -74,12 +75,6 @@ type SdkMatchResult = Omit<ProviderError, 'rawErrorBody'>;
 interface QuotaLimitMatch {
   readonly exhaustionReason: ExhaustionReason;
   readonly message: string;
-}
-
-/** What a quota-limit body can report; only ChatGPT carries a plan name. */
-interface QuotaLimitInfo {
-  readonly planType?: string;
-  readonly resetsInSeconds?: number;
 }
 
 /**

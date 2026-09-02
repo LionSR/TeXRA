@@ -1,8 +1,3 @@
-import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-
-import { matchUsageLimitMessage } from './errorInspection';
-import { detectSdkRequestBaseURL } from './sdkRequestEndpoint';
-
 /**
  * Detection + formatting for the Kimi Code (Moonshot coding-subscription)
  * usage limit. When a user drives Kimi-subscription-eligible models through
@@ -22,9 +17,11 @@ import { detectSdkRequestBaseURL } from './sdkRequestEndpoint';
  * (`api.kimi.com/coding/v1`) keeps the Moonshot open platform from being
  * misread as a subscription limit.
  */
-export interface KimiCodeSubscriptionLimit {
-  readonly resetsInSeconds?: number;
-}
+
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
+
+import { matchUsageLimitMessage, type QuotaLimitInfo } from './errorInspection';
+import { detectSdkRequestBaseURL } from './sdkRequestEndpoint';
 
 /** The distinctive Kimi Code membership-exhaustion phrase. */
 const USAGE_LIMIT_PATTERN =
@@ -46,7 +43,7 @@ function isKimiCodeEndpointError(err: unknown): boolean {
 export function parseKimiCodeSubscriptionLimit(
   err: unknown,
   rawErrorBody: unknown,
-): KimiCodeSubscriptionLimit | null {
+): QuotaLimitInfo | null {
   if (!isKimiCodeEndpointError(err)) return null;
   return matchUsageLimitMessage(err, rawErrorBody, USAGE_LIMIT_PATTERN);
 }

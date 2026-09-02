@@ -1,11 +1,3 @@
-import { TZDate } from '@date-fns/tz';
-
-import {
-  errorBodyCandidates,
-  pickNumberField,
-  pickStringField,
-} from './errorInspection';
-
 /**
  * Detection + formatting for the GLM Coding Plan usage limit.
  *
@@ -28,10 +20,15 @@ import {
  * 2026-08-08 11:32:36 重置" — a China-time timestamp). The timestamp is a
  * wall-clock reading in `Asia/Shanghai`, converted to seconds-until-reset.
  */
-export interface GlmCodingPlanLimit {
-  /** Reset hint when the backend reports one (seconds until quota resets). */
-  readonly resetsInSeconds?: number;
-}
+
+import { TZDate } from '@date-fns/tz';
+
+import {
+  errorBodyCandidates,
+  pickNumberField,
+  pickStringField,
+  type QuotaLimitInfo,
+} from './errorInspection';
 
 /** GLM Coding Plan quota-exhaustion business error codes (all HTTP 429). */
 const GLM_CODING_PLAN_EXHAUSTION_CODES: ReadonlySet<string> = new Set([
@@ -85,7 +82,7 @@ function secondsUntilReset(timestamp: string): number | undefined {
  */
 export function parseGlmCodingPlanLimit(
   rawErrorBody: unknown,
-): GlmCodingPlanLimit | null {
+): QuotaLimitInfo | null {
   for (const candidate of errorBodyCandidates(rawErrorBody)) {
     const code = pickStringField(candidate, 'code');
     if (!code || !GLM_CODING_PLAN_EXHAUSTION_CODES.has(code)) continue;

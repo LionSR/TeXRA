@@ -1,9 +1,3 @@
-import {
-  errorBodyCandidates,
-  pickNumberField,
-  pickStringField,
-} from './errorInspection';
-
 /**
  * Detection + formatting for the ChatGPT-subscription (Codex backend) usage
  * limit. When a user drives Codex-eligible models through their ChatGPT
@@ -20,10 +14,13 @@ import {
  * offer "switch to your own API key". Pure body inspection over the raw
  * error body candidates.
  */
-export interface ChatGptSubscriptionLimit {
-  readonly planType?: string;
-  readonly resetsInSeconds?: number;
-}
+
+import {
+  errorBodyCandidates,
+  pickNumberField,
+  pickStringField,
+  type QuotaLimitInfo,
+} from './errorInspection';
 
 /**
  * Parse a Codex `usage_limit_reached` body, returning the plan/reset details
@@ -32,7 +29,7 @@ export interface ChatGptSubscriptionLimit {
  */
 export function parseChatGptSubscriptionLimit(
   rawErrorBody: unknown,
-): ChatGptSubscriptionLimit | null {
+): QuotaLimitInfo | null {
   for (const candidate of errorBodyCandidates(rawErrorBody)) {
     if (pickStringField(candidate, 'type') !== 'usage_limit_reached') continue;
     return {
