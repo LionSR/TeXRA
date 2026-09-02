@@ -164,13 +164,17 @@ export class ProgressBackend {
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
       deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
         this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
-      // `latestActivationTarget` as well as the committed selection: an
-      // activation preloads the sidecar before it selects, so a terminal
-      // status landing in that window must not evict what the imminent
-      // `syncStreamContent` is about to read.
+      // The committed selection, plus the target of an activation still in
+      // flight: an activation preloads the sidecar before it selects, so a
+      // terminal status landing in that window must not evict what the
+      // imminent `syncStreamContent` is about to read. Gated on the in-flight
+      // set because `latestActivationTarget` is sticky — it survives a failed
+      // or superseded activation, and would otherwise pin that stream's
+      // record for the rest of the session.
       isStreamPresented: (stream) =>
         this.presentation.activeStream === stream ||
-        this.latestActivationTarget === stream,
+        (this.inFlightActivationGenerations.size > 0 &&
+          this.latestActivationTarget === stream),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }

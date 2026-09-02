@@ -101,6 +101,9 @@ const EMPTY_RUN_USAGE: ReadonlyMap<string, TokenUsageStats> = new Map();
  *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
 
+/** Re-drain attempts before a record with still-pending writes stays resident. */
+const MAX_EVICTION_DRAIN_ATTEMPTS = 3;
+
 /**
  * Per-field provenance of one stream's work plan: whether the in-memory value
  * for that field has an established origin — a seeded disk baseline, or a live
@@ -1171,22 +1174,31 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     shouldStillEvict?: () => boolean,
   ): Promise<void> {
-    const record = this.records.get(stream);
-    if (!record || this.deletions.owns(stream)) return;
-    const { generation, seedChain } = record;
-    await seedChain;
-    await this.writes.retryDirtyWrites(stream);
-    const current = this.records.get(stream);
-    if (
-      !current ||
-      current.generation !== generation ||
-      current.seedChain !== seedChain ||
-      this.deletions.owns(stream) ||
-      shouldStillEvict?.() === false
-    ) {
+    for (let attempt = 0; attempt < MAX_EVICTION_DRAIN_ATTEMPTS; attempt++) {
+      const record = this.records.get(stream);
+      if (!record || this.deletions.owns(stream)) return;
+      const { generation, seedChain } = record;
+      await seedChain;
+      await this.writes.retryDirtyWrites(stream);
+      const current = this.records.get(stream);
+      if (
+        !current ||
+        current.generation !== generation ||
+        current.seedChain !== seedChain ||
+        this.deletions.owns(stream) ||
+        shouldStillEvict?.() === false
+      ) {
+        return;
+      }
+      // A mutation that landed on an already-seeded record during the drain
+      // persists directly, without rebinding `seedChain`, so neither check
+      // above sees it. Evicting would drop its write lock together with the
+      // record and strand the value in neither memory nor disk, so re-drain
+      // instead — and read this with no await between it and the eviction.
+      if (this.writes.hasDirtyWrites(stream)) continue;
+      this.evict(stream);
       return;
     }
-    this.evict(stream);
   }
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
