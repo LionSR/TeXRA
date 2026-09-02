@@ -261,7 +261,6 @@ export class StreamLog {
   readonly instanceId = nextStreamLogInstanceId++;
   private entries: StreamLogEntry[] = [];
   private readonly preservedRawEntries: StreamLogPreservedRawEntry[] = [];
-  private seqCounter = 0;
   private readonly indexById = new Map<string, number>();
   /**
    * Per-entry chunk accumulators for in-flight streaming text. An entry whose
@@ -297,13 +296,12 @@ export class StreamLog {
 
     // Re-number seqNos sequentially (1-based) to close gaps from entries
     // that were filtered out by safeParse during schema upgrades.
-    // This keeps the invariant: seqCounter === entries.length, which
+    // This keeps the invariant: seqNo === array index + 1, which
     // getRange() relies on when using seqNo as an array-index proxy.
     this.entries = entries.map((entry, i) => {
       const seqNo = i + 1;
       return entry.seqNo === seqNo ? entry : { ...entry, seqNo };
     });
-    this.seqCounter = this.entries.length;
     // The settlement head is never below the entry count; one pass over the
     // entries raises it to the highest order already allocated on disk while
     // building the id index and the running-state counters.
@@ -332,11 +330,8 @@ export class StreamLog {
     }
   }
 
+  /** Entry count, which is also the next seqNo minus one: entries are never removed. */
   get head(): number {
-    return this.seqCounter;
-  }
-
-  get size(): number {
     return this.entries.length;
   }
 
@@ -449,10 +444,9 @@ export class StreamLog {
   ): StreamLogEntry {
     const fullEntry = {
       ...entry,
-      seqNo: this.seqCounter + 1,
+      seqNo: this.entries.length + 1,
       ...(settled ? { settlementSeqNo: this.settlementSeqCounter + 1 } : {}),
     } as StreamLogEntry;
-    this.seqCounter = fullEntry.seqNo;
     if (settled) this.settlementSeqCounter += 1;
     this.indexById.set(fullEntry.id, this.entries.length);
     this.entries.push(fullEntry);
@@ -547,9 +541,12 @@ export class StreamLog {
     return updated;
   }
 
-  getRange(fromSeq: number, toSeq: number = this.seqCounter): StreamLogEntry[] {
+  getRange(
+    fromSeq: number,
+    toSeq: number = this.entries.length,
+  ): StreamLogEntry[] {
     const safeFrom = Math.max(0, fromSeq);
-    const safeTo = clamp(toSeq, safeFrom, this.seqCounter);
+    const safeTo = clamp(toSeq, safeFrom, this.entries.length);
     if (safeFrom >= safeTo) return [];
     return this.entries.slice(safeFrom, safeTo);
   }

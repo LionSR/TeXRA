@@ -447,10 +447,11 @@ export function syncStreamLog(
     // synthetic operational rows; ordinary inactive streams keep synthetic
     // rows only. Each selection is rebuilt only when a change touched it —
     // the change detection comes from the delta, not from re-deriving and
-    // deep-comparing the whole projection.
-    const outputStale =
-      state.lastEntriesOutput !== slice.entries ||
-      state.lastOutputFull !== projectFullTranscript;
+    // deep-comparing the whole projection. An out-of-band `slice.entries`
+    // patch (local rows) always changes the local-row set, which
+    // `reconcileSynthetics` has already turned into these flags; only a
+    // projection-mode flip has no flag of its own.
+    const outputStale = state.lastOutputFull !== projectFullTranscript;
     let entries: readonly TranscriptRow[] = slice.entries;
     // The promotion cursor travels with the selection it indexes into: the
     // full transcript inherits the fold's frontier, a compacted workflow
@@ -476,7 +477,6 @@ export function syncStreamLog(
       finalizedFrontier = entries.length;
     }
     state.lastOutputFull = projectFullTranscript;
-    state.lastEntriesOutput = entries;
 
     if (
       slice.transcriptFold === state &&

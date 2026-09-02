@@ -430,7 +430,7 @@ describe('StreamLogStore load', () => {
     expect(storage.writes.size).toBe(0);
     expect(store.keys()).toEqual(['alpha']);
     await store.ensureLoaded('alpha');
-    expect(store.get('alpha')?.size).toBe(1);
+    expect(store.get('alpha')?.head).toBe(1);
     expect(() =>
       appendTranscriptEntry(store, 'alpha', logEntry('alpha', 2, 250)),
     ).toThrow('read-only transcript store');
@@ -456,8 +456,8 @@ describe('StreamLogStore load', () => {
       reason: 'interactive fallback test',
     });
     expect(store.has('empty-ephemeral')).toBe(true);
-    expect(store.get('empty-ephemeral')?.size).toBe(0);
-    expect(store.get('ephemeral-stream')?.size).toBe(1);
+    expect(store.get('empty-ephemeral')?.head).toBe(0);
+    expect(store.get('ephemeral-stream')?.head).toBe(1);
     expect(() => StreamLogStore.ephemeral('  ')).toThrow('requires a reason');
   });
 
@@ -474,7 +474,7 @@ describe('StreamLogStore load', () => {
     writer.append(logEntry('alpha-live', 2, 200));
     await store.flush();
 
-    expect(store.get('alpha')?.size).toBe(2);
+    expect(store.get('alpha')?.head).toBe(2);
     writer.close();
     expect(store.get('alpha')).toBeUndefined();
     expect(() => writer.append(logEntry('late', 3, 300))).toThrow(
@@ -506,7 +506,7 @@ describe('StreamLogStore load', () => {
     readGate.resolve();
     const writer = await writerPromise;
 
-    expect(store.get('alpha')?.size).toBe(1);
+    expect(store.get('alpha')?.head).toBe(1);
     expect(() => writer.append(logEntry('alpha-live', 2, 200))).not.toThrow();
     writer.close();
     await store.flush();
@@ -537,7 +537,7 @@ describe('StreamLogStore load', () => {
     await focus;
     writer.close();
 
-    expect(store.get('alpha')?.size).toBe(1);
+    expect(store.get('alpha')?.head).toBe(1);
   });
 
   it('releases only the presentation lease that owns its token', async () => {
@@ -557,7 +557,7 @@ describe('StreamLogStore load', () => {
 
     store.requestEviction('alpha');
     first.close();
-    expect(store.get('alpha')?.size).toBe(1);
+    expect(store.get('alpha')?.head).toBe(1);
 
     second.close();
     expect(store.get('alpha')).toBeUndefined();
@@ -578,7 +578,7 @@ describe('StreamLogStore load', () => {
       retainForPresentation: true,
     });
 
-    expect(store.get('alpha')?.size).toBe(1);
+    expect(store.get('alpha')?.head).toBe(1);
     lease.close();
 
     expect(store.get('alpha')).toBeUndefined();
@@ -628,7 +628,7 @@ describe('StreamLogStore load', () => {
     // Both dirty bits were moved into the active write batch. The explicit
     // flushing guard must keep beta resident while the sequential writer is
     // still blocked on alpha.
-    expect(store.get('beta')?.size).toBe(1);
+    expect(store.get('beta')?.head).toBe(1);
 
     storage.releasePausedWrite();
     await flush;
@@ -893,7 +893,7 @@ describe('StreamLogStore load', () => {
     await store.ensureLoaded('alpha');
 
     expect(storage.fullLogReads()).toBe(1);
-    expect(store.get('alpha')?.size).toBe(2);
+    expect(store.get('alpha')?.head).toBe(2);
   });
 
   it('rebuilds from the authoritative log when a summary field has the wrong type', async () => {
@@ -1765,7 +1765,7 @@ describe('StreamLogStore save throttle', () => {
     writer.append(namedEntry('late', 200, 'late write'));
     writer.close();
 
-    expect(store.get('alpha')?.size).toBe(2);
+    expect(store.get('alpha')?.head).toBe(2);
     await store.flush();
     expect(store.get('alpha')).toBeUndefined();
   });
@@ -1782,7 +1782,7 @@ describe('StreamLogStore save throttle', () => {
     writer.close();
     await store.flush();
 
-    expect(store.get('alpha')?.size).toBe(2);
+    expect(store.get('alpha')?.head).toBe(2);
   });
 
   it('does not retain eviction state for an unknown stream', async () => {

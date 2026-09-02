@@ -13,7 +13,7 @@ import { createLog } from '@logger/logUtils';
 import { ToolResult } from '@shared/schemas';
 import {
   isTimeoutError,
-  joinAbortSignal,
+  withRequestTimeout,
   retryTransientFetch,
   unwrapAbortError,
 } from '@tools/timeouts';
@@ -148,28 +148,29 @@ Useful for finding the right lemma when you know roughly what type it should hav
     // to abort in-flight Loogle requests and their retry backoff.
     const cancelSignal = getCurrentToolCallContext()?.signal;
     return retryTransientFetch(
-      async () => {
-        const raw = await ky
-          .get(LOOGLE_API_URL, {
-            searchParams: { q: query },
-            headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
-            timeout: false,
-            signal: joinAbortSignal(LOOGLE_TIMEOUT_MS, cancelSignal),
-            retry: 0,
-          })
-          .json<unknown>();
-        // Validate the body at the boundary. A malformed shape is not transient,
-        // so abort retries and let executeSingle surface it as a tool error.
-        const parsed = LoogleResponseSchema.safeParse(raw);
-        if (!parsed.success) {
-          throw new AbortError(
-            new Error(
-              `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
-            ),
-          );
-        }
-        return parsed.data;
-      },
+      () =>
+        withRequestTimeout(LOOGLE_TIMEOUT_MS, cancelSignal, async (signal) => {
+          const raw = await ky
+            .get(LOOGLE_API_URL, {
+              searchParams: { q: query },
+              headers: { 'User-Agent': 'TeXRA-VSCode-Extension' },
+              timeout: false,
+              signal,
+              retry: 0,
+            })
+            .json<unknown>();
+          // Validate the body at the boundary. A malformed shape is not transient,
+          // so abort retries and let executeSingle surface it as a tool error.
+          const parsed = LoogleResponseSchema.safeParse(raw);
+          if (!parsed.success) {
+            throw new AbortError(
+              new Error(
+                `Unexpected Loogle response shape: ${z.prettifyError(parsed.error)}`,
+              ),
+            );
+          }
+          return parsed.data;
+        }),
       {
         retries: LOOGLE_RETRIES,
         minTimeout: 1000,

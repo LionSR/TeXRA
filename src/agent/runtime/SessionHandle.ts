@@ -78,12 +78,6 @@ import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
 
-function isReplayableTerminalResult(event: ResultEvent): boolean {
-  return (
-    !event.isSubagent && event.error != null && event.error.kind !== 'abort'
-  );
-}
-
 /**
  * A valid transcript store is required; other owners may be injected.
  *
@@ -214,7 +208,6 @@ export class SessionHandle {
     this.teardown.add(() => {
       liveSessions.delete(this);
     });
-    this.teardown.add(() => this.missedTerminalResults.clear());
     this.teardown.add(() => {
       for (const detach of [...this.resultListenerDetachers]) detach();
     });
@@ -624,13 +617,6 @@ export class SessionHandle {
     );
   }
 
-  private readonly missedTerminalResults = new Map<
-    ResultEvent['executionId'],
-    ResultEvent
-  >();
-  /** Currently-subscribed `onResult` listeners that asked for missed replay. */
-  private replayResultListenerCount = 0;
-  private replayMissedResultsEnabled = false;
   /**
    * Disposers for active `onResult` hub subscriptions, so `dispose()` can
    * drop them like the pre-hub listener set did — a late `publishRunEvent`
@@ -644,40 +630,19 @@ export class SessionHandle {
    * are created inside the run and are not reachable from the host otherwise.
    *
    * Delivery rides the session event hub (`result` events travel as run-scoped
-   * facts); this method only adds the missed-terminal-result replay that the
-   * hub deliberately has no concept of.
+   * facts); this method only keeps the disposer so `dispose()` can drop the
+   * subscription with the session.
    */
-  onResult(
-    listener: (event: ResultEvent) => void,
-    options: { replayMissed?: boolean } = {},
-  ): () => void {
-    const replayMissed = options.replayMissed ?? false;
+  onResult(listener: (event: ResultEvent) => void): () => void {
     const detach = this.events.subscribeRunFacts(
       ({ event }) => listener(event),
       { types: ['result'] },
     );
     let disposed = false;
-    if (replayMissed) {
-      this.replayResultListenerCount += 1;
-      this.replayMissedResultsEnabled = true;
-      queueMicrotask(() => {
-        if (disposed) return;
-        const missed = [...this.missedTerminalResults.values()];
-        this.missedTerminalResults.clear();
-        for (const event of missed) {
-          try {
-            listener(event);
-          } catch (err) {
-            logger.warn('onResult listener threw', { data: err });
-          }
-        }
-      });
-    }
     const dispose = (): void => {
       if (disposed) return;
       disposed = true;
       this.resultListenerDetachers.delete(dispose);
-      if (replayMissed) this.replayResultListenerCount -= 1;
       detach();
     };
     this.resultListenerDetachers.add(dispose);
@@ -694,9 +659,8 @@ export class SessionHandle {
   }
 
   /**
-   * Forward one run-scoped event to this session's event bus, recording
-   * terminal `result` events for missed replay when no replay-subscribed
-   * listener is attached. Shared by `attachRunTrace` (the live per-run trace
+   * Forward one run-scoped event to this session's event bus. Shared by
+   * `attachRunTrace` (the live per-run trace
    * subscription above) and by `ExecutionRegistry`'s injected `publishResult`
    * constructor callback, which needs the identical
    * forwarding for a terminal event synthesized *after* the originating run's
@@ -706,16 +670,6 @@ export class SessionHandle {
    * session's `onResult` subscribers.
    */
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
-    if (event.type === 'result') {
-      if (this.replayResultListenerCount > 0) {
-        this.missedTerminalResults.delete(event.executionId);
-      } else if (
-        this.replayMissedResultsEnabled &&
-        isReplayableTerminalResult(event)
-      ) {
-        this.missedTerminalResults.set(event.executionId, event);
-      }
-    }
     this.events.emit({ scope: 'run', streamId, event });
   }
 

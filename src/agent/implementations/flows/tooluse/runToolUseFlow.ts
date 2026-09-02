@@ -43,6 +43,7 @@ import {
   buildOverlayToolRegistry,
   buildTerminalTool,
 } from '@tools/structuredOutput';
+import { onAbort } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
@@ -408,15 +409,23 @@ export async function runToolUseFlow(
   // partway through is still detached by the finally below, and a detach can
   // never fire against an attachment that was already taken down.
   let live = false;
+  let detachAbort = (): void => {};
   const liveAttachment = {
     attach(): void {
       if (live) return;
       live = true;
+      // The run signal is the one cancellation channel. While the flow is
+      // live it turns an abort — including one that landed before this
+      // attachment — into this flow's own interrupt, which is what cancels
+      // pending host interactions and settles the session lifecycle. Bound
+      // to the attachment so a parked flow never receives a late abort.
+      detachAbort = onAbort(signal, () => flowContext.interrupt());
       attachment?.attach(flowContext);
     },
     detach(): void {
       if (!live) return;
       live = false;
+      detachAbort();
       attachment?.detach(flowContext);
     },
   };

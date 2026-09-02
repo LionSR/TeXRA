@@ -410,6 +410,33 @@ Opening VS Code from a configured terminal provides the most reliable environmen
    - Check your internet connection speed
    - API requests might be delayed by network issues
 
+### High memory use in long CLI sessions
+
+**Problem**: A `texra` session that has run for days, or launched many
+subagents, slows down and eventually exits with a `JavaScript heap out of
+memory` error.
+
+**Solutions**:
+
+1. **Update TeXRA**: 0.40.8 and later release the per-subagent and
+   per-request state that earlier versions kept for the whole session.
+2. **Raise the heap limit** for very long runs. Node caps the heap at a few
+   gigabytes by default:
+
+   ```bash
+   NODE_OPTIONS=--max-old-space-size=8192 texra chat
+   ```
+
+3. **Capture a heap snapshot** if memory still grows, so the retained objects
+   can be inspected in Chrome DevTools:
+
+   ```bash
+   NODE_OPTIONS=--heapsnapshot-near-heap-limit=1 texra chat
+   ```
+
+   Node writes a `.heapsnapshot` file into the working directory right before
+   it would run out of memory. Attach it to a bug report.
+
 ## LaTeX diff issues
 
 ### Diff generation failures

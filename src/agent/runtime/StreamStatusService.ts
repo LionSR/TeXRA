@@ -43,10 +43,11 @@ export interface StreamPhaseState {
 }
 
 /**
- * One entry per stream, in either of its two forms. A reservation is not a
- * second structure overlaying the phase: it is the entry itself, carrying the
- * state a rollback must restore, so every reader sees the same state without
- * merging two collections.
+ * One entry per stream, in one of its three forms. Neither a reservation nor a
+ * hold is a second structure overlaying the phase: each is the entry itself
+ * (a reservation carrying the state a rollback must restore, a hold carrying
+ * its detail and any phase already known), so every reader sees the same state
+ * without merging two collections.
  */
 type StreamEntry =
   | { readonly kind: 'phase'; readonly state: StreamPhaseState }
@@ -54,28 +55,37 @@ type StreamEntry =
       readonly kind: 'reserved';
       readonly runStartedAt: number;
       readonly rollbackTo?: StreamPhaseState;
+    }
+  | {
+      /**
+       * Restart classification could not settle on a phase (held by another
+       * process, or the run state unreadable). RUNNING/WAITING mean a live
+       * flow in this process, and this process never adopts anyone else's
+       * run, so a hold with no prior phase remains unclassified until the next
+       * full metadata sync publishes it.
+       */
+      readonly kind: 'hold';
+      readonly detail: string;
+      readonly state?: StreamPhaseState;
     };
 
-function effectiveState(entry: StreamEntry): StreamPhaseState {
-  return entry.kind === 'reserved'
-    ? {
+function effectiveState(entry: StreamEntry): StreamPhaseState | undefined {
+  switch (entry.kind) {
+    case 'phase':
+      return entry.state;
+    case 'reserved':
+      return {
         phase: STREAM_PHASE.RUNNING,
         substate: STREAM_SUBSTATE.STARTING,
         runStartedAt: entry.runStartedAt,
-      }
-    : entry.state;
+      };
+    case 'hold':
+      return entry.state;
+  }
 }
 
 export class StreamStatusMachine {
   private readonly streams = new Map<StreamTabId, StreamEntry>();
-  /**
-   * Streams restart classification could not settle on a phase (held by
-   * another process, or their run state unreadable), keyed to the detail the
-   * user is shown. RUNNING/WAITING mean a live flow in this process, and this
-   * process never adopts anyone else's run, so these carry no phase. Published
-   * with the next full metadata sync rather than as a phase transition.
-   */
-  private readonly holds = new Map<StreamTabId, string>();
 
   /**
    * @param eventHub Session hub this machine publishes canonical `status` facts
@@ -119,7 +129,8 @@ export class StreamStatusMachine {
   ): boolean {
     const entry = this.streams.get(stream);
     if (entry?.kind === 'reserved') return false;
-    const previousPhase = entry?.state.phase;
+    const previousState = entry ? effectiveState(entry) : undefined;
+    const previousPhase = previousState?.phase;
     if (!canAcquireStreamReservation(previousPhase)) {
       return false;
     }
@@ -129,7 +140,7 @@ export class StreamStatusMachine {
     this.streams.set(stream, {
       kind: 'reserved',
       runStartedAt,
-      ...(entry ? { rollbackTo: entry.state } : {}),
+      ...(previousState ? { rollbackTo: previousState } : {}),
     });
     this.publishStatus(stream, STREAM_PHASE.RUNNING, {
       ...options,
@@ -175,7 +186,9 @@ export class StreamStatusMachine {
   ): boolean {
     const entry = this.streams.get(stream);
     const fromReservation = entry?.kind === 'reserved';
-    const previousState = fromReservation ? entry.rollbackTo : entry?.state;
+    let previousState: StreamPhaseState | undefined;
+    if (fromReservation) previousState = entry.rollbackTo;
+    else if (entry) previousState = effectiveState(entry);
     const from = previousState?.phase;
     let tableFrom = from;
     if (fromReservation) {
@@ -205,7 +218,6 @@ export class StreamStatusMachine {
     const runStartedAt = isActivePhase(to)
       ? (previousRunStartedAt ?? Date.now())
       : undefined;
-    this.holds.delete(stream);
     this.streams.set(stream, {
       kind: 'phase',
       state: {
@@ -277,41 +289,52 @@ export class StreamStatusMachine {
     return false;
   }
 
-  /** Record that `stream` has no phase here and why; nothing was mutated. */
+  /** Record why restart classification could not settle this stream. */
   markUnavailable(stream: StreamTabId, detail: string): void {
-    this.holds.set(stream, detail);
+    const entry = this.streams.get(stream);
+    const state = entry ? effectiveState(entry) : undefined;
+    this.streams.set(stream, {
+      kind: 'hold',
+      detail,
+      ...(state ? { state } : {}),
+    });
   }
 
   /**
-   * Drop a hold overlay without touching the phase. Restart repair calls this
-   * when a classification resolves; `transition` clears holds only when it
-   * writes, so a repair that lands on the phase already in place would
-   * otherwise leave the stream read-only forever.
+   * Drop a hold. Restart repair calls this when a classification resolves
+   * without writing a phase; a `transition` that does write replaces the hold
+   * with the phase it lands on.
    */
   clearHold(stream: StreamTabId): void {
-    this.holds.delete(stream);
+    const entry = this.streams.get(stream);
+    if (entry?.kind !== 'hold') return;
+    if (entry.state) {
+      this.streams.set(stream, { kind: 'phase', state: entry.state });
+      return;
+    }
+    this.streams.delete(stream);
   }
 
   /** The detail recorded by `markUnavailable`, if the stream has no phase here. */
   holdState(stream: StreamTabId): string | undefined {
-    return this.holds.get(stream);
+    const entry = this.streams.get(stream);
+    return entry?.kind === 'hold' ? entry.detail : undefined;
   }
 
   clearStream(stream: StreamTabId): void {
     this.streams.delete(stream);
-    this.holds.delete(stream);
   }
 
   clearAll(): void {
     this.streams.clear();
-    this.holds.clear();
   }
 
   /** Combined per-stream phase + substate, including in-flight reservations. */
   getAllStreamStates(): Map<StreamTabId, StreamPhaseState> {
     const values = new Map<StreamTabId, StreamPhaseState>();
     for (const [stream, entry] of this.streams) {
-      values.set(stream, effectiveState(entry));
+      const state = effectiveState(entry);
+      if (state) values.set(stream, state);
     }
     return values;
   }

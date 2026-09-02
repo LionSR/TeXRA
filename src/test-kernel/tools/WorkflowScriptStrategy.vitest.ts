@@ -129,7 +129,7 @@ describe('createWorkflowScriptStrategy', () => {
       }),
     );
 
-    const turn = await strategy.launch(ports, new AbortController());
+    const turn = await strategy.launch(ports, new AbortController().signal);
 
     // The live-attempt candidate and final journal agree on the total.
     expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
@@ -172,7 +172,7 @@ describe('createWorkflowScriptStrategy', () => {
       }),
     );
 
-    const turn = await strategy.launch(ports, new AbortController());
+    const turn = await strategy.launch(ports, new AbortController().signal);
 
     expect(ports.recordCost).toHaveBeenCalledOnce();
     expect(ports.recordCost).toHaveBeenCalledWith(0);
@@ -198,7 +198,7 @@ return args`,
       }),
     );
 
-    const turn = await strategy.launch(ports, new AbortController());
+    const turn = await strategy.launch(ports, new AbortController().signal);
     const delivery = await strategy.formatDelivery(turn, 0);
     expect(delivery).toContain('"question": "What is conserved?"');
     expect(ports.recordCost).toHaveBeenCalledWith(0);
@@ -227,7 +227,10 @@ return args`;
       }),
     );
 
-    const turn = await strategy.launch(fakePorts(), new AbortController());
+    const turn = await strategy.launch(
+      fakePorts(),
+      new AbortController().signal,
+    );
     const delivery = await strategy.formatDelivery(turn, 0);
     expect(delivery).toContain('"topic": "geometry"');
   });
@@ -247,7 +250,10 @@ return 'done'`,
       }),
     );
 
-    const turn = await strategy.launch(fakePorts(), new AbortController());
+    const turn = await strategy.launch(
+      fakePorts(),
+      new AbortController().signal,
+    );
     const delivery = await strategy.formatDelivery(turn, 0);
     expect(delivery).toContain(
       '=== Run log (last 80 lines; 21 earlier lines omitted) ===',
@@ -285,9 +291,9 @@ throw new Error('script failed after replay')`;
       }),
     );
 
-    await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
-      'script failed after replay',
-    );
+    await expect(
+      strategy.launch(ports, new AbortController().signal),
+    ).rejects.toThrow('script failed after replay');
     // Failure recovery excludes the pre-run journal from this invocation.
     expect(ports.recordCost).toHaveBeenCalledWith(0);
 
@@ -352,9 +358,9 @@ throw new Error('current revision failed')`,
       }),
     );
 
-    await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
-      'current revision failed',
-    );
+    await expect(
+      strategy.launch(ports, new AbortController().signal),
+    ).rejects.toThrow('current revision failed');
     expect(ports.recordCost.mock.calls).toEqual([[0.25], [0.25]]);
     const errText = await strategy.formatError(null, new Error('boom'));
     expect(errText).toContain('current.tex');
@@ -375,9 +381,9 @@ throw new Error('current revision failed')`,
       }),
     );
 
-    await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
-      'Failed to persist workflow execution snapshot',
-    );
+    await expect(
+      strategy.launch(ports, new AbortController().signal),
+    ).rejects.toThrow('Failed to persist workflow execution snapshot');
 
     // No snapshot was ever durably written, so the failure summary must
     // report the durable view (nothing ran) rather than the newer in-memory
@@ -406,9 +412,9 @@ return await agent('saved call')`;
       }),
     );
 
-    await expect(strategy.launch(ports, new AbortController())).rejects.toThrow(
-      'Workflow journal entry 0 is not an agent final result',
-    );
+    await expect(
+      strategy.launch(ports, new AbortController().signal),
+    ).rejects.toThrow('Workflow journal entry 0 is not an agent final result');
     expect(ports.recordCost.mock.calls).toEqual([[0.2]]);
   });
 });
@@ -509,7 +515,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
       }),
     );
 
-    const launch = strategy.launch(fakePorts(), new AbortController());
+    const launch = strategy.launch(fakePorts(), new AbortController().signal);
     await fake.attemptStarted(1);
     // An unknown execution id no-ops (the call stays in flight)...
     workflowControls.control('ddddd0000009' as ExecutionId, 'skip');
@@ -547,7 +553,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
       }),
     );
 
-    const launch = strategy.launch(ports, new AbortController());
+    const launch = strategy.launch(ports, new AbortController().signal);
     await fake.attemptStarted(1);
     workflowControls.control(grandchildExecutionId, 'retry');
 
@@ -579,7 +585,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
     );
 
     const launch = strategy
-      .launch(ports, new AbortController())
+      .launch(ports, new AbortController().signal)
       .then((turn) => {
         settled = true;
         return turn;
@@ -614,7 +620,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
       }),
     );
 
-    const launch = strategy.launch(ports, new AbortController());
+    const launch = strategy.launch(ports, new AbortController().signal);
     await fake.attemptStarted(1);
     // Model tokens were spent before the user skipped the attempt.
     fake.onCost(0.42);

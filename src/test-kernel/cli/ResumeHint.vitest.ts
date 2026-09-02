@@ -30,9 +30,9 @@ function makeSlice(
     streamId: string;
     readonly usage?: TokenUsageStats;
   },
-): StreamSlice {
-  const { usage, ...sliceOverrides } = over;
-  const streamId = over.streamId as StreamTabId;
+): StreamSlice & { readonly streamId: StreamTabId } {
+  const { usage, streamId: rawStreamId, ...sliceOverrides } = over;
+  const streamId = rawStreamId as StreamTabId;
   if (usage) {
     snapshotFacts(defaultSession().snapshots).addUsage(
       streamId,
@@ -40,7 +40,9 @@ function makeSlice(
       usage,
     );
   }
-  return { ...emptySlice(streamId), ...sliceOverrides, streamId };
+  // The id rides along for `streamsOf` and roster fixtures; the slice under
+  // test no longer carries it.
+  return { ...emptySlice(), ...sliceOverrides, streamId };
 }
 
 /** A finished roster row retained for display — the resume-target shape. */
@@ -60,7 +62,7 @@ function child(
 }
 
 function streamsOf(
-  ...slices: StreamSlice[]
+  ...slices: (StreamSlice & { readonly streamId: StreamTabId })[]
 ): ReadonlyMap<StreamTabId, StreamSlice> {
   return new Map(slices.map((s) => [s.streamId, s]));
 }

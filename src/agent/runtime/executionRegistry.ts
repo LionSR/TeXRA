@@ -187,14 +187,11 @@ export class ExecutionRegistry {
     // bookkeeping retains the status machine subscription's original ordering.
     this.disposeStatusSubscription = options.events.subscribeStatus(
       ({ streamId }) => {
-        for (const [executionId, handle] of this.handles) {
-          if (handle.childStreamId === streamId) {
-            this.notifyWaiters(executionId);
-            if (handle.isChildExecution) {
-              this.emitChildActivity(handle.parentStreamId);
-            }
-            break;
-          }
+        const handle = this.getAgentHandleByStream(streamId);
+        if (!handle) return;
+        this.notifyWaiters(handle.executionId);
+        if (handle.isChildExecution) {
+          this.emitChildActivity(handle.parentStreamId);
         }
       },
     );
@@ -809,12 +806,6 @@ export class ExecutionRegistry {
     const handle = this.handles.get(executionId);
     // Iterate a snapshot so a listener disposing itself mid-fire is safe.
     for (const cb of [...listeners]) cb(handle);
-
-    // Backstop against listener leaks: if the execution is no longer tracked,
-    // any still-registered persistent listener is firing into the void.
-    if (!this.handles.has(executionId)) {
-      this.listeners.delete(executionId);
-    }
   }
 
   private notifyRegistrationListeners(

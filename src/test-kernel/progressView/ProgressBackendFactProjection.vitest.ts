@@ -503,9 +503,9 @@ describe('ProgressBackend', () => {
       second.backend.state.snapshots.getRunMetadata(firstStream),
     ).toMatchObject({ description: undefined, executionId: undefined });
 
-    expect(first.backend.state.streamLogs.get(firstStream)?.size).toBe(1);
+    expect(first.backend.state.streamLogs.get(firstStream)?.head).toBe(1);
     expect(first.backend.state.streamLogs.get(secondStream)).toBeUndefined();
-    expect(second.backend.state.streamLogs.get(secondStream)?.size).toBe(1);
+    expect(second.backend.state.streamLogs.get(secondStream)?.head).toBe(1);
     expect(second.backend.state.streamLogs.get(firstStream)).toBeUndefined();
     expect(JSON.stringify(first.messages)).not.toContain(secondStream);
     expect(JSON.stringify(second.messages)).not.toContain(firstStream);

@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError, ToolResult } from '@shared/schemas';
 import {
-  joinAbortSignal,
+  withRequestTimeout,
   retryTransientFetch,
   toFetchToolError,
 } from '@tools/timeouts';
@@ -135,24 +135,31 @@ export class WebFetchTool extends defineTool({
 
     try {
       ({ rawBody, contentType } = await retryTransientFetch(
-        async (): Promise<{ rawBody: string; contentType: string }> => {
-          const response = await ky.get(url, {
-            timeout: false,
-            signal: joinAbortSignal(WEB_FETCH_TIMEOUT_MS, cancelSignal),
-            retry: 0,
-          });
+        () =>
+          withRequestTimeout(
+            WEB_FETCH_TIMEOUT_MS,
+            cancelSignal,
+            async (
+              signal,
+            ): Promise<{ rawBody: string; contentType: string }> => {
+              const response = await ky.get(url, {
+                timeout: false,
+                signal,
+                retry: 0,
+              });
 
-          const lengthHeader = response.headers.get('content-length');
-          if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
-            throw new AbortError(
-              `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
-            );
-          }
+              const lengthHeader = response.headers.get('content-length');
+              if (lengthHeader && Number(lengthHeader) > MAX_CONTENT_BYTES) {
+                throw new AbortError(
+                  `Response too large (${lengthHeader} bytes); maximum is ${MAX_CONTENT_BYTES / (1024 * 1024)} MB.`,
+                );
+              }
 
-          const ct = response.headers.get('content-type') ?? '';
-          const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
-          return { rawBody: text, contentType: ct };
-        },
+              const ct = response.headers.get('content-type') ?? '';
+              const text = await readBodyWithLimit(response, MAX_CONTENT_BYTES);
+              return { rawBody: text, contentType: ct };
+            },
+          ),
         { retries: WEB_FETCH_RETRIES, minTimeout: 500, cancelSignal },
       ));
     } catch (error) {

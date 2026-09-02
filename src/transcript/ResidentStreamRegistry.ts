@@ -10,25 +10,16 @@
  * accumulator or lifecycle flag doesn't need its own bespoke
  * get-or-create/prune/evict wiring.
  *
- * Every capability here is opt-in per consumer: a store with no "prune once
- * every field is empty" concept (`StreamSnapshotStore`, whose records
- * persist until an explicit `evict`) simply never calls {@link pruneIfEmpty},
- * and a store with no per-key generation guard (`StreamLogStore`, which
- * tracks a single store-wide revision instead) never calls
- * {@link generation}/{@link invalidateGeneration}/{@link evict}. The
- * two stores' own persistence-strategy code (per-(key,category) write
- * mutexes vs debounce+generation) is NOT part of this container and stays
- * on each store.
+ * The one capability that is opt-in per consumer is {@link pruneIfEmpty}:
+ * `StreamSnapshotStore`, whose records persist until an explicit delete,
+ * never calls it. Anything a store guards per stream beyond presence — a
+ * generation token, a seed chain — is a field on its own record, so the
+ * container never carries a second map that `delete()` could miss. The two
+ * stores' own persistence-strategy code (per-(key,category) write mutexes vs
+ * debounce) is NOT part of this container and stays on each store.
  */
 export class ResidentStreamRegistry<TId, TState> {
   private readonly records = new Map<TId, TState>();
-  /**
-   * Revocable per-key identities captured by asynchronous work. Eviction
-   * deletes the current token; a later use of the same key receives a fresh
-   * symbol, so stale continuations remain detectable without retaining every
-   * key ever observed.
-   */
-  private readonly generations = new Map<TId, symbol>();
 
   constructor(private readonly createDefault: () => TState) {}
 
@@ -69,28 +60,5 @@ export class ResidentStreamRegistry<TId, TState> {
   pruneIfEmpty(id: TId, isEmpty: (state: TState) => boolean): void {
     const record = this.records.get(id);
     if (record && isEmpty(record)) this.records.delete(id);
-  }
-
-  generation(id: TId): symbol {
-    let generation = this.generations.get(id);
-    if (generation === undefined) {
-      generation = Symbol();
-      this.generations.set(id, generation);
-    }
-    return generation;
-  }
-
-  isCurrentGeneration(id: TId, generation: symbol): boolean {
-    return this.generations.get(id) === generation;
-  }
-
-  invalidateGeneration(id: TId): void {
-    this.generations.delete(id);
-  }
-
-  /** Revoke a key's generation, then drop its record. */
-  evict(id: TId): void {
-    this.invalidateGeneration(id);
-    this.records.delete(id);
   }
 }

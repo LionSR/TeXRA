@@ -409,18 +409,16 @@ describe('childRunLoop E2E fixtures', () => {
 
       const strategy: ChildRunStrategy<FakeTurn> = {
         stageLabel: `${name} session`,
-        launch: (_ports, abortController) => {
+        launch: (_ports, signal) => {
           events.push('launch');
           return new Promise((_resolve, reject) => {
             const rejectAbort = () => {
               aborted();
               reject(createAbortError());
             };
-            if (abortController.signal.aborted) rejectAbort();
+            if (signal.aborted) rejectAbort();
             else {
-              abortController.signal.addEventListener('abort', rejectAbort, {
-                once: true,
-              });
+              signal.addEventListener('abort', rejectAbort, { once: true });
             }
           });
         },

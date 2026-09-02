@@ -240,7 +240,7 @@ export function createWorkflowScriptStrategy(
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
-    launch: async (ports, abortController) => {
+    launch: async (ports, signal) => {
       startedAt = Date.now();
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
@@ -286,7 +286,7 @@ export function createWorkflowScriptStrategy(
           ...(params.files !== undefined && {
             files: params.files,
           }),
-          signal: abortController.signal,
+          signal,
           // The session's child-run budget is the one owner of "how many at
           // once": the engine's own default is a library fallback only.
           concurrency: resolveChildRunConcurrencyBudget(),

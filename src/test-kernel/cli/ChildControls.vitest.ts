@@ -42,7 +42,7 @@ function rosterChild(
 function streamMap(
   ...streamIds: readonly StreamTabId[]
 ): Map<StreamTabId, StreamSlice> {
-  return new Map(streamIds.map((streamId) => [streamId, emptySlice(streamId)]));
+  return new Map(streamIds.map((streamId) => [streamId, emptySlice()]));
 }
 
 describe('CLI child controls', () => {

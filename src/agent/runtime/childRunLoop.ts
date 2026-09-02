@@ -206,10 +206,7 @@ export interface ChildRunStrategy<TTurn> {
   readonly deliveryMode?: 'persistOnly';
 
   /** Produce the first turn's outcome. Throws on hard failure. */
-  launch(
-    ports: ChildRunPorts,
-    abortController: AbortController,
-  ): Promise<TTurn>;
+  launch(ports: ChildRunPorts, signal: AbortSignal): Promise<TTurn>;
 
   /**
    * Produce the next turn's outcome from the queued follow-up batch. Throws
@@ -223,7 +220,7 @@ export interface ChildRunStrategy<TTurn> {
   runTurn?(
     followUps: readonly FollowUpQueueBatchItem[],
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
   ): Promise<TTurn>;
 
   /** True when `turn` ends this child's run — no further turns follow. */
@@ -370,18 +367,15 @@ export interface ChildRunLoopParams<TTurn> {
  * path, which joins this loop's live lease instead of creating a competing
  * continuation.
  *
- * `interrupt()` additionally delegates into a live native turn's flow
- * context, when one is currently attached. `handle.getToolUseFlow()` is the
- * one place a currently-running turn's real interrupt reaches.
+ * A running turn is reached through `signal` alone: every strategy binds the
+ * turn it launches to it, and a native turn's flow subscribes to its own run
+ * signal downstream of that binding.
  */
 class ChildRunInterruptible implements ExecutionInterruptHandler {
   private readonly controller = new AbortController();
   private queue: FollowUpQueue | null = null;
-  private turnAbortController: AbortController | null = null;
 
   constructor(
-    private readonly session: SessionHandle,
-    private readonly childStreamId: StreamTabId,
     /**
      * Only a strategy that declares `ownsBackgroundProcess` sets this: a
      * loop-level handler for an agent child must stay invisible to shutdown
@@ -393,11 +387,6 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   interrupt(): void {
     this.controller.abort();
     this.queue?.cancelWait();
-    this.turnAbortController?.abort();
-    const handle = this.session.executions.getAgentHandleByStream(
-      this.childStreamId,
-    );
-    handle?.getToolUseFlow()?.interrupt();
   }
 
   setQueue(q: FollowUpQueue): void {
@@ -408,17 +397,13 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
     return this.controller.signal.aborted;
   }
 
+  /**
+   * The one cancellation signal every turn of this child runs under. No turn
+   * starts after an interrupt (the loop checks `isInterrupted()` first), so a
+   * per-turn controller would only ever mirror this one.
+   */
   get signal(): AbortSignal {
     return this.controller.signal;
-  }
-
-  startTurn(): AbortController {
-    this.turnAbortController = new AbortController();
-    return this.turnAbortController;
-  }
-
-  finishTurn(): void {
-    this.turnAbortController = null;
   }
 }
 
@@ -452,14 +437,13 @@ type TurnAttempt<TTurn> =
  */
 async function attemptTurn<TTurn>(
   strategy: ChildRunStrategy<TTurn>,
-  runner: (abortController: AbortController) => Promise<TTurn>,
+  runner: (signal: AbortSignal) => Promise<TTurn>,
   loop: ChildRunInterruptible,
   logger: AgentTrace,
-  abortController: AbortController,
   startedAt: number,
 ): Promise<TurnAttempt<TTurn>> {
   try {
-    const turn = await runner(abortController);
+    const turn = await runner(loop.signal);
     logTurnSummary(logger, Date.now() - startedAt, strategy.getUsage?.(turn));
     const turnIsError = strategy.isTurnError?.(turn) === true;
     if (turnIsError) {
@@ -468,17 +452,11 @@ async function attemptTurn<TTurn>(
     return { kind: 'completed', turn, turnIsError };
   } catch (caught) {
     // A clean, caller-initiated interruption maps to `interrupted`.
-    if (
-      abortController.signal.aborted ||
-      loop.isInterrupted() ||
-      isUserAbort(caught)
-    ) {
+    if (loop.isInterrupted() || isUserAbort(caught)) {
       return { kind: 'interrupted' };
     }
     logger.error(toErrorMessage(caught));
     return { kind: 'failed', err: caught };
-  } finally {
-    loop.finishTurn();
   }
 }
 
@@ -785,8 +763,6 @@ export function startChildRunLoop<TTurn>(
   assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
   const loop = new ChildRunInterruptible(
-    runSession,
-    childStreamId,
     strategy.ownsBackgroundProcess === true,
   );
   // Native children have no persistent child-stream handle between turns, so
@@ -926,26 +902,26 @@ export function startChildRunLoop<TTurn>(
   // docs/proposals/2026-08-15-child-run-concurrency-budget.md).
   const budget = params.budgeted ? childRunBudgetFor(runSession) : undefined;
   const gateTurn = (
-    base: (ac: AbortController) => Promise<TTurn>,
-  ): ((ac: AbortController) => Promise<TTurn>) =>
+    base: (signal: AbortSignal) => Promise<TTurn>,
+  ): ((signal: AbortSignal) => Promise<TTurn>) =>
     budget === undefined
       ? base
-      : (ac) =>
+      : (signal) =>
           budget.add(
             () => {
               // A turn cancelled while awaiting a slot must not start fresh
               // model work; the loop classifies this throw as interrupted.
-              if (loop.isInterrupted() || ac.signal.aborted) {
+              if (signal.aborted) {
                 throw new Error(
                   'Child run turn cancelled while awaiting a concurrency slot.',
                 );
               }
-              return base(ac);
+              return base(signal);
             },
             // Settle a queued turn the moment it is cancelled: without the
             // signal, an aborted task blocks here until a budget slot frees
             // and only then observes the abort above.
-            { signal: ac.signal },
+            { signal },
           ) as Promise<TTurn>;
 
   let runStarted = false;
@@ -958,8 +934,8 @@ export function startChildRunLoop<TTurn>(
     // masks a primary body or finalize failure (which stays the thrown
     // error, with the release failure logged as secondary).
     let releaseFailure: unknown;
-    let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
-      strategy.launch(ports, ac);
+    let runner: (signal: AbortSignal) => Promise<TTurn> = (signal) =>
+      strategy.launch(ports, signal);
     // Turn identity (#9531): each accepted turn mints a stable token (its
     // delivery id is derived at the enqueue site) and records itself active
     // before running; the latest completed turn is carried forward so an
@@ -993,13 +969,11 @@ export function startChildRunLoop<TTurn>(
           ),
         );
         const startedAt = Date.now();
-        const abortController = loop.startTurn();
         const attempt = await attemptTurn(
           strategy,
           gateTurn(runner),
           loop,
           logger,
-          abortController,
           startedAt,
         );
         attachLoopInterrupt();
@@ -1087,7 +1061,7 @@ export function startChildRunLoop<TTurn>(
         if (!batch || loop.isInterrupted()) break;
 
         const nextRunTurn = strategy.runTurn;
-        runner = (ac) => nextRunTurn(batch.items, ports, ac);
+        runner = (signal) => nextRunTurn(batch.items, ports, signal);
         childStream?.beginTurn();
       }
     } catch (error) {

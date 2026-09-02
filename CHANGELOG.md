@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Prevent crashes in long-running CLI sessions** — CLI sessions that run many
+  subagents no longer exhaust memory and crash.
+
 ### Extension (VS Code)
 
 #### Bug Fixes

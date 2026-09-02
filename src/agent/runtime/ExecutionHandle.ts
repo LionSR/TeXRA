@@ -18,7 +18,6 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
-import { onAbort } from '@utils/core';
 
 export interface ExecutionStatusInfo {
   status: StreamPhase | 'unknown';
@@ -125,7 +124,6 @@ export class AgentExecutionHandle {
   private _parentStreamId: StreamTabId;
   private interruptHandler?: ExecutionInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
-  private detachToolUseAbortListener?: () => void;
   private suspension?: RunSuspension;
 
   /**
@@ -239,26 +237,15 @@ export class AgentExecutionHandle {
     );
   }
 
-  attachToolUseFlow(
-    context: LiveToolUseFlowContext,
-    signal?: AbortSignal,
-  ): void {
+  attachToolUseFlow(context: LiveToolUseFlowContext): void {
     if (this.category !== 'toolUse') {
       throw new Error('Only tool-use execution handles can attach tool flows.');
     }
-    this.detachToolUseAbortListener?.();
     this.toolUseFlowContext = context;
-    if (!signal) return;
-
-    this.detachToolUseAbortListener = onAbort(signal, () =>
-      context.interrupt(),
-    );
   }
 
   detachToolUseFlow(context?: LiveToolUseFlowContext): void {
     if (context !== undefined && this.toolUseFlowContext !== context) return;
-    this.detachToolUseAbortListener?.();
-    this.detachToolUseAbortListener = undefined;
     this.toolUseFlowContext = undefined;
   }
 
