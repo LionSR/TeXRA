@@ -78,12 +78,13 @@ export async function runPackSingle(
 
   log.debug(buildFileListLog(movedFiles, copiedFiles));
 
+  const cleanAgent = getCleanAgentName(agent);
   const resolvedOutputFolder =
     outputFolder ||
     path.join(
       inputDir,
       HISTORY_DIR,
-      `${generateTimestamp()}_${baseName}_${agent}_${model}`,
+      `${generateTimestamp()}_${baseName}_${cleanAgent}_${model}`,
     );
   log.debug(`Output folder: ${resolvedOutputFolder}`);
 
@@ -125,10 +126,11 @@ export async function runPackMultiple(
 
   const baseName = path.parse(inputFile).name;
   const outputDir = path.dirname(inputFile);
+  const cleanAgent = getCleanAgentName(agent);
   const commonOutputFolder = path.join(
     outputDir,
     HISTORY_DIR,
-    `${generateTimestamp()}_${baseName}_multiple_${agent}_${model}`,
+    `${generateTimestamp()}_${baseName}_multiple_${cleanAgent}_${model}`,
   );
   log.debug(`Common output folder: ${commonOutputFolder}`);
 

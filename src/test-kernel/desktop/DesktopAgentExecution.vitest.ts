@@ -1,5 +1,6 @@
 // Node imports
 import { access } from 'node:fs/promises';
+import * as path from 'node:path';
 
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -427,7 +428,7 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
 
       async deleteDir(): Promise<void> {
         for (const key of kvStoreBacking.keys()) {
-          if (key.startsWith(`${this.dir}/`)) kvStoreBacking.delete(key);
+          if (key.startsWith(this.prefix())) kvStoreBacking.delete(key);
         }
       }
 
@@ -446,14 +447,18 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
         if (options.transcriptOpenGate && this.dir === STREAM_LOGS_DIR) {
           await options.transcriptOpenGate;
         }
-        const prefix = `${this.dir}/`;
+        const prefix = this.prefix();
         return [...kvStoreBacking.keys()]
           .filter((key) => key.startsWith(prefix))
           .map((key) => key.slice(prefix.length));
       }
 
+      private prefix(): string {
+        return `${this.dir.replaceAll('\\', '/')}/`;
+      }
+
       private key(key: string): string {
-        return `${this.dir}/${key}`;
+        return `${this.prefix()}${key}`;
       }
     },
   }));
@@ -1322,8 +1327,9 @@ describe('DesktopProgressBridge', () => {
       throw new Error('no external viewer');
     });
     const spillPath = 'executions/abcdef123456/toolOutput/tool.txt';
+    const spillFile = path.join('/workspace/.texra/storage', spillPath);
     const bridge = await createBridge(messages, {
-      files: { [`/workspace/.texra/storage/${spillPath}`]: 'spilled output' },
+      files: { [spillFile]: 'spilled output' },
       showErrorMessage,
       openPath,
     });
@@ -1338,9 +1344,7 @@ describe('DesktopProgressBridge', () => {
       spillPath,
     });
 
-    expect(openPath).toHaveBeenCalledWith(
-      `/workspace/.texra/storage/${spillPath}`,
-    );
+    expect(openPath).toHaveBeenCalledWith(spillFile);
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
 
