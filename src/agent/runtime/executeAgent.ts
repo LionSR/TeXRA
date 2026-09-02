@@ -181,7 +181,7 @@ async function launchToolUseRun(
     undefined,
     {
       attach: (flowContext) => {
-        handle.attachToolUseFlow(flowContext, ctx.runScope.signal);
+        handle.attachToolUseFlow(flowContext);
         if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
           variant.onCancellationAtFlowAttachment?.();
           flowContext.interrupt();

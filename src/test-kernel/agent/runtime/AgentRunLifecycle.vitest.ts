@@ -734,8 +734,11 @@ describe('runFlowWithLifecycle', () => {
           switchModel: vi.fn().mockResolvedValue(undefined),
           interrupt,
         };
-        handle.attachToolUseFlow(flowContext, ctx.runScope.signal);
-        expect(interrupt).toHaveBeenCalledOnce();
+        handle.attachToolUseFlow(flowContext);
+        // The flow replays a stop that landed before it attached by
+        // subscribing to the run signal itself; the lifecycle's contract is
+        // that the signal already carries that stop by the time it attaches.
+        expect(ctx.runScope.signal.aborted).toBe(true);
         handle.detachToolUseFlow(flowContext);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
       },

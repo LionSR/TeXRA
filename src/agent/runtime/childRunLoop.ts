@@ -367,17 +367,15 @@ export interface ChildRunLoopParams<TTurn> {
  * path, which joins this loop's live lease instead of creating a competing
  * continuation.
  *
- * `interrupt()` additionally delegates into a live native turn's flow
- * context, when one is currently attached. `handle.getToolUseFlow()` is the
- * one place a currently-running turn's real interrupt reaches.
+ * A running turn is reached through `signal` alone: every strategy binds the
+ * turn it launches to it, and a native turn's flow subscribes to its own run
+ * signal downstream of that binding.
  */
 class ChildRunInterruptible implements ExecutionInterruptHandler {
   private readonly controller = new AbortController();
   private queue: FollowUpQueue | null = null;
 
   constructor(
-    private readonly session: SessionHandle,
-    private readonly childStreamId: StreamTabId,
     /**
      * Only a strategy that declares `ownsBackgroundProcess` sets this: a
      * loop-level handler for an agent child must stay invisible to shutdown
@@ -389,10 +387,6 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   interrupt(): void {
     this.controller.abort();
     this.queue?.cancelWait();
-    const handle = this.session.executions.getAgentHandleByStream(
-      this.childStreamId,
-    );
-    handle?.getToolUseFlow()?.interrupt();
   }
 
   setQueue(q: FollowUpQueue): void {
@@ -769,8 +763,6 @@ export function startChildRunLoop<TTurn>(
   assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
   const loop = new ChildRunInterruptible(
-    runSession,
-    childStreamId,
     strategy.ownsBackgroundProcess === true,
   );
   // Native children have no persistent child-stream handle between turns, so
