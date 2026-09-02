@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Features
+
+- **Gemini 3.8 Flash is available** — the new Flash model replaces Gemini 3.7
+  Flash in the default model list with improved reasoning and coding at the
+  same introductory price. Existing selections of Gemini 3.7 Flash keep
+  working while Google serves them.
+
 #### Bug Fixes
 
 - **Prevent crashes in long-running CLI sessions** — CLI sessions that run many
