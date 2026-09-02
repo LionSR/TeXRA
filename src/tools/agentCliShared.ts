@@ -422,7 +422,7 @@ interface AgentCliLoopParams<TTurn> {
   runProviderTurn: (
     prompt: string,
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
   ) => Promise<TTurn>;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
@@ -504,20 +504,16 @@ export function startAgentCliLoop<TTurn>(
   const runTurn = (
     followUps: readonly FollowUpQueueBatchItem[],
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
   ): Promise<TTurn> => {
     lastPrompt = followUps.map((f) => f.text).join('\n\n');
-    return runProviderTurn(lastPrompt, ports, abortController);
+    return runProviderTurn(lastPrompt, ports, signal);
   };
 
   const strategy: ChildRunStrategy<TTurn> = {
     stageLabel,
-    launch: (ports, abortController) =>
-      runTurn(
-        [{ text: initialPrompt, origin: 'user' }],
-        ports,
-        abortController,
-      ),
+    launch: (ports, signal) =>
+      runTurn([{ text: initialPrompt, origin: 'user' }], ports, signal),
     runTurn,
     isTerminal: () => false,
     getUsage,

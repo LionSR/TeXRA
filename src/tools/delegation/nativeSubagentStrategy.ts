@@ -224,7 +224,7 @@ export function createNativeSubagentStrategy(
 
   const runNative = async (
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => void,
     ) => Promise<AgentRuntimeFlowResult>,
@@ -238,10 +238,7 @@ export function createNativeSubagentStrategy(
       const result = await call((handle) => {
         detachAbort();
         runHandle = handle;
-        detachAbort = bindAbortSignals(
-          [params.signal, abortController.signal],
-          handle,
-        );
+        detachAbort = bindAbortSignals([params.signal, signal], handle);
       });
       lastResult = toDeliveryResult(result, params.executionId);
       // Every turn's totalCostUsd is the run's cumulative cost to date, not a
@@ -292,8 +289,8 @@ export function createNativeSubagentStrategy(
       deliveryMode: 'persistOnly' as const,
     }),
 
-    launch: (ports, abortController) =>
-      runNative(ports, abortController, async (onRun) => {
+    launch: (ports, signal) =>
+      runNative(ports, signal, async (onRun) => {
         const executeOptions = {
           session: params.session,
           enforceCategory: params.agentCategoryExplicit,
@@ -345,8 +342,8 @@ export function createNativeSubagentStrategy(
         return turn;
       }),
 
-    runTurn: (followUps, ports, abortController) =>
-      runNative(ports, abortController, async (onRun) => {
+    runTurn: (followUps, ports, signal) =>
+      runNative(ports, signal, async (onRun) => {
         const streamId = runHandle?.childStreamId;
         if (!streamId) {
           throw new Error(

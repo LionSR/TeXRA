@@ -48,7 +48,11 @@ import type {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
+import {
+  formatWallTimeSeconds,
+  isNonEmptyString,
+  linkAbortSignals,
+} from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -176,7 +180,7 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 export async function runStreamedTurn(params: {
   prompt: string;
   logger: AgentTrace;
-  abortController: AbortController;
+  signal: AbortSignal;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
   effort: ClaudeAgentEffort;
@@ -192,8 +196,12 @@ export async function runStreamedTurn(params: {
 
   const query = await importClaudeAgentSdk();
 
+  // The SDK takes a controller, not a signal: this one exists only at that
+  // boundary and follows the turn's signal until the stream is drained.
+  const abortController = new AbortController();
+  const detachAbort = linkAbortSignals([params.signal], abortController);
   const sdkOptions: ClaudeAgentSdkOptions = {
-    abortController: params.abortController,
+    abortController,
     model: params.model,
     permissionMode: params.permissionMode,
     effort: params.effort,
@@ -274,6 +282,7 @@ export async function runStreamedTurn(params: {
       }
     }
   } finally {
+    detachAbort();
     backgroundTasks.finish();
   }
 
@@ -424,12 +433,12 @@ function startClaudeAgentLoop(params: {
     initialPrompt,
     store: claudeAgentSessionsFor,
     releaseFallbackClaim: params.releaseFallbackClaim,
-    runProviderTurn: async (prompt, _ports, abortController) => {
+    runProviderTurn: async (prompt, _ports, signal) => {
       const forkSession = isFirstTurn && params.forkSession;
       const turn = await runStreamedTurn({
         prompt,
         logger,
-        abortController,
+        signal,
         model: params.model,
         permissionMode: params.permissionMode,
         effort: params.effort,

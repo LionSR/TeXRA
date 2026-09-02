@@ -298,7 +298,7 @@ function createBackgroundBashStrategy(params: {
     autoCloseChildStream: true,
     deliverAfterInterrupt: true,
 
-    launch: (_ports, abortController) => {
+    launch: (_ports, signal) => {
       startedAt = Date.now();
       return executeCommand(command, {
         ...(params.cwd !== undefined && { cwd: params.cwd }),
@@ -307,7 +307,7 @@ function createBackgroundBashStrategy(params: {
         // The string command form gets shell teardown: abort/timeout signal
         // the whole process group so backgrounded jobs and piped children are
         // torn down rather than left running.
-        signal: abortController.signal,
+        signal,
         onStdout: (chunk) => {
           stdout.append(chunk);
           logChunk(chunk, 'info');
