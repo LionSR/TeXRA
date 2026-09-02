@@ -323,7 +323,6 @@ export function resetTranscriptFoldState(state: TranscriptFoldState): void {
   state.finalizedFrontier = 0;
   state.synthetics = [];
   state.lastOutputFull = undefined;
-  state.lastEntriesOutput = undefined;
 }
 
 /** `sortSeq`/`tieBreak`/`rank` total order over fold items. `Infinity`

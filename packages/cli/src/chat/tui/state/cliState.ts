@@ -117,10 +117,6 @@ export interface TranscriptFoldState {
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
-  /** The exact `entries` array last emitted. A slice whose entries no longer
-   *  match was patched out of band (local rows), so the next application
-   *  must rebuild its output instead of reusing `slice.entries`. */
-  lastEntriesOutput?: readonly TranscriptRow[];
 }
 
 export interface SessionMeta {
