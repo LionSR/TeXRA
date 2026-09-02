@@ -566,7 +566,8 @@ export class StreamLog {
    * immutable; avoiding a defensive copy matters on the stream-log save path.
    */
   toPersistedEntries(): readonly unknown[] {
-    if (this.preservedRawEntries.length === 0) return this.entries;
+    const entries = this.entriesForPersistence();
+    if (this.preservedRawEntries.length === 0) return entries;
 
     const preservedByIndex = new Map<number, unknown[]>();
     for (const preserved of this.preservedRawEntries) {
@@ -583,12 +584,110 @@ export class StreamLog {
     }
 
     const persisted: unknown[] = [];
-    for (let index = 0; index <= this.entries.length; index += 1) {
+    for (let index = 0; index <= entries.length; index += 1) {
       const preserved = preservedByIndex.get(index);
       if (preserved) persisted.push(...preserved);
-      const entry = this.entries[index];
+      const entry = entries[index];
       if (entry) persisted.push(entry);
     }
     return persisted;
   }
+
+  /**
+   * The entries as the save path sees them: a still-running streaming entry
+   * persists its bounded preview, the same shape settlement gives it, while
+   * the resident entry keeps the full text for the live render. Copies only
+   * when a running entry actually exceeds the bound, so the common save still
+   * serializes `entries` by reference.
+   */
+  private entriesForPersistence(): readonly StreamLogEntry[] {
+    let bounded: StreamLogEntry[] | undefined;
+    for (const [index, entry] of this.entries.entries()) {
+      if (!isRunningStreamingTextEntry(entry) || entry.text === undefined) {
+        continue;
+      }
+      const text = boundedTranscriptPreview(entry.text);
+      if (text === entry.text) continue;
+      bounded ??= [...this.entries];
+      bounded[index] = { ...entry, text };
+    }
+    return bounded ?? this.entries;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transcript entry bound
+// ---------------------------------------------------------------------------
+
+const MAX_TRANSCRIPT_ENTRY_BYTES = 50 * 1024;
+const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
+const TRANSCRIPT_PREVIEW_LINES = 40;
+export const TRANSCRIPT_TRUNCATION_MARKER =
+  '\n\n… output truncated in transcript; retained in run artifacts …\n\n';
+const UTF8_ENCODER = new TextEncoder();
+const UTF8_DECODER = new TextDecoder();
+
+/**
+ * The head/tail preview a transcript row keeps of a long text: at most
+ * `MAX_TRANSCRIPT_ENTRY_BYTES` / `MAX_TRANSCRIPT_ENTRY_LINES`, with `marker`
+ * between the two ends. The recorder applies it when a stream settles (the
+ * full text goes to a spill file); {@link StreamLog.toPersistedEntries}
+ * applies it to a still-running streaming entry so the whole-transcript save
+ * that runs every throttle window does not rewrite the unbounded text.
+ */
+export function boundedTranscriptPreview(
+  text: string,
+  marker = TRANSCRIPT_TRUNCATION_MARKER,
+): string {
+  const lines = text.split('\n');
+  if (
+    UTF8_ENCODER.encode(text).length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
+    lines.length <= MAX_TRANSCRIPT_ENTRY_LINES
+  ) {
+    return text;
+  }
+  const contentBudget =
+    MAX_TRANSCRIPT_ENTRY_BYTES - UTF8_ENCODER.encode(marker).length;
+  const head = utf8Prefix(
+    lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n'),
+    Math.floor(contentBudget / 2),
+  );
+  const tail = utf8Suffix(
+    lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n'),
+    Math.ceil(contentBudget / 2),
+  );
+  return `${head}${marker}${tail}`;
+}
+
+/**
+ * The longest prefix of `text` that encodes within `byteBudget` UTF-8 bytes.
+ * `encodeInto` reports how many source code units fit whole into the
+ * destination, which is exactly the code-point boundary we want.
+ */
+function utf8Prefix(text: string, byteBudget: number): string {
+  if (byteBudget <= 0) return '';
+  const { read } = UTF8_ENCODER.encodeInto(text, new Uint8Array(byteBudget));
+  return text.slice(0, read);
+}
+
+/**
+ * The longest suffix of `text` that encodes within `byteBudget` UTF-8 bytes,
+ * found by walking the encoded bytes back past any `10xxxxxx` continuation
+ * bytes to the nearest code-point boundary. Only a bounded tail window is
+ * encoded: every UTF-16 code unit contributes at least one UTF-8 byte, so a
+ * `byteBudget + 1`-unit window always covers the kept bytes without an
+ * input-sized allocation on a huge single-line input, and the extra unit
+ * guarantees that a surrogate pair split by the window edge has its
+ * replacement bytes dropped before the kept region. Not exact for ill-formed
+ * input: a lone surrogate inside the kept suffix decodes to U+FFFD instead of
+ * surviving as a raw code unit (the persisted JSON bytes are identical either
+ * way, and the byte accounting matches — both encode to three bytes).
+ */
+function utf8Suffix(text: string, byteBudget: number): string {
+  const window = text.slice(Math.max(0, text.length - (byteBudget + 1)));
+  const bytes = UTF8_ENCODER.encode(window);
+  if (window.length === text.length && bytes.length <= byteBudget) return text;
+  let start = Math.max(0, bytes.length - byteBudget);
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
+  return UTF8_DECODER.decode(bytes.subarray(start));
 }

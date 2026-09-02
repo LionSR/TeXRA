@@ -59,21 +59,19 @@ import {
   type FlushableDebounce,
 } from '@utils/core';
 import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
+import {
+  boundedTranscriptPreview,
+  TRANSCRIPT_TRUNCATION_MARKER,
+  type StreamLogAppendInput,
+  type StreamLogUpdatePatch,
+} from './StreamLog';
 import type PQueue from 'p-queue';
 
-import type { StreamLogAppendInput, StreamLogUpdatePatch } from './StreamLog';
 import type { TranscriptWriter } from './StreamLogStore';
 
 const STREAM_UPDATE_THROTTLE_MS = 50;
-const MAX_TRANSCRIPT_ENTRY_BYTES = 50 * 1024;
-const MAX_TRANSCRIPT_ENTRY_LINES = 2_000;
-const TRANSCRIPT_PREVIEW_LINES = 40;
-const TRANSCRIPT_TRUNCATION_MARKER =
-  '\n\n… output truncated in transcript; retained in run artifacts …\n\n';
 const LIVE_TOOL_TRUNCATION_MARKER =
   '\n\n… output truncated while the tool is running …\n\n';
-const UTF8_ENCODER = new TextEncoder();
-const UTF8_DECODER = new TextDecoder();
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -190,63 +188,6 @@ export interface TranscriptRecorderHandle {
 export interface TranscriptSpillWriter {
   readonly pathFor: (entryId: string) => string;
   write(path: string, content: string): Promise<void>;
-}
-
-function boundedTranscriptPreview(
-  text: string,
-  marker = TRANSCRIPT_TRUNCATION_MARKER,
-): string {
-  const lines = text.split('\n');
-  if (
-    UTF8_ENCODER.encode(text).length <= MAX_TRANSCRIPT_ENTRY_BYTES &&
-    lines.length <= MAX_TRANSCRIPT_ENTRY_LINES
-  ) {
-    return text;
-  }
-  const contentBudget =
-    MAX_TRANSCRIPT_ENTRY_BYTES - UTF8_ENCODER.encode(marker).length;
-  const head = utf8Prefix(
-    lines.slice(0, TRANSCRIPT_PREVIEW_LINES).join('\n'),
-    Math.floor(contentBudget / 2),
-  );
-  const tail = utf8Suffix(
-    lines.slice(-TRANSCRIPT_PREVIEW_LINES).join('\n'),
-    Math.ceil(contentBudget / 2),
-  );
-  return `${head}${marker}${tail}`;
-}
-
-/**
- * The longest prefix of `text` that encodes within `byteBudget` UTF-8 bytes.
- * `encodeInto` reports how many source code units fit whole into the
- * destination, which is exactly the code-point boundary we want.
- */
-function utf8Prefix(text: string, byteBudget: number): string {
-  if (byteBudget <= 0) return '';
-  const { read } = UTF8_ENCODER.encodeInto(text, new Uint8Array(byteBudget));
-  return text.slice(0, read);
-}
-
-/**
- * The longest suffix of `text` that encodes within `byteBudget` UTF-8 bytes,
- * found by walking the encoded bytes back past any `10xxxxxx` continuation
- * bytes to the nearest code-point boundary. Only a bounded tail window is
- * encoded: every UTF-16 code unit contributes at least one UTF-8 byte, so a
- * `byteBudget + 1`-unit window always covers the kept bytes without an
- * input-sized allocation on a huge single-line input, and the extra unit
- * guarantees that a surrogate pair split by the window edge has its
- * replacement bytes dropped before the kept region. Not exact for ill-formed
- * input: a lone surrogate inside the kept suffix decodes to U+FFFD instead of
- * surviving as a raw code unit (the persisted JSON bytes are identical either
- * way, and the byte accounting matches — both encode to three bytes).
- */
-function utf8Suffix(text: string, byteBudget: number): string {
-  const window = text.slice(Math.max(0, text.length - (byteBudget + 1)));
-  const bytes = UTF8_ENCODER.encode(window);
-  if (window.length === text.length && bytes.length <= byteBudget) return text;
-  let start = Math.max(0, bytes.length - byteBudget);
-  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
-  return UTF8_DECODER.decode(bytes.subarray(start));
 }
 
 export function attachTranscriptRecorder(
