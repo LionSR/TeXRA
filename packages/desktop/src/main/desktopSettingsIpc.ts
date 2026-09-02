@@ -57,8 +57,10 @@ import type { DesktopAgentSettingsController } from './desktopAgentSettingsContr
 import type { DesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 
-export interface DesktopSettingsUiHost
-  extends Pick<MessageHost, 'showInfoMessage' | 'showErrorMessage'> {
+export interface DesktopSettingsUiHost extends Pick<
+  MessageHost,
+  'showInfoMessage' | 'showErrorMessage'
+> {
   openPath(filePath: string): Promise<void>;
   /**
    * Select the stream as the window's active stream. `'unavailable'` covers a

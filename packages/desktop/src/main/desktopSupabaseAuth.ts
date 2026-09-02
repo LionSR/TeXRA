@@ -63,8 +63,10 @@ export interface DesktopAuthCallbackState {
 
 type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
 
-export interface DesktopSupabaseAuthHost
-  extends Pick<MessageHost, 'showInfoMessage' | 'showErrorMessage'> {
+export interface DesktopSupabaseAuthHost extends Pick<
+  MessageHost,
+  'showInfoMessage' | 'showErrorMessage'
+> {
   openExternalUrl(url: string): Promise<void>;
   onSessionChanged(): Promise<void> | void;
 }

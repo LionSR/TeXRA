@@ -6,8 +6,7 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 
 /** Required desktop capabilities used throughout an agent execution. */
 export interface DesktopAgentExecutionHost
-  extends MainViewExecutionLaunchHost,
-    MessageHost {
+  extends MainViewExecutionLaunchHost, MessageHost {
   /**
    * Presents an instruction (e.g. a missing API key) as an actionable
    * dialog: each token in `actions` becomes a button — dispatched to the

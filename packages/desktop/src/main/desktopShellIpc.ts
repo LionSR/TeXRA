@@ -27,8 +27,10 @@ import {
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
 
-interface DesktopShellActionFactoryOptions
-  extends Pick<MessageHost, 'showInfoMessage'> {
+interface DesktopShellActionFactoryOptions extends Pick<
+  MessageHost,
+  'showInfoMessage'
+> {
   getCustomAgentDirectory(): Promise<string>;
   openExternalUrl(url: string): Promise<void>;
   openLogFolder(): Promise<void>;

@@ -20,8 +20,10 @@ type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
   ): string | undefined;
 };
 
-interface SettingsTeamRosterPresentation
-  extends Pick<MessageHost, 'showInfoMessage' | 'showErrorMessage'> {
+interface SettingsTeamRosterPresentation extends Pick<
+  MessageHost,
+  'showInfoMessage' | 'showErrorMessage'
+> {
   chooseTeamAvailability(
     prompt: TeamAvailabilityPrompt,
   ): Promise<TeamAvailabilityChoice | undefined>;
