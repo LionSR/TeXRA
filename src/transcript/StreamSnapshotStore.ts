@@ -522,13 +522,14 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * `${stream}::${accessor}` pairs already warned about a synchronous read
-   * served from a record with unestablished disk provenance, so a render
-   * loop re-reading the same stream stays one warning per accessor instead
-   * of log spam. Cleared per stream on evict (a re-seeded stream that is
-   * read too early again deserves a fresh warning).
+   * Per stream, the accessors already warned about a synchronous read served
+   * from a record with unestablished disk provenance, so a render loop
+   * re-reading the same stream stays one warning per accessor instead of log
+   * spam. Keyed by stream so evict drops the entry outright (a re-seeded
+   * stream that is read too early again deserves a fresh warning) rather than
+   * scanning every other stream's keys for a `${stream}::` prefix.
    */
-  private readonly unseededReadWarned = new Set<string>();
+  private readonly unseededReadWarned = new Map<StreamTabId, Set<string>>();
 
   /**
    * Mirror of this store's display metadata into the always-resident stream
@@ -590,9 +591,13 @@ export class StreamSnapshotStore {
    */
   private warnIfUnseeded(accessor: string, stream: StreamTabId): void {
     if (this.hasDiskProvenance(stream)) return;
-    const key = `${stream}::${accessor}`;
-    if (this.unseededReadWarned.has(key)) return;
-    this.unseededReadWarned.add(key);
+    let warned = this.unseededReadWarned.get(stream);
+    if (!warned) {
+      warned = new Set<string>();
+      this.unseededReadWarned.set(stream, warned);
+    }
+    if (warned.has(accessor)) return;
+    warned.add(accessor);
     log.warn(
       `${accessor}(${stream}) served a record with unestablished disk ` +
         `provenance; persisted sidecar state may be missing from the ` +
@@ -1129,9 +1134,7 @@ export class StreamSnapshotStore {
     this.records.evict(stream);
     this.seedQueues.delete(stream);
     this.writes.dropStreamWrites(stream);
-    for (const key of [...this.unseededReadWarned]) {
-      if (key.startsWith(`${stream}::`)) this.unseededReadWarned.delete(key);
-    }
+    this.unseededReadWarned.delete(stream);
   }
 
   /**

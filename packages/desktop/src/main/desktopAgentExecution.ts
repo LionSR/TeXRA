@@ -50,7 +50,10 @@ import {
 } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import {
+  createProgressAgentProposalController,
+  type ProgressAgentProposalController,
+} from '@controllers/progressView/ProgressAgentProposalController';
 import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import {
   createProgressViewCommandHandlers,
@@ -698,40 +701,14 @@ export class DesktopProgressBridge {
   }
 
   private createAgentProposalController(): ProgressAgentProposalController {
-    return new ProgressAgentProposalController({
+    return createProgressAgentProposalController({
       getPendingProposal: (requestId) =>
         this.backend.approvalHandlers.proposal.get(requestId),
       restoreRunConfig: async (config) => this.restoreRunConfig(config),
       openFile: (file) => this.options.host.openPath(file),
-      settleProposal: (requestId, result) => {
-        const resolved = this.hostInteractions.submitProposalDecision(
-          requestId,
-          result,
-        );
-        if (!resolved) {
-          this.logger.warn(
-            `No pending desktop host interaction found for proposal: ${requestId}`,
-          );
-        }
-      },
-      onMissingProposal: (requestId) => {
-        this.logger.warn(
-          `No pending desktop agent proposal found for setup: ${requestId}`,
-        );
-      },
-      onInvalidProposal: (issues) => {
-        this.logger.warn('Invalid desktop agent proposal config', {
-          data: { errors: issues },
-        });
-      },
-      onSetupComplete: (proposal) => {
-        this.logger.info(
-          `Desktop agent proposal ${proposal.requestId} set up in main view`,
-          {
-            data: { agent: proposal.agent },
-          },
-        );
-      },
+      submitProposalDecision: (requestId, result) =>
+        this.hostInteractions.submitProposalDecision(requestId, result),
+      log: this.logger,
     });
   }
 

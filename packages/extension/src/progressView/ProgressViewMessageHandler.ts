@@ -19,7 +19,10 @@ import {
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
 import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import {
+  createProgressAgentProposalController,
+  type ProgressAgentProposalController,
+} from '@controllers/progressView/ProgressAgentProposalController';
 import {
   createProgressViewCommandHandlers,
   createProgressViewSecondTierHandlers,
@@ -480,44 +483,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private createAgentProposalController(): ProgressAgentProposalController {
-    return new ProgressAgentProposalController({
+    return createProgressAgentProposalController({
       getPendingProposal: (requestId) =>
         this.provider.getPendingAgentProposal(requestId),
-      restoreRunConfig: async (config) => {
-        return (
-          (await this.runViewCommand<boolean>('texra.restoreState', [
-            config,
-          ])) === true
-        );
+      restoreRunConfig: async (config) =>
+        (await this.runViewCommand<boolean>('texra.restoreState', [config])) ===
+        true,
+      openFile: async (file) => {
+        await this.runViewCommand('texra.openFile', [file]);
       },
-      openFile: (file) => this.runViewCommand('texra.openFile', [file]),
-      settleProposal: (requestId, result) => {
-        const resolved = this.interactions.submitProposalDecision(
-          requestId,
-          result,
-        );
-        if (!resolved) {
-          this.log.warn(
-            `No pending host interaction found for proposal: ${requestId}`,
-          );
-        }
-      },
-      onMissingProposal: (requestId) => {
-        this.log.warn(
-          `No pending agent proposal found for setup: ${requestId}`,
-        );
-      },
-      onInvalidProposal: (issues) => {
-        this.log.warn('Invalid proposal config', {
-          data: { errors: issues },
-        });
-      },
-      onSetupComplete: (proposal) => {
-        this.log.info(
-          `Agent proposal ${proposal.requestId} set up in main view`,
-          { data: { agent: proposal.agent } },
-        );
-      },
+      submitProposalDecision: (requestId, result) =>
+        this.interactions.submitProposalDecision(requestId, result),
+      log: this.log,
     });
   }
 
