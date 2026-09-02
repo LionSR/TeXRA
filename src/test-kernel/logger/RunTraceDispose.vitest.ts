@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as logUtils from '@logger/logUtils';
 import { MESSAGE_TYPES, type StreamTabId } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
-import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
 
 describe('createRunTrace dispose', () => {
@@ -35,13 +34,13 @@ describe('createRunTrace dispose', () => {
 
   it('removes the flusher from its owning session set on dispose', () => {
     vi.useFakeTimers();
-    const flushers = new Map<string, RunTraceFlushEntry>();
+    const flushers = new Map<string, () => void>();
     const handle = createRunTrace('disposed-stream', store, flushers);
     const stream = handle.trace.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
 
     stream.append('a');
     // Chunk is throttled (49ms window), but the owning session set reaches it.
-    for (const entry of flushers.values()) entry.flush();
+    for (const flush of flushers.values()) flush();
     expect(store.get('disposed-stream')?.getRange(0)[0]?.text).toBe('a');
 
     handle.dispose();
@@ -52,7 +51,7 @@ describe('createRunTrace dispose', () => {
     // it through. The chunk would still flush via its own per-stream timer,
     // so we verify by sampling before the timer fires.
     stream.append('b');
-    for (const entry of flushers.values()) entry.flush();
+    for (const flush of flushers.values()) flush();
     // Only the 'a' chunk should be visible — the 'b' chunk hasn't been
     // pushed because the flusher was unregistered and the throttled timer
     // hasn't fired.
@@ -66,7 +65,7 @@ describe('createRunTrace dispose', () => {
     expect(() => handle.dispose()).not.toThrow();
   });
 
-  it('carries a latched cleanup failure through a successor trace', () => {
+  it('throws the cleanup failure at dispose and drops its flusher', () => {
     vi.useFakeTimers();
     const failure = new Error('delayed transcript write failed');
     const writer: TranscriptWriter = {
@@ -80,7 +79,7 @@ describe('createRunTrace dispose', () => {
       }),
       close: vi.fn(),
     };
-    const flushers = new Map<string, RunTraceFlushEntry>();
+    const flushers = new Map<string, () => void>();
     const handle = createRunTrace(
       writer.streamId,
       store,
@@ -93,18 +92,9 @@ describe('createRunTrace dispose', () => {
     stream.append('second');
     vi.advanceTimersByTime(50);
 
-    expect(() => handle.dispose()).not.toThrow();
-    expect(flushers.has('execution-failed')).toBe(true);
-
-    const successor = createRunTrace(
-      writer.streamId,
-      store,
-      flushers,
-      'execution-failed',
-    );
-    expect(flushers.get('execution-failed')?.state).toBe('active');
-    expect(() => flushers.get('execution-failed')?.flush()).toThrow(failure);
-    expect(() => successor.dispose()).not.toThrow();
+    // The failure reaches the run that owned the trace, at dispose; the
+    // session map is left clean either way.
+    expect(() => handle.dispose()).toThrow(failure);
     expect(flushers.has('execution-failed')).toBe(false);
     expect(writer.close).toHaveBeenCalledOnce();
   });

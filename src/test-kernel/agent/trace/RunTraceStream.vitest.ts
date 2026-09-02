@@ -8,7 +8,6 @@ import {
 } from '@agent/trace';
 import { MESSAGE_TYPES, type StreamLogEntry } from '@shared/schemas';
 import { createRunTrace, StreamLogStore } from '@transcript';
-import type { RunTraceFlushEntry } from '@transcript/runTrace';
 
 function streamEntries(store: StreamLogStore): StreamLogEntry[] {
   return store.get('stream')?.getRange(0) ?? [];
@@ -29,10 +28,10 @@ function withStore(
   ) => void,
 ): void {
   const store = StreamLogStore.ephemeral('test');
-  const flushers = new Map<string, RunTraceFlushEntry>();
+  const flushers = new Map<string, () => void>();
   const handle = createRunTrace('stream', store, flushers);
   run(store, handle.trace, () => {
-    for (const entry of flushers.values()) entry.flush();
+    for (const flush of flushers.values()) flush();
   });
 }
 

@@ -12,14 +12,9 @@ import { type Plan, type StreamTabId } from '@shared/schemas';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { StreamLogStore } from '@transcript';
-import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import { createRecordingHost } from '../progressTestUtils';
 
 const plan: Plan = { objective: 'Compose the per-session runtime owners.' };
-
-function activeTraceFlusher(flush: () => void): RunTraceFlushEntry {
-  return { state: 'active', flush };
-}
 
 function trackAgent(
   session: SessionHandle,
@@ -69,10 +64,7 @@ describe('SessionHandle', () => {
   it('drains trace, transcript, and registered artifact writers together', async () => {
     const session = createTestSession();
     const order: string[] = [];
-    session.flushers.set(
-      'exec:trace',
-      activeTraceFlusher(() => order.push('trace')),
-    );
+    session.flushers.set('exec:trace', () => order.push('trace'));
     vi.spyOn(session.transcripts, 'flush').mockImplementation(async () => {
       order.push('transcript');
     });
@@ -120,13 +112,10 @@ describe('SessionHandle', () => {
   it("keeps one execution's trace failure out of sibling durability", async () => {
     const session = createTestSession();
     const traceError = new Error('broken trace');
-    session.flushers.set(
-      'exec:broken',
-      activeTraceFlusher(() => {
-        throw traceError;
-      }),
-    );
-    session.flushers.set('exec:sibling', activeTraceFlusher(vi.fn()));
+    session.flushers.set('exec:broken', () => {
+      throw traceError;
+    });
+    session.flushers.set('exec:sibling', vi.fn());
     const sharedFlush = vi
       .spyOn(session.transcripts, 'flush')
       .mockResolvedValue(undefined);
@@ -331,13 +320,10 @@ describe('SessionHandle', () => {
     const laterFlusher = vi.fn();
     const interactions = vi.spyOn(session.interactions, 'dispose');
     const executions = vi.spyOn(session.executions, 'dispose');
-    session.flushers.set(
-      'failed',
-      activeTraceFlusher(() => {
-        throw failure;
-      }),
-    );
-    session.flushers.set('later', activeTraceFlusher(laterFlusher));
+    session.flushers.set('failed', () => {
+      throw failure;
+    });
+    session.flushers.set('later', laterFlusher);
 
     expect(() => session.dispose()).toThrow(failure);
 

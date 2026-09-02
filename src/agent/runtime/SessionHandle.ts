@@ -57,7 +57,6 @@ import {
 } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
-import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
@@ -125,7 +124,7 @@ export class SessionHandle {
   readonly snapshots: StreamSnapshotStore;
   private readonly detachSnapshotEvents: () => void;
   /** This session's execution-keyed trace flushers. */
-  readonly flushers: Map<string, RunTraceFlushEntry>;
+  readonly flushers: Map<string, () => void>;
   private readonly artifactFlushers = new Set<() => Promise<void>>();
   private pendingArtifactFlush: DeferredPromise<void> | undefined;
   private artifactFlushWorkerRunning = false;
@@ -199,7 +198,7 @@ export class SessionHandle {
       init.workflowControls ?? new WorkflowControlRegistry();
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
-    this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
+    this.flushers = init.flushers ?? new Map<string, () => void>();
     liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
     // session's shutdown sequence top-to-bottom: drain traces, abort and
@@ -494,11 +493,11 @@ export class SessionHandle {
       ownerKey === undefined
         ? [...this.flushers.values()]
         : [this.flushers.get(ownerKey)].filter(
-            (entry): entry is RunTraceFlushEntry => entry !== undefined,
+            (flush): flush is () => void => flush !== undefined,
           );
-    for (const entry of flushers) {
+    for (const flush of flushers) {
       try {
-        entry.flush();
+        flush();
       } catch (error) {
         failures.push(error);
       }

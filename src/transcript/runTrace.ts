@@ -16,7 +16,7 @@ import {
 } from '@agent/trace';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StreamTabId } from '@shared/schemas';
-import { aggregateError } from '@utils/core';
+import { aggregateError, throwAggregated } from '@utils/core';
 import { StorageFS } from '@utils/files/storageFS';
 
 import { attachTranscriptRecorder } from './TexraTranscriptRecorder';
@@ -33,16 +33,14 @@ export interface RunTrace {
    */
   readonly handleStatus: (event: StatusEvent) => void;
   readonly flushSpills: () => Promise<void>;
+  /**
+   * Detach the subscribers and close the writer. Throws the aggregated
+   * cleanup failure, so the run that owned the trace sees it at the moment it
+   * happens; every production caller runs this inside its own
+   * failure-collecting teardown.
+   */
   readonly dispose: () => void;
 }
-
-export type RunTraceFlushEntry =
-  | { readonly state: 'active'; readonly flush: () => void }
-  | {
-      readonly state: 'failed';
-      readonly error: unknown;
-      readonly flush: () => void;
-    };
 
 /** Run `action`, collecting any throw so every cleanup step still runs. */
 function collectFailure(failures: unknown[], action: () => void): void {
@@ -65,13 +63,12 @@ function collectFailure(failures: unknown[], action: () => void): void {
 export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore,
-  flushers: Map<string, RunTraceFlushEntry> = new Map(),
+  flushers: Map<string, () => void> = new Map(),
   ownerKey: string = streamId,
   reservedWriter?: TranscriptWriter,
 ): RunTrace {
   const writer = reservedWriter ?? store.acquireWriter(streamId, ownerKey);
-  const previousEntry = flushers.get(ownerKey);
-  if (previousEntry?.state === 'active') {
+  if (flushers.has(ownerKey)) {
     const failures: unknown[] = [
       new Error(`Execution ${ownerKey} already owns a run trace.`),
     ];
@@ -104,26 +101,11 @@ export function createRunTrace(
     throw aggregateError(failures, 'Run trace setup and cleanup failed');
   }
 
-  const pendingFailures =
-    previousEntry?.state === 'failed' ? [previousEntry.error] : [];
-  const activeEntry: RunTraceFlushEntry = {
-    state: 'active',
-    flush: () => {
-      const failures: unknown[] = [];
-      collectFailure(failures, () => transcript.flushPending());
-      if (pendingFailures.length > 0) {
-        failures.push(...pendingFailures);
-        pendingFailures.length = 0;
-      }
-      if (failures.length > 0) {
-        throw aggregateError(failures, 'Run trace flush failed');
-      }
-    },
-  };
+  const flush = (): void => transcript.flushPending();
 
   // Register the flush by execution so durability boundaries drain only their
   // own trace, while session shutdown can still drain every trace.
-  flushers.set(ownerKey, activeEntry);
+  flushers.set(ownerKey, flush);
 
   let disposed = false;
 
@@ -138,24 +120,8 @@ export function createRunTrace(
       collectFailure(failures, () => transcript.unsubscribe());
       collectFailure(failures, () => unsubscribeChannel());
       collectFailure(failures, () => writer.close());
-      if (flushers.get(ownerKey) !== activeEntry) return;
-      failures.unshift(...pendingFailures);
-      if (failures.length === 0) {
-        flushers.delete(ownerKey);
-        return;
-      }
-      const failure = aggregateError(failures, 'Run trace cleanup failed');
-      const failedEntry: RunTraceFlushEntry = {
-        state: 'failed',
-        error: failure,
-        flush: () => {
-          if (flushers.get(ownerKey) === failedEntry) {
-            flushers.delete(ownerKey);
-          }
-          throw failure;
-        },
-      };
-      flushers.set(ownerKey, failedEntry);
+      if (flushers.get(ownerKey) === flush) flushers.delete(ownerKey);
+      throwAggregated(failures, 'Run trace cleanup failed');
     },
   };
 }
