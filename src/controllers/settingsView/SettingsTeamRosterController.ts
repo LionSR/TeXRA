@@ -9,6 +9,7 @@ import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
+import type { MessageHost } from '@hosts/uiHosts';
 import { assertNever } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -19,12 +20,13 @@ type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
   ): string | undefined;
 };
 
-interface SettingsTeamRosterPresentation {
+interface SettingsTeamRosterPresentation extends Pick<
+  MessageHost,
+  'showInfoMessage' | 'showErrorMessage'
+> {
   chooseTeamAvailability(
     prompt: TeamAvailabilityPrompt,
   ): Promise<TeamAvailabilityChoice | undefined>;
-  showInfoMessage(message: string): Promise<void>;
-  showErrorMessage(message: string): Promise<void>;
 }
 
 interface SettingsTeamRosterOptions extends Omit<

@@ -21,6 +21,7 @@ import {
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { AuthCallbackUriParts } from '@auth/authCallback';
+import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -62,10 +63,11 @@ export interface DesktopAuthCallbackState {
 
 type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
 
-export interface DesktopSupabaseAuthHost {
+export interface DesktopSupabaseAuthHost extends Pick<
+  MessageHost,
+  'showInfoMessage' | 'showErrorMessage'
+> {
   openExternalUrl(url: string): Promise<void>;
-  showInfoMessage(message: string): Promise<void> | void;
-  showErrorMessage(message: string): Promise<void> | void;
   onSessionChanged(): Promise<void> | void;
 }
 

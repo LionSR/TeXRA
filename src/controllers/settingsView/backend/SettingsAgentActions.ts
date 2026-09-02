@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 // Local imports - controllers
 import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
+import type { MessageHost } from '@hosts/uiHosts';
 // Local imports - shared
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentSource, SettingsMessageFor } from '@shared/schemas';
@@ -50,8 +51,8 @@ interface SettingsAgentActionsOptions {
     message: string,
     confirmLabel: string,
   ) => Promise<boolean>;
-  readonly showInfoMessage: (message: string) => Promise<void>;
-  readonly showErrorMessage: (message: string) => Promise<void>;
+  readonly showInfoMessage: MessageHost['showInfoMessage'];
+  readonly showErrorMessage: MessageHost['showErrorMessage'];
   readonly refreshAfterMutation: () => Promise<void>;
   readonly run: (
     failureMessage: string,
