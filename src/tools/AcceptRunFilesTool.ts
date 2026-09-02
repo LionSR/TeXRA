@@ -30,7 +30,6 @@ import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
   writeApprovedContent,
-  type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { filterNotNull, filterNotNullish } from '@utils/core';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -60,20 +59,6 @@ interface RecordedRejection {
   readonly channel: RejectionChannel;
   readonly path: string;
   readonly message: string | undefined;
-}
-
-/** Narrow one declined approval to the single channel it arrived on. */
-function recordRejection(
-  approval: Exclude<ToolEditApprovalResult, { action: 'apply' }>,
-  path: string,
-): RecordedRejection {
-  if ('cause' in approval) {
-    return { channel: 'cause', path, message: approval.cause };
-  }
-  if ('reason' in approval) {
-    return { channel: 'reason', path, message: approval.reason };
-  }
-  return { channel: 'feedback', path, message: approval.feedback };
 }
 
 // ============================================================================
@@ -248,7 +233,23 @@ Parameters map directly to subagent-result delivery attributes:
 
       if (approval.action !== 'apply') {
         rejected++;
-        rejections.push(recordRejection(approval, entry.original));
+        // Narrow the declined approval to the single channel it arrived on.
+        const path = entry.original;
+        if ('cause' in approval) {
+          rejections.push({ channel: 'cause', path, message: approval.cause });
+        } else if ('reason' in approval) {
+          rejections.push({
+            channel: 'reason',
+            path,
+            message: approval.reason,
+          });
+        } else {
+          rejections.push({
+            channel: 'feedback',
+            path,
+            message: approval.feedback,
+          });
+        }
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
       }
