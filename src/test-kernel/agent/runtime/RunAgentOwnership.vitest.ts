@@ -108,11 +108,14 @@ describe('runAgent execution ownership', () => {
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
-  it('detaches the launch abort link when execution tracking throws', async () => {
+  it('cleans up a partially tracked launch when execution tracking throws', async () => {
     const signal = new AbortController().signal;
     const removeEventListener = vi.spyOn(signal, 'removeEventListener');
     const trackError = new Error('execution tracking failed');
-    trackExecution.mockImplementationOnce(() => {
+    let partiallyTrackedHandle: AgentExecutionHandle | undefined;
+    trackExecution.mockImplementationOnce((handle) => {
+      trackedHandle = handle;
+      partiallyTrackedHandle = handle;
       throw trackError;
     });
 
@@ -124,7 +127,11 @@ describe('runAgent execution ownership', () => {
       'abort',
       expect.any(Function),
     );
-    expect(untrackExecution).not.toHaveBeenCalled();
+    expect(untrackExecution).toHaveBeenCalledOnce();
+    expect(untrackExecution).toHaveBeenCalledWith(EXECUTION_ID);
+    expect(trackedHandle).toBeUndefined();
+    expect(partiallyTrackedHandle).toBeDefined();
+    expect(partiallyTrackedHandle?.interrupt()).toBe(false);
   });
 
   it('makes a fresh launch interruptible before registration settles', async () => {
