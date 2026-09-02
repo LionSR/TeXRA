@@ -28,6 +28,25 @@ export interface ProgressAgentProposalControllerDeps {
   onSetupComplete?(proposal: AgentProposalPermission): void;
 }
 
+/**
+ * The host-specific half of the agent-proposal wiring: where a pending
+ * proposal is found, how a config is restored into the main view, how a file
+ * is opened, which interaction registry settles the decision, and where to
+ * report. `log` is structural so the extension's `Log` and the desktop's
+ * `AgentTrace` both satisfy it without either host adapting its logger.
+ */
+export interface ProgressAgentProposalHostPort {
+  getPendingProposal(requestId: string): AgentProposalPermission | undefined;
+  restoreRunConfig(config: AgentConfig): Promise<boolean>;
+  openFile(path: string): Promise<void>;
+  /** False when no pending host interaction matched `requestId`. */
+  submitProposalDecision(requestId: string, result: ProposalResult): boolean;
+  log: {
+    info(message: string, options?: { data?: unknown }): void;
+    warn(message: string, options?: { data?: unknown }): void;
+  };
+}
+
 export class ProgressAgentProposalController {
   constructor(private readonly deps: ProgressAgentProposalControllerDeps) {}
 
@@ -95,4 +114,37 @@ export class ProgressAgentProposalController {
     this.deps.settleProposal(requestId, { action: 'setup' });
     this.deps.onSetupComplete?.(proposal);
   }
+}
+
+/**
+ * Builds the controller with the diagnostics both hosts had written out
+ * separately. The three `on*` hooks and the "nothing was pending" arm of
+ * `settleProposal` carry no host-specific behavior — only the log channel
+ * differs, and each host's logger already names itself — so they belong here
+ * rather than in two copies that drift apart.
+ */
+export function createProgressAgentProposalController(
+  port: ProgressAgentProposalHostPort,
+): ProgressAgentProposalController {
+  const { log } = port;
+  return new ProgressAgentProposalController({
+    getPendingProposal: (requestId) => port.getPendingProposal(requestId),
+    restoreRunConfig: (config) => port.restoreRunConfig(config),
+    openFile: (file) => port.openFile(file),
+    settleProposal: (requestId, result) => {
+      if (port.submitProposalDecision(requestId, result)) return;
+      log.warn(`No pending host interaction found for proposal: ${requestId}`);
+    },
+    onMissingProposal: (requestId) => {
+      log.warn(`No pending agent proposal found for setup: ${requestId}`);
+    },
+    onInvalidProposal: (issues) => {
+      log.warn('Invalid proposal config', { data: { errors: issues } });
+    },
+    onSetupComplete: (proposal) => {
+      log.info(`Agent proposal ${proposal.requestId} set up in main view`, {
+        data: { agent: proposal.agent },
+      });
+    },
+  });
 }
