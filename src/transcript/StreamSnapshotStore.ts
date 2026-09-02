@@ -189,6 +189,23 @@ function withoutSummaryMetaFields(
 }
 
 /**
+ * The mirrored fields one execution owns, and which a handoff to a different
+ * execution therefore invalidates. Everything else in `StreamSummaryMeta` —
+ * `parentStreamId`, `cumulativeUsage` — describes the stream across every run
+ * it has hosted and survives the handoff.
+ */
+const EXECUTION_SCOPED_SUMMARY_META_FIELDS = [
+  'identity',
+  'executionId',
+  'userFollowUpSupport',
+  'agentCategory',
+  'description',
+  'model',
+  'workingDirectory',
+  'command',
+] as const satisfies readonly (keyof StreamSummaryMeta)[];
+
+/**
  * The five execution-scoped facts owned by one run record and replaced or
  * hydrated together when a stream changes execution.
  */
@@ -1463,7 +1480,13 @@ export class StreamSnapshotStore {
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
-      record.summaryMetaHydrationFallback = undefined;
+      // Only what the departing execution owned: the stream's parent edge and
+      // its summed usage outlive any single run, and on a record minted after
+      // a release the fallback is their only source until seeding lands.
+      record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+        record.summaryMetaHydrationFallback,
+        EXECUTION_SCOPED_SUMMARY_META_FIELDS,
+      );
     }
     record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
       record.summaryMetaHydrationFallback,
