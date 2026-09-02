@@ -76,6 +76,34 @@ export class LatexMediaManager {
     private readonly fileService?: TaskRunFileService,
   ) {}
 
+  /**
+   * Run `task` over `items` at the LaTeX concurrency limit, keeping going when
+   * an individual item fails. Mirroring is best-effort by design — a deleted
+   * figure or a dependency outside the workspace must not take the surviving
+   * files down with it — so the failure is swallowed, and logged here with the
+   * offending path rather than at each call site.
+   */
+  private async forEachFile<T>(
+    items: readonly T[],
+    pathOf: (item: T) => string,
+    failureMessage: string,
+    task: (item: T) => Promise<unknown>,
+  ): Promise<void> {
+    await pMap(
+      items,
+      async (item) => {
+        try {
+          await task(item);
+        } catch (error) {
+          this.logger.debug(failureMessage, {
+            data: { path: pathOf(item), error },
+          });
+        }
+      },
+      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+    );
+  }
+
   private async mirrorFigureDependencies(
     latexFile: FileLocation,
     figures: string[],
@@ -105,18 +133,12 @@ export class LatexMediaManager {
       return;
     }
 
-    await pMap(
+    await this.forEachFile(
       [...absolutePaths],
-      async (absolutePath) => {
-        try {
-          await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
-        } catch (error) {
-          this.logger.debug('Unable to mirror figure dependency', {
-            data: { path: absolutePath, error },
-          });
-        }
-      },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
+      (absolutePath) => absolutePath,
+      'Unable to mirror figure dependency',
+      (absolutePath) =>
+        fileService.mirrorWorkspaceFile(pathToLocation(absolutePath)),
     );
   }
 
@@ -272,25 +294,20 @@ export class LatexMediaManager {
       const deps = await this.collectDependencies(file);
       if (deps.length === 0) continue;
 
-      await pMap(
+      await this.forEachFile(
         deps,
+        (absolutePath) => absolutePath,
+        'Unable to mirror LaTeX dependency',
         async (absolutePath) => {
           const depLocation = pathToLocation(absolutePath);
           const isTex = hasExtension(absolutePath, '.tex');
-          try {
-            await fileService.mirrorWorkspaceFile(depLocation, {
-              snapshot: isTex,
-            });
-            if (isTex) {
-              worklist.push(depLocation);
-            }
-          } catch (error) {
-            this.logger.debug('Unable to mirror LaTeX dependency', {
-              data: { path: absolutePath, error },
-            });
+          await fileService.mirrorWorkspaceFile(depLocation, {
+            snapshot: isTex,
+          });
+          if (isTex) {
+            worklist.push(depLocation);
           }
         },
-        { concurrency: LATEX_CONCURRENCY, stopOnError: false },
       );
       this.logger.debug('Mirrored LaTeX dependencies', {
         data: { count: deps.length, from: file.absolutePath },
@@ -378,20 +395,15 @@ export class LatexMediaManager {
 
     if (candidates.length === 0) return;
 
-    await pMap(
+    await this.forEachFile(
       candidates,
+      (absolutePath) => absolutePath,
+      'Unable to mirror project sibling',
       async (absolutePath) => {
-        try {
-          const stats = await platform().fs.stat(absolutePath);
-          if (!isFile(stats.type)) return;
-          await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
-        } catch (error) {
-          this.logger.debug('Unable to mirror project sibling', {
-            data: { path: absolutePath, error },
-          });
-        }
+        const stats = await platform().fs.stat(absolutePath);
+        if (!isFile(stats.type)) return;
+        await fileService.mirrorWorkspaceFile(pathToLocation(absolutePath));
       },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
   }
 
@@ -411,20 +423,15 @@ export class LatexMediaManager {
     );
     if (texFiles.length === 0) return;
 
-    await pMap(
+    await this.forEachFile(
       texFiles,
+      (file) => file.absolutePath,
+      'Unable to mirror figures',
       async (file) => {
-        try {
-          const figures = await extractFigurePathsFromLatex(file);
-          if (figures.length === 0) return;
-          await this.mirrorFigureDependencies(file, figures);
-        } catch (error) {
-          this.logger.debug('Unable to mirror figures', {
-            data: { path: file.absolutePath, error },
-          });
-        }
+        const figures = await extractFigurePathsFromLatex(file);
+        if (figures.length === 0) return;
+        await this.mirrorFigureDependencies(file, figures);
       },
-      { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
   }
 
