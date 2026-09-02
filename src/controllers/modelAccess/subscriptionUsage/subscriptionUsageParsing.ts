@@ -60,20 +60,28 @@ const looseFiniteNumber = z.preprocess((value) => {
   return value;
 }, z.number().finite());
 
-/** A wire timestamp expressed as epoch seconds or epoch milliseconds
- *  (whichever a `looseFiniteNumber` resolves to), normalized to epoch ms. */
-const epochMsField = looseFiniteNumber.pipe(
-  z
-    .number()
-    .nonnegative()
-    .transform((value) =>
-      Math.trunc(value < 100_000_000_000 ? value * 1000 : value),
-    ),
-);
-
-/** A wire timestamp expressed as an ISO 8601 (or otherwise `Date.parse`-able)
- *  string, normalized to epoch ms. */
-const isoTimestampField = z.string().transform((value, ctx) => {
+/** A wire timestamp expressed as an epoch number (seconds or milliseconds,
+ *  whichever `looseFiniteNumber` resolves to) or an ISO 8601 string,
+ *  normalized to epoch ms. A value that parses as a number commits to the
+ *  numeric interpretation — a negative epoch is rejected outright rather
+ *  than falling through to `Date.parse`, which accepts some non-ISO
+ *  numeric-looking strings as dates (`Date.parse('-1')` resolves to
+ *  2001-01-01). */
+const timestampMsField = z.any().transform((value, ctx) => {
+  const numeric = looseFiniteNumber.safeParse(value);
+  if (numeric.success) {
+    if (numeric.data < 0) {
+      ctx.addIssue({ code: 'custom', message: 'negative epoch timestamp' });
+      return z.NEVER;
+    }
+    return Math.trunc(
+      numeric.data < 100_000_000_000 ? numeric.data * 1000 : numeric.data,
+    );
+  }
+  if (typeof value !== 'string') {
+    ctx.addIssue({ code: 'custom', message: 'not a timestamp' });
+    return z.NEVER;
+  }
   const parsed = Date.parse(value);
   if (Number.isNaN(parsed)) {
     ctx.addIssue({ code: 'custom', message: 'not a parseable date string' });
@@ -81,10 +89,6 @@ const isoTimestampField = z.string().transform((value, ctx) => {
   }
   return parsed;
 });
-
-/** Provider responses report reset timestamps either as epoch numbers (mixed
- *  seconds/ms) or as ISO strings — try the numeric form first. */
-const timestampMsField = z.union([epochMsField, isoTimestampField]);
 
 /** Pick the first field, by alias, that parses against `schema`. Every
  *  subscription-usage adapter reads the same provider concept under several
