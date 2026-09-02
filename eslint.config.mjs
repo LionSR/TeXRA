@@ -727,4 +727,22 @@ export default tseslint.config(
       ],
     },
   },
+
+  // `<wa-icon>` is constructed in exactly one place (`waIcon()`), so the
+  // Font Awesome / Web Awesome icon set stays the single icon standard
+  // instead of accumulating parallel hand-rolled `<wa-icon>` templates.
+  {
+    files: ['src/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+    ignores: ['src/shared/wa/webAwesomeIcons.ts', '**/*.vitest.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TemplateElement[value.raw=/<wa-icon\\b/]',
+          message:
+            'Build <wa-icon> markup via waIcon() from @shared/wa/webAwesomeIcons instead of a hand-rolled template.',
+        },
+      ],
+    },
+  },
 );
