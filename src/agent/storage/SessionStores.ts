@@ -31,6 +31,50 @@ interface GoalEntryStore {
   forget(stream: StreamTabId): Promise<void>;
 }
 
+/**
+ * A per-stream map of per-incarnation values that prunes itself: deleting a
+ * stream's last incarnation also removes the stream's now-empty inner map,
+ * so `size`, `countFor`, and `allValues` only ever see live entries. Used for
+ * `pendingStreamDeletions` and `streamDeletionClaims`, which both key first
+ * by stream, then by incarnation, and both need to prune-when-empty at every
+ * write — this centralizes that dance instead of repeating it at each site.
+ */
+class IncarnationMap<K2, V> {
+  private readonly byStream = new Map<StreamTabId, Map<K2, V>>();
+
+  get size(): number {
+    return this.byStream.size;
+  }
+
+  get(stream: StreamTabId, incarnation: K2): V | undefined {
+    return this.byStream.get(stream)?.get(incarnation);
+  }
+
+  set(stream: StreamTabId, incarnation: K2, value: V): void {
+    const byIncarnation = this.byStream.get(stream) ?? new Map<K2, V>();
+    this.byStream.set(stream, byIncarnation);
+    byIncarnation.set(incarnation, value);
+  }
+
+  delete(stream: StreamTabId, incarnation: K2): void {
+    const byIncarnation = this.byStream.get(stream);
+    if (!byIncarnation) return;
+    byIncarnation.delete(incarnation);
+    if (byIncarnation.size === 0) this.byStream.delete(stream);
+  }
+
+  /** Number of incarnations tracked for `stream`, 0 if none. */
+  countFor(stream: StreamTabId): number {
+    return this.byStream.get(stream)?.size ?? 0;
+  }
+
+  allValues(): V[] {
+    return [...this.byStream.values()].flatMap((byIncarnation) => [
+      ...byIncarnation.values(),
+    ]);
+  }
+}
+
 /** The execution-lifecycle lane a stream deletion runs on as its own step. */
 export interface ExecutionLifecycleLane {
   runExecutionStep<T>(executionId: string, step: () => Promise<T>): Promise<T>;
@@ -108,13 +152,13 @@ export class SessionStores {
    * incarnation identifies the same deletion. A re-claimed identity's new
    * incarnation starts independently. `undefined` is the unkeyed slot.
    */
-  private readonly pendingStreamDeletions = new Map<
-    StreamTabId,
-    Map<number | undefined, Promise<DeleteStreamResult>>
+  private readonly pendingStreamDeletions = new IncarnationMap<
+    number | undefined,
+    Promise<DeleteStreamResult>
   >();
-  private readonly streamDeletionClaims = new Map<
-    StreamTabId,
-    Map<number, Set<symbol>>
+  private readonly streamDeletionClaims = new IncarnationMap<
+    number,
+    Set<symbol>
   >();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
   private readonly deletionQueue = new PQueue({ concurrency: 1 });
@@ -140,11 +184,10 @@ export class SessionStores {
     stream: StreamTabId,
     expectedIncarnation: number,
   ): () => void {
-    const byIncarnation =
-      this.streamDeletionClaims.get(stream) ?? new Map<number, Set<symbol>>();
-    this.streamDeletionClaims.set(stream, byIncarnation);
-    const claims = byIncarnation.get(expectedIncarnation) ?? new Set<symbol>();
-    byIncarnation.set(expectedIncarnation, claims);
+    const claims =
+      this.streamDeletionClaims.get(stream, expectedIncarnation) ??
+      new Set<symbol>();
+    this.streamDeletionClaims.set(stream, expectedIncarnation, claims);
     const claim = Symbol(stream);
     claims.add(claim);
     let released = false;
@@ -152,8 +195,9 @@ export class SessionStores {
       if (released) return;
       released = true;
       claims.delete(claim);
-      if (claims.size === 0) byIncarnation.delete(expectedIncarnation);
-      if (byIncarnation.size === 0) this.streamDeletionClaims.delete(stream);
+      if (claims.size === 0) {
+        this.streamDeletionClaims.delete(stream, expectedIncarnation);
+      }
     };
   }
 
@@ -167,7 +211,7 @@ export class SessionStores {
    * when its deletion settles or fails.
    */
   hasStreamDeletionClaim(stream: StreamTabId): boolean {
-    return !!this.streamDeletionClaims.get(stream)?.size;
+    return this.streamDeletionClaims.countFor(stream) > 0;
   }
 
   /**
@@ -243,14 +287,13 @@ export class SessionStores {
     expectedIncarnation: number | undefined,
     start: () => Promise<DeleteStreamResult>,
   ): Promise<DeleteStreamResult> {
-    const byGuard =
-      this.pendingStreamDeletions.get(stream) ??
-      new Map<number | undefined, Promise<DeleteStreamResult>>();
-    this.pendingStreamDeletions.set(stream, byGuard);
-    const existing = byGuard.get(expectedIncarnation);
+    const existing = this.pendingStreamDeletions.get(
+      stream,
+      expectedIncarnation,
+    );
     if (existing) return existing;
     const pending = start();
-    byGuard.set(expectedIncarnation, pending);
+    this.pendingStreamDeletions.set(stream, expectedIncarnation, pending);
     const finish = (): void =>
       this.finishStreamDeletion(stream, expectedIncarnation, pending);
     void pending.then(finish, finish);
@@ -285,9 +328,7 @@ export class SessionStores {
       this.pendingDeleteAll !== undefined
     ) {
       await Promise.allSettled([
-        ...[...this.pendingStreamDeletions.values()].flatMap((byGuard) => [
-          ...byGuard.values(),
-        ]),
+        ...this.pendingStreamDeletions.allValues(),
         ...(this.pendingDeleteAll ? [this.pendingDeleteAll] : []),
       ]);
     }
@@ -309,10 +350,12 @@ export class SessionStores {
     expectedIncarnation: number | undefined,
     pending: Promise<DeleteStreamResult>,
   ): void {
-    const byGuard = this.pendingStreamDeletions.get(stream);
-    if (byGuard?.get(expectedIncarnation) !== pending) return;
-    byGuard.delete(expectedIncarnation);
-    if (byGuard.size === 0) this.pendingStreamDeletions.delete(stream);
+    if (
+      this.pendingStreamDeletions.get(stream, expectedIncarnation) !== pending
+    ) {
+      return;
+    }
+    this.pendingStreamDeletions.delete(stream, expectedIncarnation);
   }
 
   private async notifyDeleted(stream: StreamTabId): Promise<void> {
