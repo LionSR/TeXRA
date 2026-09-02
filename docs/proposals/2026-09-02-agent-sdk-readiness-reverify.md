@@ -38,17 +38,17 @@ follow-up ask).
 
 ## 1. Every `-08-25` tracked fact re-verifies at `646475d`
 
-| Item                               | `-08-25` state (`51c04c6`)                              | `646475d` state                                                                                                                                     |
-| ---------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **§8a** (dead logger `export`)     | landed: `OutputChannelFactoryOptions` de-exported       | **still gone.** `src/logger/logUtils.ts:48` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:198`.                   |
-| **§8b / PT-2** (`SessionHandle`)   | landed: `useHostInteractions` removed                   | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits. `SessionHandle` re-exposes no per-concern method.               |
-| **L-3** (dead redaction branch)    | closed; `redactSecrets` single-arg                      | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                          |
-| **§7 Tier-1 doors**                | 4 of 8 landed (`export`/`review`/`templates`/`followUp`)| **present & stable.** `src/agent/{export,review,templates,followUp}/index.ts` all exist.                                                            |
-| **M-3** `ModelHandler.ts` god-base | 2,043 LoC                                               | **2,030 LoC** (`wc -l`); **−13**, from the window's simplification sweeps. Genuinely shared behavior, no per-provider copy-paste.                    |
-| **Provider-type-leak floor**       | `M`/`T` leak all four provider SDKs                     | **unchanged.** `ProviderMessage.ts:4-8` still imports message types from `@anthropic-ai/sdk`, `@google/genai`, `openai`, `@openrouter/sdk`.         |
-| **Node flow engine**               | 159 LoC, `BaseNode`/`Flow` only                         | **158 LoC** (`src/agent/node/index.ts`); still exactly `BaseNode` + `Flow` (two `export`s). Matches CLAUDE.md.                                       |
-| **`IModelHandler` port shape**     | derived `Pick<ModelHandler<…>>`, anti-drift             | **unchanged.** `src/agent/types/IModelHandler.ts` still a derived `Pick`; forward-looking manifest note (§5.1), not a defect.                        |
-| **Version**                        | 0.40.5 (short of the v0.41 `runFact.` gate)             | **0.40.8** (`packages/agent/package.json`). Advanced three patches; still short of the v0.41 retirement gate. Retirement not yet due.               |
+| Item                               | `-08-25` state (`51c04c6`)                               | `646475d` state                                                                                                                             |
+| ---------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **§8a** (dead logger `export`)     | landed: `OutputChannelFactoryOptions` de-exported        | **still gone.** `src/logger/logUtils.ts:48` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:198`.          |
+| **§8b / PT-2** (`SessionHandle`)   | landed: `useHostInteractions` removed                    | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits. `SessionHandle` re-exposes no per-concern method.      |
+| **L-3** (dead redaction branch)    | closed; `redactSecrets` single-arg                       | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                  |
+| **§7 Tier-1 doors**                | 4 of 8 landed (`export`/`review`/`templates`/`followUp`) | **present & stable.** `src/agent/{export,review,templates,followUp}/index.ts` all exist.                                                    |
+| **M-3** `ModelHandler.ts` god-base | 2,043 LoC                                                | **2,030 LoC** (`wc -l`); **−13**, from the window's simplification sweeps. Genuinely shared behavior, no per-provider copy-paste.           |
+| **Provider-type-leak floor**       | `M`/`T` leak all four provider SDKs                      | **unchanged.** `ProviderMessage.ts:4-8` still imports message types from `@anthropic-ai/sdk`, `@google/genai`, `openai`, `@openrouter/sdk`. |
+| **Node flow engine**               | 159 LoC, `BaseNode`/`Flow` only                          | **158 LoC** (`src/agent/node/index.ts`); still exactly `BaseNode` + `Flow` (two `export`s). Matches CLAUDE.md.                              |
+| **`IModelHandler` port shape**     | derived `Pick<ModelHandler<…>>`, anti-drift              | **unchanged.** `src/agent/types/IModelHandler.ts` still a derived `Pick`; forward-looking manifest note (§5.1), not a defect.               |
+| **Version**                        | 0.40.5 (short of the v0.41 `runFact.` gate)              | **0.40.8** (`packages/agent/package.json`). Advanced three patches; still short of the v0.41 retirement gate. Retirement not yet due.       |
 
 ## 2. Frozen host deep-import width — shrank on CLI, held elsewhere
 
@@ -144,9 +144,9 @@ Unchanged from `-08-25 §5`; restated in brief:
 6. **Result-taxonomy documentation.** An external consumer meets
    `AgentFlowResult` (discriminated `workflow | toolUse`), `AgentFinalResult`,
    and the non-terminal `WAITING` state. The transforms are real, not delete
-   candidates; documenting *why* `WAITING` exists and *why* `cost`/`diffs` land
+   candidates; documenting _why_ `WAITING` exists and _why_ `cost`/`diffs` land
    only on the final remains the single largest "which result do I get?"
-   clarification the surface needs. #11683 (§6) flattened the *carriers* of
+   clarification the surface needs. #11683 (§6) flattened the _carriers_ of
    these results — indirection removal, not a shape change — which reduces the
    plumbing an eventual doc must describe.
 7. **Publication** remains gated on the named-external-consumer hold; the legal
@@ -158,7 +158,7 @@ The window is dominated by simplification and indirection removal, consistent
 with the standing trend; none add a wrapper layer or widen a baseline. Relevant
 to the audited areas:
 
-- **Runtime result path** — `e919121` (#11683) *flatten runtime result carriers*
+- **Runtime result path** — `e919121` (#11683) _flatten runtime result carriers_
   — removed carrier indirection across `childRunLoop`, `sessionDescription`, and
   the reflection output nodes. Readiness-positive for §5.6.
 - **Simplification sweeps** — `3dec1d5` (#11746), `83b6192` (#11737), `4505de2`
