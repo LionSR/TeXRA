@@ -46,8 +46,8 @@ export interface StreamPhaseState {
  * One entry per stream, in one of its three forms. Neither a reservation nor a
  * hold is a second structure overlaying the phase: each is the entry itself
  * (a reservation carrying the state a rollback must restore, a hold carrying
- * the detail shown for a stream that has no phase here), so every reader sees
- * the same state without merging two collections.
+ * its detail and any phase already known), so every reader sees the same state
+ * without merging two collections.
  */
 type StreamEntry =
   | { readonly kind: 'phase'; readonly state: StreamPhaseState }
@@ -61,11 +61,12 @@ type StreamEntry =
        * Restart classification could not settle on a phase (held by another
        * process, or the run state unreadable). RUNNING/WAITING mean a live
        * flow in this process, and this process never adopts anyone else's
-       * run, so a hold carries no phase; the next full metadata sync
-       * publishes it.
+       * run, so a hold with no prior phase remains unclassified until the next
+       * full metadata sync publishes it.
        */
       readonly kind: 'hold';
       readonly detail: string;
+      readonly state?: StreamPhaseState;
     };
 
 function effectiveState(entry: StreamEntry): StreamPhaseState | undefined {
@@ -79,7 +80,7 @@ function effectiveState(entry: StreamEntry): StreamPhaseState | undefined {
         runStartedAt: entry.runStartedAt,
       };
     case 'hold':
-      return undefined;
+      return entry.state;
   }
 }
 
@@ -128,7 +129,7 @@ export class StreamStatusMachine {
   ): boolean {
     const entry = this.streams.get(stream);
     if (entry?.kind === 'reserved') return false;
-    const previousState = entry?.kind === 'phase' ? entry.state : undefined;
+    const previousState = entry ? effectiveState(entry) : undefined;
     const previousPhase = previousState?.phase;
     if (!canAcquireStreamReservation(previousPhase)) {
       return false;
@@ -187,7 +188,7 @@ export class StreamStatusMachine {
     const fromReservation = entry?.kind === 'reserved';
     let previousState: StreamPhaseState | undefined;
     if (fromReservation) previousState = entry.rollbackTo;
-    else if (entry?.kind === 'phase') previousState = entry.state;
+    else if (entry) previousState = effectiveState(entry);
     const from = previousState?.phase;
     let tableFrom = from;
     if (fromReservation) {
@@ -288,9 +289,15 @@ export class StreamStatusMachine {
     return false;
   }
 
-  /** Record that `stream` has no phase here and why. */
+  /** Record why restart classification could not settle this stream. */
   markUnavailable(stream: StreamTabId, detail: string): void {
-    this.streams.set(stream, { kind: 'hold', detail });
+    const entry = this.streams.get(stream);
+    const state = entry ? effectiveState(entry) : undefined;
+    this.streams.set(stream, {
+      kind: 'hold',
+      detail,
+      ...(state ? { state } : {}),
+    });
   }
 
   /**
@@ -299,7 +306,13 @@ export class StreamStatusMachine {
    * with the phase it lands on.
    */
   clearHold(stream: StreamTabId): void {
-    if (this.streams.get(stream)?.kind === 'hold') this.streams.delete(stream);
+    const entry = this.streams.get(stream);
+    if (entry?.kind !== 'hold') return;
+    if (entry.state) {
+      this.streams.set(stream, { kind: 'phase', state: entry.state });
+      return;
+    }
+    this.streams.delete(stream);
   }
 
   /** The detail recorded by `markUnavailable`, if the stream has no phase here. */

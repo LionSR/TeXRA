@@ -45,20 +45,22 @@ const CONFIG = AgentConfigSchema.parse({
 });
 const flushArtifacts = vi.fn();
 let trackedHandle: AgentExecutionHandle | undefined;
+const trackExecution = vi.fn((handle: AgentExecutionHandle) => {
+  trackedHandle = handle;
+});
+const untrackExecution = vi.fn((executionId: ExecutionId) => {
+  if (trackedHandle?.executionId === executionId) trackedHandle = undefined;
+});
 // The real exit choreography over the fake's flushArtifacts and the mocked
 // lease verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
 const SESSION = {
   executions: {
-    track: vi.fn((handle) => {
-      trackedHandle = handle;
-    }),
+    track: trackExecution,
     getHandle: vi.fn((executionId) =>
       trackedHandle?.executionId === executionId ? trackedHandle : undefined,
     ),
-    untrack: vi.fn((executionId) => {
-      if (trackedHandle?.executionId === executionId) trackedHandle = undefined;
-    }),
+    untrack: untrackExecution,
     // No competing generation exists in this fixture; the lane is a passthrough.
     launchExecution: vi.fn((_executionId: ExecutionId, start: () => unknown) =>
       start(),
@@ -104,6 +106,25 @@ describe('runAgent execution ownership', () => {
     flushArtifacts.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
+  });
+
+  it('detaches the launch abort link when execution tracking throws', async () => {
+    const signal = new AbortController().signal;
+    const removeEventListener = vi.spyOn(signal, 'removeEventListener');
+    const trackError = new Error('execution tracking failed');
+    trackExecution.mockImplementationOnce(() => {
+      throw trackError;
+    });
+
+    await expect(launch({ kind: 'fresh', launchSignal: signal })).rejects.toBe(
+      trackError,
+    );
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'abort',
+      expect.any(Function),
+    );
+    expect(untrackExecution).not.toHaveBeenCalled();
   });
 
   it('makes a fresh launch interruptible before registration settles', async () => {
