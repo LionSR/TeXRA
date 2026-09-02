@@ -5,6 +5,7 @@ import PQueue from 'p-queue';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
+import { deleteTranscriptWithSnapshotRollback } from '@transcript/StagedDeletionCoordinator';
 import { StreamDeletionSupersededError } from '@transcript/StreamLogStore';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
@@ -901,32 +902,24 @@ export class SessionStores {
       }
       throw new StreamDeletionSupersededError(stream);
     }
-    try {
-      // The transcript registry is the commit point for tab visibility.
-      // Snapshot sidecars are only renamed before this, so a failure can roll
-      // them back without reconstructing state from partial files. The guard
-      // travels into `delete` itself so it is re-checked after the durable
-      // transcript delete but before in-memory state is forgotten.
-      await this.streamLogs.delete(stream, { shouldDelete });
-      // `delete` re-checked the guard before forgetting in-memory state. This
-      // final check runs with no await between it and the snapshot commit, so
-      // a re-claim that landed during the transcript I/O above can roll the
-      // snapshot staging back instead of having its buffered sidecar writes
-      // discarded by `commit`.
-      if (shouldDelete?.() === false) {
-        throw new StreamDeletionSupersededError(stream);
-      }
-    } catch (error) {
-      try {
-        await snapshotDeletion.rollback();
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [error, rollbackError],
-          `Transcript and snapshot rollback failed for stream ${stream}`,
-        );
-      }
-      throw error;
-    }
+    await deleteTranscriptWithSnapshotRollback(
+      stream,
+      snapshotDeletion,
+      async () => {
+        // The transcript registry is the commit point for tab visibility. The
+        // guard travels into `delete` itself so it is re-checked after the
+        // durable transcript delete but before in-memory state is forgotten.
+        await this.streamLogs.delete(stream, { shouldDelete });
+        // `delete` re-checked the guard before forgetting in-memory state.
+        // This final check runs with no await between it and the snapshot
+        // commit, so a re-claim that landed during the transcript I/O above
+        // can roll the snapshot staging back instead of having its buffered
+        // sidecar writes discarded by `commit`.
+        if (shouldDelete?.() === false) {
+          throw new StreamDeletionSupersededError(stream);
+        }
+      },
+    );
 
     // The snapshot commit is the irreversible sidecar delete. Inspect its
     // supersede result rather than swallowing it in `allSettled`: a re-claim
