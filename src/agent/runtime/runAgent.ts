@@ -14,7 +14,11 @@ import {
   type StreamTabId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { aggregateError, generateExecutionId } from '@utils/core';
+import {
+  aggregateError,
+  generateExecutionId,
+  linkAbortSignals,
+} from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
@@ -103,12 +107,14 @@ export async function runAgent(
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session ?? defaultSession();
   const launchAbortController = new AbortController();
-  const launchSignal = executeAgentOptions.launchSignal
-    ? AbortSignal.any([
-        executeAgentOptions.launchSignal,
-        launchAbortController.signal,
-      ])
-    : launchAbortController.signal;
+  // Linked rather than composed with `AbortSignal.any`, which would keep the
+  // launch signal reachable from a long-lived caller signal for that signal's
+  // whole lifetime (see `linkAbortSignals`).
+  const detachLaunchAbortLink = linkAbortSignals(
+    [executeAgentOptions.launchSignal],
+    launchAbortController,
+  );
+  const launchSignal = launchAbortController.signal;
   const launchStreamId = getStreamTabId(request.config.agent, { executionId });
   const launchHandle = runSession.executions.getHandle(executionId)
     ? undefined
@@ -250,6 +256,7 @@ export async function runAgent(
       },
     );
   } finally {
+    detachLaunchAbortLink();
     detachLaunchInterrupt?.();
     if (
       launchHandle &&

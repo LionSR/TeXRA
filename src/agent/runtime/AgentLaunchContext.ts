@@ -52,6 +52,7 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
+import { linkAbortSignals } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, withRunContext } from './RunContext';
@@ -458,9 +459,15 @@ async function assembleAgentLaunchContext(
   const agentPath = path.dirname(resolution.entry.path);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
   const runAbortController = new AbortController();
-  const runSignal = input.signal
-    ? AbortSignal.any([input.signal, runAbortController.signal])
-    : runAbortController.signal;
+  // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
+  // every listener still attached to it) reachable from the caller's signal
+  // until that signal aborts. A parent run's signal outlives each subagent it
+  // launches, so a long orchestration would retain every finished child's run
+  // scope. The link is detached with the run trace at end-of-run.
+  const detachRunAbortLink = resources.add(
+    linkAbortSignals([input.signal], runAbortController),
+  );
+  const runSignal = runAbortController.signal;
   const runScope = createRunScope({
     streamId,
     executionId,
@@ -524,7 +531,10 @@ async function assembleAgentLaunchContext(
     initialUserMessageForTranscript: initialMediaMayBeInserted
       ? initialInstruction
       : undefined,
-    disposeTrace: runTrace.dispose,
+    disposeTrace: () => {
+      detachRunAbortLink();
+      runTrace.dispose();
+    },
   };
 }
 

@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolResult } from '@shared/schemas';
 import {
-  joinAbortSignal,
+  withRequestTimeout,
   retryTransientFetch,
   toFetchToolError,
 } from '@tools/timeouts';
@@ -91,32 +91,33 @@ export class WebSearchTool extends defineTool({
     let data: DuckDuckGoResponse;
     try {
       data = await retryTransientFetch(
-        async () => {
-          const response = await ky.get('https://api.duckduckgo.com/', {
-            searchParams: {
-              q: query,
-              format: 'json',
-              no_redirect: 1,
-              no_html: 1,
-            },
-            timeout: false,
-            signal: joinAbortSignal(DDG_TIMEOUT_MS, cancelSignal),
-            retry: 0,
-          });
-          const raw = await response.json();
-          // Validate the body at the boundary. A malformed shape is not
-          // transient, so abort retries and let the outer catch below
-          // surface it as a tool error.
-          const parsed = DuckDuckGoResponseSchema.safeParse(raw);
-          if (!parsed.success) {
-            throw new AbortError(
-              new Error(
-                `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
-              ),
-            );
-          }
-          return parsed.data;
-        },
+        () =>
+          withRequestTimeout(DDG_TIMEOUT_MS, cancelSignal, async (signal) => {
+            const response = await ky.get('https://api.duckduckgo.com/', {
+              searchParams: {
+                q: query,
+                format: 'json',
+                no_redirect: 1,
+                no_html: 1,
+              },
+              timeout: false,
+              signal,
+              retry: 0,
+            });
+            const raw = await response.json();
+            // Validate the body at the boundary. A malformed shape is not
+            // transient, so abort retries and let the outer catch below
+            // surface it as a tool error.
+            const parsed = DuckDuckGoResponseSchema.safeParse(raw);
+            if (!parsed.success) {
+              throw new AbortError(
+                new Error(
+                  `Unexpected DuckDuckGo response shape: ${z.prettifyError(parsed.error)}`,
+                ),
+              );
+            }
+            return parsed.data;
+          }),
         { retries: DDG_RETRIES, minTimeout: 500, cancelSignal },
       );
     } catch (error) {

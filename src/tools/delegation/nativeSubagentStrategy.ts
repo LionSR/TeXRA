@@ -190,12 +190,16 @@ function bindAbortSignals(
   signals: readonly (AbortSignal | undefined)[],
   handle: AgentRunHandle,
 ): () => void {
-  const uniqueSignals = unique(
+  // One listener per source, no `AbortSignal.any`: a composite built on the
+  // parent run's signal stays reachable from it (listener and all) until it
+  // aborts, which for a long-lived parent is never — one retained turn per
+  // subagent (see `linkAbortSignals`).
+  const detachers = unique(
     signals.filter((signal): signal is AbortSignal => signal !== undefined),
-  );
-  if (uniqueSignals.length === 0) return () => {};
-  const combined = AbortSignal.any(uniqueSignals);
-  return onAbort(combined, () => handle.interrupt());
+  ).map((signal) => onAbort(signal, () => handle.interrupt()));
+  return () => {
+    for (const detach of detachers) detach();
+  };
 }
 
 export function createNativeSubagentStrategy(

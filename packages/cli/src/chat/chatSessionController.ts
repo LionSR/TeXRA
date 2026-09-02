@@ -362,6 +362,15 @@ export function createChatSessionController(
     },
   });
 
+  // Every host generation still holding interaction ownership. A generation
+  // leaves on release, so session exit releases only the live ones instead of
+  // parking one dead closure per root turn in the session store for the
+  // process lifetime.
+  const liveOwnerships = new Set<{ readonly release: () => void }>();
+  disposables.add(() => {
+    for (const ownership of [...liveOwnerships]) ownership.release();
+  });
+
   // Build the runtime host shared by start and resume. Root completion marks
   // the root row complete and detaches its terminal-result presenter
   // immediately. Host interactions remain attached until every execution that
@@ -394,6 +403,7 @@ export function createChatSessionController(
     };
     const ownership = runtimeSession.executions.interactionOwnership.open(
       (): void => {
+        liveOwnerships.delete(ownership);
         detachResultToastOnce();
         detachHostInteractions();
         if (session.presentationHost === presentationHost) {
@@ -402,7 +412,7 @@ export function createChatSessionController(
         void presentationHost.close();
       },
     );
-    disposables.add(() => ownership.release());
+    liveOwnerships.add(ownership);
 
     return {
       presentationHost,

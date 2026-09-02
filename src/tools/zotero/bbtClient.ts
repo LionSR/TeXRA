@@ -19,7 +19,7 @@ import { z } from 'zod';
 // Local imports
 import { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';
 import { ToolError } from '@shared/schemas';
-import { isTimeoutError, joinAbortSignal } from '@tools/timeouts';
+import { isTimeoutError, withRequestTimeout } from '@tools/timeouts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getConfig } from '@utils/config/configUtils';
 
@@ -174,14 +174,16 @@ export async function callBetterBibTeX<T>(
   const cancelSignal = getCurrentToolCallContext()?.signal;
   let raw: unknown;
   try {
-    raw = await ky
-      .post(url, {
-        json: { jsonrpc: '2.0', method, params, id: 1 },
-        timeout: false,
-        signal: joinAbortSignal(timeout, cancelSignal),
-        retry: 0,
-      })
-      .json<unknown>();
+    raw = await withRequestTimeout(timeout, cancelSignal, (signal) =>
+      ky
+        .post(url, {
+          json: { jsonrpc: '2.0', method, params, id: 1 },
+          timeout: false,
+          signal,
+          retry: 0,
+        })
+        .json<unknown>(),
+    );
   } catch (error: unknown) {
     if (isTimeoutError(error)) {
       throw new ToolError(

@@ -110,7 +110,9 @@ export class ExecutionInteractionOwnership {
 
   /** Start an owner generation. `onRelease` fires exactly once, at release. */
   open(onRelease: () => void): ExecutionInteractionScope {
-    const liveExecutions = new Set<string>();
+    // Live execution id → its child stream, so untracking an execution can
+    // also drop the stream-owner entry its registration wrote.
+    const liveExecutions = new Map<string, StreamTabId>();
     const pendingActivations = new Set<string>();
     const disposables = new DisposableStore();
     let finished = false;
@@ -129,7 +131,14 @@ export class ExecutionInteractionOwnership {
       if (!handle) {
         if (this.executionOwners.get(executionId) === scope) {
           this.executionOwners.delete(executionId);
+          const childStreamId = liveExecutions.get(executionId);
           liveExecutions.delete(executionId);
+          if (
+            childStreamId !== undefined &&
+            this.streamOwners.get(childStreamId) === scope
+          ) {
+            this.streamOwners.delete(childStreamId);
+          }
         }
         releaseIfIdle();
         return;
@@ -147,7 +156,7 @@ export class ExecutionInteractionOwnership {
       }
 
       this.executionOwners.set(executionId, scope);
-      liveExecutions.add(executionId);
+      liveExecutions.set(executionId, handle.childStreamId);
       this.streamOwners.set(handle.childStreamId, scope);
     };
 
