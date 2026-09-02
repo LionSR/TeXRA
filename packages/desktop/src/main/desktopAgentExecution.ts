@@ -367,19 +367,17 @@ export class DesktopProgressBridge {
         this.backend.approvalHandlers.toolEdit.dismiss(requestId),
       detachCause: SESSION_DISPOSED_CAUSE,
     });
-    this.hostInteractions = {
-      // The shared progress-view host port plus the Electron shell's
-      // notification surface, which the runtime reaches through
-      // `session.interactions`.
-      ...createProgressHostInteractions({
-        interactions: presentationHost,
-        session: this.session,
-        getApprovalHandlers: () => this.backend.approvalHandlers,
-        getToolEditApprovals: () => this.toolEditApprovals!,
-        setApprovalBypassState: this.backend.setApprovalBypassState,
-      }),
-      showInfoMessage: (message) => this.options.host.showInfoMessage(message),
-    };
+    // The shared progress-view host port. Every notice the runtime raises now
+    // reaches this window through `presentationHost`'s presentation-event
+    // map, so there is no second, optional channel a host can leave
+    // unimplemented.
+    this.hostInteractions = createProgressHostInteractions({
+      interactions: presentationHost,
+      session: this.session,
+      getApprovalHandlers: () => this.backend.approvalHandlers,
+      getToolEditApprovals: () => this.toolEditApprovals!,
+      setApprovalBypassState: this.backend.setApprovalBypassState,
+    });
     this.fileActions = new DesktopProgressFileActions(this.options.host, {
       startExecution: (request) => {
         const logger = this.logger;

@@ -49,8 +49,21 @@ export async function tryResumeFromResumeData(
     if ('started' in result) return result.delivered;
     if (!isCancellationRequested()) {
       logger.warn(`Stream ${streamId} was not resumed: ${result.failed}`);
-      await session.interactions.showInfoMessage(
-        describeFollowUpFailure(result.failed),
+      // A refused resume is actionable guidance ("start a new agent task",
+      // "send the message there"), not a failure: the shared progress-view
+      // path presents these same `describeFollowUpFailure` strings through
+      // `showInfo` on both GUI hosts (progressFollowUpSubmit.ts), so this
+      // rides the info-styled `requestShowInstruction` event -- the one
+      // presentation channel every host's compile-checked handler map must
+      // implement, so an unserved surface reads as not-delivered instead of
+      // vanishing.
+      await session.interactions.emit(
+        'requestShowInstruction',
+        {
+          key: 'resumeRefused',
+          message: describeFollowUpFailure(result.failed),
+          showSuppress: false,
+        },
         { replayWhenAttached: true },
       );
     }

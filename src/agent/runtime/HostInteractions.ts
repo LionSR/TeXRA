@@ -352,8 +352,6 @@ export interface HostInteractions {
   readonly openPdf?: OpenPdfOpener;
   /** Report one agent-review finding to the active host's review session. */
   readonly reportReviewIssue?: ReportReviewIssueSink;
-  /** Present non-error information through the currently attached host. */
-  showInfoMessage?(message: string): Promise<void> | void;
   requestToolEditApproval?(
     request: ToolEditApprovalRequest,
   ): Promise<ToolEditApprovalResult> | undefined;
@@ -521,19 +519,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   get reportReviewIssue(): ReportReviewIssueSink | undefined {
     return this.activeAttachment?.interactions.reportReviewIssue;
-  }
-
-  showInfoMessage(
-    message: string,
-    options: AgentRuntimeEmitOptions = {},
-  ): Promise<void> | void {
-    const active = this.activeAttachment;
-    if (active) return active.interactions.showInfoMessage?.(message);
-    if (options.replayWhenAttached && !this.disposed) {
-      this.queuePresentationReplay((interactions) =>
-        interactions.showInfoMessage?.(message),
-      );
-    }
   }
 
   requestToolEditApproval(

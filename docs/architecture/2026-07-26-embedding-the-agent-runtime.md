@@ -473,8 +473,8 @@ the runtime already knows the parking behaviour exists.
 
 `cancel` is the one **required** member of `HostInteractions`
 (`src/agent/runtime/HostInteractions.ts:336`); every other member — the seven
-request methods plus `emit`, `dispose`, `showInfoMessage`, the diagnostics
-readers, and `setApprovalBypassState` — is optional
+request methods plus `emit`, `dispose`, the diagnostics readers, and
+`setApprovalBypassState` — is optional
 (`src/agent/runtime/HostInteractions.ts:293-338`). So the compiler already
 forces you to write `{ cancel: … }` — the trap is not a badly-typed object, it
 is **never calling `interactions.use` at all**, which no type can catch.

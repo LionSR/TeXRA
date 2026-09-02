@@ -1948,14 +1948,16 @@ describe('DesktopProgressBridge', () => {
     const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
       async () => repairGate,
     );
-    const firstInfo = vi.fn(async () => undefined);
+    const firstInstruction = vi.fn(async () => undefined);
     const bridgeRef: { current?: TestableBridge } = {};
 
     const bridge = await createBridge([], {
       configureSession: (session) => {
-        session.interactions.showInfoMessage('survive approval replay', {
-          replayWhenAttached: true,
-        });
+        session.interactions.emit(
+          'requestShowInstruction',
+          { key: 'resumeRefused', message: 'survive approval replay' },
+          { replayWhenAttached: true },
+        );
         void session.interactions.requestPlanApproval?.({
           requestId: 'close-during-attachment',
           streamId: 'attachment-close-stream' as StreamTabId,
@@ -1965,7 +1967,7 @@ describe('DesktopProgressBridge', () => {
       },
       deferReady: true,
       repairRestartedStreams,
-      showInfoMessage: firstInfo,
+      showInstructionDialog: firstInstruction,
       observeRendererMessage: (message) => {
         const progress = message as ProgressMessage;
         if (
@@ -1985,24 +1987,27 @@ describe('DesktopProgressBridge', () => {
       attachments: unknown[];
     };
     expect(interactions.attachments).toHaveLength(0);
-    expect(firstInfo).not.toHaveBeenCalled();
+    expect(firstInstruction).not.toHaveBeenCalled();
 
     const { ctor, options: firstBridgeOptions } = bridgeContext(bridge);
-    const replacementInfo = vi.fn(async () => undefined);
+    const replacementInstruction = vi.fn(async () => undefined);
     const replacement = disposeAfterTest(
       new ctor(() => undefined, {
         ...firstBridgeOptions,
         host: createStubDesktopAgentExecutionHost({
-          showInfoMessage: replacementInfo,
+          showInstructionDialog: replacementInstruction,
         }),
       }),
     );
     await replacement.waitUntilReady();
 
-    expect(replacementInfo).toHaveBeenCalledOnce();
-    expect(replacementInfo).toHaveBeenCalledWith('survive approval replay');
+    expect(replacementInstruction).toHaveBeenCalledOnce();
+    expect(replacementInstruction).toHaveBeenCalledWith(
+      'survive approval replay',
+      undefined,
+    );
     await Promise.resolve();
-    expect(replacementInfo).toHaveBeenCalledOnce();
+    expect(replacementInstruction).toHaveBeenCalledOnce();
   });
 
   it('ignores renderer switches to unknown streams', async () => {

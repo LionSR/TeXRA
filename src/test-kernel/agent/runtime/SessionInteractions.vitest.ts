@@ -333,21 +333,15 @@ describe('session.interactions immediate capabilities', () => {
 
   it('replays only opted-in presentation notices once after reattachment', async () => {
     const session = createTestSession();
-    const firstInfo = vi.fn();
     const firstEmit = vi.fn();
     const detach = session.interactions.use({
       emit: firstEmit,
-      showInfoMessage: firstInfo,
       cancel: vi.fn(),
     });
     detach();
 
-    session.interactions.showInfoMessage('attachment-scoped');
     session.interactions.emit('requestShowError', {
       message: 'attachment-scoped',
-    });
-    session.interactions.showInfoMessage('replay this', {
-      replayWhenAttached: true,
     });
     session.interactions.emit(
       'requestShowError',
@@ -355,77 +349,77 @@ describe('session.interactions immediate capabilities', () => {
       { replayWhenAttached: true },
     );
 
-    const secondInfo = vi.fn();
     const secondEmit = vi.fn();
     const detachSecond = session.interactions.use({
       emit: secondEmit,
-      showInfoMessage: secondInfo,
       cancel: vi.fn(),
     });
-    expect(secondInfo).not.toHaveBeenCalled();
     expect(secondEmit).not.toHaveBeenCalled();
 
     await Promise.resolve();
 
-    expect(secondInfo).toHaveBeenCalledOnce();
-    expect(secondInfo).toHaveBeenCalledWith('replay this');
     expect(secondEmit).toHaveBeenCalledOnce();
     expect(secondEmit).toHaveBeenCalledWith('requestShowError', {
       message: 'replay this error',
     });
 
     detachSecond();
-    const thirdInfo = vi.fn();
     const thirdEmit = vi.fn();
     session.interactions.use({
       emit: thirdEmit,
-      showInfoMessage: thirdInfo,
       cancel: vi.fn(),
     });
     await Promise.resolve();
 
-    expect(thirdInfo).not.toHaveBeenCalled();
     expect(thirdEmit).not.toHaveBeenCalled();
-    expect(firstInfo).not.toHaveBeenCalled();
     expect(firstEmit).not.toHaveBeenCalled();
     session.dispose();
   });
 
   it('leaves remaining notices queued when replay detaches the host', async () => {
     const session = createTestSession();
-    session.interactions.showInfoMessage('first', {
-      replayWhenAttached: true,
-    });
-    session.interactions.showInfoMessage('second', {
-      replayWhenAttached: true,
-    });
+    session.interactions.emit(
+      'requestShowError',
+      { message: 'first' },
+      { replayWhenAttached: true },
+    );
+    session.interactions.emit(
+      'requestShowError',
+      { message: 'second' },
+      { replayWhenAttached: true },
+    );
 
-    const firstInfo = vi.fn();
+    const firstEmit = vi.fn();
     let detachFirst = (): void => undefined;
     detachFirst = session.interactions.use({
-      showInfoMessage: (message) => {
-        firstInfo(message);
+      emit: (event, payload) => {
+        firstEmit(event, payload);
         detachFirst();
+        return true;
       },
       cancel: vi.fn(),
     });
     await Promise.resolve();
 
-    expect(firstInfo).toHaveBeenCalledOnce();
-    expect(firstInfo).toHaveBeenCalledWith('first');
+    expect(firstEmit).toHaveBeenCalledOnce();
+    expect(firstEmit).toHaveBeenCalledWith('requestShowError', {
+      message: 'first',
+    });
 
-    const secondInfo = vi.fn();
+    const secondEmit = vi.fn();
     session.interactions.use({
-      showInfoMessage: secondInfo,
+      emit: secondEmit,
       cancel: vi.fn(),
     });
     await Promise.resolve();
 
-    expect(secondInfo).toHaveBeenCalledOnce();
-    expect(secondInfo).toHaveBeenCalledWith('second');
+    expect(secondEmit).toHaveBeenCalledOnce();
+    expect(secondEmit).toHaveBeenCalledWith('requestShowError', {
+      message: 'second',
+    });
     await Promise.resolve();
-    expect(firstInfo).toHaveBeenCalledOnce();
-    expect(secondInfo).toHaveBeenCalledOnce();
+    expect(firstEmit).toHaveBeenCalledOnce();
+    expect(secondEmit).toHaveBeenCalledOnce();
     session.dispose();
   });
 
@@ -486,34 +480,25 @@ describe('session.interactions immediate capabilities', () => {
 
   it('does not queue an opted-in notice delivered to an attached presentation', () => {
     const session = createTestSession();
-    const firstInfo = vi.fn();
     const firstEmit = vi.fn();
     const detach = session.interactions.use({
       emit: firstEmit,
-      showInfoMessage: firstInfo,
       cancel: vi.fn(),
     });
 
-    session.interactions.showInfoMessage('deliver now', {
-      replayWhenAttached: true,
-    });
     session.interactions.emit(
       'requestShowError',
       { message: 'deliver error now' },
       { replayWhenAttached: true },
     );
-    expect(firstInfo).toHaveBeenCalledOnce();
     expect(firstEmit).toHaveBeenCalledOnce();
 
     detach();
-    const secondInfo = vi.fn();
     const secondEmit = vi.fn();
     session.interactions.use({
       emit: secondEmit,
-      showInfoMessage: secondInfo,
       cancel: vi.fn(),
     });
-    expect(secondInfo).not.toHaveBeenCalled();
     expect(secondEmit).not.toHaveBeenCalled();
     session.dispose();
   });
@@ -522,15 +507,18 @@ describe('session.interactions immediate capabilities', () => {
     const session = createTestSession();
     const QUEUED = 300; // past the 256 cap
     for (let n = 0; n < QUEUED; n += 1) {
-      session.interactions.showInfoMessage(`notice-${n}`, {
-        replayWhenAttached: true,
-      });
+      session.interactions.emit(
+        'requestShowError',
+        { message: `notice-${n}` },
+        { replayWhenAttached: true },
+      );
     }
 
     const messages: string[] = [];
     session.interactions.use({
-      showInfoMessage: (message) => {
-        messages.push(message);
+      emit: (_event, payload) => {
+        messages.push((payload as { message: string }).message);
+        return true;
       },
       cancel: vi.fn(),
     });
