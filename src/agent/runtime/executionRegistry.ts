@@ -575,8 +575,13 @@ export class ExecutionRegistry {
    * Subagents continue running independently and deliver results via the
    * follow-up queue. Called when stopping an orchestrator without killing
    * children.
+   *
+   * Returns the child streams whose parent edge this call already cleared and
+   * emitted — activations included, which is why a caller must not re-derive
+   * the set from `getActiveChildren` (handles only) and emit `setParentStream`
+   * for the difference: a native child between turns would be emitted twice.
    */
-  detachActiveChildren(parentStreamId: StreamTabId): void {
+  detachActiveChildren(parentStreamId: StreamTabId): readonly StreamTabId[] {
     const detachedChildStreamIds: StreamTabId[] = [];
     for (const activation of this.activeChildActivations(parentStreamId)) {
       activation.detach();
@@ -596,6 +601,7 @@ export class ExecutionRegistry {
         parentStreamId: null,
       });
     }
+    return detachedChildStreamIds;
   }
 
   /**
