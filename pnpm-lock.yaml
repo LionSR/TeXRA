@@ -58,8 +58,8 @@ importers:
         specifier: ^0.151.0
         version: 0.151.0
       '@openrouter/sdk':
-        specifier: ^1.2.83
-        version: 1.2.83
+        specifier: ^1.2.93
+        version: 1.2.93
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4(@opentelemetry/api@1.9.1)
@@ -136,8 +136,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       ignore:
-        specifier: ^7.0.6
-        version: 7.0.6
+        specifier: ^7.0.8
+        version: 7.0.8
       image-size:
         specifier: ^2.0.2
         version: 2.0.2
@@ -431,8 +431,8 @@ importers:
         specifier: ^0.151.0
         version: 0.151.0
       '@openrouter/sdk':
-        specifier: ^1.2.83
-        version: 1.2.83
+        specifier: ^1.2.93
+        version: 1.2.93
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4(@opentelemetry/api@1.9.1)
@@ -494,8 +494,8 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       ignore:
-        specifier: ^7.0.6
-        version: 7.0.6
+        specifier: ^7.0.8
+        version: 7.0.8
       image-size:
         specifier: ^2.0.2
         version: 2.0.2
@@ -824,8 +824,8 @@ importers:
         specifier: ^0.151.0
         version: 0.151.0
       '@openrouter/sdk':
-        specifier: ^1.2.83
-        version: 1.2.83
+        specifier: ^1.2.93
+        version: 1.2.93
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4(@opentelemetry/api@1.9.1)
@@ -2201,8 +2201,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@1.2.83':
-    resolution: {integrity: sha512-xgzL8gTElcAxalNGAJdkFf3ouRmLQQfeHL3KmmfY39MniUQC9z6uX/azKzADAoVM2Av56ujW6agbCcF+2lIZ9A==}
+  '@openrouter/sdk@1.2.93':
+    resolution: {integrity: sha512-ef2j/Pwt0kcFX5gxXxFMmx3Z5DfWZHiGzRyG3M6prNPIOU7gNSTbu8y4mRqL+PyvEx0zJ1MsAuZQKiIpGk+mHQ==}
 
   '@opentelemetry/api-logs@0.220.0':
     resolution: {integrity: sha512-CmVa4ImJ+ynfrPMNaAXHET6Bhb44SwzmfyVJFq9ni2jgXJR/l7C6gfVFddNmHP+ZOkP9cf4f9DBe68qVLTHc9w==}
@@ -4709,6 +4709,10 @@ packages:
 
   ignore@7.0.6:
     resolution: {integrity: sha512-BAg6QkE8W+TuQLrrw0Ugr7HegXduRuuj8/ti2kSOc+jz1dmx8/WNcjr6XGnq5YpDWxFwwaavqD0+jIUOKelTsw==}
+    engines: {node: '>= 4'}
+
+  ignore@7.0.8:
+    resolution: {integrity: sha512-YYNsSlXBjMk92SKnkwvB5LOVSa6OznlFUGcsvrFgNJbJCd0M1XKeFVRc8ZByeCqz32FivYNHJVooLmdqrmvp/Q==}
     engines: {node: '>= 4'}
 
   image-size@2.0.2:
@@ -8107,7 +8111,7 @@ snapshots:
   '@openai/codex@0.151.0-win32-x64':
     optional: true
 
-  '@openrouter/sdk@1.2.83':
+  '@openrouter/sdk@1.2.93':
     dependencies:
       zod: 4.5.4
 
@@ -10701,6 +10705,8 @@ snapshots:
   ignore@5.3.2: {}
 
   ignore@7.0.6: {}
+
+  ignore@7.0.8: {}
 
   image-size@2.0.2: {}
 
