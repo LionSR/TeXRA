@@ -703,18 +703,32 @@ still reproduce.
   `attachTerminalResultToast` keeps its `replayWhenAttached` option, because
   that flag still feeds the genuinely-live host presentation replay through
   `interactions.emit`.
-- **S6 — LIVE, NARROWED.** The `deliver` half is gone as a second result
-  carrier: it now takes `(outcome: RunOutcome)` and its doc explains that the
-  parent's payload must report the same terminal fact as the persisted history.
-  What survives is only the `result` parameter of `onRunError`
+- **S6 — LIVE, RE-SHAPED, and the finding's own proposal was wrong.** The
+  `deliver` slot is **not** gone and must **not** be deleted: it is the only
+  sequencing point between `handle.settleResult` and untrack, and it fires
+  inside the exactly-once claim gate — which is precisely why the original
+  finding's "call `onError` unconditionally before `finalizeTerminal`" would
+  have made the strategy format a failure for a run whose published result is
+  COMPLETED. #11757 retyped it to carry `(outcome: RunOutcome)`, so what is
+  actually dead is one thing only: the `result` **argument** of `onRunError`
   (`executeAgent.ts:315-318`), still declared and still unread by both passers,
-  which take `(err)` alone. The finding shrinks from "delete the deliver slot
-  and the result argument" to "narrow one callback signature".
-- **S4 — LIVE, WIDER.** Besides the three recorded raw `events.subscribe`
-  sites, #11757 added two more in `workflowPlainOutput.ts:154,177` and one in
-  `packages/agent/src/index.ts:136`. A new subscriber reaching for the raw door
-  a day after the typed doors were documented is the evidence that this finding
-  is about an ergonomics gap, not a one-off.
+  which take `(err)` alone. The finding shrinks to "narrow one callback
+  signature", and its §2.2 entry above overstates the deletion.
+- **S4 — LIVE, WIDER, and the survey undercounted it — the delta did not.**
+  An earlier revision of this section claimed #11757 added the extra raw
+  `events.subscribe` sites. **That was wrong**, and the correction is worth
+  more than the original claim: `git show a78a896:` carries both
+  `workflowPlainOutput.ts` and `packages/agent/src/index.ts` with their
+  subscribes already in place, and the SDK file is not in #11757's file list at
+  all. The truth is five consumers over **eight** raw call sites, all
+  pre-existing; the survey's own readers missed two of them. Seven convert to
+  the typed doors; the eighth, the SDK's, **must stay raw** — `subscribeRunFacts`
+  requires a `types` filter, and that consumer deliberately wants every run fact
+  for one stream whose id does not exist at subscribe time. Do not widen the
+  typed door to close the last site; that trades a narrow door for a wide one.
+  With the seven converted, the raw `subscribe` method's public visibility rests
+  on that single SDK call site, against 15 production consumers of the typed
+  doors — this is finishing a migration, not starting one.
 - **Everything else — LIVE.** D1, D3, S1, S3, S5, S7–S15, T1–T13 and L1–L4 all
   reproduce; line numbers drift but the mechanisms are unchanged. D2 is
   byte-identical.
@@ -765,9 +779,56 @@ specifically so the maintainer rules first: the child-delivery rename
 projection, which needs an explicit overturn of a prior keep ruling whose
 premise has since gone stale, and the CLI quit convergence in U3.
 
+**The delta introduced one defect, and it is the most urgent item in this
+document.** #11757 made a hold the third `StreamEntry` arm — a good collapse,
+recorded as healthy structure — but `markUnavailable` now **replaces whatever
+entry is present, a live `reserved` one included**, with a hold that carries
+forward the RUNNING/STARTING state `effectiveState` synthesizes for a
+reservation. After that overwrite `releaseIfReserved` is a no-op, a failed
+launch's rollback never runs, and the stream reads in-flight-and-unavailable —
+stuck. The repair loop re-checks `isCurrent` at the top of each iteration
+(`:247`) and again after its inner await (`:266`) precisely because a stream can
+be reused across an await — but the lease-lock catch at `:325` runs after its
+own await with no such re-check. **The fix is three lines**: add the missing
+`isCurrent(streamId, executionId)` re-check there, matching its sibling at
+`:266` and reusing its debug wording, so it routes through the single staleness
+authority. Optional hardening: make `markUnavailable` refuse to overwrite a
+`reserved` entry. This is the one item here that adds lines rather than
+deleting them, and it should not wait for any of the cleanups. Verified
+first-hand: the unconditional overwrite at `StreamStatusService.ts:293-301`,
+the synthesized RUNNING/STARTING state for a reservation at `:76-81`, the
+`kind !== 'reserved'` bail in `releaseIfReserved` at `:159`, and the unfenced
+catch at `restartRepair.ts:325` against its fenced siblings.
+
+**Seven further findings from the delta sweep**, each verified by two lenses:
+the hub's per-stream subscription filter has no production passer and folds
+into S1 rather than beside it (their estimates are not additive); the
+executions tool's two private wait methods reduce to one call, expression for
+expression; the CLI's focused-child follow-up gate is spelled twice, so the
+composer's hide rule and the submit's routing rule can drift with nothing
+enforcing agreement; `attachTerminalResultToast` takes an `interactions`
+argument that all eight call sites derive from the session they already pass;
+the extension resolves progress-view bypass controls through the ambient
+session instead of the backend's own; the CLI's child-label helper guards a
+schema-required field and keeps two unreachable fallbacks, which is finishing a
+round-5 landing that stopped at the extension; and `childRunLoop` threads a
+per-turn signal that #11757 made a loop-lifetime constant, which belongs as a
+residue row on that PR's own A1 candidate rather than as a new find.
+
+**Two delta candidates were killed and must not be refiled.** One proposed
+deleting the third fact-seed door, `applyStreamStatus`, which two dated rulings
+already keep and whose steady-state case has no status-machine equivalent. The
+other claimed an untrack asymmetry in interaction ownership; its premise is
+false (a native child does not untrack between turns), its guard would
+reintroduce the leak #11757 fixed, and the file is in the irreducibility
+register and test-pinned for that exact invariant.
+
 **What the delta says about the survey's method.** Five commits, one finding
-resolved, one narrowed, one widened, the rest unchanged — and the one
-resolution was independently confirmed rather than contradicted. The findings
-here are not artefacts of a stale checkout. But S4's growth is the standing
-warning: a subsystem under this much concurrent work re-accretes the residue a
-survey removes, so the value of the accepted items decays if they sit.
+resolved, two re-shaped, one defect introduced, the rest unchanged — and the
+one resolution was independently confirmed rather than contradicted. Two
+lessons, both uncomfortable and both worth more than the tidy version: the
+survey **undercounted S4** and an earlier revision of this section then blamed
+the delta for its own miss; and the survey's S6 proposal would have **broken an
+exactly-once invariant** had it been implemented as written. Adversarial
+re-verification at a moved HEAD caught both. A finding is not safe because two
+lenses passed it once.
