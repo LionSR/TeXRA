@@ -158,6 +158,20 @@ async function stageDeletionWithBufferedClear(): Promise<{
   return { store, deletion };
 }
 
+/**
+ * The production deletion path — `stageDeleteStream` then `commit`, exactly as
+ * SessionStores.deleteStreamSidecars and adjacentStreamCleanup drive it. The
+ * store has no one-shot delete method; this is a test convenience, not a
+ * surface unit.
+ */
+async function deleteStream(
+  store: StreamSnapshotStore,
+  stream: StreamTabId,
+): Promise<void> {
+  const deletion = await store.stageDeleteStream(stream);
+  await deletion.commit();
+}
+
 /** The work plan a fresh store reads back from disk. */
 async function reloadWorkPlan(stream: StreamTabId = STREAM): Promise<WorkPlan> {
   const reloaded = new StreamSnapshotStore();
@@ -1377,7 +1391,7 @@ describe('StreamSnapshotStore', () => {
     const wasDeletedDuringHydration = injectDuringExecutionConfigHydration(
       executionId,
       () => {
-        deletion = store.deleteStream(STREAM);
+        deletion = deleteStream(store, STREAM);
       },
     );
 
@@ -1424,13 +1438,13 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
   });
 
-  it('deleteStream cancels queued writes before removing the sidecar directory', async () => {
+  it('deleting a stream cancels queued writes before removing the sidecar directory', async () => {
     const dir = streamDataDir(STREAM);
     const store = new StreamSnapshotStore();
     await store.load([]);
 
     snapshotFacts(store).addUsage(STREAM, RUN, usage(1, 2, 0.03));
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
 
     expect(await StorageFS.exists(dir)).toBe(false);
   });
@@ -1446,7 +1460,7 @@ describe('StreamSnapshotStore', () => {
       .spyOn(StorageFS, 'rename')
       .mockRejectedValueOnce(deletionError);
 
-    await expect(store.deleteStream(STREAM)).rejects.toBe(deletionError);
+    await expect(deleteStream(store, STREAM)).rejects.toBe(deletionError);
 
     expect(store.getWorkPlan(STREAM)).toEqual({
       todos: [TODO],
@@ -1461,7 +1475,7 @@ describe('StreamSnapshotStore', () => {
     });
 
     renameSpy.mockRestore();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('recovers a crash-interrupted staged deletion before hydration', async () => {
@@ -1490,7 +1504,7 @@ describe('StreamSnapshotStore', () => {
       planSummary: PLAN_SUMMARY,
     });
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(true);
-    await recovered.deleteStream(STREAM);
+    await deleteStream(recovered, STREAM);
   });
 
   it('buffers sidecar writes until a staged deletion rolls back', async () => {
@@ -1539,7 +1553,7 @@ describe('StreamSnapshotStore', () => {
       plan: null,
       todos: [TODO],
     });
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('serializes overlapping staged deletions for one stream', async () => {
@@ -1583,7 +1597,7 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
 
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('retains buffered writes when rollback persistence fails', async () => {
@@ -1608,7 +1622,7 @@ describe('StreamSnapshotStore', () => {
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     expect((await reloadWorkPlan()).plan).toEqual(revisedPlan);
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('retries retained live rollback writes during flush', async () => {
@@ -1623,7 +1637,7 @@ describe('StreamSnapshotStore', () => {
     writeSpy.mockRestore();
     await store.flush();
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('waits unrelated writes before flush reports a recovery failure', async () => {
@@ -1671,8 +1685,8 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan(OTHER_STREAM)).plan).toEqual(PLAN);
 
     await store.flush();
-    await store.deleteStream(STREAM);
-    await store.deleteStream(OTHER_STREAM);
+    await deleteStream(store, STREAM);
+    await deleteStream(store, OTHER_STREAM);
   });
 
   it('does not recreate live storage while setup residue is staged', async () => {
@@ -1700,7 +1714,7 @@ describe('StreamSnapshotStore', () => {
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('drains dirty writes when deletion staging fails during setup', async () => {
@@ -1729,7 +1743,7 @@ describe('StreamSnapshotStore', () => {
     writeSpy.mockRestore();
     await store.flush();
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('retains refresh authority when initial deletion staging inspection fails', async () => {
@@ -1796,7 +1810,7 @@ describe('StreamSnapshotStore', () => {
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     expect((await reloadWorkPlan()).plan).toEqual(PLAN);
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('mirrors writes when rollback moved data before reporting failure', async () => {
@@ -1832,7 +1846,7 @@ describe('StreamSnapshotStore', () => {
       todos: [TODO],
     });
     await store.flush();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('retains prior rollback writes when retry setup also fails', async () => {
@@ -1859,7 +1873,7 @@ describe('StreamSnapshotStore', () => {
       plan: null,
       todos: [TODO],
     });
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('revalidates storage during setup recovery before returning', async () => {
@@ -1886,7 +1900,7 @@ describe('StreamSnapshotStore', () => {
       plan: null,
       todos: [TODO],
     });
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('retries buffered writes after staged-directory reconciliation', async () => {
@@ -1916,7 +1930,7 @@ describe('StreamSnapshotStore', () => {
       discarded: [],
     });
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('keeps the staged base when failed rollback data also has live residue', async () => {
@@ -1946,7 +1960,7 @@ describe('StreamSnapshotStore', () => {
     const reloaded = await new StreamSnapshotStore().read(STREAM);
     expect(reloaded.plan).toBeNull();
     expect(reloaded.runUsage[RUN]).toMatchObject(usage(100, 20, 0.5));
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('discards staged residue when failed rollback data has a live base', async () => {
@@ -1987,7 +2001,7 @@ describe('StreamSnapshotStore', () => {
     expect(reloaded.plan).toBeNull();
     expect(reloaded.runUsage[RUN]).toMatchObject(usage(100, 20, 0.5));
     expect(await StorageFS.exists(stagedDir)).toBe(false);
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('does not restore staged residue after a live base disappears', async () => {
@@ -2022,7 +2036,7 @@ describe('StreamSnapshotStore', () => {
     });
     expect((await reloadWorkPlan()).plan).toBeNull();
     expect(await StorageFS.exists(stagedDir)).toBe(false);
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('recreates live storage from buffered writes when both bases vanish', async () => {
@@ -2039,7 +2053,7 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
     expect((await reloadWorkPlan()).plan).toBeNull();
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(true);
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('serializes a staging retry behind failed rollback reconciliation', async () => {
@@ -2086,7 +2100,7 @@ describe('StreamSnapshotStore', () => {
     recoverySpy.mockRestore();
 
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('restores committed residue for complete orphan cleanup', async () => {
@@ -2124,7 +2138,7 @@ describe('StreamSnapshotStore', () => {
 
     statSpy.mockRestore();
     expect(await StorageFS.exists(liveDir)).toBe(true);
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('settles staging and retains writes when setup recovery fails', async () => {
@@ -2153,7 +2167,7 @@ describe('StreamSnapshotStore', () => {
     const retry = await store.stageDeleteStream(STREAM);
     await retry.rollback();
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('serializes setup recovery before another staging attempt can cancel its writes', async () => {
@@ -2206,7 +2220,7 @@ describe('StreamSnapshotStore', () => {
     await retry.rollback();
 
     expect((await reloadWorkPlan()).plan).toBeNull();
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
   });
 
   it('waits for active hydration before staging deletion', async () => {
@@ -2226,7 +2240,7 @@ describe('StreamSnapshotStore', () => {
     const wasDeleteInjected = injectDuringExecutionConfigHydration(
       executionId,
       () => {
-        deletion = store.deleteStream(STREAM);
+        deletion = deleteStream(store, STREAM);
         void deletion.catch(() => undefined);
       },
     );
@@ -2245,7 +2259,7 @@ describe('StreamSnapshotStore', () => {
     expect((await reloadWorkPlan()).todos).toEqual([TODO]);
   });
 
-  it('does not resurrect a deleted sidecar dir when deleteStream lands during hydration', async () => {
+  it('does not resurrect a deleted sidecar dir when a stream deletion lands during hydration', async () => {
     // applyStreamData awaits execution-config hydration mid-seed. If the
     // stream is deleted during that await, the continuation must not
     // re-resolve a record for the evicted stream and flush merged sidecars,
@@ -2265,7 +2279,7 @@ describe('StreamSnapshotStore', () => {
       executionId,
       () => {
         snapshotFacts(store).updateMissingOutputs(STREAM, { 1: ['late.tex'] });
-        deletion = store.deleteStream(STREAM);
+        deletion = deleteStream(store, STREAM);
       },
     );
 
@@ -2462,7 +2476,7 @@ describe('StreamSnapshotStore', () => {
 
     snapshotFacts(store).setPlan(STREAM, PLAN);
     await vi.waitFor(() => expect(writeSpy).toHaveBeenCalledTimes(1));
-    await store.deleteStream(STREAM);
+    await deleteStream(store, STREAM);
     await store.flush();
 
     expect(await StorageFS.exists(streamDataDir(STREAM))).toBe(false);
@@ -2528,15 +2542,15 @@ describe('StreamSnapshotStore', () => {
     expect(order).toEqual(['first-start', 'first-end', 'second-start']);
   });
 
-  it('deleteStream refuses reserved stream ids before sidecar directory removal', async () => {
+  it('staged deletion refuses reserved stream ids before sidecar directory removal', async () => {
     const sentinel = path.join(STREAM_DATA_DIR, 'sentinel.json');
     await StorageFS.ensureDir(STREAM_DATA_DIR);
     await StorageFS.write(sentinel, '{}');
 
     const store = new StreamSnapshotStore();
-    await store.deleteStream('' as StreamTabId);
-    await store.deleteStream('.' as StreamTabId);
-    await store.deleteStream('..' as StreamTabId);
+    await deleteStream(store, '' as StreamTabId);
+    await deleteStream(store, '.' as StreamTabId);
+    await deleteStream(store, '..' as StreamTabId);
 
     expect(await StorageFS.exists(sentinel)).toBe(true);
   });
