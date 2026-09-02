@@ -1450,8 +1450,11 @@ export class StreamSnapshotStore {
     // The config of the run this stream just left is not this run's config;
     // `run.config` follows `run.start` with the new one. A config carrying no
     // identity yet is this run's until something says otherwise, so only a
-    // KNOWN previous execution drops it.
-    const previous = record.runExecutionId;
+    // KNOWN previous execution drops it. A record minted after a release
+    // knows the previous execution only through the mirror it started from,
+    // so that names the handoff when the record itself cannot.
+    const previous =
+      record.runExecutionId ?? record.summaryMetaHydrationFallback?.executionId;
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;

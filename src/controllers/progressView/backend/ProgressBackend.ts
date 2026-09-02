@@ -173,7 +173,8 @@ export class ProgressBackend {
       // record for the rest of the session.
       isStreamPresented: (stream) =>
         !this.disposed &&
-        (this.presentation.activeStream === stream ||
+        ((this.renderer.isAvailable() &&
+          this.presentation.activeStream === stream) ||
           (this.latestActivationTarget === stream &&
             this.inFlightActivationGenerations.has(this.activationGeneration))),
     });

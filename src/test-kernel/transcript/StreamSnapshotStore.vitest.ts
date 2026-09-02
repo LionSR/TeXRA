@@ -623,27 +623,17 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
     expect(store.hasProvenance(STREAM)).toBe(true);
 
+    // A relaunch during the drain neither rotates the record generation nor
+    // rebinds its seed chain, so the caller's own liveness rule is what keeps
+    // the freshly active record resident.
+    await store.requestEviction(STREAM, () => false);
+    expect(store.hasProvenance(STREAM)).toBe(true);
+
     await store.requestEviction(STREAM);
     expect(store.hasProvenance(STREAM)).toBe(false);
 
     // Nothing was lost: the record comes back from disk on demand.
     await store.preload([STREAM]);
-    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(
-      usage(100, 20, 0.5),
-    );
-  });
-
-  it('keeps a record the caller re-classifies as live during the drain', async () => {
-    const store = new StreamSnapshotStore();
-    snapshotFacts(store).addUsage(STREAM, RUN, usage(100, 20, 0.5));
-    await store.flush();
-
-    // A relaunch of this stream neither rotates the record generation nor
-    // rebinds its seed chain, so the caller's own liveness rule is what keeps
-    // the freshly active record resident.
-    await store.requestEviction(STREAM, () => false);
-
-    expect(store.hasProvenance(STREAM)).toBe(true);
     expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(
       usage(100, 20, 0.5),
     );
