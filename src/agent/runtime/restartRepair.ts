@@ -237,7 +237,11 @@ export async function repairRestartedStreams(
         );
         break;
     }
-    options.streamStatus.markUnavailable(streamId, detail);
+    if (!options.streamStatus.markUnavailable(streamId, detail)) {
+      options.logger?.debug(
+        `Kept the live reservation on stream ${streamId} instead of marking it unavailable: ${detail}`,
+      );
+    }
     return true;
   };
 
@@ -322,6 +326,12 @@ export async function repairRestartedStreams(
       // A settlement that already mutated must surface; a lock that could
       // not even be taken proves nothing, so the stream stays unavailable.
       if (settleStarted) throw error;
+      if (!isCurrent(streamId, executionId)) {
+        options.logger?.debug(
+          `Skipped restart repair for stream ${streamId}: it was reused before settlement`,
+        );
+        continue;
+      }
       applyHold(streamId, executionId, {
         kind: 'unclassified',
         cause: `lease lock unavailable (${toErrorMessage(error)})`,
@@ -335,6 +345,12 @@ export async function repairRestartedStreams(
       // registry/lease disagreement as `owned_here`, never another window.
       if (isInFlightPhase(options.streamStatus.get(streamId))) continue;
       const self = await currentLeaseOwner();
+      if (!isCurrent(streamId, executionId)) {
+        options.logger?.debug(
+          `Skipped restart repair for stream ${streamId}: it was reused before settlement`,
+        );
+        continue;
+      }
       const { owner } = maintenance;
       // Same process requires both identities known and equal: two unknown
       // identities prove nothing, and such an owner is held, not ours.
