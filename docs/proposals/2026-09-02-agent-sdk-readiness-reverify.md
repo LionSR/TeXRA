@@ -132,9 +132,13 @@ Unchanged from `-08-25 §5`; restated in brief:
    handler method first. `scripts/validate-artifacts.mjs` guards the built
    package against the leak today.
 3. **Logger + telemetry are process-global singletons with no public plug
-   point.** The SDK-correct unlock is injectable owners behind Tier-1
-   `configureLogging`/`configureUsage` doors — specified in
-   `docs/prds/2026-05-06-prd-logger-v2.md`, deferred behind singleton-retirement.
+   point.** The SDK-correct unlock is injectable owners behind Tier-1 doors. The
+   **logging** half is designed: `docs/prds/2026-05-06-prd-logger-v2.md`
+   specifies the `LogSink`/`Platform.log` port and `attachSink` bootstrap
+   (a `configureLogging`-shaped door), deferred behind singleton-retirement. The
+   **usage/telemetry** half (a `UsageSink` / `configureUsage` door) shares that
+   architecture but has **no** referenced design doc yet — it is named across
+   these readiness passes, not specified — so it remains the open sub-item here.
 4. **Two open Tier-1 doors remain** (four of eight landed): fronting
    `agentCreatorFlow` (blocked on the interactive `AgentCreatorUI` design, §3),
    and a `core/state` door (a dynamic `import()` the ratchet counts would leave
@@ -142,12 +146,19 @@ Unchanged from `-08-25 §5`; restated in brief:
 5. **`HostInteractions` required/optional (north-star TD-2a)** — open maintainer
    contract decision. The public shape stays minimal (`cancel()` only) until the
    approval channel has a stable contract.
-6. **Result-taxonomy documentation.** An external consumer meets
-   `AgentFlowResult` (discriminated `workflow | toolUse`), `AgentFinalResult`,
-   and the non-terminal `WAITING` state. The transforms are real, not delete
-   candidates; documenting _why_ `WAITING` exists and _why_ `cost`/`diffs` land
-   only on the final remains the single largest "which result do I get?"
-   clarification the surface needs. #11683 (§6) flattened the _carriers_ of
+6. **Result-taxonomy documentation.** On the current public surface an external
+   consumer meets exactly **one** result shape: `AgentRun.result` resolves to
+   `AgentFlowResult` (discriminated `workflow | toolUse`;
+   `packages/agent/src/index.ts:91`). The other two shapes are **internal, not
+   exported**: `AgentFinalResult` (`src/agent/runtime/AgentFinalResult.ts:78`) is
+   the post-flow envelope that adds `diffs`/normalized `cost`, consumed by
+   `storage/resultMeta.ts`, and `WAITING` is the non-terminal state. The
+   transforms are real, not delete candidates; the documentation gap is exactly
+   this — spelling out that a consumer sees `AgentFlowResult`, why `WAITING`
+   exists, and why `cost`/`diffs` live on the internal `AgentFinalResult` rather
+   than on the exported result — the single largest "which result do I get?"
+   clarification the surface needs, and a prerequisite before `AgentFinalResult`
+   could ever join the public exports. #11683 (§6) flattened the _carriers_ of
    these results — indirection removal, not a shape change — which reduces the
    plumbing an eventual doc must describe.
 7. **Publication** remains gated on the named-external-consumer hold; the legal
