@@ -40,6 +40,7 @@ import {
 import { presentStream } from './childControls';
 import { bumpStreamArtifactRevision } from './subscribeStreamArtifacts';
 import {
+  foregroundWorkflowReaderStreamId,
   releaseInactiveStreamTranscript,
   syncStreamLog,
 } from './subscribeStreamLog';
@@ -191,6 +192,9 @@ export function attachSessionSignalsAdapter(
       removeStream(streamId);
       invalidateChildStreams();
     },
+    isStreamPresented: (streamId) =>
+      activeStreamId.get() === streamId ||
+      foregroundWorkflowReaderStreamId() === streamId,
   });
   const detachSessionFacts = session.events.subscribeSessionFacts((fact) => {
     if (fact.type === 'status') {

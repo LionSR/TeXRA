@@ -20,6 +20,8 @@
 // `./transcriptFold` remains only to cover rows persisted before that
 // landed; it is idempotent on already-redacted text.
 
+import { tryDefaultSession } from '@agent/runtime';
+import { warn as logWarning } from '@logger/logUtils';
 import { AgentCategory, type StreamTabId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { subscribeToSignalChanges } from '@shared/signals';
@@ -68,7 +70,7 @@ const STREAM_SYNC_THROTTLE_MS = 16;
 /** A workflow popup and its Ctrl-T reader are two views of the same full
  * transcript projection. Workflows never become the active viewport, so the
  * foreground reader is their presentation-residency owner. */
-function foregroundWorkflowReaderStreamId(): StreamTabId | undefined {
+export function foregroundWorkflowReaderStreamId(): StreamTabId | undefined {
   const reader = foregroundReader.get();
   if (!reader) return undefined;
   if (reader.kind === 'workflow') return reader.streamId;
@@ -545,6 +547,18 @@ export function releaseInactiveStreamTranscript(
   const phase = streamPhaseFor(streamId)?.phase;
   if (phase === undefined || isActivePhase(phase)) return;
   store.requestEviction(streamId);
+  // The sidecar record leaves memory with the transcript once nothing presents
+  // the stream; the next focus re-seeds it through `hydrateStreamArtifacts`,
+  // and the roster's token column reads the summary mirror meanwhile. Failure
+  // to release keeps the record resident, which is the pre-existing state.
+  void tryDefaultSession()
+    ?.snapshots.requestEviction(streamId)
+    .catch((error: unknown) => {
+      logWarning(
+        'cli.tui',
+        `Stream ${streamId} left focus but its sidecar record stayed resident: ${toErrorMessage(error)}`,
+      );
+    });
   const fold = slice.transcriptFold;
   if (fold) {
     const retainedWorkflowIssuedTaskIds = fold.hydrated

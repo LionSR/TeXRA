@@ -164,6 +164,13 @@ export class ProgressBackend {
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
       deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
         this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
+      // `latestActivationTarget` as well as the committed selection: an
+      // activation preloads the sidecar before it selects, so a terminal
+      // status landing in that window must not evict what the imminent
+      // `syncStreamContent` is about to read.
+      isStreamPresented: (stream) =>
+        this.presentation.activeStream === stream ||
+        this.latestActivationTarget === stream,
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }

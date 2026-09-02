@@ -23,7 +23,10 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { streamStageFromStageStart } from '@shared/streams/stage';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import {
+  isActivePhase,
+  isTerminalOutcomePhase,
+} from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { assertNever } from '@utils/core';
 
@@ -94,6 +97,14 @@ type SessionFactApplierOptions = {
     | DeleteStreamResult
     | undefined
     | Promise<void | DeleteStreamResult | undefined>;
+  /**
+   * Whether the host is presenting `stream` right now (focused, selected, or
+   * open in a reader). A presented stream keeps its sidecar record resident
+   * for the reads the presentation makes synchronously; every other finished
+   * child releases it at its terminal status. A host that never presents
+   * finished children may omit this.
+   */
+  isStreamPresented?: (stream: StreamTabId) => boolean;
 };
 
 /**
@@ -801,6 +812,27 @@ export class SessionFactApplier {
     this.renderer.invalidate(parentStreamId, 'subagents');
   }
 
+  /**
+   * A finished child stream nobody is presenting releases its sidecar record
+   * as well as its transcript. Children are what a long session accumulates;
+   * a root stream stays resident for the host's history views. The store
+   * re-seeds on the next `preload`, which every presentation path performs
+   * before reading, and warns on a synchronous read that skipped it.
+   */
+  private retireFinishedChildSidecar(
+    streamId: StreamTabId,
+    status: StreamPhase,
+  ): void {
+    if (!isTerminalOutcomePhase(status)) return;
+    if (!this.state.getStreamMetadata(streamId).parentStreamId) return;
+    if (this.options.isStreamPresented?.(streamId)) return;
+    withEventErrorHandling(
+      'SessionFacts',
+      `failed to release the sidecar record of finished stream ${streamId}`,
+      () => this.state.snapshots.requestEviction(streamId),
+    );
+  }
+
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
     withEventErrorHandling(
       'SessionFacts',
@@ -871,6 +903,7 @@ export class SessionFactApplier {
     const logHead = this.state.streamLogs.get(streamId)?.head ?? 0;
     if (!isActivePhase(status)) {
       this.state.streamLogs.requestEviction(streamId);
+      this.retireFinishedChildSidecar(streamId, status);
     }
 
     const isNewRunningTransition =

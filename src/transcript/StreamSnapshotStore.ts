@@ -575,6 +575,12 @@ export class StreamSnapshotStore {
       ...(record.description !== undefined && {
         description: record.description,
       }),
+      // Usage rides the mirror so a stream whose record has been released
+      // (`requestEviction`) still answers the roster's token column without
+      // re-seeding every finished child.
+      ...(record.usage.size > 0 && {
+        cumulativeUsage: sumUsageStats(record.usage.values()),
+      }),
       ...(config && {
         agentCategory: config.agentCategory,
         ...(config.model !== undefined && { model: config.model }),
@@ -1068,6 +1074,7 @@ export class StreamSnapshotStore {
         ),
       () => {
         if (!isEmptyUsage(delta)) this.writeUsage(stream);
+        this.publishSummaryMeta(stream);
       },
     );
   }
@@ -1138,6 +1145,39 @@ export class StreamSnapshotStore {
   // ==========================================================================
   // Lifecycle
   // ==========================================================================
+
+  /**
+   * Release a stream's resident record once its in-flight seed and sidecar
+   * writes have settled: the sidecar counterpart of the transcript's
+   * terminal-status eviction (`StreamLogStore.requestEviction`). The next
+   * read re-seeds from disk through `preload`, which every presentation path
+   * performs before its synchronous reads, so nothing is lost. A record a
+   * staged deletion owns, or one that gains new seed work while this waits,
+   * stays resident: someone else is about to read or remove it.
+   *
+   * Public on purpose, and the one row added to the store-surface baseline:
+   * the session's lifecycle owner requests it for a finished child stream
+   * nobody is presenting, and a host's focus-leave path requests it for the
+   * stream it just stopped presenting. Without it, the record set grows with
+   * every stream a long session touches.
+   */
+  async requestEviction(stream: StreamTabId): Promise<void> {
+    const record = this.records.get(stream);
+    if (!record || this.deletions.owns(stream)) return;
+    const { generation, seedChain } = record;
+    await seedChain;
+    await this.writes.retryDirtyWrites(stream);
+    const current = this.records.get(stream);
+    if (
+      !current ||
+      current.generation !== generation ||
+      current.seedChain !== seedChain ||
+      this.deletions.owns(stream)
+    ) {
+      return;
+    }
+    this.evict(stream);
+  }
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {

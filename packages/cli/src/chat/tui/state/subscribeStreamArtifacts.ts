@@ -76,7 +76,24 @@ export function readStreamArtifacts(
   streamId: StreamTabId,
 ): StreamArtifactProjection | undefined {
   const session = tryDefaultSession();
-  if (!session || !session.snapshots.hasProvenance(streamId)) return undefined;
+  if (!session) return undefined;
+  if (!session.snapshots.hasProvenance(streamId)) {
+    // A released record (a finished, unfocused stream) still answers the
+    // roster's token column from the summary mirror the store publishes on
+    // every usage write; its artifacts re-seed on the next focus.
+    const cumulativeUsage =
+      session.transcripts.getSummaryMeta(streamId)?.cumulativeUsage;
+    return cumulativeUsage
+      ? {
+          outputFilesByRound: {},
+          missingOutputsByRound: {},
+          compileFailuresByRound: {},
+          cumulativeUsage,
+          todos: [],
+          plan: null,
+        }
+      : undefined;
+  }
   const cached = artifactProjectionMemo.get(streamId);
   if (cached !== undefined) return cached;
   const projection = projectStreamArtifacts(session.snapshots, streamId);

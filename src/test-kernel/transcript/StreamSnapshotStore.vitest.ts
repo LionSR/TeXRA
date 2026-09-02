@@ -617,6 +617,22 @@ describe('StreamSnapshotStore', () => {
     expect(store.getRunUsage(STREAM).has('run-corrupt')).toBe(false);
   });
 
+  it('releases a settled record on request and re-seeds it on the next preload', async () => {
+    const store = new StreamSnapshotStore();
+    snapshotFacts(store).addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    await store.flush();
+    expect(store.hasProvenance(STREAM)).toBe(true);
+
+    await store.requestEviction(STREAM);
+    expect(store.hasProvenance(STREAM)).toBe(false);
+
+    // Nothing was lost: the record comes back from disk on demand.
+    await store.preload([STREAM]);
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(
+      usage(100, 20, 0.5),
+    );
+  });
+
   it('resolves pre-seed usage after merging existing disk usage', async () => {
     await writeStreamFile(STREAM, 'usageStats.json', {
       [RUN]: usage(100, 20, 0.5),
