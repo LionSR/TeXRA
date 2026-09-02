@@ -1,5 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const mocks = vi.hoisted(() => ({
+  runWithInactiveExecutionLease: vi.fn(),
+}));
+
+vi.mock('@agent/storage/executionLease', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@agent/storage/executionLease')>();
+  mocks.runWithInactiveExecutionLease.mockImplementation(
+    actual.runWithInactiveExecutionLease,
+  );
+  return {
+    ...actual,
+    runWithInactiveExecutionLease: mocks.runWithInactiveExecutionLease,
+  };
+});
+
 import { getExecutionStore } from '@agent/storage';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import type {
@@ -417,6 +433,31 @@ describe('repairRestartedStreams', () => {
     });
 
     expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
+    expect(closeRunningGroups).not.toHaveBeenCalled();
+  });
+
+  it('skips a candidate reused while the lease lock was unavailable, instead of marking it unavailable', async () => {
+    const setup = setupStream('reused-during-lock');
+    const closeRunningGroups = vi.fn(closeAllGroups);
+    mocks.runWithInactiveExecutionLease.mockRejectedValueOnce(
+      new Error('lock contention'),
+    );
+    let currentCalls = 0;
+
+    await runRepair(setup, {
+      closeRunningGroups,
+      finalizeRun: createDurableFinalizer(),
+      classifyRun: classifyAs({ kind: 'resumable' }),
+      isRepairCandidateCurrent: () => {
+        currentCalls += 1;
+        // Current at the top-of-loop check (so the run reaches the lease
+        // attempt), reused by the time the lock rejects.
+        return currentCalls === 1;
+      },
+    });
+
+    expect(setup.streamStatus.get(setup.streamId)).toBeUndefined();
+    expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
     expect(closeRunningGroups).not.toHaveBeenCalled();
   });
 

@@ -322,6 +322,12 @@ export async function repairRestartedStreams(
       // A settlement that already mutated must surface; a lock that could
       // not even be taken proves nothing, so the stream stays unavailable.
       if (settleStarted) throw error;
+      if (!isCurrent(streamId, executionId)) {
+        options.logger?.debug(
+          `Skipped restart repair for stream ${streamId}: it was reused while the lease lock was unavailable`,
+        );
+        continue;
+      }
       applyHold(streamId, executionId, {
         kind: 'unclassified',
         cause: `lease lock unavailable (${toErrorMessage(error)})`,
