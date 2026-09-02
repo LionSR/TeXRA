@@ -1,3 +1,5 @@
+import { TZDate } from '@date-fns/tz';
+
 import {
   errorBodyCandidates,
   pickNumberField,
@@ -23,8 +25,8 @@ import {
  *
  * The reset hint is derived from either a `resets_in_seconds` field or the
  * absolute reset timestamp embedded in the message (e.g. "您的限额将在
- * 2026-08-08 11:32:36 重置" — a UTC+8 China-time timestamp). The timestamp is
- * parsed as UTC+8 and converted to seconds-until-reset.
+ * 2026-08-08 11:32:36 重置" — a China-time timestamp). The timestamp is a
+ * wall-clock reading in `Asia/Shanghai`, converted to seconds-until-reset.
  */
 export interface GlmCodingPlanLimit {
   /** Reset hint when the backend reports one (seconds until quota resets). */
@@ -51,22 +53,28 @@ const GLM_CODING_PLAN_RATE_LIMIT_CODES: ReadonlySet<string> = new Set([
   '1305', // The service may be temporarily overloaded
 ]);
 
-/** UTC+8 (China Standard Time) offset in milliseconds. */
-const CST_OFFSET_MS = 8 * 60 * 60 * 1000;
+/** Timezone the GLM Coding Plan backend reports reset timestamps in. */
+const GLM_CODING_PLAN_TIME_ZONE = 'Asia/Shanghai';
 
 /** Match a `YYYY-MM-DD HH:MM:SS` reset timestamp in the error message. */
-const RESET_TIMESTAMP_PATTERN = /(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/;
+const RESET_TIMESTAMP_PATTERN =
+  /(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/;
 
-/** Seconds until the quota resets, from a UTC+8 `YYYY-MM-DD HH:MM:SS` timestamp. */
+/** Seconds until the quota resets, from an `Asia/Shanghai` `YYYY-MM-DD HH:MM:SS` timestamp. */
 function secondsUntilReset(timestamp: string): number | undefined {
   const match = RESET_TIMESTAMP_PATTERN.exec(timestamp);
   if (!match) return undefined;
-  const [date, time] = [match[1], match[2]];
-  // Parse as UTC+8: treat the wall-clock as UTC, then subtract the CST offset
-  // to get the true UTC instant.
-  const utcMs = Date.parse(`${date}T${time}Z`);
-  if (Number.isNaN(utcMs)) return undefined;
-  const resetMs = utcMs - CST_OFFSET_MS;
+  const [, year, month, day, hour, minute, second] = match.map(Number);
+  const resetMs = new TZDate(
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second,
+    GLM_CODING_PLAN_TIME_ZONE,
+  ).getTime();
+  if (Number.isNaN(resetMs)) return undefined;
   return Math.max(0, Math.floor((resetMs - Date.now()) / 1000));
 }
 

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { SubscriptionUsageWindow } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 
@@ -50,55 +52,75 @@ export function asObject(value: unknown): JsonObject | undefined {
   return isObject(value) ? value : undefined;
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  let parsed = Number.NaN;
-  if (typeof value === 'number') parsed = value;
-  if (typeof value === 'string' && value.trim() !== '') parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
+/** A loosely-typed wire number: a real number, or a non-blank numeric string
+ *  (provider responses mix both for the same logical field). */
+const looseFiniteNumber = z.preprocess((value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim() !== '') return Number(value);
+  return value;
+}, z.number().finite());
+
+/** A wire timestamp expressed as epoch seconds or epoch milliseconds
+ *  (whichever a `looseFiniteNumber` resolves to), normalized to epoch ms. */
+const epochMsField = looseFiniteNumber.pipe(
+  z
+    .number()
+    .nonnegative()
+    .transform((value) =>
+      Math.trunc(value < 100_000_000_000 ? value * 1000 : value),
+    ),
+);
+
+/** A wire timestamp expressed as an ISO 8601 (or otherwise `Date.parse`-able)
+ *  string, normalized to epoch ms. */
+const isoTimestampField = z.string().transform((value, ctx) => {
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    ctx.addIssue({ code: 'custom', message: 'not a parseable date string' });
+    return z.NEVER;
+  }
+  return parsed;
+});
+
+/** Provider responses report reset timestamps either as epoch numbers (mixed
+ *  seconds/ms) or as ISO strings — try the numeric form first. */
+const timestampMsField = z.union([epochMsField, isoTimestampField]);
+
+/** Pick the first field, by alias, that parses against `schema`. Every
+ *  subscription-usage adapter reads the same provider concept under several
+ *  different wire spellings (`reset_at` / `resets_at` / `resetTime` / …), so
+ *  the alias fallback lives once here instead of once per detector. */
+function pickField<Value>(
+  schema: z.ZodType<Value>,
+  object: JsonObject | undefined,
+  keys: readonly string[],
+): Value | undefined {
+  for (const key of keys) {
+    const result = schema.safeParse(object?.[key]);
+    if (result.success) return result.data;
+  }
+  return undefined;
 }
 
 export function stringField(
   object: JsonObject | undefined,
   ...keys: readonly string[]
 ): string | undefined {
-  for (const key of keys) {
-    const value = object?.[key];
-    if (typeof value === 'string' && value.trim() !== '') return value.trim();
-  }
-  return undefined;
+  return pickField(z.string().trim().min(1), object, keys);
 }
 
 export function numberField(
   object: JsonObject | undefined,
   ...keys: readonly string[]
 ): number | undefined {
-  for (const key of keys) {
-    const value = finiteNumber(object?.[key]);
-    if (value !== undefined) return value;
-  }
-  return undefined;
-}
-
-function timestampMs(value: unknown): number | undefined {
-  const numeric = finiteNumber(value);
-  if (numeric !== undefined) {
-    if (numeric < 0) return undefined;
-    return Math.trunc(numeric < 100_000_000_000 ? numeric * 1000 : numeric);
-  }
-  if (typeof value !== 'string') return undefined;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? undefined : parsed;
+  return pickField(looseFiniteNumber, object, keys);
 }
 
 export function timestampField(
   object: JsonObject | undefined,
   ...keys: readonly string[]
 ): number | undefined {
-  for (const key of keys) {
-    const parsed = timestampMs(object?.[key]);
-    if (parsed !== undefined) return parsed;
-  }
-  return undefined;
+  return pickField(timestampMsField, object, keys);
 }
 
 export function usageWindow(
