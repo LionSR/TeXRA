@@ -319,6 +319,9 @@ export class ProgressBackend {
           this.renderer.releaseStreamContent(previousStream);
         }
       }
+      if (previousStream) {
+        this.factApplier.retireSidecarIfFinishedChild(previousStream);
+      }
       return true;
     }
     if (!this.renderer.isAvailable()) {
@@ -340,21 +343,26 @@ export class ProgressBackend {
     const failures = hydration.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
-    const closeTranscriptLease = () => {
+    // An activation that never commits leaves behind exactly what it
+    // hydrated: the transcript lease it took, and a sidecar record the
+    // preload above made resident. Nothing later revisits this stream — it
+    // never becomes the committed selection — so both are released here.
+    const abandonActivation = () => {
       if (transcriptLeaseResult.status === 'fulfilled') {
         transcriptLeaseResult.value.close();
       }
+      this.factApplier.retireSidecarIfFinishedChild(stream);
     };
     if (generation !== this.activationGeneration) {
-      closeTranscriptLease();
+      abandonActivation();
       return false;
     }
     if (!this.state.streamLogs.has(stream)) {
-      closeTranscriptLease();
+      abandonActivation();
       return false;
     }
     if (failures.length > 0) {
-      closeTranscriptLease();
+      abandonActivation();
       throw aggregateError(
         failures.map((failure) => failure.reason),
         `Failed to hydrate stream ${stream}`,

@@ -18,15 +18,17 @@ import {
   type StreamTabId,
   type TodoItem,
 } from '@shared/schemas';
+import { subscribeToSignalChanges } from '@shared/signals';
 import {
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
   STREAM_TRANSITION_CAUSE,
 } from '@shared/streams/streamStatus';
-import { assertNever } from '@utils/core';
+import { assertNever, filterNotNullish } from '@utils/core';
 import {
   activeStreamId,
   cliStreamAcceptsStatus,
+  foregroundReader,
   patchStream,
   removeStream,
   streams,
@@ -198,6 +200,26 @@ export function attachSessionSignalsAdapter(
       activeStreamId.get() === streamId ||
       foregroundReaderStreamId() === streamId,
   });
+  // One owner of "this stream stopped being presented": focus moving, a
+  // reader of any kind closing or retargeting, or both at once. The applier's
+  // rule decides what that means for the record (a terminal child nothing
+  // presents), so a WAITING child the agent is still driving keeps its
+  // sidecar while `ExecutionsTool` reads its work plan.
+  const presentedStreamIds = (): StreamTabId[] =>
+    [activeStreamId.get(), foregroundReaderStreamId()].filter(filterNotNullish);
+  let presentedBefore = presentedStreamIds();
+  const detachPresentation = subscribeToSignalChanges(
+    [activeStreamId, foregroundReader],
+    () => {
+      const presentedNow = presentedStreamIds();
+      for (const streamId of presentedBefore) {
+        if (presentedNow.includes(streamId)) continue;
+        applier.retireSidecarIfFinishedChild(streamId);
+      }
+      presentedBefore = presentedNow;
+    },
+  );
+
   const detachSessionFacts = session.events.subscribeSessionFacts((fact) => {
     if (fact.type === 'status') {
       // CLI status modality runs BEFORE the shared applier sees the fact:
@@ -254,6 +276,7 @@ export function attachSessionSignalsAdapter(
   );
 
   return () => {
+    detachPresentation();
     detachRunFacts();
     detachSessionFacts();
     applier.dispose();
