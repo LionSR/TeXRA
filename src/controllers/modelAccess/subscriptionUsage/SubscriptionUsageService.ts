@@ -7,6 +7,7 @@ import type {
   SubscriptionUsageSnapshot,
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
+import { coalesceAsync } from '@utils/core';
 import { useChinaRegion } from '@utils/config/providerConfig';
 
 import {
@@ -180,6 +181,25 @@ export class SubscriptionUsageService {
     }
   }
 
+  // Return-path choice (D16, define-out-of-existence §1e): when invalidate()
+  // races an in-flight fetch, coalesceAsync's own identity check keeps the
+  // stale result out of the cache, but the already-waiting caller still
+  // receives it — one accepted stale read on a read-only usage display.
+  private readonly cacheReader = {
+    get: (key: string): SubscriptionUsageSnapshot | undefined => {
+      const cached = this.cache.get(key);
+      return cached && cached.expiresAt > this.now()
+        ? cached.snapshot
+        : undefined;
+    },
+    set: (key: string, snapshot: SubscriptionUsageSnapshot): void => {
+      this.cache.set(key, {
+        snapshot,
+        expiresAt: this.now() + this.cacheTtlMs,
+      });
+    },
+  };
+
   async getUsage(
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
@@ -196,35 +216,11 @@ export class SubscriptionUsageService {
     if (options.forceRefresh) {
       this.cache.delete(key);
       this.pending.delete(key);
-    } else {
-      const cached = this.cache.get(key);
-      if (cached && cached.expiresAt > this.now()) return cached.snapshot;
     }
 
-    const inFlight = this.pending.get(key);
-    if (inFlight) return inFlight;
-
-    // Return-path choice (D16, define-out-of-existence §1e): when invalidate()
-    // races an in-flight fetch, the identity check below keeps the stale result
-    // out of the cache, but the already-waiting caller still receives it — one
-    // accepted stale read on a read-only usage display.
-    const request = this.fetchUsage(provider, variant).then((snapshot) => {
-      if (this.pending.get(key) === request) {
-        this.cache.set(key, {
-          snapshot,
-          expiresAt: this.now() + this.cacheTtlMs,
-        });
-      }
-      return snapshot;
-    });
-    this.pending.set(key, request);
-    try {
-      return await request;
-    } finally {
-      if (this.pending.get(key) === request) {
-        this.pending.delete(key);
-      }
-    }
+    return coalesceAsync(this.cacheReader, this.pending, key, () =>
+      this.fetchUsage(provider, variant),
+    );
   }
 
   private unavailable(
