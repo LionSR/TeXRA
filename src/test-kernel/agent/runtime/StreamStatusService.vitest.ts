@@ -115,6 +115,22 @@ describe('StreamStatusMachine', () => {
     expect(machine.tryAcquire(streamId)).toBe(false);
   });
 
+  it('refuses to overwrite a live reservation with a hold', () => {
+    const { machine, streamId } = setupMachine(
+      'stream-status-reservation-vs-hold',
+    );
+
+    expect(machine.tryAcquire(streamId)).toBe(true);
+    expect(machine.markUnavailable(streamId, 'lease lock unavailable')).toBe(
+      false,
+    );
+    expect(machine.holdState(streamId)).toBeUndefined();
+
+    // The rollback the reservation owns still runs.
+    machine.releaseIfReserved(streamId);
+    expect(machine.get(streamId)).toBe(STREAM_PHASE.CANCELLED);
+  });
+
   it('closes the active window in WAITING and restamps after the resume gap', () => {
     vi.useFakeTimers({ now: 1_000 });
     const { machine, streamId } = setupMachine(

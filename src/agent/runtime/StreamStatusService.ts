@@ -289,15 +289,27 @@ export class StreamStatusMachine {
     return false;
   }
 
-  /** Record why restart classification could not settle this stream. */
-  markUnavailable(stream: StreamTabId, detail: string): void {
+  /**
+   * Record why restart classification could not settle this stream. Returns
+   * `false` without writing when a live reservation owns the stream: a hold
+   * describes a run some earlier process left behind, which a reservation has
+   * by definition superseded, and overwriting one strands the tab — a hold is
+   * not `reserved`, so `releaseIfReserved` becomes a no-op and a failed
+   * launch's rollback never runs, while the RUNNING the hold inherits from
+   * `effectiveState` blocks every later `tryAcquire`. Holds lived in a side
+   * map before they became an entry arm and could not do this. The caller
+   * logs the refusal so the skipped hold is not silent.
+   */
+  markUnavailable(stream: StreamTabId, detail: string): boolean {
     const entry = this.streams.get(stream);
+    if (entry?.kind === 'reserved') return false;
     const state = entry ? effectiveState(entry) : undefined;
     this.streams.set(stream, {
       kind: 'hold',
       detail,
       ...(state ? { state } : {}),
     });
+    return true;
   }
 
   /**
