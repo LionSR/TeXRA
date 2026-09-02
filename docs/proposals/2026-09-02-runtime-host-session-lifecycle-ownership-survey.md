@@ -30,7 +30,7 @@ module singleton survives. The five lifecycle roots landed, `DisposableStore`
 is the house idiom, and the CLI's `StreamSlice` lifecycle mirror — the
 2026-08-25 seam audit's highest-risk row — is deleted.
 
-**What remains is residue, not architecture.** The 45 findings that survived
+**What remains is residue, not architecture.** The 66 findings that survived
 adversarial verification are overwhelmingly _leftovers of completed
 migrations_: a guard that became a tautology when the store it counts moved
 into the session constructor, a replay queue whose second copy can no longer
@@ -52,8 +52,8 @@ subsystem.
 |                       | ownership survey | dual-system census |
 | --------------------- | ---------------: | -----------------: |
 | candidates raised     |               61 |                 34 |
-| refuted by a verifier |               40 |                 13 |
-| survived both lenses  |               21 |                 24 |
+| refuted by a verifier |               19 |                 10 |
+| survived both lenses  |               42 |                 24 |
 
 ## 1. Method
 
@@ -567,6 +567,58 @@ idle await. Delete only the interrupt call and its context field, or — the
 better shape, and a small product call — give the exit controller one
 `requestExit()` that applies the existing policy and have all three gestures
 call it. ≈ −4, and one stale comment to reword.
+
+### 2.6 Second-pass findings (the seven domains whose verification finished last)
+
+These cleared both lenses against `a78a896` and were liveness-checked at the
+re-grounded head before being recorded here. They are lower-leverage than
+§2.1–§2.5 and are listed compactly; the evidence lives in the run record.
+
+| id  | finding                                                                                                                                          | net | risk   |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --: | ------ |
+| P1  | `childRunPersistence` converts KV throws into a result object both consumers immediately turn back into a throw or a warning                     | −45 | low    |
+| P2  | The `streamStates` option on `onStreamMetadataChanged` round-trips a map the renderer can read per-stream from the same owner                    | −45 | low    |
+| P3  | `ProgressViewSecondTierActions` carries two fields the shared factory no longer needs                                                            | −22 | low    |
+| P4  | Test-only optionality across the progress-view controller ports (three `preload?`, `quotaFallbackRuntimes?`, `logError?`)                        | −20 | low    |
+| P5  | `TuiSession.presentationHost` is write-only — five writers, zero readers — plus two dead optional parameters                                     | −16 | low    |
+| P6  | Composition-root residue: a repeated ON-phase dispose and an extension lifecycle-host override reproducing the default                           | −14 | low    |
+| P7  | `StreamExecutionState.category` duplicates the durable metadata every host actually renders from                                                 | −35 | medium |
+| P8  | The CLI's SIGINT/SIGTERM registry is a hand-rolled listener set where one `DisposableStore` would do                                             | −12 | low    |
+| P9  | `MainViewExecutionLaunchResult` still nests a second union both GUI hosts unwrap twice (seam-audit C12, still open)                              | −12 | low    |
+| P10 | `executeCliRequest` keeps a deferred for a lease-acquired fact that `ownedExecutionId` already carries                                           | −12 | low    |
+| P11 | Retire three `executionRequests` host deep-import rows: the lazy imports that blocked the door move defer nothing                                |  −8 | low    |
+| P12 | `SessionState.flush()` — zero production callers, and a second un-batched flush path beside `flushArtifacts()`                                   |  −7 | low    |
+| P13 | Four knip-baseline rows in the child-run domain are held open only by direct test imports and can leave the baseline                             |  −4 | low    |
+| P14 | `StreamSnapshotStore.deleteStream` is a ratcheted public method with zero production callers — the one row that shrinks a store-surface baseline |  −4 | low    |
+| P15 | `FinalizeRunTerminalResult.outcomePersisted` is computed, logged, returned and never read, while the CLI re-reads the same fact from disk        |  −4 | low    |
+| P16 | Un-export three types nobody imports plus a single-test barrel re-export (five knip rows, no test deletions)                                     |  −1 | low    |
+
+Three of these need a word beyond the table.
+
+**P17 confirms U2 from a second direction.** A different domain reader, working
+the child-runs-and-follow-ups seam rather than the dual-UI-homes species,
+independently found `texra.sendFollowUp` to be a command hop whose only invoker
+is its own host's message handler while the desktop calls the shared function
+directly. Two readers, two framings, one finding — file it once.
+
+**One item is in tension with U3, and the tension is the useful part.** A
+second-pass finding proposes deleting five redundant `session.stopRequested = true`
+writes that immediately precede `interruptActive()`. But U3's verifier
+established that this exact assignment is **load-bearing** for `/exit`, because
+the follow-up loop polls it and dropping it can hang the quit at the teardown's
+idle await. Both can be true — the writes may be redundant _where the call
+that follows already sets it_ and load-bearing _where it does not_ — but nobody
+has separated those cases. Do not act on either until one PR settles which
+sites are which.
+
+**One item is the weakest thing in this document, and is recorded as such.** A
+refused root follow-up sets `stopRequested`, so a delivery failure is later read
+as a user interrupt and the exit code is masked to Success. If true that is a
+silent-degradation defect worth more than its three lines. But one lens refuted
+it and the other passed it only at low confidence, so it survived on a
+technicality of the merge rule rather than on evidence. It needs a proper
+verification pass before anyone touches it; it is listed here so that pass has
+somewhere to start, not because it is ready.
 
 ## 3. The dual-system ledger, re-verified at HEAD
 
