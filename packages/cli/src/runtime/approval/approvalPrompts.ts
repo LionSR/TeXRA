@@ -1,12 +1,7 @@
 import { defaultSession } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
 import { getExhaustionReason } from '@shared/schemas';
-import type {
-  AgentProposalPermission,
-  PlanApprovalPermission,
-  RetryPermission,
-  ApprovalDecision,
-} from '@shared/schemas';
+import type { RetryPermission, ApprovalDecision } from '@shared/schemas';
 import {
   quotaFallbackRouteForExhaustion,
   type QuotaFallbackRoute,
@@ -20,33 +15,6 @@ import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
 import type PQueue from 'p-queue';
-
-/**
- * Approval requests the CLI can settle by policy (auto-approve / auto-deny)
- * or by prompting, as opposed to the human-input requests (user questions,
- * external inquiry) that always need a person. Both the headless adapter and
- * the TUI discriminate on this set.
- *
- * CLI-owned, not a runtime event vocabulary: nothing emits these names over
- * the runtime host. They are the discriminator for the CLI's own approval
- * prompts, and the payloads are the plain `@shared/schemas` permission shapes
- * the live `HostInteractions` requests already carry.
- *
- * Carrying `type` and `payload` in one discriminated union (rather than two
- * separate `(event, payload)` parameters keyed off a generic) lets a
- * `switch (request.type)` narrow `request.payload` for free — no `as`
- * casts needed at the read sites.
- */
-export type CliDecisionApprovalRequest =
-  | {
-      readonly type: 'showPlanApproval';
-      readonly payload: PlanApprovalPermission;
-    }
-  | {
-      readonly type: 'showAgentProposal';
-      readonly payload: AgentProposalPermission;
-    }
-  | { readonly type: 'showRetryRequest'; readonly payload: RetryPermission };
 
 export interface CliApprovalPromptHooks {
   readonly beforePrompt?: () => void;

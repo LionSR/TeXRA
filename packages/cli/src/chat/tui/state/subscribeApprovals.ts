@@ -260,7 +260,7 @@ function prepareRetryClient(
   return runRetryTask(() => prepare(selection, signal), signal);
 }
 
-// Retry carries its own policy lookup (`showRetryRequest`) and owns a queue
+// Retry carries its own policy lookup (`requestRetry`) and owns a queue
 // reservation, so it does not enter through this path.
 async function enqueueDecision(
   payload: ApprovalPayload,

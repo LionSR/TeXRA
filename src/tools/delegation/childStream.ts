@@ -121,7 +121,6 @@ export function createChildStream(
       detachSessionTrace?.();
       runTrace.dispose();
     };
-    session.events.assertRunSubscribersAttachedBeforeActivation(childStreamId);
 
     runTrace.trace.emit({
       type: 'run.start',

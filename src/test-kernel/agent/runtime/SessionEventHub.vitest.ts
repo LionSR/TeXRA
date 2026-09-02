@@ -48,52 +48,6 @@ describe('SessionEventHub', () => {
     });
   });
 
-  it('asserts that a run-scope subscriber exists for the activating stream', () => {
-    const hub = new SessionEventHub();
-
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).toThrow(/No run-scoped session event subscribers/);
-
-    const detachSessionOnly = hub.subscribe(() => undefined, {
-      scope: 'session',
-    });
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).toThrow(/No run-scoped session event subscribers/);
-    detachSessionOnly();
-
-    const detachUnscopedRun = hub.subscribe(() => undefined, { scope: 'run' });
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).not.toThrow();
-    detachUnscopedRun();
-
-    const detachOtherRun = hub.subscribe(() => undefined, {
-      scope: 'run',
-      streamId: otherStreamId,
-    });
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).toThrow(/No run-scoped session event subscribers/);
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(otherStreamId),
-    ).not.toThrow();
-    detachOtherRun();
-
-    const detachRun = hub.subscribe(() => undefined, {
-      scope: 'run',
-      streamId,
-    });
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).not.toThrow();
-    detachRun();
-    expect(() =>
-      hub.assertRunSubscribersAttachedBeforeActivation(streamId),
-    ).toThrow(/No run-scoped session event subscribers/);
-  });
-
   it('routes run facts and usage from trace events onto the session hub', () => {
     const trace = new TraceEmitter();
     const hub = new SessionEventHub();

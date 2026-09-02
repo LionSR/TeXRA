@@ -7,8 +7,6 @@
  * what the user edited — lives behind {@link ToolEditApprovalHost}.
  */
 
-import path from 'node:path';
-
 import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   cancellationResultFor,
@@ -40,19 +38,6 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ToolEditApproval';
-
-/**
- * Path shown to the user, relative to the workspace when there is one.
- * A host without an initialized platform falls back to the basename rather
- * than failing the request.
- */
-function relativeDisplayPath(filePath: string): string {
-  try {
-    return WorkspaceFS.relativePath(filePath);
-  } catch {
-    return path.basename(filePath);
-  }
-}
 
 /** The host view of one staged request, live until the approval settles. */
 export interface ToolEditPreview {
@@ -149,7 +134,7 @@ export class ToolEditApprovalController {
     }
 
     const requestId = `approval-${generateShortId()}`;
-    const relativePath = relativeDisplayPath(request.path);
+    const relativePath = WorkspaceFS.relativePath(request.path);
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',
       request,

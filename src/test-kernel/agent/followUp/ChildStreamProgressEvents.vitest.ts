@@ -36,8 +36,6 @@ import {
 const executionId = 'c11111' as ExecutionId;
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'bash#c11111' as StreamTabId;
-const orderingExecutionId = 'c11112' as ExecutionId;
-const orderingChildStreamId = 'bash#c11112' as StreamTabId;
 const loopExecutionId = 'c11113' as ExecutionId;
 const loopChildStreamId = 'codex#c11113' as StreamTabId;
 const stoppedExecutionId = 'c11114' as ExecutionId;
@@ -54,7 +52,6 @@ const setupRetryExecutionId = 'c11120' as ExecutionId;
 const setupRetryChildStreamId = 'workflow-script#c11120' as StreamTabId;
 const allChildStreamIds = [
   childStreamId,
-  orderingChildStreamId,
   loopChildStreamId,
   stoppedChildStreamId,
   cancelledChildStreamId,
@@ -98,68 +95,10 @@ function collectSessionFacts(onlyType?: string) {
   return { facts, detach };
 }
 
-/**
- * Run `run` with a run-scope subscriber attached to the default session hub.
- * Creating or finalizing a child stream activates it, and the hub asserts a
- * run-scope subscriber is already attached at that point; the recorded events
- * themselves are not asserted here.
- */
-function withSessionEventRecording<T>(run: () => T): T {
-  const recorded = recordSessionEvents(defaultSession().events);
-  try {
-    const result = run();
-    if (result instanceof Promise) {
-      return result.finally(recorded.detach) as T;
-    }
-    recorded.detach();
-    return result;
-  } catch (err) {
-    recorded.detach();
-    throw err;
-  }
-}
-
 describe('child stream progress events', () => {
   afterEach(() => {
     for (const streamId of allChildStreamIds) {
       clearStreamStatusForTest(defaultSession().status, streamId);
-    }
-  });
-
-  it('attaches child run subscribers before activating the stream', () => {
-    const active = createRecordingHost();
-    const session = defaultSession();
-    const sequence: string[] = [];
-    const originalAssert =
-      session.events.assertRunSubscribersAttachedBeforeActivation.bind(
-        session.events,
-      );
-    const assertSpy = vi
-      .spyOn(session.events, 'assertRunSubscribersAttachedBeforeActivation')
-      .mockImplementation((streamId) => {
-        sequence.push(`assert:${streamId}`);
-        expect(active.events.map((entry) => entry.event)).not.toContain(
-          'setActiveStream',
-        );
-        originalAssert(streamId);
-      });
-    const detachEvents = session.events.subscribe((event) => {
-      if (event.scope === 'session' && event.event.type === 'setActiveStream') {
-        sequence.push('fact:setActiveStream');
-      }
-    });
-    try {
-      const childStream = startBashChild(orderingExecutionId);
-      void childStream.finalize({ autoClose: true });
-
-      expect(assertSpy).toHaveBeenCalledWith(orderingChildStreamId);
-      expect(sequence.slice(0, 2)).toEqual([
-        `assert:${orderingChildStreamId}`,
-        'fact:setActiveStream',
-      ]);
-    } finally {
-      detachEvents();
-      assertSpy.mockRestore();
     }
   });
 
@@ -241,15 +180,17 @@ describe('child stream progress events', () => {
   });
 
   it('marks a deterministic child-stream relaunch as running', async () => {
-    const firstRun = withSessionEventRecording(() =>
-      createChildStream(workflowRelaunchExecutionId, parentStreamId, {
+    const firstRun = createChildStream(
+      workflowRelaunchExecutionId,
+      parentStreamId,
+      {
         streamPrefix: 'workflow-script',
         run: { kind: 'multiAgentWorkflow', workflowName: 'draft-sections' },
         description: 'Run a named child task',
         config,
-      }),
+      },
     );
-    await withSessionEventRecording(() => firstRun.finalize());
+    await firstRun.finalize();
     expect(defaultSession().status.get(workflowRelaunchChildStreamId)).toBe(
       STREAM_PHASE.COMPLETED,
     );
@@ -609,20 +550,16 @@ describe('child stream progress events', () => {
   });
 
   it('settles child handle results as cancelled for stopped finalization', async () => {
-    const childStream = withSessionEventRecording(() =>
-      startCodexChild(
-        cancelledExecutionId,
-        'Run an interrupted Codex child loop',
-      ),
+    const childStream = startCodexChild(
+      cancelledExecutionId,
+      'Run an interrupted Codex child loop',
     );
     const handle = defaultSession().executions.getAgentHandleByStream(
       cancelledChildStreamId,
     );
     expect(handle).toBeDefined();
 
-    await withSessionEventRecording(() =>
-      childStream.finalize({ outcome: { kind: 'cancelled' } }),
-    );
+    await childStream.finalize({ outcome: { kind: 'cancelled' } });
 
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
@@ -633,21 +570,20 @@ describe('child stream progress events', () => {
   });
 
   it('settles failed child handle results with error details', async () => {
-    const childStream = withSessionEventRecording(() =>
-      startCodexChild(failedExecutionId, 'Run a failing Codex child loop'),
+    const childStream = startCodexChild(
+      failedExecutionId,
+      'Run a failing Codex child loop',
     );
     const handle =
       defaultSession().executions.getAgentHandleByStream(failedChildStreamId);
     expect(handle).toBeDefined();
 
-    await withSessionEventRecording(() =>
-      childStream.finalize({
-        outcome: {
-          kind: 'failed',
-          error: new Error('child process exited 1'),
-        },
-      }),
-    );
+    await childStream.finalize({
+      outcome: {
+        kind: 'failed',
+        error: new Error('child process exited 1'),
+      },
+    });
 
     expect(defaultSession().status.get(failedChildStreamId)).toBe(
       STREAM_PHASE.FAILED,
