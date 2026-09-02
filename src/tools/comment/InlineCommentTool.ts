@@ -81,47 +81,81 @@ function requireProvider(): InlineCommentProvider {
   return provider;
 }
 
-const InlineCommentInputSchema = z.strictObject({
-  command: z
-    .enum(['add', 'reply', 'resolve', 'unresolve', 'list'])
-    .describe(
-      "add: open a new comment thread on a file range. reply: append a comment to an existing thread. resolve/unresolve: toggle a thread's resolved state. list: read open threads and their comments, including the user's replies.",
-    ),
-  path: z
-    .string()
-    .trim()
-    .min(1)
-    .nullish()
-    .describe(
-      'add: file the comment anchors to (required). list: restrict to one file (omit for all threads). Workspace-relative or absolute.',
-    ),
-  line: z
-    .int()
-    .min(1)
-    .nullish()
-    .describe('add: 1-based start line the comment anchors to (required).'),
-  endLine: z
-    .int()
-    .min(1)
-    .nullish()
-    .describe(
-      'add: 1-based end line of the range; defaults to the start line.',
-    ),
-  body: z
-    .string()
-    .min(1)
-    .nullish()
-    .describe('add / reply: the comment text (Markdown supported).'),
-  threadId: z
-    .string()
-    .min(1)
-    .nullish()
-    .describe(
-      'reply / resolve / unresolve: the thread id returned by "add" or "list".',
-    ),
-});
+const THREAD_ID_DESCRIPTION = 'The thread id returned by "add" or "list".';
+const COMMENT_BODY_DESCRIPTION = 'The comment text (Markdown supported).';
+
+// Branches use looseObject (not strictObject): provider conversion flattens the
+// discriminated union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
+const InlineCommentInputSchema = z.discriminatedUnion('command', [
+  z
+    .looseObject({
+      command: z
+        .literal('add')
+        .describe('Open a new comment thread on a file range.'),
+      path: z
+        .string()
+        .trim()
+        .min(1)
+        .describe(
+          'File the comment anchors to. Workspace-relative or absolute.',
+        ),
+      line: z
+        .int()
+        .min(1)
+        .describe('1-based start line the comment anchors to.'),
+      endLine: z
+        .int()
+        .min(1)
+        .nullish()
+        .describe('1-based end line of the range; defaults to the start line.'),
+      body: z.string().min(1).describe(COMMENT_BODY_DESCRIPTION),
+    })
+    .refine((data) => data.endLine == null || data.endLine >= data.line, {
+      message: 'endLine must be greater than or equal to line.',
+      path: ['endLine'],
+    }),
+  z.looseObject({
+    command: z
+      .literal('reply')
+      .describe('Append a comment to an existing thread.'),
+    threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
+    body: z.string().min(1).describe(COMMENT_BODY_DESCRIPTION),
+  }),
+  z.looseObject({
+    command: z.literal('resolve').describe('Mark a thread resolved.'),
+    threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
+  }),
+  z.looseObject({
+    command: z.literal('unresolve').describe('Reopen a resolved thread.'),
+    threadId: z.string().min(1).describe(THREAD_ID_DESCRIPTION),
+  }),
+  z.looseObject({
+    command: z
+      .literal('list')
+      .describe(
+        "Read open threads and their comments, including the user's replies.",
+      ),
+    path: z
+      .string()
+      .trim()
+      .min(1)
+      .nullish()
+      .describe(
+        'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
+      ),
+  }),
+]);
 
 type InlineCommentInput = z.infer<typeof InlineCommentInputSchema>;
+type AddCommentInput = Extract<InlineCommentInput, { command: 'add' }>;
+type ReplyCommentInput = Extract<InlineCommentInput, { command: 'reply' }>;
+type SetResolvedInput = Extract<
+  InlineCommentInput,
+  { command: 'resolve' | 'unresolve' }
+>;
+type ListCommentInput = Extract<InlineCommentInput, { command: 'list' }>;
 
 /** Render a thread for the agent: a header line plus each comment indented. */
 function formatThread(thread: InlineCommentThreadView): string {
@@ -161,14 +195,8 @@ export class InlineCommentTool extends defineTool({
     }
   }
 
-  private addThread(input: InlineCommentInput): ToolResult {
+  private addThread(input: AddCommentInput): ToolResult {
     const { path, line, endLine, body } = input;
-    if (path == null || line == null || body == null) {
-      throw new ToolError('The "add" command requires path, line, and body.');
-    }
-    if (endLine != null && endLine < line) {
-      throw new ToolError('endLine must be greater than or equal to line.');
-    }
     try {
       const workingDirectory =
         getRunContextWorkingDirectory(tryUseRunContext());
@@ -196,11 +224,8 @@ export class InlineCommentTool extends defineTool({
     }
   }
 
-  private reply(input: InlineCommentInput): ToolResult {
+  private reply(input: ReplyCommentInput): ToolResult {
     const { threadId, body } = input;
-    if (threadId == null || body == null) {
-      throw new ToolError('The "reply" command requires threadId and body.');
-    }
     if (!requireProvider().reply({ threadId, body })) {
       return this.threadNotFound(threadId);
     }
@@ -208,16 +233,8 @@ export class InlineCommentTool extends defineTool({
     return executed(summary, summary);
   }
 
-  private setResolved(
-    input: InlineCommentInput,
-    resolved: boolean,
-  ): ToolResult {
+  private setResolved(input: SetResolvedInput, resolved: boolean): ToolResult {
     const { threadId } = input;
-    if (threadId == null) {
-      throw new ToolError(
-        `The "${resolved ? 'resolve' : 'unresolve'}" command requires threadId.`,
-      );
-    }
     if (!requireProvider().setResolved({ threadId, resolved })) {
       return this.threadNotFound(threadId);
     }
@@ -225,7 +242,7 @@ export class InlineCommentTool extends defineTool({
     return executed(summary, summary);
   }
 
-  private list(input: InlineCommentInput): ToolResult {
+  private list(input: ListCommentInput): ToolResult {
     let absolutePath: string | undefined;
     if (input.path != null) {
       const workingDirectory =
