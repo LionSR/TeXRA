@@ -44,6 +44,7 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'gpt56--',
   'gemini38f',
   'gemini31p',
+  'musespark13',
   'deepseekT',
   'deepseekproT',
   'kimi26T',

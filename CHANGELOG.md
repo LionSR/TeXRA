@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
   Flash in the default model list with improved reasoning and coding at the
   same introductory price. Existing selections of Gemini 3.7 Flash keep
   working while Google serves them.
+- **Muse Spark 1.3 is available** — Meta's latest standard model joins the
+  default model list with a 1M-token context window, multimodal input, prompt
+  caching, web search, and configurable reasoning. Existing selections of Muse
+  Spark 1.1 keep working while Meta serves them.
 
 #### Bug Fixes
 

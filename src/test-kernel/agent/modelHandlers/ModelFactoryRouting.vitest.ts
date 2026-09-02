@@ -519,12 +519,12 @@ describe('OpenAI model handler routing', () => {
       expected: 'ModelHandlerOpenRouterNative',
     },
     {
-      model: 'musespark11',
+      model: 'musespark13',
       useOpenRouter: false,
       expected: 'ModelHandlerMeta',
     },
     {
-      model: 'musespark11',
+      model: 'musespark13',
       useOpenRouter: true,
       expected: 'ModelHandlerOpenRouterNative',
     },
