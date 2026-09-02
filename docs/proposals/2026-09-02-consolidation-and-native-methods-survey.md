@@ -54,15 +54,22 @@ index` dedup loops, `arr[arr.length - 1]` vs. `.at(-1)`, new `Object.assign(`
 - **Hand-rolled sleeps (`new Promise(resolve => setTimeout(...))`):** within
   the survey's stated scope (`src/` and `packages/*/src/`), all 16 hits are
   in `src/test-kernel/**` test fixtures (timer-flush waits), none in
-  production code — same conclusion as prior rounds. That scope excludes
-  repo tooling scripts; `packages/cli/scripts/validate-tui.mjs:3706` defined
-  the same hand-rolled shape outside it and has since been swapped for
+  production code — same conclusion as prior rounds. Repo-wide (including
+  tooling scripts, outside that stated scope) the same tell has 17 hits:
+  those same 16 plus `scripts/capture-walkthrough-media-runner.cjs:109`,
+  which is a string template of code injected into and executed inside a
+  browser page (`document`, `requestAnimationFrame`, `shadowRoot` — no
+  Node globals), so `node:timers/promises` does not apply there — adjudicated,
+  not a candidate. A 17th-turned-18th repo-wide hit,
+  `packages/cli/scripts/validate-tui.mjs:3706`, defined the same hand-rolled
+  shape in genuine Node script code and has since been swapped for
   `node:timers/promises`' `setTimeout` (this PR).
 - **`JSON.parse(JSON.stringify(` deep clones:** all repo-wide hits are
   `src/test-kernel/**` test assertions plus the one already-adjudicated
   `src/agent/workflowScript/parseScript.ts:130` `vm.Script` sandbox literal
   (not a clone helper). No production clone helper exists to consolidate.
-- **New `.sort()` call sites in the diff (4 total):** `latexModules`'
+- **New `.sort()` call sites in the diff (4 total):**
+  `src/shared/markdown/begEndEnvironmentProbe.ts:284`'s
   `findDisplayMathRanges` — a pure function relocation, not new logic, sorting
   a function-local array; `workflowRunModel.ts:209,217`
   (`workflowCardsInTranscriptOrder`) — sorts two arrays built fresh inside
