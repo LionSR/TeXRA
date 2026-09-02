@@ -1,8 +1,8 @@
 # Simplification survey, round 2: transcript and session memory (2026-09-02)
 
 > **Status:** survey + proposal. Grounded on branch
-> `claude/texra-cli-heap-leak-ji9o1d` at `e271a04` (origin/main `646475d`
-> plus the round-1 commits `a13b28b..e271a04`). Companion to
+> `claude/texra-cli-heap-leak-ji9o1d` at `1248b5b7fc` (origin/main `646475d`
+> plus the round-1 commits `37248a74d7..1248b5b7fc`). Companion to
 > `2026-09-02-stream-lifetime-and-cancellation-simplification.md` (round 1),
 > which this round does not re-litigate. Three read-only sweeps — the CLI's
 > per-stream transcript representations, the transcript persistence and delta
@@ -297,26 +297,21 @@ them. `UsageMonitor`, `BackgroundPoller`, `fileInteractions`,
 `ToolFileInteractionContext`, and `StreamSubscriptionRegistry` hold no
 session-lifetime per-key map; nothing to file.
 
-## 3. Order of work
+## 3. Historical order and final disposition
 
-1. **T2 + C1 + C3 + S3 + T6** — mechanical, zero behavior change, one PR
-   with the R6 element table.
-2. **C2 + C5** — CLI fold and cache; the fold suites are the acceptance.
-3. **S2 + T5 + T4 (small form) + C4** — each with the one verification named
-   in its entry.
-4. **S1** — resume the 2026-08-03 row; touches the wire schema and the
-   webview join, so it is its own PR.
-5. **T7 and C6** — measure first (retained chunk bytes on a long response;
-   retained rows of a multi-hour focused stream), then design.
+Review narrowed the original work order before merge:
 
-T1 and T3 are excluded because review found that both proposed deletions
-cross durability boundaries. The remaining steps delete a copy or a dead
-branch; the only additions are one union arm (S2) and one repaint signal
-(C4).
+- **Landed:** T2, C1, C2, C3, S2, and S3.
+- **Withdrawn or not taken:** T1, T3, T4, T5, T6, C4, and C5. The reasons are
+  recorded in §5; none remains an action item from this document.
+- **Future, separate work:** S1 requires its own wire-schema and webview PR.
+  T7 and C6 remain measure-first investigations, not implementation tasks.
+
+The §5 outcome table is authoritative.
 
 ## 4. Verified
 
-Opened first-hand at `e271a04`: `TexraTranscriptRecorder.ts:258-280,338-384`;
+Opened first-hand at `1248b5b7fc`: `TexraTranscriptRecorder.ts:258-280,338-384`;
 `StreamLog.ts:296-342,560-600`; `StreamLogStore.ts:536-560,1226-1252`;
 `runTrace.ts` (full); `AgentRunLifecycle.ts:820-832`;
 `childStream.ts:224-238`; `SessionHandle.ts:424-434,491-506,557`;
@@ -332,7 +327,7 @@ were re-run for C1, C2, C3, C4, S2, S3, and T2.
 
 ## 5. Implementation status (2026-09-02, same branch)
 
-Executed in the §3 order, one commit per step, each validated with the
+Evaluated in the §3 order, with each landed step validated using the
 workspace and test-kernel type checks, ESLint on the touched files, and the
 suites that exercise the touched modules.
 

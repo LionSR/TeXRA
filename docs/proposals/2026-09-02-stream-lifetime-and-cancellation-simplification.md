@@ -1,7 +1,7 @@
 # Stream lifetime and cancellation: one owner per fact (2026-09-02)
 
 > **Status:** survey + proposal. Grounded on branch
-> `claude/texra-cli-heap-leak-ji9o1d` at `a13b28b` (origin/main `646475d`
+> `claude/texra-cli-heap-leak-ji9o1d` at `37248a74d7` (origin/main `646475d`
 > plus the per-subagent signal-retention fix). Every claim carries a
 > `path:line` at that revision; re-open before acting. Produced by three
 > read-only evidence sweeps (stream-identity owners, approval and child
@@ -398,28 +398,22 @@ Delete. **E4.** The `interactions.cancel` duplicate and the double
   finished child until deletion. Small, and both become moot if §2.C's
   retirement event is what the renderer keys on; fold into that PR.
 
-## 3. Order of work
+## 3. Historical order and final disposition
 
-1. **A1 + A4 + E3** — mechanical, zero behavior change, one PR.
-2. **E1** — bounded deletion with a `git log -S` check.
-3. **B1 + B2 + B3** — one owner per stream-identity fact; three small PRs
-   or one, each with the R6 element table.
-4. **A2** — after 1, with the `ExecutionHandle.ts:90-94` verification
-   recorded in the PR body.
-5. **2.C** — the memory term. Needs the usage-mirror decision from review;
-   ships with the soak test as its acceptance criterion.
-6. **2.D** — needs the CLI cross-round bypass ruling; blocked until then.
-7. **B4** — needs the recovery-sweep ruling; blocked until then.
+The survey originally proposed a sequential work order. First-hand review
+changed that order before merge:
 
-E2 is excluded because its deferred flusher is part of the final durability
-handoff, not dead retention.
+- **Landed:** A1, E1, B2, B3, then A2.
+- **Withdrawn or kept:** A3, A4, B1, E2, and E3. Each has an independent
+  lifetime, producer, durability role, or load-bearing test recorded in §5.
+- **Blocked on explicit rulings:** 2.C, 2.D, and B4.
 
-Every step deletes a copy of a fact and adds at most one method at the
-fact's existing owner. None adds a manager, a budget, a cache, or a table.
+The §5 outcome table is authoritative. No withdrawn candidate remains an
+action item from this document.
 
 ## 4. Verified
 
-Opened first-hand at `a13b28b`: `childRunLoop.ts:370-425,:468-478,:934-980`;
+Opened first-hand at `37248a74d7`: `childRunLoop.ts:370-425,:468-478,:934-980`;
 `runToolUseFlow.ts:355-372`; `ExecutionHandle.ts:276-290`;
 `AgentRunLifecycle.ts:185-280,:505-520`; `AgentLaunchContext.ts:440-535,:612-660`;
 `runAgent.ts:95-135,:160-260`; `nativeSubagentStrategy.ts:180-260`;
@@ -432,11 +426,11 @@ Opened first-hand at `a13b28b`: `childRunLoop.ts:370-425,:468-478,:934-980`;
 `terminalResultToast.ts:138-155`; `src/platform/disposable.ts`;
 `store-public-surface-baseline.json`. Node retention numbers from
 `AbortSignal.any` and `fetch` micro-benchmarks run on Node 22.22.2 with
-`--expose-gc` during the `a13b28b` investigation.
+`--expose-gc` during the `37248a74d7` investigation.
 
 ## 5. Implementation status (2026-09-02, same branch)
 
-Executed in the order §3 gave, one commit per step, each validated with
+Evaluated in the order §3 records, with each landed step validated using
 the workspace type check, ESLint on the touched files, and the suites that
 exercise the touched modules.
 
@@ -456,7 +450,7 @@ exercise the touched modules.
 | E2        | **Withdrawn.** The deferred flusher removal is deliberate: a root run disposes its trace _before_ the lease-release flush (`AgentRunLifecycle.ts:827`, then `runAgent.ts` → `releaseExecutionLease`), and that flush must still see the flusher to surface a late spill failure to the run that produced it; the flusher then removes itself on that same flush. The child path reaches the same flush through `childRunLoop.ts:1229`. The sweep's "never fires on its own run" was wrong for both.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | E3        | **Withdrawn.** `hasLiveOwner` has no production reader, but it is the only probe by which `ChildRunLoop.vitest.ts` pins "the follow-up queue entry is released on terminal" (11 assertions) — the exact retention this survey cares about. A test-only consumer that pins a load-bearing contract is not dead.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-Net across the landed steps (`git diff --stat 06c4ea5..HEAD`, production
+Net across the landed steps (`git diff --stat fc39db8ef3..HEAD`, production
 files only): four fields, four methods, three parameters, and one map
 deleted; one field (`StreamRecord.generation`), one private helper
 (`StreamLogStore.unpin`), and one boundary controller (Claude SDK adapter)
