@@ -76,6 +76,11 @@ interface PendingDraftSave extends InquiryPermissionIds {
   draft: InquiryDraft | null;
 }
 
+interface ValidatableTextarea extends HTMLElement {
+  setCustomValidity(message: string): void;
+  reportValidity(): boolean;
+}
+
 function safeHttpUrl(link: string): string | undefined {
   const url = tryParseUrl(link);
   return url && (url.protocol === 'http:' || url.protocol === 'https:')
@@ -315,22 +320,23 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
               `
             : nothing
         }
-        <div class="external-inquiry-request__transcript-label">Q</div>
+        <div class="external-inquiry-request__transcript-label">Question</div>
         <div class="external-inquiry-request__transcript-text">
           ${turn.question}
         </div>
-        <div class="external-inquiry-request__transcript-label">A</div>
+        <div class="external-inquiry-request__transcript-label">Answer</div>
         <div class="external-inquiry-request__transcript-text">
           ${turn.answer}
         </div>
         ${
           turn.sessionLinks?.length
             ? html`
-                <div class="external-inquiry-request__transcript-links">
-                  ${turn.sessionLinks.map((link) =>
-                    this.renderKnownSessionLink(link),
+                <ul class="external-inquiry-request__transcript-links">
+                  ${turn.sessionLinks.map(
+                    (link) =>
+                      html`<li>${this.renderKnownSessionLink(link)}</li>`,
                   )}
-                </div>
+                </ul>
               `
             : nothing
         }
@@ -340,7 +346,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private renderQuestion(question: string): TemplateResult {
     const { copied } = this.copyController.state;
-    const text = copied ? 'Copied!' : 'Copy question';
+    const text = copied ? 'Question copied' : 'Copy question';
 
     return html`
       <div class="external-inquiry-request__question">
@@ -349,8 +355,9 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           ${renderLabeledActionButton({
             icon: copied ? 'check' : 'copy',
             text,
-            title:
-              'Copy question to clipboard for pasting into an external AI model',
+            title: copied
+              ? 'Question copied to clipboard'
+              : 'Copy question to clipboard for pasting into an external AI model',
             onClick: () => this.copyController.copy(question),
           })}
         </div>
@@ -373,16 +380,16 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
         <div class="external-inquiry-request__attach-label">
           ${waIcon('cloud-arrow-up')} Files to upload to the external model:
         </div>
-        <div class="external-inquiry-request__file-list">
+        <ul class="external-inquiry-request__file-list">
           ${files.map(
             (file) => html`
-              <div class="external-inquiry-request__file-item">
+              <li class="external-inquiry-request__file-item">
                 ${waIcon('file')}
                 <span>${file}</span>
-              </div>
+              </li>
             `,
           )}
-        </div>
+        </ul>
       </div>
     `;
   }
@@ -390,23 +397,27 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private renderAnswerArea(): TemplateResult {
     return html`
       <div class="external-inquiry-request__answer-area">
-        <div class="external-inquiry-request__answer-label">
-          Paste the answer from the external model:
-        </div>
         <wa-textarea
           class="external-inquiry-request__answer-input"
-          aria-label="Answer from the external model"
+          name="external-inquiry-answer"
           placeholder="Paste the answer here…"
           rows="4"
           resize="vertical"
+          required
+          autocomplete="off"
+          spellcheck="true"
           .value=${live(this.answerText)}
           @input=${this.handleAnswerInput}
           @keydown=${this.handleKeyDown}
-        ></wa-textarea>
-        <div class="external-inquiry-request__answer-hint">
-          If the external model returns files, save them into the workspace and
-          tell the agent the paths.
-        </div>
+        >
+          <span slot="label" class="external-inquiry-request__answer-label">
+            Paste the answer from the external model
+          </span>
+          <span slot="hint" class="external-inquiry-request__answer-hint">
+            If the external model returns files, save them into the workspace
+            and tell the agent the paths.
+          </span>
+        </wa-textarea>
       </div>
     `;
   }
@@ -421,21 +432,19 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
                   <div class="external-inquiry-request__session-links-label">
                     Known external session links:
                   </div>
-                  <div class="external-inquiry-request__session-links-list">
+                  <ul class="external-inquiry-request__session-links-list">
                     ${repeat(
                       sessionLinks,
                       (link) => link,
-                      (link) => this.renderKnownSessionLink(link),
+                      (link) =>
+                        html`<li>${this.renderKnownSessionLink(link)}</li>`,
                     )}
-                  </div>
+                  </ul>
                 </div>
               `
             : nothing
         }
         <div class="external-inquiry-request__session-links-input-group">
-          <div class="external-inquiry-request__session-links-label">
-            Save external session link for follow-ups:
-          </div>
           <div class="external-inquiry-request__chat-links">
             Open:
             ${renderDotMeta([
@@ -455,16 +464,30 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           </div>
           <wa-textarea
             class="external-inquiry-request__session-links-input"
-            aria-label="External session links, one per line"
+            name="external-inquiry-session-links"
             placeholder="Paste one external session link per line…"
             rows="2"
             resize="vertical"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            inputmode="url"
             .value=${live(this.sessionLinksText)}
             @input=${this.handleSessionLinksInput}
-          ></wa-textarea>
-          <div class="external-inquiry-request__session-links-hint">
-            Add the chat URL you used after pasting the answer.
-          </div>
+          >
+            <span
+              slot="label"
+              class="external-inquiry-request__session-links-label"
+            >
+              Save external session links for follow-ups
+            </span>
+            <span
+              slot="hint"
+              class="external-inquiry-request__session-links-hint"
+            >
+              Add the chat URLs you used, one per line.
+            </span>
+          </wa-textarea>
         </div>
       </div>
     `;
@@ -498,7 +521,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           title: 'Submit the answer from the external model',
           action: INQUIRY_SUBMIT_ACTION,
           kind: 'primary',
-          disabled: !this.hasAnswer,
+          disabled: this.archived,
           onClick: this.handleSubmit,
         })}
         ${this.renderRejectButton('Reject this external inquiry (n)')}
@@ -511,12 +534,14 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private handleAnswerInput(e: Event): void {
     this.answerText =
       (e.target as HTMLElement & { value?: string }).value ?? '';
+    (e.currentTarget as ValidatableTextarea).setCustomValidity('');
     this.scheduleDraftSave();
   }
 
   private handleSessionLinksInput(e: Event): void {
     this.sessionLinksText =
       (e.target as HTMLElement & { value?: string }).value ?? '';
+    (e.currentTarget as ValidatableTextarea).setCustomValidity('');
     this.scheduleDraftSave();
   }
 
@@ -529,9 +554,38 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private handleSubmit(): void {
     if (this.archived) return;
-    if (!this.hasAnswer) return;
-    const answer = this.answerText.trim();
+    const answerInput = this.renderRoot.querySelector<ValidatableTextarea>(
+      '.external-inquiry-request__answer-input',
+    );
+    answerInput?.setCustomValidity(
+      this.hasAnswer
+        ? ''
+        : 'Paste the external model’s answer before submitting.',
+    );
+    if (!this.hasAnswer) {
+      answerInput?.reportValidity();
+      return;
+    }
+
     const sessionLinks = this.normalizedSessionLinks;
+    const sessionLinksInput =
+      this.renderRoot.querySelector<ValidatableTextarea>(
+        '.external-inquiry-request__session-links-input',
+      );
+    const hasInvalidSessionLink = sessionLinks.some(
+      (link) => safeHttpUrl(link) === undefined,
+    );
+    sessionLinksInput?.setCustomValidity(
+      hasInvalidSessionLink
+        ? 'Enter complete http:// or https:// URLs, one per line.'
+        : '',
+    );
+    if (hasInvalidSessionLink) {
+      sessionLinksInput?.reportValidity();
+      return;
+    }
+
+    const answer = this.answerText.trim();
 
     clearInquiryDraft(this.permission.data.requestId);
 

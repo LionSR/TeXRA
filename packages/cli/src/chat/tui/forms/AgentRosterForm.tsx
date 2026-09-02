@@ -152,7 +152,7 @@ export function AgentRosterForm(
           </Text>
         ) : null}
         <Select
-          items={[...items]}
+          items={items}
           maxVisibleItems={window.maxVisibleItems}
           showOverflow={window.showOverflow}
           onSelect={onSelect}

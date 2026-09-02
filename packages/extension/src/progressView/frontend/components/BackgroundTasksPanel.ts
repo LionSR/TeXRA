@@ -26,13 +26,14 @@ import { consume } from '@lit/context';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components used by this template
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import {
   STREAM_PHASE,
   runIdentityDisplayName,
@@ -68,9 +69,6 @@ import {
   type PhaseStageMap,
   type StreamByIdMap,
 } from '../streamContexts';
-
-// Web Awesome native components
-import '@awesome.me/webawesome/dist/components/details/details.js';
 
 @customElement('background-tasks-panel')
 export class BackgroundTasksPanel extends LitElement {
@@ -131,8 +129,8 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name {
-        flex: 0 1 auto;
-        max-width: min(14rem, 40%);
+        display: block;
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -140,6 +138,15 @@ export class BackgroundTasksPanel extends LitElement {
       }
 
       .task-name--clickable {
+        appearance: none;
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: min(14rem, 40%);
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font: inherit;
+        text-align: start;
         cursor: pointer;
         color: var(--color-text-link);
         text-decoration: underline;
@@ -149,6 +156,10 @@ export class BackgroundTasksPanel extends LitElement {
 
       .task-name--clickable:hover {
         text-decoration-color: currentColor;
+      }
+
+      .task-name--clickable .task-name {
+        color: inherit;
       }
 
       /* Sits between the name and the description: a run's phase identifies
@@ -178,6 +189,7 @@ export class BackgroundTasksPanel extends LitElement {
       .task-elapsed {
         flex-shrink: 0;
         font-size: var(--font-size-xs);
+        font-variant-numeric: tabular-nums;
         color: var(--color-text-secondary);
       }
 
@@ -185,6 +197,7 @@ export class BackgroundTasksPanel extends LitElement {
         flex: 0 0 auto;
         font-family: var(--wa-font-family-code);
         font-size: var(--font-size-xs);
+        font-variant-numeric: tabular-nums;
         color: var(--color-text-secondary);
       }
 
@@ -347,7 +360,7 @@ export class BackgroundTasksPanel extends LitElement {
     const preview = thread.lastQuestionPreview || '(empty question)';
     const idPrefix = `background-inquiry-${index}`;
     return html`
-      <div class="task-header">
+      <div class="task-header" role="listitem">
         ${waIcon('circle-question', { className: 'task-icon task-icon--inquiry' })}
         <span class="inquiry-id">${thread.threadId}</span>
         <span id="${idPrefix}-description" class="task-description"
@@ -422,7 +435,9 @@ export class BackgroundTasksPanel extends LitElement {
     if (items.length === 0) return nothing;
 
     const content = html`
-      <div class="section-content">${repeat(items, key, renderItem)}</div>
+      <div class="section-content" role="list">
+        ${repeat(items, key, renderItem)}
+      </div>
     `;
     if (!withHeader) return content;
 
@@ -457,25 +472,22 @@ export class BackgroundTasksPanel extends LitElement {
     const displayName = runIdentityDisplayName(child.identity);
 
     return html`
-      <div class="task-header">
+      <div class="task-header" role="listitem">
         ${waIcon(icon, {
           className: `task-icon ${child.identity.kind === 'process' ? 'task-icon--process' : 'task-icon--subagent'}`,
         })}
-        <span
+        <button
           id="${idPrefix}-name"
-          class="task-name task-name--clickable"
-          role="link"
-          tabindex="0"
+          class="task-name--clickable"
+          type="button"
+          aria-label="Open ${displayName} stream"
           @click=${() => this.navigateToStream(childStreamId)}
-          @keydown=${(e: KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              this.navigateToStream(childStreamId);
-            }
-          }}
-          >${displayName}</span
         >
-        <wa-tooltip for="${idPrefix}-name">Go to ${displayName}</wa-tooltip>
+          <span class="task-name">${displayName}</span>
+        </button>
+        <wa-tooltip for="${idPrefix}-name"
+          >Open ${displayName} stream</wa-tooltip
+        >
         ${
           phaseLabel
             ? html`<span id="${idPrefix}-phase" class="task-phase"

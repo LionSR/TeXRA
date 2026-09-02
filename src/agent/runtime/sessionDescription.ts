@@ -7,7 +7,6 @@
  * future agents can quickly understand each session.
  */
 
-import { resolveAgentForLaunch } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage/executionLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -102,6 +101,7 @@ export async function generateSessionDescription(
   executionId: ExecutionId,
   streamId: StreamTabId,
   config: AgentConfig,
+  agentDescription: string | undefined,
   session: SessionHandle,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -119,17 +119,7 @@ export async function generateSessionDescription(
 
     const userPrompt = buildUserPrompt(
       config.agent,
-      // The launch resolver, not a lookup of our own: `getAgentPath` is a thin
-      // wrapper over this same call, so the purpose we describe always belongs
-      // to the entry that actually ran. Any other resolver can diverge — by
-      // category, by pinned source, or by picking a higher-priority same-name
-      // agent the visible roster did not select — and label a run with a
-      // different agent's purpose.
-      resolveAgentForLaunch(
-        config.agentCategory,
-        config.agent,
-        config.agentSource,
-      )?.entry.description,
+      agentDescription,
       instruction,
     );
     const text = await runHelperModelCompletion(helperResult.kit, {

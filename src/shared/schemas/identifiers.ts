@@ -3,6 +3,12 @@ import { z } from 'zod';
 export const StreamTabIdSchema = z.string().min(1);
 export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
+/** A stream tab id, or the empty-string sentinel meaning "no active stream". */
+export const StreamSelectionSchema = z.union([
+  StreamTabIdSchema,
+  z.literal(''),
+]);
+
 /** Hex string (12-char current, 6-char and UUID-like legacy forms). */
 export const ExecutionIdSchema = z
   .string()

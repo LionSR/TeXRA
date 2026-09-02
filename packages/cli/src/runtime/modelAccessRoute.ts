@@ -4,7 +4,11 @@ import {
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
-import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
+import {
+  CHATGPT_AUTH,
+  GROK_AUTH,
+  RESEARCHER_ACCESS_AUTH,
+} from '@shared/copy/accountAuth';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 
@@ -344,7 +348,7 @@ function formatCliModelAccessSummary(status: CliModelAccessStatus): string {
   return `ChatGPT ${chatGpt} · Grok ${grok} · ${codingPlans.join(' · ')} · otherwise: ${formatCliModelAccessRouteInline('personal')}`;
 }
 
-/** Launcher-row summary: Researcher Access ahead of the access summary. */
+/** Launcher-row summary: TeXRA account ahead of the access summary. */
 export function formatCliAccountAccessSummary(
   status: CliModelAccessStatus,
 ): string {
@@ -407,7 +411,7 @@ export function buildCliAccountAccessRows(
     rows.push({
       provider: 'texra',
       operation: 'sign-out',
-      label: `Sign out of ${RESEARCHER_ACCESS.label}`,
+      label: RESEARCHER_ACCESS_AUTH.signOutDescription,
       description: status.texraAccountLabel ?? RESEARCHER_ACCESS.label,
     });
   }

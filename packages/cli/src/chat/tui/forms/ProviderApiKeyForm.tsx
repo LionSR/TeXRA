@@ -6,10 +6,12 @@ import {
   type ApiKeyStatus,
   type ApiProvider,
 } from '@model/apiProviders';
+import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
 import { providerDisplayName } from '@shared/constants/providers';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
+import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 
 type ProviderApiKeyStatuses = Partial<
@@ -33,10 +35,20 @@ function providerApiKeyStatusLabel(
   return 'Status unavailable';
 }
 
-export function buildProviderApiKeyItems(view: ProviderApiKeyStatusView) {
+function providerApiKeyFormLabel(provider: ApiProvider): string {
+  const providerName = providerDisplayName(provider);
+  const codingPlan = codingPlanForApiProvider(provider);
+  return codingPlan && !codingPlan.exclusiveCredential
+    ? `${providerName} API/${codingPlan.displayName}`
+    : providerName;
+}
+
+export function buildProviderApiKeyItems(
+  view: ProviderApiKeyStatusView,
+): Array<{ value: ApiProvider; label: string; description: string }> {
   return API_PROVIDERS.map((provider) => ({
     value: provider,
-    label: providerDisplayName(provider),
+    label: providerApiKeyFormLabel(provider),
     description: providerApiKeyStatusLabel(view.statuses?.[provider], view),
   }));
 }
@@ -56,16 +68,16 @@ function configuredProviderApiKeySummary(
 export function formatProviderApiKeySummary(
   view: ProviderApiKeyStatusView,
 ): string {
-  if (!view.statuses) {
-    if (view.loading && !view.error) return 'Checking configured keys';
-    return 'Status unavailable';
-  }
-  const summary = configuredProviderApiKeySummary(view.statuses);
-  if (view.error) return `${summary} · status unavailable`;
-  return view.loading ? `${summary} · refreshing` : summary;
+  return formatStatusViewSummary(
+    view,
+    'Checking configured keys',
+    view.statuses === undefined
+      ? undefined
+      : configuredProviderApiKeySummary(view.statuses),
+  );
 }
 
-export interface ProviderApiKeyFormProps {
+interface ProviderApiKeyFormProps {
   readonly availableRows?: number;
   readonly statusView?: ProviderApiKeyStatusView;
   readonly onSave: (
@@ -92,9 +104,9 @@ export function ProviderApiKeyForm(
         items={
           props.statusView
             ? buildProviderApiKeyItems(props.statusView)
-            : API_PROVIDERS.map((provider) => ({
-                value: provider,
-                label: providerDisplayName(provider),
+            : API_PROVIDERS.map((candidate) => ({
+                value: candidate,
+                label: providerApiKeyFormLabel(candidate),
               }))
         }
         description={

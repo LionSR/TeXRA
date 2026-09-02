@@ -9,7 +9,7 @@ import OpenAI, { OpenAIError } from 'openai';
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports
-import { logProgressStatus, startCompactionActivity } from '@agent/trace';
+import { logProgressStatus } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -30,18 +30,13 @@ import type {
   OpenAIResponseToolCall,
   TokenCountOptions,
 } from '@agent/types/ModelHandlerContracts';
-import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
   isContextWindowError,
   isPreviousResponseIdError,
-  isUserAbort,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkError/errorPatterns';
-import {
-  buildErrorLogData,
-  getSdkErrorMessage,
-} from '@common/errors/sdkError/providerErrorFormat';
+import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
 import { isGpt5ModelName } from '@model/modelNames';
 import type {
@@ -54,14 +49,12 @@ import {
   type ToolFileAttachment,
   type ToolResult,
 } from '@shared/schemas';
-import { clamp, filterNotNullish } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
 import { getWebSocketEnabled } from '@utils/config/providerConfig';
 import { getConfig } from '@utils/config/configUtils';
 
 // Local file imports
-import { roundedUtilizationPercent } from '../support/contextUtilization';
-import { logCompactionEvent } from '../support/compactionLogging';
 import { AUXILIARY_MAX_RETRIES } from '../support/auxiliaryRetry';
 import { toDataUrl } from '../support/dataUrl';
 import {
@@ -90,9 +83,6 @@ import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
-  CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-  COMPACTION_USER_PROMPT,
-  estimateTokensFromText,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
@@ -101,6 +91,10 @@ import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTrans
 import { createOpenAIBackgroundRunLifecycle } from './openAIBackgroundRunLifecycle';
 import { ServerChainState } from '../support/ServerChainState';
 import { isResponseFunctionToolCallItem } from './responsesShapeGuards';
+import {
+  OpenAICompactionCoordinator,
+  type OpenAICompactionResult,
+} from './openAICompactionCoordinator';
 import {
   contentToText,
   createInputText,
@@ -120,10 +114,8 @@ import type { InputTokenCountParams } from 'openai/resources/responses/input-tok
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {
-  CompactedResponse,
   EasyInputMessage,
   Response,
-  ResponseCompactParams,
   ResponseUsage,
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
@@ -285,13 +277,14 @@ function mergeMissingStreamedOutputItems(
  * abstractions. Conversation state is maintained through `previous_response_id`
  * so we only submit the new messages for each turn.
  *
- * THREAD SAFETY: This handler delegates its mutable conversation state to two
- * collaborators — {@link ServerChainState} (the `previous_response_id` chain
- * anchor + sent-messages/token bookkeeping) and {@link BackgroundRunLifecycle}
- * (the pending background-response id + poll/resume choreography) — and
- * neither is thread-safe. Each handler instance (and the collaborators it
- * owns) must be used by a single agent execution at a time. Do not share
- * instances across concurrent invocations.
+ * THREAD SAFETY: This handler delegates its mutable conversation state to
+ * three collaborators — {@link ServerChainState} (the `previous_response_id`
+ * chain anchor + sent-messages/token bookkeeping), {@link BackgroundRunLifecycle}
+ * (the pending background-response id + poll/resume choreography), and
+ * {@link OpenAICompactionCoordinator} (the compaction cache + trigger/recovery
+ * policy) — and none of them is thread-safe. Each handler instance (and the
+ * collaborators it owns) must be used by a single agent execution at a time.
+ * Do not share instances across concurrent invocations.
  */
 export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   ResponseInputItem,
@@ -461,8 +454,59 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     provider: this.config.provider,
   });
 
-  /** Internal compaction recovery already attempted during this public call. */
-  private compactionRetrySource: 'threshold' | 'overflow' | null = null;
+  /** Compaction cache + trigger/recovery policy. See
+   *  {@link OpenAICompactionCoordinator} for the lane this handler delegates. */
+  private readonly compaction = new OpenAICompactionCoordinator({
+    chainState: this.chainState,
+    modelFullName: this.config.fullName,
+    getLogger: () => this.logger,
+    supportsReasoning: () => this.capabilities.supportsReasoning,
+    supportsManualCompaction: () => this.supportsManualCompaction,
+    supportsTokenCounting: () => this.supportsTokenCounting,
+    storesResponsesServerSide: () => this.storesResponsesServerSide,
+    isOpenRouterRoutingEnabled: () => this.isOpenRouterRoutingEnabled(),
+    getEffectiveContextWindow: () => this.getEffectiveContextWindow(),
+    getEffectiveInputTokenLimit: () => this.getEffectiveInputTokenLimit(),
+    getCompactionThresholdPercent: () => this.getCompactionThresholdPercent(),
+    getTokenSafetyBuffer: () => this.getTokenSafetyBuffer(),
+    isCompactionRequested: () => this.isCompactionRequested(),
+    consumeCompactionRequest: () => this.consumeCompactionRequest(),
+    messagesTailFingerprint: (messages) =>
+      this.messagesTailFingerprint(messages),
+    estimateTokenCount: (messages, options) =>
+      this.estimateTokenCount(messages, options),
+    extractResponseText: (response) => this.extractResponse(response, '').text,
+    validateTokenLimits: (inputTokens, maxTokens, contextWindow, tokenBuffer) =>
+      this.validateTokenLimits(
+        inputTokens,
+        maxTokens,
+        contextWindow,
+        tokenBuffer,
+      ),
+    logMaxTokensReduced: (params) => this.logMaxTokensReduced(params),
+    runClientCompaction: (
+      messages,
+      tokensBefore,
+      summarize,
+      buildSummaryMessage,
+    ) =>
+      this.runClientCompaction(
+        messages,
+        tokensBefore,
+        summarize,
+        buildSummaryMessage,
+      ),
+  });
+
+  /** Test-seam accessor pair over the coordinator's cache: the compaction
+   *  vitest suites read and stub `handler.compactionResult` via casts. */
+  private get compactionResult(): OpenAICompactionResult | undefined {
+    return this.compaction.result;
+  }
+
+  private set compactionResult(value: OpenAICompactionResult | undefined) {
+    this.compaction.result = value;
+  }
 
   // =========================================================================
   // WebSocket transport
@@ -542,7 +586,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   ): CreateResponseResult<Response, ResponseInputItem> {
     // Apply compaction state if compaction happened this call
     if (ctx.compactedThisCall) {
-      this.applyCompactionState();
+      this.compaction.applyCompactionState();
     }
 
     // Only chain from completed responses with usage data. Missing usage
@@ -629,113 +673,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
-   * Calculate the absolute token threshold based on the model's context window
-   * and the configured percentage threshold.
-   */
-  private getCompactionTokenThreshold(): number {
-    const percent = this.getCompactionThresholdPercent();
-    if (percent <= 0) {
-      return 0;
-    }
-    return Math.floor((percent / 100) * this.getEffectiveInputTokenLimit());
-  }
-
-  /**
-   * Whether this route can compact at all: compaction is supported, not
-   * routed through OpenRouter (which may not support compaction), and there
-   * is prior conversation to compact. Shared by the manual/requested flag
-   * path and the live-count decision in {@link createResponseImpl}.
-   */
-  private canCompactRoute(): boolean {
-    return (
-      this.supportsManualCompaction &&
-      !this.isOpenRouterRoutingEnabled() &&
-      this.chainState.getCumulativeInputTokens() > 0
-    );
-  }
-
-  /**
-   * Check if the conversation should be compacted.
-   *
-   * Automatic compaction is decided by the live pre-flight token count in
-   * {@link createResponseImpl} — one measurement of the CURRENT request owns
-   * the decision (it mints its own compaction request and retries
-   * internally). The cumulative-usage threshold below is only the fallback
-   * decision for models that cannot count tokens pre-flight; the cumulative
-   * figure comes from the PREVIOUS successful response and goes stale the
-   * moment a single turn adds a large input.
-   */
-  private shouldCompact(): boolean {
-    if (!this.supportsManualCompaction) {
-      this.consumeCompactionRequest();
-      return false;
-    }
-
-    // Manual/requested compaction bypasses threshold checks.
-    // The flag is NOT cleared here - the caller clears it after compaction
-    // is attempted to preserve the request across retries.
-    if (this.isCompactionRequested()) {
-      return this.canCompactRoute();
-    }
-
-    if (this.supportsTokenCounting) {
-      // The live pre-flight count decides for counting-capable models.
-      // Deliberate tradeoff: if the count API soft-fails for a turn, that
-      // turn has no automatic compaction trigger at all (the stale cumulative
-      // figure is not consulted) — the API enforces the window, and an
-      // API-side overflow still recovers via handleCreateResponseError's
-      // compact-and-retry. Costs one extra round-trip in that rare failure
-      // mode; keeps the live count the single decision owner.
-      return false;
-    }
-
-    const thresholdPercent = this.getCompactionThresholdPercent();
-    if (thresholdPercent <= 0) {
-      return false;
-    }
-    if (this.isOpenRouterRoutingEnabled()) {
-      // Same exclusion as canCompactRoute(): OpenRouter conversations compact
-      // through ModelHandlerOpenRouterNative. Nothing is logged here because
-      // the capability gate above already returns for every OpenRouter-routed
-      // request — no provider profile grants supportsManualCompaction on that
-      // route — so this only pins the invariant.
-      return false;
-    }
-    const threshold = this.getCompactionTokenThreshold();
-    return this.chainState.getCumulativeInputTokens() > threshold;
-  }
-
-  /**
-   * Result from compactConversation including messages and state updates.
-   * State updates are returned but not applied - caller is responsible for
-   * applying them only after successful API call to prevent stale state on retry.
-   *
-   * `sourceMessages` is the exact `messages` array reference compaction ran
-   * against — it's how {@link createResponseImpl} recognizes a same-turn retry
-   * (PocketFlow's `Node._exec` reuses the same `prepRes`, hence the same
-   * `messages` reference, across retry attempts) and reuses this result
-   * instead of re-running compaction. That reuse is what keeps this payload's
-   * retry lifetime matched to {@link ServerChainState.clearChainForCompaction}'s
-   * anchor clear, which already survives retries permanently — without it, the
-   * anchor clear alone would survive while this payload got wiped every
-   * attempt, forcing a redundant re-compaction on each retry.
-   *
-   * Reference equality alone cannot distinguish a same-turn retry from the
-   * next turn, since `ModelInvocationNode.post()` mutates the shared messages
-   * array in place (same reference survives across turns too). The field is
-   * therefore also cleared unconditionally by {@link applyCompactionState} on
-   * every successful call, so it can never outlive the turn it was computed
-   * for; the `sourceMessages` check only ever matters while an attempt from
-   * this same turn is still retrying after a failure.
-   */
-  private compactionResult?: {
-    compactedMessages: ResponseInputItem[];
-    tokensAfter: number;
-    sourceMessages: ResponseInputItem[];
-    sourceFingerprint: string;
-  };
-
-  /**
    * Get the appropriate safety buffer for token validation.
    * - Chained responses (previous_response_id): proportional margin (5% of context window)
    *   because the pre-flight token count can significantly undercount server-side context
@@ -780,25 +717,10 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
-   * Compact the conversation to reduce context size via OpenAI's stateful
-   * `/responses/compact` endpoint, which replaces prior assistant messages,
-   * tool calls, and results with a single encrypted compaction item.
-   *
-   * Only usable when {@link storesResponsesServerSide} is true — the compact
-   * endpoint acts on a stored server-side response, which a `store: false`
-   * backend (the ChatGPT-subscription/Codex profile) never has. That backend
-   * is compacted via {@link compactConversationClientSide} instead, a
-   * distinct code path that never calls this endpoint.
-   *
-   * State updates are stored in compactionResult but NOT applied immediately.
-   * The caller must apply them only after successful API call to prevent
-   * stale state if the API call fails and needs to retry.
-   *
-   * @param client - OpenAI client instance
-   * @param messages - Current conversation messages
-   * @param systemPrompt - Optional system instructions
-   * @param signal - Optional abort signal
-   * @returns The compacted messages array, or original messages if compaction fails
+   * Stateful `/responses/compact` endpoint compaction; the implementation
+   * lives in {@link OpenAICompactionCoordinator.compactConversation}. Kept as
+   * a delegate because the vitest suites stub this method via a cast to
+   * intercept compaction.
    */
   private async compactConversation(
     client: OpenAI,
@@ -807,321 +729,13 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     signal?: AbortSignal,
     convertedTools?: unknown[],
   ): Promise<ResponseInputItem[]> {
-    const tokensBefore = this.chainState.getCumulativeInputTokens();
-    const contextWindow = this.getEffectiveContextWindow();
-
-    this.logger.debug('Compacting conversation', {
-      data: {
-        inputTokens: tokensBefore,
-        utilizationPercent: roundedUtilizationPercent(
-          tokensBefore,
-          contextWindow,
-        ),
-        contextWindow,
-      },
-    });
-
-    const compactParams: ResponseCompactParams = {
-      model: this.config.fullName,
-      input: messages,
-    };
-
-    if (systemPrompt) {
-      compactParams.instructions = systemPrompt;
-    }
-
-    // NOTE: Do NOT pass previous_response_id here.
-    // We're sending the full message history in `input`, so passing
-    // previous_response_id would cause double-counting and exceed context window.
-
-    const activity = startCompactionActivity(this.logger);
-    try {
-      const compactedResponse: CompactedResponse = await client
-        .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
-        .responses.compact(compactParams, { signal });
-
-      // Note: SDK types CompactedResponse.output as ResponseOutputItem[], but the
-      // compact endpoint returns ResponseInputItem[] suitable for re-submission.
-      const compactedMessages =
-        compactedResponse.output as unknown as ResponseInputItem[];
-      if (compactedMessages.length === 0) {
-        this.logger.warn('Compaction returned no reusable context, skipping');
-        this.compactionResult = undefined;
-        activity.finish('skipped');
-        return messages;
-      }
-
-      // CRITICAL: Clear the chain anchor now that compaction has replaced the
-      // server-side history. Must happen BEFORE estimateTokenCount — otherwise the
-      // count would include the full previous conversation on top of the compacted
-      // messages, massively inflating the result.
-      this.chainState.clearChainForCompaction();
-
-      // Count the actual tokens of the compacted messages rather than relying on
-      // usage fields from the compact response (usage.input_tokens is the cost of
-      // the compact operation's input, and usage.output_tokens may not match the
-      // input token cost when these items are re-submitted).
-      let tokensAfter: number;
-      try {
-        tokensAfter = await this.estimateTokenCount(compactedMessages, {
-          client,
-          signal,
-          systemPrompt,
-          tools: convertedTools,
-        });
-      } catch (err) {
-        // Fall back to output_tokens if token counting fails. Log so a degraded
-        // post-compaction token estimate is visible rather than silent.
-        this.logger.debug(
-          'Post-compaction token counting failed; falling back to output_tokens',
-          {
-            data: buildErrorLogData(err, {
-              operation: 'post-compaction token counting',
-            }),
-          },
-        );
-        // NOTE: It's unclear what output_tokens represents exactly for the compact
-        // endpoint — it may be the generation cost rather than the reusable content
-        // size. This fallback is a best-effort estimate until OpenAI clarifies.
-        tokensAfter = compactedResponse.usage.output_tokens;
-      }
-
-      logCompactionEvent({
-        logger: this.logger,
-        tokensBefore,
-        tokensAfter,
-        contextWindow,
-        details: `OpenAI Responses API compaction: ${compactedResponse.output.length} items`,
-      });
-
-      // Store compacted messages for use in this request.
-      // Mark as pending compaction - state will be finalized after successful API call.
-      // This prevents stale state if API call fails and needs retry.
-      this.compactionResult = {
-        compactedMessages,
-        tokensAfter,
-        sourceMessages: messages,
-        sourceFingerprint: this.messagesTailFingerprint(messages),
-      };
-
-      activity.finish('completed');
-      return compactedMessages;
-    } catch (err) {
-      const userAborted = isUserAbort(err);
-      activity.finish(userAborted ? 'cancelled' : 'failed');
-      signal?.throwIfAborted();
-      if (userAborted) throw err;
-      this.logger.warn(
-        `Compaction failed, continuing with original messages: ${getSdkErrorMessage(err)}`,
-        {
-          data: buildErrorLogData(err, { operation: 'compact conversation' }),
-        },
-      );
-      this.compactionResult = undefined;
-      return messages;
-    }
-  }
-
-  /**
-   * Client-side compaction fallback for backends that cannot use the
-   * stateful `/responses/compact` endpoint (see {@link compactConversation})
-   * because they don't store responses server-side — the ChatGPT-subscription
-   * (Codex) backend forces `store: false` on every request, so there is no
-   * stored response for the compact endpoint to act on (#7213). Summarizes
-   * the conversation locally via a throwaway system-prompt-swap call to the
-   * same Responses API, then resends a single summary message instead of the
-   * full history. Reuses the `ModelHandler.runClientCompaction` scaffold
-   * already shared by the Chat Completions, OpenRouter-native, and Google
-   * Interactions handlers.
-   *
-   * The summarization call always streams: this path only ever runs under a
-   * profile that also forces `streaming: 'forced'` (see
-   * `getStreamingConfig`), and a non-streaming request would receive an SSE
-   * body it can't parse.
-   *
-   * State updates are stored in compactionResult but NOT applied immediately,
-   * mirroring {@link compactConversation} — the caller applies them only
-   * after a successful API call so a failed retry doesn't see stale state.
-   *
-   * @param client - OpenAI client instance
-   * @param messages - Current conversation messages
-   * @param signal - Optional abort signal
-   * @returns The compacted messages array, or original messages if compaction fails
-   */
-  private async compactConversationClientSide(
-    client: OpenAI,
-    messages: ResponseInputItem[],
-    signal?: AbortSignal,
-  ): Promise<ResponseInputItem[]> {
-    const tokensBefore = this.chainState.getCumulativeInputTokens();
-    const contextWindow = this.getEffectiveContextWindow();
-
-    this.logger.debug('Compacting conversation (client-side)', {
-      data: {
-        inputTokens: tokensBefore,
-        utilizationPercent: roundedUtilizationPercent(
-          tokensBefore,
-          contextWindow,
-        ),
-        contextWindow,
-      },
-    });
-
-    const { compactedMessages, didCompact } = await this.runClientCompaction(
+    return this.compaction.compactConversation(
+      client,
       messages,
-      tokensBefore,
-      async (conversationMessages, compactionSystemPrompt) => {
-        const stream = await client
-          .withOptions({ maxRetries: AUXILIARY_MAX_RETRIES })
-          .responses.stream(
-            {
-              model: this.config.fullName,
-              instructions: compactionSystemPrompt,
-              input: [
-                ...conversationMessages,
-                {
-                  type: 'message',
-                  role: 'user',
-                  content: [createInputText(COMPACTION_USER_PROMPT)],
-                },
-              ],
-              max_output_tokens: CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
-              store: this.storesResponsesServerSide,
-              ...(this.capabilities.supportsReasoning && {
-                reasoning: { effort: 'low' },
-              }),
-            },
-            { signal },
-          );
-
-        // The ChatGPT-subscription (Codex) backend strips `max_output_tokens`
-        // at the wire (it answers `400 Unsupported parameter: max_output_tokens`
-        // — see rewriteCodexRequestBody), so the summary cap cannot be enforced
-        // server-side on this path, and this client-side path only ever runs for
-        // that stateless profile. Enforce the cap locally instead: stop
-        // consuming and abort the request once the streamed summary reaches the
-        // cap, bounding both the resent summary size and the summarization
-        // turn's latency. Under a backend that does honor `max_output_tokens`
-        // the stream ends first, so this ceiling is never hit.
-        let streamedText = '';
-        for await (const event of stream) {
-          if (event.type !== 'response.output_text.delta') continue;
-          streamedText += event.delta;
-          if (
-            estimateTokensFromText(streamedText) >=
-            CLIENT_COMPACTION_SUMMARY_MAX_TOKENS
-          ) {
-            stream.abort();
-            return {
-              summaryText: streamedText.trim(),
-              outputTokens: estimateTokensFromText(streamedText),
-            };
-          }
-        }
-
-        // Prefer the text accumulated from the deltas above: the Codex backend
-        // leaves the completed response's `output`/`output_text` empty (the same
-        // reason executeStreamingPath rebuilds from `output_text.delta`), so
-        // extracting only from finalResponse() would yield an empty summary and
-        // silently skip compaction. Fall back to finalResponse() extraction only
-        // when no text was streamed.
-        const summaryResponse = await stream.finalResponse();
-        const summaryText =
-          streamedText.trim() ||
-          this.extractResponse(summaryResponse, '').text.trim();
-        return {
-          summaryText,
-          outputTokens:
-            summaryResponse.usage?.output_tokens ??
-            estimateTokensFromText(summaryText),
-        };
-      },
-      (summary): ResponseInputItem => ({
-        type: 'message',
-        role: 'user',
-        content: [createInputText(summary)],
-      }),
+      systemPrompt,
+      signal,
+      convertedTools,
     );
-
-    if (!didCompact) {
-      this.compactionResult = undefined;
-      return compactedMessages;
-    }
-
-    // CRITICAL: clear now, before this handler builds the next request —
-    // the compacted messages replace the discarded history, so a stale
-    // previousResponseId must never be resent alongside them (same reason as
-    // compactConversation()'s stateful path).
-    this.chainState.clearChainForCompaction();
-    this.compactionResult = {
-      compactedMessages,
-      // Bookkeeping must reflect the INPUT cost of resending the compacted
-      // payload next turn (system items + the summary message with its
-      // "[Previous conversation summary]" prefix), not the OUTPUT cost of
-      // generating the summary — mirroring the stateful path, which counts the
-      // compacted items' input tokens. `applyTokenCountFailureFallback()`
-      // prefers this value over the chain's cumulative count, and on the Codex
-      // profile it is load-bearing: token counting
-      // is unavailable and the route-input-limit guard fails the request
-      // locally when the estimate + safety buffer overflow that limit, so an
-      // output-token underestimate could let through a request the backend
-      // then rejects.
-      tokensAfter: this.estimateResentInputTokens(compactedMessages),
-      sourceMessages: messages,
-      sourceFingerprint: this.messagesTailFingerprint(messages),
-    };
-    return compactedMessages;
-  }
-
-  /**
-   * Estimate the input-token cost of resending the compacted payload. The
-   * ChatGPT-subscription (Codex) profile — the only backend that reaches
-   * {@link compactConversationClientSide} — exposes no token-counting endpoint
-   * (`supportsTokenCounting: false`), so {@link estimateTokenCount} throws and
-   * the stateful path's exact API count is unavailable; fall back to a
-   * text-length heuristic over exactly what gets resent.
-   */
-  private estimateResentInputTokens(messages: ResponseInputItem[]): number {
-    // Flatten message content (string or typed parts) to plain text;
-    // non-text items contribute nothing to the estimate.
-    const text = messages
-      .map((message) =>
-        isMessageItem(message) ? contentToText(message.content, '') : '',
-      )
-      .join('\n');
-    return Math.max(1, estimateTokensFromText(text));
-  }
-
-  /**
-   * Apply compaction state updates after successful API call.
-   * Updates conversation state flags.
-   *
-   * Note: cumulativeInputTokens is NOT updated here - it will be set from
-   * response.usage.input_tokens after the API call to reflect actual usage.
-   */
-  private applyCompactionState(): void {
-    if (!this.compactionResult) return;
-
-    // Reset sent messages counter and mark as compacted so subsequent
-    // requests know to send all messages.
-    this.chainState.markCompactionApplied();
-
-    // Note: the chain anchor is already cleared immediately after compaction
-    // (before API call) to avoid "No tool output found" errors.
-
-    // Clear compactionResult now that this successful call has consumed it.
-    // This runs only on success (finalizeResponse's success paths), never on
-    // a failed attempt that will be retried, so it can't be confused with the
-    // same-turn-retry cache check in createResponseImpl(). Clearing here
-    // (rather than relying on `sourceMessages !== messages` reference
-    // (in)equality) matters because PocketFlow's ModelInvocationNode.post()
-    // mutates `shared.messages` in place via replaceMessagesInPlace
-    // (length=0 + push), so the array reference is often IDENTICAL across
-    // turns, not just across retries of the same turn. Leaving compactionResult
-    // set here would make the next turn's genuinely different input look like
-    // a same-turn retry, resend this turn's stale compactedMessages, and
-    // silently drop everything appended since (tool outputs, new user turns).
-    this.compactionResult = undefined;
   }
 
   /** Reset conversation bookkeeping when starting a new session. */
@@ -1332,52 +946,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   private applyTokenCountFailureFallback(maxOutputTokens: number): number {
-    // Best available estimate of current input tokens: the post-compaction
-    // figure when compaction just happened, else the previous response's
-    // cumulative count, else 0 on the first turn.
-    const inputEstimate =
-      this.compactionResult?.tokensAfter ??
-      this.chainState.getCumulativeInputTokens();
-    if (inputEstimate <= 0) return maxOutputTokens;
-
-    const buffer = this.getTokenSafetyBuffer();
-    const inputTokenLimit = this.getEffectiveInputTokenLimit();
-    if (inputEstimate + buffer >= inputTokenLimit) {
-      const error = new Error(
-        `Token estimate (${inputEstimate}) + safety buffer (${buffer}) exceeds route input limit (${inputTokenLimit}).`,
-      );
-      attachContextWindowError(error);
-      throw error;
-    }
-    const contextWindow = this.getEffectiveContextWindow();
-    const bufferedMaxTokens = contextWindow - inputEstimate - buffer;
-    const validation = this.validateTokenLimits(
-      inputEstimate,
-      maxOutputTokens,
-      contextWindow,
-      buffer,
-    );
-    const capped = clamp(
-      Math.min(validation.adjustedMaxTokens, bufferedMaxTokens),
-      0,
-      maxOutputTokens,
-    );
-    if (capped === maxOutputTokens) return maxOutputTokens;
-
-    this.logger.debug('Fallback: adjusting max_output_tokens', {
-      data: { before: maxOutputTokens, after: capped, inputEstimate },
-    });
-    this.logMaxTokensReduced({
-      tokensBefore: inputEstimate,
-      tokensBeforeIsEstimate: true,
-      contextWindow,
-      utilizationPercent: validation.utilizationPercent,
-      originalMaxTokens: maxOutputTokens,
-      reducedMaxTokens: capped,
-      details:
-        'OpenAI Response: max_output_tokens reduced from fallback estimate',
-    });
-    return capped;
+    return this.compaction.applyTokenCountFailureFallback(maxOutputTokens);
   }
 
   /**
@@ -1402,40 +971,13 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     run: () => Promise<T>,
   ): Promise<T> {
     return this.withSingleTurnGuard('modelHandlerOpenAIResponse', () => {
-      this.compactionRetrySource = null;
+      this.compaction.retrySource = null;
       return run();
     });
   }
 
   override get supportsForcedToolChoice(): boolean {
     return true;
-  }
-
-  /** Drop a cached compaction result that no longer matches the current input. */
-  private invalidateStaleCompactionCache(messages: ResponseInputItem[]): void {
-    // A same-turn retry (PocketFlow's Node._exec reuses the same prepRes, hence
-    // the same `messages` reference, across retry attempts) keeps its cached
-    // result — otherwise the chain anchor that compaction already cleared on
-    // chainState (which survives retries permanently) would outlive this
-    // payload, forcing a redundant re-compaction on every retry. A retained
-    // pending response is handled by the caller before this state can be
-    // discarded. This reference check alone is NOT sufficient to distinguish a
-    // same-turn retry from the next turn, because ModelInvocationNode.post()
-    // mutates `shared.messages` in place, so the reference is often identical
-    // across turns too; the primary cross-turn guard is applyCompactionState()
-    // clearing compactionResult on every successful call. This only matters
-    // while a compaction from a still-in-flight (unsuccessful) attempt is pending.
-    if (
-      this.compactionResult !== undefined &&
-      (this.compactionResult.sourceMessages !== messages ||
-        this.compactionResult.sourceFingerprint !==
-          this.messagesTailFingerprint(messages))
-    ) {
-      // Reference or content changed — a follow-up appended after a failed
-      // turn mutates the SAME array in place, so identity alone would replay
-      // a stale pre-follow-up payload and silently drop the user's message.
-      this.compactionResult = undefined;
-    }
   }
 
   /** Select the mutually-exclusive background / streaming / WebSocket transport. */
@@ -1509,7 +1051,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       effectiveMessages = reusableCompaction.compactedMessages;
       compactedThisCall = true;
       compactedMessages = reusableCompaction.compactedMessages;
-    } else if (this.shouldCompact()) {
+    } else if (this.compaction.shouldCompact()) {
       // Consume the manual compaction request now that compaction is being
       // attempted. For automatic compaction (threshold-based) no request is
       // pending, so this reports false and changes nothing.
@@ -1523,7 +1065,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
           `Compacting conversation (requested, ${this.chainState.getCumulativeInputTokens()} input tokens)`,
         );
       } else {
-        const threshold = this.getCompactionTokenThreshold();
+        const threshold = this.compaction.getCompactionTokenThreshold();
         logProgressStatus(
           this.logger,
           `Compacting conversation (${this.chainState.getCumulativeInputTokens()} tokens exceed ${this.getCompactionThresholdPercent()}% threshold of ${threshold} tokens)`,
@@ -1541,7 +1083,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
             signal,
             convertedTools,
           )
-        : await this.compactConversationClientSide(client, messages, signal);
+        : await this.compaction.compactConversationClientSide(
+            client,
+            messages,
+            signal,
+          );
       // compactionResult is set if compaction succeeded
       const { compactionResult } = this;
       compactedThisCall = compactionResult !== undefined;
@@ -1792,8 +1338,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     }
 
     // Clear any stale compaction cache before deciding whether to reuse it
-    // below (see {@link invalidateStaleCompactionCache}).
-    this.invalidateStaleCompactionCache(messages);
+    // below (see {@link OpenAICompactionCoordinator.invalidateStaleCompactionCache}).
+    this.compaction.invalidateStaleCompactionCache(messages);
 
     const { useBackgroundResponses, useStreaming, useWebSocket } =
       this.resolveExecutionMode();
@@ -1907,16 +1453,16 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (
       preFlightTokens !== undefined &&
       !compactedThisCall &&
-      this.compactionRetrySource === null &&
+      this.compaction.retrySource === null &&
       this.getCompactionThresholdPercent() > 0 &&
-      preFlightTokens > this.getCompactionTokenThreshold() &&
-      this.canCompactRoute()
+      preFlightTokens > this.compaction.getCompactionTokenThreshold() &&
+      this.compaction.canCompactRoute()
     ) {
       logProgressStatus(
         this.logger,
-        `Compacting conversation (pre-flight count ${preFlightTokens} tokens exceeds ${this.getCompactionThresholdPercent()}% threshold of ${this.getCompactionTokenThreshold()} tokens)`,
+        `Compacting conversation (pre-flight count ${preFlightTokens} tokens exceeds ${this.getCompactionThresholdPercent()}% threshold of ${this.compaction.getCompactionTokenThreshold()} tokens)`,
       );
-      this.compactionRetrySource = 'threshold';
+      this.compaction.retrySource = 'threshold';
       this.requestCompaction();
       return this.createResponseImpl(options);
     }
@@ -2297,8 +1843,8 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     } else if (
       isContextWindowError(error) &&
       !compactedThisCall &&
-      this.compactionRetrySource !== 'overflow' &&
-      (this.chainState.hasAnchor() || this.canCompactRoute())
+      this.compaction.retrySource !== 'overflow' &&
+      (this.chainState.hasAnchor() || this.compaction.canCompactRoute())
     ) {
       // Recovery for a context-window overflow (API-side or pre-flight):
       // - When chaining, accumulated reasoning tokens from prior turns are
@@ -2320,7 +1866,7 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       // cumulativeInputTokens, which would prevent shouldCompact() from
       // triggering on the retry.
       this.backgroundLifecycle.clearPending();
-      this.compactionRetrySource = 'overflow';
+      this.compaction.retrySource = 'overflow';
       this.requestCompaction();
       // Retry internally: the recursive call will compact (shouldCompact()=true)
       // and send all messages without server-side state.
@@ -2551,10 +2097,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     if (!Array.isArray(items)) return [];
 
     const calls = items.filter(isResponseFunctionToolCallItem);
-    if (calls.length === 0) {
-      return [];
-    }
-
     return calls.map((call) => ({
       provider: 'openai-response',
       callId: call.call_id,

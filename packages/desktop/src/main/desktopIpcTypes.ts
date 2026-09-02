@@ -102,12 +102,9 @@ interface CommandHandlerEntry {
   claim?: boolean;
 }
 
-export type CommandHandlerMap = Record<
-  string,
-  CommandRunner | CommandHandlerEntry
->;
+type CommandHandlerMap = Record<string, CommandRunner | CommandHandlerEntry>;
 
-export interface CreateCommandHandlerOptions {
+interface CreateCommandHandlerOptions {
   onAsyncError?: (error: unknown) => void;
 }
 

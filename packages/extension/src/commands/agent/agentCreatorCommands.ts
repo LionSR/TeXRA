@@ -129,7 +129,7 @@ function buildVSCodeUI(): AgentCreatorUI {
       );
 
       const selected = await pickToolGroups(agentName, items);
-      if (!selected || selected.length === 0) return undefined;
+      if (!selected?.length) return undefined;
       const tools: string[] = [];
       const groups: string[] = [];
       for (const item of selected) {
@@ -142,7 +142,7 @@ function buildVSCodeUI(): AgentCreatorUI {
       return { tools, groups };
     },
 
-    async getCustomAgentDir() {
+    getCustomAgentDir() {
       return agentDirectories.custom();
     },
 
@@ -150,8 +150,8 @@ function buildVSCodeUI(): AgentCreatorUI {
       void vscode.window.showInformationMessage(`Created agent at ${filePath}`);
     },
 
-    async promptAddToConfig(agentName, category) {
-      await promptToAddAgentToConfig(agentName, 'custom', category);
+    promptAddToConfig(agentName, category) {
+      return promptToAddAgentToConfig(agentName, 'custom', category);
     },
 
     async openCreatedFile(filePath) {
@@ -161,9 +161,7 @@ function buildVSCodeUI(): AgentCreatorUI {
       await vscode.window.showTextDocument(doc);
     },
 
-    renderTemplate(template, vars) {
-      return renderAgentTemplateString(template, vars);
-    },
+    renderTemplate: renderAgentTemplateString,
   };
 }
 

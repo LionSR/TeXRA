@@ -2,7 +2,7 @@
  * Poll-based event source for GitHub PR activity.
  *
  * Each subscribed PR maintains per-resource cursors (last-seen ID) and ETags.
- * A single shared timer ticks every `PR_POLL_INTERVAL_MS` and iterates all
+ * A single shared timer ticks every `GITHUB_POLL_INTERVAL_MS` and iterates all
  * active subscriptions. Events are converted to natural-language text via
  * `formatPREvent` and dispatched to per-caller listeners.
  *
@@ -68,7 +68,7 @@ import {
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-  PR_POLL_INTERVAL_MS,
+  GITHUB_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
 import {
   isDefiniteMergeableState,
@@ -97,8 +97,6 @@ function createInitialState(pr: PRKey): PRSubscriptionState {
     lastAnnotationKeys: new Set(),
     annotationLevelByListener: new Map(),
     currentShaState: undefined,
-    state: undefined,
-    merged: false,
     mergeableState: undefined,
     etags: {},
   };
@@ -157,8 +155,6 @@ export interface PRSubscriptionState extends BasePollSubscriptionState {
    * across a push — there's no separate list of fields to remember to clear.
    */
   currentShaState: PRCurrentShaState | undefined;
-  state: 'open' | 'closed' | undefined;
-  merged: boolean;
   /** Last *definite* `mergeable_state`; see `isDefiniteMergeableState`. */
   mergeableState: string | undefined;
   etags: {
@@ -197,26 +193,6 @@ export interface PRCurrentShaState {
   pendingAnnotationRuns: GhCheckRun[];
 }
 
-/**
- * One tick's conditional GETs for everything except the PR detail itself,
- * issued in parallel by `fetchTickResources`.
- *
- * `stagedCheckRunsCache` is deliberately carried alongside `checksRes` rather
- * than committed by the fetch: the caller writes it to
- * `currentShaState.checkRunsCache` only after consuming `checksRes`. See
- * `fetchAllCheckRuns` and `commitStagedCheckRunsCache` for why.
- */
-interface PRTickResources {
-  commentsRes: ConditionalResponse<GhIssueComment[]>;
-  reviewCommentsRes: ConditionalResponse<GhReviewComment[]>;
-  reviewsRes: ConditionalResponse<GhReview[]>;
-  checksRes: ConditionalResponse<{
-    total_count: number;
-    check_runs: GhCheckRun[];
-  }>;
-  stagedCheckRunsCache: CheckRunsCache | undefined;
-}
-
 export class PRPollingSource extends PollingSourceBase<
   string,
   PRSubscriptionState
@@ -226,7 +202,7 @@ export class PRPollingSource extends PollingSourceBase<
   constructor() {
     super({
       name: 'PRPollingSource',
-      pollIntervalMs: PR_POLL_INTERVAL_MS,
+      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
       maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
       ...DEFAULT_POLLING_BACKOFF_CONFIG,
     });
@@ -308,41 +284,41 @@ export class PRPollingSource extends PollingSourceBase<
 
     if (!(await this.refreshPrMetadata(key, state, prPath))) return;
 
-    // Bail cleanly if the PR is already closed. On the first (initialization)
-    // tick this prevents a zombie subscription: without this branch the
-    // subscription would stay in the map forever, burning an API call every
-    // 30s and a slot in the concurrent-subscription cap, because the
-    // open→closed auto-unsubscribe transition in `refreshPrMetadata` never
-    // fires for a PR that was closed before we started watching.
-    if (state.state === 'closed') {
-      // Defense-in-depth: auto-unsubscribe whenever we land here while
-      // still tracked, not only on `!initialized`. The open→closed
-      // transition above is the primary path, but this covers any edge
-      // (future refactors, unexpected state) where we could otherwise
-      // return early every tick without ever cleaning up.
-      if (this.has(key)) {
-        this.emit(
-          state,
-          formatPRClosed(state.slug, pr.pullNumber, state.merged),
-        );
-        this.detach(key);
-      }
-      state.initialized = true;
-      return;
-    }
-
     // `stagedCheckRunsCache` stays uncommitted here on purpose: it is written
     // to `currentShaState.checkRunsCache` only at the end of the success path
     // (after the diff branch), so a sibling rejection in the parallel fetch
     // can never advance the cache while the diff never ran — a stale cache +
     // 304 next tick would silently swallow check-run transitions.
-    const {
+    const issueCommentsUrl = withSince(
+      `${issuePath}/comments?per_page=100`,
+      state.issueComments.sinceCursor,
+    );
+    const reviewCommentsUrl = withSince(
+      `${prPath}/comments?per_page=100`,
+      state.reviewComments.sinceCursor,
+    );
+    const [
       commentsRes,
       reviewCommentsRes,
       reviewsRes,
-      checksRes,
-      stagedCheckRunsCache,
-    } = await this.fetchTickResources(state, prPath, issuePath);
+      { response: checksRes, stagedCache: stagedCheckRunsCache },
+    ] = await Promise.all([
+      ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
+      ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
+      ghGet<GhReview[]>(`${prPath}/reviews?per_page=100`, state.etags.reviews),
+      state.currentShaState?.sha
+        ? fetchAllCheckRunsClient(
+            pr.owner,
+            pr.repo,
+            state.currentShaState.sha,
+            state.currentShaState.checkRunsCache,
+            this.logger,
+          )
+        : Promise.resolve({
+            response: { status: 304 as const },
+            stagedCache: undefined,
+          }),
+    ]);
 
     // Issue/review comment lists: seed on the first tick (nothing emitted),
     // diff + emit on later ticks. consumeCommentList branches on
@@ -413,8 +389,8 @@ export class PRPollingSource extends PollingSourceBase<
    * reset, and mergeable-state transitions.
    *
    * Returns `false` when the rest of the tick must be skipped — either a
-   * malformed payload or the open→closed transition that already detached the
-   * subscription. A 304 (or any non-200) leaves state untouched and continues.
+   * malformed payload or a closed PR that was already detached. A 304 (or any
+   * non-200) leaves state untouched and continues.
    */
   private async refreshPrMetadata(
     key: string,
@@ -425,15 +401,11 @@ export class PRPollingSource extends PollingSourceBase<
     const prRes = await ghGet<GhPullRequest>(prPath, state.etags.pr);
     if (prRes.status !== 200) return true;
 
-    // Validate the state-driving PR payload. A parse failure must NOT throw:
-    // pollOne runs inside pollEntry's try/catch, and a throw here would bump
-    // consecutiveFailures every tick without advancing lastSuccessAt, so a
-    // persistently-odd-but-200 payload would detach this live subscription
-    // after the 24 h failure window. Log + skip the tick instead: returning
-    // normally lets pollEntry reset lastSuccessAt/consecutiveFailures, so the
-    // detach gate never trips. We skip BEFORE writing state.etags.pr, so the
-    // PR-detail ETag is not advanced on a bad body — the next tick re-fetches
-    // the same resource and re-validates (no strand).
+    // Validate the state-driving PR payload non-throwingly (never throw on
+    // the 200 path — see validateOrSkip). We skip BEFORE writing
+    // state.etags.pr, so the PR-detail ETag is not advanced on a bad body —
+    // the next tick re-fetches the same resource and re-validates (no
+    // strand).
     const parsed = this.validateOrSkip(
       prRes,
       GhPullRequestSchema,
@@ -443,18 +415,19 @@ export class PRPollingSource extends PollingSourceBase<
     const prData = parsed.data;
     state.etags.pr = prRes.etag;
     const newHead = prData.head.sha;
-    const newState = prData.state;
-    const newMerged = prData.merged;
     const newMergeable = prData.mergeable_state;
 
-    // Detect close/merge on initialized subscriptions.
-    if (state.initialized && state.state === 'open' && newState === 'closed') {
-      this.emit(state, formatPRClosed(state.slug, pr.pullNumber, newMerged));
+    // A closed PR cannot produce any later activity worth polling. Handling
+    // every closed 200 response here covers both initially-closed and
+    // open-to-closed subscriptions without mirroring the remote state locally.
+    if (prData.state === 'closed') {
+      this.emit(
+        state,
+        formatPRClosed(state.slug, pr.pullNumber, prData.merged),
+      );
       this.detach(key);
       return false;
     }
-    state.state = newState;
-    state.merged = newMerged;
     // New push invalidates prior CI terminal state — the next completion
     // on the new SHA should re-emit CI progress events. Also drop the
     // per-page check-runs cache: it's keyed only by page number, and the
@@ -504,56 +477,6 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   /**
-   * Issue every non-PR-detail conditional GET for one tick in parallel. The
-   * check-runs leg is skipped (synthesized as a 304) until a head SHA is
-   * known, and its cache replacement is returned staged rather than committed
-   * — see {@link PRTickResources}.
-   */
-  private async fetchTickResources(
-    state: PRSubscriptionState,
-    prPath: string,
-    issuePath: string,
-  ): Promise<PRTickResources> {
-    const { pr } = state;
-    const issueCommentsUrl = withSince(
-      `${issuePath}/comments?per_page=100`,
-      state.issueComments.sinceCursor,
-    );
-    const reviewCommentsUrl = withSince(
-      `${prPath}/comments?per_page=100`,
-      state.reviewComments.sinceCursor,
-    );
-    const [commentsRes, reviewCommentsRes, reviewsRes, checksOutcome] =
-      await Promise.all([
-        ghGet<GhIssueComment[]>(issueCommentsUrl, state.etags.issueComments),
-        ghGet<GhReviewComment[]>(reviewCommentsUrl, state.etags.reviewComments),
-        ghGet<GhReview[]>(
-          `${prPath}/reviews?per_page=100`,
-          state.etags.reviews,
-        ),
-        state.currentShaState?.sha
-          ? fetchAllCheckRunsClient(
-              pr.owner,
-              pr.repo,
-              state.currentShaState.sha,
-              state.currentShaState.checkRunsCache,
-              this.logger,
-            )
-          : Promise.resolve({
-              response: { status: 304 as const },
-              stagedCache: undefined,
-            }),
-      ]);
-    return {
-      commentsRes,
-      reviewCommentsRes,
-      reviewsRes,
-      checksRes: checksOutcome.response,
-      stagedCheckRunsCache: checksOutcome.stagedCache,
-    };
-  }
-
-  /**
    * First tick for a subscription: seed the review and check-run cursors so
    * pre-subscription history is never replayed, then mark the subscription
    * initialized. Emits nothing. Comment lists are seeded by the shared
@@ -561,8 +484,11 @@ export class PRPollingSource extends PollingSourceBase<
    */
   private seedFirstTick(
     state: PRSubscriptionState,
-    reviewsRes: PRTickResources['reviewsRes'],
-    checksRes: PRTickResources['checksRes'],
+    reviewsRes: ConditionalResponse<GhReview[]>,
+    checksRes: ConditionalResponse<{
+      total_count: number;
+      check_runs: GhCheckRun[];
+    }>,
     stagedCheckRunsCache: CheckRunsCache | undefined,
   ): void {
     if (reviewsRes.status === 200) {

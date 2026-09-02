@@ -1,7 +1,7 @@
 /** Declarative task group list — renders groups, headers, and log entries inline. */
 
 // Third-party imports
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
@@ -92,6 +92,30 @@ const TIMELINE_ITEM_WINDOW_STEP = 120;
 const DEFAULT_GROUP_ROW_WINDOW = 400;
 const GROUP_ROW_WINDOW_STEP = 400;
 
+const taskGroupListStyles = css`
+  /* Phase labels may come from workflow plans, so let long or untranslated
+     values wrap instead of forcing the status and timestamp off-screen. */
+  .group-title {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .group-time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* This compact disclosure is the only native button in the task-group
+     surface. Keep its target at the WCAG minimum without increasing the
+     visual density of every workflow row. */
+  .workflow-row-group {
+    min-block-size: 24px;
+  }
+
+  :host(:dir(rtl)) .workflow-row-group wa-icon {
+    transform: scaleX(-1);
+  }
+`;
+
 /**
  * Maps a group's `StreamPhase`/`RunOutcome` status to a steady wa-icon name.
  * Each terminal phase gets its own icon; an unrecognized status renders as
@@ -139,7 +163,7 @@ function renderStatusStrip(
 
 @customElement('task-group-list')
 export class TaskGroupList extends LitElement {
-  static override styles = [designTokens, ...logStyles];
+  static override styles = [designTokens, ...logStyles, taskGroupListStyles];
 
   /** All task groups to render */
   @property({ attribute: false }) groups: TaskGroup[] = [];
@@ -628,8 +652,8 @@ export class TaskGroupList extends LitElement {
               <span class="group-status-icon" aria-hidden="true"
                 >${WORKFLOW_PHASE_GLYPH.declared}</span
               >
-              <span class="group-title"
-                >${formatWorkflowPhaseHeading(phase.heading)}</span
+              <bdi class="group-title"
+                >${formatWorkflowPhaseHeading(phase.heading)}</bdi
               >
               <span class="group-progress"
                 >${formatWorkflowPhaseTally(phase)}</span
@@ -672,15 +696,22 @@ export class TaskGroupList extends LitElement {
           label: formatStreamStatusLabel(group.status),
         })}
       </span>
-      <span class="group-title">${title}</span>
+      <bdi class="group-title">${title}</bdi>
       ${phase ? this.renderPhaseProgress(phase) : nothing}
       <span class="group-time">
         <span class="group-start-time">
-          ${waIcon('clock')} ${formattedStartTime}
+          ${waIcon('clock')}
+          <span class="visually-hidden">Started at </span>
+          <time datetime=${new Date(group.startTime).toISOString()}
+            >${formattedStartTime}</time
+          >
         </span>
         ${
           durationText
-            ? html`<span class="group-duration">${durationText}</span>`
+            ? html`<span class="group-duration"
+                ><span class="visually-hidden">Duration </span
+                >${durationText}</span
+              >`
             : nothing
         }
       </span>
@@ -811,7 +842,7 @@ export class TaskGroupList extends LitElement {
 
     // Pre-output placeholder, including terminal-mode (process-agent) streams:
     // with no output the terminal buffer is empty and would render a blank
-    // <pre>, so show the same "Run is starting" / idle text instead.
+    // pane, so show the same "Run is starting" / idle text instead.
     if (
       this.rows.length === 0 &&
       this.entries.length === 0 &&

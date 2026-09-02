@@ -915,7 +915,7 @@ export abstract class ModelHandler<
   ): MediaAttachmentKind[] {
     const kinds = this.insertedAttachmentKinds.get(context) ?? [];
     this.insertedAttachmentKinds.set(context, []);
-    return [...kinds];
+    return kinds;
   }
 
   /**

@@ -57,7 +57,7 @@ async function renderPopup(
   rows: readonly TranscriptRow[],
   availableRows: number,
 ) {
-  const slice = { ...emptySlice(ROOT), taskGroups, entries: rows };
+  const slice = { ...emptySlice(), taskGroups, entries: rows };
   const retained = retainedWorkflowPopupProjection(slice);
   const model = workflowRunModel({
     taskGroups: retained.taskGroups,

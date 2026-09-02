@@ -70,7 +70,10 @@ const ParsedCreatorYamlSchema = z.object({
   }),
 });
 
-function parseCreatorTemplate(fileName: string, raw: string) {
+function parseCreatorTemplate(
+  fileName: string,
+  raw: string,
+): z.infer<typeof ParsedCreatorYamlSchema> {
   const parsed = ParsedCreatorYamlSchema.safeParse(yaml.parse(raw));
   if (!parsed.success) {
     throw new Error(

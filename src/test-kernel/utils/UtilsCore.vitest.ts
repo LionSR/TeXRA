@@ -12,6 +12,7 @@ import {
   getBasename,
   getFileStem,
   KeyedMutex,
+  linkAbortSignals,
   throwAggregated,
   toNewestFirstByTimestamp,
   utcMonthStart,
@@ -517,5 +518,34 @@ describe('createFlushableDebounce', () => {
     batcher.schedule();
     vi.advanceTimersByTime(100);
     expect(callback).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('linkAbortSignals', () => {
+  it('forwards a source abort with its reason and detaches cleanly', () => {
+    const source = new AbortController();
+    const controller = new AbortController();
+    const detach = linkAbortSignals([undefined, source.signal], controller);
+
+    // Detaching removes the only external reference to `controller`: a later
+    // source abort must not reach it. `AbortSignal.any` offered no such
+    // release, which is what kept every finished child scope reachable from a
+    // long-lived parent signal.
+    detach();
+    source.abort(new Error('late'));
+    expect(controller.signal.aborted).toBe(false);
+
+    const linked = new AbortController();
+    const reason = new Error('stop');
+    const live = new AbortController();
+    linkAbortSignals([live.signal], linked);
+    live.abort(reason);
+    expect(linked.signal.reason).toBe(reason);
+
+    const preAborted = new AbortController();
+    preAborted.abort(reason);
+    const immediate = new AbortController();
+    linkAbortSignals([preAborted.signal], immediate);
+    expect(immediate.signal.reason).toBe(reason);
   });
 });

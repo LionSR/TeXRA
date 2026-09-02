@@ -20,16 +20,12 @@ export function registerFollowUpCommand(
   registerCommandEntries(context, [
     {
       id: 'texra.sendFollowUp',
-      handler: async (payload: {
-        stream: StreamTabId;
-        text: string;
-        mediaFiles?: string[];
-      }) => {
-        const { stream: streamId, text, mediaFiles } = payload;
+      handler: async (payload: { stream: StreamTabId; text: string }) => {
+        const { stream: streamId, text } = payload;
         await submitProgressFollowUp({
           session: defaultSession(),
           streamId,
-          input: { text, mediaFiles },
+          input: { text },
           acknowledge: () => {},
           showInfo: (message) => vscode.window.showWarningMessage(message),
         });

@@ -67,10 +67,7 @@ export function registerMainViewCommands(
   ]);
 }
 
-/**
- * Show the project import quick-pick. Migrated to the shared command
- * registry in #3781 batch 4.
- */
+/** Show the project import quick-pick. */
 export async function showImportOptions(): Promise<void> {
   const picked = await vscode.window.showQuickPick(
     [

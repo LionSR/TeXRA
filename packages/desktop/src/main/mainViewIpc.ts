@@ -28,7 +28,7 @@ import type { DesktopPromptIpc } from './desktopPromptController.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
 
-export interface DesktopMainViewIpcOptions {
+interface DesktopMainViewIpcOptions {
   fileSelection: DesktopFileSelection;
   prompt: DesktopPromptIpc;
   settings: DesktopSettingsIpc;
@@ -55,7 +55,7 @@ export interface DesktopMainViewIpcOptions {
   onAsyncError?: (error: unknown) => void;
 }
 
-export interface DesktopMainViewIpc {
+interface DesktopMainViewIpc {
   postToRenderer(message: unknown): void;
   dispose(): void;
 }
@@ -79,8 +79,7 @@ export function installDesktopMainViewIpc(
   const banner = createCommandHandler({
     // Banner state is frontend-owned, so renderer updates round-trip through
     // the host just as they do in the extension.
-    [MAIN_VIEW_COMMANDS.SET_BANNER]: (message) =>
-      bridge.postToRenderer(message),
+    [MAIN_VIEW_COMMANDS.SET_BANNER]: bridge.postToRenderer,
   });
   const viewState = createDesktopViewStateIpc(bridge);
   const shell = createDesktopShellIpc(options.shellActions);
@@ -126,7 +125,7 @@ export function installDesktopMainViewIpc(
   window.once('closed', dispose);
 
   return {
-    postToRenderer: (message) => bridge.postToRenderer(message),
+    postToRenderer: bridge.postToRenderer,
     dispose,
   };
 }

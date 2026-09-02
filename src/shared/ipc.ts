@@ -147,7 +147,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   USE_OWN_API_KEY: 'useOwnApiKey',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
-  RESTORE_STATE: 'restoreState',
+  RESTORE_STATE: COMMON_COMMANDS.STATE_RESTORE,
   EXPORT_TRANSCRIPT: 'exportTranscript',
   SEND_FOLLOW_UP: 'sendFollowUp',
   POLISH_FOLLOW_UP: 'polishFollowUp',

@@ -14,10 +14,16 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** True when any provider has a usable API key in secret storage or the environment. */
 async function hasAnyUsableProviderApiKey(
   secrets: PlatformSecrets,
+  onProbeFailure: (message: string) => void,
 ): Promise<boolean> {
   for (const provider of API_PROVIDERS) {
     // Keep the scan sequential so the first usable key ends the lookup.
-    if (isNonEmptyString(await lookupApiKey(secrets, provider))) return true;
+    const hasApiKey = await probeSetupCredential(
+      `${provider} API key`,
+      async () => isNonEmptyString(await lookupApiKey(secrets, provider)),
+      onProbeFailure,
+    );
+    if (hasApiKey) return true;
   }
   return false;
 }
@@ -56,9 +62,5 @@ export async function hasUsableSetupCredential(
     onProbeFailure,
   );
   if (hasGrokSubscription) return true;
-  return probeSetupCredential(
-    'Provider API key',
-    () => hasAnyUsableProviderApiKey(secrets),
-    onProbeFailure,
-  );
+  return hasAnyUsableProviderApiKey(secrets, onProbeFailure);
 }

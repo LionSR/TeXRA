@@ -13,11 +13,9 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 
-const PASS_THROUGH_COMMANDS = [PROGRESS_VIEW_COMMANDS.SWITCH_VIEW] as const;
-
 type DesktopProgressIpcOwnedCommand =
   | typeof PROGRESS_VIEW_COMMANDS.WEBVIEW_READY
-  | (typeof PASS_THROUGH_COMMANDS)[number];
+  | typeof PROGRESS_VIEW_COMMANDS.SWITCH_VIEW;
 
 export type DesktopProgressInboundHandlerRegistry = Omit<
   ProgressViewInboundHandlerRegistry,
@@ -34,7 +32,7 @@ interface DesktopProgressSource {
   ensure(): Promise<DesktopProgressIpcBridge>;
 }
 
-export interface DesktopProgressIpcOptions {
+interface DesktopProgressIpcOptions {
   source: DesktopProgressSource;
   /** Called for a recognized command that wasn't dispatched to a real
    *  handler. A matched `unsupported(...)` registry entry supplies its
@@ -48,8 +46,6 @@ export interface DesktopProgressIpcOptions {
 }
 
 export type DesktopProgressIpc = DesktopMessageHandler;
-
-const passThroughCommands: ReadonlySet<string> = new Set(PASS_THROUGH_COMMANDS);
 
 export function createDesktopProgressIpc(
   options: DesktopProgressIpcOptions,
@@ -104,8 +100,8 @@ export function createDesktopProgressIpc(
       const result = ProgressViewInboundMessageSchema.safeParse(message);
       if (!result.success) return false;
 
-      // WEBVIEW_READY and pass-through commands return false so sibling
-      // handlers in the chain still receive them.
+      // WEBVIEW_READY and SWITCH_VIEW are pass-throughs: they return false so
+      // sibling handlers in the chain still receive them.
       if (result.data.command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
         if (result.data.view !== 'progress') return false;
         withProgress((progress) => {
@@ -113,8 +109,9 @@ export function createDesktopProgressIpc(
         });
         return false;
       }
-      const command = result.data.command;
-      if (passThroughCommands.has(command)) return false;
+      if (result.data.command === PROGRESS_VIEW_COMMANDS.SWITCH_VIEW) {
+        return false;
+      }
 
       withProgress((progress) => {
         dispatchAndReport(

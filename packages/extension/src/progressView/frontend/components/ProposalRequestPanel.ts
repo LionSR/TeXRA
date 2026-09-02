@@ -43,7 +43,7 @@ import {
   readSelectValue,
   renderAgentOptions,
   renderModelOptions,
-} from '@shared/utils/selectTemplates';
+} from '@shared/wa/selectTemplates';
 
 // Local imports - shared utilities
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -158,6 +158,9 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                       .value=${currentAgent}
                       @change=${this.handleAgentSelectChange}
                     >
+                      <span slot="label" class="visually-hidden"
+                        >Agent for this proposal</span
+                      >
                       ${renderAgentOptions(agentOptions)}
                     </wa-select>
                   </div>
@@ -176,6 +179,9 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                       .value=${currentModel}
                       @change=${this.handleSelectChange}
                     >
+                      <span slot="label" class="visually-hidden"
+                        >Model for this proposal</span
+                      >
                       ${renderModelOptions(modelOptions)}
                     </wa-select>
                   </div>
@@ -193,8 +199,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
               ${this.renderProposalFiles(data)}`
         }
       `,
-      approveTitle: 'Approve (y)',
-      rejectTitle: 'Reject (n)',
+      approveTitle: 'Approve this proposal (y)',
+      rejectTitle: 'Reject this proposal (n)',
       trailingActions: renderLabeledActionButton({
         id: 'proposal-setup-button',
         icon: 'reply',
@@ -378,6 +384,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                 data-file=${ifDefined(clickable ? file : undefined)}
                 role=${ifDefined(clickable ? 'button' : undefined)}
                 tabindex=${ifDefined(clickable ? '0' : undefined)}
+                aria-label=${ifDefined(clickable ? `Open ${file}` : undefined)}
                 >${getBasename(file)}</span
               ><wa-tooltip for="${idPrefix}-file-${i}">${file}</wa-tooltip>`,
         )}

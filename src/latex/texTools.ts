@@ -197,19 +197,13 @@ export async function compileLatex2Pdf(
       log.debug(`Setting ${key} to: ${value}`);
     }
 
-    const latexmkArgs = [
-      '-pdf',
-      '-f',
-      '-interaction=nonstopmode',
-      `-output-directory=${outDir}`,
-      latexFile,
-    ];
-
     const pdflatexArgs = [
       '-interaction=nonstopmode',
       `-output-directory=${outDir}`,
       latexFile,
     ];
+
+    const latexmkArgs = ['-pdf', '-f', ...pdflatexArgs];
 
     function runPdflatex() {
       return runToolWithCheck('pdflatex', pdflatexArgs, {

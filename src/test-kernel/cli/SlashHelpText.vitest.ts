@@ -45,7 +45,7 @@ describe('formatSlashCommandHelp', () => {
       '- `/key` (`/keys`) — Add a provider API key with masked input',
     );
     expect(help).toContain(
-      '- `/login` — Sign in to ChatGPT, Grok, or Researcher Access',
+      '- `/login` — Sign in with ChatGPT or Grok, or sign in to your TeXRA account',
     );
   });
 

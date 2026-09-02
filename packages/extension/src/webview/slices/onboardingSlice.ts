@@ -61,7 +61,7 @@ export function createOnboardingHandlers(host: MainViewInboundHost) {
       // Persist the user-scoped declined flag (same flag the CLI picker
       // writes), then re-derive so the card disappears and the normal
       // launcher renders.
-      await setOnboardingDeclined(host.context.globalState, true);
+      await setOnboardingDeclined(host.extensionContext.globalState, true);
       await host.refreshOnboardingFunnel?.();
     },
     [MAIN_VIEW_COMMANDS.ONBOARDING_SIGN_IN_CHATGPT]: async () => {
@@ -83,7 +83,7 @@ export function createOnboardingHandlers(host: MainViewInboundHost) {
         host.viewName,
       ),
     [MAIN_VIEW_COMMANDS.ONBOARDING_SKIP_SETUP]: async () => {
-      await setFirstRunDone(host.context.globalState, true);
+      await setFirstRunDone(host.extensionContext.globalState, true);
       await host.refreshOnboardingFunnel?.();
     },
   } satisfies Partial<MainViewInboundHandlerRegistry>;

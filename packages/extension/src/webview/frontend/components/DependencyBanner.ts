@@ -11,6 +11,17 @@ import { renderWarningBanner } from '@shared/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 import { MainViewEvents } from '../events';
 
+function getToolLabel(tool: string): string {
+  switch (tool) {
+    case 'gm':
+      return 'GraphicsMagick';
+    case 'magick':
+      return 'ImageMagick';
+    default:
+      return tool;
+  }
+}
+
 @customElement('dependency-banner')
 export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> {
   static override styles = [
@@ -29,6 +40,9 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-3xs);
+        margin: 0;
+        padding: 0;
+        list-style: none;
       }
     `,
   ];
@@ -49,54 +63,55 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
     this.dispatchEvent(MainViewEvents.openInstallGuide({ tool }));
   }
 
-  private getToolLabel(tool: string): string {
-    switch (tool) {
-      case 'gm':
-        return 'GraphicsMagick';
-      case 'magick':
-        return 'ImageMagick';
-      default:
-        return tool;
-    }
-  }
-
   override render(): TemplateResult {
     const missing = this.state.missingTools ?? [];
     const tools = missing.flatMap((tool) =>
       tool === 'gm/magick' ? ['gm', 'magick'] : [tool],
     );
+    const imageToolMissing = missing.includes('gm/magick');
 
     return renderWarningBanner({
       id: 'dependencyBanner',
       role: 'status',
       body: html`
-        <div class="missing-tools">
-          ${when(
-            tools.length === 0,
-            () => html`Missing dependencies: none`,
-            () =>
-              repeat(
+        ${when(
+          tools.length === 0,
+          () => html`<span>No dependencies are missing.</span>`,
+          () => html`
+            <span>Missing dependencies:</span>
+            <ul class="missing-tools">
+              ${repeat(
                 tools,
                 (tool) => tool,
-                (tool) => html`
-                  <div class="dependency-item">
-                    <span aria-hidden="true">${this.getToolLabel(tool)}</span>
-                    <wa-button
-                      class="dependency-install-button"
-                      appearance="plain"
-                      size="s"
-                      @click=${() => this.handleInstall(tool)}
-                    >
-                      ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
-                      <span class="visually-hidden"
-                        >${this.getToolLabel(tool)}</span
+                (tool) => {
+                  const label = getToolLabel(tool);
+
+                  return html`
+                    <li class="dependency-item">
+                      <span
+                        ><bdi dir="auto">${label}</bdi>${
+                          imageToolMissing &&
+                          (tool === 'gm' || tool === 'magick')
+                            ? ' (choose one)'
+                            : ''
+                        }</span
                       >
-                    </wa-button>
-                  </div>
-                `,
-              ),
-          )}
-        </div>
+                      <wa-button
+                        class="dependency-install-button"
+                        appearance="plain"
+                        size="s"
+                        aria-label=${`Open ${label} install guide`}
+                        @click=${() => this.handleInstall(tool)}
+                      >
+                        ${waIcon('book', { slot: 'start' })} Install guide
+                      </wa-button>
+                    </li>
+                  `;
+                },
+              )}
+            </ul>
+          `,
+        )}
         <div class="actions">
           <wa-button
             id="dependencyRecheckButton"
@@ -104,13 +119,12 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
             size="s"
             @click=${this.handleRecheck}
           >
-            ${waIcon('rotate-right', { slot: 'start' })} Re-check
+            ${waIcon('rotate-right', { slot: 'start' })} Check again
           </wa-button>
           <wa-button
             id="dependencyDismissButton"
             appearance="plain"
             size="s"
-            title="Dismiss (can be re-enabled in settings)"
             @click=${this.handleDismiss}
           >
             ${waIcon('xmark', { slot: 'start' })} Dismiss

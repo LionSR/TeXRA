@@ -52,6 +52,7 @@ import {
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
+import { linkAbortSignals } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { createRunContext, withRunContext } from './RunContext';
@@ -69,6 +70,8 @@ import type {
 const logger = createLog('AgentLaunchContext');
 
 export interface AgentLaunchContext extends AgentCore {
+  /** Description from the exact registry entry selected for this launch. */
+  resolvedAgentDescription?: string;
   usageMonitor: UsageMonitor;
   parentStage: StageHandle;
   attachedMemoryMisses: AttachedMemoryMiss[];
@@ -285,10 +288,10 @@ async function assembleAgentLaunchContext(
     fullConfig.agentSource,
   );
   input.signal?.throwIfAborted();
-  // `loadAgentSettingAndPrompts` already applies `ensureAgentCategoryForSource`
-  // before parsing, and `AgentSettingSchema` prefaults `agentCategory` (to
-  // Workflow when absent), so `setting.agentCategory` is always populated here —
-  // a second `ensureAgentCategoryForSource` pass would be a guaranteed no-op.
+  // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
+  // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
+  // (to Workflow when absent), so `setting.agentCategory` is always populated
+  // here — a second defaulting pass would be a guaranteed no-op.
   const [setting, prompt] = await loadAgentSettingAndPrompts(resolution);
   input.signal?.throwIfAborted();
 
@@ -456,9 +459,15 @@ async function assembleAgentLaunchContext(
   const agentPath = path.dirname(resolution.entry.path);
   const workingDirectory = config.workingDirectory?.trim() || undefined;
   const runAbortController = new AbortController();
-  const runSignal = input.signal
-    ? AbortSignal.any([input.signal, runAbortController.signal])
-    : runAbortController.signal;
+  // Linked, not composed: `AbortSignal.any` would keep this run's signal (and
+  // every listener still attached to it) reachable from the caller's signal
+  // until that signal aborts. A parent run's signal outlives each subagent it
+  // launches, so a long orchestration would retain every finished child's run
+  // scope. The link is detached with the run trace at end-of-run.
+  const detachRunAbortLink = resources.add(
+    linkAbortSignals([input.signal], runAbortController),
+  );
+  const runSignal = runAbortController.signal;
   const runScope = createRunScope({
     streamId,
     executionId,
@@ -507,6 +516,7 @@ async function assembleAgentLaunchContext(
   );
   return {
     config,
+    resolvedAgentDescription: resolution.entry.description,
     setting,
     prompt,
     modelCell,
@@ -521,7 +531,10 @@ async function assembleAgentLaunchContext(
     initialUserMessageForTranscript: initialMediaMayBeInserted
       ? initialInstruction
       : undefined,
-    disposeTrace: runTrace.dispose,
+    disposeTrace: () => {
+      detachRunAbortLink();
+      runTrace.dispose();
+    },
   };
 }
 

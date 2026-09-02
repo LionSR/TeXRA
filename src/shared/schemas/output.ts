@@ -278,7 +278,7 @@ export const RoundOutputSchema = z.strictObject({
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
-export const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
+const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
   (output) => ({
     round: output.round,
     relativePath: fileLocationDisplayPath(output.location),
@@ -290,14 +290,15 @@ export const OutputFileSummaryFromInfoSchema = OutputFileInfoSchema.transform(
   }),
 ).pipe(OutputFileSummarySchema);
 
-export const CompileFailureSummaryFromFailureSchema =
-  CompileFailureSchema.transform((failure) => ({
+const CompileFailureSummaryFromFailureSchema = CompileFailureSchema.transform(
+  (failure) => ({
     round: failure.round,
     displayName: failure.displayName,
     outputPath: fileLocationDisplayPath(failure.output),
     logPath: failure.logRelativePath,
     logAbsolutePath: failure.log.absolutePath,
-  })).pipe(CompileFailureSummarySchema);
+  }),
+).pipe(CompileFailureSummarySchema);
 
 export function roundOutputsToOutputSummaries(
   roundOutputs: RoundOutput[],

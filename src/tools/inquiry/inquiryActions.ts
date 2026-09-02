@@ -75,12 +75,12 @@ export async function persistExternalInquiryAction(
   payload: ExternalInquiryAction,
 ): Promise<ExternalInquiryTransition> {
   if (payload.action === 'submit') {
-    const persisted = await recordAnswerForOpenTurn({
+    const manifest = await recordAnswerForOpenTurn({
       threadId: payload.threadId,
       answer: payload.answer,
       sessionLinks: payload.sessionLinks ?? undefined,
     });
-    if (!persisted) {
+    if (!manifest) {
       logger.warn(
         `Inquiry submit ignored: thread ${payload.threadId} has no open turn.`,
       );
@@ -89,7 +89,7 @@ export async function persistExternalInquiryAction(
     return {
       kind: 'answered',
       threadId: payload.threadId,
-      manifest: persisted.manifest,
+      manifest,
     };
   }
 

@@ -17,7 +17,6 @@ import type { AgentModePreset } from '@shared/schemas';
 
 // Local file imports
 import {
-  dispatchKey,
   mountComponent,
   useLitComponentTestDom,
 } from './litComponentTestUtils';
@@ -39,10 +38,9 @@ const CUSTOM_PRESET: AgentModePreset = {
 
 /**
  * Regression coverage for the a11y-clickables audit: the team-preset card
- * was a plain `<div @click>` with no role/tabindex/keydown, so keyboard
- * users could never select a team even though `.preset-card:focus-visible`
- * already shipped an outline. Mirrors GoalTab.ts's `.goal-row` and
- * AgentSelectionPanel.ts's `.agent-list-item` keyboard-activation pattern.
+ * was a plain `<div @click>`, so keyboard users could never select a team.
+ * Keep the apply action on a native button so browser keyboard behavior does
+ * not depend on a hand-rolled key handler.
  */
 describe('multi-agent-tab preset card keyboard activation', () => {
   useLitComponentTestDom(
@@ -63,44 +61,40 @@ describe('multi-agent-tab preset card keyboard activation', () => {
       .map(([, payload]) => (payload as { presetId: string }).presetId);
   }
 
-  it('exposes role=button and tabindex=0 on every preset card', async () => {
+  it('renders every preset apply action as a native button', async () => {
     const element = await mount();
     const cards = element.shadowRoot?.querySelectorAll('.preset-card') ?? [];
     expect(cards.length).toBe(AGENT_MODE_PRESETS.length);
     for (const card of cards) {
-      expect(card.getAttribute('role')).toBe('button');
-      expect(card.getAttribute('tabindex')).toBe('0');
+      expect(card.tagName).toBe('BUTTON');
+      expect(card.getAttribute('type')).toBe('button');
     }
   });
 
-  it('applies the preset on Enter and Space, not on other keys', async () => {
+  it('applies the preset from its native button', async () => {
     const element = await mount();
 
     const firstCard = element.shadowRoot?.querySelector('.preset-card');
-    expect(firstCard).toBeInstanceOf(HTMLElement);
+    expect(firstCard?.tagName).toBe('BUTTON');
+    (firstCard as HTMLElement).click();
 
-    dispatchKey(firstCard!, 'a');
-    expect(appliedPresetIds()).toHaveLength(0);
-
-    dispatchKey(firstCard!, 'Enter');
-    dispatchKey(firstCard!, ' ');
-
-    expect(appliedPresetIds()).toEqual([
-      AGENT_MODE_PRESETS[0]!.id,
-      AGENT_MODE_PRESETS[0]!.id,
-    ]);
+    expect(appliedPresetIds()).toEqual([AGENT_MODE_PRESETS[0]!.id]);
   });
 
-  it('does not apply the preset when Enter/Space bubbles from the delete button', async () => {
+  it('keeps the delete action separate from the preset button', async () => {
     const element = await mount({ customPresets: [CUSTOM_PRESET] });
 
     const deleteButton =
       element.shadowRoot?.querySelector('.preset-delete-btn');
     expect(deleteButton).toBeInstanceOf(HTMLElement);
 
-    dispatchKey(deleteButton!, 'Enter');
+    (deleteButton as HTMLElement).click();
 
     expect(appliedPresetIds()).toHaveLength(0);
+    expect(mocks.postMessage).toHaveBeenCalledWith(
+      SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
+      { presetId: CUSTOM_PRESET.id },
+    );
   });
 
   /**
@@ -117,6 +111,7 @@ describe('multi-agent-tab preset card keyboard activation', () => {
     );
     expect(activeCards?.length).toBe(1);
     expect(activeCards?.[0]?.textContent).toContain(active.name);
+    expect(activeCards?.[0]?.getAttribute('aria-pressed')).toBe('true');
 
     const otherCard = element.shadowRoot?.querySelector('.preset-card');
     (otherCard as HTMLElement).click();

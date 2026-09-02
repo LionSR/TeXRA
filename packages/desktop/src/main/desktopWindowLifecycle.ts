@@ -27,21 +27,43 @@ interface BeforeQuitApp {
   quit(): void;
 }
 
-function installRendererNavigationCleanup(
-  webContents: EventSource,
-  workspaceIpc: DisposableRendererResources,
+export interface DesktopWindowLifecycleWiring {
+  webContents: EventSource;
+  workspaceIpc: DisposableRendererResources;
+  showDiscardDialog(): number;
+  isFatalShutdownRequested(): boolean;
+  clearPendingWorkspaceRelaunch(): void;
+  clearContinueQuitAfterWindowClose(): void;
+}
+
+export function bootstrapDesktopWindowLifecycle(
+  options: DesktopWindowLifecycleWiring,
 ): void {
+  options.webContents.on('will-prevent-unload', (event) => {
+    if (options.isFatalShutdownRequested()) {
+      options.clearPendingWorkspaceRelaunch();
+      event.preventDefault();
+      return;
+    }
+    if (options.showDiscardDialog() === 1) {
+      event.preventDefault();
+      return;
+    }
+    options.clearPendingWorkspaceRelaunch();
+    options.clearContinueQuitAfterWindowClose();
+  });
+
   let initialRendererNavigationComplete = false;
-  webContents.on('did-navigate', () => {
+  options.webContents.on('did-navigate', () => {
     if (!initialRendererNavigationComplete) {
       initialRendererNavigationComplete = true;
       return;
     }
-    workspaceIpc.disposeRendererResources();
+    options.workspaceIpc.disposeRendererResources();
   });
 }
 
-function installBeforeQuitHandler(options: {
+export function installDesktopBeforeQuitWiring(options: {
   app: BeforeQuitApp;
   getMainWindow(): MainWindow | null;
   lifecycle: ShutdownLifecycle;
@@ -66,51 +88,4 @@ function installBeforeQuitHandler(options: {
       options.app.quit();
     });
   });
-}
-
-export function installDesktopBeforeQuitWiring(options: {
-  app: BeforeQuitApp;
-  getMainWindow(): MainWindow | null;
-  lifecycle: ShutdownLifecycle;
-  continueAfterWindowClose(continueQuit: () => void): void;
-}): void {
-  installBeforeQuitHandler(options);
-}
-
-export interface DesktopWindowLifecycleWiring {
-  webContents: EventSource;
-  workspaceIpc: DisposableRendererResources;
-  showDiscardDialog(): number;
-  isFatalShutdownRequested(): boolean;
-  clearPendingWorkspaceRelaunch(): void;
-  clearContinueQuitAfterWindowClose(): void;
-}
-
-function installUnsavedChangesHandler(options: {
-  webContents: EventSource;
-  showDiscardDialog(): number;
-  isFatalShutdownRequested(): boolean;
-  clearPendingWorkspaceRelaunch(): void;
-  clearContinueQuitAfterWindowClose(): void;
-}): void {
-  options.webContents.on('will-prevent-unload', (event) => {
-    if (options.isFatalShutdownRequested()) {
-      options.clearPendingWorkspaceRelaunch();
-      event.preventDefault();
-      return;
-    }
-    if (options.showDiscardDialog() === 1) {
-      event.preventDefault();
-      return;
-    }
-    options.clearPendingWorkspaceRelaunch();
-    options.clearContinueQuitAfterWindowClose();
-  });
-}
-
-export function bootstrapDesktopWindowLifecycle(
-  options: DesktopWindowLifecycleWiring,
-): void {
-  installUnsavedChangesHandler(options);
-  installRendererNavigationCleanup(options.webContents, options.workspaceIpc);
 }

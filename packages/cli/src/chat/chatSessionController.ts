@@ -50,7 +50,7 @@ import {
 } from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { StreamSnapshotStore } from '@transcript';
-import { generateExecutionId } from '@utils/core';
+import { generateExecutionId, throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { clearApprovals } from './tui/state/approvalQueue';
@@ -321,15 +321,17 @@ export function createChatSessionController(
   // the local transcript unless the run was stopped intentionally, and set
   // the exit code accordingly.
   const reportRunFailure = (error: unknown): void => {
+    if (session.stopRequested) {
+      session.runExitCode = CliExitCode.Success;
+      return;
+    }
     // A launch failure already rendered through a targeted presentation
     // (e.g. the model-not-recognized instruction) is marked -- skip the
     // generic transcript line so the TUI doesn't show the same failure twice.
-    if (!session.stopRequested && !hasErrorPresentationClaimed(error)) {
+    if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    if (session.stopRequested) {
-      session.runExitCode = CliExitCode.Success;
-    } else if (error instanceof ExecutionLeaseActiveError) {
+    if (error instanceof ExecutionLeaseActiveError) {
       session.runExitCode = CliExitCode.Usage;
     } else {
       session.runExitCode = CliExitCode.AgentError;
@@ -358,6 +360,23 @@ export function createChatSessionController(
         `Execution ${executionId} is a workflow; resume it with \`texra resume ${executionId}\`.`,
       );
     },
+  });
+
+  // Every host generation still holding interaction ownership. A generation
+  // leaves on release, so session exit releases only the live ones instead of
+  // parking one dead closure per root turn in the session store for the
+  // process lifetime.
+  const liveOwnerships = new Set<{ readonly release: () => void }>();
+  disposables.add(() => {
+    const failures: unknown[] = [];
+    for (const ownership of [...liveOwnerships]) {
+      try {
+        ownership.release();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    throwAggregated(failures, 'Multiple interaction owners failed to release');
   });
 
   // Build the runtime host shared by start and resume. Root completion marks
@@ -392,6 +411,7 @@ export function createChatSessionController(
     };
     const ownership = runtimeSession.executions.interactionOwnership.open(
       (): void => {
+        liveOwnerships.delete(ownership);
         detachResultToastOnce();
         detachHostInteractions();
         if (session.presentationHost === presentationHost) {
@@ -400,7 +420,7 @@ export function createChatSessionController(
         void presentationHost.close();
       },
     );
-    disposables.add(() => ownership.release());
+    liveOwnerships.add(ownership);
 
     return {
       presentationHost,

@@ -23,6 +23,7 @@ import {
 } from '@controllers/settingsView/backend/templateAgentCreation';
 import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
+import type { MessageHost } from '@hosts/uiHosts';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   agentKey,
@@ -62,7 +63,7 @@ type DesktopAgentHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET
 >;
 
-export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
+interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePorts {
   readonly registry: {
     readonly loadAgents: typeof loadAgents;
     readonly refreshAgents: typeof refresh;
@@ -109,10 +110,10 @@ export interface DefaultDesktopAgentSettingsControllerOptions extends SettingsSt
     readonly canAccess: () => Promise<boolean>;
     readonly signIn: () => Promise<boolean>;
   };
-  readonly notifications: {
-    readonly showInfoMessage: (message: string) => Promise<void>;
-    readonly showErrorMessage: (message: string) => Promise<void>;
-  };
+  readonly notifications: Pick<
+    MessageHost,
+    'showInfoMessage' | 'showErrorMessage'
+  >;
 }
 
 export interface DesktopAgentSettingsController {

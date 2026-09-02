@@ -1,18 +1,12 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
-
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
+
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
+import { type CliContext } from '../runtime/cliContext';
 import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
-import {
-  formatCliNoAvailableModelsRecovery,
-  getCliModelAccessList,
-  type CliModelAccess,
-} from '../runtime/modelAccess';
 import {
   buildInitConfig,
   pathExists,
@@ -22,11 +16,17 @@ import {
   type InitAnswers,
   type InitConfigShape,
 } from '../runtime/initConfig';
+import { initCliPlatform } from '../runtime/initPlatform';
+import { writeTextStderr } from '../runtime/logSinks';
+import {
+  formatCliNoAvailableModelsRecovery,
+  getCliModelAccessList,
+  type CliModelAccess,
+} from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import { type CliContext } from '../runtime/cliContext';
 
 interface InitAgentOption {
   readonly name: string;
@@ -48,10 +48,11 @@ export function defaultInitAnswers(
   agents: readonly InitAgentOption[],
   models: readonly CliModelAccess[],
 ): InitAnswers {
-  const firstAvailable = models.find((model) => model.available);
   return {
     agent: pickDefaultToolUseAgent(agents),
-    model: firstAvailable?.model.value ?? CLI_BUILTIN_DEFAULT_MODEL,
+    model:
+      models.find((model) => model.available)?.model.value ??
+      CLI_BUILTIN_DEFAULT_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
     // which silently denies every privileged action.

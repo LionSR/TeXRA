@@ -10,11 +10,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { AgentReviewService, issueRange } from './AgentReviewService';
 
-export const AGENT_REVIEW_CODE_ACTION_METADATA: vscode.CodeActionProviderMetadata =
-  {
-    providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
-  };
-
 export class AgentReviewCodeActionProvider
   implements vscode.CodeActionProvider
 {

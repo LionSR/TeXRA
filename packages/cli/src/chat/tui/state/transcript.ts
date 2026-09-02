@@ -84,7 +84,14 @@ function appendLocalTranscriptEntry(
   const normalized = text.trim();
   if (!normalized) return;
 
-  const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();
+  const streamId =
+    explicitStreamId ??
+    resolveLocalTranscriptStreamId({
+      activeStreamId: activeStreamId.get(),
+      fallbackStreamId: CLI_LOCAL_STREAM_ID,
+      parentStream: parentStream.get(),
+      rootStreamId: rootStreamId.get(),
+    });
   focusStream(streamId, { onlyIfUnset: true });
   const log = defaultSession().transcripts.get(streamId);
   const seqNo = log?.head ?? 0;
@@ -127,15 +134,6 @@ export function resolveLocalTranscriptStreamId({
   );
 }
 
-function defaultLocalTranscriptStreamId(): StreamTabId {
-  return resolveLocalTranscriptStreamId({
-    activeStreamId: activeStreamId.get(),
-    fallbackStreamId: CLI_LOCAL_STREAM_ID,
-    parentStream: parentStream.get(),
-    rootStreamId: rootStreamId.get(),
-  });
-}
-
 export function moveLocalTranscriptToStream(streamId: StreamTabId): void {
   if (streamId === CLI_LOCAL_STREAM_ID) return;
 
@@ -159,8 +157,6 @@ export function clearLocalTranscript(): void {
   removeStream(CLI_LOCAL_STREAM_ID);
 }
 
-function resetTranscriptState(): void {
+registerCliStateResetHook(() => {
   localEntrySeq = 0;
-}
-
-registerCliStateResetHook(resetTranscriptState);
+});

@@ -1,9 +1,6 @@
 // Centralized layout dimensions for the TUI. Import from here instead of
 // re-declaring per-file so spacing stays consistent across forms and modals.
 
-/** Maximum terminal columns used by slash-command form frames. */
-export const FORM_FRAME_MAX_WIDTH = 80;
-
 /** Combined columns consumed by ConfirmCard's left+right border and paddingX. */
 export const CONFIRM_CARD_HORIZONTAL_DECORATION = 4;
 
@@ -30,9 +27,3 @@ export function isCompactRows(
 ): boolean {
   return availableRows !== undefined && availableRows <= threshold;
 }
-
-/** Columns consumed by the edit diff panel's side padding/gutter. */
-export const EDIT_DIFF_PADDING = 6;
-
-/** Columns of side padding in the status bar row. */
-export const STATUS_BAR_HORIZONTAL_PADDING = 2;

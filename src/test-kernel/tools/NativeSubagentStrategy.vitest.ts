@@ -168,7 +168,7 @@ async function launchWaitingTurn(
   mocks.executeAgent.mockResolvedValueOnce(
     toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId),
   );
-  await strategy.launch(fakePorts(), new AbortController());
+  await strategy.launch(fakePorts(), new AbortController().signal);
   mocks.executeAgent.mock.calls.at(-1)?.[2].onRun?.({
     childStreamId: CHILD_STREAM_ID,
     deliveryTargetStreamId: params.parentStreamId,
@@ -214,7 +214,7 @@ describe('NativeSubagentStrategy', () => {
       return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
 
-    await strategy.launch(fakePorts(), new AbortController());
+    await strategy.launch(fakePorts(), new AbortController().signal);
     expect(mocks.executeAgent).toHaveBeenLastCalledWith(
       params.config,
       params.executionId,
@@ -233,7 +233,7 @@ describe('NativeSubagentStrategy', () => {
       options.onRun?.(liveHandle);
       return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
-    await strategy.launch(fakePorts(), new AbortController());
+    await strategy.launch(fakePorts(), new AbortController().signal);
     expect(strategy.resolveDeliveryTarget?.()).toBe(params.parentStreamId);
     liveHandle.deliveryTargetStreamId = undefined;
     expect(strategy.resolveDeliveryTarget?.()).toBeUndefined();
@@ -257,7 +257,7 @@ describe('NativeSubagentStrategy', () => {
       });
     });
 
-    await strategy.launch(ports, new AbortController());
+    await strategy.launch(ports, new AbortController().signal);
 
     expect(mocks.executeAgent).toHaveBeenCalledWith(
       params.config,
@@ -285,7 +285,7 @@ describe('NativeSubagentStrategy', () => {
       }),
     );
 
-    const { completion } = startChildRunLoop({
+    const completion = startChildRunLoop({
       childStreamId: CHILD_STREAM_ID,
       parentStreamId: params.parentStreamId,
       executionId: params.executionId,
@@ -316,7 +316,7 @@ describe('NativeSubagentStrategy', () => {
       });
     });
 
-    const { completion } = startChildRunLoop({
+    const completion = startChildRunLoop({
       childStreamId: CHILD_STREAM_ID,
       parentStreamId: params.parentStreamId,
       executionId: params.executionId,
@@ -344,7 +344,7 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(baseParams());
     mockLaunchPublishing({ interrupt }, 'cancelled');
 
-    await strategy.launch(fakePorts(), turn);
+    await strategy.launch(fakePorts(), turn.signal);
 
     expect(interrupt).toHaveBeenCalledOnce();
   });
@@ -359,7 +359,7 @@ describe('NativeSubagentStrategy', () => {
     });
     mockLaunchPublishing({ interrupt }, 'cancelled');
 
-    await strategy.launch(fakePorts(), new AbortController());
+    await strategy.launch(fakePorts(), new AbortController().signal);
 
     expect(interrupt).toHaveBeenCalledOnce();
   });
@@ -373,7 +373,7 @@ describe('NativeSubagentStrategy', () => {
     });
     mockLaunchPublishing({ interrupt }, 'cancelled', () => controller.abort());
 
-    await strategy.launch(fakePorts(), controller);
+    await strategy.launch(fakePorts(), controller.signal);
 
     expect(interrupt).toHaveBeenCalledOnce();
   });
@@ -384,7 +384,7 @@ describe('NativeSubagentStrategy', () => {
     const strategy = createNativeSubagentStrategy(baseParams());
     mockLaunchPublishing({ interrupt }, 'completed');
 
-    await strategy.launch(fakePorts(), controller);
+    await strategy.launch(fakePorts(), controller.signal);
     controller.abort();
 
     expect(interrupt).not.toHaveBeenCalled();
@@ -407,7 +407,7 @@ describe('NativeSubagentStrategy', () => {
       return toolUseTurnResult(STREAM_PHASE.WAITING, params.executionId);
     });
     const strategy = createNativeSubagentStrategy(params);
-    await strategy.launch(fakePorts(), new AbortController());
+    await strategy.launch(fakePorts(), new AbortController().signal);
 
     mocks.readConfig.mockResolvedValue({ agentCategory: 'toolUse' });
     mocks.retrieveSessionResumeData.mockResolvedValue(
@@ -434,7 +434,7 @@ describe('NativeSubagentStrategy', () => {
       return toolUseTurnResult('cancelled', params.executionId);
     });
 
-    const resumed = strategy.runTurn!([], fakePorts(), turn);
+    const resumed = strategy.runTurn!([], fakePorts(), turn.signal);
     await ready;
     expect(mocks.resumeToolUseTurn).toHaveBeenCalledWith(
       expect.anything(),
@@ -507,7 +507,10 @@ describe('NativeSubagentStrategy', () => {
       return toolUseTurnResult('failed', params.executionId);
     });
 
-    const turn = await strategy.launch(fakePorts(), new AbortController());
+    const turn = await strategy.launch(
+      fakePorts(),
+      new AbortController().signal,
+    );
     expect(strategy.isTurnError?.(turn)).toBe(true);
 
     const errMsg = await strategy.formatError(turn, null);
@@ -572,7 +575,7 @@ describe('NativeSubagentStrategy', () => {
     mocks.resumeToolUseTurn.mockRejectedValueOnce(resumeError);
 
     await expect(
-      strategy.runTurn!([], fakePorts(), new AbortController()),
+      strategy.runTurn!([], fakePorts(), new AbortController().signal),
     ).rejects.toBe(resumeError);
   });
 
@@ -748,7 +751,7 @@ describe('NativeSubagentStrategy', () => {
       }),
     );
 
-    await strategy.launch(ports, new AbortController());
+    await strategy.launch(ports, new AbortController().signal);
     expect(ports.recordCost).toHaveBeenCalledWith(0.42);
   });
 

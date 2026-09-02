@@ -251,7 +251,7 @@ describe('CLI orchestration items', () => {
       rows: 10,
       footerHints: [
         'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
-        'Researcher Access sign-in may unlock more remote team agents.',
+        'TeXRA account sign-in may unlock more remote team agents.',
       ],
     });
 
@@ -342,7 +342,7 @@ describe('CLI orchestration items', () => {
     expect(items[1]).toEqual({
       label: 'Account & access',
       description:
-        'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+        'TeXRA account signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
       value: { kind: 'browse-account-access' },
     });
     expect(
@@ -427,7 +427,7 @@ describe('CLI orchestration items', () => {
     ).toEqual({
       label: 'Account & access',
       description:
-        'Researcher Access signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
+        'TeXRA account signed out · ChatGPT Off · Grok Off · Kimi On · GLM Off · otherwise: your own API keys',
       value: { kind: 'browse-account-access' },
     });
   });
@@ -482,7 +482,7 @@ describe('CLI orchestration items', () => {
     expect(
       items.find((item) => item.label === 'Account & access')?.description,
     ).toBe(
-      'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      'TeXRA account signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
@@ -497,19 +497,19 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-out' },
       }),
       expect.objectContaining({
-        label: 'Sign out of Researcher Access',
+        label: 'Sign out of your TeXRA account',
         description: 'researcher@example.com',
         value: { kind: 'account', provider: 'texra', operation: 'sign-out' },
       }),
     ]);
   });
 
-  it('prefixes the launcher access summary with the Researcher Access sign-in state', () => {
+  it('prefixes the launcher access summary with the TeXRA account sign-in state', () => {
     expect(accountDescription(accountStatus({ texraSignedIn: true }))).toBe(
-      'Researcher Access signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      'TeXRA account signed in · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
     expect(accountDescription(accountStatus())).toBe(
-      'Researcher Access signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
+      'TeXRA account signed out · ChatGPT Off · Grok Off · Kimi Off · GLM Off · otherwise: your own API keys',
     );
   });
 
@@ -519,7 +519,7 @@ describe('CLI orchestration items', () => {
     expect(buildCliAccountAccessItems(account)).toEqual([
       ...accountAccessToggleRows(),
       expect.objectContaining({
-        label: 'Sign in with Researcher Access',
+        label: 'Sign in to your TeXRA account',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
@@ -546,7 +546,7 @@ describe('CLI orchestration items', () => {
         value: { kind: 'account', provider: 'grok', operation: 'sign-in' },
       }),
       expect.objectContaining({
-        label: 'Sign in with Researcher Access',
+        label: 'Sign in to your TeXRA account',
         description: '',
         value: { kind: 'account', provider: 'texra', operation: 'sign-in' },
       }),
@@ -730,7 +730,7 @@ describe('CLI orchestration items', () => {
         description: 'unavailable; no team root; 1/2 tools; Lean Project',
         footerHints: [
           'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
-          'Researcher Access sign-in may unlock more remote team agents.',
+          'TeXRA account sign-in may unlock more remote team agents.',
         ],
       }),
     );
@@ -759,7 +759,7 @@ describe('CLI orchestration items', () => {
 
     expect(orchestrationFooterHints(items)).toEqual([
       'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
-      'Researcher Access sign-in may unlock more remote team agents.',
+      'TeXRA account sign-in may unlock more remote team agents.',
     ]);
   });
 

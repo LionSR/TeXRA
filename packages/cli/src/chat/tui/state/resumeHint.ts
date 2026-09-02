@@ -11,6 +11,7 @@ import { quote } from 'shell-quote';
 import type { CliOutputFormat } from '@cli/schemas/cliSettings';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
+  isEmptyUsage,
   sumUsageStats,
   type StreamTabId,
   type TokenUsageStats,
@@ -78,37 +79,25 @@ export function formatResumeCommand(
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${executionId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }
 
-function usageHasTokens(usage: TokenUsageStats): boolean {
-  return (
-    usage.inputTokens > 0 ||
-    usage.outputTokens > 0 ||
-    (usage.cacheReadInputTokens ?? 0) > 0 ||
-    (usage.cacheMissInputTokens ?? 0) > 0 ||
-    (usage.cacheCreationInputTokens ?? 0) > 0 ||
-    (usage.reasoningTokens ?? 0) > 0
-  );
-}
-
 export function collectResumeUsage(
   streams: ReadonlyMap<StreamTabId, StreamSlice>,
 ): TokenUsageStats | undefined {
   const usages: TokenUsageStats[] = [];
 
   for (const streamId of streams.keys()) {
-    const usage: TokenUsageStats | undefined =
-      readStreamArtifacts(streamId)?.cumulativeUsage;
-    if (!usage || !usageHasTokens(usage)) continue;
+    const usage = readStreamArtifacts(streamId)?.cumulativeUsage;
+    if (!usage || isEmptyUsage(usage)) continue;
     usages.push(usage);
   }
 
   const total = sumUsageStats(usages);
-  return usageHasTokens(total) ? total : undefined;
+  return isEmptyUsage(total) ? undefined : total;
 }
 
 export function formatResumeUsage(
   usage: TokenUsageStats | undefined,
 ): string | undefined {
-  if (!usage || !usageHasTokens(usage)) return undefined;
+  if (!usage || isEmptyUsage(usage)) return undefined;
   const total = usage.inputTokens + usage.outputTokens;
   const cached = usage.cacheReadInputTokens ?? 0;
   const reasoning = usage.reasoningTokens ?? 0;

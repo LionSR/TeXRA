@@ -10,13 +10,15 @@ import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared schemas, styles, and constants
-import type {
-  ContextStateData,
-  TokenUsageStats,
-  UsageRoute,
+import {
+  isEmptyUsage,
+  type ContextStateData,
+  type TokenUsageStats,
+  type UsageRoute,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
+import { focusRingStyles } from '@shared/styles/controlStyles';
 
 // Local imports - shared icons and utils
 import type { TeXRAIconName } from '@shared/wa/iconNames';
@@ -33,13 +35,14 @@ type TokenStat = {
   id: string;
   value: number;
   tooltip: string;
-  /** Cache counters are hidden when the run never touched the cache. */
+  /** Optional counters stay hidden until the run reports them. */
   onlyWhenPositive?: boolean;
 };
 
 function renderTokenStat(stat: TokenStat): TemplateResult {
+  const tooltip = `${stat.tooltip}: ${stat.value.toLocaleString('en-US')}`;
   // prettier-ignore
-  return html`${waIcon(stat.icon, { id: stat.id })}${formatCompactTokenCount(stat.value)}<wa-tooltip for=${stat.id}>${stat.tooltip}</wa-tooltip>`;
+  return html`<span id=${stat.id} class="token-stat">${waIcon(stat.icon)}${formatCompactTokenCount(stat.value)}</span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
 }
 
 /** Solid fill color based on context utilization. */
@@ -74,6 +77,7 @@ function usageRouteDecision(
 export class UsagePanel extends LitElement {
   static override styles = [
     designTokens,
+    focusRingStyles,
     css`
       :host {
         display: block;
@@ -110,6 +114,17 @@ export class UsagePanel extends LitElement {
         font-size: var(--font-size-icon-sm);
       }
 
+      /* Each compact counter needs a keyboard-reachable explanation. Keeping
+         the icon and value together also prevents either half wrapping away
+         from the other at narrow widths. */
+      .token-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        border-radius: var(--border-radius-small);
+        white-space: nowrap;
+      }
+
       .run-summary__route {
         font-weight: var(--wa-font-weight-semibold);
         white-space: nowrap;
@@ -125,6 +140,7 @@ export class UsagePanel extends LitElement {
         display: inline-flex;
         align-items: center;
         gap: var(--wa-space-2xs);
+        border-radius: var(--border-radius-small);
       }
 
       .context-gauge__track {
@@ -162,15 +178,7 @@ export class UsagePanel extends LitElement {
 
   /** Whether the usage stats have any non-zero values worth displaying. */
   private get hasUsage(): boolean {
-    const u = this.usage;
-    if (!u) return false;
-    return (
-      u.inputTokens > 0 ||
-      u.outputTokens > 0 ||
-      u.cost > 0 ||
-      (u.cacheReadInputTokens ?? 0) > 0 ||
-      (u.cacheCreationInputTokens ?? 0) > 0
-    );
+    return this.usage != null && !isEmptyUsage(this.usage);
   }
 
   /** `ContextStateDataSchema` requires both gauge fields, so presence is all
@@ -191,9 +199,10 @@ export class UsagePanel extends LitElement {
         </span>
         <span
           id=${ELEMENT_IDS.RUN_SUMMARY}
-          class="run-summary"
+          class="run-summary focus-ring-inset"
           role=${this.usage ? 'group' : nothing}
           aria-label=${this.buildUsageLabel()}
+          tabindex=${this.usage ? '0' : nothing}
         >
           ${this.renderUsage()}
         </span>
@@ -208,6 +217,7 @@ export class UsagePanel extends LitElement {
     const cacheRead = this.usage.cacheReadInputTokens ?? 0;
     const cacheMiss = this.usage.cacheMissInputTokens ?? 0;
     const cacheWrite = this.usage.cacheCreationInputTokens ?? 0;
+    const reasoning = this.usage.reasoningTokens ?? 0;
 
     const stats: TokenStat[] = [
       {
@@ -234,7 +244,7 @@ export class UsagePanel extends LitElement {
         icon: 'database',
         id: 'usage-cache-write-icon',
         value: cacheWrite,
-        tooltip: 'Cache creation tokens (1.25x cost)',
+        tooltip: 'Cache creation tokens (1.25× cost)',
         onlyWhenPositive: true,
       },
       {
@@ -242,6 +252,13 @@ export class UsagePanel extends LitElement {
         id: 'usage-output-icon',
         value: outputTokens,
         tooltip: 'Output tokens',
+      },
+      {
+        icon: 'comments',
+        id: 'usage-reasoning-icon',
+        value: reasoning,
+        tooltip: 'Reasoning tokens',
+        onlyWhenPositive: true,
       },
     ];
 
@@ -286,10 +303,12 @@ export class UsagePanel extends LitElement {
     // used` — the rule `formatSubscriptionUsagePercent` sets and the CLI
     // status bar already applies to this same number.
     const clamped = clamp(utilizationPercent, 0, 100);
-    const percentLabel = `${Math.max(1, Math.round(utilizationPercent))}% context used`;
+    const roundedPercent =
+      utilizationPercent > 0 ? Math.max(1, Math.round(utilizationPercent)) : 0;
+    const percentLabel = `${roundedPercent}% context used`;
 
     return html`
-      <span id="usage-context-gauge" class="context-gauge">
+      <span id="usage-context-gauge" class="context-gauge" tabindex="0">
         ${waIcon('window-maximize')}
         <span class="context-gauge__track">
           <wa-progress-bar
@@ -304,7 +323,10 @@ export class UsagePanel extends LitElement {
           ${formatCompactTokenCount(contextWindow)}
         </span>
       </span>
-      <wa-tooltip for="usage-context-gauge">${percentLabel}</wa-tooltip>
+      <wa-tooltip for="usage-context-gauge"
+        >${percentLabel} (${formatCompactTokenCount(inputTokens)} of
+        ${formatCompactTokenCount(contextWindow)} tokens)</wa-tooltip
+      >
     `;
   }
 
@@ -315,6 +337,21 @@ export class UsagePanel extends LitElement {
     // still states it as "$0.000".
     const costLabel =
       usageCostLabel(cost, this.usage.usageRoute) ?? formatCostUsd(cost);
-    return `Total usage: ${formatCompactTokenCount(inputTokens)} input tokens, ${formatCompactTokenCount(outputTokens)} output tokens, ${costLabel}`;
+    const parts = [`${formatCompactTokenCount(inputTokens)} input tokens`];
+    const optionalParts: ReadonlyArray<readonly [number, string]> = [
+      [this.usage.cacheReadInputTokens ?? 0, 'cache read tokens'],
+      [this.usage.cacheMissInputTokens ?? 0, 'cache miss tokens'],
+      [this.usage.cacheCreationInputTokens ?? 0, 'cache creation tokens'],
+    ];
+    for (const [value, label] of optionalParts) {
+      if (value > 0) parts.push(`${formatCompactTokenCount(value)} ${label}`);
+    }
+    parts.push(`${formatCompactTokenCount(outputTokens)} output tokens`);
+    const reasoning = this.usage.reasoningTokens ?? 0;
+    if (reasoning > 0) {
+      parts.push(`${formatCompactTokenCount(reasoning)} reasoning tokens`);
+    }
+    parts.push(costLabel);
+    return `Total usage: ${parts.join(', ')}`;
   }
 }

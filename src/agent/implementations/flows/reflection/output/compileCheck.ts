@@ -11,6 +11,7 @@ import {
   type ExecutionId,
   type FileLocation,
   type OutputFileInfo,
+  type RunStorageFileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
@@ -29,13 +30,10 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
 import { getRunDir } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import {
-  publishCompiledPdfArtifact,
-  type CompiledPdfArtifact,
-} from './compiledPdfArtifacts';
+import { publishCompiledPdfArtifact } from './compiledPdfArtifacts';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 
-export interface CompileCheckContext {
+interface CompileCheckContext {
   fileService: TaskRunFileService;
   outputState: OutputState;
   logger: AgentTrace;
@@ -45,8 +43,8 @@ export interface CompileCheckContext {
 const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
-export interface CompileCheckResult {
-  artifacts: CompiledPdfArtifact[];
+interface CompileCheckResult {
+  artifacts: RunStorageFileLocation[];
   /** Absent when no check ran at all, which is not the same as zero failures. */
   compileResult?: CompileResult;
 }
@@ -145,7 +143,7 @@ export async function runCompileCheck(
   const compileRoot = path.join(runDirectory, 'compile');
   const failures: CompileFailure[] = [];
   const failureLogExcerpts: string[] = [];
-  const artifacts: CompiledPdfArtifact[] = [];
+  const artifacts: RunStorageFileLocation[] = [];
 
   for (const outputFile of texOutputs) {
     const displayName = getCompileDisplayName(outputFile);
@@ -254,7 +252,7 @@ async function compileOne(
 ): Promise<{
   failure: CompileFailure | null;
   failureLogExcerpt: string;
-  artifact: CompiledPdfArtifact | null;
+  artifact: RunStorageFileLocation | null;
 }> {
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
@@ -453,7 +451,7 @@ async function tryPublishArtifact({
   outputFile,
   compiledPdfPath,
   executionId,
-}: TryPublishArtifactArgs): Promise<CompiledPdfArtifact | null> {
+}: TryPublishArtifactArgs): Promise<RunStorageFileLocation | null> {
   try {
     const artifact = await publishCompiledPdfArtifact({
       runDirectory: opts.runDirectory,
@@ -465,7 +463,7 @@ async function tryPublishArtifact({
     });
     if (artifact) {
       ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
-        data: artifact.latestPdf.relativePath,
+        data: artifact.relativePath,
       });
     }
     return artifact;

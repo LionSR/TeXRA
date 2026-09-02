@@ -135,8 +135,8 @@ function renderWelcomeHtml(): string {
     <a class="button secondary" href="${setApiKey}">Set API key &mdash; ${ONBOARDING_CHOICE_API_KEY.description}</a>
   </div>
   <p class="muted">
-    Signing in to TeXRA (${RESEARCHER_ACCESS.label}) separately unlocks the
-    hosted research-agent catalog, including the orchestrator.
+    Signing in to your ${RESEARCHER_ACCESS.label} separately unlocks the hosted
+    research-agent catalog, including the orchestrator.
     <a href="${signInTexra}">Sign In</a>
   </p>
   <p class="section-label">Open your project</p>

@@ -11,6 +11,7 @@ import { HTTPError, TimeoutError } from 'ky';
 import pRetry, { AbortError, type Options as PRetryOptions } from 'p-retry';
 
 import { ToolError } from '@shared/schemas';
+import { linkAbortSignals } from '@utils/core';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -41,15 +42,9 @@ export function unwrapAbortError(error: unknown): unknown {
  */
 export function isTimeoutError(error: unknown): boolean {
   if (error instanceof TimeoutError) return true;
-  if (error instanceof Error && error.name === 'TimeoutError') return true;
-  if (
-    error instanceof Error &&
-    error.name === 'AbortError' &&
-    isTimeoutError(error.cause)
-  ) {
-    return true;
-  }
-  return false;
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'TimeoutError') return true;
+  return error.name === 'AbortError' && isTimeoutError(error.cause);
 }
 
 /**
@@ -77,21 +72,40 @@ export function isTransientHttpError(error: unknown): boolean {
 }
 
 /**
- * Join a per-call timeout with the run's cancellation signal (if any).
+ * Run one request under a signal that aborts after `timeoutMs` or when the
+ * run's cancellation signal fires, whichever comes first.
  *
- * `AbortSignal.timeout` covers both connection and body read; a client's own
- * `timeout` option (e.g. ky's) only clears once headers arrive. The run's
- * cancellation signal joins in so an interrupted run aborts in-flight
- * requests instead of waiting out the timeout.
+ * The timeout spans the whole of `request` — connection and body read — where
+ * a client's own `timeout` option (e.g. ky's) only clears once headers arrive.
+ * The run's cancellation signal is linked in so an interrupted run aborts
+ * in-flight requests instead of waiting out the timeout. The timeout reason is
+ * the same `TimeoutError` DOMException `AbortSignal.timeout()` produces, so
+ * {@link isTimeoutError} classifies it. Timer and link are released once
+ * `request` settles: an `AbortSignal.any` composite on the run signal would
+ * instead stay reachable from that signal for the rest of the run, one per
+ * tool call (see `linkAbortSignals`).
  */
-export function joinAbortSignal(
+export async function withRequestTimeout<T>(
   timeoutMs: number,
-  cancelSignal?: AbortSignal,
-): AbortSignal {
-  const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  return cancelSignal
-    ? AbortSignal.any([cancelSignal, timeoutSignal])
-    : timeoutSignal;
+  cancelSignal: AbortSignal | undefined,
+  request: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const detachCancel = linkAbortSignals([cancelSignal], controller);
+  const timer = setTimeout(() => {
+    controller.abort(
+      new DOMException(
+        `Request timed out after ${timeoutMs} ms`,
+        'TimeoutError',
+      ),
+    );
+  }, timeoutMs);
+  try {
+    return await request(controller.signal);
+  } finally {
+    clearTimeout(timer);
+    detachCancel();
+  }
 }
 
 /**

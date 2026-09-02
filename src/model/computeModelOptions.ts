@@ -29,6 +29,7 @@ import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
+  type ProviderCapabilityProfile,
 } from './providerCapabilities';
 import {
   kimiCodeEffectiveConfig,
@@ -57,7 +58,6 @@ import {
   copilotRouteForModel,
   staticModelConfigEntries,
 } from './runtimeModelRegistry';
-import type { ProviderCapabilityProfile } from './providerCapabilities';
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
 
 /**
@@ -170,6 +170,17 @@ interface UnavailableReasonContext {
 }
 
 /**
+ * Unavailable reason for both Copilot kinds; see the comment at its use sites
+ * in {@link UNAVAILABLE_REASON_BUILDERS}.
+ */
+function copilotUnavailableReason({ model }: UnavailableReasonContext): string {
+  return (
+    copilotRouteUnavailableReason(model) ??
+    `Model "${model}" is currently unavailable through Copilot in VS Code.`
+  );
+}
+
+/**
  * Per-kind unavailable-reason prose, compiler-checked the same way
  * {@link AVAILABILITY_STATUS_FIELDS} is: omitting a kind here — including a
  * newly added `ModelAvailabilityKind` whose status is `available: false` —
@@ -196,12 +207,8 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
   // sentence a run would fail with. The `??` arm is unreachable: these kinds
   // are only chosen inside the `prefersCopilotRoute` branch, which is the one
   // case that helper never answers `undefined` for.
-  'copilot-consent-required': ({ model }) =>
-    copilotRouteUnavailableReason(model) ??
-    `Model "${model}" is currently unavailable through Copilot in VS Code.`,
-  'copilot-unavailable': ({ model }) =>
-    copilotRouteUnavailableReason(model) ??
-    `Model "${model}" is currently unavailable through Copilot in VS Code.`,
+  'copilot-consent-required': copilotUnavailableReason,
+  'copilot-unavailable': copilotUnavailableReason,
   // Unreachable from `getModelUnavailableReason` today (it returns its own
   // "not recognized" message before a config resolves far enough to compute
   // availability at all), but the table must still cover it: `unknown-model`
@@ -593,21 +600,16 @@ export function invalidateModelOptionsCache(): void {
 export async function computeModelOptionsData(
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
-  const cacheKey = getModelOptionsCacheKey(models);
+  const cacheKey =
+    models == null
+      ? VISIBLE_MODELS_CACHE_KEY
+      : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
   return coalesceAsync<string, ModelOptionData[]>(
     resolvedModelOptions,
     pendingModelOptions,
     cacheKey,
     () => computeModelOptionsDataUncached(models),
   );
-}
-
-function getModelOptionsCacheKey(
-  models: readonly string[] | undefined,
-): string {
-  return models == null
-    ? VISIBLE_MODELS_CACHE_KEY
-    : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
 }
 
 async function computeModelOptionsDataUncached(

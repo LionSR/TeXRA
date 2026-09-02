@@ -92,6 +92,7 @@ import {
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
+import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
@@ -124,14 +125,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView');
 
-    const ctx: SettingsHandlerContext = {
-      channel: this.channel,
-      log: this.log,
-      extensionContext: context,
-      withActiveWebview: (fn) => this.withActiveWebview(fn),
-      postMessageToActiveWebview: (message) =>
-        this.postMessageToActiveWebview(message),
-    };
+    const ctx: SettingsHandlerContext = this.bindViewSliceHost(context);
 
     // Must build inside the constructor: the platform is initialized by
     // extension.ts during activation, so destructuring its stores at module
@@ -156,8 +150,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       externalOpener: new VscodeExternalOpener(),
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl: (provider) =>
-        this.profileController.getProviderKeyUrl(provider),
+      getProviderKeyUrl,
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {
@@ -315,8 +308,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       resetCustomAgentDir: () => this.agentHandlers.handleResetCustomAgentDir(),
       applyAgentModePreset: (message) =>
         this.agentHandlers.handleApplyAgentModePreset(message),
-      saveAgentModePreset: (message) =>
-        this.agentHandlers.handleSaveAgentModePreset(message),
+      saveAgentModePreset: () => this.agentHandlers.handleSaveAgentModePreset(),
       deleteAgentModePreset: (message) =>
         this.agentHandlers.handleDeleteAgentModePreset(message),
       getGitHubTokenStatus: () =>

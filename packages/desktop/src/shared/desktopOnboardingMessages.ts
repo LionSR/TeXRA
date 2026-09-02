@@ -14,7 +14,7 @@ export const DesktopOnboardingSetStateMessageSchema = z.object({
   shouldShow: z.boolean(),
 });
 
-export type DesktopOnboardingSetStateMessage = z.infer<
+type DesktopOnboardingSetStateMessage = z.infer<
   typeof DesktopOnboardingSetStateMessageSchema
 >;
 

@@ -27,7 +27,6 @@ import { getLightweightMd } from '@shared/highlighting/lightweightMd';
 import { renderIconActionButtonParts } from '@shared/wa/actionButtons';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
-import { getBasename } from '@utils/core';
 import {
   formatBytes,
   formatResultCount,
@@ -201,7 +200,7 @@ export class MemoryItem extends LitElement {
    */
   private renderActionGroup(): TemplateResult {
     const pinned = this.item?.pinned === true;
-    const memoryName = getBasename(this.item?.displayPath);
+    const memoryPath = this.item?.displayPath;
     const actions = [
       {
         id: 'memory-pin-button',
@@ -230,7 +229,7 @@ export class MemoryItem extends LitElement {
       // down a list tell a screen-reader user nothing about which one they hit.
       ...renderIconActionButtonParts({
         ...action,
-        label: memoryName ? `${action.label}: ${memoryName}` : action.label,
+        label: memoryPath ? `${action.label}: ${memoryPath}` : action.label,
       }),
     }));
     return html`
@@ -277,7 +276,7 @@ export class MemoryItem extends LitElement {
         })}
       >
         <div class="list-item-header">
-          <div class="memory-path">${this.item.displayPath}</div>
+          <div class="memory-path" dir="auto">${this.item.displayPath}</div>
           ${this.renderActionGroup()}
         </div>
         <div class="text-secondary meta-strip">

@@ -110,15 +110,15 @@ vi.mock('@tools/claudeAgentImport', () => ({
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
 
-import { ClaudeAgentTool } from '@tools/claudeAgent';
+import { ClaudeAgentTool, runStreamedTurn } from '@tools/claudeAgent';
 import { createFakeAgentCliChildStream } from '../support/agentCliResumeTestUtils';
 
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'stream:claude-child' as StreamTabId;
 const executionId = 'parent-exec' as ExecutionId;
 
-function completedChildRunLoop(): { completion: Promise<void> } {
-  return { completion: Promise.resolve() };
+function completedChildRunLoop(): Promise<void> {
+  return Promise.resolve();
 }
 
 function stubExecutions(): any {
@@ -270,6 +270,36 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
   });
 
+  it('detaches the abort link when SDK query construction throws', async () => {
+    const signal = new AbortController().signal;
+    const removeEventListener = vi.spyOn(signal, 'removeEventListener');
+    const failure = new Error('Claude query construction failed');
+    mocks.query.mockImplementationOnce(() => {
+      throw failure;
+    });
+
+    await expect(
+      runStreamedTurn({
+        prompt: 'start Claude',
+        logger: createFakeAgentCliChildStream(childStreamId).logger,
+        signal,
+        model: 'claude-sonnet-4-6',
+        permissionMode: 'acceptEdits',
+        effort: 'high',
+        cwd: undefined,
+        additionalDirectories: undefined,
+        env: {},
+        resumeSessionId: undefined,
+        pathToClaudeCodeExecutable: undefined,
+      }),
+    ).rejects.toBe(failure);
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'abort',
+      expect.any(Function),
+    );
+  });
+
   it('logs a detached run-loop rejection through the child trace', async () => {
     const childStream = createFakeAgentCliChildStream(childStreamId);
     const error = vi
@@ -277,9 +307,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       .mockImplementation(() => {});
     const lateFailure = new Error('late Claude finalization failed');
     mocks.createChildStream.mockReturnValue(childStream);
-    mocks.startChildRunLoop.mockReturnValue({
-      completion: Promise.reject(lateFailure),
-    });
+    mocks.startChildRunLoop.mockReturnValue(Promise.reject(lateFailure));
 
     await expect(
       new ClaudeAgentTool().call({ prompt: 'launch Claude' }),
@@ -316,7 +344,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     const [loopParams] = mocks.startChildRunLoop.mock.calls[0] as [
       { strategy: ChildRunStrategy<unknown> },
     ];
-    await loopParams.strategy.launch(fakePorts(), new AbortController());
+    await loopParams.strategy.launch(fakePorts(), new AbortController().signal);
 
     expect(mocks.query).toHaveBeenCalledTimes(1);
     const [callArgs] = mocks.query.mock.calls[0] as [
@@ -345,7 +373,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     await new ClaudeAgentTool().call({ prompt: 'start Claude' });
     const turn = await captured.strategy?.launch?.(
       fakePorts(),
-      new AbortController(),
+      new AbortController().signal,
     );
     if (!turn) throw new Error('Expected a Claude turn result');
     captured.strategy?.publishUsage?.(turn);
@@ -508,7 +536,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     const ports = fakePorts();
     const firstTurn = await captured.strategy?.launch?.(
       ports,
-      new AbortController(),
+      new AbortController().signal,
     );
     if (!firstTurn) throw new Error('Expected a Claude fork turn');
     captured.strategy?.onTurnSuccess?.(firstTurn, {
@@ -517,7 +545,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     await captured.strategy?.runTurn?.(
       [{ text: 'continue the fork', origin: 'user' }],
       ports,
-      new AbortController(),
+      new AbortController().signal,
     );
 
     expect(mocks.query).toHaveBeenCalledTimes(2);
@@ -580,7 +608,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     const ports = fakePorts();
     const firstTurn = await captured.strategy?.launch?.(
       ports,
-      new AbortController(),
+      new AbortController().signal,
     );
     expect(firstTurn).toMatchObject({
       isError: true,
@@ -600,7 +628,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     await captured.strategy?.runTurn?.(
       [{ text: 'must not resume the source', origin: 'user' }],
       ports,
-      new AbortController(),
+      new AbortController().signal,
     );
     expect(mocks.query).toHaveBeenCalledTimes(2);
     expect(mocks.query.mock.calls[0]?.[0]).toMatchObject({

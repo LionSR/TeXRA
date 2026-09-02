@@ -3,13 +3,13 @@ import { LitElement } from 'lit';
 
 // Local imports - shared handlers
 import { COMMON_COMMANDS } from '@shared/ipc';
-import { logWarn } from '@shared/log';
 import { postMessage } from '@shared/hostBridge';
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
   type Theme,
 } from '@shared/schemas';
+import { SignalWatcher } from '@shared/signals';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 
 import type { ZodError } from 'zod';
@@ -62,7 +62,7 @@ function handleCommonMessage(
  * instead of `unknown`.
  */
 
-export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
+abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   protected debugMode = false;
 
   private readonly messageListener = (event: MessageEvent) => {
@@ -103,7 +103,7 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
     if (!this.debugMode) {
       return;
     }
-    logWarn(context, error);
+    console.warn(context, error);
   }
 
   /**
@@ -156,4 +156,18 @@ export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
    * The backend sends TMessage objects via postMessage (structured clone).
    */
   protected abstract handleMessage(message: TMessage): void;
+}
+
+/**
+ * `SignalWatcher(BaseWebviewApp<TMessage>)`, cast once here instead of at
+ * each of the three view-root components: `BaseWebviewApp` is abstract, but
+ * `SignalWatcher` expects a concrete constructor. Safe because every app
+ * subclass implements the abstract members before `@customElement` runs.
+ */
+export function signalWatcherWebviewAppBase<TMessage = unknown>() {
+  return SignalWatcher(
+    BaseWebviewApp as unknown as new (
+      ...args: any[]
+    ) => BaseWebviewApp<TMessage>,
+  );
 }

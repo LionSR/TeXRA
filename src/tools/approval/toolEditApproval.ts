@@ -352,17 +352,16 @@ export function buildApprovalRejectedResult(
   rejection: ToolEditRejectionProvenance,
 ): ToolResult {
   const feedback = rejection.feedback?.trim();
-  const isPolicyDenial = rejection.reason !== undefined;
-  const isAutomaticCancellation = 'cause' in rejection;
   const reason = rejection.reason?.trim();
   const cause = rejection.cause?.trim();
-  let summary = `User rejected ${sourceTool} for ${path}.`;
-  if (isPolicyDenial) {
-    summary = `Tool edit denied: ${sourceTool} for ${path}.`;
-  }
   // Cancellation outranks policy denial in the summary.
-  if (isAutomaticCancellation) {
+  let summary: string;
+  if ('cause' in rejection) {
     summary = `Tool edit approval cancelled: ${sourceTool} for ${path}.`;
+  } else if (rejection.reason !== undefined) {
+    summary = `Tool edit denied: ${sourceTool} for ${path}.`;
+  } else {
+    summary = `User rejected ${sourceTool} for ${path}.`;
   }
   const details = [reason, cause].filter(isNonEmptyString);
   const error =

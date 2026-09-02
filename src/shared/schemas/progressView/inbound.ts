@@ -24,11 +24,8 @@ import {
   InquirySubmitActionSchema,
 } from '../inquiry';
 import { AgentProposalSchema, UserQuestionAnswersSchema } from '../prompts';
-import {
-  StreamScopedBaseSchema,
-  StreamSelectionSchema,
-  streamScopedCommand,
-} from './data';
+import { StreamSelectionSchema } from '../identifiers';
+import { StreamScopedBaseSchema, streamScopedCommand } from './data';
 import { GettingStartedActionSchema } from '../mainView/state';
 import { ExhaustionReasonSchema } from '../errors';
 
@@ -62,6 +59,17 @@ function actionWithFeedback<Base extends z.ZodRawShape, Action extends string>(
     action: z.literal(action),
     feedback: z.string().optional(),
   });
+}
+
+/**
+ * Base fields for an approval-action discriminated union: the command literal
+ * plus the request being answered.
+ */
+function approvalActionBase<T extends string>(command: T) {
+  return {
+    command: z.literal(command),
+    requestId: z.string().min(1),
+  };
 }
 
 const UseOwnApiKeyMessageSchema = StreamScopedBaseSchema.extend({
@@ -131,10 +139,9 @@ const CancelRetryRequestMessageSchema = StreamScopedBaseSchema.extend({
   requestId: z.string(),
 });
 
-const ToolEditActionMessageBase = {
-  command: z.literal(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION),
-  requestId: z.string().min(1),
-};
+const ToolEditActionMessageBase = approvalActionBase(
+  PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+);
 const ToolEditApprovalActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({
     ...ToolEditActionMessageBase,
@@ -143,10 +150,9 @@ const ToolEditApprovalActionMessageSchema = z.discriminatedUnion('action', [
   actionWithFeedback(ToolEditActionMessageBase, 'reject'),
 ]);
 
-const BashActionMessageBase = {
-  command: z.literal(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION),
-  requestId: z.string().min(1),
-};
+const BashActionMessageBase = approvalActionBase(
+  PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
+);
 const BashApprovalActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({
     ...BashActionMessageBase,
@@ -155,10 +161,9 @@ const BashApprovalActionMessageSchema = z.discriminatedUnion('action', [
   actionWithFeedback(BashActionMessageBase, 'reject'),
 ]);
 
-const ProposalActionMessageBase = {
-  command: z.literal(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION),
-  requestId: z.string().min(1),
-};
+const ProposalActionMessageBase = approvalActionBase(
+  PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+);
 const AgentProposalActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({
     ...ProposalActionMessageBase,
@@ -176,10 +181,9 @@ export type ProgressAgentProposalActionMessage = z.infer<
   typeof AgentProposalActionMessageSchema
 >;
 
-const PlanActionMessageBase = {
-  command: z.literal(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION),
-  requestId: z.string().min(1),
-};
+const PlanActionMessageBase = approvalActionBase(
+  PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
+);
 const PlanApprovalActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({
     ...PlanActionMessageBase,
@@ -203,10 +207,9 @@ const ExternalInquiryActionMessageSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-const UserQuestionActionMessageBase = {
-  command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),
-  requestId: z.string().min(1),
-};
+const UserQuestionActionMessageBase = approvalActionBase(
+  PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION,
+);
 
 const UserQuestionActionMessageSchema = z.discriminatedUnion('action', [
   z.strictObject({

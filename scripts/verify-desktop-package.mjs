@@ -6,6 +6,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
+  reportCheckFailures,
   requiredMonacoWorkers,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -638,11 +639,7 @@ if (!app) {
   }
 }
 
-if (failures.length > 0) {
-  console.error('Desktop package check failed:');
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
+reportCheckFailures('Desktop package check', failures);
 
 const summary = [
   `Desktop package check passed for ${app.label}`,

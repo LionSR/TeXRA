@@ -81,6 +81,7 @@ export const latexTabStyles: CSSResult = css`
     font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
+    overflow-wrap: anywhere;
   }
 
   .dependency-install-actions {
@@ -98,9 +99,9 @@ export const latexTabStyles: CSSResult = css`
     font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    direction: ltr;
+    overflow-wrap: anywhere;
+    unicode-bidi: isolate;
   }
 
   /* The shared settings banner owns the callout; this view only lets the
@@ -160,6 +161,10 @@ export const latexTabStyles: CSSResult = css`
     margin-top: var(--wa-space-2xs);
     color: var(--color-status-error);
     font-size: var(--font-size-sm);
+  }
+
+  .replacement-json-error:empty {
+    display: none;
   }
 
   .setting-config-key {

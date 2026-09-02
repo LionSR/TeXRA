@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import process from 'node:process';
 
 import { walkFiles } from './walkFiles.mjs';
 
@@ -15,6 +16,14 @@ export const requiredMonacoWorkers = [
 
 export function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+/** Print accumulated failures under `label` and exit(1); no-op when empty. */
+export function reportCheckFailures(label, failures) {
+  if (failures.length === 0) return;
+  console.error(`${label} failed:`);
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
 }
 
 /** Return recursive file paths with stable VSIX-compatible separators. */

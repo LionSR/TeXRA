@@ -36,9 +36,7 @@ export function deviceCodeAuthorized<T>(value: T): DeviceCodePollAuthorized<T> {
 export function deviceCodePending(
   intervalDeltaMs?: number,
 ): DeviceCodePollPending {
-  return intervalDeltaMs === undefined
-    ? { ok: false }
-    : { ok: false, intervalDeltaMs };
+  return { ok: false, intervalDeltaMs };
 }
 
 interface DeviceCodePollOptions<T> {
@@ -70,6 +68,13 @@ interface DeviceCodePollOptions<T> {
   readonly checkDeadlineBeforeSleep?: boolean;
 }
 
+function defaultSleepWithSignal(
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  return defaultSleep(ms, undefined, { signal });
+}
+
 /**
  * Poll until {@link DeviceCodePollOptions.attempt} authorizes, the deadline
  * elapses, the signal aborts, or a hard error is thrown.
@@ -78,10 +83,7 @@ export async function pollUntilDeviceAuthorized<T>(
   options: DeviceCodePollOptions<T>,
 ): Promise<T> {
   const now = options.now ?? Date.now;
-  const sleep =
-    options.sleep ??
-    ((ms: number, signal?: AbortSignal) =>
-      defaultSleep(ms, undefined, { signal }));
+  const sleep = options.sleep ?? defaultSleepWithSignal;
   const checkBefore = options.checkDeadlineBeforeSleep ?? true;
   let intervalMs = options.intervalMs;
 

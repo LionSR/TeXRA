@@ -206,10 +206,7 @@ export interface ChildRunStrategy<TTurn> {
   readonly deliveryMode?: 'persistOnly';
 
   /** Produce the first turn's outcome. Throws on hard failure. */
-  launch(
-    ports: ChildRunPorts,
-    abortController: AbortController,
-  ): Promise<TTurn>;
+  launch(ports: ChildRunPorts, signal: AbortSignal): Promise<TTurn>;
 
   /**
    * Produce the next turn's outcome from the queued follow-up batch. Throws
@@ -223,7 +220,7 @@ export interface ChildRunStrategy<TTurn> {
   runTurn?(
     followUps: readonly FollowUpQueueBatchItem[],
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
   ): Promise<TTurn>;
 
   /** True when `turn` ends this child's run — no further turns follow. */
@@ -282,11 +279,10 @@ export interface ChildRunStrategy<TTurn> {
   ): ResultMeta | undefined | Promise<ResultMeta | undefined>;
 
   /**
-   * Where a turn's delivery should be sent. Defaults to the run's static
-   * `parentStreamId` when omitted. Native strategies track the live run
-   * handle's `deliveryTargetStreamId`, which goes `undefined` once the child
-   * is detached from its orchestrator (see `AgentExecutionHandle.detach`), so
-   * a detached child's results stop routing to the old parent.
+   * Where a turn's delivery should be sent. Native strategies track their
+   * per-turn handle directly. Child-stream loops omit this and the driver reads
+   * their persistent handle's live `deliveryTargetStreamId`, which goes
+   * `undefined` once the child is detached from its orchestrator.
    */
   resolveDeliveryTarget?(): StreamTabId | undefined;
 
@@ -361,11 +357,6 @@ export interface ChildRunLoopParams<TTurn> {
   readonly afterArtifactsDrained?: () => void | Promise<void>;
 }
 
-export interface ChildRunLoopHandle {
-  /** Settles after terminal delivery, finalization, and artifact release. */
-  readonly completion: Promise<void>;
-}
-
 /**
  * Interrupt handler attached to the child's execution handle for the child's
  * whole lifetime, so the stop button always finds a live target — including
@@ -376,18 +367,15 @@ export interface ChildRunLoopHandle {
  * path, which joins this loop's live lease instead of creating a competing
  * continuation.
  *
- * `interrupt()` additionally delegates into a live native turn's flow
- * context, when one is currently attached. `handle.getToolUseFlow()` is the
- * one place a currently-running turn's real interrupt reaches.
+ * A running turn is reached through `signal` alone: every strategy binds the
+ * turn it launches to it, and a native turn's flow subscribes to its own run
+ * signal downstream of that binding.
  */
 class ChildRunInterruptible implements ExecutionInterruptHandler {
   private readonly controller = new AbortController();
   private queue: FollowUpQueue | null = null;
-  private turnAbortController: AbortController | null = null;
 
   constructor(
-    private readonly session: SessionHandle,
-    private readonly childStreamId: StreamTabId,
     /**
      * Only a strategy that declares `ownsBackgroundProcess` sets this: a
      * loop-level handler for an agent child must stay invisible to shutdown
@@ -399,11 +387,6 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
   interrupt(): void {
     this.controller.abort();
     this.queue?.cancelWait();
-    this.turnAbortController?.abort();
-    const handle = this.session.executions.getAgentHandleByStream(
-      this.childStreamId,
-    );
-    handle?.getToolUseFlow()?.interrupt();
   }
 
   setQueue(q: FollowUpQueue): void {
@@ -414,17 +397,13 @@ class ChildRunInterruptible implements ExecutionInterruptHandler {
     return this.controller.signal.aborted;
   }
 
+  /**
+   * The one cancellation signal every turn of this child runs under. No turn
+   * starts after an interrupt (the loop checks `isInterrupted()` first), so a
+   * per-turn controller would only ever mirror this one.
+   */
   get signal(): AbortSignal {
     return this.controller.signal;
-  }
-
-  startTurn(): AbortController {
-    this.turnAbortController = new AbortController();
-    return this.turnAbortController;
-  }
-
-  finishTurn(): void {
-    this.turnAbortController = null;
   }
 }
 
@@ -458,14 +437,13 @@ type TurnAttempt<TTurn> =
  */
 async function attemptTurn<TTurn>(
   strategy: ChildRunStrategy<TTurn>,
-  runner: (abortController: AbortController) => Promise<TTurn>,
+  runner: (signal: AbortSignal) => Promise<TTurn>,
   loop: ChildRunInterruptible,
   logger: AgentTrace,
-  abortController: AbortController,
   startedAt: number,
 ): Promise<TurnAttempt<TTurn>> {
   try {
-    const turn = await runner(abortController);
+    const turn = await runner(loop.signal);
     logTurnSummary(logger, Date.now() - startedAt, strategy.getUsage?.(turn));
     const turnIsError = strategy.isTurnError?.(turn) === true;
     if (turnIsError) {
@@ -474,17 +452,11 @@ async function attemptTurn<TTurn>(
     return { kind: 'completed', turn, turnIsError };
   } catch (caught) {
     // A clean, caller-initiated interruption maps to `interrupted`.
-    if (
-      abortController.signal.aborted ||
-      loop.isInterrupted() ||
-      isUserAbort(caught)
-    ) {
+    if (loop.isInterrupted() || isUserAbort(caught)) {
       return { kind: 'interrupted' };
     }
     logger.error(toErrorMessage(caught));
     return { kind: 'failed', err: caught };
-  } finally {
-    loop.finishTurn();
   }
 }
 
@@ -521,18 +493,6 @@ function turnDeliveryId(turnRef: ChildTurnRef): string {
  * Why the child-run loop stopped, for the structured termination diagnostic.
  */
 type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
-
-/**
- * Resolve the loop's termination cause without a nested ternary.
- */
-function resolveLoopTerminationCause(
-  interrupted: boolean,
-  turnFailed: boolean,
-): ChildLoopTerminationCause {
-  if (interrupted) return 'interrupted';
-  if (turnFailed) return 'turn_failed';
-  return 'terminal';
-}
 
 /**
  * Structured turn-lifecycle diagnostic (#9531): ties the execution, the turn's
@@ -587,19 +547,18 @@ async function persistTurnStateBestEffort(
 }
 
 /**
- * Where this turn's output goes. A strategy without `resolveDeliveryTarget`
- * (agent-CLI) always delivers to the run's static parent. A strategy that HAS
- * one (native) may return `undefined` — meaning the child was detached from its
- * orchestrator (see `AgentExecutionHandle.detach`) — which must skip delivery
- * entirely, not silently fall back to the old parent.
+ * Where this turn's output goes. Native strategies resolve their per-turn
+ * handle; child-stream loops receive their persistent handle's live target.
+ * Either may return `undefined` after detachment, which must skip delivery
+ * entirely rather than silently falling back to the old parent.
  */
 function resolveDeliveryTarget<TTurn>(
   strategy: ChildRunStrategy<TTurn>,
-  parentStreamId: StreamTabId,
+  resolveChildStreamTarget: () => StreamTabId | undefined,
 ): StreamTabId | undefined {
   return strategy.resolveDeliveryTarget
     ? strategy.resolveDeliveryTarget()
-    : parentStreamId;
+    : resolveChildStreamTarget();
 }
 
 /**
@@ -612,8 +571,24 @@ function resolveDeliveryTarget<TTurn>(
  * another turn (no finalize pending) may wake immediately.
  */
 interface PendingChildDelivery {
-  readonly targetStreamId: StreamTabId;
+  readonly resolveTargetStreamId: () => StreamTabId | undefined;
   readonly followUp: FollowUpQueueInput;
+}
+
+/**
+ * A turn result with nowhere to go: the child detached from its orchestrator,
+ * so the report slot is the only place the outcome survives. Shared by the
+ * enqueue site and the deferred wake site, which resolve the target at
+ * different times.
+ */
+function warnDetachedChildDelivery(
+  logger: AgentTrace,
+  executionId: ExecutionId,
+): void {
+  logger.warn(
+    'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
+    { data: { executionId } },
+  );
 }
 
 /**
@@ -627,7 +602,6 @@ interface PendingChildDelivery {
 async function deliverTurn<TTurn>(params: {
   strategy: ChildRunStrategy<TTurn>;
   executionId: ExecutionId;
-  parentStreamId: StreamTabId;
   logger: AgentTrace;
   turn: TTurn | null;
   turnRef: ChildTurnRef;
@@ -635,6 +609,7 @@ async function deliverTurn<TTurn>(params: {
   wallTimeMs: number;
   isError: boolean;
   prepareParentDelivery?: () => boolean;
+  resolveDefaultDeliveryTarget: () => StreamTabId | undefined;
   /** Serializes turn-state writes against the acceptance write (#9531). */
   turnStateWrites: PQueue;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
@@ -642,7 +617,6 @@ async function deliverTurn<TTurn>(params: {
   const {
     strategy,
     executionId,
-    parentStreamId,
     logger,
     turn,
     turnRef,
@@ -650,6 +624,7 @@ async function deliverTurn<TTurn>(params: {
     wallTimeMs,
     isError,
     prepareParentDelivery,
+    resolveDefaultDeliveryTarget,
   } = params;
   const delivered = turn != null && !isError;
   const msg = await (delivered
@@ -703,17 +678,15 @@ async function deliverTurn<TTurn>(params: {
 
   if (strategy.deliveryMode === 'persistOnly') return undefined;
 
-  const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
-  if (!targetStreamId) {
-    logger.warn(
-      'Turn result not delivered: child was detached from its orchestrator. The result remains in the execution report.',
-      { data: { executionId } },
-    );
+  const resolveTargetStreamId = (): StreamTabId | undefined =>
+    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
+  if (!resolveTargetStreamId()) {
+    warnDetachedChildDelivery(logger, executionId);
     return undefined;
   }
   if (prepareParentDelivery?.() === false) return undefined;
   return {
-    targetStreamId,
+    resolveTargetStreamId,
     followUp: {
       text: msg,
       origin: 'subagent_result',
@@ -733,8 +706,13 @@ async function submitPendingDelivery(
   logger: AgentTrace,
 ): Promise<void> {
   if (!pending) return;
+  const targetStreamId = pending.resolveTargetStreamId();
+  if (!targetStreamId) {
+    warnDetachedChildDelivery(logger, executionId);
+    return;
+  }
   const delivery = await deliverChildRunFollowUp({
-    targetStreamId: pending.targetStreamId,
+    targetStreamId,
     followUp: pending.followUp,
     session,
   });
@@ -744,7 +722,7 @@ async function submitPendingDelivery(
       {
         data: {
           executionId,
-          parentStreamId: pending.targetStreamId,
+          parentStreamId: targetStreamId,
           reason: delivery.reason,
         },
       },
@@ -752,7 +730,7 @@ async function submitPendingDelivery(
   } else if (delivery.wake === 'failed') {
     logger.warn(
       'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { executionId, parentStreamId: pending.targetStreamId } },
+      { data: { executionId, parentStreamId: targetStreamId } },
     );
   }
 }
@@ -766,7 +744,7 @@ async function submitPendingDelivery(
  */
 export function startChildRunLoop<TTurn>(
   params: ChildRunLoopParams<TTurn>,
-): ChildRunLoopHandle {
+): Promise<void> {
   const {
     childStream,
     childStreamId,
@@ -785,24 +763,26 @@ export function startChildRunLoop<TTurn>(
   assertOwnedExecutionLease(executionId);
   const runSession = currentSession();
   const loop = new ChildRunInterruptible(
-    runSession,
-    childStreamId,
     strategy.ownsBackgroundProcess === true,
   );
-  // The parent counts this child as active from here until the final delivery
-  // below has landed, whatever turn handles come and go in between: a child
-  // result can therefore never reach a parent whose queue already went terminal.
+  // Native children have no persistent child-stream handle between turns, so
+  // retain their parent lineage until final delivery. Child-stream loops own
+  // their lifecycle through that stream instead; reserving parent delivery for
+  // them would make a terminal parent look recoverable after it can no longer
+  // accept either user input or the child's result.
   let activationDetached = false;
-  const releaseChildActivation = runSession.executions.reserveChildActivation({
-    executionId,
-    parentStreamId,
-    childStreamId,
-    interrupt: () => loop.interrupt(),
-    detach: () => {
-      activationDetached = true;
-    },
-    isDetached: () => activationDetached,
-  });
+  const releaseChildActivation = childStream
+    ? () => undefined
+    : runSession.executions.reserveChildActivation({
+        executionId,
+        parentStreamId,
+        childStreamId,
+        interrupt: () => loop.interrupt(),
+        detach: () => {
+          activationDetached = true;
+        },
+        isDetached: () => activationDetached,
+      });
   let sessionOwnershipReleased = false;
   const releaseSessionOwnershipOnce = (): void => {
     if (sessionOwnershipReleased) return;
@@ -872,6 +852,12 @@ export function startChildRunLoop<TTurn>(
   }
 
   const attemptId = randomUUID();
+  // Keep the child-stream handle itself, not a target snapshot. Finalization
+  // untracks the handle before terminal delivery, while detachment still
+  // mutates this object's live delivery target.
+  const childStreamHandle = childStream
+    ? runSession.executions.getHandle(executionId)
+    : undefined;
 
   let bestCostUsd: number | undefined;
   const ports: ChildRunPorts = {
@@ -881,7 +867,11 @@ export function startChildRunLoop<TTurn>(
         return;
       }
       if (strategy.deliveryMode === 'persistOnly' || activationDetached) return;
-      const targetStreamId = resolveDeliveryTarget(strategy, parentStreamId);
+      const targetStreamId = resolveDeliveryTarget(strategy, () =>
+        childStream
+          ? childStreamHandle?.deliveryTargetStreamId
+          : parentStreamId,
+      );
       if (!targetStreamId) return;
       const msg = formatSubagentProgress(executionId, agentName, update);
       void deliverChildRunFollowUp({
@@ -912,26 +902,26 @@ export function startChildRunLoop<TTurn>(
   // docs/proposals/2026-08-15-child-run-concurrency-budget.md).
   const budget = params.budgeted ? childRunBudgetFor(runSession) : undefined;
   const gateTurn = (
-    base: (ac: AbortController) => Promise<TTurn>,
-  ): ((ac: AbortController) => Promise<TTurn>) =>
+    base: (signal: AbortSignal) => Promise<TTurn>,
+  ): ((signal: AbortSignal) => Promise<TTurn>) =>
     budget === undefined
       ? base
-      : (ac) =>
+      : (signal) =>
           budget.add(
             () => {
               // A turn cancelled while awaiting a slot must not start fresh
               // model work; the loop classifies this throw as interrupted.
-              if (loop.isInterrupted() || ac.signal.aborted) {
+              if (signal.aborted) {
                 throw new Error(
                   'Child run turn cancelled while awaiting a concurrency slot.',
                 );
               }
-              return base(ac);
+              return base(signal);
             },
             // Settle a queued turn the moment it is cancelled: without the
             // signal, an aborted task blocks here until a budget slot frees
             // and only then observes the abort above.
-            { signal: ac.signal },
+            { signal },
           ) as Promise<TTurn>;
 
   let runStarted = false;
@@ -944,8 +934,8 @@ export function startChildRunLoop<TTurn>(
     // masks a primary body or finalize failure (which stays the thrown
     // error, with the release failure logged as secondary).
     let releaseFailure: unknown;
-    let runner: (ac: AbortController) => Promise<TTurn> = (ac) =>
-      strategy.launch(ports, ac);
+    let runner: (signal: AbortSignal) => Promise<TTurn> = (signal) =>
+      strategy.launch(ports, signal);
     // Turn identity (#9531): each accepted turn mints a stable token (its
     // delivery id is derived at the enqueue site) and records itself active
     // before running; the latest completed turn is carried forward so an
@@ -979,13 +969,11 @@ export function startChildRunLoop<TTurn>(
           ),
         );
         const startedAt = Date.now();
-        const abortController = loop.startTurn();
         const attempt = await attemptTurn(
           strategy,
           gateTurn(runner),
           loop,
           logger,
-          abortController,
           startedAt,
         );
         attachLoopInterrupt();
@@ -1005,7 +993,10 @@ export function startChildRunLoop<TTurn>(
         const delivery = await deliverTurn({
           strategy,
           executionId,
-          parentStreamId,
+          resolveDefaultDeliveryTarget: () =>
+            childStream
+              ? childStreamHandle?.deliveryTargetStreamId
+              : parentStreamId,
           logger,
           turn,
           turnRef,
@@ -1070,7 +1061,7 @@ export function startChildRunLoop<TTurn>(
         if (!batch || loop.isInterrupted()) break;
 
         const nextRunTurn = strategy.runTurn;
-        runner = (ac) => nextRunTurn(batch.items, ports, ac);
+        runner = (signal) => nextRunTurn(batch.items, ports, signal);
         childStream?.beginTurn();
       }
     } catch (error) {
@@ -1091,13 +1082,16 @@ export function startChildRunLoop<TTurn>(
       // acceptance record cannot land after the retry's newer turn state.
       await turnStateWrites.onIdle();
       detachLoopInterrupt?.();
+      let terminationCause: ChildLoopTerminationCause = 'terminal';
+      if (loop.isInterrupted()) {
+        terminationCause = 'interrupted';
+      } else if (sawTurnFailure) {
+        terminationCause = 'turn_failed';
+      }
       emitTurnDiagnostic(logger, 'loop.terminated', {
         executionId,
         queueOwner: queueLease,
-        interruptionCause: resolveLoopTerminationCause(
-          loop.isInterrupted(),
-          sawTurnFailure,
-        ),
+        interruptionCause: terminationCause,
       });
       if (queueLease) runSession.followUps.release(queueLease, 'terminal');
       releaseSessionOwnershipOnce();
@@ -1236,12 +1230,10 @@ export function startChildRunLoop<TTurn>(
   } catch (error) {
     throw unwindSetup(error);
   }
-  return {
-    completion: completion.catch((error: unknown) => {
-      // Refused before `run` began (the registry disposed, or a storage-root
-      // change holds the lifecycle): `run`'s own unwinding never ran.
-      if (runStarted) throw error;
-      throw unwindSetup(error);
-    }),
-  };
+  return completion.catch((error: unknown) => {
+    // Refused before `run` began (the registry disposed, or a storage-root
+    // change holds the lifecycle): `run`'s own unwinding never ran.
+    if (runStarted) throw error;
+    throw unwindSetup(error);
+  });
 }

@@ -21,8 +21,8 @@ import {
   type WorkflowScriptRunResult,
 } from './types';
 
-// v4: journal identity is the content key; v3 records could hold one key at
-// two indices after script drift and fail loudly rather than being translated.
+// v4: journal identity is the content key. Index is only the last matched
+// invocation position, so stale v4 journals may legitimately repeat it.
 const WORKFLOW_SCRIPT_CHECKPOINT_SCHEMA_VERSION = 4;
 
 const PersistedJsonValueSchema = z.discriminatedUnion('kind', [
@@ -202,9 +202,10 @@ async function runPersistedWorkflowScriptLocked(
   // and args, keep the journal: an entry replays only on a matching
   // prompt/execution-options hash, so drifted calls re-execute while
   // presentation-only edits, unchanged calls, and calls that merely moved
-  // stay free. The union is monotone by key — a re-visited key overwrites
-  // its entry (and its position); entries this run never reached remain, so
-  // an args-driven branch taken again later still replays.
+  // stay free. Keep the key union while this invocation is running so a
+  // crash can resume prior branches and newly completed work together. A
+  // successful invocation replaces that recovery union with its own bounded
+  // journal below.
   const script = requestedScript ?? prior?.script;
   if (script === undefined) {
     throw new Error(
@@ -266,6 +267,9 @@ async function runPersistedWorkflowScriptLocked(
     // checkpoint store may belong to its orchestrator.
     onJournalEntry: persistEntry,
   });
+  // Success makes this invocation authoritative. Replace the recovery union
+  // atomically so superseded revisions cannot grow the durable cache forever.
+  journalByKey.clear();
   for (const entry of result.journal) journalByKey.set(entry.key, entry);
   await persistCheckpoint();
   return result;

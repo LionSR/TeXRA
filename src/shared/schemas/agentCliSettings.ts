@@ -11,12 +11,10 @@ function parseEnumSetting<T extends string>(
   values: readonly T[],
   fallback: T,
 ): (raw: unknown) => T {
-  const known = values as readonly string[];
-  return (raw: unknown): T => {
-    if (typeof raw !== 'string') return fallback;
-    if (known.includes(raw)) return raw as T;
-    return fallback;
-  };
+  return (raw: unknown): T =>
+    typeof raw === 'string' && (values as readonly string[]).includes(raw)
+      ? (raw as T)
+      : fallback;
 }
 
 /** Valid Codex sandbox modes. */
@@ -66,7 +64,7 @@ export const parseCodexApprovalPolicy = parseEnumSetting(
 /** Claude Code CLI model options surfaced in the picker. */
 export const ClaudeAgentModelSchema = z.enum([
   'claude-sonnet-5',
-  'claude-fable-5',
+  'claude-fable-5-1',
   'claude-opus-5',
   'claude-haiku-4-5-20251001',
 ]);
@@ -74,10 +72,27 @@ export type ClaudeAgentModel = z.infer<typeof ClaudeAgentModelSchema>;
 
 export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-5';
 
-export const parseClaudeAgentModel = parseEnumSetting(
+const parseClaudeAgentModelEnum = parseEnumSetting(
   ClaudeAgentModelSchema.options,
   CLAUDE_AGENT_DEFAULT_MODEL,
 );
+
+/**
+ * Claude Fable 5 was retired in favor of Fable 5.1 (identical specs/pricing,
+ * cheaper cache reads). Map a previously-persisted `claude-fable-5` forward
+ * instead of letting the enum parser silently discard it back to the
+ * default -- `readSetting` runs this before `schema.safeParse`, so an
+ * unmapped legacy id would already look "valid" by the time the loud
+ * invalid-value warning path could fire.
+ *
+ * Introduced 2026-09-01. Per AGENTS.md's compatibility-retirement policy,
+ * this branch (and its regression test) may be removed three months after
+ * Fable 5.1 shipped, i.e. on or after 2026-12-01.
+ */
+export function parseClaudeAgentModel(raw: unknown): ClaudeAgentModel {
+  if (raw === 'claude-fable-5') return 'claude-fable-5-1';
+  return parseClaudeAgentModelEnum(raw);
+}
 
 /** Claude Code CLI permission modes exposed in settings. */
 export const ClaudeAgentPermissionModeSchema = z.enum([

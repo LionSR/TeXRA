@@ -8,7 +8,7 @@ import {
   externalInquiryQuestionRowsBudget,
 } from '@cli/chat/tui/modals/ExternalInquiry';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
-import { textInputDisplayWindow } from '@cli/chat/tui/input/BaseTextInput';
+import { textInputDisplayWindow } from '@cli/chat/tui/input/textInputDisplay';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';

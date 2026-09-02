@@ -34,7 +34,7 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { isKnownUnsupported } from '@shared/utils/dispatcher';
-import { AGENT_DECORATORS } from '@shared/utils/icons';
+import { AGENT_DECORATORS } from '@shared/wa/icons';
 import { getBasename, groupBy } from '@utils/core';
 
 // Local imports - shared schemas and events
@@ -122,6 +122,12 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   }
 
   private handleListKeydown(event: KeyboardEvent): void {
+    if (
+      !(event.target as HTMLElement | null)?.closest('.agent-list-item-select')
+    ) {
+      return;
+    }
+
     const items = this.displayOrder;
     if (items.length === 0) return;
 
@@ -152,7 +158,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
       this.selectAgent(items[nextIndex]);
       requestAnimationFrame(() => {
         const el = this.shadowRoot?.querySelector(
-          '.agent-list-item.selected',
+          '.agent-list-item-select[aria-current="true"]',
         ) as HTMLElement | null;
         el?.focus();
       });
@@ -170,33 +176,15 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
   private renderListItem(agent: AgentSelectionItem): TemplateResult {
     const key = agentKey(agent);
     const isSelected = this.selectedKey === key;
-    const { tone, badge } = sourceMeta(agent.source);
+    const { badge } = sourceMeta(agent.source);
 
     return html`
       <div
         class=${classMap({
           'agent-list-item': true,
-          'focus-ring-inset': true,
           selected: isSelected,
         })}
-        data-source=${tone}
-        role="option"
-        aria-selected=${isSelected}
-        tabindex=${isSelected ? '0' : '-1'}
-        @click=${() => this.selectAgent(agent)}
-        @keydown=${(e: KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            // Ignore Enter/Space that bubbled out of the nested wa-switch —
-            // it owns its own activation and must not also select the row
-            // (same guard as the preset cards in MultiAgentTab).
-            if ((e.target as HTMLElement | null)?.closest('wa-switch')) {
-              return;
-            }
-            e.preventDefault();
-            this.selectAgent(agent);
-          }
-        }}
-        title=${agent.description ?? agent.name}
+        role="listitem"
       >
         <wa-switch
           class="agent-list-item-toggle"
@@ -220,18 +208,48 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
             >Show ${agent.name} in agent selector</span
           >
         </wa-switch>
-        <span class="agent-list-item-name">${agent.name}</span>
-        <span class="agent-list-item-badges">
-          ${
-            badge
-              ? html`<span title="${badge.label} agent"
-                  >${waIcon(badge.icon, { label: `${badge.label} agent` })}</span
-                >`
-              : nothing
-          }
-        </span>
+        <button
+          class="agent-list-item-select focus-ring-inset"
+          type="button"
+          aria-current=${isSelected ? 'true' : nothing}
+          aria-controls="${this.category}-agent-detail"
+          tabindex=${isSelected ? '0' : '-1'}
+          @click=${() => this.selectAgent(agent)}
+          title=${agent.description ?? agent.name}
+        >
+          <bdi class="agent-list-item-name" dir="auto">${agent.name}</bdi>
+          <span class="agent-list-item-badges">
+            ${
+              badge
+                ? html`<span title="${badge.label} agent"
+                    >${waIcon(badge.icon, {
+                      label: `${badge.label} agent`,
+                    })}</span
+                  >`
+                : nothing
+            }
+          </span>
+        </button>
       </div>
     `;
+  }
+
+  private renderSetAllButton(
+    source: AgentSource,
+    sourceName: string,
+    enable: boolean,
+  ): TemplateResult {
+    const verb = enable ? 'Show' : 'Hide';
+    return html`<wa-button
+      class="agent-count-link btn-ghost is-link"
+      appearance="plain"
+      size="s"
+      @click=${() => this.handleSetAllEnabled(source, enable)}
+      title="${verb} all ${sourceName} agents"
+    >
+      ${verb} all
+      <span class="visually-hidden">${sourceName} agents</span>
+    </wa-button>`;
   }
 
   private renderList(): TemplateResult {
@@ -243,53 +261,34 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
     return html`
       <div
         class="agent-list-pane"
-        role="listbox"
-        aria-label="Agent list"
-        @keydown=${(e: KeyboardEvent) => this.handleListKeydown(e)}
+        role="region"
+        aria-label="Agents"
+        @keydown=${this.handleListKeydown}
       >
         ${orderedSources.map((source) => {
           const agents = groups.get(source)!;
           const enabledInGroup = agents.filter((a) => a.enabled).length;
           const sourceName = sourceMeta(source).displayName;
+          const headingId = `${this.category}-${source}-agents-heading`;
           return html`
-            <div class="agent-list-section-header">
+            <div class="agent-list-section-header" id=${headingId}>
               <span>${sourceName}</span>
               <span class="agent-list-section-actions">
                 ${
                   enabledInGroup < agents.length
-                    ? html`<wa-button
-                        class="agent-count-link btn-ghost is-link"
-                        appearance="plain"
-                        size="s"
-                        @click=${() => this.handleSetAllEnabled(source, true)}
-                        title="Show all ${sourceName} agents"
-                      >
-                        Show all
-                        <span class="visually-hidden"
-                          >${sourceName} agents</span
-                        >
-                      </wa-button>`
+                    ? this.renderSetAllButton(source, sourceName, true)
                     : nothing
                 }
                 ${
                   enabledInGroup > 0
-                    ? html`<wa-button
-                        class="agent-count-link btn-ghost is-link"
-                        appearance="plain"
-                        size="s"
-                        @click=${() => this.handleSetAllEnabled(source, false)}
-                        title="Hide all ${sourceName} agents"
-                      >
-                        Hide all
-                        <span class="visually-hidden"
-                          >${sourceName} agents</span
-                        >
-                      </wa-button>`
+                    ? this.renderSetAllButton(source, sourceName, false)
                     : nothing
                 }
               </span>
             </div>
-            ${agents.map((a) => this.renderListItem(a))}
+            <div role="list" aria-labelledby=${headingId}>
+              ${agents.map((a) => this.renderListItem(a))}
+            </div>
           `;
         })}
       </div>
@@ -404,9 +403,15 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
     const { displayName, badge } = sourceMeta(agent.source);
 
     return html`
-      <div class="agent-detail-pane">
+      <section
+        class="agent-detail-pane"
+        id="${this.category}-agent-detail"
+        aria-labelledby="${this.category}-agent-detail-name"
+      >
         <div class="agent-detail-header">
-          <h3 class="agent-detail-name">${agent.name}</h3>
+          <h3 class="agent-detail-name" id="${this.category}-agent-detail-name">
+            <bdi dir="auto">${agent.name}</bdi>
+          </h3>
           <wa-tag variant="neutral" size="s" title="${displayName} agent"
             >${badge ? html`${waIcon(badge.icon)} ` : nothing}${displayName}</wa-tag
           >
@@ -414,7 +419,7 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
         ${
           agent.description
-            ? html`<div class="agent-detail-description">
+            ? html`<div class="agent-detail-description" dir="auto">
                 ${agent.description}
               </div>`
             : nothing
@@ -422,22 +427,22 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
         ${
           agent.filePath
             ? html`<div class="agent-detail-path" title=${agent.filePath}>
-                ${getBasename(agent.filePath)}
+                <bdi dir="auto">${getBasename(agent.filePath)}</bdi>
               </div>`
             : nothing
         }
 
-        <div class="agent-detail-meta">
-          <span class="agent-detail-meta-label">Shown in agent selector</span>
-          <span class="agent-detail-meta-value">
+        <dl class="agent-detail-meta">
+          <dt class="agent-detail-meta-label">Shown in agent selector</dt>
+          <dd class="agent-detail-meta-value">
             ${agent.enabled ? 'Yes' : 'No'}
-          </span>
+          </dd>
 
           ${
             agent.tools?.length
               ? html`
-                  <span class="agent-detail-meta-label">Tools</span>
-                  <div class="agent-detail-meta-value">
+                  <dt class="agent-detail-meta-label">Tools</dt>
+                  <dd class="agent-detail-meta-value">
                     <div class="agent-detail-tools">
                       ${agent.tools.map(
                         (t) =>
@@ -445,20 +450,20 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
                             class="agent-tool-badge"
                             variant="neutral"
                             size="s"
-                            >${t}</wa-tag
+                            ><bdi dir="auto">${t}</bdi></wa-tag
                           >`,
                       )}
                     </div>
-                  </div>
+                  </dd>
                 `
               : nothing
           }
-        </div>
+        </dl>
 
         <div class="agent-detail-actions">
           ${this.renderDetailActions(agent)}
         </div>
-      </div>
+      </section>
     `;
   }
 
@@ -476,9 +481,9 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
       <div class="agent-split-panel">
         ${this.renderList()} ${this.renderDetail(agent)}
       </div>
-      <div class="agent-count">
-        ${enabledCount}/${this.agents.length}
-        ${pluralize(this.agents.length, 'agent')} in dropdown
+      <div class="agent-count" aria-live="polite" aria-atomic="true">
+        ${enabledCount} of ${this.agents.length}
+        ${pluralize(this.agents.length, 'agent')} shown in selector
       </div>
     `;
   }

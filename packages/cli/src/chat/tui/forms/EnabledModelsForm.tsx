@@ -14,7 +14,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
-export interface EnabledModelsFormProps {
+interface EnabledModelsFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
 }

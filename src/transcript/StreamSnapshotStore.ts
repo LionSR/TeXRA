@@ -16,7 +16,6 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
-import { Mutex } from 'async-mutex';
 import pMap from 'p-map';
 import { z } from 'zod';
 
@@ -66,6 +65,11 @@ import { isDirectory } from '@utils/files/fsEntryType';
 
 import { ResidentStreamRegistry } from './ResidentStreamRegistry';
 import {
+  DirtySidecarWritesError,
+  SidecarWriteCoordinator,
+  type SidecarWriteHost,
+} from './SidecarWriteCoordinator';
+import {
   StagedDeletionCoordinator,
   type StagedDeletionHost,
   type StagedStreamSnapshotDeletion,
@@ -96,10 +100,9 @@ const EMPTY_RUN_USAGE: ReadonlyMap<string, TokenUsageStats> = new Map();
 /** Bounded fan-out for seeding many streams' sidecars, so startup does not
  *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
-/** Bound retries for writes that remain dirty. */
-const MAX_DIRTY_WRITE_RETRIES = 3;
 
-class DirtySidecarWritesError extends Error {}
+/** Re-drain attempts before a record with still-pending writes stays resident. */
+const MAX_EVICTION_DRAIN_ATTEMPTS = 3;
 
 /**
  * Per-field provenance of one stream's work plan: whether the in-memory value
@@ -184,6 +187,23 @@ function withoutSummaryMetaFields(
   for (const field of fields) delete remaining[field];
   return Object.keys(remaining).length > 0 ? remaining : undefined;
 }
+
+/**
+ * The mirrored fields one execution owns, and which a handoff to a different
+ * execution therefore invalidates. Everything else in `StreamSummaryMeta` —
+ * `parentStreamId`, `cumulativeUsage` — describes the stream across every run
+ * it has hosted and survives the handoff.
+ */
+const EXECUTION_SCOPED_SUMMARY_META_FIELDS = [
+  'identity',
+  'executionId',
+  'userFollowUpSupport',
+  'agentCategory',
+  'description',
+  'model',
+  'workingDirectory',
+  'command',
+] as const satisfies readonly (keyof StreamSummaryMeta)[];
 
 /**
  * The five execution-scoped facts owned by one run record and replaced or
@@ -377,16 +397,20 @@ function workPlanProvenanceOf(
  * bookkeeping, and the overlay patches. Because every field
  * for a stream lives on the same object, dropping a stream's memory is one
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
- * so `evict()`/`evictAll()` cannot drift from the field list.
- *
- * Per-stream version counters (must survive eviction to keep guarding
- * in-flight seed races) live inside the shared {@link ResidentStreamRegistry}
- * container that backs `records`, not on the record itself. `writeMutexes`
- * (keyed by the compound `${stream}::${key}`, not a bare stream id) stays as
- * its own map on the store — the same exclusion #7892 already carved out of
- * `perStreamStores()`.
+ * so `evict()` cannot drift from the field list. That includes the
+ * `generation` token: dropping the record revokes it, and a re-created record
+ * mints a fresh one, so a continuation captured against the old record stays
+ * detectable without a second map of historical stream ids. `writeMutexes`
+ * (keyed by the compound `${stream}::${key}`, not a bare stream id) lives in
+ * {@link SidecarWriteCoordinator}.
  */
 interface StreamRecord {
+  /**
+   * Revocable identity of this resident record, captured by asynchronous
+   * seed and write work. Rotated by staged deletion and revoked with the
+   * record, so work started against an earlier incarnation sees a mismatch.
+   */
+  generation: symbol;
   // -- Accumulated durable state (mirrors on-disk StreamData) --------------
   outputFiles: RoundIndexed<OutputFileInfo>;
   missingOutputs: RoundIndexed<string>;
@@ -448,17 +472,12 @@ interface StreamRecord {
   overlays: Partial<OverlayPatches>;
 }
 
-interface DirtySidecarWrite {
-  stream: StreamTabId;
-  key: string;
-  value: unknown;
-}
-
 export class StreamSnapshotStore {
   private readonly records = new ResidentStreamRegistry<
     StreamTabId,
     StreamRecord
   >(() => ({
+    generation: Symbol(),
     outputFiles: {},
     missingOutputs: {},
     compileFailures: {},
@@ -482,21 +501,36 @@ export class StreamSnapshotStore {
   /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
-   * behind that rename; this store keeps the records, write mutexes, and
-   * stream versions it reaches back for through {@link StagedDeletionHost}.
+   * behind that rename; this store keeps the records and stream generations
+   * it reaches back for through {@link StagedDeletionHost} (the write mutexes
+   * live in {@link SidecarWriteCoordinator}, reached through the same host).
    */
   private readonly deletions = new StagedDeletionCoordinator({
-    queueWrite: (stream, key, value) => this.queueWrite(stream, key, value),
-    cancelPendingWrites: (stream) => this.cancelPendingWritesForStream(stream),
-    bumpStreamVersion: (stream) => this.records.bumpVersion(stream),
+    queueWrite: (stream, key, value) =>
+      this.writes.queueWrite(stream, key, value),
+    cancelPendingWrites: (stream) =>
+      this.writes.cancelPendingWritesForStream(stream),
+    invalidateStreamGeneration: (stream) => this.rotateGeneration(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
     evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
 
-  // -- Per (stream, category) serialized write locks -------------------------
-  private readonly writeMutexes = new Map<string, Mutex>();
-  /** Latest ordinary sidecar value not yet confirmed durable, by write lock. */
-  private readonly dirtyWrites = new Map<string, DirtySidecarWrite>();
+  /**
+   * The write-durability lane: per-(stream, category) serialized write locks,
+   * dirty-write tracking, and bounded retries. It reaches back for the KV
+   * handle, the staged-deletion write buffer, and the stream-generation guard
+   * through {@link SidecarWriteHost}.
+   */
+  private readonly writes = new SidecarWriteCoordinator({
+    kvWrite: (stream, key, value) => this.kv(stream).write(key, value),
+    bufferWrite: (stream, key, value) =>
+      this.deletions.bufferWrite(stream, key, value),
+    captureDirtyWrite: (stream, key, value) =>
+      this.deletions.captureDirtyWrite(stream, key, value),
+    streamGeneration: (stream) => this.streamGeneration(stream),
+    isCurrentGeneration: (stream, generation) =>
+      this.isCurrentGeneration(stream, generation),
+  } satisfies SidecarWriteHost);
 
   /**
    * Per-stream FIFO lane (concurrency 1) that serializes seed reads and the
@@ -512,13 +546,14 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * `${stream}::${accessor}` pairs already warned about a synchronous read
-   * served from a record with unestablished disk provenance, so a render
-   * loop re-reading the same stream stays one warning per accessor instead
-   * of log spam. Cleared per stream on evict (a re-seeded stream that is
-   * read too early again deserves a fresh warning).
+   * Per stream, the accessors already warned about a synchronous read served
+   * from a record with unestablished disk provenance, so a render loop
+   * re-reading the same stream stays one warning per accessor instead of log
+   * spam. Keyed by stream so evict drops the entry outright (a re-seeded
+   * stream that is read too early again deserves a fresh warning) rather than
+   * scanning every other stream's keys for a `${stream}::` prefix.
    */
-  private readonly unseededReadWarned = new Set<string>();
+  private readonly unseededReadWarned = new Map<StreamTabId, Set<string>>();
 
   /**
    * Mirror of this store's display metadata into the always-resident stream
@@ -560,6 +595,12 @@ export class StreamSnapshotStore {
       ...(record.description !== undefined && {
         description: record.description,
       }),
+      // Usage rides the mirror so a stream whose record has been released
+      // (`requestEviction`) still answers the roster's token column without
+      // re-seeding every finished child.
+      ...(record.usage.size > 0 && {
+        cumulativeUsage: sumUsageStats(record.usage.values()),
+      }),
       ...(config && {
         agentCategory: config.agentCategory,
         ...(config.model !== undefined && { model: config.model }),
@@ -580,9 +621,13 @@ export class StreamSnapshotStore {
    */
   private warnIfUnseeded(accessor: string, stream: StreamTabId): void {
     if (this.hasDiskProvenance(stream)) return;
-    const key = `${stream}::${accessor}`;
-    if (this.unseededReadWarned.has(key)) return;
-    this.unseededReadWarned.add(key);
+    let warned = this.unseededReadWarned.get(stream);
+    if (!warned) {
+      warned = new Set<string>();
+      this.unseededReadWarned.set(stream, warned);
+    }
+    if (warned.has(accessor)) return;
+    warned.add(accessor);
     log.warn(
       `${accessor}(${stream}) served a record with unestablished disk ` +
         `provenance; persisted sidecar state may be missing from the ` +
@@ -592,7 +637,15 @@ export class StreamSnapshotStore {
   }
 
   private getOrCreateRecord(stream: StreamTabId): StreamRecord {
-    return this.records.getOrCreate(stream);
+    const resident = this.records.get(stream);
+    if (resident) return resident;
+    const record = this.records.getOrCreate(stream);
+    // A record minted for a stream the mirror already knows — a released one
+    // that a late fact touches — starts from what the mirror holds, so
+    // publishing that one field republishes a whole summary that keeps the
+    // rest. Record fields still win: the fallback only fills gaps.
+    record.summaryMetaHydrationFallback = this.summaryMetaSource?.(stream);
+    return record;
   }
 
   private kv(streamId: StreamTabId): KVStore {
@@ -615,8 +668,21 @@ export class StreamSnapshotStore {
     }
   }
 
-  private streamVersion(stream: StreamTabId): number {
-    return this.records.version(stream);
+  private streamGeneration(stream: StreamTabId): symbol {
+    return this.getOrCreateRecord(stream).generation;
+  }
+
+  private isCurrentGeneration(
+    stream: StreamTabId,
+    generation: symbol,
+  ): boolean {
+    return this.records.get(stream)?.generation === generation;
+  }
+
+  /** Revoke every continuation captured against the current record. */
+  private rotateGeneration(stream: StreamTabId): void {
+    const record = this.records.get(stream);
+    if (record) record.generation = Symbol();
   }
 
   /**
@@ -762,19 +828,19 @@ export class StreamSnapshotStore {
    */
   private queueAfterSeed(
     stream: StreamTabId,
-    version: number,
+    generation: symbol,
     apply: () => unknown,
   ): Promise<void> {
     const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
         if (!this.hasDiskProvenance(stream)) {
           try {
-            await this.readSeed(stream, version);
+            await this.readSeed(stream, generation);
           } catch (err: unknown) {
             if (!this.hasDiskProvenance(stream)) throw err;
           }
         }
-        if (this.streamVersion(stream) !== version) return;
+        if (!this.isCurrentGeneration(stream, generation)) return;
         const record = this.records.get(stream);
         if (!record || record.diskState === 'unknown') return;
         apply();
@@ -788,12 +854,15 @@ export class StreamSnapshotStore {
     return next;
   }
 
-  private async readSeed(stream: StreamTabId, version: number): Promise<void> {
-    if (this.streamVersion(stream) !== version) return;
+  private async readSeed(
+    stream: StreamTabId,
+    generation: symbol,
+  ): Promise<void> {
+    if (!this.isCurrentGeneration(stream, generation)) return;
     if (this.hasDiskProvenance(stream)) return;
-    await this.retryDirtyWrites(stream);
-    if (this.streamVersion(stream) !== version) return;
-    await this.seedFromDisk(stream, version);
+    await this.writes.retryDirtyWrites(stream);
+    if (!this.isCurrentGeneration(stream, generation)) return;
+    await this.seedFromDisk(stream, generation);
   }
 
   /**
@@ -806,7 +875,7 @@ export class StreamSnapshotStore {
    */
   private async seedFromDisk(
     stream: StreamTabId,
-    version: number,
+    generation: symbol,
   ): Promise<void> {
     let exists: boolean;
     try {
@@ -821,11 +890,11 @@ export class StreamSnapshotStore {
       );
       exists = true;
     }
-    if (this.streamVersion(stream) !== version) return;
+    if (!this.isCurrentGeneration(stream, generation)) return;
     const data = exists
       ? await readStreamData(this.kv(stream))
       : emptyStreamData();
-    if (this.streamVersion(stream) !== version) return;
+    if (!this.isCurrentGeneration(stream, generation)) return;
     await this.applyStreamData(
       stream,
       data,
@@ -872,7 +941,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     field: RoundKeyedField,
   ): void {
-    this.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
+    this.writes.write(stream, OVERLAY_TO_SIDECAR_KEY[field], {
       ...this.records.get(stream)?.[field],
     });
   }
@@ -900,7 +969,7 @@ export class StreamSnapshotStore {
       unparsed && unparsed.size > 0
         ? { ...Object.fromEntries(unparsed), ...parsed }
         : parsed;
-    this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, payload);
+    this.writes.write(stream, STREAM_DATA_KEYS.USAGE_STATS, payload);
   }
 
   /**
@@ -937,12 +1006,12 @@ export class StreamSnapshotStore {
       return;
     }
 
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     if (overlayPatch !== undefined) {
       const { overlays } = this.getOrCreateRecord(stream);
       overlays[overlayKey] = mergePatch(overlays[overlayKey], overlayPatch);
     }
-    this.queueAfterSeed(stream, version, () => undefined);
+    this.queueAfterSeed(stream, generation, () => undefined);
   }
 
   /**
@@ -1033,6 +1102,7 @@ export class StreamSnapshotStore {
         ),
       () => {
         if (!isEmptyUsage(delta)) this.writeUsage(stream);
+        this.publishSummaryMeta(stream);
       },
     );
   }
@@ -1052,7 +1122,7 @@ export class StreamSnapshotStore {
   // artifact write. **A caller that carries the result across an `await` must
   // clone it** — `applyRoundPatch` mutates these records in place, so a live
   // run can add or drop a round while the caller is suspended. See
-  // `ProgressWorkflowActionsController.diffStream`, which snapshots before the
+  // `ProgressWorkflowRunActionsController.diffStream`, which snapshots before the
   // request crosses an interactive quick pick.
   //
   // The write path still snapshots (`snapshotFromMemory`, `writeRoundKeyedField`),
@@ -1104,27 +1174,76 @@ export class StreamSnapshotStore {
   // Lifecycle
   // ==========================================================================
 
-  /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
-  private evict(stream: StreamTabId): void {
-    this.records.evict(stream);
-    this.seedQueues.delete(stream);
-    for (const key of [...this.writeMutexes.keys()]) {
-      if (!key.startsWith(`${stream}::`)) continue;
-      this.writeMutexes.delete(key);
-      this.dirtyWrites.delete(key);
-    }
-    for (const key of [...this.unseededReadWarned]) {
-      if (key.startsWith(`${stream}::`)) this.unseededReadWarned.delete(key);
+  /**
+   * Release a stream's resident record once its in-flight seed and sidecar
+   * writes have settled: the sidecar counterpart of the transcript's
+   * terminal-status eviction (`StreamLogStore.requestEviction`). The next
+   * read re-seeds from disk through `preload`, which every presentation path
+   * performs before its synchronous reads, so nothing is lost. A record a
+   * staged deletion owns, one a reader is seeding, or one that gains new seed
+   * work while this waits stays resident: someone else is about to read or
+   * remove it.
+   *
+   * `shouldStillEvict` is re-read after those awaits, the same shape
+   * `StagedDeletionCoordinator.commit` uses: a run that relaunches this
+   * stream while the drain is in flight neither rotates the generation nor
+   * rebinds the seed chain once provenance is established, so the caller's
+   * own liveness rule is what keeps a freshly active record resident.
+   *
+   * Public on purpose, and the one row added to the store-surface baseline:
+   * the session's lifecycle owner requests it for a finished child stream
+   * nobody is presenting, and a host's focus-leave path requests it for the
+   * stream it just stopped presenting. Without it, the record set grows with
+   * every stream a long session touches.
+   */
+  async requestEviction(
+    stream: StreamTabId,
+    shouldStillEvict?: () => boolean,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < MAX_EVICTION_DRAIN_ATTEMPTS; attempt++) {
+      const record = this.records.get(stream);
+      if (!record || this.deletions.owns(stream)) return;
+      const { generation, seedChain } = record;
+      // A reader-driven seed is a caller that asked for this record and will
+      // read it synchronously when its `preload` resolves. Releasing it out
+      // from under that caller would answer its question with an empty
+      // record, so the next release trigger collects it instead. `refreshSeed`
+      // parks the pre-refresh disk state for exactly its own duration, so that
+      // — not the seed queue, which fact-driven mutations share, and whose
+      // work no reader is waiting on — is what names a reader.
+      if (record.seedRefreshBaseline !== undefined) return;
+      // `seedChain` is the newest queued task either path published, so
+      // awaiting it drains the queue as it stood; anything queued behind it
+      // rebinds the field and the identity check below sees that instead.
+      await seedChain;
+      await this.writes.retryDirtyWrites(stream);
+      const current = this.records.get(stream);
+      if (
+        !current ||
+        current.generation !== generation ||
+        current.seedChain !== seedChain ||
+        this.deletions.owns(stream) ||
+        shouldStillEvict?.() === false
+      ) {
+        return;
+      }
+      // A mutation that landed on an already-seeded record during the drain
+      // persists directly, without rebinding `seedChain`, so neither check
+      // above sees it. Evicting would drop its write lock together with the
+      // record and strand the value in neither memory nor disk, so re-drain
+      // instead — and read this with no await between it and the eviction.
+      if (this.writes.hasDirtyWrites(stream)) continue;
+      this.evict(stream);
+      return;
     }
   }
 
-  evictAll(): void {
-    this.records.evictAll();
-    this.seedQueues.clear();
-    this.writeMutexes.clear();
-    this.dirtyWrites.clear();
-    this.unseededReadWarned.clear();
-    this.deletions.reset();
+  /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
+  private evict(stream: StreamTabId): void {
+    this.records.delete(stream);
+    this.seedQueues.delete(stream);
+    this.writes.dropStreamWrites(stream);
+    this.unseededReadWarned.delete(stream);
   }
 
   /**
@@ -1275,7 +1394,7 @@ export class StreamSnapshotStore {
         parentStreamId: next.parentStreamId,
       }),
     };
-    this.write(stream, STREAM_DATA_KEYS.META, file);
+    this.writes.write(stream, STREAM_DATA_KEYS.META, file);
   }
 
   private queueMetaPatch(
@@ -1295,7 +1414,7 @@ export class StreamSnapshotStore {
       applyMeta();
       this.getOrCreateRecord(stream).metaOverlay = false;
     } else {
-      this.queueAfterSeed(stream, this.streamVersion(stream), applyMeta);
+      this.queueAfterSeed(stream, this.streamGeneration(stream), applyMeta);
     }
   }
 
@@ -1353,12 +1472,21 @@ export class StreamSnapshotStore {
     // The config of the run this stream just left is not this run's config;
     // `run.config` follows `run.start` with the new one. A config carrying no
     // identity yet is this run's until something says otherwise, so only a
-    // KNOWN previous execution drops it.
-    const previous = record.runExecutionId;
+    // KNOWN previous execution drops it. A record minted after a release
+    // knows the previous execution only through the mirror it started from,
+    // so that names the handoff when the record itself cannot.
+    const previous =
+      record.runExecutionId ?? record.summaryMetaHydrationFallback?.executionId;
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
-      record.summaryMetaHydrationFallback = undefined;
+      // Only what the departing execution owned: the stream's parent edge and
+      // its summed usage outlive any single run, and on a record minted after
+      // a release the fallback is their only source until seeding lands.
+      record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+        record.summaryMetaHydrationFallback,
+        EXECUTION_SCOPED_SUMMARY_META_FIELDS,
+      );
     }
     record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
       record.summaryMetaHydrationFallback,
@@ -1538,7 +1666,7 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   private writeWorkPlan(stream: StreamTabId, plan: WorkPlanSnapshot): void {
-    this.write(
+    this.writes.write(
       stream,
       STREAM_DATA_KEYS.WORK_PLAN,
       PersistedWorkPlanSchema.parse({
@@ -1548,117 +1676,6 @@ export class StreamSnapshotStore {
         planSummary: plan.planSummary,
       }),
     );
-  }
-
-  private write(stream: StreamTabId, key: string, value: unknown): void {
-    // A staged deletion owns the stream's namespace, so it takes the value
-    // into its transactional buffer instead of letting it reach disk.
-    if (this.deletions.bufferWrite(stream, key, value)) return;
-    const chainKey = `${stream}::${key}`;
-    const dirty = { stream, key, value } satisfies DirtySidecarWrite;
-    this.dirtyWrites.set(chainKey, dirty);
-    void this.persistDirtyWrite(chainKey, dirty).catch((err: unknown) =>
-      log.warn(
-        `Failed to persist ${key}.json for stream ${stream}; sidecar remains dirty.`,
-        { data: err },
-      ),
-    );
-  }
-
-  private async persistDirtyWrite(
-    chainKey: string,
-    write: DirtySidecarWrite,
-  ): Promise<void> {
-    // A newer write or staged deletion can revoke this retry before it enters
-    // the per-key queue. Only the current dirty owner may recreate that queue.
-    if (this.dirtyWrites.get(chainKey) !== write) return;
-    await this.queueWrite(write.stream, write.key, write.value);
-    if (this.dirtyWrites.get(chainKey) === write) {
-      this.dirtyWrites.delete(chainKey);
-    }
-  }
-
-  /** Queue a sidecar write and expose its completion to transactional callers. */
-  private queueWrite(
-    stream: StreamTabId,
-    key: string,
-    value: unknown,
-  ): Promise<void> {
-    const chainKey = `${stream}::${key}`;
-    const version = this.streamVersion(stream);
-    const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
-    this.writeMutexes.set(chainKey, mutex);
-    return mutex.runExclusive(() => {
-      // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
-      // write queued before that must NOT fire afterward, or a late `kv()`
-      // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
-      if (!this.writeMutexes.has(chainKey)) return;
-      if (this.streamVersion(stream) !== version) return;
-      return this.kv(stream).write(key, value);
-    });
-  }
-
-  private writeBelongsToStream(
-    chainKey: string,
-    stream?: StreamTabId,
-  ): boolean {
-    return stream === undefined || chainKey.startsWith(`${stream}::`);
-  }
-
-  private async waitForWrites(stream?: StreamTabId): Promise<void> {
-    await Promise.all(
-      [...this.writeMutexes]
-        .filter(([chainKey]) => this.writeBelongsToStream(chainKey, stream))
-        .map(([, mutex]) => mutex.waitForUnlock()),
-    );
-  }
-
-  private cancelPendingWritesForStream(stream: StreamTabId): Promise<void>[] {
-    const prefix = `${stream}::`;
-    const pending: Promise<void>[] = [];
-    for (const [key, mutex] of this.writeMutexes) {
-      if (!key.startsWith(prefix)) continue;
-      const dirty = this.dirtyWrites.get(key);
-      // Hand the cancelled value to a staged deletion, which keeps it buffered
-      // until the transaction settles. This loop is synchronous, so which
-      // deletion (if any) owns the stream cannot change while it runs.
-      if (dirty)
-        this.deletions.captureDirtyWrite(stream, dirty.key, dirty.value);
-      this.dirtyWrites.delete(key);
-      pending.push(mutex.waitForUnlock());
-      this.writeMutexes.delete(key);
-    }
-    return pending;
-  }
-
-  private dirtyWriteEntries(
-    stream?: StreamTabId,
-  ): [string, DirtySidecarWrite][] {
-    return [...this.dirtyWrites].filter(([chainKey]) =>
-      this.writeBelongsToStream(chainKey, stream),
-    );
-  }
-
-  private async retryDirtyWrites(stream?: StreamTabId): Promise<void> {
-    await this.waitForWrites(stream);
-
-    for (let attempt = 0; attempt < MAX_DIRTY_WRITE_RETRIES; attempt++) {
-      const dirty = this.dirtyWriteEntries(stream);
-      if (dirty.length === 0) return;
-      await Promise.allSettled(
-        dirty.map(([chainKey, write]) =>
-          this.persistDirtyWrite(chainKey, write),
-        ),
-      );
-    }
-
-    const remaining = this.dirtyWriteEntries(stream).length;
-    if (remaining > 0) {
-      throw new DirtySidecarWritesError(
-        `Sidecar writes remain dirty after ${MAX_DIRTY_WRITE_RETRIES} retries; ` +
-          `${remaining} sidecar write(s) remain dirty.`,
-      );
-    }
   }
 
   private unseenSeedChains(
@@ -1704,7 +1721,7 @@ export class StreamSnapshotStore {
     while (true) {
       await this.drainSeedChains(completedSeeds, failures);
       try {
-        await this.retryDirtyWrites();
+        await this.writes.retryDirtyWrites();
         dirtyWritesDurable = true;
       } catch (error) {
         dirtyWritesDurable = false;
@@ -1825,7 +1842,7 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     reportArtifactAuthority = false,
   ): Promise<void> {
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     const record = this.getOrCreateRecord(stream);
     const refreshBaseline = record.seedRefreshBaseline ?? record.diskState;
     record.seedRefreshBaseline = refreshBaseline;
@@ -1833,24 +1850,27 @@ export class StreamSnapshotStore {
     record.diskState = 'unknown';
     const next: Promise<void> = this.seedQueueFor(stream)
       .add(async () => {
-        if (this.streamVersion(stream) !== version) return;
-        await this.retryDirtyWrites(stream);
-        if (this.streamVersion(stream) !== version) return;
-        await this.seedFromDisk(stream, version);
+        if (!this.isCurrentGeneration(stream, generation)) return;
+        await this.writes.retryDirtyWrites(stream);
+        if (!this.isCurrentGeneration(stream, generation)) return;
+        await this.seedFromDisk(stream, generation);
       })
       .then(
         () => {
           const current = this.records.get(stream);
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            this.streamVersion(stream) === version
+            this.isCurrentGeneration(stream, generation)
           ) {
             current.seedRefreshBaseline = undefined;
           }
         },
         (error: unknown) => {
           const current = this.records.get(stream);
-          const versionIsCurrent = this.streamVersion(stream) === version;
+          const generationIsCurrent = this.isCurrentGeneration(
+            stream,
+            generation,
+          );
           // Snapshot the surviving state BEFORE the restore below, whose
           // `persistEagerOverlays` drains the very overlays it reads.
           const resolvedRefreshBaseline =
@@ -1858,7 +1878,7 @@ export class StreamSnapshotStore {
               ? current?.diskState
               : refreshBaseline;
           const failureBaseline: DiskState | undefined =
-            reportArtifactAuthority && current && versionIsCurrent
+            reportArtifactAuthority && current && generationIsCurrent
               ? resolvedRefreshBaseline
               : undefined;
           const failureWorkPlanProvenance =
@@ -1867,7 +1887,7 @@ export class StreamSnapshotStore {
               : undefined;
           if (
             current?.seedRefreshGeneration === refreshGeneration &&
-            versionIsCurrent
+            generationIsCurrent
           ) {
             current.diskState = refreshBaseline;
             current.seedRefreshBaseline = undefined;
@@ -1947,7 +1967,7 @@ export class StreamSnapshotStore {
     data: StreamData,
     provenance: Exclude<DiskState, 'unknown'>,
   ): Promise<void> {
-    const version = this.streamVersion(stream);
+    const generation = this.streamGeneration(stream);
     const record = this.getOrCreateRecord(stream);
     const metaOverlay = record.metaOverlay ? record.meta : undefined;
     const usageOverlayToReplay = new Map(record.overlays.usage);
@@ -2015,7 +2035,7 @@ export class StreamSnapshotStore {
       } else {
         record.summaryMetaHydrationFallback = undefined;
       }
-      if (this.streamVersion(stream) !== version) return;
+      if (!this.isCurrentGeneration(stream, generation)) return;
       // Re-checked after the await: a `run.start` for another execution can
       // land during it, and this seed's pair belongs to the run it read.
       const liveExecutionId = record.runExecutionId;

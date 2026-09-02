@@ -8,7 +8,7 @@ import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 // Local imports - shared webview
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import '@shared/wa/spinner';
-import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 
 // Local imports - shared schemas
@@ -17,7 +17,7 @@ import type {
   StreamLifecycleStatus,
   StreamTabId,
 } from '@shared/schemas';
-import { SignalWatcher, subscribeToSignalChanges } from '@shared/signals';
+import { subscribeToSignalChanges } from '@shared/signals';
 import {
   designTokens,
   viewTabStyles,
@@ -67,13 +67,8 @@ import './components/StreamConversation';
 
 registerTeXRAWebAwesomeIcons();
 
-// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
-// Safe because ProgressApp implements all abstract members below.
-const ProgressAppBase = SignalWatcher(
-  BaseWebviewApp as unknown as new (
-    ...args: any[]
-  ) => BaseWebviewApp<ProgressViewOutboundMessage>,
-);
+const ProgressAppBase =
+  signalWatcherWebviewAppBase<ProgressViewOutboundMessage>();
 
 @customElement('progress-app')
 export class ProgressApp extends ProgressAppBase {
@@ -290,13 +285,8 @@ export class ProgressApp extends ProgressAppBase {
     }
     const view = event.detail.name === 'launcher' ? 'main' : 'progress';
     const tabs = event.currentTarget as MutableWaTabGroup;
-    if (view === 'main' && placement.get() === 'editor') {
-      this.focusLauncherSidebar(tabs);
-      return;
-    }
     if (view === 'main') {
-      postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });
-      this.resetProgressTab(tabs);
+      this.focusLauncherSidebar(tabs);
       return;
     }
     postMessage(COMMON_COMMANDS.SWITCH_VIEW, { view });

@@ -37,19 +37,12 @@ export class GettingStartedBanner extends LitElement {
       }
 
       .getting-started-title {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--wa-space-3xs);
+        margin: 0;
         line-height: var(--line-height-normal);
       }
 
       .getting-started-title strong {
         font-weight: var(--font-weight-semibold, 600);
-      }
-
-      .getting-started-title span {
-        color: var(--wa-color-text-quiet);
       }
 
       .getting-started-copy {
@@ -109,15 +102,18 @@ export class GettingStartedBanner extends LitElement {
       body: html`
         <div class="getting-started-row">
           <div class="getting-started-body">
-            <div class="getting-started-title">
+            <p class="getting-started-title">
               <strong>No LaTeX files yet</strong>
-              <span>Start from a sample or import an existing paper.</span>
-            </div>
-            <p class="getting-started-copy">
-              Then run setup to connect TeXRA, check LaTeX, and choose a starter
-              agent team.
             </p>
-            <div class="getting-started-actions actions">
+            <p class="getting-started-copy">
+              Create or import a project, then run setup to check LaTeX and
+              choose an agent team.
+            </p>
+            <div
+              class="getting-started-actions actions"
+              role="group"
+              aria-label="Getting started actions"
+            >
               ${this.renderAction('runSetup', 'filled', 'brand')}
               ${this.renderAction('createSampleProject', 'outlined')}
               ${this.renderAction('cloneOverleaf', 'outlined')}
@@ -130,7 +126,7 @@ export class GettingStartedBanner extends LitElement {
             appearance="plain"
             size="s"
             title="Dismiss for this session"
-            aria-label="Dismiss getting started row"
+            aria-label="Dismiss getting started for this session"
             @click=${this.handleDismiss}
           >
             ${waIcon('xmark')}

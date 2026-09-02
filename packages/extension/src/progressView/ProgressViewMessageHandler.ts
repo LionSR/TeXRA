@@ -17,9 +17,12 @@ import {
   type FollowUpApplyPorts,
 } from '@controllers/progressView/followUpApply';
 import type { ProgressHostInteractions } from '@controllers/progressView/backend/progressHostInteractions';
-import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
+import { ProgressWorkflowRunActionsController } from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import {
+  createProgressAgentProposalController,
+  type ProgressAgentProposalController,
+} from '@controllers/progressView/ProgressAgentProposalController';
 import {
   createProgressViewCommandHandlers,
   createProgressViewSecondTierHandlers,
@@ -45,6 +48,7 @@ import type {
   GettingStartedAction,
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
+  ProgressViewOutboundMessage,
   StreamTabId,
 } from '@shared/schemas';
 import {
@@ -95,7 +99,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private readonly commandHandlers: ReturnType<
     typeof createProgressViewCommandHandlers
   >;
-  private readonly workflowActionsController: ProgressWorkflowActionsController;
+  private readonly workflowRunActionsController: ProgressWorkflowRunActionsController;
   private readonly apiKeyRetryController: ProgressApiKeyRetryController;
   private readonly followUpController: ProgressFollowUpController;
   private readonly followUpPolishController: ProgressFollowUpPolishController;
@@ -146,12 +150,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
    * asks for a different subset, so this is the superset. Passed by reference,
    * excess-property checking does not apply and each port's type still narrows
    * it to the members that port declares.
-   *
-   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
-   * copies every member in at runtime, so those objects carry accessors their
-   * port type does not declare. Harmless today -- nothing enumerates or
-   * serializes them -- but do not add a member here whose mere presence would
-   * change a consumer's behavior.
    */
   private readonly snapshotPort = {
     getActiveStream: () => this.provider.backend.presentation.activeStream,
@@ -189,7 +187,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       progressTitle: 'Transcribing follow-up message',
     });
 
-    this.workflowActionsController = this.createWorkflowActionsController();
+    this.workflowRunActionsController =
+      this.createWorkflowRunActionsController();
     this.workflowFileActionsController =
       this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
@@ -245,8 +244,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     let polishProgress: vscode.Progress<{ message?: string }> | undefined;
 
     const secondTierActions: ProgressViewSecondTierActions = {
-      ...this.snapshotPort,
-      workflowActions: this.workflowActionsController,
+      getRunMetadata: this.snapshotPort.getRunMetadata,
+      preload: this.snapshotPort.preload,
+      workflowRunActions: this.workflowRunActionsController,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
@@ -256,12 +256,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         await this.runViewCommand('texra.restoreState', [config]);
       },
       applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
-      applyPolishResult: (result) =>
-        applyFollowUpPolishResult(result, this.followUpPorts),
+      capturePolishReporter: () => {
+        const post = this.captureResultPost('Follow-up polish result');
+        const ports = { ...this.followUpPorts, post };
+        return {
+          applyResult: (result) => applyFollowUpPolishResult(result, ports),
+          reportError: (stream, error) =>
+            this.reportPolishError(stream, error, post),
+        };
+      },
       onPolishProgress: (message) => {
         polishProgress?.report({ message });
       },
-      onPolishError: (stream, error) => this.reportPolishError(stream, error),
       postToRenderer: (message) => {
         this.postToActiveView(message);
       },
@@ -343,6 +349,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       // extension only wraps it in a VS Code progress notification and feeds
       // the shared handler's stage reports into it.
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: async (data) => {
+        const reporter = secondTierActions.capturePolishReporter();
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -354,6 +361,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             try {
               await secondTierHandlers[PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP](
                 data,
+                reporter,
               );
             } finally {
               if (polishProgress === progress) polishProgress = undefined;
@@ -445,7 +453,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             copyMeta,
           ]),
         mergeFile: (baseFile, editedFile) =>
-          this.runViewCommand('texra.merge', [undefined, baseFile, editedFile]),
+          this.runViewCommand('texra.merge', [baseFile, editedFile]),
         latexdiffFile: (baseFile, editedFile) =>
           this.runViewCommand('texra.latexdiff', [
             undefined,
@@ -475,44 +483,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private createAgentProposalController(): ProgressAgentProposalController {
-    return new ProgressAgentProposalController({
+    return createProgressAgentProposalController({
       getPendingProposal: (requestId) =>
         this.provider.getPendingAgentProposal(requestId),
-      restoreRunConfig: async (config) => {
-        return (
-          (await this.runViewCommand<boolean>('texra.restoreState', [
-            config,
-          ])) === true
-        );
+      restoreRunConfig: async (config) =>
+        (await this.runViewCommand<boolean>('texra.restoreState', [config])) ===
+        true,
+      openFile: async (file) => {
+        await this.runViewCommand('texra.openFile', [file]);
       },
-      openFile: (file) => this.runViewCommand('texra.openFile', [file]),
-      settleProposal: (requestId, result) => {
-        const resolved = this.interactions.submitProposalDecision(
-          requestId,
-          result,
-        );
-        if (!resolved) {
-          this.log.warn(
-            `No pending host interaction found for proposal: ${requestId}`,
-          );
-        }
-      },
-      onMissingProposal: (requestId) => {
-        this.log.warn(
-          `No pending agent proposal found for setup: ${requestId}`,
-        );
-      },
-      onInvalidProposal: (issues) => {
-        this.log.warn('Invalid proposal config', {
-          data: { errors: issues },
-        });
-      },
-      onSetupComplete: (proposal) => {
-        this.log.info(
-          `Agent proposal ${proposal.requestId} set up in main view`,
-          { data: { agent: proposal.agent } },
-        );
-      },
+      submitProposalDecision: (requestId, result) =>
+        this.interactions.submitProposalDecision(requestId, result),
+      log: this.log,
     });
   }
 
@@ -536,32 +518,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       },
       followUp: {
         captureAdmissionReporter: () => {
-          const source = this.getActiveView()?.webview;
+          const post = this.captureResultPost('Follow-up admission result');
           return (stream, accepted) => {
-            if (!source) return;
-            void Promise.resolve(
-              source.postMessage({
-                command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
-                stream,
-                accepted,
-              }),
-            ).then(
-              (delivered) => {
-                if (!delivered) {
-                  this.log.debug(
-                    'Follow-up result target did not accept the message',
-                  );
-                }
-              },
-              (error: unknown) => {
-                this.log.debug(
-                  'Follow-up result target is no longer attached',
-                  {
-                    data: error,
-                  },
-                );
-              },
-            );
+            post({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_RESULT,
+              stream,
+              accepted,
+            });
           };
         },
         reportImageSaveError: (_image, error) => {
@@ -660,8 +623,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     await vscode.window.showTextDocument(document, { preview: false });
   }
 
-  private createWorkflowActionsController(): ProgressWorkflowActionsController {
-    return new ProgressWorkflowActionsController({
+  private createWorkflowRunActionsController(): ProgressWorkflowRunActionsController {
+    return new ProgressWorkflowRunActionsController({
       state: this.snapshotPort,
       runDiff: async (request) => {
         await this.runViewCommand('texra.runLatexdiff', [request]);
@@ -850,10 +813,59 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     });
   }
 
+  /**
+   * Capture a result route that never falls through to a replacement surface
+   * or document. A missing, replaced, disposed, or rejecting target is undeliverable;
+   * diagnose that at debug without turning completed work into a run failure.
+   */
+  private captureResultPost(
+    resultName: string,
+  ): (message: ProgressViewOutboundMessage) => void {
+    const source = this.getActiveView()?.webview;
+    const isSourceDocumentCurrent = source
+      ? this.provider.captureWebviewDocument(source)
+      : () => false;
+    return (message) => {
+      if (!source) {
+        this.log.debug(`${resultName} is undeliverable: target is unavailable`);
+        return;
+      }
+      void Promise.resolve()
+        .then(() => {
+          if (!isSourceDocumentCurrent()) {
+            this.log.debug(
+              `${resultName} is undeliverable: target document was replaced`,
+            );
+            return true;
+          }
+          return source.postMessage(message);
+        })
+        .then(
+          (delivered) => {
+            if (!delivered) {
+              this.log.debug(
+                `${resultName} is undeliverable: target did not accept the message`,
+              );
+            }
+          },
+          (error: unknown) => {
+            this.log.debug(
+              `${resultName} is undeliverable: target is no longer attached`,
+              { data: error },
+            );
+          },
+        );
+    };
+  }
+
   /** Post the polish failure to the renderer, surface it, and log it. */
-  private reportPolishError(stream: StreamTabId, error: unknown): void {
+  private reportPolishError(
+    stream: StreamTabId,
+    error: unknown,
+    post: (message: ProgressViewOutboundMessage) => void,
+  ): void {
     const errorMsg = toErrorMessage(error);
-    this.postToActiveView({
+    post({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
       stream,
       kind: 'polishError',

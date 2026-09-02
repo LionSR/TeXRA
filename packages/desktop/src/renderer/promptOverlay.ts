@@ -9,7 +9,7 @@ import {
 import { createOverlayDialog } from './overlayDialog';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
-export interface DesktopPromptOverlay {
+interface DesktopPromptOverlay {
   open(message: DesktopShowPromptMessage): void;
 }
 

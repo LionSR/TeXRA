@@ -58,12 +58,6 @@ export const toolUseStyles = css`
     word-break: break-word;
   }
 
-  /* Hide <wa-details>'s built-in disclosure icon when there's nothing to
-     expand (mirrors the old native-details toggle-icon visibility:hidden). */
-  wa-details.banner-details--no-toggle::part(icon) {
-    visibility: hidden;
-  }
-
   .tool-use-user-feedback > .details-summary :is(.tool-use-title, wa-icon) {
     color: var(--color-text-link);
   }

@@ -266,7 +266,7 @@ describe('CLI doctor', () => {
       checks: [
         {
           id: 'auth',
-          name: 'Researcher Access',
+          name: 'TeXRA account',
           status: 'pass',
           message: 'Signed in as user@example.edu.',
         },

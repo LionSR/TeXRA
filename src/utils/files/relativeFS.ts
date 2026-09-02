@@ -10,8 +10,8 @@ import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - filesystem
-import { isFile } from './fsEntryType';
 import { BaseFS } from './baseFS';
+import { isFile } from './fsEntryType';
 
 const log = createLog('relativeFS');
 

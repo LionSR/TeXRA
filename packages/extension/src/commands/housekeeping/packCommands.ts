@@ -46,8 +46,8 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
   }
 }
 
-export async function handlePack(config: PackConfig): Promise<void> {
-  await runFileOp(config, {
+export function handlePack(config: PackConfig): Promise<void> {
+  return runFileOp(config, {
     runSingle: runPackSingle,
     runMultiple: runPackMultiple,
     runRunDir: runPackRunDir,

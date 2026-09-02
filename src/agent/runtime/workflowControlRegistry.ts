@@ -39,6 +39,6 @@ export class WorkflowControlRegistry {
    * id. No-op if no live run owns it.
    */
   control(grandchildId: ExecutionId, action: WorkflowControlAction): void {
-    for (const control of this.runs.values()) control(grandchildId, action);
+    for (const control of this.runs) control(grandchildId, action);
   }
 }

@@ -34,7 +34,6 @@ import {
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
 } from '@shared/copy/accountAuth';
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -193,13 +192,10 @@ export async function logoutFromChat(
   if (target === 'texra' || target === 'all') {
     try {
       await signOutCliSupabase();
-      lines.push(ACCOUNT_OUTCOME.signedOut(RESEARCHER_ACCESS.label));
+      lines.push(RESEARCHER_ACCESS_AUTH.signedOut);
     } catch (error: unknown) {
       lines.push(
-        ACCOUNT_OUTCOME.signOutFailedWithReason(
-          RESEARCHER_ACCESS.label,
-          toErrorMessage(error),
-        ),
+        RESEARCHER_ACCESS_AUTH.signOutFailedWithReason(toErrorMessage(error)),
       );
     }
   }

@@ -1,14 +1,12 @@
 import type { MainViewExecutionLaunchHost } from '@controllers/mainView/backend/MainViewExecutionLaunchController';
 import type { TranscriptExportFormat } from '@controllers/progressView/exportTranscript';
-import type { DiffViewHost } from '@hosts/uiHosts';
+import type { DiffViewHost, MessageHost } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 
 /** Required desktop capabilities used throughout an agent execution. */
-export interface DesktopAgentExecutionHost extends MainViewExecutionLaunchHost {
-  showErrorMessage(message: string): Promise<void> | void;
-  showWarningMessage(message: string): Promise<void> | void;
-  showInfoMessage(message: string): Promise<void> | void;
+export interface DesktopAgentExecutionHost
+  extends MainViewExecutionLaunchHost, MessageHost {
   /**
    * Presents an instruction (e.g. a missing API key) as an actionable
    * dialog: each token in `actions` becomes a button — dispatched to the

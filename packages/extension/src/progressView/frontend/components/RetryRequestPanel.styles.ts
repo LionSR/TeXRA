@@ -6,10 +6,13 @@ import { sp } from '@shared/styles';
 
 export const retryRequestPanelStyles: CSSResult = css`
   .retry-request__operation {
+    margin: 0;
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-normal);
     font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-normal);
+    overflow-wrap: anywhere;
   }
 
   /* No local clip. A max-height of 4em with overflow hidden cut the message
@@ -26,7 +29,9 @@ export const retryRequestPanelStyles: CSSResult = css`
   .retry-request__error {
     font-size: var(--font-size-sm);
     color: var(--color-error);
-    word-break: break-word;
+    line-height: var(--line-height-normal);
+    overflow-wrap: anywhere;
+    text-wrap: pretty;
   }
 
   .retry-request__error-details {

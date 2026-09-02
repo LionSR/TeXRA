@@ -140,15 +140,12 @@ export function attachTerminalResultToast(
   interactions: SessionHostInteractions,
   options: { replayWhenAttached?: boolean } = {},
 ): () => void {
-  return session.onResult(
-    (event) => {
-      const toast = terminalResultToast(event);
-      if (toast?.type === 'instruction') {
-        interactions.emit('requestShowInstruction', toast.payload, options);
-      } else if (toast?.type === 'error') {
-        interactions.emit('requestShowError', toast.payload, options);
-      }
-    },
-    options.replayWhenAttached ? { replayMissed: true } : undefined,
-  );
+  return session.onResult((event) => {
+    const toast = terminalResultToast(event);
+    if (toast?.type === 'instruction') {
+      interactions.emit('requestShowInstruction', toast.payload, options);
+    } else if (toast?.type === 'error') {
+      interactions.emit('requestShowError', toast.payload, options);
+    }
+  });
 }

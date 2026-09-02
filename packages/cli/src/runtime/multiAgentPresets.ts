@@ -240,12 +240,6 @@ export function cliMultiAgentPresetListRecord(
   };
 }
 
-export function cliMultiAgentPresetListRecords(
-  plans: readonly CliMultiAgentPresetRunPlan[],
-): CliMultiAgentPresetListRecord[] {
-  return plans.map(cliMultiAgentPresetListRecord);
-}
-
 function formatPresetAvailabilityForLauncher(
   availability: TeamAvailability,
   blockReason: string | undefined,
@@ -256,13 +250,13 @@ function formatPresetAvailabilityForLauncher(
     formatPresetAgentCountForLauncher(
       'workflow',
       availability.agents.workflow,
-      {
-        countStyle,
-      },
-    ),
-    formatPresetAgentCountForLauncher('tool-use', availability.agents.toolUse, {
       countStyle,
-    }),
+    ),
+    formatPresetAgentCountForLauncher(
+      'tool-use',
+      availability.agents.toolUse,
+      countStyle,
+    ),
   ].filter(filterNotNullish);
 
   if (parts.length > 0) details.push(parts.join('; '));
@@ -278,11 +272,11 @@ function formatLauncherBlockReason(blockReason: string): string {
 function formatPresetAgentCountForLauncher(
   kind: 'workflow' | 'tool-use',
   availability: TeamAgentAvailability,
-  options: { readonly countStyle: 'total' | 'ratio' },
+  countStyle: 'total' | 'ratio',
 ): string | undefined {
   if (availability.total === 0) return undefined;
   const count =
-    options.countStyle === 'total'
+    countStyle === 'total'
       ? String(availability.total)
       : `${availability.available}/${availability.total}`;
   const label = pluralize(

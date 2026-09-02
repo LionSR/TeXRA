@@ -39,7 +39,7 @@ const log = createLog('ServerTools');
  * Schema for a single web search result entry.
  * Normalized across all providers.
  */
-export const WebSearchResultEntrySchema = z.object({
+const WebSearchResultEntrySchema = z.object({
   /** URL of the search result */
   url: z.string(),
   /** Title of the page */
@@ -153,11 +153,7 @@ export interface ServerToolExtractionResult {
 
 /** Shared shape check: a non-null object whose `type` matches the given tag. */
 function hasBlockType(value: unknown, type: string): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { type?: string }).type === type
-  );
+  return isObject(value) && value.type === type;
 }
 
 /** Type guard for Anthropic server tool use block. */
@@ -388,8 +384,13 @@ function webFetchBlockFields(result: WebFetchBlock): WebFetchResultFields {
 }
 
 /**
- * Read a web-fetch result from either Anthropic's live nested block or the
- * flat block reconstructed by the completed-run archive.
+ * Read a web-fetch result from a `web_fetch_tool_result` block. Live provider
+ * responses and newly written completed-run archives carry the nested
+ * `web_fetch_result` content; archives written before 2026-09 stored
+ * `url`/`title`/`page_content` flat on the block, and that legacy shape is
+ * normalized here at the read boundary rather than migrated on disk.
+ * Retire the flat branch no earlier than 2026-12, when archives from before
+ * the nested-shape writer can be considered cold.
  */
 export function extractWebFetchResultFields(
   block: unknown,
@@ -431,15 +432,14 @@ export function extractAnthropicWebFetchResults(
     const fetchUrl = urlMap.get(block.tool_use_id) ?? '';
 
     if (isWebFetchBlock(block.content)) {
-      // Successful fetch
-      const fields = extractWebFetchResultFields(block);
+      const fields = webFetchBlockFields(block.content);
       results.push({
-        url: fields?.url || fetchUrl,
-        title: fields?.title,
+        url: fields.url || fetchUrl,
+        title: fields.title,
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'completed',
-        content: fields?.content,
+        content: fields.content,
       });
     } else {
       // Error result — block.content is narrowed to WebFetchToolResultErrorBlock

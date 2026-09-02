@@ -81,7 +81,7 @@ describe('user-question-panel', () => {
     const element = await mountPanel();
     const actions = collectActions(element);
 
-    expect(submitButton(element).disabled).toBe(true);
+    expect(submitButton(element).disabled).toBe(false);
     expect(element.handleKeyboardShortcut('y')).toBe(true);
     expect(actions).toEqual([]);
   });
@@ -172,6 +172,7 @@ describe('user-question-panel', () => {
     const radioGroup = element.shadowRoot?.querySelector(
       'wa-radio-group',
     ) as HTMLElement & { value?: string };
+    expect(radioGroup.getAttribute('label')).toBe('Choose one answer');
     radioGroup.value = 'No';
     dispatchChange(radioGroup);
     await element.updateComplete;

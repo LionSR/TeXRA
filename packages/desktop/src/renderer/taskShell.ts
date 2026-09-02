@@ -21,7 +21,7 @@ import {
   type WorkbenchTab,
 } from '../shared/desktopTaskShell.js';
 
-export interface TaskSidebarModel {
+interface TaskSidebarModel {
   readonly files: Node;
   readonly filesExpanded: boolean;
   readonly hasWorkspace: boolean;
@@ -35,7 +35,7 @@ export interface TaskSidebarModel {
   readonly commandsLabel: string;
 }
 
-export interface TaskSidebarCallbacks {
+interface TaskSidebarCallbacks {
   onNewTask(): void;
   onSearch(): void;
   onToggleFiles(): void;
@@ -199,7 +199,7 @@ export function taskSidebarTemplate(
   `;
 }
 
-export interface WorkbenchTabsCallbacks {
+interface WorkbenchTabsCallbacks {
   onActivate(tabId: string): void;
   onClose(tabId: string): void;
   onHide(): void;

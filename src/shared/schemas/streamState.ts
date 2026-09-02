@@ -118,10 +118,6 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
-const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
-  toolCallCount: 0,
-};
-
 export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 
 // Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
@@ -142,9 +138,9 @@ export const BackendOwnedFieldsSchema = z.object({
   /** Runtime behavior declared by the launch source, not UI visibility. */
   userFollowUpSupport: UserFollowUpSupportSchema.optional(),
   lastTimestamp: z.number().optional(),
-  conversationProgress: ConversationProgressSchema.prefault(
-    DEFAULT_CONVERSATION_PROGRESS,
-  ),
+  conversationProgress: ConversationProgressSchema.prefault({
+    toolCallCount: 0,
+  }),
   stage: StreamStageSchema.optional(),
   /** Child roster — live entries plus the finished ones retained for display
    *  (`finishedAt` set). */

@@ -17,18 +17,16 @@ type UnavailableReason = Extract<
   { state: 'unavailable' }
 >['reason'];
 
-const UNAVAILABLE_DETAILS: Record<UnavailableReason, string | undefined> = {
-  invalid_credentials: 'The provider rejected the configured credentials.',
-  malformed_response: 'The provider returned usage data TeXRA could not read.',
-  missing_credentials: undefined,
-  request_failed: undefined,
-};
-
 function unavailableDetail(reason: UnavailableReason): string {
-  return (
-    UNAVAILABLE_DETAILS[reason] ??
-    'The provider usage request failed. Try refreshing again shortly.'
-  );
+  switch (reason) {
+    case 'invalid_credentials':
+      return 'The provider rejected the configured credentials.';
+    case 'malformed_response':
+      return 'The provider returned usage data TeXRA could not read.';
+    case 'missing_credentials':
+    case 'request_failed':
+      return 'The provider usage request failed. Try refreshing again shortly.';
+  }
 }
 
 @customElement('subscription-usage-row')
@@ -145,7 +143,9 @@ export class SubscriptionUsageRow extends LitElement {
       <div class="settings-row subscription-usage-row">
         <div class="settings-row-text">
           <div class="usage-card">
-            <span class="usage-plan">${snapshot.planName} usage</span>
+            <span class="usage-plan"
+              ><bdi dir="auto">${snapshot.planName}</bdi> usage</span
+            >
             ${snapshot.windows.map((window) => {
               const label = subscriptionUsageWindowLabel(window);
               const percent = formatSubscriptionUsagePercent(
@@ -157,13 +157,18 @@ export class SubscriptionUsageRow extends LitElement {
               );
               return html`
                 <div class="usage-window">
-                  <span class="usage-summary">${label}: ${percent}</span>
+                  <span class="usage-summary"
+                    ><bdi dir="auto">${label}</bdi>:
+                    <bdi dir="auto">${percent}</bdi></span
+                  >
                   <progress
                     max="100"
                     value=${window.percentUsed}
-                    aria-label="${snapshot.providerName} ${label} usage: ${percent} used"
+                    aria-label="${snapshot.providerName} ${label} usage"
                   ></progress>
-                  <span class="usage-reset">${reset ?? ''}</span>
+                  <span class="usage-reset"
+                    ><bdi dir="auto">${reset ?? ''}</bdi></span
+                  >
                 </div>
               `;
             })}

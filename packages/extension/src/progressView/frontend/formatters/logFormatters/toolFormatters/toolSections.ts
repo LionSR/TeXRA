@@ -13,7 +13,6 @@
  */
 
 import { html, nothing, type TemplateResult } from 'lit';
-import { ifDefined } from 'lit/directives/if-defined.js';
 
 import {
   buildToolUseSection,
@@ -98,7 +97,7 @@ function renderFileGroupsSection(
   section: ToolFileGroupsSection,
 ): TemplateResult {
   // prettier-ignore
-  const fileItems = html`${section.groups.flatMap((group) => group.files.map((file) => html`<li class="detail-item">${waIcon('file')} <span class="${group.clickable ? 'file-link clickable-link' : 'file-label'}" data-file=${ifDefined(group.clickable ? file : undefined)} role=${ifDefined(group.clickable ? 'button' : undefined)} tabindex=${ifDefined(group.clickable ? '0' : undefined)}>${file}</span> <span class="file-source">(${group.label})</span></li>`))}`;
+  const fileItems = html`${section.groups.flatMap((group) => group.files.map((file) => html`<li class="detail-item">${waIcon('file')} ${group.clickable ? buildFileLinkSpan(file, html`<bdi dir="auto">${file}</bdi>`) : html`<span class="file-label"><bdi dir="auto">${file}</bdi></span>`} <span class="file-source">(<bdi dir="auto">${group.label}</bdi>)</span></li>`))}`;
   // prettier-ignore
   return buildToolUseSection(section.label, html`<ul class="detail-list">${fileItems}</ul>`);
 }
@@ -107,10 +106,10 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
   // prettier-ignore
   const fileItems = html`${section.files.map((file) => {
     const diffStats = file.lineChanges
-      ? html` <span class="file-stats"><span class="added">+${file.lineChanges.added}</span><span class="removed">-${file.lineChanges.removed}</span></span>`
+      ? html` <span class="file-stats"><span class="visually-hidden">${file.lineChanges.added} ${file.lineChanges.added === 1 ? 'line' : 'lines'} added, ${file.lineChanges.removed} ${file.lineChanges.removed === 1 ? 'line' : 'lines'} removed</span><span class="added" aria-hidden="true">+${file.lineChanges.added}</span><span class="removed" aria-hidden="true">-${file.lineChanges.removed}</span></span>`
       : nothing;
     // prettier-ignore
-    return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(file.path, file.path)}${file.from ? html` <span class="file-source">(from ${file.from})</span>` : nothing}${file.note ? html` <span class="file-source">(${file.note})</span>` : nothing}${diffStats}</li>`;
+    return html`<li class="detail-item">${waIcon('file')} ${buildFileLinkSpan(file.path, html`<bdi dir="auto">${file.path}</bdi>`)}${file.from ? html` <span class="file-source">(from <bdi dir="auto">${file.from}</bdi>)</span>` : nothing}${file.note ? html` <span class="file-source">(<bdi dir="auto">${file.note}</bdi>)</span>` : nothing}${diffStats}</li>`;
   })}`;
   // prettier-ignore
   return buildToolUseSection(section.label, html`<ul class="detail-list">${fileItems}</ul>`);
@@ -118,7 +117,7 @@ function renderFileListSection(section: ToolFileListSection): TemplateResult {
 
 function renderChecklistSection(section: ToolChecklistSection): TemplateResult {
   // prettier-ignore
-  const items = html`${section.items.map((item) => html`<li class="detail-item">${waIcon(item.done ? 'circle-check' : 'circle')} <span>${item.text}</span></li>`)}`;
+  const items = html`${section.items.map((item) => html`<li class="detail-item">${waIcon(item.done ? 'circle-check' : 'circle')} <span class="visually-hidden">${item.done ? 'Completed' : 'Pending'}: </span><bdi dir="auto">${item.text}</bdi></li>`)}`;
   // prettier-ignore
   return buildToolUseSection(section.label, html`<ul class="detail-list">${items}</ul>`);
 }
@@ -154,9 +153,9 @@ function renderToolSection(
       });
     case 'identifier': {
       // prettier-ignore
-      const note = section.note ? html` <span class="file-source">(${section.note})</span>` : nothing;
+      const note = section.note ? html` <span class="file-source">(<bdi dir="auto">${section.note}</bdi>)</span>` : nothing;
       // prettier-ignore
-      return buildToolUseSection(section.label, html`<code class="execution-id">${section.value}</code>${note}`);
+      return buildToolUseSection(section.label, html`<code class="execution-id" dir="ltr">${section.value}</code>${note}`);
     }
     case 'file':
       return renderFileSection(section);

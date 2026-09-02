@@ -37,13 +37,6 @@ export class ProviderKeyModal extends LitElement {
         line-height: var(--line-height-normal);
       }
 
-      .provider-key-label {
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-2xs);
-        font-weight: var(--font-weight-medium);
-      }
-
       wa-input.provider-key-input {
         display: block;
         width: 100%;
@@ -162,6 +155,7 @@ export class ProviderKeyModal extends LitElement {
               class="provider-key-input"
               type="password"
               autocomplete="off"
+              autocapitalize="off"
               spellcheck="false"
               .value=${this.value}
               @input=${this.handleInput}

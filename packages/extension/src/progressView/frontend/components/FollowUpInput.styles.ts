@@ -123,6 +123,10 @@ export const followUpInputStyles: CSSResult = css`
     border-radius: var(--wa-border-radius-circle);
   }
 
+  .follow-up-actions > .action-icon-busy:has(.composer-primary-action) {
+    margin-inline-start: auto;
+  }
+
   .follow-up-actions .recording::part(base) {
     color: var(--wa-color-danger-on-quiet);
     background: var(--wa-color-danger-fill-quiet);

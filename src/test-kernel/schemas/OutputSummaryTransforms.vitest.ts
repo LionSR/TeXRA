@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  CompileFailureSummaryFromFailureSchema,
-  OutputFileSummaryFromInfoSchema,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
   type CompileFailure,
@@ -65,18 +63,23 @@ function roundOutput(overrides: Partial<RoundOutput> = {}): RoundOutput {
 
 describe('output summary transforms', () => {
   it('projects rich output metadata to the flattened summary shape', () => {
-    const summary = OutputFileSummaryFromInfoSchema.parse(
-      outputFile({
-        lineage: {
-          original: workspace('src/main.tex', '/workspace/src/main.tex'),
-          diffBase: workspace(
-            'snapshots/main.tex',
-            '/run/r1/original/main.tex',
-          ),
-        },
-        diff: { added: 7, removed: 3 },
+    const [summary] = roundOutputsToOutputSummaries([
+      roundOutput({
+        round: 1,
+        outputs: [
+          outputFile({
+            lineage: {
+              original: workspace('src/main.tex', '/workspace/src/main.tex'),
+              diffBase: workspace(
+                'snapshots/main.tex',
+                '/run/r1/original/main.tex',
+              ),
+            },
+            diff: { added: 7, removed: 3 },
+          }),
+        ],
       }),
-    );
+    ]);
 
     expect(summary).toEqual({
       round: 1,
@@ -90,11 +93,11 @@ describe('output summary transforms', () => {
   });
 
   it('falls back to the absolute path for external output locations', () => {
-    const summary = OutputFileSummaryFromInfoSchema.parse(
-      outputFile({
-        location: external('/tmp/main.pdf'),
+    const [summary] = roundOutputsToOutputSummaries([
+      roundOutput({
+        outputs: [outputFile({ location: external('/tmp/main.pdf') })],
       }),
-    );
+    ]);
 
     expect(summary.relativePath).toBe('/tmp/main.pdf');
     expect(summary.absolutePath).toBe('/tmp/main.pdf');
@@ -114,16 +117,17 @@ describe('output summary transforms', () => {
   });
 
   it('projects compile failures to flattened paths', () => {
-    const workspaceSummary = CompileFailureSummaryFromFailureSchema.parse(
-      compileFailure({
-        output: workspace('build/main.pdf', '/workspace/build/main.pdf'),
-      }),
-    );
-    const externalSummary = CompileFailureSummaryFromFailureSchema.parse(
-      compileFailure({
-        output: external('/tmp/main.pdf'),
-      }),
-    );
+    const [workspaceSummary, externalSummary] =
+      roundOutputsToCompileFailureSummaries([
+        roundOutput({
+          compileFailures: [
+            compileFailure({
+              output: workspace('build/main.pdf', '/workspace/build/main.pdf'),
+            }),
+            compileFailure({ output: external('/tmp/main.pdf') }),
+          ],
+        }),
+      ]);
 
     expect(workspaceSummary.outputPath).toBe('build/main.pdf');
     expect(workspaceSummary.logPath).toBe('logs/main.log');

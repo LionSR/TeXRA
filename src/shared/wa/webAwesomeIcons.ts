@@ -123,7 +123,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 
 import { TEXRA_ICON_CANONICAL_NAMES, type TeXRAIconName } from './iconNames';
 
-export const TEXRA_ICON_LIBRARY = 'texra';
+const TEXRA_ICON_LIBRARY = 'texra';
 
 type FontAwesomePathData = string | string[];
 

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - IPC contracts
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 
 // Type imports
@@ -327,6 +328,75 @@ describe('MainViewMessageHandler interaction mappings', () => {
         data: { missingTools: ['latexindent', 'gs'] },
       },
     ]);
+  });
+
+  it('waits for the login-banner post before refreshing credentials', async () => {
+    const posted = createDeferred<void>();
+    mocks.executeCommand.mockResolvedValueOnce(true);
+    postMessage.mockReturnValueOnce(posted.promise);
+
+    const handling = handler.handleMessage(
+      { command: MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER },
+      view,
+    );
+    await nextTurn();
+
+    expect(mocks.executeCommand.mock.calls).toEqual([['texra.signIn']]);
+    expect(postMessage).toHaveBeenCalledWith({
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'login',
+      visible: false,
+    });
+
+    posted.resolve();
+    await handling;
+    await nextTurn();
+
+    expect(mocks.executeCommand).toHaveBeenCalledWith(
+      'texra.refreshApiKeyStatus',
+    );
+    expect(mocks.executeCommand).toHaveBeenCalledWith(
+      'texra.refreshAllOptions',
+    );
+  });
+
+  it('posts dependency results to the view that requested the check', async () => {
+    const checked = createDeferred<string[]>();
+    const firstPostMessage = vi.fn();
+    const secondPostMessage = vi.fn();
+    const firstView = {
+      webview: { postMessage: firstPostMessage },
+    } as unknown as vscode.WebviewView;
+    const secondView = {
+      webview: { postMessage: secondPostMessage },
+    } as unknown as vscode.WebviewView;
+    mocks.checkCoreDependencies.mockReturnValueOnce(checked.promise);
+
+    const checking = handler.handleMessage(
+      { command: MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES },
+      firstView,
+    );
+    await nextTurn();
+    await handler.handleMessage(
+      {
+        command: MAIN_VIEW_COMMANDS.SET_BANNER,
+        banner: 'login',
+        visible: true,
+      },
+      secondView,
+    );
+
+    checked.resolve([]);
+    await checking;
+    await nextTurn();
+
+    const dependencyBanner = {
+      command: MAIN_VIEW_COMMANDS.SET_BANNER,
+      banner: 'dependency',
+      visible: false,
+    };
+    expect(firstPostMessage).toHaveBeenCalledWith(dependencyBanner);
+    expect(secondPostMessage).not.toHaveBeenCalledWith(dependencyBanner);
   });
 
   it('writes the distinct dismissed-state keys for both dismissed banners', async () => {

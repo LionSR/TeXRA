@@ -43,14 +43,17 @@ import {
   type FollowUpApplyPorts,
 } from '@controllers/progressView/followUpApply';
 import {
-  ProgressWorkflowActionsController,
+  ProgressWorkflowRunActionsController,
   type WorkflowDiffRequest,
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowActionsController';
+} from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import {
+  createProgressAgentProposalController,
+  type ProgressAgentProposalController,
+} from '@controllers/progressView/ProgressAgentProposalController';
 import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import {
   createProgressViewCommandHandlers,
@@ -126,7 +129,10 @@ import {
 import type { DesktopProgressInboundHandlerRegistry } from './desktopProgressIpc.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-function operationLabel(operation: WorkflowFileOperation) {
+function operationLabel(operation: WorkflowFileOperation): {
+  verb: string;
+  gerund: string;
+} {
   return operation === 'pack'
     ? { verb: 'pack', gerund: 'packing' }
     : { verb: 'clean', gerund: 'cleaning' };
@@ -172,12 +178,6 @@ export class DesktopProgressBridge {
    * excess-property checking does not apply and each port's type still narrows
    * it to the members that port declares.
    *
-   * The two spread sites are the exception: `{ ...this.snapshotPort, ... }`
-   * copies every member in at runtime, so those objects carry accessors their
-   * port type does not declare. Harmless today -- nothing enumerates or
-   * serializes them -- but do not add a member here whose mere presence would
-   * change a consumer's behavior.
-   *
    * `getRunMetadata` is deliberately this class's override, not the store's:
    * it falls back to the summary mirror for the execution id.
    */
@@ -203,7 +203,7 @@ export class DesktopProgressBridge {
    * each run's agent/model/input/output configuration from the shared snapshot
    * store and calls back into the two host-supplied operations below.
    */
-  private workflowActions!: ProgressWorkflowActionsController;
+  private workflowRunActions!: ProgressWorkflowRunActionsController;
   /** Plans compile-fix runs for a finished stream. */
   private followUpController!: ProgressFollowUpController;
   /** Rewrites follow-up text with the helper model ("Polish" in the follow-up box). */
@@ -411,7 +411,7 @@ export class DesktopProgressBridge {
     this.workflowFileActions = this.createWorkflowFileActionsController();
     this.agentProposalController = this.createAgentProposalController();
     this.commandHandlers = this.createSharedCommandHandlers();
-    this.workflowActions = this.createWorkflowActionsController();
+    this.workflowRunActions = this.createWorkflowRunActionsController();
     this.followUpController = this.createFollowUpController();
     this.apiKeyRetryController = this.createApiKeyRetryController();
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
@@ -465,7 +465,7 @@ export class DesktopProgressBridge {
   }
 
   /**
-   * Mirrors the extension's `createWorkflowActionsController`
+   * Mirrors the extension's `createWorkflowRunActionsController`
    * (`progressView/ProgressViewMessageHandler.ts`). The controller itself is
    * host-neutral; it reads each run's configuration from the same
    * `StreamSnapshotStore` both hosts share, so only the two terminal operations
@@ -473,8 +473,8 @@ export class DesktopProgressBridge {
    * `texra.pack` / `texra.clean` commands; the desktop calls the same
    * host-agnostic cores directly.
    */
-  private createWorkflowActionsController(): ProgressWorkflowActionsController {
-    return new ProgressWorkflowActionsController({
+  private createWorkflowRunActionsController(): ProgressWorkflowRunActionsController {
+    return new ProgressWorkflowRunActionsController({
       state: this.snapshotPort,
       runDiff: (request) => this.runWorkflowDiff(request),
       runFileOperation: (operation, request) =>
@@ -701,40 +701,14 @@ export class DesktopProgressBridge {
   }
 
   private createAgentProposalController(): ProgressAgentProposalController {
-    return new ProgressAgentProposalController({
+    return createProgressAgentProposalController({
       getPendingProposal: (requestId) =>
         this.backend.approvalHandlers.proposal.get(requestId),
       restoreRunConfig: async (config) => this.restoreRunConfig(config),
       openFile: (file) => this.options.host.openPath(file),
-      settleProposal: (requestId, result) => {
-        const resolved = this.hostInteractions.submitProposalDecision(
-          requestId,
-          result,
-        );
-        if (!resolved) {
-          this.logger.warn(
-            `No pending desktop host interaction found for proposal: ${requestId}`,
-          );
-        }
-      },
-      onMissingProposal: (requestId) => {
-        this.logger.warn(
-          `No pending desktop agent proposal found for setup: ${requestId}`,
-        );
-      },
-      onInvalidProposal: (issues) => {
-        this.logger.warn('Invalid desktop agent proposal config', {
-          data: { errors: issues },
-        });
-      },
-      onSetupComplete: (proposal) => {
-        this.logger.info(
-          `Desktop agent proposal ${proposal.requestId} set up in main view`,
-          {
-            data: { agent: proposal.agent },
-          },
-        );
-      },
+      submitProposalDecision: (requestId, result) =>
+        this.hostInteractions.submitProposalDecision(requestId, result),
+      log: this.logger,
     });
   }
 
@@ -850,8 +824,9 @@ export class DesktopProgressBridge {
 
   private createProgressViewInboundHandlers(): DesktopProgressInboundHandlerRegistry {
     const secondTierActions: ProgressViewSecondTierActions = {
-      ...this.snapshotPort,
-      workflowActions: this.workflowActions,
+      getRunMetadata: this.snapshotPort.getRunMetadata,
+      preload: this.snapshotPort.preload,
+      workflowRunActions: this.workflowRunActions,
       apiKeyRetry: this.apiKeyRetryController,
       followUp: this.followUpController,
       followUpPolish: this.followUpPolishController,
@@ -866,24 +841,26 @@ export class DesktopProgressBridge {
         }
       },
       applyFollowUpPlan: (plan) => applyFollowUpPlan(plan, this.followUpPorts),
-      applyPolishResult: (result) =>
-        applyFollowUpPolishResult(result, this.followUpPorts),
-      onPolishError: async (stream, error) => {
-        const message = toErrorMessage(error);
-        this.postToRenderer({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
-          stream,
-          kind: 'polishError',
-          text: null,
-          error: message,
-        });
-        this.logger.error(`Error polishing follow-up: ${message}`, {
-          data: toLogData(error),
-        });
-        await this.options.host.showErrorMessage(
-          `Error polishing follow-up: ${message}`,
-        );
-      },
+      capturePolishReporter: () => ({
+        applyResult: (result) =>
+          applyFollowUpPolishResult(result, this.followUpPorts),
+        reportError: async (stream, error) => {
+          const message = toErrorMessage(error);
+          this.postToRenderer({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FOLLOW_UP_TEXT,
+            stream,
+            kind: 'polishError',
+            text: null,
+            error: message,
+          });
+          this.logger.error(`Error polishing follow-up: ${message}`, {
+            data: toLogData(error),
+          });
+          await this.options.host.showErrorMessage(
+            `Error polishing follow-up: ${message}`,
+          );
+        },
+      }),
       postToRenderer: (message) => this.postToRenderer(message),
       restoreProposalConfig: async (proposal) => {
         await this.agentProposalController.restoreProposalConfig(proposal);
@@ -1148,7 +1125,7 @@ export class DesktopProgressBridge {
     // -- runLatexdiffFile -> diffAcceptedFilePair -> runSharedLatexdiff ->
     // runLatexdiffForExecution -- before anything enumerates it. A workflow
     // still producing output would otherwise change the diff scope after the
-    // user began the action. Mirrors ProgressWorkflowActionsController.diffStream.
+    // user began the action. Mirrors ProgressWorkflowRunActionsController.diffStream.
     const outputsByRound = cloneRoundIndexed(
       this.state.snapshots.getOutputFiles(stream),
     );

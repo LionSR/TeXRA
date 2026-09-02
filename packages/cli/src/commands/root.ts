@@ -1,6 +1,6 @@
 import { defineCommand, runCommand } from 'citty';
 
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 import {
   readCliAmbientState,
@@ -112,7 +112,7 @@ export const rootCommand = withUsageSections(
         ['texra setup', 'choose ChatGPT, sign in, or add a key (guided)'],
         ['texra auth chatgpt login', 'sign in with a ChatGPT subscription'],
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
-        ['texra login', `sign in with ${RESEARCHER_ACCESS.label}`],
+        ['texra login', RESEARCHER_ACCESS_AUTH.signInExample],
         ['texra chat', 'start an interactive tool-use session'],
         [
           'texra clone <project> --cwd ./paper',

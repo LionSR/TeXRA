@@ -203,14 +203,24 @@ describe('formatConversation', () => {
 
   it('formats archived (completed-run sidecar) web_fetch_tool_result blocks as a title/url marker', () => {
     // `src/transcript/completedRunArchive.ts`'s `webFetchEntryToMessages`
-    // reconstructs this block type with top-level url/title/page_content —
-    // no nested `content` — unlike the live Anthropic SDK shape above.
+    // reconstructs this block type in the same nested shape as the live
+    // Anthropic SDK shape above (minus fields only the provider sets).
     const output = formatAssistantBlocks([
       {
         type: 'web_fetch_tool_result',
-        url: 'https://texra.ai',
-        title: 'TeXRA home',
-        page_content: 'the full fetched page text'.repeat(20),
+        content: {
+          type: 'web_fetch_result',
+          url: 'https://texra.ai',
+          retrieved_at: null,
+          content: {
+            type: 'document',
+            title: 'TeXRA home',
+            source: {
+              type: 'text',
+              data: 'the full fetched page text'.repeat(20),
+            },
+          },
+        },
       },
     ]);
 
@@ -237,7 +247,13 @@ describe('formatConversation', () => {
     const output = formatAssistantBlocks([
       {
         type: 'web_fetch_tool_result',
-        page_content: 'fetched page text',
+        content: {
+          type: 'web_fetch_result',
+          content: {
+            type: 'document',
+            source: { type: 'text', data: 'fetched page text' },
+          },
+        },
       },
     ]);
 

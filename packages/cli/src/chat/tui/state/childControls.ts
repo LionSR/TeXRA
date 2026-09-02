@@ -1,4 +1,4 @@
-// Pure state helpers for App-level child execution navigation.
+// State helpers for App-level child execution navigation and presentation.
 
 // Local imports - shared schemas
 import {

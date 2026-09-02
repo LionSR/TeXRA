@@ -43,6 +43,7 @@ import {
   buildOverlayToolRegistry,
   buildTerminalTool,
 } from '@tools/structuredOutput';
+import { onAbort } from '@utils/core';
 import { TaskRunFileService } from '@utils/files/taskRunStorage';
 
 // Local file imports
@@ -59,7 +60,7 @@ import {
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseServices } from './ToolUseServices';
 
-export interface RunToolUseFlowInput extends BaseFlowContextInit {
+interface RunToolUseFlowInput extends BaseFlowContextInit {
   /** Abort this run's sticky signal. */
   interrupt: () => void;
   setting: AgentToolUseSetting;
@@ -100,7 +101,7 @@ export interface RunToolUseFlowInput extends BaseFlowContextInit {
   onFlowRecordDisposition?: (disposition: 'preserve' | 'delete') => void;
 }
 
-export interface RunToolUseFlowResult {
+interface RunToolUseFlowResult {
   outcome: RunOutcome | typeof STREAM_PHASE.WAITING;
   response?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
@@ -140,7 +141,7 @@ export interface ToolUseFlowContext {
  * flow owns the pairing: every `attach` is followed by exactly one `detach`,
  * including when `attach` itself throws after wiring part of the host up.
  */
-export interface ToolUseFlowAttachment {
+interface ToolUseFlowAttachment {
   attach(context: ToolUseFlowContext): void;
   detach(context: ToolUseFlowContext): void;
 }
@@ -381,7 +382,6 @@ export async function runToolUseFlow(
   let outcome: RunToolUseFlowResult['outcome'] = RUN_OUTCOME.CANCELLED;
   let files: string[] | undefined;
   let totalCostUsd: number | undefined;
-  let attachmentFollowUps: readonly FollowUpQueueBatchItem[] = [];
   let resumeStartupPreservation:
     'cancellation' | 'initial-read-failure' | undefined;
   let persistenceRecoveryPending = false;
@@ -409,15 +409,23 @@ export async function runToolUseFlow(
   // partway through is still detached by the finally below, and a detach can
   // never fire against an attachment that was already taken down.
   let live = false;
+  let detachAbort = (): void => {};
   const liveAttachment = {
     attach(): void {
       if (live) return;
       live = true;
+      // The run signal is the one cancellation channel. While the flow is
+      // live it turns an abort — including one that landed before this
+      // attachment — into this flow's own interrupt, which is what cancels
+      // pending host interactions and settles the session lifecycle. Bound
+      // to the attachment so a parked flow never receives a late abort.
+      detachAbort = onAbort(signal, () => flowContext.interrupt());
       attachment?.attach(flowContext);
     },
     detach(): void {
       if (!live) return;
       live = false;
+      detachAbort();
       attachment?.detach(flowContext);
     },
   };
@@ -434,7 +442,7 @@ export async function runToolUseFlow(
 
   try {
     liveAttachment.attach();
-    attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
+    const attachmentFollowUps = input.takePendingFollowUps?.() ?? [];
     // A host can hand off a cancellation synchronously during setup. Observe
     // it before touching the persisted resume record.
     if (signal.aborted && input.resume) {

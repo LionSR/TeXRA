@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, join, resolve as resolvePath } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   app,
   BrowserWindow,
@@ -152,7 +151,7 @@ import type {
 } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
-const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
+const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
 const credentialLog = createLog('Setup Credentials');
 
@@ -1012,7 +1011,6 @@ function createWindow(options: {
         // Idempotent: returns the in-flight/initialized registry so a kickoff
         // racing the startup `loadAgents()` cannot hit "Could not find agent:
         // setup" (mirrors `setupAssistantCommand.launchSetupAssistant`).
-        const { loadAgents } = await import('@agent/index');
         await loadAgents();
         const preparation = prepareMainViewExecutionRequest(message);
         if (!preparation.valid) {
@@ -1036,9 +1034,7 @@ function createWindow(options: {
       // the State 0 walkthrough button opens the desktop docs externally — the
       // closest desktop analog, reusing the same docs URL the Help menu's
       // "Desktop Documentation" item opens.
-      openGettingStarted: async () => {
-        await previewHost.openExternal(DESKTOP_DOCS_URL);
-      },
+      openGettingStarted: () => previewHost.openExternal(DESKTOP_DOCS_URL),
       onAsyncError: reportAsyncError,
     },
   );

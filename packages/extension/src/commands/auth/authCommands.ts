@@ -52,10 +52,9 @@ export async function signIn(): Promise<boolean> {
     // Check if auth system is ready - if not, provide clear error with reason
     const authReady = await SupabaseClient.isReady();
     if (!authReady) {
-      const initError = SupabaseClient.getInitError();
-      const reason = initError
-        ? initError.message
-        : 'Authentication service not initialized';
+      const reason =
+        SupabaseClient.getInitError()?.message ??
+        'Authentication service not initialized';
       void showLoggedMessage(
         CHANNEL,
         `Sign in failed: ${reason}. Try reloading VS Code (Ctrl+Shift+P → "Reload Window"). If the problem continues, open Help → Toggle Developer Tools → Console for details.`,
@@ -139,16 +138,16 @@ export async function signOut(): Promise<void> {
     if (!confirmed) return;
 
     const authProvider = SupabaseAuthProvider.getInstance();
-    if (authProvider) {
-      const removed = await authProvider.removeStoredSession();
-      const outcome = removed ? 'Signed out' : 'You were already signed out';
-      void vscode.window.showInformationMessage(outcome);
-    } else {
+    if (!authProvider) {
       void showLoggedMessage(
         CHANNEL,
         'Sign-out is unavailable right now. Reload the window, then try again.',
       );
+      return;
     }
+    const removed = await authProvider.removeStoredSession();
+    const outcome = removed ? 'Signed out' : 'You were already signed out';
+    void vscode.window.showInformationMessage(outcome);
   } catch (error) {
     void showLoggedErrorMessage(CHANNEL, 'Sign out failed', error);
   }

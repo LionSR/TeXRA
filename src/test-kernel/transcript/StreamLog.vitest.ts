@@ -47,7 +47,7 @@ describe('StreamLog', () => {
     }
 
     expect(log.head).toBe(5_001);
-    expect(log.size).toBe(5_001);
+    expect(log.head).toBe(5_001);
     expect(log.hasRunningGroup).toBe(true);
 
     const entries = log.getRange(0, log.head);

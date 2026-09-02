@@ -10,7 +10,7 @@ export const DESKTOP_LOG_COMMANDS = {
 const DesktopLogSnapshotSchema = z.object({
   text: z.string(),
   truncated: z.boolean(),
-  path: z.string().nullish(),
+  path: z.string(),
 });
 
 export const DesktopSetLogMessageSchema = z.object({

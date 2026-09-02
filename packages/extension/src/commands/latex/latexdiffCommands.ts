@@ -18,6 +18,7 @@ import {
   type LatexdiffPackResult,
 } from '@housekeeping/packLatexdiffvc';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
+import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type {
   DiffRunResult,
   RunLatexdiffCommandConfig,
@@ -30,7 +31,7 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { CHANNEL, latexdiffService } from '@latex/latexdiff/service';
+import { latexdiffService } from '@latex/latexdiff/service';
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
@@ -62,20 +63,19 @@ type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
  * reporting any failure under `errorMessage`. Every command in this file goes
  * through here.
  */
-async function withLatexdiffTool<T>(
+async function withLatexdiffTool(
   tool: LatexdiffTool,
   errorMessage: string,
-  action: () => Promise<T>,
-): Promise<T | undefined> {
+  action: () => Promise<void>,
+): Promise<void> {
   try {
     if (!(await checkToolInstalled(tool))) {
       log.warn(`${tool} is not installed; command will not run.`);
-      return undefined;
+      return;
     }
-    return await action();
+    await action();
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, errorMessage, err);
-    return undefined;
   }
 }
 
@@ -115,15 +115,14 @@ async function promptForLatexdiffMathMarkup(): Promise<
 }
 
 interface OpenedLatexdiffResult {
-  diffFilePath: string;
   diffLocation: FileLocation;
   viewerReady: boolean;
 }
 
 /**
- * Open and build one generated diff, returning the path, the resolved
- * location, and whether the viewer may be scheduled for it. The path alone is
- * not enough: an external `compileLatex2Pdf` failure can produce a generated
+ * Open and build one generated diff, returning its resolved location and
+ * whether the viewer may be scheduled for it. A generated path alone is not
+ * enough: an external `compileLatex2Pdf` failure can produce a generated
  * file whose PDF is not viewer-ready.
  */
 async function openLatexdiffResult(
@@ -149,7 +148,7 @@ async function openLatexdiffResult(
     preserveFocus: true,
     scheduleViewer: options.scheduleViewer,
   });
-  return { diffFilePath, diffLocation, viewerReady };
+  return { diffLocation, viewerReady };
 }
 
 /**
@@ -207,9 +206,7 @@ async function prepareLatexdiffResultsAndScheduleViewer(
         });
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
-          log.debug(
-            `Successfully generated diff: ${opened.diffFilePath}${suffix}`,
-          );
+          log.debug(`Successfully generated diff: ${result.diffPath}${suffix}`);
           if (opened.viewerReady) {
             lastViewerLocation = opened.diffLocation;
           }

@@ -10,25 +10,16 @@
  * accumulator or lifecycle flag doesn't need its own bespoke
  * get-or-create/prune/evict wiring.
  *
- * Every capability here is opt-in per consumer: a store with no "prune once
- * every field is empty" concept (`StreamSnapshotStore`, whose records
- * persist until an explicit `evict`) simply never calls {@link pruneIfEmpty},
- * and a store with no per-key version counter (`StreamLogStore`, which
- * tracks a single store-wide revision instead) never calls
- * {@link version}/{@link bumpVersion}/{@link evict}/{@link evictAll}. The
- * two stores' own persistence-strategy code (per-(key,category) write
- * mutexes vs debounce+generation) is NOT part of this container and stays
- * on each store.
+ * The one capability that is opt-in per consumer is {@link pruneIfEmpty}:
+ * `StreamSnapshotStore`, whose records persist until an explicit delete,
+ * never calls it. Anything a store guards per stream beyond presence — a
+ * generation token, a seed chain — is a field on its own record, so the
+ * container never carries a second map that `delete()` could miss. The two
+ * stores' own persistence-strategy code (per-(key,category) write mutexes vs
+ * debounce) is NOT part of this container and stays on each store.
  */
 export class ResidentStreamRegistry<TId, TState> {
   private readonly records = new Map<TId, TState>();
-  /**
-   * Per-key version counters. Deliberately never deleted — not even by
-   * {@link evict}/{@link evictAll} — so a version captured before a key's
-   * record is dropped still lets an in-flight async operation detect that it
-   * raced against a later change for the same key.
-   */
-  private readonly versions = new Map<TId, number>();
 
   constructor(private readonly createDefault: () => TState) {}
 
@@ -69,24 +60,5 @@ export class ResidentStreamRegistry<TId, TState> {
   pruneIfEmpty(id: TId, isEmpty: (state: TState) => boolean): void {
     const record = this.records.get(id);
     if (record && isEmpty(record)) this.records.delete(id);
-  }
-
-  version(id: TId): number {
-    return this.versions.get(id) ?? 0;
-  }
-
-  bumpVersion(id: TId): void {
-    this.versions.set(id, this.version(id) + 1);
-  }
-
-  /** Bump a key's version, then drop its record — the two always happen together. */
-  evict(id: TId): void {
-    this.bumpVersion(id);
-    this.records.delete(id);
-  }
-
-  evictAll(): void {
-    for (const id of this.records.keys()) this.bumpVersion(id);
-    this.records.clear();
   }
 }

@@ -265,11 +265,9 @@ export async function resolveWorkflowOutput(
         `Workflow ${terminalStatus} without generated outputs; nothing was copied to ${outputDir}.`,
       );
     }
-    if (outputFile) {
-      throw new Error(
-        `Workflow ${terminalStatus} without a generated output; ${outputFile} was not written.`,
-      );
-    }
+    throw new Error(
+      `Workflow ${terminalStatus} without a generated output; ${outputFile} was not written.`,
+    );
   }
 
   if (outputDir) {

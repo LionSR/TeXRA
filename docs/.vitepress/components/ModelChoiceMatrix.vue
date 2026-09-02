@@ -18,7 +18,7 @@ const rows = [
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['fable5', 'opus5', 'gpt56', 'gemini31p'],
+    models: ['fable51', 'opus5', 'gpt56', 'gemini31p'],
   },
   {
     icon: 'code',
@@ -30,13 +30,13 @@ const rows = [
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable5', 'opus5T', 'sonnet5T', 'deepseekT', 'kimi3'],
+    models: ['fable51', 'opus5T', 'sonnet5T', 'deepseekT', 'kimi3'],
   },
   {
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['gemini31p', 'fable5', 'sonnet5', 'opus5'],
+    models: ['gemini31p', 'fable51', 'sonnet5', 'opus5'],
   },
 ];
 </script>

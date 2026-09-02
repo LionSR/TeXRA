@@ -47,20 +47,19 @@ export function stripOrphanedServerToolUse<T>(blocks: readonly T[]): {
     }
   }
 
+  const resultIdsFor = (name: string): Set<string> | undefined => {
+    if (name === 'web_search') return searchResultIds;
+    if (name === 'web_fetch') return fetchResultIds;
+    return undefined;
+  };
+
   const orphanedIds: string[] = [];
   const kept = blocks.filter((block) => {
     if (!isAnthropicServerToolUse(block)) return true;
-    if (block.name === 'web_search') {
-      if (searchResultIds.has(block.id)) return true;
-      orphanedIds.push(block.id);
-      return false;
-    }
-    if (block.name === 'web_fetch') {
-      if (fetchResultIds.has(block.id)) return true;
-      orphanedIds.push(block.id);
-      return false;
-    }
-    return true;
+    const resultIds = resultIdsFor(block.name);
+    if (!resultIds || resultIds.has(block.id)) return true;
+    orphanedIds.push(block.id);
+    return false;
   });
 
   return { kept, orphanedIds };

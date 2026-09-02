@@ -5,7 +5,7 @@ import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-// Local imports - shared styles
+// Local imports - shared styles, ipc, and schemas
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
@@ -27,12 +27,12 @@ import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-// Local imports - shared schemas
+// Local imports - shared state keys and utilities
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSelectValue } from '@shared/utils/selectTemplates';
+import { readSelectValue } from '@shared/wa/selectTemplates';
 import { groupBy } from '@utils/core';
 
-// Side-effect imports - register WA button, icon, and switch components
+// Side-effect imports - register WA button, icon, select, and option components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
@@ -166,10 +166,6 @@ export class ToolsTab extends LitElement {
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
 
-  private handleRecheck(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS);
-  }
-
   private handleApprovalPolicyChange = (e: Event): void => {
     const policy = parseTexraApprovalPolicy(readSelectValue(e));
     if (policy) postStateSetting(TEXRA_APPROVAL_POLICY_CONFIG_KEY, policy);
@@ -292,7 +288,8 @@ export class ToolsTab extends LitElement {
             text: 'Re-check',
             kind: 'secondary',
             appearance: 'outlined',
-            onClick: () => this.handleRecheck(),
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
           })}
         </div>
         ${this.renderApprovalSettings()}

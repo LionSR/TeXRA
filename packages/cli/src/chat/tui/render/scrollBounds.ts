@@ -69,24 +69,19 @@ export function scrollBoundedRows<T>({
     };
   }
 
-  const offset = Math.max(
+  const offset = clamp(
+    scrollOffset,
     0,
-    Math.min(
-      scrollOffset,
-      maxScrollableRowOffset({
-        maxDisplayLines,
-        totalLines: rows.length,
-      }),
-    ),
+    maxScrollableRowOffset({
+      maxDisplayLines,
+      totalLines: rows.length,
+    }),
   );
   const hiddenBefore = offset;
   const reserveBefore = hiddenBefore > 0 ? 1 : 0;
-  const contentSlotsWithoutAfter = Math.max(0, maxDisplayLines - reserveBefore);
+  const contentSlotsWithoutAfter = maxDisplayLines - reserveBefore;
   const reserveAfter = offset + contentSlotsWithoutAfter < rows.length ? 1 : 0;
-  const visibleCount = Math.max(
-    0,
-    maxDisplayLines - reserveBefore - reserveAfter,
-  );
+  const visibleCount = maxDisplayLines - reserveBefore - reserveAfter;
   const visibleRows = rows.slice(offset, offset + visibleCount);
   const hiddenAfter = Math.max(0, rows.length - (offset + visibleCount));
 

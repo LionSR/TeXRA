@@ -2,14 +2,6 @@
 import PQueue from 'p-queue';
 
 // Local imports
-import {
-  deleteExecution as deleteStoredExecution,
-  listExecutionStreamReferences,
-  type DeleteExecutionOptions,
-  type DeleteExecutionResult,
-  type ExecutionStreamReferenceListing,
-  readExecutionStreamIndex,
-} from '@agent/storage/executionListing';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
@@ -17,6 +9,14 @@ import { StreamDeletionSupersededError } from '@transcript/StreamLogStore';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { throwAggregated, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  deleteExecution as deleteStoredExecution,
+  listExecutionStreamReferences,
+  type DeleteExecutionOptions,
+  type DeleteExecutionResult,
+  type ExecutionStreamReferenceListing,
+  readExecutionStreamIndex,
+} from './executionListing';
 
 const log = createLog('SessionStores');
 

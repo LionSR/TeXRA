@@ -681,6 +681,42 @@ return await parallel([
     expect(order).toEqual(['runner', 'checkpoint:1', 'completed:call-1']);
   });
 
+  it('observes validated cache hits and live results after durable commit', async () => {
+    const cached = await runScript(`return await agent('cached')`);
+    const order: string[] = [];
+    const run = await runWorkflowScript({
+      script: `${META}
+const cached = await agent('cached')
+log('after cache')
+const live = await agent('live')
+log('after live')
+return [cached, live]`,
+      journal: cached.journal,
+      runAgent: async ({ prompt }) => {
+        order.push(`runner:${prompt}`);
+        return `result:${prompt}`;
+      },
+      onJournalEntry: async (entry) => {
+        await delay(5);
+        order.push(`checkpoint:${entry.index}`);
+      },
+      onJournalEntryConsumed: (entry) => {
+        order.push(`consumed:${entry.index}`);
+      },
+      onEvent: (event) => order.push(event.message),
+    });
+
+    expect(run.result).toEqual(['result:cached', 'result:live']);
+    expect(order).toEqual([
+      'consumed:0',
+      'after cache',
+      'runner:live',
+      'checkpoint:1',
+      'consumed:1',
+      'after live',
+    ]);
+  });
+
   it('reports a synchronous snapshot-write failure instead of hanging', async () => {
     // A synchronous `onSnapshot` throw runs the coalescing writer's drain to
     // completion (`catch` and `finally` included) inside `publish`, so the

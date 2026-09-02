@@ -15,7 +15,7 @@ export async function initializeDesktopCrashReporting({
 }: DesktopCrashReportingInitOptions): Promise<void> {
   const dsn = process.env.TEXRA_SENTRY_DSN?.trim();
   if (!dsn) {
-    log.debug?.('Desktop crash reporting disabled: TEXRA_SENTRY_DSN unset.');
+    log.debug('Desktop crash reporting disabled: TEXRA_SENTRY_DSN unset.');
     return;
   }
 
@@ -27,9 +27,9 @@ export async function initializeDesktopCrashReporting({
       dsn,
       tracesSampleRate: 0,
       attachScreenshot: false,
-      beforeSend: (event) => scrubCrashEvent(event),
+      beforeSend: scrubCrashEvent,
     });
   } catch (error) {
-    log.error?.('Failed to initialize desktop crash reporting', error);
+    log.error('Failed to initialize desktop crash reporting', error);
   }
 }

@@ -9,7 +9,6 @@
 
 import { z } from 'zod';
 
-import { logWarn } from '@shared/log';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 
 import { AgentCategorySchema } from './agent';
@@ -40,7 +39,7 @@ const AgentModePresetIconSchema = z.string().transform((rawIcon) => {
     return normalized as AgentModePresetIconName;
   }
 
-  logWarn(
+  console.warn(
     `[agentPresets] Unknown agent team icon "${normalized}"; falling back to ` +
       `"${FALLBACK_AGENT_MODE_PRESET_ICON}" instead of dropping the team.`,
   );
@@ -63,7 +62,7 @@ export type AgentModePreset = z.infer<typeof AgentModePresetSchema>;
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   const parsedRecords = z.array(z.unknown()).prefault([]).safeParse(raw);
   if (!parsedRecords.success) {
-    logWarn(
+    console.warn(
       `[agentPresets] Custom agent teams are not an array; ignoring them for ` +
         `this read: ${parsedRecords.error.message}`,
     );
@@ -74,7 +73,7 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
     const result = AgentModePresetSchema.safeParse(rawPreset);
     if (result.success) return [result.data];
 
-    logWarn(
+    console.warn(
       `[agentPresets] Ignoring malformed custom agent team at index ${index}: ` +
         result.error.message,
     );

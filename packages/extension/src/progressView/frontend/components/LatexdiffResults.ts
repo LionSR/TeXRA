@@ -33,6 +33,12 @@ const LATEXDIFF_STATUS_ICONS: Record<DiffStatus, TeXRAIconName> = {
   error: 'circle-exclamation',
 };
 
+/** Screen-reader labels for the otherwise icon-only result status. */
+const LATEXDIFF_STATUS_LABELS: Record<DiffStatus, string> = {
+  success: 'Comparison succeeded',
+  error: 'Comparison failed',
+};
+
 @customElement('latexdiff-results')
 export class LatexdiffResults extends LitElement {
   static override styles = [
@@ -51,7 +57,8 @@ export class LatexdiffResults extends LitElement {
       .latexdiff-content {
         list-style: none;
         margin: 0;
-        padding: var(--wa-space-3xs) 0 var(--wa-space-2xs) var(--wa-space-s);
+        padding-block: var(--wa-space-3xs) var(--wa-space-2xs);
+        padding-inline: var(--wa-space-s) 0;
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-3xs);
@@ -63,13 +70,18 @@ export class LatexdiffResults extends LitElement {
       }
 
       .file-link {
+        appearance: none;
+        padding: 0;
+        border: 0;
+        background: none;
         color: var(--color-text-link);
         cursor: pointer;
-        overflow-wrap: anywhere;
-      }
-
-      .file-link:hover {
+        font: inherit;
+        text-align: inherit;
         text-decoration: underline;
+        text-decoration-thickness: from-font;
+        text-underline-position: from-font;
+        overflow-wrap: anywhere;
       }
 
       .arrow {
@@ -91,24 +103,23 @@ export class LatexdiffResults extends LitElement {
     this.dispatchEvent(ProgressEvents.fileClick({ file: filePath }));
   }
 
-  private renderFileLink(filePath: string, label: string): TemplateResult {
+  private renderFileLink(
+    filePath: string,
+    label: string,
+    accessibleLabel: string,
+  ): TemplateResult {
     if (!filePath) {
       return html`<span>${label}</span>`;
     }
-    return html`<span
+    return html`<button
+      type="button"
       class="file-link"
       data-file=${filePath}
-      role="button"
-      tabindex="0"
+      aria-label=${accessibleLabel}
       @click=${() => this.handleFileClick(filePath)}
-      @keydown=${(e: KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          this.handleFileClick(filePath);
-        }
-      }}
-      >${label}</span
-    >`;
+    >
+      ${label}
+    </button>`;
   }
 
   private renderEntry(entry: DiffResultDisplay, index: number): TemplateResult {
@@ -125,6 +136,7 @@ export class LatexdiffResults extends LitElement {
     } = entry;
 
     const icon = LATEXDIFF_STATUS_ICONS[status];
+    const statusLabel = LATEXDIFF_STATUS_LABELS[status];
     const baseLabel =
       baseRound === null
         ? displayName
@@ -134,10 +146,15 @@ export class LatexdiffResults extends LitElement {
     const entryId = `latexdiff-entry-${index}`;
     return html`
       <li id=${entryId} class="detail-item" data-run-id=${ifDefined(runId)}>
-        ${waIcon(icon)} ${this.renderFileLink(baseFile, baseLabel)}
+        ${waIcon(icon, { label: statusLabel })}
+        ${this.renderFileLink(baseFile, baseLabel, `Open base file: ${baseLabel}`)}
         ${waIcon('arrow-right', { className: 'arrow' })}
-        ${this.renderFileLink(revisedFile, revisedLabel)}
-        (${this.renderFileLink(diffFile, 'diff')})
+        ${this.renderFileLink(
+          revisedFile,
+          revisedLabel,
+          `Open revised file ${revisedLabel} for ${displayName}`,
+        )}
+        (${this.renderFileLink(diffFile, 'diff', `Open ${displayName} diff`)})
         ${message ? html`<wa-tooltip for=${entryId}>${message}</wa-tooltip>` : nothing}
       </li>
     `;

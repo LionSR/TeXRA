@@ -1,4 +1,4 @@
-/** Subscription-backed model access: ChatGPT, Copilot in VS Code, Kimi Code. */
+/** Subscription-backed model access: ChatGPT, Grok, coding-plan providers, and Copilot in VS Code. */
 
 import {
   LitElement,
@@ -10,7 +10,7 @@ import {
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-// Local imports - shared styles
+// Local imports - shared styles, schemas, and templates
 import { commonViewStyles, designTokens } from '@shared/styles';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -27,7 +27,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
-// Web Awesome icon bundle (side-effect import)
+// Side-effect imports - register WA button, details, icon, and tag components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

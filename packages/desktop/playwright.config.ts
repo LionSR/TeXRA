@@ -23,7 +23,7 @@ export default defineConfig({
   // Generous timeout: cold Electron launch + IPC bring-up can take a while.
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: [['list']],
+  reporter: 'list',
   use: {
     // Baseline viewport for committed screenshots. Individual tests may
     // override via `page.setViewportSize()`.

@@ -6,7 +6,7 @@
  * with `// prettier-ignore` to prevent whitespace issues.
  */
 
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { classMap, type ClassInfo } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { TOOL_OUTPUT_LANGUAGES } from '@progressView/frontend/formatters/constants';
@@ -26,8 +26,7 @@ import {
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { isObject } from '@utils/core';
 
-// Side-effect import to register <tool-timer> custom element
-import '@progressView/frontend/components/ToolTimer';
+// Side-effect import to register <terminal-output> custom element
 import '@progressView/frontend/components/TerminalOutput';
 
 // Side-effect imports - register WA components
@@ -100,8 +99,14 @@ export function buildToolUseDetails(opts: {
     'tool-use-error': opts.isError,
     ...opts.extraClasses,
   };
+  // The failure icon is decorative and hidden from assistive technology.
+  // Keep the collapsed summary's state available without adding visual noise.
+  const statusText = opts.isError
+    ? html`<span class="visually-hidden"> — Failed</span>`
+    : nothing;
+  const extraContent = html`${statusText}${opts.extraContent ?? nothing}`;
   // prettier-ignore
-  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent: opts.extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)}>${opts.content}</div></wa-details>`;
+  return html`<wa-details appearance="plain" icon-placement="start" class=${classMap(classes)} ?open=${opts.defaultOpen ?? false}>${buildDetailsSummary({ iconName: opts.iconName, label: opts.label, labelClass: 'tool-use-title', extraContent })}<div class="banner-content log-entry-content" data-log-id=${ifDefined(opts.row.id)} data-group-id=${ifDefined(opts.row.groupId)}>${opts.content}</div></wa-details>`;
 }
 
 type ToolSectionOptions = {

@@ -52,8 +52,7 @@ interface FileActionOptions {
   readonly className: string;
   readonly command: string;
   readonly file: string;
-  // Unique per (round, file-index) so the button id can't collide when the
-  // same workspace path appears across rounds in one shadow root.
+  // Unique per (round, file-index); see renderFileActionButton for the id contract.
   readonly idPrefix: string;
   readonly base?: string;
   readonly prev?: string;
@@ -91,14 +90,8 @@ function renderFileActionButton(opts: FileActionOptions): TemplateResult {
 
 const STORAGE_HINT_DISMISS_KEY = 'generatedFilesStorageHint.dismissed';
 
-/** Parsed path components for display */
-interface ParsedPath {
-  dir: string;
-  basename: string;
-}
-
 /** Parse a path into directory and basename components */
-function parsePath(path: string): ParsedPath {
+function parsePath(path: string): { dir: string; basename: string } {
   const normalized = normalizeFilePath(path);
   // With no slash, lastIndexOf is -1 and the dir slice already yields the
   // fallback: '' for dir.
@@ -211,8 +204,8 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
         ${renderIconActionButton({
           id: 'storage-hint-dismiss-button',
           icon: 'xmark',
-          label: 'Dismiss storage explanation',
-          tooltip: 'Dismiss storage explanation',
+          label: 'Dismiss generated files explanation',
+          tooltip: 'Dismiss generated files explanation',
           className: 'storage-hint__dismiss',
           onClick: this.handleDismissStorageHint,
         })}
@@ -229,16 +222,20 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     round: number,
     files: readonly OutputFileInfo[],
   ): TemplateResult {
-    const rows = repeat(
-      files,
-      (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
-      (file, index) => this.renderFileItem(file, round, index),
-    );
+    const rows = html`
+      <ul class="file-round-list">
+        ${repeat(
+          files,
+          (file, index) => `${round}-${file.location?.absolutePath ?? index}`,
+          (file, index) => this.renderFileItem(file, round, index),
+        )}
+      </ul>
+    `;
 
     // A per-round disclosure only earns its chrome when there are multiple
     // rounds to tell apart; a single round renders its files directly.
     if (this.sortedRounds.length === 1) {
-      return html`${rows}`;
+      return rows;
     }
 
     return html`
@@ -286,17 +283,19 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
       filePath,
       effectiveBase,
       compareBase,
+      tooltipPath,
       idPrefix,
     );
     const previousAction = this.renderPreviousAction(
       filePath,
       effectiveBase,
       diffBase,
+      tooltipPath,
       idPrefix,
     );
 
     return html`
-      <div class="file-item">
+      <li class="file-item">
         ${
           failure
             ? html`${waIcon('triangle-exclamation', { id: `${idPrefix}-compile-warning`, className: 'compile-warning', label: 'Compile check failed' })}
@@ -325,7 +324,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
             failure
               ? renderFileActionButton({
                   icon: 'terminal',
-                  label: 'Open compile log',
+                  label: `Open compile log for ${tooltipPath}`,
                   title: `Open compile log (${failure.logRelativePath})`,
                   className: '',
                   command: PROGRESS_VIEW_COMMANDS.OPEN_FILE,
@@ -336,7 +335,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
           }
           ${baseActions} ${previousAction}
         </div>
-      </div>
+      </li>
     `;
   }
 
@@ -388,8 +387,13 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
 
     return html`
       <span class="file-stats">
-        <span class="added">+${counts.added}</span>
-        <span class="removed">-${counts.removed}</span>
+        <span class="visually-hidden"
+          >${counts.added} ${counts.added === 1 ? 'line' : 'lines'} added,
+          ${counts.removed} ${counts.removed === 1 ? 'line' : 'lines'}
+          removed</span
+        >
+        <span class="added" aria-hidden="true">+${counts.added}</span>
+        <span class="removed" aria-hidden="true">-${counts.removed}</span>
       </span>
     `;
   }
@@ -398,6 +402,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     filePath: string,
     basePath: string,
     compareBase: string,
+    displayPath: string,
     idPrefix: string,
   ): TemplateResult | typeof nothing {
     if (!basePath) return nothing;
@@ -405,7 +410,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     return html`
       ${renderFileActionButton({
         icon: 'code-compare',
-        label: 'Compare with base',
+        label: `Compare ${displayPath} with base`,
         title: 'Compare with base in a side-by-side diff',
         className: 'compare-btn',
         command: PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL,
@@ -415,7 +420,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
       })}
       ${renderFileActionButton({
         icon: 'plus-minus',
-        label: 'Run latexdiff',
+        label: `Run latexdiff for ${displayPath}`,
         title: 'Run latexdiff against the base file',
         className: 'latexdiff-btn',
         command: PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE,
@@ -425,7 +430,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
       })}
       ${renderFileActionButton({
         icon: 'check',
-        label: 'Accept edits',
+        label: `Accept edits for ${displayPath}`,
         title: 'Accept edits into the workspace file',
         className: 'accept-btn',
         command: PROGRESS_VIEW_COMMANDS.ACCEPT_FILE,
@@ -435,7 +440,7 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
       })}
       ${renderFileActionButton({
         icon: 'code-merge',
-        label: 'Merge edits',
+        label: `Merge edits for ${displayPath}`,
         title: 'Merge edits into the workspace file',
         className: 'merge-btn',
         command: PROGRESS_VIEW_COMMANDS.MERGE_FILE,
@@ -450,13 +455,14 @@ export class FileList extends UnsupportedCommandsMixin(LitElement) {
     filePath: string,
     basePath: string,
     previousPath: string | undefined,
+    displayPath: string,
     idPrefix: string,
   ): TemplateResult | typeof nothing {
     if (!previousPath || previousPath === basePath) return nothing;
 
     return renderFileActionButton({
       icon: 'plus',
-      label: 'Compare with previous round',
+      label: `Compare ${displayPath} with previous round`,
       title: 'Compare with previous round in a side-by-side diff',
       className: 'prev-btn',
       command: PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS,

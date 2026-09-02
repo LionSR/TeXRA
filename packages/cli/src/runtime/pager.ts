@@ -21,12 +21,10 @@ const DEFAULT_PAGER = 'less -FIRX';
 export function resolvePagerCommand(
   env: Record<string, string | undefined> = readCliEnv(),
 ): string | undefined {
-  const pager = env.PAGER;
-  if (pager === undefined) return DEFAULT_PAGER;
-  const trimmed = pager.trim();
+  const pager = env.PAGER?.trim() ?? DEFAULT_PAGER;
   // `PAGER=` (empty) or `PAGER=cat` are the conventional "no pager" signals.
-  if (trimmed === '' || trimmed === 'cat') return undefined;
-  return trimmed;
+  if (pager === '' || pager === 'cat') return undefined;
+  return pager;
 }
 
 /**

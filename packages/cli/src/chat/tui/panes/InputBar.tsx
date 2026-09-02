@@ -9,11 +9,13 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { writeTextStderr } from '@cli/runtime/logSinks';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { BaseTextInput, textInputCappedRowCount } from '../input/BaseTextInput';
+import { BaseTextInput } from '../input/BaseTextInput';
+import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,
@@ -371,13 +373,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
 
   // Slash palette pops up while typing /…
   const parsed = parseSlashInput(value);
-  const isTypingSlashCommandName =
-    parsed !== undefined && !/\s/.test(value.slice(1));
   const paletteMatchCount =
     parsed !== undefined ? matchSlashCommands(parsed.name).length : 0;
   const showPalette =
     parsed !== undefined &&
-    isTypingSlashCommandName &&
+    !/\s/.test(value.slice(1)) &&
     paletteMatchCount > 0 &&
     !reverseSearchOpen &&
     !disabled &&
@@ -413,8 +413,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // live frame past the terminal (per-keystroke scrollback churn). One frame
   // of lag (signal set post-render) beats a whole draft-lifetime of overflow.
   const inputDisplayWidth = Math.max(1, columns - INPUT_BAR_DECORATION_COLUMNS);
+  const disabledDisplayText = props.disabledMessage
+    ? wrapAnsiToWidth(props.disabledMessage, inputDisplayWidth)
+    : undefined;
+  const disabledContentRows = disabledDisplayText
+    ? Math.min(
+        INPUT_BAR_MAX_CONTENT_ROWS,
+        disabledDisplayText.split('\n').length,
+      )
+    : 1;
   const draftContentRows = disabled
-    ? 1
+    ? disabledContentRows
     : textInputCappedRowCount(
         value,
         inputDisplayWidth,
@@ -456,12 +465,20 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         borderColor={COLOR_BORDER}
         paddingX={1}
         aria-role="textbox"
+        aria-state={{ disabled }}
       >
         <Text aria-hidden color={COLOR_HINT}>
           {POINTER}{' '}
         </Text>
         {disabled && props.disabledMessage ? (
-          <Text dimColor>{props.disabledMessage}</Text>
+          <Box
+            flexGrow={1}
+            flexShrink={1}
+            height={draftContentRows}
+            overflowY="hidden"
+          >
+            <Text dimColor>{disabledDisplayText}</Text>
+          </Box>
         ) : (
           <Box
             flexGrow={1}

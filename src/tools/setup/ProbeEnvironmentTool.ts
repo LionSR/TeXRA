@@ -36,12 +36,12 @@ const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
  *
  * Returns a single structured JSON document covering OS, PATH, package
  * manager, core TeXRA dependencies, LaTeX Workshop extension, usable API-key
- * origins, broader usable credential status, and Researcher Access status.
+ * origins, broader usable credential status, and TeXRA account status.
  * No approval gate — purely read-only, akin to `ls` / `glob`.
  */
 export class ProbeEnvironmentTool extends defineTool({
   name: 'probe_environment',
-  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and Researcher Access sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
+  description: `Probe the active host and environment and return a structured JSON summary covering host kind, OS, shell, PATH, detected package manager (brew/apt/scoop), installation status of TeXRA's core LaTeX dependencies (pdflatex, latexmk, latexindent, perl, gs, gm/magick, texcount, latexdiff), the LaTeX Workshop VS Code extension, each provider API key's origin (TeXRA secrets, environment, or absent; values are never returned), ChatGPT subscription state, broader usable credential status, and TeXRA account sign-in status. Read-only, no approval required. Call this first in any setup session to decide what to do next.`,
   schema: ProbeEnvironmentInputSchema,
 }) {
   protected async execute(_input: ProbeInput): Promise<ToolResult> {
@@ -106,7 +106,7 @@ export class ProbeEnvironmentTool extends defineTool({
       credentials: {
         // `anyApiKeySet` is literal — only true if at least one
         // per-provider API key is present (matches the `apiKeys`
-        // array below). A Researcher-Access-only user would have
+        // array below). A TeXRA-account-only user would have
         // had this come out true under the previous adapter-backed
         // check, which contradicted the per-provider detail and
         // misled credential planning.
@@ -115,7 +115,7 @@ export class ProbeEnvironmentTool extends defineTool({
         ),
         // `hasAnyUsableCredential` is the broader "can setup launch a
         // model right now" signal — direct key, ChatGPT subscription,
-        // or server-side Researcher Access. Kept as a separate field
+        // or server-side TeXRA account. Kept as a separate field
         // so the agent can reason about API keys separately.
         hasAnyUsableCredential: credentialReadiness.available,
         usableCredentialStatus: credentialReadiness.status,

@@ -17,7 +17,6 @@ const log = createLog('FileLister');
 
 export class FileLister {
   public static initialize(context: vscode.ExtensionContext): void {
-    getFileLister();
     context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() =>
         getFileLister().refresh(),
@@ -33,7 +32,7 @@ export class FileLister {
     this.settings = loadFileListSettings();
   }
 
-  public async list(fileType: ListableFileType): Promise<string[]> {
+  public list(fileType: ListableFileType): Promise<string[]> {
     return this.listFiles(getFileListConfig(fileType, this.settings));
   }
 

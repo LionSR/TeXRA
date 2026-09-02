@@ -18,10 +18,7 @@ import type {
 } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import type {
-  CompactionActivityBlock,
-  CompactionActivityProjection,
-} from '@shared/streams/compactionActivityProjection';
+import type { CompactionActivityProjection } from '@shared/streams/compactionActivityProjection';
 import type { WorkflowRowGroup } from '@shared/streams/workflowRunModel';
 import type { WorkPlanProvenance } from '@transcript';
 import { isChildStreamRemoved, sessionStreamPhase } from './childExecutions';
@@ -50,9 +47,6 @@ export interface TranscriptFoldItem {
   readonly tieBreak: number;
   /** Equal-key source order: 0 = compaction row, 1 = log row, 2 = synthetic. */
   readonly rank: 0 | 1 | 2;
-  /** Compaction rows: the block `rendered` was built from; reference equality
-   *  means the row is current. */
-  block?: CompactionActivityBlock;
 }
 
 /**
@@ -123,10 +117,6 @@ export interface TranscriptFoldState {
   /** Whether the last emitted `entries` was the full transcript or compact;
    *  undefined until the first emission. */
   lastOutputFull?: boolean;
-  /** The exact `entries` array last emitted. A slice whose entries no longer
-   *  match was patched out of band (local rows), so the next application
-   *  must rebuild its output instead of reusing `slice.entries`. */
-  lastEntriesOutput?: readonly TranscriptRow[];
 }
 
 export interface SessionMeta {
@@ -161,7 +151,6 @@ export interface BypassState {
  * separate from the fact rail by design) and terminal modality.
  */
 export interface StreamSlice {
-  readonly streamId: StreamTabId;
   /** Run/round/phase lifecycle projected from the canonical StreamLog. */
   readonly taskGroups: readonly TaskGroup[];
   /** Attempt boundary from the newest transcript marker, independently of
@@ -205,9 +194,8 @@ export const NO_BYPASS: BypassState = {
 /** The zero value of a stream slice: every field at its pre-run default.
  *  Tests build fixtures from this so a new `StreamSlice` field cannot drift
  *  away from what the store actually seeds. */
-export function emptySlice(streamId: StreamTabId): StreamSlice {
+export function emptySlice(): StreamSlice {
   return {
-    streamId,
     latestLine: undefined,
     taskGroups: [],
     workflowAttemptId: undefined,
@@ -245,7 +233,7 @@ export function patchStream(
 ): void {
   RETIRED_STREAMS.delete(streamId);
   const current = streams.get();
-  const slice = current.get(streamId) ?? emptySlice(streamId);
+  const slice = current.get(streamId) ?? emptySlice();
   const next = update(slice);
   if (next === slice) return;
   const out = new Map(current);

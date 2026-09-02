@@ -12,14 +12,14 @@ export function loadGitHubTokenStatus(): Promise<GitHubTokenStatus> {
 }
 
 /** Persist a GitHub PAT without exposing it outside the credential store. */
-export async function saveGitHubToken(token: string): Promise<void> {
-  await storeCredential(platform().secrets, {
+export function saveGitHubToken(token: string): Promise<void> {
+  return storeCredential(platform().secrets, {
     secretName: GITHUB_TOKEN_STORAGE_KEY,
     value: token,
     kind: 'github',
   });
 }
 
-export async function removeGitHubToken(): Promise<void> {
-  await platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+export function removeGitHubToken(): Promise<void> {
+  return platform().secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
 }

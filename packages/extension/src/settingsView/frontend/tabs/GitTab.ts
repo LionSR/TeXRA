@@ -174,19 +174,13 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
   @property({ attribute: false })
   prSubscriptions: readonly PRSubscriptionEntry[] = [];
 
-  private handleAuthorNameChange(event: Event): void {
-    const target = event.target as WaInput | null;
-    const name = target?.value?.trim();
-    if (name) {
-      postStateSetting(WorkspaceStateKey.GIT_AUTHOR_NAME, name);
-    }
-  }
-
-  private handleAuthorEmailChange(event: Event): void {
-    const target = event.target as WaInput | null;
-    const email = target?.value?.trim();
-    if (email) {
-      postStateSetting(WorkspaceStateKey.GIT_AUTHOR_EMAIL, email);
+  private handleIdentityInputChange(
+    event: Event,
+    key: WorkspaceStateKey,
+  ): void {
+    const value = (event.target as WaInput | null)?.value?.trim();
+    if (value) {
+      postStateSetting(key, value);
     }
   }
 
@@ -324,8 +318,8 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                       (subscription) => html`
                         <li>
                           <div class="subscription-meta">
-                            <code class="subscription-key"
-                              >${subscription.key}</code
+                            <code class="subscription-key" dir="ltr"
+                              ><bdi>${subscription.key}</bdi></code
                             >
                             ${
                               subscription.owners.length > 0
@@ -336,11 +330,14 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                                           <div class="subscription-owner-row">
                                             <span
                                               class="subscription-owner-label"
-                                              >${owner.label}</span
+                                              ><bdi dir="auto"
+                                                >${owner.label}</bdi
+                                              ></span
                                             >
                                             ${renderLabeledActionButton({
                                               icon: 'comments',
                                               text: 'Jump to agent',
+                                              label: `Jump to ${owner.label}`,
                                               kind: 'secondary',
                                               appearance: 'outlined',
                                               onClick: () =>
@@ -364,6 +361,7 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                           ${renderLabeledActionButton({
                             icon: 'circle-stop',
                             text: 'Stop monitoring',
+                            label: `Stop monitoring ${subscription.key}`,
                             kind: 'secondary',
                             appearance: 'outlined',
                             onClick: () =>
@@ -401,9 +399,14 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         class="form-control-fill"
                         name="git-author-name"
                         autocomplete="name"
+                        spellcheck="false"
                         .value=${this.authorName}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
-                        @change=${this.handleAuthorNameChange}
+                        @change=${(event: Event) =>
+                          this.handleIdentityInputChange(
+                            event,
+                            WorkspaceStateKey.GIT_AUTHOR_NAME,
+                          )}
                       ></wa-input>
                     </div>
                     <div class="input-row">
@@ -412,11 +415,19 @@ export class GitTab extends UnsupportedCommandsMixin(LitElement) {
                         id="git-author-email"
                         class="form-control-fill"
                         name="git-author-email"
+                        type="email"
+                        inputmode="email"
                         autocomplete="email"
+                        autocapitalize="off"
                         spellcheck="false"
+                        dir="ltr"
                         .value=${this.authorEmail}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
-                        @change=${this.handleAuthorEmailChange}
+                        @change=${(event: Event) =>
+                          this.handleIdentityInputChange(
+                            event,
+                            WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+                          )}
                       ></wa-input>
                     </div>
                   </div>

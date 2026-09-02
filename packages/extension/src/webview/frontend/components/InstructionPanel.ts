@@ -27,7 +27,7 @@ import {
   renderAgentOptions,
   renderModelOptions,
   renderTeamOptions,
-} from '@shared/utils/selectTemplates';
+} from '@shared/wa/selectTemplates';
 import { getTextareaValue } from '@shared/utils/textarea';
 import { detectBrowserPlatform } from '@shared/commands/accelerators';
 import { renderIconActionButton } from '@shared/wa/actionButtons';

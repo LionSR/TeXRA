@@ -69,13 +69,17 @@ type FollowUpSubmission =
  * such as a child whose activation outlives its parent's teardown, cannot
  * recreate the queue and trigger a resume of a run that is gone; only an
  * explicit claim reopens the stream. Stream ids embed their execution id, so
- * the mark never collides with a later run, and a session accrues one per
- * ended stream.
+ * the mark never collides with a later run. Tombstones are bounded; after
+ * eviction, callers must revalidate persisted authority before recoverable
+ * admission.
  */
 export class ToolUseFollowUpQueue {
   static readonly DELIVERY_ID_CAP = 1000;
+  static readonly TERMINALIZED_CAP = 500;
   private readonly entries = new Map<StreamTabId, QueueEntry>();
-  private readonly terminalized = new Set<StreamTabId>();
+  private readonly terminalized = createBoundedIdSet<StreamTabId>(
+    ToolUseFollowUpQueue.TERMINALIZED_CAP,
+  );
   private readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
   >();
@@ -182,11 +186,9 @@ export class ToolUseFollowUpQueue {
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     const owner = entry.owner;
     if (owner?.kind === 'flow') return { kind: 'delivered_live' };
-    if (owner !== undefined) return { kind: 'queued' };
-
-    if (admission === 'live_owner') {
-      // Live notifications use this path to reach WAITING parents whose
-      // retained queue will be consumed when the stream resumes.
+    // Live notifications use the live_owner path to reach WAITING parents
+    // whose retained queue will be consumed when the stream resumes.
+    if (owner !== undefined || admission === 'live_owner') {
       return { kind: 'queued' };
     }
 

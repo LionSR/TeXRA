@@ -211,16 +211,12 @@ function configureAnsi(
   const quotePrefix = (): string =>
     quoteDepth > 0 ? style.dim('│ '.repeat(quoteDepth)) : '';
 
-  const startsAtQuoteOpen = (
-    tokens: Parameters<RendererRule>[0],
-    idx: number,
-  ) => tokens[idx - 1]?.type === 'blockquote_open';
-
   const quoteBlockStart = (
     tokens: Parameters<RendererRule>[0],
     idx: number,
   ): string => {
-    if (quoteDepth === 0 || startsAtQuoteOpen(tokens, idx)) return '';
+    if (quoteDepth === 0 || tokens[idx - 1]?.type === 'blockquote_open')
+      return '';
     return quotePrefix();
   };
 
@@ -311,22 +307,18 @@ function configureAnsi(
       style.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? ''),
     )}\n\n`;
 
-  r.bullet_list_open = () => {
+  const listOpen = (): string => {
     listDepth += 1;
     return '';
   };
-  r.bullet_list_close = () => {
+  const listClose = (): string => {
     listDepth = Math.max(0, listDepth - 1);
     return '';
   };
-  r.ordered_list_open = () => {
-    listDepth += 1;
-    return '';
-  };
-  r.ordered_list_close = () => {
-    listDepth = Math.max(0, listDepth - 1);
-    return '';
-  };
+  r.bullet_list_open = listOpen;
+  r.bullet_list_close = listClose;
+  r.ordered_list_open = listOpen;
+  r.ordered_list_close = listClose;
   // The first item in a list inherits the blockquote gutter from
   // `blockquote_open`; continuation items follow a `list_item_close → \n`
   // and need the gutter re-injected so the second bullet doesn't render

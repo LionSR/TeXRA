@@ -24,12 +24,13 @@ export async function openFinalOutputIfAvailable(
   if (!primary) return;
 
   try {
-    const uri = vscode.Uri.file(primary.absolutePath);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc, {
-      preview: true,
-      preserveFocus: false,
-    });
+    await vscode.window.showTextDocument(
+      vscode.Uri.file(primary.absolutePath),
+      {
+        preview: true,
+        preserveFocus: false,
+      },
+    );
     vscode.window.setStatusBarMessage(
       'Workflow complete — revised file opened in preview. Use the progress toolbar to Accept or Pack.',
       8000,

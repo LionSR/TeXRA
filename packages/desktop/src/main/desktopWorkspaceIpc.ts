@@ -40,7 +40,7 @@ import type {
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 
-export interface DesktopWorkspaceIpcOptions {
+interface DesktopWorkspaceIpcOptions {
   ptyHost: DesktopPtyHost;
   browserViews: DesktopBrowserViews;
   /**
@@ -53,7 +53,7 @@ export interface DesktopWorkspaceIpcOptions {
   onAsyncError?(error: unknown): void;
 }
 
-export interface DesktopWorkspaceIpc extends DesktopMessageHandler {
+interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   /**
    * Releases resources owned by the current renderer document.
    *

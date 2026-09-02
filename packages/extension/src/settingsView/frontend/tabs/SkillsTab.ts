@@ -15,6 +15,7 @@ import { commonViewStyles, designTokens } from '@shared/styles';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { renderSettingsSectionHeading } from '@shared/wa/settingsSection';
 import { groupBy } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 
 import {
   postStateSetting,
@@ -158,7 +159,7 @@ export class SkillsTab extends LitElement {
             ? nothing
             : html`<div class="skill-issues" role="status">
                 ${this.issues.length} skill load
-                issue${this.issues.length === 1 ? '' : 's'}:
+                ${pluralize(this.issues.length, 'issue')}:
                 ${this.issues.map((issue) => issue.message).join('; ')}
               </div>`
         }

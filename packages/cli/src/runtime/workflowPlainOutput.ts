@@ -190,6 +190,11 @@ export function attachWorkflowPlainOutput(
         case STREAM_PHASE.CANCELLED:
         case STREAM_PHASE.FAILED:
           projection.complete(event.phase);
+          // A finished stream projects nothing further; a rerun under the
+          // same id starts from its own `run.start`. Dropping it here keeps
+          // the map (and each projection's per-call line memo) from growing
+          // by one entry per workflow stream for the process lifetime.
+          projections.delete(event.streamId);
           break;
         case STREAM_PHASE.RUNNING:
         case STREAM_PHASE.WAITING:

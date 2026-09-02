@@ -23,7 +23,7 @@ export function createBannerHandlers(host: MainViewInboundHost) {
   return {
     // Webview-initiated banner updates are echoed back to the active view so
     // the frontend banner state stays the single owner of visibility.
-    [MAIN_VIEW_COMMANDS.SET_BANNER]: (m) => host.postToActiveView(m),
+    [MAIN_VIEW_COMMANDS.SET_BANNER]: (m) => host.postMessageToActiveWebview(m),
     [MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE]: (m) => {
       const docsCommand = getToolDocsCommand(m.tool);
       if (!docsCommand) return;
@@ -31,28 +31,25 @@ export function createBannerHandlers(host: MainViewInboundHost) {
       const [command, ...args] = docsCommand.split(',');
       return safeExecuteCommand(command, args, host.viewName);
     },
-    [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async () => {
-      const view = host.getActiveView();
-      if (!view) {
-        return;
-      }
-      const missingTools = await checkCoreDependencies(true);
-      view.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.SET_BANNER,
-        banner: 'dependency',
-        visible: missingTools.length > 0,
-        ...(missingTools.length > 0 && {
-          data: { missingTools: [...missingTools] },
-        }),
-      });
-    },
+    [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: () =>
+      host.withActiveWebview(async (webview) => {
+        const missingTools = await checkCoreDependencies(true);
+        await webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.SET_BANNER,
+          banner: 'dependency',
+          visible: missingTools.length > 0,
+          ...(missingTools.length > 0 && {
+            data: { missingTools: [...missingTools] },
+          }),
+        });
+      }),
     [MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER]: async () => {
       try {
         const authenticated = await vscode.commands.executeCommand<boolean>(
           AUTH_COMMANDS.SIGN_IN,
         );
         if (authenticated) {
-          host.postToActiveView({
+          await host.postMessageToActiveWebview({
             command: MAIN_VIEW_COMMANDS.SET_BANNER,
             banner: 'login',
             visible: false,

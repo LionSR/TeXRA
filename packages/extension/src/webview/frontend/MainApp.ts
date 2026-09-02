@@ -6,8 +6,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/skeleton/skeleton.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { SignalWatcher } from '@shared/signals';
-import { BaseWebviewApp } from '@shared/BaseWebviewApp';
+import { signalWatcherWebviewAppBase } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 import {
   designTokens,
@@ -125,11 +124,7 @@ import { mainViewStyles } from './styles';
 
 registerTeXRAWebAwesomeIcons();
 
-// Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
-// Safe because MainApp implements all abstract members below.
-const MainAppBase = SignalWatcher(
-  BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
-);
+const MainAppBase = signalWatcherWebviewAppBase();
 
 @customElement('main-app')
 export class MainApp extends MainAppBase {
@@ -166,10 +161,6 @@ export class MainApp extends MainAppBase {
   // bodies, plus the two handlers bound at two template sites each. Everything
   // else binds inline at its template site.
 
-  private readonly onSignInFromBanner = (): void => {
-    postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER);
-  };
-
   private readonly onOnboardingOpenGettingStarted = (): void => {
     postMessage(MAIN_VIEW_COMMANDS.ONBOARDING_OPEN_GETTING_STARTED);
   };
@@ -196,16 +187,9 @@ export class MainApp extends MainAppBase {
     postMessage(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS);
   };
 
-  private readonly onLatexDiffsToggle = ({
-    detail,
-  }: CustomEvent<LatexDiffsToggleDetail>): void => {
-    latexdiffsVisible$.set(detail.visible);
-  };
-
-  private readonly onInstructionInput = ({
-    detail,
-  }: CustomEvent<InstructionChangeDetail>): void => {
-    setInstruction(detail.value);
+  /** Agent settings + "Browse all agents" both open the agent config editor. */
+  private readonly onEditAgentConfig = (): void => {
+    runAgentConfigAction('edit');
   };
 
   override connectedCallback(): void {
@@ -438,12 +422,15 @@ export class MainApp extends MainAppBase {
           detail,
         }: CustomEvent<WorkingDirectoryChangeDetail>) =>
           changeWorkingDirectory(detail.value)}
-        @instruction-input=${this.onInstructionInput}
+        @instruction-input=${({
+          detail,
+        }: CustomEvent<InstructionChangeDetail>) =>
+          setInstruction(detail.value)}
         @panel-action=${({ detail }: CustomEvent<ActionDetail>) =>
           runPanelAction(detail.action)}
         @execute=${() => sendExecuteMessage()}
-        @agent-settings=${() => runAgentConfigAction('edit')}
-        @browse-all-agents=${() => runAgentConfigAction('edit')}
+        @agent-settings=${this.onEditAgentConfig}
+        @browse-all-agents=${this.onEditAgentConfig}
         @team-settings=${this.onOpenMultiAgentSettings}
         @manage-teams=${this.onOpenMultiAgentSettings}
         @model-settings=${() =>
@@ -474,7 +461,7 @@ export class MainApp extends MainAppBase {
           postMessage(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE, {
             tool: detail.tool,
           })}
-        @sign-in=${this.onSignInFromBanner}
+        @sign-in=${() => postMessage(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER)}
         @dismiss-login=${this.onDismissLogin}
         @dismiss-getting-started=${this.onDismissGettingStarted}
         @getting-started-action=${({
@@ -610,7 +597,10 @@ export class MainApp extends MainAppBase {
           .commit=${commit$.get()}
           .commitOptions=${fo.commit}
           .isGitRepo=${isGitRepo$.get()}
-          @latexdiffs-toggle=${this.onLatexDiffsToggle}
+          @latexdiffs-toggle=${({
+            detail,
+          }: CustomEvent<LatexDiffsToggleDetail>) =>
+            latexdiffsVisible$.set(detail.visible)}
           @latexdiffs-action=${({
             detail,
           }: CustomEvent<LatexDiffsActionDetail>) =>

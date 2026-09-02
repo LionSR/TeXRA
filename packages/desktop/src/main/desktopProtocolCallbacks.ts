@@ -51,13 +51,13 @@ export interface DesktopProtocolApp {
   ): void;
 }
 
-export interface DesktopProtocolLifecycle {
+interface DesktopProtocolLifecycle {
   router: DesktopProtocolCallbackRouter;
   /** True only for the process holding Electron's single-instance lock. */
   ownsSingleInstanceLock: boolean;
 }
 
-export interface InstallDesktopProtocolOptions {
+interface InstallDesktopProtocolOptions {
   app: DesktopProtocolApp;
   argv?: readonly string[];
   execPath?: string;
@@ -107,9 +107,7 @@ export function createDesktopProtocolCallbackRouter(
   function routeUrl(rawUrl: string): boolean {
     const callback = parseDesktopProtocolCallback(rawUrl);
     if (!callback) {
-      options.log?.debug?.(
-        'Ignoring unsupported desktop protocol callback URL',
-      );
+      options.log?.debug('Ignoring unsupported desktop protocol callback URL');
       return false;
     }
 
@@ -189,6 +187,6 @@ function registerProtocolClient(options: InstallDesktopProtocolOptions): void {
     : app.setAsDefaultProtocolClient(TEXRA_PROTOCOL);
 
   if (!didRegister) {
-    options.log?.warn?.(`Failed to register ${TEXRA_PROTOCOL}:// handler`);
+    options.log?.warn(`Failed to register ${TEXRA_PROTOCOL}:// handler`);
   }
 }

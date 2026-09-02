@@ -30,10 +30,7 @@ import {
   progressHeaderStatus,
   type StreamStatusDisplayKey,
 } from '@shared/streams/streamStatusDisplay';
-import {
-  AGENT_DECORATORS,
-  getAgentCategoryDecorator,
-} from '@shared/utils/icons';
+import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@shared/wa/icons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -537,8 +534,6 @@ export class StreamTabs extends LitElement {
         break;
       case 'toggle-children':
         this.toggleChildren(streamId);
-        break;
-      default:
         break;
     }
   }

@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
+import { RESEARCHER_ACCESS_AUTH } from '@shared/copy/accountAuth';
 
 import { assertExplicitModelKnown } from '../runtime/runModel';
 import {
@@ -59,10 +59,7 @@ export const chatCommand = withUsageSections(
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
         ['/goal', 'configure autonomous goal mode and auto-approval scope'],
-        [
-          '/login, /logout',
-          `sign in or out of ChatGPT or ${RESEARCHER_ACCESS.label}`,
-        ],
+        ['/login, /logout', RESEARCHER_ACCESS_AUTH.chatLoginDescription],
         [
           'Ctrl-T',
           "open the focused stream's full output in a scrollable reader (PgUp/PgDn pages)",

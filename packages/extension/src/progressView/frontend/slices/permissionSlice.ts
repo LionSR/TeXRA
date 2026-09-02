@@ -1,5 +1,5 @@
 /**
- * Permission handlers: UPDATE_PERMISSION, UPDATE_BYPASS.
+ * Permission handlers: UPDATE_PERMISSION, UPDATE_BYPASS, GOAL_ACTIVE_UPDATED.
  *
  * Owns resolvedProposalIds, upsertProposalPermission,
  * and removePrompt helpers.
@@ -41,7 +41,7 @@ export function addResolvedProposalId(id: string): void {
 }
 
 // ============================================================
-// Helpers (exported for use by eventHandlers.ts)
+// Helpers
 // ============================================================
 
 /**

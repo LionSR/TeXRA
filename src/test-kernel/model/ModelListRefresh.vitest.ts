@@ -75,20 +75,26 @@ describe('refreshModelListAndLog', () => {
     expect(enabledModels(state)).not.toContain('grok4');
   });
 
-  it('adds Gemini 3.7 Flash while preserving Gemini 3.6 Flash from the previous model list', async () => {
-    const previousVersion = 494_338_219;
+  it('adds current models while preserving superseded selections', async () => {
+    expect(MODEL_CONFIGS.gemini38f?.deprecated).not.toBe(true);
+    expect(MODEL_CONFIGS.gemini37f?.deprecated).toBe(true);
+    const previousVersion = 953_335_914;
     const state = new FakeStateStore({
       [GlobalStateKey.MODEL_LIST_VERSION]: previousVersion,
-      [GlobalStateKey.ENABLED_MODELS]: ['gemini36f'],
+      [GlobalStateKey.ENABLED_MODELS]: ['gemini37f', 'musespark11'],
     });
 
     const result = await refreshModelListAndLog(state);
 
     expect(result.previousVersion).toBe(previousVersion);
-    expect(result.added).toContain('gemini37f');
-    expect(result.removed).not.toContain('gemini36f');
+    expect(result.added).toContain('gemini38f');
+    expect(result.added).toContain('musespark13');
+    expect(result.removed).not.toContain('gemini37f');
+    expect(result.removed).not.toContain('musespark11');
+    expect(enabledModels(state)).toContain('gemini38f');
     expect(enabledModels(state)).toContain('gemini37f');
-    expect(enabledModels(state)).toContain('gemini36f');
+    expect(enabledModels(state)).toContain('musespark13');
+    expect(enabledModels(state)).toContain('musespark11');
     expect(state.get(GlobalStateKey.MODEL_LIST_VERSION)).toBe(
       MODEL_LIST_VERSION,
     );

@@ -13,12 +13,20 @@ export function renderProgressBadgeContent(
 ): TemplateResult | typeof nothing {
   const stageLabel = formatStageLabel(stage);
   const tools = progress?.toolCallCount ?? 0;
-  const parts = [
-    stageLabel ?? '',
-    tools > 0 ? formatResultCount(tools, 'tool call') : '',
-  ].filter(Boolean);
-  if (parts.length === 0) return nothing;
-  return html`${parts.join(', ')}`;
+  if (!stageLabel && tools <= 0) return nothing;
+
+  const accessibleLabel = getProgressBadgeTitle(progress, stage);
+  return html`<span aria-hidden="true"
+      >${stageLabel ? html`<bdi dir="auto">${stageLabel}</bdi>` : nothing}${
+        stageLabel && tools > 0 ? ', ' : nothing
+      }${tools > 0 ? formatResultCount(tools, 'tool call') : nothing}</span
+    >${
+      accessibleLabel
+        ? html`<span class="visually-hidden"
+            ><bdi dir="auto">${accessibleLabel}</bdi></span
+          >`
+        : nothing
+    }`;
 }
 
 export function getProgressBadgeTitle(

@@ -68,8 +68,7 @@ import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
-const CHANNEL = 'executeAgent';
-const logger = createLog(CHANNEL);
+const logger = createLog('executeAgent');
 
 /** A claimed execution no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {
@@ -182,7 +181,7 @@ async function launchToolUseRun(
     undefined,
     {
       attach: (flowContext) => {
-        handle.attachToolUseFlow(flowContext, ctx.runScope.signal);
+        handle.attachToolUseFlow(flowContext);
         if (variant.kind === 'resume' && variant.isCancellationRequested?.()) {
           variant.onCancellationAtFlowAttachment?.();
           flowContext.interrupt();
@@ -436,6 +435,7 @@ export async function executeAgent(
         runExecutionId,
         runStreamId,
         config,
+        ctx.resolvedAgentDescription,
         runSession,
         ctx.runScope.signal,
       );

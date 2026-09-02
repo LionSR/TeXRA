@@ -58,8 +58,6 @@ export function createPRSubscriptionState(
     lastAnnotationKeys: new Set(),
     annotationLevelByListener: new Map(),
     currentShaState: undefined,
-    state: undefined,
-    merged: false,
     mergeableState: undefined,
     etags: {},
     ...overrides,

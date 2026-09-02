@@ -318,14 +318,6 @@ function everyHost(
   };
 }
 
-/**
- * Only the webview hosts honor the setting — the reader exists in shared code
- * but its effect has no headless counterpart. The row must say why.
- */
-function webviewHosts(reader: string): SettingHonoredBy {
-  return { vscode: { reader }, desktop: { reader } };
-}
-
 type SurfacedSettingInput = Omit<
   StateSettingEntry,
   'surfaces' | 'description' | 'category'
@@ -491,7 +483,7 @@ const CORE_SETTING_ROWS: Record<
     default: false,
     title: 'Google background responses',
     description:
-      'Run long-running Google workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
+      'Run Google workflow generations as background Interactions (submit + poll). When this and the Google streaming toggle are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The Google streaming toggle avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost(
       'src/agent/modelHandlers/google/modelHandlerGoogleInteractions.ts',
     ),
@@ -499,7 +491,7 @@ const CORE_SETTING_ROWS: Record<
       provider: 'google',
       label: 'Background responses',
       description:
-        'Run long-running workflow generations as background Interactions (submit + poll) to avoid timeouts. Off by default. Requires server-side conversation state; models that do not support it fall back automatically.',
+        'Run workflow generations as background Interactions (submit + poll). When this and the Google streaming toggle are off, direct Google workflows use one foreground request, so long generations can hit host, network, or Google API request deadlines before completion. The Google streaming toggle avoids that unary request; background responses also do when server-side conversation state is enabled and the selected model supports them. Off by default; unsupported models fall back automatically.',
     },
   }),
   'model.useBackgroundResponses': modelProviderToggle({
@@ -960,18 +952,12 @@ const TOOL_PATH_PROTECTION_RUNTIME_REACHABILITY = {
 } satisfies CliRuntimeReachability;
 
 /**
- * Git identity rows keep the one documented slot divergence in the catalog:
- * the extension and desktop store them in worktree-shared WorkspaceState while
- * the CLI reads them from `.texra/config.json`, which is where an existing
- * user's values already live.
+ * The one documented slot divergence in the catalog, shared by the git
+ * identity and skill availability rows: the extension and desktop store them
+ * in worktree-shared WorkspaceState while the CLI reads them from
+ * `.texra/config.json`, which is where an existing user's values already live.
  */
-const GIT_AUTHOR_SLOTS: SettingSlots = {
-  vscode: 'workspaceState',
-  desktop: 'workspaceState',
-  cli: 'config',
-};
-
-const SKILL_AVAILABILITY_SLOTS: SettingSlots = {
+const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
   vscode: 'workspaceState',
   desktop: 'workspaceState',
   cli: 'config',
@@ -992,6 +978,21 @@ const GIT_AUTHOR_HONORED_BY: SettingHonoredBy = {
     reachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
   },
 };
+
+const CODEX_AGENT_HONORED_BY = everyHost(
+  CODEX_CONFIG_READER,
+  CODEX_AGENT_RUNTIME_REACHABILITY,
+);
+
+const CLAUDE_AGENT_HONORED_BY = everyHost(
+  CLAUDE_AGENT_CONFIG_READER,
+  CLAUDE_AGENT_RUNTIME_REACHABILITY,
+);
+
+const WORKFLOW_COMPILE_HONORED_BY = everyHost(
+  WORKFLOW_COMPILE_READER,
+  WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
+);
 
 // Written by the extension/desktop Models tab and the CLI's `/config` panel
 // through the same catalog write path.
@@ -1122,7 +1123,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Attribute agent-authored git commits to the TeXRA identity so they are distinguishable from your own commits.',
     category: 'git',
-    slots: GIT_AUTHOR_SLOTS,
+    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -1136,7 +1137,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: GIT_AUTHOR_SLOTS,
+    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -1147,7 +1148,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
     category: 'git',
-    slots: GIT_AUTHOR_SLOTS,
+    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
     honoredBy: GIT_AUTHOR_HONORED_BY,
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
@@ -1158,7 +1159,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description:
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
-    slots: GIT_AUTHOR_SLOTS,
+    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
     honoredBy: {
       ...GIT_AUTHOR_HONORED_BY,
       cli: {
@@ -1228,7 +1229,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Filesystem access mode used when TeXRA launches Codex.',
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(CODEX_CONFIG_READER, CODEX_AGENT_RUNTIME_REACHABILITY),
+    honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: ['Read-only', 'Workspace write', 'Full access'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -1239,7 +1240,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Reasoning effort hint passed to Codex runs.',
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(CODEX_CONFIG_READER, CODEX_AGENT_RUNTIME_REACHABILITY),
+    honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -1250,7 +1251,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'When Codex should ask for approval before risky actions.',
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(CODEX_CONFIG_READER, CODEX_AGENT_RUNTIME_REACHABILITY),
+    honoredBy: CODEX_AGENT_HONORED_BY,
     enumLabels: [
       'Auto approve',
       'Ask when requested',
@@ -1267,11 +1268,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Claude model selected for Claude Code agent sessions.',
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      CLAUDE_AGENT_CONFIG_READER,
-      CLAUDE_AGENT_RUNTIME_REACHABILITY,
-    ),
-    enumLabels: ['Sonnet 5', 'Fable 5', 'Opus 5', 'Haiku 4.5'],
+    honoredBy: CLAUDE_AGENT_HONORED_BY,
+    enumLabels: ['Sonnet 5', 'Fable 5.1', 'Opus 5', 'Haiku 4.5'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
   surfacedSetting({
@@ -1283,10 +1281,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Permission policy used by Claude Code agent sessions.',
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      CLAUDE_AGENT_CONFIG_READER,
-      CLAUDE_AGENT_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: [
       'Prompt for risky actions',
       'Auto-accept edits',
@@ -1302,10 +1297,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Reasoning effort hint passed to Claude Code agent sessions.',
     category: 'ai-agents',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      CLAUDE_AGENT_CONFIG_READER,
-      CLAUDE_AGENT_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: CLAUDE_AGENT_HONORED_BY,
     enumLabels: ['Low', 'Medium', 'High', 'Extra high', 'Maximum'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
@@ -1319,10 +1311,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Compile the LaTeX project automatically after an agent writes its output.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      WORKFLOW_COMPILE_READER,
-      WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: WORKFLOW_COMPILE_HONORED_BY,
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
   surfacedSetting({
@@ -1336,10 +1325,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Maximum time (in milliseconds) to wait for an automatic post-output compile before giving up.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      WORKFLOW_COMPILE_READER,
-      WORKFLOW_COMPILE_RUNTIME_REACHABILITY,
-    ),
+    honoredBy: WORKFLOW_COMPILE_HONORED_BY,
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
   surfacedSetting({
@@ -1351,9 +1337,16 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slots: sameSlot('workspaceState'),
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
     // handler (headless), so the CLI does not honor it.
-    honoredBy: webviewHosts(
-      'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
-    ),
+    honoredBy: {
+      vscode: {
+        reader:
+          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+      },
+      desktop: {
+        reader:
+          'src/agent/implementations/flows/reflection/nodes/OutputNode.ts',
+      },
+    },
     surfaces: { settingsView: 'latex' },
   }),
   surfacedSetting({
@@ -1627,7 +1620,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skills',
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
-    slots: SKILL_AVAILABILITY_SLOTS,
+    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
     honoredBy: everyHost(
       'src/skills/runtimeSkills.ts',
       SKILL_AVAILABILITY_REACHABILITY,
@@ -1641,7 +1634,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Skill sources',
     description: 'Enable or disable skill source groups in this workspace.',
     category: 'tools',
-    slots: SKILL_AVAILABILITY_SLOTS,
+    slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
     honoredBy: everyHost(
       'src/skills/runtimeSkills.ts',
       SKILL_AVAILABILITY_REACHABILITY,

@@ -12,8 +12,6 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 
-// Custom endpoints use the provider state written by the Models view.
-
 /**
  * Provider default base URLs. Providers whose endpoint depends on the
  * China/international toggles supply a thunk, read only when that provider is

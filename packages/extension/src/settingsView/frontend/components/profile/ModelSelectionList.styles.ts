@@ -18,6 +18,7 @@ export const modelSelectionListStyles: CSSResult = css`
   .helper-model-row {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--wa-space-xs);
     margin-bottom: var(--wa-space-s);
   }
@@ -83,6 +84,12 @@ export const modelSelectionListStyles: CSSResult = css`
     gap: var(--wa-space-xs);
   }
 
+  .model-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
   .model-row wa-switch {
     flex: 1;
     min-width: 0;
@@ -107,7 +114,6 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .model-name {
-    font-family: var(--wa-font-family-mono);
     white-space: nowrap;
     min-width: 0;
     overflow: hidden;
@@ -115,6 +121,7 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   .model-shortname {
+    font-family: var(--wa-font-family-mono);
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
   }
@@ -126,6 +133,7 @@ export const modelSelectionListStyles: CSSResult = css`
     font-size: var(--font-size-xs);
     white-space: nowrap;
     margin-inline-start: auto;
+    font-variant-numeric: tabular-nums;
   }
 
   .model-route {

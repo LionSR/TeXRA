@@ -15,7 +15,6 @@ import { conversationContentStyles } from './ConversationContent.styles';
 import './StreamHeader';
 
 // Side-effect imports - sibling components
-import './TaskGroupList';
 import './FileList';
 import './BackgroundTasksPanel';
 
@@ -53,13 +52,13 @@ export class WorkflowStreamContent extends BaseStreamContent {
         ${this.renderLog()}
 
         <div class="conversation-column conversation-epilogue">
-          ${this.renderUsagePanel(state.runUsage, state.contextState)}
-
           <file-list
             .filesByRound=${state.files}
             .failuresByRound=${state.compileFailures}
             .unsupportedCommands=${this.streamContext.unsupportedCommands}
           ></file-list>
+
+          ${this.renderUsagePanel(state.runUsage, state.contextState)}
         </div>
       </div>
     `;

@@ -49,7 +49,7 @@ import {
   takeTail,
 } from '@common/errors/sdkError/errorPatterns';
 import { handleStreamingFailure } from '@common/errors/sdkError/streamFailure';
-import { composeLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
+import { longRunningGoogleInteractionsFetch } from '@platform/defaults/longRunningModelTransport';
 import {
   type FileLocation,
   type MediaAttachmentKind,
@@ -129,6 +129,38 @@ type InteractionGetParamsNonStreaming =
 type GoogleGenAIInteraction = Omit<Interactions.Interaction, 'steps'> & {
   steps?: Step[];
 };
+
+/** Per-call options threaded to every Speakeasy Interactions request. */
+type InteractionsRequestOptions = {
+  maxRetries: number;
+  fetchOptions: RequestInit;
+};
+
+type GoogleInteractionsHttpClient = {
+  request(request: Request): Promise<Response>;
+};
+type GoogleInteractionsSdkClient = {
+  _httpClient: GoogleInteractionsHttpClient;
+  _options: { http_client: GoogleInteractionsHttpClient };
+};
+type GoogleInteractionsClientInternals = {
+  getClient(apiVersion?: string): GoogleInteractionsSdkClient;
+};
+
+/** Install the pinned SDK's request-local HTTP seam on every API-version client. */
+function installLongRunningInteractionsTransport(client: GoogleGenAI): void {
+  const interactions =
+    client.interactions as unknown as GoogleInteractionsClientInternals;
+  const getClient = interactions.getClient.bind(interactions);
+  interactions.getClient = (apiVersion?: string) => {
+    const sdk = getClient(apiVersion);
+    const httpClient = { request: longRunningGoogleInteractionsFetch };
+    sdk._httpClient = httpClient;
+    // Streaming lazily constructs sdk.interactions from this option object.
+    sdk._options.http_client = httpClient;
+    return sdk;
+  };
+}
 
 /**
  * Maps an Interactions media `resolution` literal to the chat
@@ -271,8 +303,7 @@ interface TransientBackgroundRetrievalState {
 function isStaleInteractionChainError(error: unknown): boolean {
   const status = detectStatusCode(error);
   const message = errorMessageOf(error);
-  const rawCode = (error as { code?: unknown })?.code;
-  const code = typeof rawCode === 'string' ? rawCode : '';
+  const code = pickStringField(error, 'code') ?? '';
 
   const mentionsPreviousInteractionId = /previous_interaction_id/i.test(
     message,
@@ -370,11 +401,6 @@ interface PendingStepBuffer {
  * function-calling sequence, so this is safe; a fuller fix would need the base
  * contract to return `Step[]` (out of scope).
  */
-/** Per-call options threaded to every Speakeasy Interactions request. */
-type InteractionsRequestOptions = {
-  maxRetries: number;
-  fetchOptions: RequestInit;
-};
 
 export class ModelHandlerGoogleInteractions extends ModelHandler<
   Step,
@@ -665,13 +691,15 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
     // `{ attempts: 1 }` — switches apiCall into a pRetry wrapper that converts
     // non-ok responses into bare Errors with no status field, blinding the
     // route gate's 429/5xx classification for Google.
+    const googleClient = new GoogleGenAI({
+      apiKey: credential.apiKey,
+      httpOptions: {
+        baseUrl: credential.baseUrl ?? undefined,
+      },
+    });
+    installLongRunningInteractionsTransport(googleClient);
     const client = this.rememberClientCredentialRoute(
-      new GoogleGenAI({
-        apiKey: credential.apiKey,
-        httpOptions: {
-          baseUrl: credential.baseUrl ?? undefined,
-        },
-      }),
+      googleClient,
       credential.route,
       credential.apiKey,
     );
@@ -1780,22 +1808,16 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * client defaults to its own 4-retry backoff, which `httpOptions`-level
    * retry settings do not govern. Abort is wired via `fetchOptions.signal`
    * (GoogleGenAIRequestOptions has no top-level abortSignal field). The
-   * dispatcher threads the shared 30-minute stream-inactivity budget through
-   * the SDK's typed fetchOptions seam — `dispatcher` is undici's non-standard
-   * RequestInit extension honored by Node's fetch but absent from the DOM lib
-   * types this repo compiles against, hence the cast. Verified against
-   * @google/genai 2.12.0 (fetchOptions spreads into the Request init and
-   * survives the SDK's clone/rewrap); re-verify the seam on SDK bumps.
+   * request-local HTTP client observes native fetch response resolution and
+   * applies the shared header/body-inactivity policy without relying on
+   * non-standard RequestInit fields that the SDK drops while rebuilding.
    */
   private interactionsRequestOptions(
     signal?: AbortSignal,
   ): InteractionsRequestOptions {
     return {
       maxRetries: 0,
-      fetchOptions: {
-        ...(signal ? { signal } : {}),
-        dispatcher: composeLongRunningModelDispatcher(),
-      } as RequestInit,
+      fetchOptions: signal ? { signal } : {},
     };
   }
 
@@ -1812,8 +1834,8 @@ export class ModelHandlerGoogleInteractions extends ModelHandler<
    * `CreateModelInteractionParamsNonStreaming` alias) so the caller's actual
    * request-shape fields (`model`/`input`/`store`/…) survive into
    * `submitParams` below — see the comment on the sibling non-streaming
-   * `create()` call in `createResponseImpl` for why the public alias by
-   * itself would make TS pick `create()`'s most general overload.
+   * `create()` call in `dispatchGoogleInteractionsExecution` for why the public
+   * alias by itself would make TS pick `create()`'s most general overload.
    */
   private async executeBackgroundPath<
     P extends Omit<CreateModelInteractionParamsNonStreaming, 'stream'>,

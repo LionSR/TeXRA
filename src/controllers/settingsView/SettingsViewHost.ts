@@ -37,6 +37,7 @@ interface SettingsViewHostOptions {
 
 interface SettingsViewHostMutationOptions {
   readonly afterPost?: () => Awaitable<void>;
+  readonly respond?: SettingsRespond;
 }
 
 export class SettingsViewHost {
@@ -112,7 +113,7 @@ export class SettingsViewHost {
 
   async setModelEnabled(
     input: SetModelEnabledInput,
-    options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
+    options?: SettingsViewHostMutationOptions,
   ): Promise<void> {
     await this.modelSelectionController.setModelEnabled(input);
     await this.postModelSelectionMutation(options);
@@ -120,14 +121,14 @@ export class SettingsViewHost {
 
   async setReasoningLevel(
     input: SetReasoningLevelInput,
-    options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
+    options?: SettingsViewHostMutationOptions,
   ): Promise<void> {
     await this.modelSelectionController.setReasoningLevel(input);
     await this.postModelSelectionMutation(options);
   }
 
   private async postModelSelectionMutation(
-    options?: SettingsViewHostMutationOptions & { respond?: SettingsRespond },
+    options?: SettingsViewHostMutationOptions,
   ): Promise<void> {
     await this.sendModelSelectionData(options?.respond);
     await options?.afterPost?.();

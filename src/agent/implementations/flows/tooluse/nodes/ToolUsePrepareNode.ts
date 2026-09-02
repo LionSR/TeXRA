@@ -49,6 +49,20 @@ export class ToolUsePrepareNode extends BaseNode<
 
     if (resumeShared) {
       logger.debug('Resuming tool-use session from saved state.');
+    }
+
+    const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
+      await buildInitialToolUsePrompts(
+        this.services.prompt,
+        promptVars,
+        logger,
+        promptOptions,
+      );
+    const systemMessage = systemPrompt
+      ? `${systemPrompt}\n${instructionSuffix}`
+      : instructionSuffix;
+
+    if (resumeShared) {
       // The persisted messages are used verbatim -- including `messages[0]`
       // for providers that embed the system prompt into `messages` (OpenAI,
       // OpenRouter). Rewriting that text on every resume to reflect current
@@ -58,21 +72,11 @@ export class ToolUsePrepareNode extends BaseNode<
       // system-prompt edit made between suspend and resume therefore does
       // not propagate into an already-suspended run.
       //
-      // `systemPrompt` below is still rebuilt fresh: for providers that pass
+      // The system prompt is still rebuilt fresh for providers that pass
       // `system` per-call instead of storing it in `messages` (Anthropic,
       // Google), it isn't part of the cached prefix at all -- the round flow
       // resupplies it on every model call regardless of resume, so rebuilding
       // it here is orthogonal to the caching concern above.
-      const rebuiltPrompts = await buildInitialToolUsePrompts(
-        this.services.prompt,
-        promptVars,
-        logger,
-        promptOptions,
-      );
-      const systemMessage = buildSystemText(
-        rebuiltPrompts.systemPrompt,
-        rebuiltPrompts.instructionSuffix,
-      );
       const workspaceState = AgentWorkspaceState.fromSnapshot(
         resumeShared.stateSlices.workspaceSnapshot,
       );
@@ -80,7 +84,6 @@ export class ToolUsePrepareNode extends BaseNode<
         messages: resumeShared.messages,
         runState: resumeShared.stateSlices.runStateSnapshot,
         workspaceState,
-        cycleStartLastResponse: workspaceState.assembly.lastResponse,
         userChannels: { ...resumeShared.stateSlices.userChannels },
         shouldSkipCycle: true,
         systemPrompt: systemMessage,
@@ -89,16 +92,6 @@ export class ToolUsePrepareNode extends BaseNode<
 
     const runState = AgentRunStateSnapshotSchema.parse({});
     const workspaceState = AgentWorkspaceState.create();
-
-    const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
-      await buildInitialToolUsePrompts(
-        this.services.prompt,
-        promptVars,
-        logger,
-        promptOptions,
-      );
-
-    const systemMessage = buildSystemText(systemPrompt, instructionSuffix);
     // Attach any media files (CLI `--media`, an image pasted on the first
     // message) to the initial user message via the shared media slot. No-ops
     // when empty or the model lacks vision.
@@ -135,7 +128,6 @@ export class ToolUsePrepareNode extends BaseNode<
       messages,
       runState,
       workspaceState,
-      cycleStartLastResponse: workspaceState.assembly.lastResponse,
       userChannels: userVarChannels,
       shouldSkipCycle: false,
       systemPrompt: systemMessage,
@@ -171,18 +163,4 @@ export class ToolUsePrepareNode extends BaseNode<
 
     return FlowTransition.DEFAULT;
   }
-}
-
-/**
- * Combine the system prompt with the instruction suffix into the single text
- * block used for the system message. Falls back to the suffix alone when there
- * is no system prompt.
- */
-function buildSystemText(
-  systemPrompt: string,
-  instructionSuffix: string,
-): string {
-  return systemPrompt
-    ? `${systemPrompt}\n${instructionSuffix}`
-    : instructionSuffix;
 }

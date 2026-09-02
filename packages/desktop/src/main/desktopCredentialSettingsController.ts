@@ -11,7 +11,7 @@ import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionU
 import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
-import type { ExternalOpener, PromptHost } from '@hosts/uiHosts';
+import type { ExternalOpener, MessageHost, PromptHost } from '@hosts/uiHosts';
 import {
   computeModelOptionsData,
   getEnabledModels,
@@ -39,6 +39,7 @@ import {
 } from '@shared/schemas';
 import { ACCOUNT_OUTCOME } from '@shared/copy/accountAuth';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
+import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
@@ -63,11 +64,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
       productName: string,
     ): void | Promise<void>;
   };
-  readonly notifications: {
-    showInfoMessage(message: string): Promise<void>;
-    showWarningMessage(message: string): Promise<void>;
-    showErrorMessage(message: string): Promise<void>;
-  };
+  readonly notifications: MessageHost;
   readonly auth: {
     signIn(): Promise<void>;
     signOut(): Promise<void>;
@@ -192,8 +189,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       externalOpener: options.externalOpener,
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
-      getProviderKeyUrl: (provider) =>
-        this.profileController.getProviderKeyUrl(provider),
+      getProviderKeyUrl,
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
       reportFailure: async (message, error) => {
@@ -285,11 +281,11 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     error: unknown,
   ): void {
     this.options.onError(error);
-    void this.options.notifications
-      .showErrorMessage(
+    void Promise.resolve(
+      this.options.notifications.showErrorMessage(
         `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(error)}`,
-      )
-      .catch(this.options.onError);
+      ),
+    ).catch(this.options.onError);
   }
 
   private signInPresenter(displayName: string): SubscriptionSignInPresenter {
@@ -351,8 +347,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   }
 
   /** Also driven by the desktop welcome card, not just the Settings view. */
-  async signInChatGpt(): Promise<void> {
-    await this.signInSubscription('chatgpt');
+  signInChatGpt(): Promise<void> {
+    return this.signInSubscription('chatgpt');
   }
 
   /**

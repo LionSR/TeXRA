@@ -12,13 +12,10 @@
  */
 
 // Local imports
-import {
-  readWorkflowScriptCheckpoint,
-  type WorkflowScriptRunOptions,
-} from '@agent/workflowScript';
 import type {
   WorkflowAgentInvocation,
   WorkflowAgentRunner,
+  WorkflowJournalEntry,
   WorkflowScriptRunResult,
 } from '@agent/workflowScript';
 import type { AgentTrace } from '@agent/trace';
@@ -243,11 +240,27 @@ export function createWorkflowScriptStrategy(
     stageLabel: `Workflow script '${params.name}'`,
     ...(params.deliveryMode && { deliveryMode: params.deliveryMode }),
 
-    launch: async (ports, abortController) => {
+    launch: async (ports, signal) => {
       startedAt = Date.now();
       // Physical-attempt callbacks are the current-invocation boundary: replay
       // and stable recovery emit none, while every model attempt emits one.
       const attemptCost = createWorkflowAttemptCostTracker();
+      const attemptJournalByKey = new Map<string, WorkflowJournalEntry>();
+      const attemptJournal = (): WorkflowJournalEntry[] =>
+        [...attemptJournalByKey.values()].toSorted(
+          (left, right) => left.index - right.index,
+        );
+      // Settle only entries consumed by this invocation: the durable union may
+      // hold superseded or malformed untouched recovery history, and baseline
+      // history is irrelevant to this invocation's cost and delivered files.
+      const settleAttempt = (
+        snapshot: WorkflowExecutionSnapshot | undefined,
+      ): void => {
+        const journal = attemptJournal();
+        const costUsd = attemptCost.total(journal);
+        ports.recordCost(costUsd);
+        settleSummary({ journal, snapshot }, costUsd);
+      };
       const runAgent = params.createRunAgent({
         onCost: (invocation, totalCostUsd) => {
           ports.recordCost(attemptCost.record(invocation, totalCostUsd ?? 0));
@@ -273,7 +286,7 @@ export function createWorkflowScriptStrategy(
           ...(params.files !== undefined && {
             files: params.files,
           }),
-          signal: abortController.signal,
+          signal,
           // The session's child-run budget is the one owner of "how many at
           // once": the engine's own default is a library fallback only.
           concurrency: resolveChildRunConcurrencyBudget(),
@@ -281,6 +294,12 @@ export function createWorkflowScriptStrategy(
           fingerprintAgentDependencies: (options) =>
             fingerprintWorkflowAgentDependencies(params.executionId, options),
           onActivity: runLog.add,
+          // This invocation's consumed results are the only entries its cost
+          // and delivery summary may claim. The engine fires after durable
+          // commit for live results and after validation for cache hits.
+          onJournalEntryConsumed: (entry) => {
+            attemptJournalByKey.set(entry.key, entry);
+          },
           onSnapshot: async (snapshot) => {
             // Persist first: only a durably written snapshot may feed the
             // delivery summary, otherwise a failed write leaves the summary
@@ -295,26 +314,14 @@ export function createWorkflowScriptStrategy(
           },
         });
       } catch (runError) {
-        // Include newly journaled calls without re-billing the pre-run
-        // baseline. A malformed checkpoint never masks the run error; live
-        // candidates already recorded through the loop remain available.
         try {
-          const checkpoint = await readWorkflowScriptCheckpoint(
-            params.store,
-            params.checkpointId,
-          );
-          const costUsd = attemptCost.total(checkpoint?.journal ?? []);
-          ports.recordCost(costUsd);
-          settleSummary(
-            { journal: checkpoint?.journal ?? [], snapshot: lastSnapshot },
-            costUsd,
-          );
+          settleAttempt(lastSnapshot);
         } catch (settlementError) {
           // The run error is what the caller must see, so settlement cannot
-          // rethrow — but dropping it silently loses this invocation's spend
-          // from the parent's accounting. Say so.
+          // rethrow. Live candidates recorded through the loop remain billed;
+          // report when the final attempt-local reconciliation could not land.
           params.logger.warn(
-            `Workflow script '${params.name}' failed and its cost could not be settled from the checkpoint; this run's spend is unbilled: ${toErrorMessage(settlementError)}`,
+            `Workflow script '${params.name}' failed and its cost could not be settled from this attempt's journal: ${toErrorMessage(settlementError)}`,
             { data: settlementError },
           );
         }
@@ -326,11 +333,7 @@ export function createWorkflowScriptStrategy(
         unregisterControls?.();
       }
 
-      // The final journal supplies only this invocation's missing/lower
-      // completed-call fallback; baseline history contributes zero.
-      const costUsd = attemptCost.total(run.journal);
-      ports.recordCost(costUsd);
-      settleSummary(run, costUsd);
+      settleAttempt(run.snapshot);
       return run;
     },
 

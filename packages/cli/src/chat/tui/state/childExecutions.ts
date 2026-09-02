@@ -7,8 +7,7 @@
 // (`isStreamRemoved`). This module holds no state of its own: it binds the
 // adapter's `SessionState` and re-derives signal snapshots whenever the
 // adapter reports a change, so Ink components re-render off one source of
-// truth instead of a parallel fact-fold. (Collapsed from the former 692-line
-// `CHILD_STREAMS` state machine — single-substrate plan, Wave A.)
+// truth instead of a parallel fact-fold.
 
 import { computed, signal, type Signal } from '@lit-labs/signals';
 import type { StreamPhaseState } from '@agent/runtime';
@@ -58,7 +57,8 @@ export function invalidateChildStreams(): void {
 /**
  * Revision counter over the bound `SessionState`. A component whose render
  * reads the shared state through `streamMetadataFor`/`streamStateFor`/
- * `queuedFollowUpsFor` must `useSignal(sessionStateRevision)` (point-in-time
+ * `streamUnavailableDetailFor`/`queuedFollowUpsFor` must
+ * `useSignal(sessionStateRevision)` (point-in-time
  * readers — command handlers, teardown paths — read the helpers plainly).
  */
 export const sessionStateRevision: Signal.Computed<number> = computed(
@@ -89,6 +89,13 @@ export function sessionStreamPhase(
   streamId: StreamTabId,
 ): StreamPhaseState | undefined {
   return BOUND.get()?.state.streamStatus.getStreamState(streamId);
+}
+
+/** Canonical reason a stream is unavailable in this session. */
+export function streamUnavailableDetailFor(
+  streamId: StreamTabId,
+): string | undefined {
+  return BOUND.get()?.state.streamStatus.holdState(streamId);
 }
 
 /** Queued follow-up messages for a stream, from the session-owned queue. */
@@ -177,9 +184,11 @@ export function activeSubagentsFor(
   parentStreamId: StreamTabId,
   rosters: ChildRosters,
 ): readonly ActiveChildInfo[] {
-  const roster = rosters.get(parentStreamId);
-  if (!roster) return [];
-  return roster.filter((child) => child.finishedAt === undefined);
+  return (
+    rosters
+      .get(parentStreamId)
+      ?.filter((child) => child.finishedAt === undefined) ?? []
+  );
 }
 
 /** Display rows for a parent: the shared roster verbatim (live rows first,

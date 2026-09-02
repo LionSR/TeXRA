@@ -24,7 +24,7 @@ import type {
  * payloads (e.g. null array slots) without throwing.
  */
 export function isFunctionToolCall(
-  toolCall: ChatCompletionMessageToolCall | null | undefined | unknown,
+  toolCall: unknown,
 ): toolCall is ChatCompletionMessageFunctionToolCall {
   return (
     toolCall != null &&

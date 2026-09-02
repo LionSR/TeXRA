@@ -367,12 +367,10 @@ const LARGE_CHANGE_DIFF_LINES = 80;
  */
 const LARGE_CHANGE_RATIO = 0.4;
 
-const LOG_CHANNEL = 'subagentDiffs';
-const log = createLog(LOG_CHANNEL);
+const log = createLog('subagentDiffs');
 // The boundary warn in `buildSubagentResult` predates the A4 file merge and
 // stays on its historical channel so log ingestion keyed on it keeps seeing it.
-const DELIVERY_LOG_CHANNEL = 'subagentDelivery';
-const deliveryLog = createLog(DELIVERY_LOG_CHANNEL);
+const deliveryLog = createLog('subagentDelivery');
 
 /**
  * Truncate diff text to a maximum number of lines.

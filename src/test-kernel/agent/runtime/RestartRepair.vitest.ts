@@ -34,13 +34,16 @@ interface StreamSetup {
   streamId: StreamTabId;
   executionId: ExecutionId;
   streamStatus: StreamStatusMachine;
+  events: SessionEventHub;
 }
 
 function setupStream(name: string): StreamSetup {
+  const events = new SessionEventHub();
   return {
     streamId: `stream-${name}` as StreamTabId,
     executionId: `execution-${name}` as ExecutionId,
-    streamStatus: new StreamStatusMachine(new SessionEventHub()),
+    streamStatus: new StreamStatusMachine(events),
+    events,
   };
 }
 
@@ -138,9 +141,14 @@ describe('repairRestartedStreams', () => {
     expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
 
-    // A hold overlaid on an already-terminal phase is released even though
-    // the terminal transition itself is a no-op.
+    // A hold overlaid on an already-terminal phase is released without
+    // replaying synthetic RUNNING and terminal transitions.
+    const emittedPhases: string[] = [];
+    const detach = setup.events.subscribeStatus((event) => {
+      emittedPhases.push(event.phase);
+    });
     setup.streamStatus.markUnavailable(setup.streamId, 'transient read error');
+    expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
     await runRepair(setup, {
       closeRunningGroups: closeAllGroups,
       finalizeRun: createDurableFinalizer(),
@@ -152,6 +160,8 @@ describe('repairRestartedStreams', () => {
 
     expect(setup.streamStatus.holdState(setup.streamId)).toBeUndefined();
     expect(setup.streamStatus.get(setup.streamId)).toBe(STREAM_PHASE.CANCELLED);
+    expect(emittedPhases).toEqual([]);
+    detach();
   });
 
   it('acts on the durable facts re-read under the settlement lease, not the pre-claim classification', async () => {

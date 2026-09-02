@@ -1,10 +1,10 @@
 /**
  * Integrations tab for coding agents, services, reference managers, and
  * assisted inquiries. Reuses the same `tool-card` component as the Tools tab,
- * plus the Codex-specific inline settings that used to live inside ToolsTab.
+ * plus the per-agent inline settings (Codex, Claude Agent) that used to live
+ * inside ToolsTab.
  */
 
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -32,7 +32,7 @@ import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
 
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSelectValue } from '@shared/utils/selectTemplates';
+import { readSelectValue } from '@shared/wa/selectTemplates';
 
 // Local imports - catalog-driven settings rows
 import {
@@ -63,8 +63,10 @@ export class AIAgentsTab extends LitElement {
         align-items: center;
         flex-wrap: wrap;
         gap: var(--wa-space-s);
-        margin-bottom: var(--wa-space-xs);
+        padding: 0;
+        margin: 0 0 var(--wa-space-xs);
         font-size: var(--font-size-sm);
+        list-style: none;
       }
 
       .ai-agents-status-stat {
@@ -132,6 +134,7 @@ export class AIAgentsTab extends LitElement {
       throw new Error(`No settings-view catalog row for setting "${key}"`);
     }
     const options = catalogEnumChoices(key);
+    const controlId = `ai-agent-${key.replaceAll('.', '-')}`;
     const onChange = (e: Event): void => {
       const selected = readSelectValue(e);
       if (selected) {
@@ -141,13 +144,13 @@ export class AIAgentsTab extends LitElement {
     return html`
       <div class="settings-row">
         <div class="settings-row-text">
-          <span class="settings-row-label">${label}</span>
+          <label class="settings-row-label" for=${controlId}>${label}</label>
           <span class="settings-row-help">${entry.description}</span>
         </div>
         <div class="settings-row-control">
           <wa-select
             class="setting-select"
-            aria-label=${label}
+            id=${controlId}
             .value=${value}
             @change=${onChange}
           >
@@ -223,30 +226,30 @@ export class AIAgentsTab extends LitElement {
     const pending = counts.unknown + counts['coming-soon'];
 
     return html`
-      <div class="ai-agents-status">
-        <span class="ai-agents-status-stat ai-agents-status-available">
-          ${waIcon('check')} ${counts.available} available
-        </span>
+      <ul class="ai-agents-status" aria-label="Integration status">
+        <li class="ai-agents-status-stat ai-agents-status-available">
+          ${waIcon('check')} Available: ${counts.available}
+        </li>
         ${
           counts['not-found'] > 0
             ? html`
-                <span class="ai-agents-status-stat ai-agents-status-missing">
-                  ${waIcon('triangle-exclamation')} ${counts['not-found']}
-                  ${counts['not-found'] === 1 ? 'needs' : 'need'} setup
-                </span>
+                <li class="ai-agents-status-stat ai-agents-status-missing">
+                  ${waIcon('triangle-exclamation')} Need setup:
+                  ${counts['not-found']}
+                </li>
               `
             : nothing
         }
         ${
           pending > 0
             ? html`
-                <span class="ai-agents-status-stat ai-agents-status-neutral">
-                  ${waIcon('clock')} ${pending} pending
-                </span>
+                <li class="ai-agents-status-stat ai-agents-status-neutral">
+                  ${waIcon('clock')} Pending: ${pending}
+                </li>
               `
             : nothing
         }
-      </div>
+      </ul>
     `;
   }
 

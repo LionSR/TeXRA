@@ -66,7 +66,7 @@ describe('createRunTrace dispose', () => {
     expect(() => handle.dispose()).not.toThrow();
   });
 
-  it('carries a latched cleanup failure through a successor trace', () => {
+  it('keeps a cleanup failure for the final durability flush', () => {
     vi.useFakeTimers();
     const failure = new Error('delayed transcript write failed');
     const writer: TranscriptWriter = {
@@ -96,15 +96,8 @@ describe('createRunTrace dispose', () => {
     expect(() => handle.dispose()).not.toThrow();
     expect(flushers.has('execution-failed')).toBe(true);
 
-    const successor = createRunTrace(
-      writer.streamId,
-      store,
-      flushers,
-      'execution-failed',
-    );
-    expect(flushers.get('execution-failed')?.state).toBe('active');
+    expect(flushers.get('execution-failed')?.state).toBe('failed');
     expect(() => flushers.get('execution-failed')?.flush()).toThrow(failure);
-    expect(() => successor.dispose()).not.toThrow();
     expect(flushers.has('execution-failed')).toBe(false);
     expect(writer.close).toHaveBeenCalledOnce();
   });

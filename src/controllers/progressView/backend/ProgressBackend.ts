@@ -164,6 +164,19 @@ export class ProgressBackend {
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
       deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
         this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
+      // The committed selection, plus the target of an activation still in
+      // flight: an activation preloads the sidecar before it selects, so a
+      // terminal status landing in that window must not evict what the
+      // imminent `syncStreamContent` is about to read. Gated on the in-flight
+      // set because `latestActivationTarget` is sticky — it survives a failed
+      // or superseded activation, and would otherwise pin that stream's
+      // record for the rest of the session.
+      isStreamPresented: (stream) =>
+        !this.disposed &&
+        ((this.renderer.isAvailable() &&
+          this.presentation.activeStream === stream) ||
+          (this.latestActivationTarget === stream &&
+            this.inFlightActivationGenerations.has(this.activationGeneration))),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -298,8 +311,7 @@ export class ProgressBackend {
     const generation = ++this.activationGeneration;
     this.latestActivationTarget = stream;
     if (!stream) {
-      const previousStream = this.presentation.activeStream;
-      this.presentation.select('');
+      const previousStream = this.selectPresentedStream('');
       this.releasePresentationLeases();
       if (this.renderer.isAvailable()) {
         this.renderer.onActiveStreamChanged('');
@@ -311,7 +323,7 @@ export class ProgressBackend {
       return true;
     }
     if (!this.renderer.isAvailable()) {
-      this.presentation.select(stream);
+      this.selectPresentedStream(stream);
       this.releasePresentationLeases();
       return true;
     }
@@ -329,21 +341,26 @@ export class ProgressBackend {
     const failures = hydration.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
-    const closeTranscriptLease = () => {
+    // An activation that never commits leaves behind exactly what it
+    // hydrated: the transcript lease it took, and a sidecar record the
+    // preload above made resident. Nothing later revisits this stream — it
+    // never becomes the committed selection — so both are released here.
+    const abandonActivation = () => {
       if (transcriptLeaseResult.status === 'fulfilled') {
         transcriptLeaseResult.value.close();
       }
+      this.factApplier.retireSidecarIfFinishedChild(stream);
     };
     if (generation !== this.activationGeneration) {
-      closeTranscriptLease();
+      abandonActivation();
       return false;
     }
     if (!this.state.streamLogs.has(stream)) {
-      closeTranscriptLease();
+      abandonActivation();
       return false;
     }
     if (failures.length > 0) {
-      closeTranscriptLease();
+      abandonActivation();
       throw aggregateError(
         failures.map((failure) => failure.reason),
         `Failed to hydrate stream ${stream}`,
@@ -357,7 +374,7 @@ export class ProgressBackend {
     const previousStream = this.presentation.activeStream;
     const previousTranscriptLease = this.transcriptPresentationLease;
     this.transcriptPresentationLease = transcriptLeaseResult.value;
-    this.presentation.select(stream);
+    this.selectPresentedStream(stream);
     if (options.notifyActivation) this.renderer.onActiveStreamChanged(stream);
     this.renderer.syncStreamContent(stream);
     if (previousStream && previousStream !== stream) {
@@ -366,6 +383,22 @@ export class ProgressBackend {
     if (previousTranscriptLease !== transcriptLeaseResult.value)
       previousTranscriptLease?.close();
     return true;
+  }
+
+  /**
+   * Move the committed selection, and retire what it replaced. Every path
+   * that changes the selection goes through this, so a finished child that
+   * was presented — and therefore skipped by the terminal-status rule — is
+   * released exactly once, whichever path replaced it and whether or not a
+   * renderer was available at the time.
+   */
+  private selectPresentedStream(next: PresentedStreamId): PresentedStreamId {
+    const previous = this.presentation.activeStream;
+    this.presentation.select(next);
+    if (previous && previous !== next) {
+      this.factApplier.retireSidecarIfFinishedChild(previous);
+    }
+    return previous;
   }
 
   private releasePresentationLeases(): void {
@@ -413,9 +446,9 @@ export class ProgressBackend {
 
   /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
   applySessionFact(
-    ...args: Parameters<SessionFactApplier['handleSessionFact']>
+    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
   ): boolean {
-    return this.admitSessionFact(args[0]);
+    return this.admitSessionFact(fact);
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -518,30 +551,24 @@ export class ProgressBackend {
     }
 
     if (retainedOutcome) {
-      // Best-effort presentation repair, each failure isolated so a broken
-      // rebuild cannot suppress the retention notification and neither can
-      // make the deletion outcome disappear. The session-fact applier must
-      // still see `active`/`failed` and retire its provisional tombstone.
-      try {
-        await this.lifecycle.rebuildRenderedStreams({ syncActiveStream: true });
-      } catch (error) {
-        log.warn(
-          'Failed to rebuild rendered streams after a retained deletion',
-          {
-            data: { stream, retained, error },
+      await this.repairAfterDeletion({
+        syncActiveStream: true,
+        retainedNotify: {
+          activeCount: retainedOutcome === 'active' ? 1 : 0,
+          failedCount: retainedOutcome === 'failed' ? 1 : 0,
+        },
+        warnings: {
+          rebuild: {
+            message:
+              'Failed to rebuild rendered streams after a retained deletion',
+            data: { stream, retained },
           },
-        );
-      }
-      try {
-        await this.lifecycle.notifyDeletionRetained(
-          retainedOutcome === 'active' ? 1 : 0,
-          retainedOutcome === 'failed' ? 1 : 0,
-        );
-      } catch (error) {
-        log.warn('Failed to notify after a retained stream deletion', {
-          data: { stream, retained, error },
-        });
-      }
+          notify: {
+            message: 'Failed to notify after a retained stream deletion',
+            data: { stream, retained },
+          },
+        },
+      });
     }
 
     return retained;
@@ -639,7 +666,7 @@ export class ProgressBackend {
       activeAfterClear !== '' && remainingStreams.includes(activeAfterClear);
     const newerActivationPending =
       activationGenerationAtStart !== this.activationGeneration;
-    const newerIntentControlsSelection = this.newerIntentControlsSelection(
+    const newerIntentControls = this.newerIntentControlsSelection(
       activationGenerationAtStart,
       stream,
     );
@@ -647,8 +674,8 @@ export class ProgressBackend {
     // DELETE_STREAM. A concurrent explicit deselection is presentation intent
     // and must remain empty rather than being replaced by a fallback.
     const shouldActivateStream =
-      (selectionWasDeleted && !newerIntentControlsSelection) ||
-      (wasActive && hasVisibleActive && !newerIntentControlsSelection);
+      !newerIntentControls &&
+      (selectionWasDeleted || (wasActive && hasVisibleActive));
 
     this.postMessage({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -677,32 +704,65 @@ export class ProgressBackend {
       () => this.prepareAllStreamDeletions(),
       () => this.deleteAllStreamsNow(),
     );
-    const newerIntentControlsSelection =
+    const newerIntentControls =
       this.newerIntentControlsSelection(activationGeneration);
-    try {
-      await this.lifecycle.rebuildRenderedStreams({
-        syncActiveStream: !outcome.allDeleted && !newerIntentControlsSelection,
-      });
-    } catch (error) {
-      log.warn('Failed to rebuild rendered streams after bulk deletion', {
-        data: { allDeleted: outcome.allDeleted, error },
-      });
-    }
-    if (!outcome.allDeleted) {
-      try {
-        await this.lifecycle.notifyDeletionRetained(
-          outcome.activeCount,
-          outcome.failedCount,
-        );
-      } catch (error) {
-        log.warn('Failed to notify after a retained bulk deletion', {
+    await this.repairAfterDeletion({
+      syncActiveStream: !outcome.allDeleted && !newerIntentControls,
+      retainedNotify: outcome.allDeleted
+        ? undefined
+        : {
+            activeCount: outcome.activeCount,
+            failedCount: outcome.failedCount,
+          },
+      warnings: {
+        rebuild: {
+          message: 'Failed to rebuild rendered streams after bulk deletion',
+          data: { allDeleted: outcome.allDeleted },
+        },
+        notify: {
+          message: 'Failed to notify after a retained bulk deletion',
           data: {
             activeCount: outcome.activeCount,
             failedCount: outcome.failedCount,
-            error,
           },
-        });
-      }
+        },
+      },
+    });
+  }
+
+  /**
+   * Best-effort presentation repair, each failure isolated so a broken
+   * rebuild cannot suppress the retention notification and neither can
+   * make the deletion outcome disappear. The session-fact applier must
+   * still see `active`/`failed` and retire its provisional tombstone.
+   */
+  private async repairAfterDeletion(options: {
+    syncActiveStream: boolean;
+    retainedNotify?: { activeCount: number; failedCount: number };
+    warnings: {
+      rebuild: { message: string; data: Record<string, unknown> };
+      notify: { message: string; data: Record<string, unknown> };
+    };
+  }): Promise<void> {
+    try {
+      await this.lifecycle.rebuildRenderedStreams({
+        syncActiveStream: options.syncActiveStream,
+      });
+    } catch (error) {
+      log.warn(options.warnings.rebuild.message, {
+        data: { ...options.warnings.rebuild.data, error },
+      });
+    }
+    if (!options.retainedNotify) return;
+    try {
+      await this.lifecycle.notifyDeletionRetained(
+        options.retainedNotify.activeCount,
+        options.retainedNotify.failedCount,
+      );
+    } catch (error) {
+      log.warn(options.warnings.notify.message, {
+        data: { ...options.warnings.notify.data, error },
+      });
     }
   }
 
@@ -763,12 +823,8 @@ export class ProgressBackend {
   load(): Promise<void> {
     return this.enqueueStorageOperation(async () => {
       await this.session.waitUntilReady();
-      await this.loadPresentationState();
+      await this.state.load(this.stateOwnership);
     });
-  }
-
-  private loadPresentationState(): Promise<void> {
-    return this.state.load(this.stateOwnership);
   }
 
   /**
@@ -790,23 +846,11 @@ export class ProgressBackend {
     prepare: () => Promise<P>,
     work: (prepared: P) => Promise<T>,
   ): Promise<T> {
-    let prepared!: P;
-    let publishPreparation!: (value: PromiseLike<void>) => void;
-    const preparation = new Promise<void>((resolve) => {
-      publishPreparation = resolve;
-    });
-    const operation = this.enqueueStorageOperation(async () => {
-      await preparation;
-      return work(prepared);
-    });
-    const pendingPreparation = Promise.resolve().then(async () => {
-      prepared = await prepare();
-    });
+    const preparation = Promise.resolve().then(prepare);
     // If an earlier queue entry is still running, attach a rejection handler
     // until this operation reaches the same promise.
     void preparation.catch(() => undefined);
-    publishPreparation(pendingPreparation);
-    return operation;
+    return this.enqueueStorageOperation(() => preparation.then(work));
   }
 
   /**
@@ -845,6 +889,13 @@ export class ProgressBackend {
     if (this.disposed) return;
     this.disposed = true;
     for (const detach of this.detachEventListeners.splice(0)) detach();
+    // Disposal is this host's last "stops presenting", and the session
+    // outlives the window, so nothing else would revisit a finished child
+    // that was still selected. The selection itself is a persisted user
+    // preference and stays as it is; `isStreamPresented` reads `disposed`,
+    // so the rule already sees this host as presenting nothing.
+    const presented = this.presentation.activeStream;
+    if (presented) this.factApplier.retireSidecarIfFinishedChild(presented);
     this.factApplier.dispose();
     this.activationGeneration += 1;
     this.releasePresentationLeases();

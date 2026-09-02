@@ -149,10 +149,8 @@ function enable(context: vscode.ExtensionContext): void {
 }
 
 function disable(): void {
-  if (runFactUnsubscribe) {
-    runFactUnsubscribe();
-    runFactUnsubscribe = undefined;
-  }
+  runFactUnsubscribe?.();
+  runFactUnsubscribe = undefined;
   if (collection) {
     collection.clear();
     collection.dispose();

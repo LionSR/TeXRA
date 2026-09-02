@@ -7,9 +7,9 @@
  * enqueued as a follow-up instruction to an existing session via the SDK's
  * `resume:` option (or via streaming-input on the live session). With
  * fork_session, it instead starts a new session from the selected session's
- * state. Each turn's
- * result is delivered back to the parent's follow-up queue, so the
- * orchestrator sees responses uniformly whether it or the user drove the turn.
+ * state. Each turn's result is delivered back to the parent's follow-up
+ * queue, so the orchestrator sees responses uniformly whether it or the user
+ * drove the turn.
  *
  * Authentication: the SDK spawns the Claude Code CLI as a subprocess, which
  * picks up whichever auth the user has configured:
@@ -48,7 +48,11 @@ import type {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { formatWallTimeSeconds, isNonEmptyString } from '@utils/core';
+import {
+  formatWallTimeSeconds,
+  isNonEmptyString,
+  linkAbortSignals,
+} from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -115,7 +119,7 @@ const ClaudeAgentInputSchema = z
       .string()
       .nullish()
       .describe(
-        "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5', 'claude-opus-5'). Defaults to user-configured model.",
+        "Claude model to use (e.g. 'claude-sonnet-5', 'claude-fable-5-1', 'claude-opus-5'). Defaults to user-configured model.",
       ),
     effort: ClaudeAgentEffortSchema.nullish().describe(
       'Reasoning depth hint passed to the SDK (defaults to user-configured effort, typically high).',
@@ -154,9 +158,6 @@ interface TurnResult {
   errorMessage?: string;
 }
 
-const INVALID_FORK_SESSION_MESSAGE =
-  'Claude Code fork did not create a distinct session';
-
 function claudeCostLines(turn: TurnResult): string[] | undefined {
   return typeof turn.totalCostUsd === 'number' && turn.totalCostUsd > 0
     ? [`<cost-usd>${turn.totalCostUsd.toFixed(4)}</cost-usd>`]
@@ -179,7 +180,7 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 export async function runStreamedTurn(params: {
   prompt: string;
   logger: AgentTrace;
-  abortController: AbortController;
+  signal: AbortSignal;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
   effort: ClaudeAgentEffort;
@@ -195,8 +196,12 @@ export async function runStreamedTurn(params: {
 
   const query = await importClaudeAgentSdk();
 
+  // The SDK takes a controller, not a signal: this one exists only at that
+  // boundary and follows the turn's signal until the stream is drained.
+  const abortController = new AbortController();
+  const detachAbort = linkAbortSignals([params.signal], abortController);
   const sdkOptions: ClaudeAgentSdkOptions = {
-    abortController: params.abortController,
+    abortController,
     model: params.model,
     permissionMode: params.permissionMode,
     effort: params.effort,
@@ -220,7 +225,6 @@ export async function runStreamedTurn(params: {
     sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
   }
 
-  const stream = query({ prompt, options: sdkOptions });
   const responseParts: string[] = [];
   const toolLogRefs = new Map<string, ClaudeToolLogRef>();
   const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
@@ -231,6 +235,7 @@ export async function runStreamedTurn(params: {
   let errorMessage: string | undefined;
 
   try {
+    const stream = query({ prompt, options: sdkOptions });
     for await (const raw of stream) {
       if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
 
@@ -277,6 +282,7 @@ export async function runStreamedTurn(params: {
       }
     }
   } finally {
+    detachAbort();
     backgroundTasks.finish();
   }
 
@@ -285,7 +291,10 @@ export async function runStreamedTurn(params: {
     (!sessionId || sessionId === params.resumeSessionId)
   ) {
     isError = true;
-    errorMessage = [errorMessage, INVALID_FORK_SESSION_MESSAGE]
+    errorMessage = [
+      errorMessage,
+      'Claude Code fork did not create a distinct session',
+    ]
       .filter(isNonEmptyString)
       .join('\n');
   }
@@ -424,12 +433,12 @@ function startClaudeAgentLoop(params: {
     initialPrompt,
     store: claudeAgentSessionsFor,
     releaseFallbackClaim: params.releaseFallbackClaim,
-    runProviderTurn: async (prompt, _ports, abortController) => {
+    runProviderTurn: async (prompt, _ports, signal) => {
       const forkSession = isFirstTurn && params.forkSession;
       const turn = await runStreamedTurn({
         prompt,
         logger,
-        abortController,
+        signal,
         model: params.model,
         permissionMode: params.permissionMode,
         effort: params.effort,

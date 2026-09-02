@@ -34,12 +34,6 @@ export function streamScopedCommand<T extends string>(command: T) {
   return StreamScopedBaseSchema.extend({ command: z.literal(command) });
 }
 
-/** A stream tab id, or the empty-string sentinel meaning "no active stream". */
-export const StreamSelectionSchema = z.union([
-  StreamTabIdSchema,
-  z.literal(''),
-]);
-
 // ============================================================
 // Progress View Data Schemas
 // ============================================================
@@ -123,12 +117,12 @@ const SafeUrlSchema = z.string().transform(sanitizeLiveLinkUrl);
 
 /**
  * Render-boundary projection of the canonical provider web-search entry
- * (`WebSearchResultEntrySchema` in `@agent/types/ServerTools` — not imported
- * here because the shared layer must not depend on the agent layer). Keeps
- * only the rendered fields, all optional because persisted archives may be
- * partial, and applies the SafeUrl sanitization transform to `url` at this
- * boundary (#7230). Named for its payload so it no longer collides with the
- * agent layer's same-name schemas (#10279).
+ * (`WebSearchResult['results'][number]` in `@agent/types/ServerTools`). The
+ * schema is not imported here because the shared layer must not depend on the
+ * agent layer. It keeps only the rendered fields, all optional because
+ * persisted archives may be partial, and applies the SafeUrl sanitization
+ * transform to `url` at this boundary (#7230). Named for its payload so it no
+ * longer collides with the agent layer's same-name schemas (#10279).
  */
 const WebSearchPayloadItemSchema = z.object({
   url: SafeUrlSchema.optional(),

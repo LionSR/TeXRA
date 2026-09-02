@@ -14,7 +14,6 @@
  */
 
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
-import { z } from 'zod';
 import { isFunctionToolCall } from '@agent/modelHandlers/openai/functionToolCalls';
 import {
   extractTextContentPart,
@@ -29,7 +28,7 @@ import {
 import {
   ANTHROPIC_SERVER_TOOL_BLOCK_TYPES,
   extractWebFetchResultFields,
-  WebSearchResultEntrySchema,
+  type WebSearchResult,
 } from '@agent/types/ServerTools';
 import { assertNever, isObject } from '@utils/core';
 import { isImageMimeType } from '@utils/files/mimeUtils';
@@ -42,103 +41,92 @@ import type {
 import type { ExportNode, UserPart } from './schemas';
 
 // ============================================================
-// Input schemas (implementation detail — not exported publicly)
+// Input types (implementation detail — not exported publicly)
 // ============================================================
 
 /**
  * One entry inside a `web_search_tool_result` block's `content` array: the
- * provider wire shape of the canonical {@link WebSearchResultEntrySchema},
+ * provider wire shape of the canonical {@link WebSearchResult},
  * read permissively (`title`/`url` optional on the wire) and tagged with the
  * block's `type` string.
  */
-const WebSearchResultItemSchema = WebSearchResultEntrySchema.pick({
-  title: true,
-  url: true,
-})
-  .partial()
-  .extend({ type: z.string() });
+type WebSearchResultItem = Partial<
+  Pick<WebSearchResult['results'][number], 'title' | 'url'>
+> & { type: string };
 
 /**
  * Discriminated union of API content blocks across the four provider shapes
  * this module normalizes (Anthropic, OpenAI Chat Completions, OpenAI
  * Response API, Google GenAI — the latter via {@link googlePartToBlocks},
  * which translates Google's field-based `Part` into these type-based
- * blocks). Each variant declares only the fields that provider actually
- * populates for that block kind, so the six consuming functions below can
- * switch/narrow on `type` instead of re-deriving validity with ad hoc
- * optional-field checks.
+ * blocks). Each variant declares only the fields this module reads for that
+ * block kind. Existing runtime guards narrow the raw values; this union gives
+ * the consumers below exhaustive `type`-based narrowing afterward.
  */
-const ContentBlockSchema = z.discriminatedUnion('type', [
+type ContentBlock =
   // Plain text. Anthropic and Google GenAI use 'text'; OpenAI Response API
   // splits it into 'input_text' (user) and 'output_text' (assistant).
-  z.object({ type: z.literal('text'), text: z.string().optional() }),
-  z.object({ type: z.literal('input_text'), text: z.string().optional() }),
-  z.object({ type: z.literal('output_text'), text: z.string().optional() }),
+  | { type: 'text'; text?: string }
+  | { type: 'input_text'; text?: string }
+  | { type: 'output_text'; text?: string }
 
   // Anthropic extended-thinking / Google GenAI thought blocks.
-  z.object({
-    type: z.literal(CONVERSATION_BLOCK_TYPES.thinking),
-    thinking: z.string().optional(),
-  }),
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.redactedThinking) }),
+  | {
+      type: typeof CONVERSATION_BLOCK_TYPES.thinking;
+      thinking?: string;
+    }
+  | { type: typeof CONVERSATION_BLOCK_TYPES.redactedThinking }
 
   // Tool call / tool result — shared by Anthropic, Google GenAI, and the
   // VS Code language-model bridge (see normalizeContentBlock).
-  z.object({
-    type: z.literal(CONVERSATION_BLOCK_TYPES.toolUse),
-    name: z.string().optional(),
-    input: z.unknown().optional(),
-  }),
-  z.object({
-    type: z.literal(CONVERSATION_BLOCK_TYPES.toolResult),
-    content: z.unknown().optional(),
-  }),
+  | {
+      type: typeof CONVERSATION_BLOCK_TYPES.toolUse;
+      name?: string;
+      input?: unknown;
+    }
+  | {
+      type: typeof CONVERSATION_BLOCK_TYPES.toolResult;
+      content?: unknown;
+    }
 
   // Attachment markers: Anthropic ('image'/'document'), OpenAI Response API
   // ('input_image'/'input_file'), OpenAI Chat Completions ('image_url'/
   // 'file'). None of these carry fields this module reads — only `type`
   // decides which attachment kind to render.
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.image) }),
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.inputImage) }),
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.imageUrl) }),
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.document) }),
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.inputFile) }),
-  z.object({ type: z.literal(CONVERSATION_BLOCK_TYPES.file) }),
+  | { type: typeof CONVERSATION_BLOCK_TYPES.image }
+  | { type: typeof CONVERSATION_BLOCK_TYPES.inputImage }
+  | { type: typeof CONVERSATION_BLOCK_TYPES.imageUrl }
+  | { type: typeof CONVERSATION_BLOCK_TYPES.document }
+  | { type: typeof CONVERSATION_BLOCK_TYPES.inputFile }
+  | { type: typeof CONVERSATION_BLOCK_TYPES.file }
 
   // Anthropic server-side tool blocks (the provider executes these, not a
   // local tool handler).
-  z.object({
-    type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse),
-    name: z.string().optional(),
-    input: z.unknown().optional(),
-  }),
-  z.object({
-    type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult),
-    content: z.array(WebSearchResultItemSchema).optional(),
-  }),
+  | {
+      type: typeof ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.serverToolUse;
+      name?: string;
+      input?: unknown;
+    }
+  | {
+      type: typeof ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webSearchToolResult;
+      content?: WebSearchResultItem[];
+    }
   // `extractWebFetchResultFields` reads its fields off the raw block itself
-  // (it accepts `unknown`), not off this schema's inferred type, so this
-  // variant only declares the discriminant. `looseObject` (not `object`)
-  // documents that undeclared fields are intentionally read elsewhere —
-  // and keeps that true if runtime `.parse()` is ever added to this schema
-  // (currently it isn't; see the module-level type-derivation-only note).
-  z.looseObject({
-    type: z.literal(ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult),
-  }),
-]);
-type ContentBlock = z.infer<typeof ContentBlockSchema>;
+  // (it accepts `unknown`), so this variant only declares the discriminant.
+  | {
+      type: typeof ANTHROPIC_SERVER_TOOL_BLOCK_TYPES.webFetchToolResult;
+      [key: string]: unknown;
+    };
 
-const ConversationMessageSchema = z.looseObject({
-  role: z.string().optional(),
-  content: z
-    .union([z.string(), z.array(ContentBlockSchema), z.unknown()])
-    .optional(),
+interface ConversationMessage {
+  role?: string;
+  content?: unknown;
   // Google GenAI uses `parts` instead of `content`
-  parts: z.array(z.unknown()).optional(),
+  parts?: unknown[];
   // OpenAI Chat Completions: tool_calls on assistant messages
-  tool_calls: z.array(z.unknown()).optional(),
-});
-type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
+  tool_calls?: unknown[];
+  [key: string]: unknown;
+}
 
 // ============================================================
 // Helpers
@@ -147,6 +135,11 @@ type ConversationMessage = z.infer<typeof ConversationMessageSchema>;
 /** Pretty-print a non-string value for display inside an export block. */
 function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+/** Render a tool-result payload as display text: strings pass through. */
+function toolResultContentText(content: unknown): string {
+  return typeof content === 'string' ? content : prettyJson(content ?? '');
 }
 
 function extractBlocks(msg: ConversationMessage): ContentBlock[] {
@@ -218,10 +211,7 @@ function googlePartToBlocks(part: Part): ContentBlock[] {
     return [
       {
         type: 'tool_result',
-        content:
-          typeof fr.response === 'string'
-            ? fr.response
-            : prettyJson(fr.response ?? ''),
+        content: toolResultContentText(fr.response),
       },
     ];
   }
@@ -342,10 +332,7 @@ function assistantBlockToNode(block: ContentBlock): ExportNode | null {
         asClassifiedBlock<typeof CONVERSATION_BLOCK_TYPES.toolResult>(block);
       return {
         kind: 'tool-result',
-        text:
-          typeof toolResult.content === 'string'
-            ? toolResult.content
-            : prettyJson(toolResult.content ?? ''),
+        text: toolResultContentText(toolResult.content),
       };
     }
 

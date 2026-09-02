@@ -105,6 +105,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   @property({ attribute: false }) recording = false;
 
   @state() private polishing = false;
+  @state() private statusAnnouncement = '';
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
@@ -120,7 +121,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   });
 
   protected override willUpdate(changedProperties: PropertyValues): void {
-    // React to shouldFocus property change
     if (changedProperties.has('shouldFocus') && this.shouldFocus) {
       this.focusInput({ scrollIntoView: true }).then(() => {
         // Guard against dispatching events after disconnection
@@ -130,7 +130,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       });
     }
 
-    // React to polishedText property change
     if (changedProperties.has('polishedText') && this.polishedText !== null) {
       this.polishing = false;
       this.updateValue(this.polishedText);
@@ -141,7 +140,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       this.polishing = false;
     }
 
-    // React to transcribedText property change
     if (
       changedProperties.has('transcribedText') &&
       this.transcribedText !== null
@@ -160,7 +158,6 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       });
     }
 
-    // React to recording property change
     if (changedProperties.has('recording')) {
       this.recordingController.setRecording(this.recording);
     }
@@ -250,6 +247,11 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
         'replace',
         eventSink,
       );
+      this.announceStatus(
+        added.length === 1
+          ? 'Image attached to the follow-up message.'
+          : `${added.length} images attached to the follow-up message.`,
+      );
       return;
     }
 
@@ -278,7 +280,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
       return html` <section aria-label="Follow-up message">${body}</section> `;
     }
     return html`
-      <wa-details class="panel-collapsible" summary="Followup">
+      <wa-details class="panel-collapsible" summary="Follow-up">
         ${body}
       </wa-details>
     `;
@@ -298,16 +300,24 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
         <div class="composer-surface">
           <wa-textarea
             id=${ELEMENT_IDS.FOLLOW_UP_INPUT}
-            aria-label="Follow-up message"
+            name="follow-up-message"
             placeholder="Message TeXRA…"
             rows="2"
             resize="vertical"
+            autocomplete="off"
+            spellcheck="true"
             ?disabled=${this.sending}
             .value=${live(this.value)}
             @input=${this.handleInput}
             @keydown=${this.handleKeydown}
             @paste=${this.handlePaste}
-          ></wa-textarea>
+          >
+            <span slot="label" class="visually-hidden">Follow-up message</span>
+            <span slot="hint" class="visually-hidden">
+              Press Enter to send or Shift+Enter for a new line. Paste images to
+              attach them.
+            </span>
+          </wa-textarea>
 
           <div class="follow-up-actions">
             ${
@@ -355,6 +365,9 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
             })}
           </div>
         </div>
+        <div class="visually-hidden" role="status">
+          ${this.statusAnnouncement}
+        </div>
       </div>
     `;
   }
@@ -400,6 +413,15 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
     const streamId = this.streamId;
     const transientState = this.transientState;
     if (!streamId || !transientState || this.sending) return;
+    if (
+      !this.value.trim() &&
+      transientState.pendingImages.length === 0 &&
+      transientState.pendingImagePastes.size === 0
+    ) {
+      this.announceStatus('Enter a follow-up message before sending.');
+      void this.focusInput();
+      return;
+    }
     this.emitSendForStream(streamId, transientState);
   }
 
@@ -410,6 +432,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   ): void {
     if (transientState.pendingImagePastes.size > 0) {
       transientState.sendAfterImagePastes = true;
+      this.announceStatus('Attaching images before sending.');
       return;
     }
     // Image chips stay in the draft until FOLLOW_UP_RESULT accepts the send.
@@ -419,6 +442,7 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
         images: transientState.pendingImages,
       }),
     );
+    this.announceStatus('Sending follow-up message.');
     transientState.sendAfterImagePastes = false;
   }
 
@@ -437,9 +461,22 @@ export class FollowUpInput extends UnsupportedCommandsMixin(LitElement) {
   }
 
   private emitPolish(): void {
-    if (!this.value.trim()) return;
+    if (!this.value.trim()) {
+      this.announceStatus('Enter a follow-up message before polishing.');
+      void this.focusInput();
+      return;
+    }
     this.polishing = true;
+    this.announceStatus('Polishing follow-up message.');
     this.dispatchEvent(ProgressEvents.followupPolish());
+  }
+
+  /** Update the stable polite region, including when the same message repeats. */
+  private announceStatus(message: string): void {
+    this.statusAnnouncement = '';
+    void this.updateComplete.then(() => {
+      if (this.isConnected) this.statusAnnouncement = message;
+    });
   }
 
   private updateValue(

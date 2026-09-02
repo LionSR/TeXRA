@@ -30,8 +30,10 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
-import { setLeanLanguageServices } from '../leanLanguageServices';
-import type { LeanLanguageServices } from '../leanLanguageServices';
+import {
+  setLeanLanguageServices,
+  type LeanLanguageServices,
+} from '../leanLanguageServices';
 import type {
   LeanFileCommand,
   LeanProjectCommand,
@@ -741,8 +743,6 @@ export async function defaultResolveWorkspaceRoot(
       return dir;
     }
     if (dir === root) return null;
-    const parent = path.dirname(dir);
-    if (parent === dir) return null;
-    dir = parent;
+    dir = path.dirname(dir);
   }
 }

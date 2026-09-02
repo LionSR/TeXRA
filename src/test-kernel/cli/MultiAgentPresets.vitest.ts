@@ -151,7 +151,7 @@ describe('CLI multi-agent presets', () => {
     expect(output).not.toContain('workflow:0');
     expect(output).toContain('texra multi-agent show <team-id>');
     expect(output).toContain(
-      'Researcher Access sign-in may load additional remote team agents',
+      'TeXRA account sign-in may load additional remote team agents',
     );
   });
 
@@ -177,7 +177,7 @@ describe('CLI multi-agent presets', () => {
     );
     expect(formatCliMultiAgentPresetLauncherHints(plan)).toEqual([
       'Team setup: run `texra multi-agent show <team-id>` using the team id shown in each row.',
-      'Researcher Access sign-in may unlock more remote team agents.',
+      'TeXRA account sign-in may unlock more remote team agents.',
     ]);
   });
 
@@ -399,7 +399,7 @@ describe('CLI multi-agent presets', () => {
         '  progressCheck',
         '  search',
         '',
-        'Hint: Researcher Access sign-in may load additional remote team agents.',
+        'Hint: TeXRA account sign-in may load additional remote team agents.',
       ].join('\n'),
     );
   });

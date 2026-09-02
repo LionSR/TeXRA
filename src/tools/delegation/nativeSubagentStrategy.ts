@@ -190,12 +190,16 @@ function bindAbortSignals(
   signals: readonly (AbortSignal | undefined)[],
   handle: AgentRunHandle,
 ): () => void {
-  const uniqueSignals = unique(
+  // One listener per source, no `AbortSignal.any`: a composite built on the
+  // parent run's signal stays reachable from it (listener and all) until it
+  // aborts, which for a long-lived parent is never — one retained turn per
+  // subagent (see `linkAbortSignals`).
+  const detachers = unique(
     signals.filter((signal): signal is AbortSignal => signal !== undefined),
-  );
-  if (uniqueSignals.length === 0) return () => {};
-  const combined = AbortSignal.any(uniqueSignals);
-  return onAbort(combined, () => handle.interrupt());
+  ).map((signal) => onAbort(signal, () => handle.interrupt()));
+  return () => {
+    for (const detach of detachers) detach();
+  };
 }
 
 export function createNativeSubagentStrategy(
@@ -220,7 +224,7 @@ export function createNativeSubagentStrategy(
 
   const runNative = async (
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => void,
     ) => Promise<AgentRuntimeFlowResult>,
@@ -234,10 +238,7 @@ export function createNativeSubagentStrategy(
       const result = await call((handle) => {
         detachAbort();
         runHandle = handle;
-        detachAbort = bindAbortSignals(
-          [params.signal, abortController.signal],
-          handle,
-        );
+        detachAbort = bindAbortSignals([params.signal, signal], handle);
       });
       lastResult = toDeliveryResult(result, params.executionId);
       // Every turn's totalCostUsd is the run's cumulative cost to date, not a
@@ -288,8 +289,8 @@ export function createNativeSubagentStrategy(
       deliveryMode: 'persistOnly' as const,
     }),
 
-    launch: (ports, abortController) =>
-      runNative(ports, abortController, async (onRun) => {
+    launch: (ports, signal) =>
+      runNative(ports, signal, async (onRun) => {
         const executeOptions = {
           session: params.session,
           enforceCategory: params.agentCategoryExplicit,
@@ -341,8 +342,8 @@ export function createNativeSubagentStrategy(
         return turn;
       }),
 
-    runTurn: (followUps, ports, abortController) =>
-      runNative(ports, abortController, async (onRun) => {
+    runTurn: (followUps, ports, signal) =>
+      runNative(ports, signal, async (onRun) => {
         const streamId = runHandle?.childStreamId;
         if (!streamId) {
           throw new Error(
@@ -452,6 +453,7 @@ export function createNativeSubagentStrategy(
         const result = turn
           ? toDeliveryResult(turn, params.executionId)
           : lastResult;
+        const wallTimeMs = Date.now() - params.startedAt;
         const failureOptions = {
           parentExecutionId: params.parentExecutionId,
           cause: lastErr ?? error,
@@ -461,7 +463,7 @@ export function createNativeSubagentStrategy(
             params.agentName,
             params.config.agentCategory,
             result,
-            Date.now() - params.startedAt,
+            wallTimeMs,
             failureOptions,
           );
         } catch (buildError) {
@@ -475,7 +477,7 @@ export function createNativeSubagentStrategy(
             params.agentName,
             params.config.agentCategory,
             undefined,
-            Date.now() - params.startedAt,
+            wallTimeMs,
             failureOptions,
           );
         }

@@ -47,7 +47,6 @@ function startBoundRun(
 function reviewCollection(...changedFiles: string[]) {
   return {
     repoRoot: '/repo',
-    baseDescription: 'main branch',
     changedFiles,
   };
 }

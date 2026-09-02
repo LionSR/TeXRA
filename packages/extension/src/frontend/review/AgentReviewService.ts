@@ -130,10 +130,6 @@ class AgentReviewServiceImpl {
     };
   }
 
-  getIssue(id: string): ReviewIssue | undefined {
-    return this.issues.find((issue) => issue.id === id);
-  }
-
   /** Absolute path of the file an issue refers to. */
   issuePath(issue: ReviewIssue): string {
     return path.join(this.reviewRoot ?? '', issue.file);
@@ -277,7 +273,6 @@ class AgentReviewServiceImpl {
     // shows paths exactly as git printed them.
     this.reviewRuns.collect(run, {
       repoRoot,
-      baseDescription,
       changedFiles: changedFiles.map(normalizeReviewFilePath),
     });
     this.emitter.fire();
@@ -436,7 +431,7 @@ class AgentReviewServiceImpl {
   }
 
   dismissIssue(id: string): void {
-    const issue = this.getIssue(id);
+    const issue = this.issues.find((entry) => entry.id === id);
     if (!issue) return;
     this.dismissed.add(fingerprint(issue));
     this.issues = this.issues.filter((entry) => entry.id !== id);
@@ -473,7 +468,7 @@ class AgentReviewServiceImpl {
   async fixIssues(ids?: readonly string[]): Promise<void> {
     const targets = ids
       ? this.issues.filter((issue) => ids.includes(issue.id))
-      : [...this.issues];
+      : this.issues;
     if (targets.length === 0) {
       void vscode.window.showInformationMessage(
         'No agent review issues to fix.',

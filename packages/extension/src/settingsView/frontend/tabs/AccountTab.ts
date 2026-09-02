@@ -42,6 +42,7 @@ export class AccountTab extends LitElement {
          the banner when the settings pane narrows or text is enlarged. */
       .settings-banner-title {
         overflow-wrap: anywhere;
+        unicode-bidi: plaintext;
       }
     `,
   ];
@@ -59,9 +60,9 @@ export class AccountTab extends LitElement {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
   };
 
-  private handleManageProviderKeys(): void {
+  private readonly handleManageProviderKeys = (): void => {
     this.dispatchEvent(createEvent('manage-provider-keys'));
-  }
+  };
 
   private renderIdentityBanner(): TemplateResult {
     const expired = this.sessionProblem === 'expired';
@@ -142,7 +143,7 @@ export class AccountTab extends LitElement {
           ${renderSettingsSectionHeading({
             title: 'Credentials',
             description:
-              'Provider API keys remain in Providers & Models, alongside the models that use them.',
+              'Manage provider API keys alongside the models that use them.',
             icon: 'key',
           })}
           <div class="settings-section">
@@ -159,7 +160,7 @@ export class AccountTab extends LitElement {
                   text: 'Manage keys',
                   kind: 'secondary',
                   appearance: 'outlined',
-                  onClick: () => this.handleManageProviderKeys(),
+                  onClick: this.handleManageProviderKeys,
                 })}
               </div>
             </div>
@@ -169,7 +170,8 @@ export class AccountTab extends LitElement {
         <section>
           ${renderSettingsSectionHeading({
             title: 'Privacy',
-            description: 'Choose what TeXRA records about your model usage.',
+            description:
+              'Choose whether TeXRA sends telemetry for model usage billed to your API keys.',
             icon: 'shield',
           })}
           <div class="settings-section">

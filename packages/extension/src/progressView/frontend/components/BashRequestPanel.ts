@@ -47,16 +47,21 @@ export class BashRequestPanel extends BaseBypassApprovalPanel<'bash'> {
         ${
           data.cwd
             ? html`<div class="bash-approval-request__cwd">
-                Directory: <span>${data.cwd}</span>
+                Runs in: <bdi dir="ltr">${data.cwd}</bdi>
               </div>`
             : nothing
         }
         <div class="bash-approval-request__command">
-          ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
+          ${buildCodeBlock(data.command, {
+            language: 'bash',
+            className: 'tool-command-input',
+            showLanguage: true,
+            showCopy: true,
+          })}
         </div>
       `,
-      approveTitle: 'Allow this command to execute (y)',
-      rejectTitle: 'Reject this command (n)',
+      approveTitle: 'Run this command (y)',
+      rejectTitle: 'Do not run this command (n)',
     });
   }
 }

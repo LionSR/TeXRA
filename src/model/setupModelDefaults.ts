@@ -67,7 +67,7 @@ const SETUP_PROVIDER_DEFAULTS: Readonly<Record<string, SetupProviderDefaults>> =
       fallbackSource: ModelProvider.MINIMAX,
     },
     glm: { preferredModel: 'glm5', fallbackSource: ModelProvider.GLM },
-    meta: { preferredModel: 'musespark11', fallbackSource: ModelProvider.META },
+    meta: { preferredModel: 'musespark13', fallbackSource: ModelProvider.META },
   };
 
 /** Whether `config` is safe to hand to the setup assistant for `setupProvider`. */

@@ -10,6 +10,9 @@
  * same shape as a Ctrl+C interruption and re-probes with `verify_setup`.
  */
 
+// Standard library imports
+import { setTimeout as sleep } from 'node:timers/promises';
+
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 import * as vscode from 'vscode';
@@ -100,12 +103,7 @@ async function captureExecution(
 
   // Drain any final chunks; bound the wait so a hung reader can't
   // block the agent forever.
-  const output = await Promise.race([
-    reader,
-    new Promise<string>((resolve) =>
-      setTimeout(() => resolve(''), READER_DRAIN_MS),
-    ),
-  ]);
+  const output = await Promise.race([reader, sleep(READER_DRAIN_MS, '')]);
 
   return {
     exitCode: result.timedOut ? undefined : result.value,
@@ -116,10 +114,7 @@ async function captureExecution(
 
 /** Strip ANSI control sequences and retain the captured output tail. */
 function truncateTerminalOutput(output: string): string {
-  const stripped = stripAnsi(output);
-  return stripped.length > TERMINAL_OUTPUT_MAX_CHARS
-    ? stripped.slice(-TERMINAL_OUTPUT_MAX_CHARS)
-    : stripped;
+  return stripAnsi(output).slice(-TERMINAL_OUTPUT_MAX_CHARS);
 }
 
 /**

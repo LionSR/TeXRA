@@ -105,6 +105,7 @@ function createProvider() {
   ) as ProgressViewProvider;
   const injected = provider as unknown as Record<string, unknown>;
   injected.target = { placement: 'sidebar', ready: false };
+  injected.documentIdentities = new WeakMap<vscode.Webview, object>();
   injected._mainViewProvider = mainViewProvider;
   injected.context = { extensionUri: { fsPath: '/ext' } };
   injected.contentProvider = { getHtmlContent: () => '<progress-view />' };

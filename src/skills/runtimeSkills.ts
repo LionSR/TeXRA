@@ -2,9 +2,9 @@ import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   type ActiveSkillSourceScope,
   type RawAcceptedSkill,
+  type SettingHost,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import type { SettingHost } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { readPlatformSetting } from '@utils/config/platformSettings';

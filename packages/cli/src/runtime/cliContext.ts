@@ -29,7 +29,7 @@ import type { Stats } from 'node:fs';
 type CliMode = 'headless' | 'interactive';
 
 export interface CliPromptRequest {
-  readonly kind: 'approval' | 'externalInquiry';
+  readonly kind: 'approval';
   readonly summary: string;
   readonly prompt: string;
 }

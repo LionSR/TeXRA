@@ -308,9 +308,9 @@ export type WorkflowAgentRunner = (
 
 /**
  * One completed agent() call, cached for resume. Identity is `key` alone;
- * `index` records where the call sat in the run that journaled it, for
- * ordering and cost attribution, and is rewritten when a resumed run replays
- * the entry at a new position.
+ * `index` records the last invocation position that matched the entry. It is
+ * rewritten when a resumed run replays the entry at a new position and need
+ * not be unique in a stale recovery journal.
  */
 export interface WorkflowJournalEntry {
   index: number;
@@ -386,6 +386,15 @@ export interface WorkflowScriptRunOptions {
    * host restart cannot expose work whose journal entry was never persisted.
    */
   onJournalEntry?: (entry: WorkflowJournalEntry) => void | Promise<void>;
+  /**
+   * Synchronous observer for every validated result this invocation consumes,
+   * whether replayed or live. It fires after the call reaches its terminal
+   * cached/completed status and before the result becomes visible to the
+   * script; an onTransition throw during that status prevents both this
+   * callback and consumption. A live entry is already durably committed by
+   * onJournalEntry when this observer fires.
+   */
+  onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => void;
   /**
    * Durable-persistence hook: receives an isolated copy of the canonical
    * snapshot after a transition, with writes coalesced under backpressure —

@@ -116,6 +116,25 @@ describe('MemoryTool view with an omitted path', () => {
     });
   });
 
+  it.each([
+    [
+      '/outside.md',
+      'Invalid path "/outside.md". All memory paths must start with /memories',
+    ],
+    ['/memories/../outside.md', 'Invalid memory path: /memories/../outside.md'],
+  ])(
+    'preserves the path validator error for %s',
+    async (inputPath, message) => {
+      const result = await viewMemory(inputPath);
+
+      expect(result).toMatchObject({
+        status: 'error',
+        error: expect.stringContaining(message),
+        diagnostics: { name: 'ToolError' },
+      });
+    },
+  );
+
   it('preserves the model-facing directory listing bytes and depth limit', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));

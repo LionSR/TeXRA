@@ -53,11 +53,11 @@ vi.mock('@agent/followUp/childRunDelivery', () => ({
   deliverChildRunFollowUp: mocks.deliverChildRunFollowUp,
 }));
 
-import type { WorkflowJournalEntry } from '@agent/workflowScript';
 import { getExecutionStore } from '@agent/storage';
+import type { WorkflowJournalEntry } from '@agent/workflowScript';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
   startChildRunLoop,
-  type ChildRunLoopHandle,
   type ChildRunLoopParams,
   type ChildRunPorts,
   type ChildRunStrategy,
@@ -82,6 +82,7 @@ import {
 } from '@shared/schemas';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { seedStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 import {
   claudeAgentSessionsFor,
@@ -235,7 +236,7 @@ function startLoop(
   ids: { childStreamId: StreamTabId; executionId: ExecutionId },
   strategy: ChildRunStrategy<FakeTurn>,
   extras: Partial<ChildRunLoopParams<FakeTurn>> = {},
-): ChildRunLoopHandle {
+): Promise<void> {
   return startChildRunLoop({
     ...ids,
     parentStreamId: PARENT_STREAM_ID,
@@ -408,18 +409,16 @@ describe('childRunLoop E2E fixtures', () => {
 
       const strategy: ChildRunStrategy<FakeTurn> = {
         stageLabel: `${name} session`,
-        launch: (_ports, abortController) => {
+        launch: (_ports, signal) => {
           events.push('launch');
           return new Promise((_resolve, reject) => {
             const rejectAbort = () => {
               aborted();
               reject(createAbortError());
             };
-            if (abortController.signal.aborted) rejectAbort();
+            if (signal.aborted) rejectAbort();
             else {
-              abortController.signal.addEventListener('abort', rejectAbort, {
-                once: true,
-              });
+              signal.addEventListener('abort', rejectAbort, { once: true });
             }
           });
         },
@@ -473,7 +472,7 @@ describe('childRunLoop E2E fixtures', () => {
       });
 
     try {
-      const handle = startLoop({ childStreamId, executionId }, strategy);
+      const completion = startLoop({ childStreamId, executionId }, strategy);
       await writeStarted.promise;
       // Interrupt the loop through its parent lineage: no turn handle is
       // tracked in this fixture, so the stop reaches the loop via its
@@ -487,7 +486,7 @@ describe('childRunLoop E2E fixtures', () => {
       expect(mocks.releaseExecutionLeaseAfterArtifacts).not.toHaveBeenCalled();
 
       writeBarrier.resolve();
-      await handle.completion;
+      await completion;
       expect(writeTurnState).toHaveBeenCalledOnce();
       expect(mocks.releaseExecutionLeaseAfterArtifacts).toHaveBeenCalledWith(
         session,
@@ -499,17 +498,131 @@ describe('childRunLoop E2E fixtures', () => {
     }
   });
 
+  it('keeps follow-up ownership distinct across child-stream and native child lifecycles', async () => {
+    const { executionId } = loopIds('follow-up-ownership');
+    const turn = pDefer<FakeTurn>();
+    const launchStarted = pDefer<void>();
+    const formatStarted = pDefer<void>();
+    const formattedDelivery = pDefer<string>();
+    let notifyProgress: ChildRunPorts['notify'] = () => {};
+    const strategy = createTerminalStrategy(
+      'Follow-up ownership',
+      (ports) => {
+        notifyProgress = ports.notify;
+        launchStarted.resolve();
+        return turn.promise;
+      },
+      () => {
+        formatStarted.resolve();
+        return formattedDelivery.promise;
+      },
+    );
+    const childStream = createChildStream(executionId, PARENT_STREAM_ID, {
+      streamPrefix: 'codex',
+      run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+      description: 'Keep a background child running',
+      config: childStreamConfig,
+    });
+    const { childStreamId } = childStream;
+    trackedExecutionIds.add(executionId);
+    const completion = startLoop({ childStreamId, executionId }, strategy, {
+      childStream,
+    });
+    const tryResumeStream = vi.fn(async () => false);
+    const resumePort = { tryResumeStream };
+    await launchStarted.promise;
+
+    try {
+      seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
+        phase: STREAM_PHASE.RUNNING,
+      });
+      await expect(
+        submitFollowUp(PARENT_STREAM_ID, 'active parent', {
+          session,
+          resumePort,
+        }),
+      ).resolves.toEqual({ status: 'queued', wake: 'failed' });
+
+      seedStreamStatusForTest(session.status, PARENT_STREAM_ID, {
+        phase: STREAM_PHASE.COMPLETED,
+      });
+      const userAdmission = vi.fn();
+      await expect(
+        submitFollowUp(PARENT_STREAM_ID, 'restore me', {
+          session,
+          resumePort,
+          onAdmitted: userAdmission,
+        }),
+      ).resolves.toMatchObject({ status: 'failed' });
+      expect(userAdmission).toHaveBeenCalledWith(false);
+      await expect(
+        submitFollowUp(
+          PARENT_STREAM_ID,
+          { text: 'late child result', origin: 'subagent_result' },
+          { session, resumePort, mode: 'child_delivery' },
+        ),
+      ).resolves.toMatchObject({ status: 'failed' });
+      expect(session.followUps.getAll(PARENT_STREAM_ID)).toEqual([
+        'active parent',
+      ]);
+
+      const releaseNativeChild = session.executions.reserveChildActivation({
+        executionId: 'exec-follow-up-native-child-test' as ExecutionId,
+        parentStreamId: PARENT_STREAM_ID,
+        childStreamId: 'stream-follow-up-native-child-test' as StreamTabId,
+        interrupt: vi.fn(),
+        detach: vi.fn(),
+        isDetached: () => false,
+      });
+      try {
+        await expect(
+          submitFollowUp(PARENT_STREAM_ID, 'native child result', {
+            session,
+            resumePort,
+            mode: 'child_delivery',
+          }),
+        ).resolves.toEqual({ status: 'queued', wake: 'failed' });
+      } finally {
+        releaseNativeChild();
+      }
+
+      notifyProgress({ kind: 'started' });
+      expect(mocks.deliverChildRunFollowUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetStreamId: PARENT_STREAM_ID,
+          mode: 'live_notification',
+        }),
+      );
+      mocks.deliverChildRunFollowUp.mockClear();
+
+      turn.resolve({ kind: 'terminal', value: 'done' });
+      await formatStarted.promise;
+      session.executions.detachActiveChildren(PARENT_STREAM_ID);
+      notifyProgress({ kind: 'started' });
+      formattedDelivery.resolve('delivered:done');
+      await completion;
+
+      expect(mocks.deliverChildRunFollowUp).not.toHaveBeenCalled();
+    } finally {
+      session.followUps.terminalize(PARENT_STREAM_ID);
+      session.executions.detachActiveChildren(PARENT_STREAM_ID);
+      turn.resolve({ kind: 'terminal', value: 'done' });
+      formattedDelivery.resolve('delivered:done');
+      await completion;
+    }
+  });
+
   it('persists without parent delivery in persist-only mode', async () => {
     const { childStreamId, executionId } = loopIds('persist-only');
     const { strategy, resolveTurn } = createFakeStrategy();
 
-    const handle = startLoop(
+    const completion = startLoop(
       { childStreamId, executionId },
       { ...strategy, deliveryMode: 'persistOnly' },
       { parentStreamId: 'headless-parent' as StreamTabId },
     );
     await resolveTurn(1, { kind: 'terminal', value: 'saved' });
-    await handle.completion;
+    await completion;
 
     expect(mocks.persistChildRunReport).toHaveBeenCalledWith(
       executionId,
@@ -536,11 +649,11 @@ describe('childRunLoop E2E fixtures', () => {
     });
 
     try {
-      await startLoop(ids, createTerminalStrategy('First attempt')).completion;
+      await startLoop(ids, createTerminalStrategy('First attempt'));
       expect(session.followUps.hasLiveOwner(ids.childStreamId)).toBe(false);
 
       await expect(
-        startLoop(ids, createTerminalStrategy('Retry attempt')).completion,
+        startLoop(ids, createTerminalStrategy('Retry attempt')),
       ).resolves.toBeUndefined();
       expect(admissions).toEqual(['delivered_live', 'delivered_live']);
       const delivered = session.followUps.queue(parentLease).drainItems();
@@ -1142,11 +1255,9 @@ describe('childRunLoop E2E fixtures', () => {
       () => 'delivered',
     );
 
-    const { completion } = startLoop(
-      loopIds('workflow-attempt-cost'),
-      strategy,
-      { recordCost },
-    );
+    const completion = startLoop(loopIds('workflow-attempt-cost'), strategy, {
+      recordCost,
+    });
 
     await expect(completion).resolves.toBeUndefined();
     expect(recordCost).toHaveBeenCalledOnce();
@@ -1177,7 +1288,7 @@ describe('childRunLoop E2E fixtures', () => {
       );
       const recordCost = vi.fn(observe);
 
-      const { completion } = startLoop(
+      const completion = startLoop(
         loopIds(`${failure}-cost-observer`),
         strategy,
         { recordCost },

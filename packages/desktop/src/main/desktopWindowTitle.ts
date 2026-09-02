@@ -19,7 +19,7 @@ type DesktopTitleWindow = Pick<
 >;
 
 /** Derive aggregate activity from canonical process-session owners. */
-export function getDesktopSessionActivity(
+function getDesktopSessionActivity(
   session: DesktopTitleSession,
 ): SessionTitleState {
   if (session.interactions.pendingCount > 0) return 'approval';

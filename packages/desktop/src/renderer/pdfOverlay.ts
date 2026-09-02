@@ -30,7 +30,7 @@ function pdfPathToFileUrl(absolutePath: string): string {
   return `file:///${encodeURIComponent(normalised)}`;
 }
 
-export interface PdfOverlayController {
+interface PdfOverlayController {
   open(payload: DesktopShowPdfMessage): void;
   close(): void;
 }

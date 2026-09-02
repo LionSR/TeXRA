@@ -16,7 +16,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 import { AsyncListForm } from './_shared/ListForm';
 
-export interface SkillsListFormProps {
+interface SkillsListFormProps {
   readonly availableRows?: number;
   readonly onSelect: (value: SkillActivation) => void;
   readonly onClose: () => void;

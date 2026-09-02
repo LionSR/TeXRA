@@ -298,6 +298,7 @@ export async function runWorkflowScript(
     fingerprintAgentDependencies,
     onEvent,
     onJournalEntry,
+    onJournalEntryConsumed,
     onControl,
   } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
@@ -310,7 +311,7 @@ export async function runWorkflowScript(
   // (a duplicate is a contract fault below) and the durable child id is
   // already index-free, so a call that moved because the script inserted,
   // removed, or reordered a sibling still replays. `index` stays on every
-  // entry as an ordering fact for the resume journal and cost attribution.
+  // entry as the last position where this invocation matched it.
   const priorEntries = new Map<string, WorkflowJournalEntry>(
     (options.journal ?? []).map((entry) => [entry.key, entry]),
   );
@@ -674,10 +675,12 @@ export async function runWorkflowScript(
         prior.result,
         'Cached agent() result',
       );
-      journal.set(index, { index, key, result: normalizedResult });
+      const entry = { index, key, result: normalizedResult };
+      journal.set(index, entry);
       executionState.settleCall(progressId, {
         status: WORKFLOW_CALL_STATUS.CACHED,
       });
+      onJournalEntryConsumed?.(entry);
       return payload;
     }
     // The execution snapshot solely owns the queued fact (QUEUED status); no
@@ -836,20 +839,18 @@ export async function runWorkflowScript(
       let callSettled = false;
       try {
         const committed = await journalCommitFence.commit(async () => {
-          await persistJournalEntry({
-            index,
-            key,
-            result: normalizedResult,
-          });
+          const entry = { index, key, result: normalizedResult };
+          await persistJournalEntry(entry);
           // The durable journal write is the commit point: once the entry is
           // persisted, a resume replays this call from cache, so a later
-          // throw — including a transition observer throwing inside
-          // `settleCall`'s synchronous publish — must not rewrite the call
-          // to failed and leave the snapshot contradicting the journal.
+          // throw — including a synchronous observer throwing below — must
+          // not rewrite the call to failed and leave the snapshot
+          // contradicting the journal.
           callSettled = true;
           executionState.settleCall(progressId, {
             status: WORKFLOW_CALL_STATUS.COMPLETED,
           });
+          onJournalEntryConsumed?.(entry);
         });
         if (!committed) return undefined;
       } catch (error) {

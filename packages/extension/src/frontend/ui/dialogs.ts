@@ -100,7 +100,7 @@ export async function selectFolder(
     canSelectFolders: true,
     canSelectMany: false,
     openLabel: options.openLabel,
-    ...(options.title ? { title: options.title } : {}),
+    title: options.title,
   });
   return folders?.[0]?.fsPath ?? null;
 }

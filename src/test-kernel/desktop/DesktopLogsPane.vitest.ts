@@ -21,7 +21,7 @@ interface LogsPaneController {
   readonly element: HTMLElement;
   applySnapshot(message: {
     command: typeof DESKTOP_LOG_COMMANDS.SET_LOG;
-    log: { text: string; truncated: boolean; path?: string };
+    log: { text: string; truncated: boolean; path: string };
   }): void;
   setActive(active: boolean): void;
 }

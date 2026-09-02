@@ -10,8 +10,8 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { Disposable } from '@platform/interfaces';
 import { unique } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
-// swap; safe at both call sites below since the input is always a relative
-// path already validated by isStrictlyWithin or path.relative.
+// swap; safe at the call site below since the input is always a relative
+// path from path.relative behind an isStrictlyWithin check.
 import {
   isPathWithin,
   isStrictlyWithin,
@@ -35,9 +35,7 @@ export function workflowInputGlobOptions(
 }
 
 function resolveAgainstCwd(candidate: string, cwd: string): string {
-  return path.isAbsolute(candidate)
-    ? path.resolve(candidate)
-    : path.resolve(cwd, candidate);
+  return path.resolve(cwd, candidate);
 }
 
 function normalizeCliInputPath(candidate: string, cwd: string): string {
@@ -198,7 +196,7 @@ async function expandWorkflowInputSpec(
 
   const normalizeMatches = (matches: string[]): string[] =>
     matches
-      .sort()
+      .toSorted()
       .map((match) =>
         normalizeCliInputPathForRun(match, cwd, flagLabel, options),
       );

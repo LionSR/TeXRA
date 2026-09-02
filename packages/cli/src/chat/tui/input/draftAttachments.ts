@@ -30,7 +30,7 @@ export interface PastedImageEntry {
   readonly displayName: string;
 }
 
-export type DraftAttachment = PastedTextEntry | PastedImageEntry;
+type DraftAttachment = PastedTextEntry | PastedImageEntry;
 
 /** Count newline sequences, matching the chip's "+M lines" suffix. */
 function pastedNewlineCount(text: string): number {

@@ -47,12 +47,12 @@ export function ansiEscapeEnd(text: string, index: number): number {
     const belEnd = text.indexOf(ANSI_BEL, index + 2);
     const stEnd = text.indexOf(OSC_STRING_TERMINATOR, index + 2);
     const c1End = text.indexOf(ANSI_C1_STRING_TERMINATOR, index + 2);
-    const ends = [
-      belEnd === -1 ? undefined : belEnd + 1,
-      stEnd === -1 ? undefined : stEnd + OSC_STRING_TERMINATOR.length,
-      c1End === -1 ? undefined : c1End + 1,
-    ].filter((end): end is number => end !== undefined);
-    return ends.length === 0 ? text.length : Math.min(...ends);
+    return Math.min(
+      belEnd === -1 ? Infinity : belEnd + 1,
+      stEnd === -1 ? Infinity : stEnd + OSC_STRING_TERMINATOR.length,
+      c1End === -1 ? Infinity : c1End + 1,
+      text.length,
+    );
   }
 
   if (isAnsiIntermediateByte(next)) {

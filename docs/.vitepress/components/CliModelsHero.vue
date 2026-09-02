@@ -13,7 +13,7 @@
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 const rows = [
-  { id: 'fable5', label: 'Claude Fable 5', status: 'api key set' },
+  { id: 'fable51', label: 'Claude Fable 5.1', status: 'api key set' },
   { id: 'opus5T', label: 'Opus 5 (Thinking)', status: 'api key set' },
   {
     id: 'sonnet5T',
@@ -48,11 +48,11 @@ const rows = [
       <!-- Beat 2: one model's details -->
       <div class="mk-term-prompt cmo-show">
         <span class="mk-term-sigil">$</span>
-        <span class="mk-term-cmd">texra models show fable5</span>
+        <span class="mk-term-cmd">texra models show fable51</span>
       </div>
       <div class="cmo-details">
-        <div><span class="cmo-k">id:</span> fable5</div>
-        <div><span class="cmo-k">label:</span> Claude Fable 5</div>
+        <div><span class="cmo-k">id:</span> fable51</div>
+        <div><span class="cmo-k">label:</span> Claude Fable 5.1</div>
         <div><span class="cmo-k">provider:</span> anthropic</div>
         <div><span class="cmo-k">status:</span> api key set</div>
       </div>

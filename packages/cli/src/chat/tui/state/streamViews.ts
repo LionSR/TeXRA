@@ -11,7 +11,6 @@ import type { RunIdentity, StreamTabId, StreamTabInfo } from '@shared/schemas';
 import {
   focusOrderDescendants,
   streamMetadataFor,
-  visibleSubagentRows,
   type ChildRosters,
 } from './childExecutions';
 import type { StreamSlice } from './cliState';
@@ -204,8 +203,7 @@ export function streamTreeEntries(
   for (const [index, id] of ordered.entries()) {
     if (!init.streams.has(id)) continue;
     const position = index + 1;
-    const shortcutIndex = position > 9 ? undefined : position;
-    out.push({ id, shortcutIndex });
+    out.push({ id, shortcutIndex: position > 9 ? undefined : position });
   }
   return out;
 }

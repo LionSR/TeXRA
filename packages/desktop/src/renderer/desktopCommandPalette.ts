@@ -51,7 +51,7 @@ export interface CommandPaletteController {
   close(): void;
 }
 
-export interface DesktopCommandPaletteOptions {
+interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
   getStreams?: () => readonly StreamTabInfo[];
@@ -121,12 +121,12 @@ export function executeCommandPaletteEntry(
   // propagating; sync handler errors still throw and bubble to the caller.
   const result = onExecute(entry.id);
   if (isThenable(result)) {
-    (result as Promise<boolean>).catch((error) => {
+    result.catch((error) => {
       console.error('[command-palette] async dispatch rejected', error);
     });
     return true;
   }
-  return result !== false;
+  return result;
 }
 
 export function createDesktopCommandPalette({
@@ -201,8 +201,6 @@ export function createDesktopCommandPalette({
       case 'Enter':
         event.preventDefault();
         executeActiveCommand();
-        break;
-      default:
         break;
     }
   };

@@ -31,16 +31,16 @@ export class SecretManager {
 
   public static readonly GITHUB_TOKEN_KEY = GITHUB_TOKEN_STORAGE_KEY;
 
-  public static async gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
+  public static gitHubTokenExists(): Promise<'secret' | 'env' | 'none'> {
     return resolveGitHubTokenSource(platform().secrets);
   }
 
   /** Usable-key check, delegated to `@model/apiProviders`'s `hasUsableApiKey`. */
-  public static async hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
+  public static hasUsableApiKey(provider: ApiProvider): Promise<boolean> {
     return resolvedHasUsableApiKey(platform().secrets, provider);
   }
 
-  public static async getApiProviderQuickPickItems(): Promise<
+  public static getApiProviderQuickPickItems(): Promise<
     ApiProviderQuickPickItem[]
   > {
     return Promise.all(

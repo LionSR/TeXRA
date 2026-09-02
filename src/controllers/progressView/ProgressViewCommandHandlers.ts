@@ -38,7 +38,7 @@ import {
   type TranscriptExportPorts,
 } from './exportTranscript';
 import { submitProgressFollowUp } from './progressFollowUpSubmit';
-import type { ProgressWorkflowActionsController } from './ProgressWorkflowActionsController';
+import type { ProgressWorkflowRunActionsController } from './ProgressWorkflowRunActionsController';
 import type { ProgressWorkflowFileActionsController } from './ProgressWorkflowFileActionsController';
 import type { ProgressAgentProposalController } from './ProgressAgentProposalController';
 import type { ProgressApiKeyRetryController } from './ProgressApiKeyRetryController';
@@ -468,9 +468,14 @@ export function createProgressViewCommandHandlers(
 
 // ── Second-tier handler deps ──────────────────────────────────────────────
 
+interface ProgressViewPolishReporter {
+  applyResult(result: ProgressFollowUpPolishResult): Promise<void>;
+  reportError(stream: StreamTabId, error: unknown): void | Promise<void>;
+}
+
 export interface ProgressViewSecondTierActions {
   /** Shared controllers (host-neutral; created once per host with injected deps). */
-  readonly workflowActions: ProgressWorkflowActionsController;
+  readonly workflowRunActions: ProgressWorkflowRunActionsController;
   readonly apiKeyRetry: ProgressApiKeyRetryController;
   readonly followUp: ProgressFollowUpController;
   readonly followUpPolish: ProgressFollowUpPolishController;
@@ -497,21 +502,18 @@ export interface ProgressViewSecondTierActions {
   readonly restoreRunConfig: (config: AgentConfig) => Promise<void>;
   /** Resolve a follow-up plan (plan kinds map to host-specific execution). */
   readonly applyFollowUpPlan: (plan: ProgressFollowUpPlan) => Promise<void>;
-  /** Render a polish result (update renderer + show host messages). */
-  readonly applyPolishResult: (
-    result: ProgressFollowUpPolishResult,
-  ) => Promise<void>;
+  /**
+   * Capture the polish-result route before preload or model work yields. The
+   * extension has two progress surfaces, so resolving the active renderer when
+   * polishing finishes can overwrite a different composer's draft.
+   */
+  readonly capturePolishReporter: () => ProgressViewPolishReporter;
   /**
    * Report a polish stage to the user. Hosts with a progress surface (the
    * extension feeds a `vscode.window.withProgress` notification) implement it;
    * hosts without one leave it unset.
    */
   readonly onPolishProgress?: (message: string) => void;
-  /** Handle a polish controller exception (post error to renderer + log + host message). */
-  readonly onPolishError: (
-    stream: StreamTabId,
-    error: unknown,
-  ) => void | Promise<void>;
   /** Post a message to the renderer. */
   readonly postToRenderer: (message: ProgressViewOutboundMessage) => void;
   /** Restore an agent proposal config into the main view (delegates to agentProposalController). */
@@ -536,7 +538,7 @@ export interface ProgressViewSecondTierActions {
  * Shared second-tier progress-view command handlers used by both extension and
  * desktop.
  *
- * These handlers wrap shared controllers ({@link ProgressWorkflowActionsController},
+ * These handlers wrap shared controllers ({@link ProgressWorkflowRunActionsController},
  * {@link ProgressApiKeyRetryController}, {@link ProgressFollowUpController},
  * {@link ProgressFollowUpPolishController}) plus host-injected callbacks for
  * messaging, retry settlement, state restoration, plan/polish result
@@ -553,11 +555,12 @@ export function createProgressViewSecondTierHandlers(
 
   return {
     // ── Workflow toolbar (diff / pack / clean) ──
-    [CMD.DIFF_STREAM]: (data) => deps.workflowActions.diffStream(data.stream),
+    [CMD.DIFF_STREAM]: (data) =>
+      deps.workflowRunActions.diffStream(data.stream),
     [CMD.PACK_STREAM]: (data) =>
-      deps.workflowActions.runFileOperation(data.stream, 'pack'),
+      deps.workflowRunActions.runFileOperation(data.stream, 'pack'),
     [CMD.CLEAN_STREAM]: (data) =>
-      deps.workflowActions.runFileOperation(data.stream, 'clean'),
+      deps.workflowRunActions.runFileOperation(data.stream, 'clean'),
 
     // ── Retry ──
     [CMD.RETRY_STREAM_REQUEST]: async (data) => {
@@ -656,12 +659,15 @@ export function createProgressViewSecondTierHandlers(
     },
 
     // ── Follow-up polish ──
-    [CMD.POLISH_FOLLOW_UP]: async (data) => {
+    [CMD.POLISH_FOLLOW_UP]: async (
+      data,
+      reporter = deps.capturePolishReporter(),
+    ) => {
       await deps.preload?.(data.stream);
       const config = deps.getRunMetadata(data.stream).config;
       if (!config) {
         // Same port the polish failures use, rather than a silent return.
-        await deps.onPolishError(
+        await reporter.reportError(
           data.stream,
           new Error('This run has no saved configuration to polish against.'),
         );
@@ -675,9 +681,9 @@ export function createProgressViewSecondTierHandlers(
           runConfig: config,
         });
         deps.onPolishProgress?.('Applying changes...');
-        await deps.applyPolishResult(result);
+        await reporter.applyResult(result);
       } catch (error) {
-        await deps.onPolishError(data.stream, error);
+        await reporter.reportError(data.stream, error);
       }
     },
 

@@ -4,15 +4,137 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-### Features
+### Shared (all surfaces)
 
-- **Use longer ChatGPT subscription context windows** — the TUI, extension,
+#### Features
+
+- **Gemini 3.8 Flash is available** — the new Flash model replaces Gemini 3.7
+  Flash in the default model list with improved reasoning and coding at the
+  same introductory price. Existing selections of Gemini 3.7 Flash keep
+  working while Google serves them.
+- **Muse Spark 1.3 is available** — Meta's latest standard model joins the
+  default model list with a 1M-token context window, multimodal input, prompt
+  caching, web search, and configurable reasoning. Existing selections of Muse
+  Spark 1.1 keep working while Meta serves them.
+
+#### Bug Fixes
+
+- **Prevent crashes in long-running CLI sessions** — CLI sessions that run many
+  subagents no longer exhaust memory and crash.
+
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Archive custom-agent output on Windows** — packing generated files into the
+  History folder now works for custom agents.
+
+### CLI
+
+#### Bug Fixes
+
+- **Unavailable runs explain why they cannot accept input** — the composer now
+  shows when another TeXRA process holds the run or its saved state is unreadable.
+
+## [0.40.7] - 2026-08-31
+
+### Shared (all surfaces)
+
+#### Breaking Changes
+
+- **Inquiry threads do not transfer to older TeXRA versions** — TeXRA
+  0.40.0-0.40.5 cannot read threads created in current builds or deliver their
+  answers. TeXRA 0.40.6 can read the threads, but cannot deliver answers across
+  versions. Finish or drop open inquiries before switching.
+- **Approve a multi-agent workflow as a whole** — reviewing each call, or the
+  first call of each phase, is no longer an option. Skip or retry individual
+  agents from live progress. Restart any 0.40.6 run you left waiting on that
+  review.
+
+#### Features
+
+- **Use longer ChatGPT subscription context windows** — the CLI, extension,
   and desktop app now let you raise the input token budget for supported GPT
   models while keeping the standard limit by default.
 - **Choose skills per workspace** — the extension, desktop app, and CLI now let
   you enable or disable individual skills and skill source groups from one
   consolidated skills display. Skills are off by default until you enable the
   master skills switch.
+- **See the whole workflow plan while it runs** — phases that have not started
+  yet stay visible, running agents show what they are doing, and work that
+  needs you is listed first. The progress view and CLI show the same picture.
+- **Run more workflow agents in parallel** — multi-agent workflows follow the
+  same parallel-work limit as other child agents. That limit now defaults to
+  this computer's CPU count instead of four; you can still set a number.
+
+#### Bug Fixes
+
+- **Google model runs no longer hang** — they time out instead of waiting
+  forever, and a brief background glitch no longer fails the turn.
+- **Workflow resumes and compile checks stay trustworthy** — completed work is
+  reused after you edit or reorder the script, and a workflow that rejects
+  uncompilable output now fails on the last round instead of adding an extra
+  one.
+- **A restarted workflow shows only the current attempt** — tasks from an
+  earlier try no longer mix into live progress.
+- **GLM Coding Plan and custom GLM URLs apply where you configured them** —
+  running a model and checking usage now use the same connection.
+- **A bad key lookup no longer hides your other providers** — TeXRA keeps
+  checking the rest and reports the failure instead of looking unconfigured.
+- **You cannot continue a finished run that still has child agents** — TeXRA
+  refuses the follow-up instead of taking a message it cannot run.
+- **Long sessions stay stable** — TeXRA no longer keeps growing memory as a
+  session continues.
+- **Elapsed time only counts active work** — waiting time is no longer included
+  after you resume.
+- **Sign-in copy says “TeXRA account”** — remaining Researcher Access wording
+  on sign-in, setup, and the CLI now uses that name.
+
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Polish results return to the view you started from** — they no longer
+  appear in a different progress view.
+- **Approval cards show the model's usual name** — not a raw model id.
+- **Delete actions for generated files say what they remove** — including
+  latexdiff copies.
+- **Settings and progress stay usable in a small pane** — tabs wrap, keyboard
+  and screen-reader labels are accurate, and reduced-motion and right-to-left
+  layouts work.
+- **Starting a run and walkthrough buttons keep working** — an info message no
+  longer blocks desktop launch, and walkthrough steps that need a folder now
+  say so.
+
+### Desktop
+
+#### Bug Fixes
+
+- **You can see pending approvals with the sidebar closed** — a badge appears,
+  and an approval on another task opens the sidebar once. Setup dialogs have
+  buttons you can click, and the Tasks count matches the list you see.
+
+### CLI
+
+#### Features
+
+- **Inspect a running workflow without leaving the conversation** — Enter opens
+  it as phase tabs over the chat. Switch phases, jump to failures, skip or
+  retry a call, or open that agent; Esc returns you to the parent.
+- **Account and model access are one list** — the launcher and `/api`,
+  `/login`, and `/logout` all open it.
+- **`/goal` chooses what Goal may auto-approve** — commands only, or all agent
+  work. Finished to-dos collapse so current work stays visible, and the
+  terminal tab stops spinning when the session is idle.
+
+#### Bug Fixes
+
+- **Saving a GLM key explains the Coding Plan** — the row is labelled for both
+  regular GLM and the Coding Plan, and a note tells you how to turn the plan
+  on.
+- **The status bar stays readable and the running cost stays correct** — the
+  queued-input warning is not squeezed out on a narrow terminal, and long
+  conversations keep an accurate spend.
 
 ## [0.40.6] - 2026-08-28
 

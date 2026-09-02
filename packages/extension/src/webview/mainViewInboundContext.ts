@@ -1,23 +1,20 @@
 import * as vscode from 'vscode';
 
-import { RecordingManager } from '@frontend/media/RecordingManager';
-import type { Log } from '@logger/logUtils';
+import type { ViewSliceHost } from '@common/webview';
+import type { RecordingManager } from '@frontend/media/RecordingManager';
 
 import type { DiffManager } from './managers/DiffManager';
 import type { FileManager } from './managers/FileManager';
 import type { InstructionManager } from './managers/InstructionManager';
 
 /**
- * The slice-visible face of {@link MainViewMessageHandler}. Inbound command
- * slices live in ./slices/ and receive this narrow, bound context instead of
- * reaching into the handler class, keeping the class's private surface private
- * while letting each slice own a domain of commands.
+ * The slice-visible face of {@link MainViewMessageHandler}. Extends the
+ * shared {@link ViewSliceHost} with main-view managers and the view-wrapper
+ * accessor recording needs. Inbound command slices live in ./slices/ and
+ * receive this instead of reaching into the handler class.
  */
-export interface MainViewInboundHost {
+export interface MainViewInboundHost extends ViewSliceHost {
   readonly viewName: string;
-  readonly channel: string;
-  readonly log: Log;
-  readonly context: vscode.ExtensionContext;
   /**
    * Recompute and re-push the onboarding funnel (owned by
    * MainViewProvider). Called on webview ready and after welcome-card
@@ -30,8 +27,6 @@ export interface MainViewInboundHost {
   readonly recordingManager: RecordingManager;
 
   runWithActiveView<T>(fn: (view: vscode.WebviewView) => T): T | undefined;
-  getActiveView(): vscode.WebviewView | undefined;
-  postToActiveView(message: unknown): void;
   handleWebviewReady(): Promise<void>;
   handleThemeRequest(): void;
   handleDebugModeRequest(): void;

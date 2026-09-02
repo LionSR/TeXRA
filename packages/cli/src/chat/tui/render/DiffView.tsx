@@ -44,22 +44,17 @@ const DEFAULT_DIFF_WIDTH = 74;
 type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
 
 export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
-  return hunks.flatMap((hunk) => {
-    const lines = hunk.lines.filter(
-      (line) => !line.startsWith(NO_NEWLINE_MARKER),
-    );
-    const hunkHeader = formatHunkHeader(hunk);
-    const rendered: DiffDisplayLine[] = [
-      { kind: 'header', text: hunkHeader },
-      ...lines.map((line): DiffDisplayLine => {
+  return hunks.flatMap((hunk) => [
+    { kind: 'header' as const, text: formatHunkHeader(hunk) },
+    ...hunk.lines
+      .filter((line) => !line.startsWith(NO_NEWLINE_MARKER))
+      .map((line): DiffDisplayLine => {
         const marker = line.at(0);
         if (marker === '+') return { kind: 'added', text: line };
         if (marker === '-') return { kind: 'removed', text: line };
         return { kind: 'context', text: line };
       }),
-    ];
-    return rendered;
-  });
+  ]);
 }
 
 export function wrappedDiffDisplayLines(
@@ -100,8 +95,10 @@ export function initialDiffScrollOffset(
     totalLines: lines.length,
   });
   const defaultOffset = clamp(changedIndex - 1, 0, maxOffset);
+  const fallbackOffset = (): number =>
+    changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
   if (firstChange?.kind !== 'removed') {
-    return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
+    return fallbackOffset();
   }
 
   let removedEnd = changedIndex;
@@ -109,7 +106,7 @@ export function initialDiffScrollOffset(
   const addedIndex =
     lines.at(removedEnd + 1)?.kind === 'added' ? removedEnd + 1 : undefined;
   if (addedIndex === undefined) {
-    return changedIndex < initiallyVisibleContentRows ? 0 : defaultOffset;
+    return fallbackOffset();
   }
 
   if (addedIndex < initiallyVisibleContentRows) return 0;
@@ -171,7 +168,7 @@ function compactBoundedDiffDisplayLines(
   const visibleLines = lines.slice(start, start + visibleCount);
   if (visibleBudget === 1) return visibleLines;
 
-  const hiddenRows = Math.max(0, lines.length - visibleLines.length);
+  const hiddenRows = lines.length - visibleLines.length;
   if (hiddenRows === 0) return visibleLines;
 
   return [

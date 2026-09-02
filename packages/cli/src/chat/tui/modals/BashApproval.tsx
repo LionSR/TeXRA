@@ -16,7 +16,7 @@ import {
 } from './ScrollableModalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
-export interface BashApprovalProps {
+interface BashApprovalProps {
   readonly availableRows?: number;
   readonly payload: BashPermission;
   readonly onDecide: (decision: ApprovalDecision) => void;

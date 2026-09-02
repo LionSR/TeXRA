@@ -12,7 +12,7 @@ import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 
 import { AsyncListForm } from './_shared/ListForm';
 
-export interface MemoryListFormProps {
+interface MemoryListFormProps {
   readonly availableRows?: number;
   readonly onSelect: (storagePath: string) => void;
   readonly onClose: () => void;

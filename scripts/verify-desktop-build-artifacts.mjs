@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
   readJson,
+  reportCheckFailures,
   requiredMonacoWorkers,
   vscodeRuntimeImportPattern,
 } from './extension-package-utils.mjs';
@@ -75,11 +75,7 @@ if (
   );
 }
 
-if (failures.length > 0) {
-  console.error('Desktop build artifact check failed:');
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
+reportCheckFailures('Desktop build artifact check', failures);
 
 const artifactList = [
   ...requiredFiles,

@@ -32,12 +32,7 @@ import { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ModelHandlerCompatibilityKey } from '@agent/runtime/modelHandlerCompatibilityKey';
 import type { SdkToolCall } from '@agent/types/ModelHandlerContracts';
 import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import {
-  runToolUseFlow,
-  type RunToolUseFlowResult,
-  type RunToolUseFlowInput,
-  type ToolUseFlowAttachment,
-} from '@agent/implementations/flows/tooluse/runToolUseFlow';
+import { runToolUseFlow } from '@agent/implementations/flows/tooluse/runToolUseFlow';
 import {
   parseToolUseShared,
   type StateSlicesSnapshot,
@@ -91,6 +86,9 @@ const VALID_TOOL_USE_SHARED = {
   shouldSkipCycle: false,
   stateSlices: null,
 };
+
+type RunToolUseFlowInput = Parameters<typeof runToolUseFlow>[0];
+type ToolUseFlowAttachment = NonNullable<Parameters<typeof runToolUseFlow>[2]>;
 
 // Stored shared state left by a run whose handler identity was persisted.
 function activeHandlerShared(): Record<string, unknown> {
@@ -307,7 +305,7 @@ async function runPersistedFlow(
   streamId: StreamTabId,
   resume: ToolUseResumeData | undefined,
   options: PersistedFlowRunOptions = {},
-): Promise<RunToolUseFlowResult> {
+) {
   const { attachment } = options;
   const session = options.session ?? createTestSession();
   const config = options.config ?? resume?.agentConfig ?? CONFIG;

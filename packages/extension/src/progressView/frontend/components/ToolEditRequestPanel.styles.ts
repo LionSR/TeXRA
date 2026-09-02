@@ -8,14 +8,25 @@ export const toolEditRequestPanelStyles: CSSResult = css`
   .approval-request__path {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
-    color: var(--color-text-link);
-    word-break: break-word;
+    font-variant-ligatures: none;
+    line-height: var(--line-height-normal);
+    color: var(--wa-color-text-normal);
+    overflow-wrap: anywhere;
+    text-align: start;
+  }
+
+  .approval-request__source-tool {
+    font-family: var(--wa-font-family-mono);
+    font-variant-ligatures: none;
+    color: var(--wa-color-text-normal);
+    overflow-wrap: anywhere;
   }
 
   .approval-request__diff {
     display: inline-flex;
     align-items: baseline;
     gap: ${sp.small};
+    font-variant-numeric: tabular-nums;
   }
 
   .approval-request__diff-added,

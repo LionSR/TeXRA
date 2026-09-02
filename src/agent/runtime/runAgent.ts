@@ -14,7 +14,11 @@ import {
   type StreamTabId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
-import { aggregateError, generateExecutionId } from '@utils/core';
+import {
+  aggregateError,
+  generateExecutionId,
+  linkAbortSignals,
+} from '@utils/core';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
@@ -103,33 +107,40 @@ export async function runAgent(
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session ?? defaultSession();
   const launchAbortController = new AbortController();
-  const launchSignal = executeAgentOptions.launchSignal
-    ? AbortSignal.any([
-        executeAgentOptions.launchSignal,
-        launchAbortController.signal,
-      ])
-    : launchAbortController.signal;
-  const launchStreamId = getStreamTabId(request.config.agent, { executionId });
-  const launchHandle = runSession.executions.getHandle(executionId)
-    ? undefined
-    : new AgentExecutionHandle(
-        {
-          streamId: launchStreamId,
-          executionId,
-          identity: { kind: 'agent', agent: request.config.agent },
-          category: request.config.agentCategory,
-        },
-        launchStreamId,
-      );
-  const detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
-    interrupt: () => launchAbortController.abort(),
-  });
-  if (launchHandle) runSession.executions.track(launchHandle);
-
-  // The launch handle above is tracked synchronously so a stop can reach the
-  // launch; the generation itself starts on the execution's lane, after any
-  // previous generation of this id has disposed.
+  let detachLaunchAbortLink: (() => void) | undefined;
+  let launchHandle: AgentExecutionHandle | undefined;
+  let detachLaunchInterrupt: (() => void) | undefined;
   try {
+    // Linked rather than composed with `AbortSignal.any`, which would keep the
+    // launch signal reachable from a long-lived caller signal for that signal's
+    // whole lifetime (see `linkAbortSignals`).
+    detachLaunchAbortLink = linkAbortSignals(
+      [executeAgentOptions.launchSignal],
+      launchAbortController,
+    );
+    const launchSignal = launchAbortController.signal;
+    const launchStreamId = getStreamTabId(request.config.agent, {
+      executionId,
+    });
+    launchHandle = runSession.executions.getHandle(executionId)
+      ? undefined
+      : new AgentExecutionHandle(
+          {
+            streamId: launchStreamId,
+            executionId,
+            identity: { kind: 'agent', agent: request.config.agent },
+            category: request.config.agentCategory,
+          },
+          launchStreamId,
+        );
+    detachLaunchInterrupt = launchHandle?.attachInterruptHandler({
+      interrupt: () => launchAbortController.abort(),
+    });
+    if (launchHandle) runSession.executions.track(launchHandle);
+
+    // The launch handle above is tracked synchronously so a stop can reach the
+    // launch; the generation itself starts on the execution's lane, after any
+    // previous generation of this id has disposed.
     return await runSession.executions.launchExecution(
       executionId,
       async () => {
@@ -250,6 +261,7 @@ export async function runAgent(
       },
     );
   } finally {
+    detachLaunchAbortLink?.();
     detachLaunchInterrupt?.();
     if (
       launchHandle &&

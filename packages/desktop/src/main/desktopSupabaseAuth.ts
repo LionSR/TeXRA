@@ -21,6 +21,7 @@ import {
   type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { AuthCallbackUriParts } from '@auth/authCallback';
+import type { MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -38,7 +39,7 @@ const DesktopPendingOAuthStateSchema = z.object({
 });
 type DesktopPendingOAuthState = z.infer<typeof DesktopPendingOAuthStateSchema>;
 
-export interface DesktopSupabaseAuth {
+interface DesktopSupabaseAuth {
   signIn(provider?: OAuthProvider): Promise<void>;
   signInAndWaitForSession(
     provider?: OAuthProvider,
@@ -62,10 +63,11 @@ export interface DesktopAuthCallbackState {
 
 type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
 
-export interface DesktopSupabaseAuthHost {
+export interface DesktopSupabaseAuthHost extends Pick<
+  MessageHost,
+  'showInfoMessage' | 'showErrorMessage'
+> {
   openExternalUrl(url: string): Promise<void>;
-  showInfoMessage(message: string): Promise<void> | void;
-  showErrorMessage(message: string): Promise<void> | void;
   onSessionChanged(): Promise<void> | void;
 }
 
@@ -78,7 +80,7 @@ interface DesktopSupabaseAuthOptions {
   log: DesktopAuthLog;
 }
 
-export interface DesktopOAuthClient {
+interface DesktopOAuthClient {
   auth: {
     signInWithOAuth(input: {
       provider: OAuthProvider;
@@ -225,9 +227,9 @@ export function createDesktopSupabaseAuth(
   const waitForCompletion = (attempt: DesktopAuthAttempt, timeoutMs: number) =>
     new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
-        attempt.settle(false);
-        if (ownsAttempt(attempt)) {
-          activeAttempt = undefined;
+        const wasOwned = ownsAttempt(attempt);
+        settleAttempt(attempt, false);
+        if (wasOwned) {
           void callbackState
             .clearAwaitingCallback(attempt.nonce)
             .catch((error: unknown) => {
@@ -279,8 +281,7 @@ export function createDesktopSupabaseAuth(
       );
       return;
     }
-    const callbackNonce =
-      new URLSearchParams(callback.query).get('app_nonce') ?? undefined;
+    const callbackNonce = new URLSearchParams(callback.query).get('app_nonce');
     if (!callbackNonce || !callbackState.matchesPendingNonce(callbackNonce)) {
       log.warn(
         'Desktop auth callback rejected: nonce mismatch (possible login-CSRF or stale callback)',

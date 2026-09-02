@@ -36,7 +36,7 @@ export class CliSecrets implements PlatformSecrets {
 
   constructor(private readonly filePath = cliSecretsPath()) {}
 
-  async get(key: string): Promise<string | undefined> {
+  get(key: string): Promise<string | undefined> {
     return secretWithEnvOverride(key, cliEnvValue, (k) => this.getStored(k));
   }
 
@@ -46,12 +46,12 @@ export class CliSecrets implements PlatformSecrets {
     return typeof value === 'string' ? value : undefined;
   }
 
-  async set(key: string, value: string): Promise<void> {
-    await this.mutate((store) => store.set(key, value));
+  set(key: string, value: string): Promise<void> {
+    return this.mutate((store) => store.set(key, value));
   }
 
-  async delete(key: string): Promise<void> {
-    await this.mutate((store) => store.set(key, undefined));
+  delete(key: string): Promise<void> {
+    return this.mutate((store) => store.set(key, undefined));
   }
 
   async listStoredKeys(): Promise<readonly string[]> {

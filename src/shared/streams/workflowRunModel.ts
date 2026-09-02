@@ -25,6 +25,7 @@ import {
   type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
+import { compareBySeqNo, usableSequence } from '@shared/streams/streamOrdering';
 import {
   TOKENS_GENERATED,
   workflowPhaseHeadingOfGroup,
@@ -203,12 +204,15 @@ function workflowCardsInTranscriptOrder(
   const legacy: WorkflowTaskRow[] = [];
   for (const row of rows) {
     if (row.kind !== 'workflowTask') continue;
-    (usableSeqNo(row.seqNo) === undefined ? legacy : sequenced).push(row);
+    (usableSequence(row.seqNo) === undefined ? legacy : sequenced).push(row);
   }
-  sequenced.sort(
-    (left, right) =>
-      usableSeqNo(left.seqNo)! - usableSeqNo(right.seqNo)! ||
-      compareCardFallback(left, right),
+  sequenced.sort((left, right) =>
+    compareBySeqNo(
+      left,
+      right,
+      (row) => row.seqNo,
+      (row) => row.timestamp,
+    ),
   );
   legacy.sort(compareCardFallback);
   if (sequenced.length === 0) return legacy;
@@ -223,12 +227,6 @@ interface AttemptBoundary {
   readonly timestamp: number;
   readonly stableKey: string;
   readonly seqNo?: number;
-}
-
-function usableSeqNo(seqNo: number | undefined): number | undefined {
-  return seqNo !== undefined && Number.isSafeInteger(seqNo) && seqNo > 0
-    ? seqNo
-    : undefined;
 }
 
 function laterAttemptBoundaryByTime(
@@ -265,7 +263,7 @@ function latestWorkflowAttemptId(
   for (const row of cards) {
     const attemptId = row.call.attemptId;
     if (attemptId === undefined) continue;
-    const seqNo = usableSeqNo(row.seqNo);
+    const seqNo = usableSequence(row.seqNo);
     const boundary: AttemptBoundary = {
       attemptId,
       timestamp: row.timestamp,
@@ -563,17 +561,12 @@ export function formatWorkflowCallLiveParts(
 /** The counted groups a phase's quiet rows collapse into. */
 export type WorkflowRowGroup = 'queued' | 'declared';
 
-const WORKFLOW_ROW_GROUP_LABEL = {
-  queued: 'queued',
-  declared: 'declared',
-} as const satisfies Record<WorkflowRowGroup, string>;
-
 /** `12 queued` — the one spelling of a counted group's row. */
 export function formatWorkflowRowGroup(row: {
   readonly count: number;
   readonly group: WorkflowRowGroup;
 }): string {
-  return `${row.count} ${WORKFLOW_ROW_GROUP_LABEL[row.group]}`;
+  return `${row.count} ${row.group}`;
 }
 
 export type WorkflowPhaseRow =
@@ -596,8 +589,7 @@ export type WorkflowPhaseRow =
     };
 
 /** Rows that failed lead, rows worth watching follow. */
-const ATTENTION_STATUSES = ['failed', 'running'] as const;
-type AttentionStatus = (typeof ATTENTION_STATUSES)[number];
+type AttentionStatus = 'failed' | 'running';
 const ATTENTION_RANK: Record<AttentionStatus, number> = {
   failed: 0,
   running: 1,
@@ -606,7 +598,7 @@ const ATTENTION_RANK: Record<AttentionStatus, number> = {
 function isAttentionStatus(
   status: WorkflowCallProgress['status'],
 ): status is AttentionStatus {
-  return (ATTENTION_STATUSES as readonly string[]).includes(status);
+  return status === 'failed' || status === 'running';
 }
 
 const QUEUED_STATUSES: ReadonlySet<WorkflowCallProgress['status']> = new Set([

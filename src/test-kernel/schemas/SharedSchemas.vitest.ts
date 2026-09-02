@@ -40,6 +40,10 @@ describe('parseClaudeAgentModel', () => {
   it('defaults invalid persisted selections to Sonnet', () => {
     expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-5');
   });
+
+  it('maps a persisted claude-fable-5 selection forward to its 5.1 successor', () => {
+    expect(parseClaudeAgentModel('claude-fable-5')).toBe('claude-fable-5-1');
+  });
 });
 
 describe('MainView housekeeping messages', () => {

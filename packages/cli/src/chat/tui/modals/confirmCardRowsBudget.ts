@@ -28,10 +28,7 @@ export function confirmCardFeedbackRows({
     1,
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION - FEEDBACK_PREFIX_COLUMNS,
   );
-  return (
-    FEEDBACK_MARGIN_ROWS +
-    Math.max(1, wrapAnsiToWidth(text, width).split('\n').length)
-  );
+  return FEEDBACK_MARGIN_ROWS + wrapAnsiToWidth(text, width).split('\n').length;
 }
 
 /**

@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
-import { ToolError, type ToolFileAttachment } from '@shared/schemas';
+import {
+  ToolError,
+  type ToolFileAttachment,
+  type ToolResult,
+} from '@shared/schemas';
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
 import {
   resolveAndFormat,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
+import { executed } from '@tools/core/result';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 /** Shared `texPath` Zod field for LaTeX extraction tools, with a per-tool description. */
@@ -38,12 +43,8 @@ interface AttachmentLimitOptions {
 export function emptyExtractionResult(
   label: string,
   summary: string,
-): { status: 'executed'; summary: string; output: string } {
-  return {
-    status: 'executed',
-    summary,
-    output: formatToolOutput(label, null),
-  };
+): Extract<ToolResult, { status: 'executed' }> {
+  return executed(formatToolOutput(label, null), summary);
 }
 
 export async function resolveLatexFileOrThrow(

@@ -15,13 +15,12 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
+  cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
-  cliMultiAgentPresetListRecords,
   formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   readCliMultiAgentPresets,
-  type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import {
   loadCliMultiAgentPresetPlanSet,
@@ -45,10 +44,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliToolUseConfig } from '../runtime/runExecution';
-import {
-  toolUseResultText,
-  type CliToolUseRunResult,
-} from '../runtime/terminalStatus';
+import { toolUseResultText } from '../runtime/terminalStatus';
 import { withExpandedRunInputs } from '../runtime/workflowInputs';
 
 interface MultiAgentRunInit {
@@ -78,53 +74,13 @@ function formatAttachedFileList(
   ].join('\n');
 }
 
-/** Preserve the user's launch input without copying model-only directives. */
-function formatMultiAgentDisplayInstruction(
-  instruction: string,
-  inputFiles: readonly string[],
-  contextFiles: readonly string[],
-): string {
-  if (instruction) return instruction;
-
-  return [
-    formatAttachedFileList('Attached input files:', inputFiles),
-    formatAttachedFileList('Attached read-only context files:', contextFiles),
-  ]
-    .filter(filterNotNullish)
-    .join('\n\n');
-}
-
-function writeMultiAgentRunResult(
-  context: CliContext,
-  plan: CliMultiAgentPresetRunPlan,
-  result: CliToolUseRunResult,
-): void {
-  const payload = {
-    preset: {
-      id: plan.preset.id,
-      name: plan.preset.name,
-      source: plan.preset.source,
-    },
-    rootAgent: plan.rootAgent?.name,
-    result,
-  };
-
-  emitCliResult(context, {
-    json: payload,
-    ndjson: { kind: 'multi-agent-result', ...payload },
-    text: toolUseResultText(result),
-  });
-}
-
 async function runMultiAgentList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
-  const presets = readCliMultiAgentPresets();
   const { plans, remoteCatalogRefreshAttempted } =
-    await loadCliMultiAgentPresetPlanSet(presets);
-  const records = cliMultiAgentPresetListRecords(plans);
+    await loadCliMultiAgentPresetPlanSet(readCliMultiAgentPresets());
 
   emitCliResult(context, {
-    json: records,
+    json: plans.map(cliMultiAgentPresetListRecord),
     ndjson: cliMultiAgentPresetNdjsonRecords(plans),
     text: formatCliMultiAgentPresetList(plans, {
       includeLoginHint: !remoteCatalogRefreshAttempted,
@@ -228,11 +184,19 @@ export async function runMultiAgentPreset(
         );
       }
 
-      const displayInstruction = formatMultiAgentDisplayInstruction(
-        instruction,
-        init.inputFiles,
-        init.contextFiles,
-      );
+      // Preserve the user's launch input without copying the model-only
+      // directive assembled into config.instruction below.
+      const displayInstruction =
+        instruction ||
+        [
+          formatAttachedFileList('Attached input files:', init.inputFiles),
+          formatAttachedFileList(
+            'Attached read-only context files:',
+            init.contextFiles,
+          ),
+        ]
+          .filter(filterNotNullish)
+          .join('\n\n');
       const config: AgentConfigPayload = {
         agent: rootAgent.name,
         model,
@@ -262,7 +226,20 @@ export async function runMultiAgentPreset(
       });
       if (!execution.ok) return execution.exitCode;
 
-      writeMultiAgentRunResult(runContext, plan, execution.result);
+      const payload = {
+        preset: {
+          id: plan.preset.id,
+          name: plan.preset.name,
+          source: plan.preset.source,
+        },
+        rootAgent: plan.rootAgent?.name,
+        result: execution.result,
+      };
+      emitCliResult(runContext, {
+        json: payload,
+        ndjson: { kind: 'multi-agent-result', ...payload },
+        text: toolUseResultText(execution.result),
+      });
 
       return execution.exitCode;
     },
@@ -277,21 +254,19 @@ const multiAgentListCommand = defineCliCommand({
   run: runMultiAgentList,
 });
 
-const multiAgentPresetArgs = {
-  ...GLOBAL_ARGS,
-  preset: {
-    type: 'positional',
-    required: true,
-    description: 'Preset id or name from `texra multi-agent list`',
-  },
-} as const;
-
 const multiAgentShowCommand = defineCliCommand({
   meta: {
     name: 'show',
     description: 'Show one multi-agent team preset and its resolved agents',
   },
-  args: multiAgentPresetArgs,
+  args: {
+    ...GLOBAL_ARGS,
+    preset: {
+      type: 'positional',
+      required: true,
+      description: 'Preset id or name from `texra multi-agent list`',
+    },
+  },
   run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
 });
 

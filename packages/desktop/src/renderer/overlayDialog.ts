@@ -32,13 +32,13 @@ function createDialogCloseButton(
 
 /**
  * Shared scaffolding for the desktop's imperative `wa-dialog` overlays
- * (PDF, prompt). Each overlay used to hand-build the same shell —
- * `withoutHeader` / `lightDismiss` / `aria-label`, a titled header,
- * an absolutely-positioned close button, and the `appRoot.append`. Centralizing
- * it keeps overlays owning only their content and behavior, and stops the
- * near-identical shells (and their `desktop-*` class families) from drifting.
+ * (PDF, prompt): one shell — `withoutHeader` / `lightDismiss` / `aria-label`,
+ * a titled header, an absolutely-positioned close button, and the
+ * `appRoot.append` — so each overlay owns only its content and behavior and
+ * the near-identical shells (and their `desktop-*` class families) cannot
+ * drift.
  */
-export interface OverlayDialogOptions {
+interface OverlayDialogOptions {
   appRoot: HTMLElement;
   /**
    * CSS class family. Derives `${prefix}-overlay`, `${prefix}-close`,
@@ -53,7 +53,7 @@ export interface OverlayDialogOptions {
   title: string;
 }
 
-export interface OverlayDialogHandle {
+interface OverlayDialogHandle {
   dialog: WaDialog;
   titleEl: HTMLElement;
   subtitleEl: HTMLElement;

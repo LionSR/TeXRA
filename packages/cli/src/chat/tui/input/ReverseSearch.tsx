@@ -13,7 +13,7 @@ import { COLOR_ACCENT } from '@cli/tui/ui/colors';
 import { BaseTextInput } from './BaseTextInput';
 import type { InputHistory } from '../history/inputHistory';
 
-export interface ReverseSearchProps {
+interface ReverseSearchProps {
   readonly history: InputHistory;
   /** Commit the selected line — caller writes it into the input. */
   readonly onCommit: (line: string) => void;

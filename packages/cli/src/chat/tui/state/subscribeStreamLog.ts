@@ -65,6 +65,14 @@ import {
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
 
+/** The stream any foreground reader is showing, whatever it reads from it.
+ *  The work-plan reader reads the snapshot store directly, so sidecar
+ *  residency answers to every reader kind — unlike transcript residency
+ *  below, which only the transcript-shaped readers own. */
+export function foregroundReaderStreamId(): StreamTabId | undefined {
+  return foregroundReader.get()?.streamId;
+}
+
 /** A workflow popup and its Ctrl-T reader are two views of the same full
  * transcript projection. Workflows never become the active viewport, so the
  * foreground reader is their presentation-residency owner. */
@@ -447,10 +455,11 @@ export function syncStreamLog(
     // synthetic operational rows; ordinary inactive streams keep synthetic
     // rows only. Each selection is rebuilt only when a change touched it —
     // the change detection comes from the delta, not from re-deriving and
-    // deep-comparing the whole projection.
-    const outputStale =
-      state.lastEntriesOutput !== slice.entries ||
-      state.lastOutputFull !== projectFullTranscript;
+    // deep-comparing the whole projection. An out-of-band `slice.entries`
+    // patch (local rows) always changes the local-row set, which
+    // `reconcileSynthetics` has already turned into these flags; only a
+    // projection-mode flip has no flag of its own.
+    const outputStale = state.lastOutputFull !== projectFullTranscript;
     let entries: readonly TranscriptRow[] = slice.entries;
     // The promotion cursor travels with the selection it indexes into: the
     // full transcript inherits the fold's frontier, a compacted workflow
@@ -476,7 +485,6 @@ export function syncStreamLog(
       finalizedFrontier = entries.length;
     }
     state.lastOutputFull = projectFullTranscript;
-    state.lastEntriesOutput = entries;
 
     if (
       slice.transcriptFold === state &&
@@ -544,6 +552,10 @@ export function releaseInactiveStreamTranscript(
   if (!slice) return;
   const phase = streamPhaseFor(streamId)?.phase;
   if (phase === undefined || isActivePhase(phase)) return;
+  // Transcript residency only. The sidecar record answers to a different
+  // rule (terminal children nothing presents) and to a different set of
+  // readers, so `sessionSignalsAdapter` owns its release from one
+  // presentation-change subscription.
   store.requestEviction(streamId);
   const fold = slice.transcriptFold;
   if (fold) {

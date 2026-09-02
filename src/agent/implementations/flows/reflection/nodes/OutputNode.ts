@@ -5,6 +5,7 @@ import {
   MESSAGE_TYPES,
   type AgentFileLocation,
   type CompileResult,
+  type RunStorageFileLocation,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -23,7 +24,6 @@ import { checkExpectedOutputs } from '../output/outputValidation';
 import { summarizeRound, type RoundSummary } from '../output/roundSummary';
 import { formatCompileFailureRoundContext } from '../output/compileFailureRoundContext';
 import { tryOperation } from '../output/outputOperations';
-import type { CompiledPdfArtifact } from '../output/compiledPdfArtifacts';
 import type { RoundFileMapping } from '../output/types';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -38,7 +38,7 @@ interface OutputPrepInput {
 interface OutputExecResult {
   summary: RoundSummary;
   compileResult?: CompileResult;
-  compiledArtifacts: CompiledPdfArtifact[];
+  compiledArtifacts: RunStorageFileLocation[];
   emitCompileFailures: boolean;
 }
 
@@ -74,7 +74,7 @@ export class OutputNode extends BaseNode<
 
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
-    const compiledArtifacts: CompiledPdfArtifact[] = [];
+    const compiledArtifacts: RunStorageFileLocation[] = [];
     let emitCompileFailures = false;
 
     // Only process if turn ended (model completed response)
@@ -99,21 +99,13 @@ export class OutputNode extends BaseNode<
       );
 
       if (hasRoundOutputs(outputState, currentRound)) {
-        const roundMapping = traceFileLineage(
-          outputState,
-          diffBaseFiles,
-          currentRound,
-        );
-        mapping = roundMapping;
+        mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
         // `handleLatexdiffOfOutput` already wraps its whole body in
         // `tryOperation`, so a second recover layer here would only ever see
         // its own push.
         compiledArtifacts.push(
-          ...(await diffManager.handleLatexdiffOfOutput(
-            currentRound,
-            roundMapping,
-          )),
+          ...(await diffManager.handleLatexdiffOfOutput(currentRound, mapping)),
         );
 
         await tryOperation(async () => {
@@ -249,7 +241,7 @@ export class OutputNode extends BaseNode<
       } else {
         for (const artifact of execRes.compiledArtifacts) {
           interactions.emit('requestOpenFile', {
-            location: artifact.latestPdf,
+            location: artifact,
             preserveFocus: true,
           });
         }

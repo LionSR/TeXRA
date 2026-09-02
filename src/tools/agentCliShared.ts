@@ -136,13 +136,11 @@ async function queueAgentCliFollowUp(
   // A queued follow-up whose wake failed is still queued: it is delivered
   // when the agent is resumed, so the caller must not offer it again.
   const wakeFailed = result.status === 'queued' && result.wake === 'failed';
+  const followUpLine = wakeFailed
+    ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
+    : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
   return executed(
-    [
-      wakeFailed
-        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}', but the agent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`
-        : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`,
-      `Execution ID: ${stored.executionId}`,
-    ].join('\n'),
+    [followUpLine, `Execution ID: ${stored.executionId}`].join('\n'),
     `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
   );
 }
@@ -424,7 +422,7 @@ interface AgentCliLoopParams<TTurn> {
   runProviderTurn: (
     prompt: string,
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
   ) => Promise<TTurn>;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
@@ -506,20 +504,16 @@ export function startAgentCliLoop<TTurn>(
   const runTurn = (
     followUps: readonly FollowUpQueueBatchItem[],
     ports: ChildRunPorts,
-    abortController: AbortController,
+    signal: AbortSignal,
   ): Promise<TTurn> => {
     lastPrompt = followUps.map((f) => f.text).join('\n\n');
-    return runProviderTurn(lastPrompt, ports, abortController);
+    return runProviderTurn(lastPrompt, ports, signal);
   };
 
   const strategy: ChildRunStrategy<TTurn> = {
     stageLabel,
-    launch: (ports, abortController) =>
-      runTurn(
-        [{ text: initialPrompt, origin: 'user' }],
-        ports,
-        abortController,
-      ),
+    launch: (ports, signal) =>
+      runTurn([{ text: initialPrompt, origin: 'user' }], ports, signal),
     runTurn,
     isTerminal: () => false,
     getUsage,
@@ -548,7 +542,7 @@ export function startAgentCliLoop<TTurn>(
     },
   };
 
-  const { completion } = startChildRunLoop({
+  const completion = startChildRunLoop({
     childStream,
     childStreamId,
     parentStreamId,

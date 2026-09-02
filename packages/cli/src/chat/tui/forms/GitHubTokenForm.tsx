@@ -9,6 +9,7 @@ import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CredentialEntryForm } from './ApiKeyEntryForm';
+import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 
 export interface GitHubTokenStatusView {
@@ -26,13 +27,11 @@ const STATUS_LABELS: Readonly<Record<GitHubTokenStatus, string>> = {
 };
 
 export function formatGitHubTokenSummary(view: GitHubTokenStatusView): string {
-  if (!view.status) {
-    if (view.loading && !view.error) return 'Checking token';
-    return 'Status unavailable';
-  }
-  const label = STATUS_LABELS[view.status];
-  if (view.error) return `${label} · status unavailable`;
-  return view.loading ? `${label} · refreshing` : label;
+  return formatStatusViewSummary(
+    view,
+    'Checking token',
+    view.status === undefined ? undefined : STATUS_LABELS[view.status],
+  );
 }
 
 function buildGitHubTokenActionItems(
@@ -68,7 +67,7 @@ function statusHint(status: GitHubTokenStatus | undefined): string {
   return 'Needs repo for private repos, public_repo for public. Or export GH_TOKEN / GITHUB_TOKEN.';
 }
 
-export interface GitHubTokenFormProps {
+interface GitHubTokenFormProps {
   readonly availableRows?: number;
   readonly statusView?: GitHubTokenStatusView;
   readonly onSave: (token: string) => Promise<void>;
@@ -85,6 +84,16 @@ export function GitHubTokenForm(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
+  const runAction = (action: () => Promise<void>): void => {
+    setSaving(true);
+    void action()
+      .then(() => props.onDone())
+      .catch((actionError: unknown) => {
+        setSaving(false);
+        setError(toErrorMessage(actionError));
+      });
+  };
+
   if (entering) {
     return (
       <CredentialEntryForm
@@ -98,16 +107,7 @@ export function GitHubTokenForm(
           setError(undefined);
           setEntering(false);
         }}
-        onSubmit={(token) => {
-          setSaving(true);
-          void props
-            .onSave(token)
-            .then(() => props.onDone())
-            .catch((saveError: unknown) => {
-              setSaving(false);
-              setError(toErrorMessage(saveError));
-            });
-        }}
+        onSubmit={(token) => runAction(() => props.onSave(token))}
       />
     );
   }
@@ -143,14 +143,7 @@ export function GitHubTokenForm(
           return;
         }
         if (action === 'remove') {
-          setSaving(true);
-          void props
-            .onRemove()
-            .then(() => props.onDone())
-            .catch((removeError: unknown) => {
-              setSaving(false);
-              setError(toErrorMessage(removeError));
-            });
+          runAction(() => props.onRemove());
           return;
         }
         void tryOpenBrowser(GITHUB_TOKEN_CREATE_URL).then((opened) => {

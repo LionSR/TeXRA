@@ -14,11 +14,14 @@ import {
   createDesktopSupabaseAuth,
   type DesktopAuthCallbackState,
   type DesktopAuthCoordinator,
-  type DesktopOAuthClient,
   type DesktopSupabaseAuthHost,
 } from '@desktop/main/desktopSupabaseAuth';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+
+type DesktopOAuthClient = Parameters<
+  typeof createDesktopSupabaseAuth
+>[0]['oauthClient'];
 
 function createCoordinator() {
   const storedSession: { current: SupabaseSession | null } = { current: null };

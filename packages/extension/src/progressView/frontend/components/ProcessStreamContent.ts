@@ -54,8 +54,13 @@ export class ProcessStreamContent extends LitElement {
         word-break: break-word;
       }
 
-      .command-strip > span {
+      .command-strip > * {
         min-width: 0;
+      }
+
+      .command-strip:focus-visible {
+        outline: var(--focus-ring-width) solid var(--wa-color-focus);
+        outline-offset: calc(-1 * var(--focus-ring-offset));
       }
 
       .prompt {
@@ -96,9 +101,14 @@ export class ProcessStreamContent extends LitElement {
           command
             ? html`
                 <div class="conversation-column process-command">
-                  <div class="command-strip">
-                    <span class="prompt">$</span>
-                    <span class="command">${command}</span>
+                  <div
+                    class="command-strip"
+                    role="region"
+                    aria-label="Command"
+                    tabindex="0"
+                  >
+                    <span class="prompt" aria-hidden="true">$</span>
+                    <code class="command" dir="ltr">${command}</code>
                   </div>
                 </div>
               `

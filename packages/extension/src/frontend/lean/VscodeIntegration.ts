@@ -140,7 +140,6 @@ function createLeanFileUri(absolutePath: string): LeanFileUri {
  */
 interface LeanClient {
   isRunning(): boolean;
-  isInFolderManagedByThisClient(uri: LeanFileUri): boolean;
   sendRequest(method: string, params: unknown): Promise<unknown>;
 }
 
@@ -304,7 +303,7 @@ async function sendPositionRequest<T>(
  * @param line - 0-indexed line number
  * @param column - 0-indexed column number
  */
-async function getGoalState(
+function getGoalState(
   filePath: string,
   line: number,
   column: number,
@@ -322,7 +321,7 @@ async function getGoalState(
  * @param line - 0-indexed line number
  * @param column - 0-indexed column number
  */
-async function getTermGoal(
+function getTermGoal(
   filePath: string,
   line: number,
   column: number,
@@ -340,7 +339,7 @@ async function getTermGoal(
  * @param line - 0-indexed line number
  * @param column - 0-indexed column number
  */
-async function getHoverInfo(
+function getHoverInfo(
   filePath: string,
   line: number,
   column: number,
@@ -402,8 +401,7 @@ async function executeProjectCommand(
     // vscode-lean4 registers these commands in activateLean4Features(), not
     // during its initial extension activation. Awaiting the exported feature
     // promise prevents a race with command registration after a Lean file opens.
-    const clientProvider = await getClientProvider();
-    if (!clientProvider) {
+    if (!(await getClientProvider())) {
       throw new Error(
         'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
       );

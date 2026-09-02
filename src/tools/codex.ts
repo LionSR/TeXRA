@@ -78,7 +78,7 @@ import {
   buildCodexUsageStats,
 } from './codexShared';
 
-// Third-party imports
+// Third-party type imports (import/order places these after local imports)
 import type {
   RunResult,
   SandboxMode,
@@ -385,14 +385,8 @@ function startCodexLoop(params: {
     initialPrompt,
     store: codexThreadsFor,
     releaseFallbackClaim,
-    runProviderTurn: (prompt, _ports, abortController) =>
-      runStreamedTurn(
-        thread,
-        prompt,
-        childStreamId,
-        logger,
-        abortController.signal,
-      ),
+    runProviderTurn: (prompt, _ports, signal) =>
+      runStreamedTurn(thread, prompt, childStreamId, logger, signal),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: (turn) => turn.usage,
     buildUsageStats: (turn) =>

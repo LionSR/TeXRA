@@ -58,19 +58,26 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
   override render(): TemplateResult {
     const data = this.permission.data;
     const metaParts: MetaPart[] = [];
-    if (data.sourceTool) metaParts.push(`Requested by ${data.sourceTool}`);
+    if (data.sourceTool) {
+      metaParts.push(html`
+        Requested by
+        <bdi class="approval-request__source-tool" dir="ltr"
+          >${data.sourceTool}</bdi
+        >
+      `);
+    }
     metaParts.push(this.renderDiffMeta());
 
     return this.renderRequestShell({
       prefix: 'approval-request',
       details: html`
-        <div class="approval-request__path">
+        <div class="approval-request__path" dir="ltr">
           ${data.relativePath || data.path}
         </div>
         <div class="approval-request__meta">${renderDotMeta(metaParts)}</div>
       `,
-      approveTitle: 'Approve (y)',
-      rejectTitle: 'Reject (n)',
+      approveTitle: 'Approve this edit (y)',
+      rejectTitle: 'Reject this edit (n)',
       leadingActions: this.renderDiffActions(),
     });
   }
@@ -104,8 +111,12 @@ export class ToolEditRequestPanel extends BaseBypassApprovalPanel<'toolEdit'> {
       triggerAriaLabel: 'More diff actions',
       tooltip: 'More diff actions',
       items: html`
-        <wa-dropdown-item value="previewProposed">Preview</wa-dropdown-item>
-        <wa-dropdown-item value="showLatexdiff">LaTeXdiff</wa-dropdown-item>
+        <wa-dropdown-item value="previewProposed"
+          >Preview proposed PDF</wa-dropdown-item
+        >
+        <wa-dropdown-item value="showLatexdiff"
+          >Show LaTeXdiff</wa-dropdown-item
+        >
       `,
       onSelect: this.handleMenuSelect,
     });

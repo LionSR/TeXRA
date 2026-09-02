@@ -8,11 +8,11 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { ProgressBackendOptions } from '@controllers/progressView/backend/ProgressBackend';
 import {
-  ProgressWorkflowActionsController,
+  ProgressWorkflowRunActionsController,
   type WorkflowDiffRequest,
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
-} from '@controllers/progressView/ProgressWorkflowActionsController';
+} from '@controllers/progressView/ProgressWorkflowRunActionsController';
 import type {
   OutputFileInfo,
   RoundIndexed,
@@ -111,15 +111,15 @@ export function createOutputFile(
   };
 }
 
-export interface ProgressWorkflowActionsHarnessOptions {
+export interface ProgressWorkflowRunActionsHarnessOptions {
   runConfigs?: Map<StreamTabId, AgentConfig>;
   executionIds?: Map<StreamTabId, string>;
   outputs?: Map<StreamTabId, RoundIndexed<OutputFileInfo>>;
   knownWorkspaceOutputs?: Map<StreamTabId, Set<string>>;
 }
 
-export interface ProgressWorkflowActionsHarness {
-  controller: ProgressWorkflowActionsController;
+export interface ProgressWorkflowRunActionsHarness {
+  controller: ProgressWorkflowRunActionsController;
   metadataReads: StreamTabId[];
   diffs: WorkflowDiffRequest[];
   fileOperations: Array<{
@@ -128,9 +128,9 @@ export interface ProgressWorkflowActionsHarness {
   }>;
 }
 
-export function createProgressWorkflowActionsHarness(
-  options: ProgressWorkflowActionsHarnessOptions = {},
-): ProgressWorkflowActionsHarness {
+export function createProgressWorkflowRunActionsHarness(
+  options: ProgressWorkflowRunActionsHarnessOptions = {},
+): ProgressWorkflowRunActionsHarness {
   const metadataReads: StreamTabId[] = [];
   const diffs: WorkflowDiffRequest[] = [];
   const fileOperations: Array<{
@@ -139,7 +139,7 @@ export function createProgressWorkflowActionsHarness(
   }> = [];
 
   return {
-    controller: new ProgressWorkflowActionsController({
+    controller: new ProgressWorkflowRunActionsController({
       state: {
         getRunMetadata: (stream) => {
           metadataReads.push(stream);

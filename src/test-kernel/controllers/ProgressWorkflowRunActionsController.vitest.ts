@@ -6,18 +6,18 @@ import { AgentCategory } from '@shared/schemas';
 import {
   createAgentConfig,
   createOutputFile,
-  createProgressWorkflowActionsHarness,
+  createProgressWorkflowRunActionsHarness,
   createWorkflowConfig,
 } from '../support/ProgressControllerHarnesses';
 
-describe('ProgressWorkflowActionsController', () => {
+describe('ProgressWorkflowRunActionsController', () => {
   it('ignores toolbar actions for non-workflow streams', async () => {
     const toolUseConfig = createAgentConfig({
       agentCategory: AgentCategory.ToolUse,
       outputFiles: [],
     });
     const { controller, diffs, fileOperations } =
-      createProgressWorkflowActionsHarness({
+      createProgressWorkflowRunActionsHarness({
         runConfigs: new Map([['stream-a', toolUseConfig]]),
       });
 
@@ -32,7 +32,7 @@ describe('ProgressWorkflowActionsController', () => {
     const output = createOutputFile();
     const config = createWorkflowConfig({ outputFiles: ['declared.tex'] });
     const { controller, diffs, metadataReads } =
-      createProgressWorkflowActionsHarness({
+      createProgressWorkflowRunActionsHarness({
         runConfigs: new Map([['stream-a', config]]),
         executionIds: new Map([['stream-a', 'exec-123']]),
         outputs: new Map([['stream-a', { 1: [output] }]]),
@@ -57,7 +57,7 @@ describe('ProgressWorkflowActionsController', () => {
 
   it('reports no active output files when the run config declares none', async () => {
     const config = createWorkflowConfig({ outputFiles: [] });
-    const { controller, diffs } = createProgressWorkflowActionsHarness({
+    const { controller, diffs } = createProgressWorkflowRunActionsHarness({
       runConfigs: new Map([['stream-a', config]]),
     });
 
@@ -73,7 +73,7 @@ describe('ProgressWorkflowActionsController', () => {
       outputFiles: ['declared.tex', '/workspace/generated.tex'],
     });
     const { controller, fileOperations, metadataReads } =
-      createProgressWorkflowActionsHarness({
+      createProgressWorkflowRunActionsHarness({
         runConfigs: new Map([['stream-a', config]]),
         executionIds: new Map([['stream-a', 'exec-123']]),
         knownWorkspaceOutputs: new Map([
@@ -104,14 +104,13 @@ describe('ProgressWorkflowActionsController', () => {
 
   it('passes all resolved output files for clean requests', async () => {
     const config = createWorkflowConfig({ outputFiles: ['declared.tex'] });
-    const { controller, fileOperations } = createProgressWorkflowActionsHarness(
-      {
+    const { controller, fileOperations } =
+      createProgressWorkflowRunActionsHarness({
         runConfigs: new Map([['stream-a', config]]),
         knownWorkspaceOutputs: new Map([
           ['stream-a', new Set(['generated.tex'])],
         ]),
-      },
-    );
+      });
 
     await controller.runFileOperation('stream-a', 'clean');
 

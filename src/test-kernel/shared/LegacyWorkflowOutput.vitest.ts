@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import { runCleanMultiple, runCleanSingle } from '@housekeeping/clean';
-import { runPackMultiple } from '@housekeeping/pack';
+import { runPackMultiple, runPackSingle } from '@housekeeping/pack';
 import {
   findFilesFromPatterns,
   resolveHousekeepingTargets,
@@ -133,6 +133,29 @@ describe('filename-era workflow output grammar', () => {
     }
   });
 
+  it('packs a source-qualified agent into a filesystem-safe folder', async () => {
+    const outputRelativePath = 'paper_polish_r0_gpt-4.tex';
+    await writeFile(path.join(workspacePath, 'paper.tex'), 'source');
+    await writeFile(
+      path.join(workspacePath, outputRelativePath),
+      'generated output',
+    );
+
+    const result = await runPackSingle(
+      'gpt-4',
+      'paper.tex',
+      'custom:polish_long',
+    );
+
+    if (result.status !== 'success' || result.outputFolder === undefined) {
+      throw new Error(`Expected a successful pack, got ${result.status}`);
+    }
+    expect(path.basename(result.outputFolder)).not.toContain(':');
+    await expect(
+      access(path.join(workspacePath, result.outputFolder, outputRelativePath)),
+    ).resolves.toBeUndefined();
+  });
+
   it('packs a flat XML round output', async () => {
     const xmlRelativePath = 'paper_polish_r0_gpt-4.xml';
     await writeFile(path.join(workspacePath, 'paper.tex'), 'source');
@@ -149,6 +172,7 @@ describe('filename-era workflow output grammar', () => {
     if (result.status !== 'success' || result.outputFolder === undefined) {
       throw new Error(`Expected a successful pack, got ${result.status}`);
     }
+    expect(path.basename(result.outputFolder)).not.toContain(':');
     await expect(
       access(path.join(workspacePath, xmlRelativePath)),
     ).rejects.toMatchObject({ code: 'ENOENT' });

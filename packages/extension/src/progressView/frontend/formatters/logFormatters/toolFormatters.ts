@@ -52,6 +52,9 @@ import {
 import { renderToolSections } from './toolFormatters/toolSections';
 import type { FormatResult } from '../baseLogFormatter';
 
+// Side-effect import - register the <tool-timer> element rendered below
+import '@progressView/frontend/components/ToolTimer';
+
 /** Header width for this surface; the model carries the preview untruncated. */
 const HEADER_PREVIEW_MAX_CHARS = 120;
 
@@ -102,7 +105,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   // a successful command's `exit 0` says nothing the status icon does not.
   if (model.isError && model.exitCode !== undefined) {
     // prettier-ignore
-    sections.push(html`<div class="tool-use-section tool-exit-code">exit ${model.exitCode}</div>`);
+    sections.push(html`<div class="tool-use-section tool-exit-code" dir="ltr">exit ${model.exitCode}</div>`);
   }
 
   if (model.errorPreview) {
@@ -162,7 +165,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   // itself, so nothing has to survive a round trip through a DOM attribute.
   // prettier-ignore
   const setupButton = proposal
-    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Setup this proposal configuration" @click=${(event: Event) => { event.preventDefault(); postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal }); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Setup</button>`
+    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" @click=${(event: Event) => { event.preventDefault(); postMessage(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG, { proposal }); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Restore setup</button>`
     : nothing;
   // prettier-ignore
   const extraContent = html`${timerTemplate ?? nothing}${row.spillPath ? buildSpillArtifactButton(row.spillPath) : nothing}${setupButton}`;

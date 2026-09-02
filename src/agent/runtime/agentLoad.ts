@@ -15,7 +15,7 @@ import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitio
 import { inlineAgentDefinition } from '@agent/index/inlineAgents';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
-import { agentKey, AgentCategory, type AgentSource } from '@shared/schemas';
+import { agentKey, AgentCategory } from '@shared/schemas';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 
 import { normalizeAgentSettingTools } from './agentSettingTools';
@@ -59,15 +59,6 @@ async function loadYaml(absolutePath: string): Promise<object> {
     );
   }
   return parsed.value as object;
-}
-
-function ensureAgentCategoryForSource<
-  T extends { agentCategory?: AgentCategory },
->(settings: T, source: AgentSource): T {
-  if (source === 'builtInToolUse' && !settings.agentCategory) {
-    return { ...settings, agentCategory: AgentCategory.ToolUse };
-  }
-  return settings;
 }
 
 export async function loadAgentSettingAndPrompts(
@@ -154,7 +145,9 @@ export async function loadAgentSettingAndPrompts(
     prompts = mergeInheritedAgentObject(parentPrompts, config.prompts);
   }
 
-  settings = ensureAgentCategoryForSource(settings, entry.source);
+  if (entry.source === 'builtInToolUse' && !settings.agentCategory) {
+    settings = { ...settings, agentCategory: AgentCategory.ToolUse };
+  }
 
   const normalizedSettings = normalizeAgentSettingTools(settings, CHANNEL);
 

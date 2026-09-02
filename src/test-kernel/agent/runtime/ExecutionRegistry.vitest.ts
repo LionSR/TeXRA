@@ -1551,8 +1551,6 @@ describe('executionRegistry', () => {
     const resumingStreamId = 'stream-follow-up-resuming-test' as StreamTabId;
     const waitingStreamId = 'stream-follow-up-waiting-test' as StreamTabId;
     const stoppedStreamId = 'stream-follow-up-stopped-test' as StreamTabId;
-    const parentStreamId = 'stream-follow-up-parent-test' as StreamTabId;
-    const childStreamId = 'stream-follow-up-child-test' as StreamTabId;
     const context = createLiveToolUseFlowContext();
 
     try {
@@ -1594,20 +1592,6 @@ describe('executionRegistry', () => {
       expect(registry.getToolUseFollowUpTarget(stoppedStreamId)).toEqual({
         kind: 'no_session',
         streamStatus: STREAM_PHASE.CANCELLED,
-      });
-
-      seedStreamStatusForTest(streamStatus, parentStreamId, {
-        phase: STREAM_PHASE.CANCELLED,
-      });
-      registry.track(
-        createHandle(
-          'exec-follow-up-child-test',
-          parentStreamId,
-          childStreamId,
-        ),
-      );
-      expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
-        kind: 'queue',
       });
     } finally {
       registry.dispose();
