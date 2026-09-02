@@ -634,7 +634,6 @@ describe('createChatSessionController', () => {
 
     expect(mocks.globalGet).toHaveBeenCalledWith(
       GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-      false,
     );
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('stream-1', {
       detachActiveChildren: true,

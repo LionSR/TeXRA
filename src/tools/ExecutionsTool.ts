@@ -48,6 +48,7 @@ import {
   readCompletedRunTodos,
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -519,12 +520,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       'workspaceState',
       platform().workspaceState,
     );
-    if (
-      !platform().globalState.get<boolean>(
-        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        true,
-      )
-    ) {
+    if (!readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL)) {
       throw new ToolError(
         'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
       );
