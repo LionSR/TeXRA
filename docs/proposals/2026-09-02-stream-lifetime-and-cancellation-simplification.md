@@ -12,7 +12,7 @@
 
 A multi-day `texra` orchestration with many subagents died at V8's ~4 GB
 old-space ceiling with 3.9 GB still live after a full mark-compact. The
-narrow fix landed first (`a13b28b`): every subagent run, launch, and tool
+narrow fix landed first (`37248a74d7`): every subagent run, launch, and tool
 request derived its cancellation signal with `AbortSignal.any` from the
 parent run's signal, and Node keeps such a composite — and every abort
 listener still attached to it — reachable from its sources until the
