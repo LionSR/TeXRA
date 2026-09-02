@@ -738,7 +738,7 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
-          selector: 'TemplateElement[value.raw=/<wa-icon\\b/]',
+          selector: 'TemplateElement[value.raw=/<wa-icon[\\s>\\/]/]',
           message:
             'Build <wa-icon> markup via waIcon() from @shared/wa/webAwesomeIcons instead of a hand-rolled template.',
         },
