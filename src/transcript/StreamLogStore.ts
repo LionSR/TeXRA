@@ -188,10 +188,13 @@ interface StreamState {
    * the stream remains a known, listable stream. `undefined` = released.
    */
   log?: StreamLog;
-  /** Reasons that currently require the heavy transcript to stay resident. */
-  leases?: Set<TranscriptResidencyLeaseReason>;
-  /** Exact presentation capabilities currently retaining this transcript. */
-  presentationLeases?: Set<symbol>;
+  /**
+   * Everything currently keeping the heavy transcript resident: lifecycle
+   * reasons (writer, focus, flush) and the exact tokens of open presentation
+   * leases. One set, because residency asks one question — is anything
+   * pinning this — and only `requestEviction` cares which member it drops.
+   */
+  pins?: Set<TranscriptResidencyLeaseReason | symbol>;
   /**
    * Membership flag: this stream's rehydrate read from disk failed. While set,
    * saves skip it so we never overwrite the authoritative disk copy with a
@@ -377,9 +380,7 @@ export class StreamLogStore {
       streamId,
       (s) =>
         s.log === undefined &&
-        (s.leases === undefined || s.leases.size === 0) &&
-        (s.presentationLeases === undefined ||
-          s.presentationLeases.size === 0) &&
+        (s.pins === undefined || s.pins.size === 0) &&
         !s.loadFailed &&
         s.pendingLoad === undefined &&
         s.writer === undefined,
@@ -588,10 +589,7 @@ export class StreamLogStore {
     const state = this.streams.get(streamId);
     if (!state && !this.summaries.has(streamId)) return;
     this.releaseRequests.add(streamId);
-    if (state) {
-      state.leases?.delete('focus');
-      if (state.leases?.size === 0) state.leases = undefined;
-    }
+    if (state) this.unpin(state, 'focus');
     this.tryRelease(streamId);
   }
 
@@ -730,17 +728,14 @@ export class StreamLogStore {
 
     const token = Symbol(streamId);
     const state = this.ensureStreamState(streamId);
-    state.presentationLeases ??= new Set();
-    state.presentationLeases.add(token);
+    state.pins ??= new Set();
+    state.pins.add(token);
     let closed = false;
     const close = (): void => {
       if (closed) return;
       closed = true;
       const current = this.streams.get(streamId);
-      current?.presentationLeases?.delete(token);
-      if (current?.presentationLeases?.size === 0) {
-        current.presentationLeases = undefined;
-      }
+      if (current) this.unpin(current, token);
       // A presentation lease makes a historical transcript resident. Once
       // the final exact owner leaves, request eviction even when no lifecycle
       // status event previously did so.
@@ -1313,8 +1308,8 @@ export class StreamLogStore {
     reason: TranscriptResidencyLeaseReason,
   ): void {
     const state = this.ensureStreamState(streamId);
-    state.leases ??= new Set();
-    state.leases.add(reason);
+    state.pins ??= new Set();
+    state.pins.add(reason);
   }
 
   private releaseLease(
@@ -1323,10 +1318,17 @@ export class StreamLogStore {
   ): void {
     const state = this.streams.get(streamId);
     if (!state) return;
-    state.leases?.delete(reason);
-    if (state.leases?.size === 0) state.leases = undefined;
+    this.unpin(state, reason);
     this.tryRelease(streamId);
     this.pruneStreamState(streamId);
+  }
+
+  private unpin(
+    state: StreamState,
+    pin: TranscriptResidencyLeaseReason | symbol,
+  ): void {
+    state.pins?.delete(pin);
+    if (state.pins?.size === 0) state.pins = undefined;
   }
 
   private tryRelease(streamId: StreamTabId): void {
@@ -1335,8 +1337,7 @@ export class StreamLogStore {
     if (
       !state ||
       !this.releaseRequests.has(streamId) ||
-      (state.leases?.size ?? 0) > 0 ||
-      (state.presentationLeases?.size ?? 0) > 0 ||
+      (state.pins?.size ?? 0) > 0 ||
       this.dirtyIds.has(streamId) ||
       state.pendingLoad
     ) {

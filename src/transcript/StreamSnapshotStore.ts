@@ -377,16 +377,20 @@ function workPlanProvenanceOf(
  * bookkeeping, and the overlay patches. Because every field
  * for a stream lives on the same object, dropping a stream's memory is one
  * `records.delete(stream)` — every field disappears with it BY CONSTRUCTION,
- * so `evict()` cannot drift from the field list.
- *
- * Revocable per-stream generation identities guard in-flight seed races and
- * disappear on eviction rather than retaining historical stream ids. They
- * live inside the shared {@link ResidentStreamRegistry} container that backs
- * `records`, not on the record itself. `writeMutexes`
+ * so `evict()` cannot drift from the field list. That includes the
+ * `generation` token: dropping the record revokes it, and a re-created record
+ * mints a fresh one, so a continuation captured against the old record stays
+ * detectable without a second map of historical stream ids. `writeMutexes`
  * (keyed by the compound `${stream}::${key}`, not a bare stream id) lives in
  * {@link SidecarWriteCoordinator}.
  */
 interface StreamRecord {
+  /**
+   * Revocable identity of this resident record, captured by asynchronous
+   * seed and write work. Rotated by staged deletion and revoked with the
+   * record, so work started against an earlier incarnation sees a mismatch.
+   */
+  generation: symbol;
   // -- Accumulated durable state (mirrors on-disk StreamData) --------------
   outputFiles: RoundIndexed<OutputFileInfo>;
   missingOutputs: RoundIndexed<string>;
@@ -453,6 +457,7 @@ export class StreamSnapshotStore {
     StreamTabId,
     StreamRecord
   >(() => ({
+    generation: Symbol(),
     outputFiles: {},
     missingOutputs: {},
     compileFailures: {},
@@ -485,8 +490,7 @@ export class StreamSnapshotStore {
       this.writes.queueWrite(stream, key, value),
     cancelPendingWrites: (stream) =>
       this.writes.cancelPendingWritesForStream(stream),
-    invalidateStreamGeneration: (stream) =>
-      this.records.invalidateGeneration(stream),
+    invalidateStreamGeneration: (stream) => this.rotateGeneration(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
     evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
@@ -503,9 +507,9 @@ export class StreamSnapshotStore {
       this.deletions.bufferWrite(stream, key, value),
     captureDirtyWrite: (stream, key, value) =>
       this.deletions.captureDirtyWrite(stream, key, value),
-    streamGeneration: (stream) => this.records.generation(stream),
+    streamGeneration: (stream) => this.streamGeneration(stream),
     isCurrentGeneration: (stream, generation) =>
-      this.records.isCurrentGeneration(stream, generation),
+      this.isCurrentGeneration(stream, generation),
   } satisfies SidecarWriteHost);
 
   /**
@@ -631,14 +635,20 @@ export class StreamSnapshotStore {
   }
 
   private streamGeneration(stream: StreamTabId): symbol {
-    return this.records.generation(stream);
+    return this.getOrCreateRecord(stream).generation;
   }
 
   private isCurrentGeneration(
     stream: StreamTabId,
     generation: symbol,
   ): boolean {
-    return this.records.isCurrentGeneration(stream, generation);
+    return this.records.get(stream)?.generation === generation;
+  }
+
+  /** Revoke every continuation captured against the current record. */
+  private rotateGeneration(stream: StreamTabId): void {
+    const record = this.records.get(stream);
+    if (record) record.generation = Symbol();
   }
 
   /**
@@ -1131,7 +1141,7 @@ export class StreamSnapshotStore {
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
-    this.records.evict(stream);
+    this.records.delete(stream);
     this.seedQueues.delete(stream);
     this.writes.dropStreamWrites(stream);
     this.unseededReadWarned.delete(stream);
