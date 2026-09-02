@@ -1,3 +1,5 @@
+import { LRUCache } from 'lru-cache';
+
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { lookupApiKey } from '@model/apiProviders';
 import { platform } from '@platform/platform';
@@ -69,11 +71,6 @@ interface SubscriptionUsageServiceInit {
   readonly requestTimeoutMs?: number;
 }
 
-interface CacheEntry {
-  readonly snapshot: SubscriptionUsageSnapshot;
-  readonly expiresAt: number;
-}
-
 interface SubscriptionUsageAdapter {
   readonly resolveVariant?: () => boolean | string | Promise<boolean | string>;
   readonly fetch: (
@@ -111,7 +108,14 @@ export class SubscriptionUsageService {
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   >;
-  private readonly cache = new Map<string, CacheEntry>();
+  private readonly cache: LRUCache<string, SubscriptionUsageSnapshot>;
+  // lru-cache treats ttl:0 as "no expiration", not "always expired" — a
+  // cacheTtlMs of 0 means the opposite (never retain), so route reads/writes
+  // through a stub when disabled instead of trusting LRUCache with ttl:0.
+  private readonly cacheReader: {
+    get(key: string): SubscriptionUsageSnapshot | undefined;
+    set(key: string, value: SubscriptionUsageSnapshot): void;
+  };
   private readonly pending = new Map<
     string,
     Promise<SubscriptionUsageSnapshot>
@@ -124,6 +128,18 @@ export class SubscriptionUsageService {
     this.cacheTtlMs = init.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.adapters = this.createAdapters();
+    this.cache = new LRUCache({
+      max: 64,
+      ttl: this.cacheTtlMs,
+      // The default resolution debounces perf.now() via a real setTimeout,
+      // which ignores the injected clock (this.now) entirely in tests.
+      ttlResolution: 0,
+      perf: { now: this.now },
+    });
+    this.cacheReader =
+      this.cacheTtlMs > 0
+        ? this.cache
+        : { get: () => undefined, set: () => {} };
   }
 
   /** Provider transports are adapters; caching and failure policy stay common. */
@@ -181,25 +197,6 @@ export class SubscriptionUsageService {
     }
   }
 
-  // Return-path choice (D16, define-out-of-existence §1e): when invalidate()
-  // races an in-flight fetch, coalesceAsync's own identity check keeps the
-  // stale result out of the cache, but the already-waiting caller still
-  // receives it — one accepted stale read on a read-only usage display.
-  private readonly cacheReader = {
-    get: (key: string): SubscriptionUsageSnapshot | undefined => {
-      const cached = this.cache.get(key);
-      return cached && cached.expiresAt > this.now()
-        ? cached.snapshot
-        : undefined;
-    },
-    set: (key: string, snapshot: SubscriptionUsageSnapshot): void => {
-      this.cache.set(key, {
-        snapshot,
-        expiresAt: this.now() + this.cacheTtlMs,
-      });
-    },
-  };
-
   async getUsage(
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
@@ -218,8 +215,15 @@ export class SubscriptionUsageService {
       this.pending.delete(key);
     }
 
-    return coalesceAsync(this.cacheReader, this.pending, key, () =>
-      this.fetchUsage(provider, variant),
+    // Return-path choice (D16, define-out-of-existence §1e): when invalidate()
+    // races an in-flight fetch, coalesceAsync's own identity check keeps the
+    // stale result out of the cache, but the already-waiting caller still
+    // receives it — one accepted stale read on a read-only usage display.
+    return coalesceAsync<string, SubscriptionUsageSnapshot>(
+      this.cacheReader,
+      this.pending,
+      key,
+      () => this.fetchUsage(provider, variant),
     );
   }
 
