@@ -172,9 +172,10 @@ export class ProgressBackend {
       // or superseded activation, and would otherwise pin that stream's
       // record for the rest of the session.
       isStreamPresented: (stream) =>
-        this.presentation.activeStream === stream ||
-        (this.inFlightActivationGenerations.size > 0 &&
-          this.latestActivationTarget === stream),
+        !this.disposed &&
+        (this.presentation.activeStream === stream ||
+          (this.inFlightActivationGenerations.size > 0 &&
+            this.latestActivationTarget === stream)),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -880,6 +881,13 @@ export class ProgressBackend {
     if (this.disposed) return;
     this.disposed = true;
     for (const detach of this.detachEventListeners.splice(0)) detach();
+    // Disposal is this host's last "stops presenting", and the session
+    // outlives the window, so nothing else would revisit a finished child
+    // that was still selected. The selection itself is a persisted user
+    // preference and stays as it is; `isStreamPresented` reads `disposed`,
+    // so the rule already sees this host as presenting nothing.
+    const presented = this.presentation.activeStream;
+    if (presented) this.factApplier.retireSidecarIfFinishedChild(presented);
     this.factApplier.dispose();
     this.activationGeneration += 1;
     this.releasePresentationLeases();
