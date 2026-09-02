@@ -18,6 +18,7 @@ import { createLog } from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import { deleteTranscriptWithSnapshotRollback } from './StagedDeletionCoordinator';
 import {
   clearPersistedSummaryParentStream,
   deletePersistedStreamLog,
@@ -68,19 +69,9 @@ async function deletePersistedAdjacentStreamState(
     stream,
     clearChildSummaryParentEdges,
   );
-  try {
-    await deletePersistedStreamLog(stream);
-  } catch (error) {
-    try {
-      await snapshotDeletion.rollback();
-    } catch (rollbackError) {
-      throw new AggregateError(
-        [error, rollbackError],
-        `Transcript and snapshot rollback failed for stream ${stream}`,
-      );
-    }
-    throw error;
-  }
+  await deleteTranscriptWithSnapshotRollback(stream, snapshotDeletion, () =>
+    deletePersistedStreamLog(stream),
+  );
   await snapshotDeletion.commit();
 }
 

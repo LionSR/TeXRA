@@ -2,6 +2,8 @@
 
 import { css, type CSSResult } from 'lit';
 
+import { visuallyHiddenDeclarations } from '@shared/styles';
+
 export const latexTabStyles: CSSResult = css`
   :host {
     display: block;
@@ -127,15 +129,7 @@ export const latexTabStyles: CSSResult = css`
   .setting-control-metadata::part(form-control-label),
   .setting-control-metadata::part(label),
   .setting-control-metadata::part(hint) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
+    ${visuallyHiddenDeclarations}
   }
 
   .replacement-groups-row,

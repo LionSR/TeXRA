@@ -76,6 +76,36 @@ export interface StagedStreamSnapshotDeletion {
 }
 
 /**
+ * Run the authoritative transcript deletion while a snapshot deletion is
+ * staged, rolling that staging back if the transcript step fails so neither
+ * storage domain is left half-deleted. A rollback that also fails is reported
+ * with `AggregateError` so it cannot replace the failure that caused it.
+ *
+ * Only the failure path is shared. Each caller keeps its own commit (one
+ * inspects the supersede result, the other does not) and its own pre-commit
+ * supersede check, which rolls back best-effort instead of aggregating.
+ */
+export async function deleteTranscriptWithSnapshotRollback(
+  stream: StreamTabId,
+  snapshotDeletion: Pick<StagedStreamSnapshotDeletion, 'rollback'>,
+  deleteTranscript: () => Promise<void>,
+): Promise<void> {
+  try {
+    await deleteTranscript();
+  } catch (error) {
+    try {
+      await snapshotDeletion.rollback();
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        `Transcript and snapshot rollback failed for stream ${stream}`,
+      );
+    }
+    throw error;
+  }
+}
+
+/**
  * The narrow port back into the snapshot store. Every member is a capability
  * the staged-deletion machine cannot own itself: durable writes and the
  * per-(stream, category) write locks (both delegated to the store's

@@ -2,7 +2,7 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { sp } from '@shared/styles';
+import { sp, visuallyHiddenDeclarations } from '@shared/styles';
 
 export const userQuestionPanelStyles: CSSResult = css`
   .user-question-request__questions {
@@ -67,15 +67,7 @@ export const userQuestionPanelStyles: CSSResult = css`
      the short action cue available to assistive technology without repeating
      the question already supplied by the outer fieldset legend. */
   wa-radio-group::part(form-control-label) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
+    ${visuallyHiddenDeclarations}
   }
 
   .user-question-request__option {

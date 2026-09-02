@@ -9,6 +9,24 @@ import {
 } from './controlStyles';
 
 /**
+ * {@link visuallyHiddenStyles} without its selector, for rules that cannot use
+ * the class: Web Awesome exposes form-control labels and hints as shadow
+ * parts, so a view hiding one writes its own `::part(...)` rule against an
+ * element it cannot add a class to. Interpolate this rather than restate it.
+ */
+export const visuallyHiddenDeclarations: CSSResult = css`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`;
+
+/**
  * Available to the accessibility tree, absent from the layout. The canonical
  * copy across every view surface (InstructionPanel and WorktreeChip both
  * used to carry their own). Exported on its own — interpolated into
@@ -18,15 +36,7 @@ import {
  */
 export const visuallyHiddenStyles: CSSResult = css`
   .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
+    ${visuallyHiddenDeclarations}
   }
 `;
 
