@@ -48,6 +48,11 @@ import {
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { WorkflowTaskRow } from '@shared/transcript';
+import { SESSION_LIST } from '@shared/copy/nestedRuns';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import { setCliStreamPhase } from '@test/support/cliStreamStatus';
 import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
@@ -922,16 +927,114 @@ describe('App foreground Escape ownership', () => {
       await waitFor(
         () =>
           currentFrame(stdout).includes('Session list') &&
-          visibleTranscriptRows() === 4,
+          visibleTranscriptRows() === 2,
       );
       expect(currentFrame(stdout)).toContain('Session list');
-      expect(visibleTranscriptRows()).toBe(4);
+      expect(visibleTranscriptRows()).toBe(2);
 
       stdin.write('\t');
       await waitFor(() => visibleTranscriptRows() === 10);
       expect(visibleTranscriptRows()).toBe(10);
       expect(currentFrame(stdout)).not.toContain('Session list');
     } finally {
+      instance.unmount();
+    }
+  });
+
+  it.each([
+    {
+      classification: 'held elsewhere',
+      detail: streamHeldMessage({ pid: 4321, hostname: 'other-host' }),
+    },
+    {
+      classification: 'unclassified',
+      detail: streamUnreadableMessage('checkpoint is malformed'),
+    },
+  ])(
+    'disables an unavailable root composer and shows its $classification reason',
+    async ({ detail }) => {
+      seedChildHierarchy();
+      const onSubmit = vi.fn();
+      const { instance, stdin, stdout } = await renderDebugApp(
+        { ...appProps(vi.fn()), onSubmit },
+        { columns: 240, rows: 30 },
+      );
+      await waitFor(() => stdin.listenerCount('readable') > 0);
+
+      const renderedFrame = (): string =>
+        currentFrame(stdout).replaceAll(/\s+/gu, ' ');
+      try {
+        childState.streamStatus.clearStream(ROOT);
+        childState.streamStatus.markUnavailable(ROOT, detail);
+        invalidateChildStreams();
+        await waitFor(() => renderedFrame().includes(detail));
+        stdin.write('must not submit\r');
+        await sleep(30);
+
+        expect(renderedFrame()).toContain(detail);
+        expect(renderedFrame()).not.toContain('must not submit');
+        expect(onSubmit).not.toHaveBeenCalled();
+
+        stdin.write('\t');
+        await waitFor(() => renderedFrame().includes(SESSION_LIST.choosing));
+        stdin.write('\t');
+        await waitFor(() => renderedFrame().includes(detail));
+      } finally {
+        childState.streamStatus.clearStream(ROOT);
+        instance.unmount();
+      }
+    },
+  );
+
+  it('shows the unavailable reason for a child whose composer is normally hidden', async () => {
+    seedChildHierarchy();
+    seedStreamMeta(CHILD, {
+      identity: { kind: 'agent', agent: 'structured-child' },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      agentCategory: AgentCategory.ToolUse,
+    });
+    focusStream(CHILD);
+    const detail = streamHeldMessage({ pid: 4321, hostname: 'other-host' });
+    const { instance, stdout } = await renderDebugApp(appProps(vi.fn()), {
+      columns: 240,
+      rows: 30,
+    });
+
+    try {
+      childState.streamStatus.clearStream(CHILD);
+      childState.streamStatus.markUnavailable(CHILD, detail);
+      invalidateChildStreams();
+      await waitFor(() => currentFrame(stdout).includes(detail));
+
+      expect(currentFrame(stdout)).toContain(detail);
+    } finally {
+      childState.streamStatus.clearStream(CHILD);
+      instance.unmount();
+    }
+  });
+
+  it('hides input-only hints but keeps navigation hints for an unavailable root', async () => {
+    seedChildHierarchy();
+    const detail = streamHeldMessage({ pid: 4321, hostname: 'other-host' });
+    const { instance, stdout } = await renderDebugApp(appProps(vi.fn()), {
+      columns: 240,
+      rows: 30,
+    });
+
+    try {
+      childState.streamStatus.clearStream(ROOT);
+      childState.streamStatus.markUnavailable(ROOT, detail);
+      invalidateChildStreams();
+      await waitFor(() => currentFrame(stdout).includes(detail));
+      const rendered = currentFrame(stdout);
+
+      expect(rendered).not.toContain('/status details');
+      expect(rendered).not.toContain('/agent agents');
+      expect(rendered).not.toContain('/model models');
+      expect(rendered).toContain('Tab sessions');
+      expect(rendered).toContain('Esc 1..9 focus');
+    } finally {
+      childState.streamStatus.clearStream(ROOT);
       instance.unmount();
     }
   });

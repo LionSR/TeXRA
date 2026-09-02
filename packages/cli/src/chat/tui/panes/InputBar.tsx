@@ -14,7 +14,10 @@ import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { textInputCappedRowCount } from '../input/textInputDisplay';
+import {
+  textInputCappedRowCount,
+  textInputWrappedRowCount,
+} from '../input/textInputDisplay';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,
@@ -412,8 +415,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // live frame past the terminal (per-keystroke scrollback churn). One frame
   // of lag (signal set post-render) beats a whole draft-lifetime of overflow.
   const inputDisplayWidth = Math.max(1, columns - INPUT_BAR_DECORATION_COLUMNS);
+  const disabledContentRows = props.disabledMessage
+    ? Math.min(
+        INPUT_BAR_MAX_CONTENT_ROWS,
+        textInputWrappedRowCount(props.disabledMessage, inputDisplayWidth),
+      )
+    : 1;
   const draftContentRows = disabled
-    ? 1
+    ? disabledContentRows
     : textInputCappedRowCount(
         value,
         inputDisplayWidth,
@@ -455,12 +464,20 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         borderColor={COLOR_BORDER}
         paddingX={1}
         aria-role="textbox"
+        aria-state={{ disabled }}
       >
         <Text aria-hidden color={COLOR_HINT}>
           {POINTER}{' '}
         </Text>
         {disabled && props.disabledMessage ? (
-          <Text dimColor>{props.disabledMessage}</Text>
+          <Box
+            flexGrow={1}
+            flexShrink={1}
+            height={draftContentRows}
+            overflowY="hidden"
+          >
+            <Text dimColor>{props.disabledMessage}</Text>
+          </Box>
         ) : (
           <Box
             flexGrow={1}

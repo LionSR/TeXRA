@@ -57,7 +57,8 @@ export function invalidateChildStreams(): void {
 /**
  * Revision counter over the bound `SessionState`. A component whose render
  * reads the shared state through `streamMetadataFor`/`streamStateFor`/
- * `queuedFollowUpsFor` must `useSignal(sessionStateRevision)` (point-in-time
+ * `streamUnavailableDetailFor`/`queuedFollowUpsFor` must
+ * `useSignal(sessionStateRevision)` (point-in-time
  * readers — command handlers, teardown paths — read the helpers plainly).
  */
 export const sessionStateRevision: Signal.Computed<number> = computed(
@@ -88,6 +89,13 @@ export function sessionStreamPhase(
   streamId: StreamTabId,
 ): StreamPhaseState | undefined {
   return BOUND.get()?.state.streamStatus.getStreamState(streamId);
+}
+
+/** Canonical reason a stream is unavailable in this session. */
+export function streamUnavailableDetailFor(
+  streamId: StreamTabId,
+): string | undefined {
+  return BOUND.get()?.state.streamStatus.holdState(streamId);
 }
 
 /** Queued follow-up messages for a stream, from the session-owned queue. */

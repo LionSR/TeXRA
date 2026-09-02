@@ -100,6 +100,7 @@ import {
   sessionStateRevision,
   streamMetadataFor,
   streamStateFor,
+  streamUnavailableDetailFor,
   subagentExecutionLabels as subagentExecutionLabelsSignal,
   visibleSubagentRows,
 } from './state/childExecutions';
@@ -197,8 +198,8 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundReader = useSignal(foregroundReaderSignal);
   const slashPaletteOpen = useSignal(slashPaletteOpenSignal);
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
-  // Render reads shared stream metadata through `streamMetadataFor`; the
-  // revision signal re-renders on metadata changes the roster signal misses.
+  // Render reads shared stream metadata and unavailable detail through narrow
+  // readers; the revision signal re-renders on changes the roster misses.
   const sessionRevision = useSignal(sessionStateRevision);
   const artifactRevision = useSignal(streamArtifactRevision);
   const formBusy = formProgress?.status === 'running';
@@ -265,11 +266,15 @@ export function App(props: AppProps): React.JSX.Element {
       parentStream,
       metadata: activeStreamId ? streamMetadataFor(activeStreamId) : undefined,
     }).kind === 'reject';
+  const unavailableDetail = activeStreamId
+    ? streamUnavailableDetailFor(activeStreamId)
+    : undefined;
   const appInputDisabled = foregroundOpen || childListFocused;
   const inputDisabledMessage = childListFocused
     ? SESSION_LIST.choosing
-    : undefined;
-  const inputDisabled = appInputDisabled || childInputHidden;
+    : unavailableDetail;
+  const inputDisabled =
+    appInputDisabled || childInputHidden || unavailableDetail !== undefined;
   // One gate for "the App owns the keyboard": focus shortcuts and bare Escape
   // both derive from these same three facts.
   const focusShortcutsActive =
@@ -284,7 +289,8 @@ export function App(props: AppProps): React.JSX.Element {
     escapeInterruptStateRef.current = escapeInterruptState;
   });
   const inputBarVisible =
-    !foregroundOpen && (!childInputHidden || childListFocused);
+    !foregroundOpen &&
+    (!childInputHidden || childListFocused || unavailableDetail !== undefined);
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
@@ -842,7 +848,9 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
-              chatInputAvailable={!childInputHidden}
+              chatInputAvailable={
+                !childInputHidden && unavailableDetail === undefined
+              }
               commandName={props.commandName}
               foregroundEscapeAction={foregroundEscapeAction({
                 activeFormEscapeAction: formBusy

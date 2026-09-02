@@ -181,6 +181,11 @@ function lastDisplayRowIsFull(
   );
 }
 
+/** Wrapped text rows at `width`, without reserving space for a caret. */
+export function textInputWrappedRowCount(value: string, width: number): number {
+  return textInputDisplayRows(value, Math.max(1, width)).length;
+}
+
 /** Rows the input will occupy at `width`, using the same soft-break algorithm
  *  as {@link textInputDisplayWindow}. When the last row is exactly full, the
  *  end-of-value caret wraps to its own row. */

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
+import { textInputWrappedRowCount } from '@cli/chat/tui/input/textInputDisplay';
 import type { PastedImageEntry } from '@cli/chat/tui/input/draftAttachments';
 import {
   ActiveDraftScope,
@@ -26,11 +27,13 @@ import {
 } from '@cli/chat/tui/commands/slashRegistry';
 import {
   activeForm,
+  inputBarContentRows,
   requestDraftRestore,
   resetCliState,
   streams,
 } from '@cli/chat/tui/state/cliState';
 import { CLI_LOCAL_STREAM_ID } from '@cli/chat/tui/state/transcript';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import {
   loadInk,
   renderInteractive,
@@ -58,6 +61,92 @@ function latestRenderedFrame(stdout: InkRenderHandles['stdout']): string {
 
 beforeEach(() => clipboardMock.attachClipboardImage.mockReset());
 afterEach(() => vi.clearAllMocks());
+
+describe('InputBar disabled message layout', () => {
+  it('allocates enough narrow rows to show the ordinary held-run reason', async () => {
+    const { ink, React } = await loadInk();
+    const detail = streamHeldMessage({ pid: 4321, hostname: 'other-host' });
+    const columns = 40;
+    const expectedRows = Math.min(
+      5,
+      textInputWrappedRowCount(detail, columns - 6),
+    );
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(InputBar, {
+        disabled: true,
+        disabledMessage: detail,
+        onSubmit: vi.fn(),
+      }),
+      { columns, debug: true },
+    );
+
+    try {
+      await waitFor(() => inputBarContentRows.get() === expectedRows);
+      const rendered = latestRenderedFrame(stdout)
+        .replaceAll(/[│╭╮╰╯─›]/gu, ' ')
+        .replaceAll(/\s+/gu, ' ');
+
+      expect(expectedRows).toBeGreaterThan(1);
+      expect(rendered).toContain(detail);
+      expect(inputBarContentRows.get()).toBe(expectedRows);
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('does not reserve a caret row for an exact-width disabled message', async () => {
+    const { ink, React } = await loadInk();
+    const columns = 20;
+    const detail = '12345678901234';
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(InputBar, {
+        disabled: true,
+        disabledMessage: detail,
+        onSubmit: vi.fn(),
+      }),
+      { columns, debug: true },
+    );
+
+    try {
+      await waitFor(() => latestRenderedFrame(stdout).includes(detail));
+
+      expect(textInputWrappedRowCount(detail, columns - 6)).toBe(1);
+      expect(inputBarContentRows.get()).toBe(1);
+    } finally {
+      instance.unmount();
+    }
+  });
+
+  it('caps extreme disabled details to the input content-row budget', async () => {
+    const { ink, React } = await loadInk();
+    const detail = Array.from(
+      { length: 8 },
+      (_, index) => `unavailable reason row ${index + 1}`,
+    ).join('\n');
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(InputBar, {
+        disabled: true,
+        disabledMessage: detail,
+        onSubmit: vi.fn(),
+      }),
+      { columns: 80, debug: true },
+    );
+
+    try {
+      await waitFor(() => inputBarContentRows.get() === 5);
+      const rendered = latestRenderedFrame(stdout);
+
+      expect(rendered).toContain('unavailable reason row 5');
+      expect(rendered).not.toContain('unavailable reason row 6');
+      expect(inputBarContentRows.get()).toBe(5);
+    } finally {
+      instance.unmount();
+    }
+  });
+});
 
 describe('InputBar history arrow boundaries', () => {
   it('keeps idle arrows in the input when there is no history to walk', async () => {
