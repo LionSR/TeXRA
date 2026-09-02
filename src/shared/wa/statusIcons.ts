@@ -6,6 +6,7 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 // Local imports
 import type { ProviderKeyStatus } from '@shared/schemas';
 import type { TeXRAIconName } from '@shared/wa/iconNames';
+import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 /**
  * Abstract terminal-run outcome, independent of any one surface's status
@@ -57,13 +58,11 @@ export function renderSetStatusIcon<Status extends string>({
   if (!fallback) {
     // `label` exposes the check's meaning to assistive technology; `title`
     // alone is a hover-only tooltip on an otherwise aria-hidden icon.
-    return html`<wa-icon
-      library="texra"
-      name="check"
-      class="status-check-icon"
-      label=${title ?? 'Set'}
-      title=${title ?? 'Set'}
-    ></wa-icon>`;
+    return waIcon('check', {
+      className: 'status-check-icon',
+      label: title ?? 'Set',
+      title: title ?? 'Set',
+    });
   }
   return html`<wa-tag variant=${fallback.variant ?? 'neutral'} size="s"
     >${fallback.label}</wa-tag
