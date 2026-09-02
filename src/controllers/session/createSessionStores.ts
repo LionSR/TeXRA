@@ -28,14 +28,12 @@ export function createSessionStores(session: SessionHandle): SessionStores {
       releaseStreamResources(stream, session);
     },
     onChildrenDetached: (parent, children) => {
-      const activeChildren = new Set(
-        session.executions
-          .getActiveChildren(parent)
-          .map(({ childStreamId }) => childStreamId),
-      );
-      session.executions.detachActiveChildren(parent);
+      // The registry clears and emits the edge for every child it detaches —
+      // activations included, which `getActiveChildren` cannot see. This hook
+      // only projects the durable children it left behind.
+      const detached = new Set(session.executions.detachActiveChildren(parent));
       for (const child of children) {
-        if (activeChildren.has(child)) continue;
+        if (detached.has(child)) continue;
         session.events.emit({
           scope: 'session',
           event: {
