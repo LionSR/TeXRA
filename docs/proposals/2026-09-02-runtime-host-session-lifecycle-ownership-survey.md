@@ -30,13 +30,14 @@ module singleton survives. The five lifecycle roots landed, `DisposableStore`
 is the house idiom, and the CLI's `StreamSlice` lifecycle mirror — the
 2026-08-25 seam audit's highest-risk row — is deleted.
 
-**What remains is residue, not architecture.** The 42 findings that survived
+**What remains is residue, not architecture.** The 45 findings that survived
 adversarial verification are overwhelmingly _leftovers of completed
 migrations_: a guard that became a tautology when the store it counts moved
 into the session constructor, a replay queue whose second copy can no longer
 be reached, a vocabulary that exists to be mapped back to the vocabulary it
 came from, seams injected for tests that production never passes. Three are
-live defects. None requires a new abstraction; every accepted item deletes.
+live defects, and three more are one user action wearing several front doors.
+None requires a new abstraction; every accepted item deletes.
 
 **One finding was fixed while this survey ran, by someone else, for the same
 reason.** S2 below — the unreachable second replay queue for terminal results —
@@ -52,7 +53,7 @@ subsystem.
 | --------------------- | ---------------: | -----------------: |
 | candidates raised     |               61 |                 34 |
 | refuted by a verifier |               40 |                 13 |
-| survived both lenses  |               21 |                 21 |
+| survived both lenses  |               21 |                 24 |
 
 ## 1. Method
 
@@ -514,6 +515,59 @@ policy that reader needs a date at its declaration, in the form
 `resultMeta.ts` already uses. Net today is 0; at retirement ≈ −43. Also
 correct the lifecycle doc, which still calls the move unexecuted.
 
+### 2.5 Dual UI homes — one user action, several front doors
+
+The dual-system lens's eighth species, and the only one that reads directly
+against the "one home per user action" rule. These three were verified last and
+are recorded at the re-grounded head.
+
+**U1. Stop has three homes, and the extension detours through a hidden
+command.** One user action — stop this stream — reaches
+`ExecutionRegistry.stopAgentStream` three ways. The `stopStream` port on
+`ProgressBackendLifecycleOptions` has two callers (the toolbar stop, and
+delete's implicit stop) and two implementors: the extension forwards into its
+message handler, which cancels the retry and then **re-enters through
+`vscode.commands.executeCommand('texra.stopAgent')`**, while the desktop
+inlines that same cancel-then-stop body. `texra.stopAgent` is catalogued and
+contributed but palette-hidden by `when: false`, and its only production
+dispatcher is the progress view that just called it. `ProgressBackend` already
+owns the session, and the controllers-to-agent value edge is in the baseline,
+so the body has one natural owner: make `stopStream(stream, {clearRetryRequest})`
+the owner and delete the port, both host implementations, the command file, its
+catalog row, and the surface wiring. ≈ −45. Two riders the PR must respect: do
+**not** also drop the retry pre-cancel, because its cause string reaches the
+agent verbatim; and note that the extension's pre-cancel moves from the
+adapter-level cancel to the session-level one, which is a superset. The
+single-owner-sessions doc recorded "stop has three" as an observation and never
+booked it.
+
+**U2. `texra.sendFollowUp` is a command hop with one internal caller.** The
+whole file is one `submitProgressFollowUp` call with a no-op acknowledge,
+registering an id that appears in neither the command catalog nor
+`package.json` — so it is not a palette, keybinding, or contributed surface.
+Its only dispatcher is the progress-view message handler binding a controller
+port that **the desktop binds directly**. No error guard is lost: the submit
+resolves at admission and catches internally, so the command wrapper's
+absorption never fires. Bind it inline as desktop does, reusing the handler's
+existing info callback, and delete the file and its registration. ≈ −30. Ship
+with U1 — same shape, same host, same reviewer.
+
+**U3. CLI quit has two homes with different semantics.** `/exit` unconditionally
+sets the stop flag, interrupts the active run, and requests exit. Ctrl-C's
+preserve arm deliberately exits **without** interrupting a resumable-idle root,
+and the graceful teardown it reaches already owns that decision — interrupt only
+when a run is pending and not resumable-idle. So `/exit` pre-empts a policy that
+lives one layer below it: on an idle WAITING conversation it marks the run
+CANCELLED and applies the detach and approval-clearing side effects where Ctrl-C
+leaves it WAITING. The checkpoint survives both since #11304, so this is a
+persisted-status and side-effect divergence, not data loss. The fix is **not**
+the one-line deletion it looks like: the stop flag must stay, because the
+follow-up loop polls it and dropping it can hang `/exit` at the teardown's
+idle await. Delete only the interrupt call and its context field, or — the
+better shape, and a small product call — give the exit controller one
+`requestExit()` that applies the existing policy and have all three gestures
+call it. ≈ −4, and one stale comment to reword.
+
 ## 3. The dual-system ledger, re-verified at HEAD
 
 Each row of the 2026-07-09 census (Part D) and the R1 accounting table,
@@ -690,8 +744,29 @@ same day against the same subsystem. Overlap and division of labour:
 - No finding in this document duplicates a candidate those two filed and left
   open. The three live defects in §2.1 are untouched by either.
 
+**Independent confirmation from the census's own synthesis.** The dual-system
+census finished after the re-grounding and ran its own spot-check against
+`28a914c` — this branch's head — without being told what the re-grounding had
+concluded. It re-opened the cited lines and re-grepped the key symbol for
+thirteen of its highest-leverage candidates. Twelve confirmed with line drift
+only where #11757 rewrote the file. The thirteenth was its version of S2, which
+it downgraded to "reject — already landed" on finding zero hits, and it drew the
+same lesson unprompted: _"this is why the spot-check step matters."_ Two passes,
+two methods, one conclusion, reached separately.
+
+**The census's dedupe rulings**, applied above: the legacy status union member
+was found from two directions and is merged into one entry (S3); the dead
+`SessionHandleInit` members absorb an item from a separate batch (S10); and the
+desktop window-title derivation is **recorded on the existing SSOT plan row
+rather than filed**, because one verifier refused it as an owner question
+already on the ledger and the change would flip desktop behavior at the
+reservation window. Two more are filed as proposals rather than issues
+specifically so the maintainer rules first: the child-delivery rename
+projection, which needs an explicit overturn of a prior keep ruling whose
+premise has since gone stale, and the CLI quit convergence in U3.
+
 **What the delta says about the survey's method.** Five commits, one finding
-resolved, one narrowed, one widened, thirty-two unchanged — and the one
+resolved, one narrowed, one widened, the rest unchanged — and the one
 resolution was independently confirmed rather than contradicted. The findings
 here are not artefacts of a stale checkout. But S4's growth is the standing
 warning: a subsystem under this much concurrent work re-accretes the residue a
