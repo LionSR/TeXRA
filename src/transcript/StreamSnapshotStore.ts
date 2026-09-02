@@ -620,7 +620,15 @@ export class StreamSnapshotStore {
   }
 
   private getOrCreateRecord(stream: StreamTabId): StreamRecord {
-    return this.records.getOrCreate(stream);
+    const resident = this.records.get(stream);
+    if (resident) return resident;
+    const record = this.records.getOrCreate(stream);
+    // A record minted for a stream the mirror already knows — a released one
+    // that a late fact touches — starts from what the mirror holds, so
+    // publishing that one field republishes a whole summary that keeps the
+    // rest. Record fields still win: the fallback only fills gaps.
+    record.summaryMetaHydrationFallback = this.summaryMetaSource?.(stream);
+    return record;
   }
 
   private kv(streamId: StreamTabId): KVStore {
@@ -1178,6 +1186,13 @@ export class StreamSnapshotStore {
       const record = this.records.get(stream);
       if (!record || this.deletions.owns(stream)) return;
       const { generation, seedChain } = record;
+      // A seed still running is a reader that asked for this record and will
+      // read it synchronously when its `preload` resolves. Releasing it out
+      // from under that caller would answer its question with an empty
+      // record, so the next release trigger collects it instead. `seedChain`
+      // outlives its work, so the queue's own pending count is the signal.
+      const seedQueue = this.seedQueues.get(stream);
+      if (seedQueue && seedQueue.pending + seedQueue.size > 0) return;
       await seedChain;
       await this.writes.retryDirtyWrites(stream);
       const current = this.records.get(stream);
