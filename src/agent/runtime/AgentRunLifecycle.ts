@@ -823,15 +823,7 @@ export async function runFlowWithLifecycle(
     // this closes the one still live.
     ctx.modelCell.dispose();
     // Drop the run-trace subscribers (channel sink + transcript recorder) so
-    // they don't pile up across many agent runs. The trace throws its
-    // aggregated cleanup failure; guarded like the cancel above so it cannot
-    // replace the result this run already published.
-    try {
-      ctx.disposeTrace();
-    } catch (disposeError) {
-      logger.warn('Failed to dispose the run trace after the run ended', {
-        data: { agentIdentifier, streamId, error: disposeError },
-      });
-    }
+    // they don't pile up across many agent runs.
+    ctx.disposeTrace();
   }
 }

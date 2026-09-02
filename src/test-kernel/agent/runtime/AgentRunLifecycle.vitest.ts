@@ -14,7 +14,6 @@ import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
   type AgentRunHandle,
-  type LiveToolUseFlowContext,
 } from '@agent/runtime/ExecutionHandle';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
@@ -714,32 +713,20 @@ describe('runFlowWithLifecycle', () => {
     }
   });
 
-  it('replays a stop requested by onRun once interruption is attached', async () => {
+  it('carries a stop requested by onRun on the run signal', async () => {
     const { executionId, streamId, ctx } = lifecycleFixture(
       'lifecycle-early-stop',
     );
-    const interrupt = vi.fn();
 
     const result = await runFlowWithLifecycle(
       ctx,
-      async (handle) => {
+      async () => {
         expect(defaultSession().status.get(streamId)).toBe(
           STREAM_PHASE.CANCELLED,
         );
-        const flowContext: LiveToolUseFlowContext = {
-          ownerSession: defaultSession(),
-          modelHandler: { supportsManualCompaction: false },
-          requestImmediateCompaction: vi.fn(),
-          modelSwitchDisabledReason: vi.fn(),
-          switchModel: vi.fn().mockResolvedValue(undefined),
-          interrupt,
-        };
-        handle.attachToolUseFlow(flowContext);
-        // The flow replays a stop that landed before it attached by
-        // subscribing to the run signal itself; the lifecycle's contract is
-        // that the signal already carries that stop by the time it attaches.
+        // linkAbortSignals has separate pre-aborted replay coverage; this
+        // lifecycle test proves the signal already carries the early stop.
         expect(ctx.runScope.signal.aborted).toBe(true);
-        handle.detachToolUseFlow(flowContext);
         return toolUseResult(executionId, streamId, RUN_OUTCOME.CANCELLED);
       },
       {

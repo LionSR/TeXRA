@@ -13,7 +13,6 @@ import {
 } from '@agent/runtime/SessionHandle';
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { classifyAgentError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
 import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import type {
   ExecutionId,
@@ -28,8 +27,6 @@ import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { toDeliveryUsage } from './deliveryEnvelope';
-
-const log = createLog('childStream');
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
@@ -354,16 +351,7 @@ async function finalizeChildStream(
     // (host toast) consumers — the loop already presents them as follow-ups.
     persistence: options?.persistence ?? { kind: 'skip' },
   });
-  // The trace throws its aggregated cleanup failure. The child's result is
-  // already settled above, so the failure is logged here rather than allowed
-  // to look like a terminal-choreography failure to the loop.
-  try {
-    disposeTrace();
-  } catch (disposeError) {
-    log.warn('Failed to dispose a child stream trace after its run ended', {
-      data: { childStreamId: handle.childStreamId, error: disposeError },
-    });
-  }
+  disposeTrace();
 
   if (options?.autoClose) {
     session.events.emit({

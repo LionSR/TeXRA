@@ -8,10 +8,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Keep memory flat across long runs with many subagents** — every finished
-  subagent, web request, and root turn used to leave a small permanent
-  footprint behind; multi-day orchestrations could exhaust the process heap
-  and crash. Those footprints are now released when the work finishes.
+- **Prevent crashes in long-running CLI sessions** — CLI sessions that run many
+  subagents no longer exhaust memory and crash.
 
 ### Extension (VS Code)
 

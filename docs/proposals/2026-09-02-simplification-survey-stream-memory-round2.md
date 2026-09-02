@@ -27,8 +27,9 @@ reference through every downstream structure. The unbounded term is the
 _element count_ of the focused stream (no budget anywhere on
 `StreamLog.entries`, `fold.items`, or `slice.entries` while the stream is
 focused), not duplicated payload. Everything else below is small: fields
-with no readers, mirrors with one reader, a dead defense, and one
-write-amplification defect on the persistence rail.
+with no readers, mirrors with one reader, and a dead defense. The transcript
+write amplification noted below remains a storage-engine concern because the
+proposed in-place bound did not preserve crash durability.
 
 ## 1. Settled surfaces honored (do not re-file)
 
@@ -36,7 +37,8 @@ write-amplification defect on the persistence rail.
   whole-array rewrite of a transcript every 300 ms as the storage-engine
   defect and **supersedes** the JSONL journal prescription of
   `2026-08-23-single-owner-sessions.md` §6. No storage-engine or journal
-  change is proposed here; §2.T1 is a bound inside the current model.
+  change is proposed here; §2.T1 records why an attempted bound inside the
+  current model was withdrawn.
 - **2026-08-10 memory investigation, Findings 2, 6, 7** shipped: the
   incremental fold (`subscribeStreamLog.ts:8-12`), the slice-local task-group
   memo (`cliState.ts:69-74`), and `StreamingTextAccumulator` (`StreamLog.ts:169-204`).
@@ -74,25 +76,15 @@ element delta (files / exported symbols / declarations / LoC, estimated).
 
 ### 2.T Transcript persistence and delta model
 
-**T1. Bound a running streaming entry on the persistence rail.**
-`TexraTranscriptRecorder.flushStream` applies `boundedTranscriptPreview`
-(50 KB / 2,000 lines, `:68-70`) only when the stream has ended (`:380-382`,
-via `boundModelResponse`). While it runs, `:376` appends every delta to the
-persisted entry unbounded, and `StreamLogStore.runWriteBatch` rewrites the
-whole entries array of every dirty stream each 300 ms window
-(`SAVE_MAX_WAIT_MS`, `:47`; `writeStream :1233` →
-`toPersistedEntries :571`). A 500 KB response streaming for a minute is
-rewritten in full on the order of 200 times for a final 50 KB row. The
-delta rail already keeps chunks live-only (Finding 7's remediation); the
-persistence rail does not. Fix inside the current model: `toPersistedEntries`
-maps entries for which `isRunningStreamingTextEntry` holds (`StreamLog.ts:226`)
-through the same head/tail preview before serialization, leaving the
-in-memory entry and the live render untouched; a crash-time resume then
-shows exactly what settlement would have persisted. The preview helper moves
-from the recorder to `StreamLog` (one exported function, two callers).
-Delta: +0 elements net (one function relocates), ~+10 LoC; the disk and
-serialization traffic of every long streaming turn drops by the ratio of
-its length to 50 KB. **New.**
+**T1. Running-stream persistence bound — withdrawn.** While a streaming
+entry runs, `StreamLogStore` rewrites its growing text each save window. The
+attempted fix serialized only the bounded head/tail preview while leaving the
+full text in memory. That is not crash-safe: settlement is what first creates
+the durable spill, so a crash before settlement would permanently lose every
+omitted byte. Unfinished output therefore remains fully persisted until normal
+settlement has safely created its spill. Reducing the resulting write
+amplification belongs to the superseding storage-engine work, not to a
+preview-only save-path optimization.
 
 **T2. One name for the entry count.** `StreamLog.seqCounter` (`:264`) is
 `entries.length` by construction (the constructor comment at `:299-301`
@@ -104,28 +96,15 @@ CLI reads both names for the same watermark (`transcript.ts:97` `head`,
 field and `size`; `head` returns `entries.length`; two reader edits.
 Delta: −1 field, −1 getter, ~−8 LoC. **New.**
 
-**T3. The `'failed'` flusher entry surfaces in the wrong place; throw at
-dispose instead.** `createRunTrace`'s dispose parks a cleanup failure as
-`{state:'failed'}` in the session's flusher map (`runTrace.ts:148-158`) for
-a later `flush()` to throw. Both production dispose sites already run inside
-failure-collecting cleanup: `childStream.ts:224-238` iterates a `cleanups`
-array and aggregates every throw, and `AgentRunLifecycle.ts:827` is the last
-statement of the run's `finally`, whose sibling steps follow the
-collect-don't-mask rule the file states at `:805-816`. Meanwhile the
-"successor inherits the failure" arm (`:107-120`) is unreachable in
-production because the owner key is the execution id at every call site
-(`AgentLaunchContext.ts:356-360`, `childStream.ts:99-104`) and execution
-ids are never reused; its only exercise is `RunTraceDispose.vitest.ts:83-108`.
-Worse, the parked entry is drained not only at session teardown but by the
-CLI's transcript sync, which calls `flushPendingTraces()` on every tick
-(`subscribeStreamLog.ts:277`): a trace-cleanup failure of a finished child
-would surface as an exception inside the TUI's render path. Throw at
-dispose (guarded with `collectFailure` at the lifecycle site), and
-`RunTraceFlushEntry` collapses to `() => void`: −1 union type, −1 state
-arm, −1 `pendingFailures` array, −1 successor branch, ~−35 LoC; the test
-that pins the successor arm retires with the mechanism. **New.**
-Cross-reference round 1 §5 E2 (withdrawn): the _artifact_ flusher's
-deferred removal is deliberate and stays; this is the _trace_ flusher.
+**T3. Throw the failed trace flusher at dispose — withdrawn.** The run
+lifecycle disposes its trace before `runAgent` reaches
+`releaseExecutionLease()`. If dispose deletes the failed flusher and its throw
+is caught as best-effort lifecycle cleanup, the final artifact drain cannot
+observe the failure and the run can report success despite transcript loss.
+The `{state:'failed'}` entry therefore remains registered until the existing
+lease-release durability boundary drains it, surfaces the failure to the run,
+and removes it. This matches round 1 §5 E2's ordering evidence; simplifying
+the union would erase a durability handoff rather than dead state.
 
 **T4. Two producers of the summary cache file.** `recordSummaryMeta`
 (`StreamLogStore.ts:539-557`) enqueues its own
@@ -322,22 +301,18 @@ session-lifetime per-key map; nothing to file.
 
 1. **T2 + C1 + C3 + S3 + T6** — mechanical, zero behavior change, one PR
    with the R6 element table.
-2. **T3** — the trace flusher union; ships with the `collectFailure` guard at
-   `AgentRunLifecycle.ts:827` and retires `RunTraceDispose.vitest.ts`'s
-   successor-arm test with the arm.
-3. **C2 + C5** — CLI fold and cache; the fold suites are the acceptance.
-4. **T1** — the persistence bound; acceptance is a test that a running
-   streaming entry serializes at the preview size while the in-memory entry
-   keeps the full text.
-5. **S2 + T5 + T4 (small form) + C4** — each with the one verification named
+2. **C2 + C5** — CLI fold and cache; the fold suites are the acceptance.
+3. **S2 + T5 + T4 (small form) + C4** — each with the one verification named
    in its entry.
-6. **S1** — resume the 2026-08-03 row; touches the wire schema and the
+4. **S1** — resume the 2026-08-03 row; touches the wire schema and the
    webview join, so it is its own PR.
-7. **T7 and C6** — measure first (retained chunk bytes on a long response;
+5. **T7 and C6** — measure first (retained chunk bytes on a long response;
    retained rows of a multi-hour focused stream), then design.
 
-Every step deletes a copy or a dead branch; the only additions are one
-union arm (S2), one relocated function (T1), and one repaint signal (C4).
+T1 and T3 are excluded because review found that both proposed deletions
+cross durability boundaries. The remaining steps delete a copy or a dead
+branch; the only additions are one union arm (S2) and one repaint signal
+(C4).
 
 ## 4. Verified
 
@@ -363,9 +338,9 @@ suites that exercise the touched modules.
 
 | Candidate | Outcome                                                                                                                                                                                                                                                                                                                                                                                                 |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T1        | **Landed.** `toPersistedEntries` serializes a still-running streaming entry through the preview bound; the helper moved to `StreamLog` with both callers. One regression test pins "persisted preview, resident full text, settled unchanged".                                                                                                                                                          |
+| T1        | **Withdrawn.** Preview-only persistence before settlement has no durable spill behind it, so a crash would lose the omitted output. Active unfinished text remains fully persisted until settlement safely creates the spill.                                                                                                                                                                           |
 | T2        | **Landed.** `seqCounter` and `size` are gone; `head` is `entries.length`.                                                                                                                                                                                                                                                                                                                               |
-| T3        | **Landed.** `RunTraceFlushEntry` is a plain flush function; dispose throws its aggregated failure, the lifecycle site guards it like its sibling steps, and the child-stream site logs it after the child's result has settled. The successor-arm test retired with the arm.                                                                                                                            |
+| T3        | **Withdrawn.** Trace disposal precedes the run's final lease-release flush. A failed flusher must remain registered so that durability boundary observes and surfaces transcript cleanup failure instead of allowing a successful result after transcript loss.                                                                                                                                         |
 | T4        | **Not taken.** The two-line small form does not earn a change; the real question (whether a meta-only summary write earns its own path) needs the crash-time-cache reasoning at `StreamLogStore.ts:547-551` ruled on.                                                                                                                                                                                   |
 | T5        | **Withdrawn.** `StreamLogStoreLoad.vitest.ts:1481-1543` pins the interleaved position on purpose: the preserved row is a _future entry type_, so an older build keeps a newer build's row where the newer reader expects it. Positional fidelity is forward compatibility, not coherence theater.                                                                                                       |
 | T6        | **Withdrawn.** A cancelled stage's `stage.end` legitimately arrives after the transcript boundary (`WorkflowScriptStreamTranscript.vitest.ts`, "keeps mixed cancelled settlement order identical live and cold"), and needs its metadata to persist the row's kind. The sweep may not clear it. (The `spillQueues` half of the sweep's claim was already wrong: `runOnPerKeyQueue` prunes idle queues.) |

@@ -50,7 +50,7 @@ import {
 } from '@shared/schemas';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { StreamSnapshotStore } from '@transcript';
-import { generateExecutionId } from '@utils/core';
+import { generateExecutionId, throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { clearApprovals } from './tui/state/approvalQueue';
@@ -368,7 +368,15 @@ export function createChatSessionController(
   // process lifetime.
   const liveOwnerships = new Set<{ readonly release: () => void }>();
   disposables.add(() => {
-    for (const ownership of [...liveOwnerships]) ownership.release();
+    const failures: unknown[] = [];
+    for (const ownership of [...liveOwnerships]) {
+      try {
+        ownership.release();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    throwAggregated(failures, 'Multiple interaction owners failed to release');
   });
 
   // Build the runtime host shared by start and resume. Root completion marks

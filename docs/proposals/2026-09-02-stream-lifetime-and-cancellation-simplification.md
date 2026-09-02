@@ -357,18 +357,13 @@ Check `git log -S missedTerminalResults` in the PR for the incident that
 motivated it and confirm that path no longer exists. Delta: −3 fields,
 −1 predicate, −2 options, ~−45 LoC.
 
-**E2. Artifact flushers remove themselves at dispose.** The per-run
-flushers (`childStream.ts:107-110`, `AgentLaunchContext.ts:380-383`) defer
-their own removal to "the next flush after `traceDisposed`", but the run's
-own flush runs _before_ its trace disposes (`finalizeRunTerminal` flushes at
-`AgentRunLifecycle.ts:234-242`; `disposeTrace()` follows at
-`childStream.ts:353`), so the flusher is reclaimed only by some later,
-unrelated flush. Its only remaining effect after dispose is surfacing one
-late `pendingSpillFailure` to whoever that unrelated caller is
-(`TexraTranscriptRecorder.ts:885-892`). Await `flushSpills()` once inside
-`disposeTrace` and remove the flusher there. Delta: −2 `traceDisposed`
-flags, −2 deferred closures, ~−15 LoC; the late failure reaches the run
-that produced it.
+**E2. Artifact flushers remove themselves at dispose — withdrawn.** The
+run's terminal finalizer flushes before trace disposal, but the run driver then
+reaches `releaseExecutionLease()` after disposal. That final release is the
+durability boundary which must still see any late spill or trace cleanup
+failure and surface it to the run that produced it. Eager removal at dispose
+would let a caught cleanup failure disappear before that boundary and could
+report success despite transcript loss. Deferred removal therefore stays.
 
 **E3.** `ToolUseFollowUpQueueManager.hasLiveOwner` (`:202`) has zero
 production readers (declared for "diagnostics and teardown assertions").
@@ -406,7 +401,7 @@ Delete. **E4.** The `interactions.cancel` duplicate and the double
 ## 3. Order of work
 
 1. **A1 + A4 + E3** — mechanical, zero behavior change, one PR.
-2. **E1 + E2** — bounded deletions with a `git log -S` check each, one PR.
+2. **E1** — bounded deletion with a `git log -S` check.
 3. **B1 + B2 + B3** — one owner per stream-identity fact; three small PRs
    or one, each with the R6 element table.
 4. **A2** — after 1, with the `ExecutionHandle.ts:90-94` verification
@@ -415,6 +410,9 @@ Delete. **E4.** The `interactions.cancel` duplicate and the double
    ships with the soak test as its acceptance criterion.
 6. **2.D** — needs the CLI cross-round bypass ruling; blocked until then.
 7. **B4** — needs the recovery-sweep ruling; blocked until then.
+
+E2 is excluded because its deferred flusher is part of the final durability
+handoff, not dead retention.
 
 Every step deletes a copy of a fact and adds at most one method at the
 fact's existing owner. None adds a manager, a budget, a cache, or a table.

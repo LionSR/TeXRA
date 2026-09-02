@@ -7,7 +7,6 @@ import {
   type StreamLogEntry,
 } from '@shared/schemas';
 import { StreamLog } from '@transcript';
-import { TRANSCRIPT_TRUNCATION_MARKER } from '@transcript/StreamLog';
 
 function logWithMessage(text = ''): StreamLog {
   const log = new StreamLog();
@@ -293,35 +292,5 @@ describe('StreamLog', () => {
     for (const entry of persisted) {
       expect(entry.text).toBe(oracle.get(entry.id));
     }
-  });
-});
-
-describe('StreamLog persistence bound', () => {
-  it('persists a running streaming entry as its preview while memory keeps the text', () => {
-    const log = new StreamLog();
-    const entry = log.append({
-      id: 'stream-1',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
-      level: 'info',
-      timestamp: 1,
-      messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-      text: '',
-      data: { status: 'running' },
-    });
-    const chunk = `${'x'.repeat(99)}\n`;
-    for (let i = 0; i < 700; i += 1) log.appendText(entry.id, chunk);
-    const full = chunk.repeat(700);
-    expect(log.getById(entry.id)?.text).toBe(full);
-
-    const persisted = log.toPersistedEntries()[0] as { text: string };
-    expect(persisted.text).toContain(TRANSCRIPT_TRUNCATION_MARKER);
-    expect(persisted.text.length).toBeLessThan(full.length);
-    // The resident entry is untouched by the save-path copy.
-    expect(log.getById(entry.id)?.text).toBe(full);
-
-    // Settlement is the recorder's bound, not this one: a settled entry
-    // persists exactly what memory holds.
-    log.settle(entry.id, { data: { status: 'completed' } });
-    expect((log.toPersistedEntries()[0] as { text: string }).text).toBe(full);
   });
 });

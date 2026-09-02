@@ -110,7 +110,7 @@ vi.mock('@tools/claudeAgentImport', () => ({
   findClaudeBinaryPath: mocks.findClaudeBinaryPath,
 }));
 
-import { ClaudeAgentTool } from '@tools/claudeAgent';
+import { ClaudeAgentTool, runStreamedTurn } from '@tools/claudeAgent';
 import { createFakeAgentCliChildStream } from '../support/agentCliResumeTestUtils';
 
 const parentStreamId = 'stream:parent' as StreamTabId;
@@ -268,6 +268,36 @@ describe('claude_agent tool launch and resume fallback', () => {
     expect(mocks.registerExecution).not.toHaveBeenCalled();
     expect(mocks.createChildStream).not.toHaveBeenCalled();
     expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
+  });
+
+  it('detaches the abort link when SDK query construction throws', async () => {
+    const signal = new AbortController().signal;
+    const removeEventListener = vi.spyOn(signal, 'removeEventListener');
+    const failure = new Error('Claude query construction failed');
+    mocks.query.mockImplementationOnce(() => {
+      throw failure;
+    });
+
+    await expect(
+      runStreamedTurn({
+        prompt: 'start Claude',
+        logger: createFakeAgentCliChildStream(childStreamId).logger,
+        signal,
+        model: 'claude-sonnet-4-6',
+        permissionMode: 'acceptEdits',
+        effort: 'high',
+        cwd: undefined,
+        additionalDirectories: undefined,
+        env: {},
+        resumeSessionId: undefined,
+        pathToClaudeCodeExecutable: undefined,
+      }),
+    ).rejects.toBe(failure);
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      'abort',
+      expect.any(Function),
+    );
   });
 
   it('logs a detached run-loop rejection through the child trace', async () => {

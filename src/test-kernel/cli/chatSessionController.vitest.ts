@@ -134,6 +134,7 @@ import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { SessionEventHub } from '@agent/runtime/SessionEventHub';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -679,6 +680,46 @@ describe('createChatSessionController', () => {
     expect(mocks.stopAgentStream).toHaveBeenCalledWith('child-a', {
       detachActiveChildren: true,
     });
+  });
+
+  it('releases every live interaction owner when one release fails', () => {
+    const firstFailure = new Error('first ownership release failed');
+    const firstRelease = vi.fn(() => {
+      throw firstFailure;
+    });
+    const secondRelease = vi.fn();
+    const scopes = [firstRelease, secondRelease].map((release) => ({
+      claim: vi.fn(),
+      finish: vi.fn(),
+      release,
+    }));
+    const runtimeSession = mocks.defaultSession();
+    const open = vi
+      .fn()
+      .mockReturnValueOnce(scopes[0])
+      .mockReturnValueOnce(scopes[1]);
+    const disposables = new DisposableStore();
+    const ctrl = createChatSessionController(
+      makeInit({
+        disposables,
+        runtimeSession: {
+          ...runtimeSession,
+          executions: {
+            ...runtimeSession.executions,
+            interactionOwnership: { open },
+          },
+        } as SessionHandle,
+      }),
+    );
+    const never = pDefer<never>();
+    mocks.executeAgent.mockReturnValue(never.promise);
+
+    ctrl.startRootRun(makeRunRequest('First run.'));
+    ctrl.startRootRun(makeRunRequest('Second run.'));
+
+    expect(() => disposables.dispose()).toThrow(firstFailure);
+    expect(firstRelease).toHaveBeenCalledOnce();
+    expect(secondRelease).toHaveBeenCalledOnce();
   });
 
   it('keeps detached-child approvals answerable after the stopped root finalizes', async () => {

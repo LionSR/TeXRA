@@ -225,7 +225,6 @@ export async function runStreamedTurn(params: {
     sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
   }
 
-  const stream = query({ prompt, options: sdkOptions });
   const responseParts: string[] = [];
   const toolLogRefs = new Map<string, ClaudeToolLogRef>();
   const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
@@ -236,6 +235,7 @@ export async function runStreamedTurn(params: {
   let errorMessage: string | undefined;
 
   try {
+    const stream = query({ prompt, options: sdkOptions });
     for await (const raw of stream) {
       if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
 
