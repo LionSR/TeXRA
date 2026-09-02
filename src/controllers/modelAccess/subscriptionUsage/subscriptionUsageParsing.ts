@@ -61,12 +61,12 @@ const looseFiniteNumber = z.preprocess((value) => {
 }, z.number().finite());
 
 /** A wire timestamp expressed as an epoch number (seconds or milliseconds,
- *  whichever `looseFiniteNumber` resolves to) or an ISO 8601 string,
- *  normalized to epoch ms. A value that parses as a number commits to the
- *  numeric interpretation — a negative epoch is rejected outright rather
- *  than falling through to `Date.parse`, which accepts some non-ISO
- *  numeric-looking strings as dates (`Date.parse('-1')` resolves to
- *  2001-01-01). */
+ *  whichever `looseFiniteNumber` resolves to) or an ISO 8601 (or otherwise
+ *  `Date.parse`-able) string, normalized to epoch ms. A value that parses as
+ *  a number commits to the numeric interpretation — a negative epoch is
+ *  rejected outright rather than falling through to `Date.parse`, which
+ *  accepts some non-ISO numeric-looking strings as dates (`Date.parse('-1')`
+ *  resolves to 2001-01-01). */
 const timestampMsField = z.any().transform((value, ctx) => {
   const numeric = looseFiniteNumber.safeParse(value);
   if (numeric.success) {
