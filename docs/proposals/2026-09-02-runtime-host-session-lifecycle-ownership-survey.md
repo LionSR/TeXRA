@@ -884,3 +884,52 @@ the delta for its own miss; and the survey's S6 proposal would have **broken an
 exactly-once invariant** had it been implemented as written. Adversarial
 re-verification at a moved HEAD caught both. A finding is not safe because two
 lenses passed it once.
+
+## 8. Filed, and what was deliberately not filed
+
+Re-grounded once more on `5df2a1e`. Two further commits landed after §7's
+`a3f01c1`: **#11762** (`e599027`), which executed the concurrent survey's §2.C,
+and a pnpm version alignment with no bearing here. Every finding was
+liveness-checked at that head before filing.
+
+**#11762 answered one of the three open questions in the maintainer's favour.**
+The store-public-surface baseline was widened by exactly one row,
+`requestEviction`, with the justification written into the baseline's own
+`semantics` string and a pointer to the section that argued for it. That closes
+the "the ratchet says no, the design says yes" question §7 raised for the
+sidecar record — and it makes P14 _more_ valuable, not less: deleting the dead
+`deleteStream` wrapper hands the row straight back, taking the surface from 22
+to 21. To be precise about a claim it would be easy to overstate,
+`requestEviction` does **not** supersede `deleteStream` — one releases a
+resident record that re-seeds from disk, the other removes sidecars from disk.
+P14 rests on the wrapper being dead, and the baseline offset is an accounting
+argument, not a functional one.
+
+Eight issues carry the actionable findings:
+
+| issue    | carries                                                                                         |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| `#11765` | the `markUnavailable` reservation overwrite introduced by #11757 — the one item that adds lines |
+| `#11766` | D1, the extension's silently dropped resume-failure notice (needs a decision between two fixes) |
+| `#11767` | D2, the re-derived detach set and its double emission                                           |
+| `#11768` | D3, the toggle cast that lets a persisted string re-enable orchestrator kills                   |
+| `#11769` | P14, the dead `deleteStream` wrapper and the baseline row it gives back                         |
+| `#11770` | U1 and U2, the two progress-view actions that leave the extension to re-enter it                |
+| `#11771` | the three rulings — `taskRuns`, the `EndGroupStatus` date-versus-permanence conflict, `/exit`   |
+| `#11772` | S1, S3, S5, S9, S11 as one batch of high-confidence dead-surface deletions                      |
+
+**What was deliberately not filed, and why.** The remaining ~50 findings stay
+in this record rather than becoming issues. Filing them all would be the
+activity trap the repo's own rule names — a program that opens more follow-ups
+than it retires pauses further building until its tail closes — and it would
+bury the eight above. Specifically held back: everything ruled `consolidate`
+into an existing row; the two items filed as proposals pending a ruling; the
+item in unresolved tension with `/exit` (recorded inside `#11771` so the ruling
+sees it); and the one finding this document already labels its weakest, which
+survived on a merge-rule technicality and needs a real verification pass before
+anyone acts on it. Those are all still here, with their evidence, for whoever
+picks up the tail.
+
+**#11769 is the one with a clock on it.** Its argument is legible right now
+because the baseline row was just spent and the reasoning is written into the
+file; in three months it is archaeology.
