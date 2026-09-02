@@ -1,12 +1,15 @@
 # Simplification survey: agent runtime, hosts, session, and lifecycle ownership (2026-09-02)
 
-> **Status:** survey record, read-only. Grounded on `origin/main` at `a78a896`
-> (#11754). No code changes accompany this entry. Two multi-agent passes ran
-> over one territory: an **ownership survey** (12 domain readers) and a
-> **dual-system census** (8 species readers), each candidate then put through
-> two independent adversarial lenses. Every claim below carries the verifiers'
-> corrections rather than the finders' original wording. Re-open every cited
-> site before acting — this territory changes at ~20 PRs/day.
+> **Status:** survey record, read-only. Surveyed against `a78a896` (#11754),
+> then **re-grounded on `origin/main` at `a3f01c1`** — see §7, which carries the
+> per-finding status at the newer head and the reconciliation with two
+> concurrent surveys that landed in this territory the same day. No code
+> changes accompany this entry. Two multi-agent passes ran over one territory:
+> an **ownership survey** (12 domain readers) and a **dual-system census** (8
+> species readers), each candidate then put through two independent adversarial
+> lenses. Every claim below carries the verifiers' corrections rather than the
+> finders' original wording. Re-open every cited site before acting — this
+> territory changes at ~20 PRs/day, and it moved under this survey while it ran.
 
 ## 0. The question, and the honest verdict
 
@@ -34,6 +37,16 @@ into the session constructor, a replay queue whose second copy can no longer
 be reached, a vocabulary that exists to be mapped back to the vocabulary it
 came from, seams injected for tests that production never passes. Three are
 live defects. None requires a new abstraction; every accepted item deletes.
+
+**One finding was fixed while this survey ran, by someone else, for the same
+reason.** S2 below — the unreachable second replay queue for terminal results —
+was found independently as E1 of
+`2026-09-02-stream-lifetime-and-cancellation-simplification.md` and landed in
+#11757. It is struck in §7 and left in place here so the two records agree on
+what was true at `a78a896`. That convergence is the most useful single datum
+in this document: two surveys with different methods, run in parallel without
+knowledge of each other, picked the same top dead-surface finding out of this
+subsystem.
 
 |                       | ownership survey | dual-system census |
 | --------------------- | ---------------: | -----------------: |
@@ -612,3 +625,74 @@ readers' and verifiers' work: `SessionHandle.ts` (constructor, `onResult`,
 Checks run for this docs-only change: `npx prettier --check` on the new file,
 `node scripts/check-guidance-refs.mjs`, `node docs/scripts/check-root-docs.mjs`,
 and `git diff --check`.
+
+## 7. Re-grounded on `a3f01c1`
+
+The survey read `a78a896`. Main advanced five commits while it ran, two of them
+in this exact territory, so every finding was re-checked at the newer head
+before this record was published.
+
+| commit                          | effect on this survey                                                                                                                                                                                                                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `03fa583`                       | #11757 "release per-subagent and per-request state in long CLI runs" — rewrote `SessionHandle`, `StreamStatusService`, `childRunLoop`, `runAgent`, `terminalResultToast`, `executionRegistry`, `ExecutionHandle`, `AgentLaunchContext` and four CLI state files. **Resolves S2, narrows S6, widens S4.** |
+| `631153e`                       | #11752 "show unavailable streams as read-only" — executes D4 of the single-owner-sessions plan in the CLI. Touches the classification the refuted HM-4 row described; no finding here depends on it.                                                                                                     |
+| `a3f01c1`, `451aaf1`, `dd41482` | a model addition and two dependency bumps; no effect.                                                                                                                                                                                                                                                    |
+
+**Per-finding status at `a3f01c1`.** Every finding was re-checked; all but one
+still reproduce.
+
+- **S2 — RESOLVED.** `missedTerminalResults`, `replayResultListenerCount`,
+  `replayMissedResultsEnabled`, `isReplayableTerminalResult` and the
+  `replayMissed` option have zero production hits. #11757 deleted them as E1 of
+  the concurrent stream-lifetime survey, which reached the same conclusion by a
+  different route and recorded one narrowing this survey also reached:
+  `attachTerminalResultToast` keeps its `replayWhenAttached` option, because
+  that flag still feeds the genuinely-live host presentation replay through
+  `interactions.emit`.
+- **S6 — LIVE, NARROWED.** The `deliver` half is gone as a second result
+  carrier: it now takes `(outcome: RunOutcome)` and its doc explains that the
+  parent's payload must report the same terminal fact as the persisted history.
+  What survives is only the `result` parameter of `onRunError`
+  (`executeAgent.ts:315-318`), still declared and still unread by both passers,
+  which take `(err)` alone. The finding shrinks from "delete the deliver slot
+  and the result argument" to "narrow one callback signature".
+- **S4 — LIVE, WIDER.** Besides the three recorded raw `events.subscribe`
+  sites, #11757 added two more in `workflowPlainOutput.ts:154,177` and one in
+  `packages/agent/src/index.ts:136`. A new subscriber reaching for the raw door
+  a day after the typed doors were documented is the evidence that this finding
+  is about an ergonomics gap, not a one-off.
+- **Everything else — LIVE.** D1, D3, S1, S3, S5, S7–S15, T1–T13 and L1–L4 all
+  reproduce; line numbers drift but the mechanisms are unchanged. D2 is
+  byte-identical.
+
+**Reconciliation with the two concurrent surveys.** #11757 shipped
+`2026-09-02-simplification-survey-stream-memory-round2.md` and
+`2026-09-02-stream-lifetime-and-cancellation-simplification.md`, written the
+same day against the same subsystem. Overlap and division of labour:
+
+- Their stream-lifetime **E1 is this survey's S2** — same finding, found
+  independently, landed by them. No further action here.
+- Their stream-memory **S3** landed the registry's status subscription onto
+  `getAgentHandleByStream` and deleted the listener backstop. That is adjacent
+  to this survey's registry listener-rail candidate, which **this survey's own
+  verifier told it not to file** because the fold would widen the public
+  registration channel's contract. Their narrower change took the safe half;
+  the refusal recorded in §4 stands for the rest.
+- Their stream-memory **S2** made `holds` a third `StreamEntry` arm, which is
+  the kind of collapse §5 of this document lists as healthy structure rather
+  than debt. No conflict.
+- Their **2.C is blocked on a maintainer ruling** — retiring a finished child
+  stream's snapshot record needs one new public method, and
+  `store-public-surface-baseline.json` rejects growth. That ruling is worth
+  pairing with this survey's L1 and the `EndGroupStatus` conflict in §3: three
+  open questions that are all "the ratchet or the ledger says no, and the
+  design says yes".
+- No finding in this document duplicates a candidate those two filed and left
+  open. The three live defects in §2.1 are untouched by either.
+
+**What the delta says about the survey's method.** Five commits, one finding
+resolved, one narrowed, one widened, thirty-two unchanged — and the one
+resolution was independently confirmed rather than contradicted. The findings
+here are not artefacts of a stale checkout. But S4's growth is the standing
+warning: a subsystem under this much concurrent work re-accretes the residue a
+survey removes, so the value of the accepted items decays if they sit.
