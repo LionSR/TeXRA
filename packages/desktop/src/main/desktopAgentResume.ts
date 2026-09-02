@@ -91,8 +91,15 @@ async function resumeDesktopStream(
     });
     if ('started' in result) return result.delivered;
     if (!isCancellationRequested()) {
-      await session.interactions.showInfoMessage(
-        describeFollowUpFailure(result.failed),
+      // Same info-styled channel the sibling progress-view follow-up path
+      // uses for this wording; desktop renders it as an 'info' message box.
+      await session.interactions.emit(
+        'requestShowInstruction',
+        {
+          key: 'resumeRefused',
+          message: describeFollowUpFailure(result.failed),
+          showSuppress: false,
+        },
         { replayWhenAttached: true },
       );
     }

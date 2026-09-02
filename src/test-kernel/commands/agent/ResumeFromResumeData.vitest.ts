@@ -55,18 +55,21 @@ describe('tryResumeFromResumeData', () => {
   it('words a refusal with the shared follow-up failure vocabulary', async () => {
     const session = defaultSession();
     const has = vi.spyOn(session.transcripts, 'has').mockReturnValue(true);
-    const showInfoMessage = vi
-      .spyOn(session.interactions, 'showInfoMessage')
-      .mockReturnValue(undefined);
+    const emit = vi.spyOn(session.interactions, 'emit').mockReturnValue(false);
     mocks.resumeStream.mockResolvedValueOnce({ failed: 'finished' });
 
     await expect(tryResumeFromResumeData(STREAM)).resolves.toBe(false);
 
-    expect(showInfoMessage).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
+    expect(emit).toHaveBeenCalledWith(
+      'requestShowInstruction',
+      {
+        key: 'resumeRefused',
+        message: 'This run has finished. Start a new agent task to continue.',
+        showSuppress: false,
+      },
       { replayWhenAttached: true },
     );
-    showInfoMessage.mockRestore();
+    emit.mockRestore();
     has.mockRestore();
   });
 });
