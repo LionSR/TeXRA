@@ -40,7 +40,7 @@ import {
 import { presentStream } from './childControls';
 import { bumpStreamArtifactRevision } from './subscribeStreamArtifacts';
 import {
-  foregroundWorkflowReaderStreamId,
+  foregroundReaderStreamId,
   releaseInactiveStreamTranscript,
   syncStreamLog,
 } from './subscribeStreamLog';
@@ -192,9 +192,11 @@ export function attachSessionSignalsAdapter(
       removeStream(streamId);
       invalidateChildStreams();
     },
+    // Sidecar residency answers to every reader kind, not just the
+    // transcript-shaped ones: `/plan` reads the snapshot store directly.
     isStreamPresented: (streamId) =>
       activeStreamId.get() === streamId ||
-      foregroundWorkflowReaderStreamId() === streamId,
+      foregroundReaderStreamId() === streamId,
   });
   const detachSessionFacts = session.events.subscribeSessionFacts((fact) => {
     if (fact.type === 'status') {

@@ -1155,13 +1155,22 @@ export class StreamSnapshotStore {
    * staged deletion owns, or one that gains new seed work while this waits,
    * stays resident: someone else is about to read or remove it.
    *
+   * `shouldStillEvict` is re-read after those awaits, the same shape
+   * `StagedDeletionCoordinator.commit` uses: a run that relaunches this
+   * stream while the drain is in flight neither rotates the generation nor
+   * rebinds the seed chain once provenance is established, so the caller's
+   * own liveness rule is what keeps a freshly active record resident.
+   *
    * Public on purpose, and the one row added to the store-surface baseline:
    * the session's lifecycle owner requests it for a finished child stream
    * nobody is presenting, and a host's focus-leave path requests it for the
    * stream it just stopped presenting. Without it, the record set grows with
    * every stream a long session touches.
    */
-  async requestEviction(stream: StreamTabId): Promise<void> {
+  async requestEviction(
+    stream: StreamTabId,
+    shouldStillEvict?: () => boolean,
+  ): Promise<void> {
     const record = this.records.get(stream);
     if (!record || this.deletions.owns(stream)) return;
     const { generation, seedChain } = record;
@@ -1172,7 +1181,8 @@ export class StreamSnapshotStore {
       !current ||
       current.generation !== generation ||
       current.seedChain !== seedChain ||
-      this.deletions.owns(stream)
+      this.deletions.owns(stream) ||
+      shouldStillEvict?.() === false
     ) {
       return;
     }

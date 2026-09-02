@@ -67,10 +67,18 @@ import {
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
 
+/** The stream any foreground reader is showing, whatever it reads from it.
+ *  The work-plan reader reads the snapshot store directly, so sidecar
+ *  residency answers to every reader kind — unlike transcript residency
+ *  below, which only the transcript-shaped readers own. */
+export function foregroundReaderStreamId(): StreamTabId | undefined {
+  return foregroundReader.get()?.streamId;
+}
+
 /** A workflow popup and its Ctrl-T reader are two views of the same full
  * transcript projection. Workflows never become the active viewport, so the
  * foreground reader is their presentation-residency owner. */
-export function foregroundWorkflowReaderStreamId(): StreamTabId | undefined {
+function foregroundWorkflowReaderStreamId(): StreamTabId | undefined {
   const reader = foregroundReader.get();
   if (!reader) return undefined;
   if (reader.kind === 'workflow') return reader.streamId;
@@ -549,10 +557,16 @@ export function releaseInactiveStreamTranscript(
   store.requestEviction(streamId);
   // The sidecar record leaves memory with the transcript once nothing presents
   // the stream; the next focus re-seeds it through `hydrateStreamArtifacts`,
-  // and the roster's token column reads the summary mirror meanwhile. Failure
-  // to release keeps the record resident, which is the pre-existing state.
+  // and the roster's token column reads the summary mirror meanwhile. An open
+  // reader of any kind keeps it: the work-plan reader reads the store even for
+  // a stream that is neither active nor a workflow. Failure to release keeps
+  // the record resident, which is the pre-existing state.
+  const sidecarPresented = (): boolean =>
+    activeStreamId.get() === streamId ||
+    foregroundReaderStreamId() === streamId;
+  if (sidecarPresented()) return;
   void tryDefaultSession()
-    ?.snapshots.requestEviction(streamId)
+    ?.snapshots.requestEviction(streamId, () => !sidecarPresented())
     .catch((error: unknown) => {
       logWarning(
         'cli.tui',

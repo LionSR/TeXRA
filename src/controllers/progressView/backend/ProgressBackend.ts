@@ -369,6 +369,11 @@ export class ProgressBackend {
     this.renderer.syncStreamContent(stream);
     if (previousStream && previousStream !== stream) {
       this.renderer.releaseStreamContent(previousStream);
+      // A child the user watched through to completion was presented when it
+      // finished, so the terminal-status path deliberately kept its sidecar.
+      // Releasing the selection is the second moment that rule can become
+      // true; the applier owns it either way.
+      this.factApplier.retireSidecarIfFinishedChild(previousStream);
     }
     if (previousTranscriptLease !== transcriptLeaseResult.value)
       previousTranscriptLease?.close();

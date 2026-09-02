@@ -633,6 +633,22 @@ describe('StreamSnapshotStore', () => {
     );
   });
 
+  it('keeps a record the caller re-classifies as live during the drain', async () => {
+    const store = new StreamSnapshotStore();
+    snapshotFacts(store).addUsage(STREAM, RUN, usage(100, 20, 0.5));
+    await store.flush();
+
+    // A relaunch of this stream neither rotates the record generation nor
+    // rebinds its seed chain, so the caller's own liveness rule is what keeps
+    // the freshly active record resident.
+    await store.requestEviction(STREAM, () => false);
+
+    expect(store.hasProvenance(STREAM)).toBe(true);
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject(
+      usage(100, 20, 0.5),
+    );
+  });
+
   it('resolves pre-seed usage after merging existing disk usage', async () => {
     await writeStreamFile(STREAM, 'usageStats.json', {
       [RUN]: usage(100, 20, 0.5),

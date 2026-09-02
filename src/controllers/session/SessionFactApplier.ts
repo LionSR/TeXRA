@@ -818,19 +818,30 @@ export class SessionFactApplier {
    * a root stream stays resident for the host's history views. The store
    * re-seeds on the next `preload`, which every presentation path performs
    * before reading, and warns on a synchronous read that skipped it.
+   *
+   * The single owner of that rule, so the two moments it can become true —
+   * the stream finishes while nothing presents it, and a host stops
+   * presenting a stream that already finished — ask the same question. The
+   * rule is re-read after the store's drain: a relaunch or a fresh
+   * presentation during it keeps the record.
    */
-  private retireFinishedChildSidecar(
-    streamId: StreamTabId,
-    status: StreamPhase,
-  ): void {
-    if (!isTerminalOutcomePhase(status)) return;
-    if (!this.state.getStreamMetadata(streamId).parentStreamId) return;
-    if (this.options.isStreamPresented?.(streamId)) return;
+  retireSidecarIfFinishedChild(streamId: StreamTabId): void {
+    if (!this.isRetiredSidecarCandidate(streamId)) return;
     withEventErrorHandling(
       'SessionFacts',
       `failed to release the sidecar record of finished stream ${streamId}`,
-      () => this.state.snapshots.requestEviction(streamId),
+      () =>
+        this.state.snapshots.requestEviction(streamId, () =>
+          this.isRetiredSidecarCandidate(streamId),
+        ),
     );
+  }
+
+  private isRetiredSidecarCandidate(streamId: StreamTabId): boolean {
+    const phase = this.state.streamStatus.get(streamId);
+    if (phase === undefined || !isTerminalOutcomePhase(phase)) return false;
+    if (!this.state.getStreamMetadata(streamId).parentStreamId) return false;
+    return this.options.isStreamPresented?.(streamId) !== true;
   }
 
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
@@ -903,7 +914,7 @@ export class SessionFactApplier {
     const logHead = this.state.streamLogs.get(streamId)?.head ?? 0;
     if (!isActivePhase(status)) {
       this.state.streamLogs.requestEviction(streamId);
-      this.retireFinishedChildSidecar(streamId, status);
+      this.retireSidecarIfFinishedChild(streamId);
     }
 
     const isNewRunningTransition =
