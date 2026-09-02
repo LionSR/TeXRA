@@ -208,8 +208,11 @@ export class SubscriptionUsageService {
     // races an in-flight fetch, coalesceAsync's own identity check keeps the
     // stale result out of the cache, but the already-waiting caller still
     // receives it — one accepted stale read on a read-only usage display.
-    return coalesceAsync(this.cache, this.pending, key, () =>
-      this.fetchUsage(provider, variant),
+    return coalesceAsync<string, SubscriptionUsageSnapshot>(
+      this.cache,
+      this.pending,
+      key,
+      () => this.fetchUsage(provider, variant),
     );
   }
 
