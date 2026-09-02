@@ -38,17 +38,17 @@ follow-up ask).
 
 ## 1. Every `-08-25` tracked fact re-verifies at `646475d`
 
-| Item                               | `-08-25` state (`51c04c6`)                               | `646475d` state                                                                                                                             |
-| ---------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **§8a** (dead logger `export`)     | landed: `OutputChannelFactoryOptions` de-exported        | **still gone.** `src/logger/logUtils.ts:48` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:198`.          |
-| **§8b / PT-2** (`SessionHandle`)   | landed: `useHostInteractions` removed                    | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits. `SessionHandle` re-exposes no per-concern method.      |
-| **L-3** (dead redaction branch)    | closed; `redactSecrets` single-arg                       | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                  |
-| **§7 Tier-1 doors**                | 4 of 8 landed (`export`/`review`/`templates`/`followUp`) | **present & stable.** `src/agent/{export,review,templates,followUp}/index.ts` all exist.                                                    |
-| **M-3** `ModelHandler.ts` god-base | 2,043 LoC                                                | **2,030 LoC** (`wc -l`); **−13**, from the window's simplification sweeps. Genuinely shared behavior, no per-provider copy-paste.           |
-| **Provider-type-leak floor**       | `M`/`T` leak all four provider SDKs                      | **unchanged.** `ProviderMessage.ts:4-8` still imports message types from `@anthropic-ai/sdk`, `@google/genai`, `openai`, `@openrouter/sdk`. |
-| **Node flow engine**               | 159 LoC, `BaseNode`/`Flow` only                          | **158 LoC** (`src/agent/node/index.ts`); still exactly `BaseNode` + `Flow` (two `export`s). Matches CLAUDE.md.                              |
-| **`IModelHandler` port shape**     | derived `Pick<ModelHandler<…>>`, anti-drift              | **unchanged.** `src/agent/types/IModelHandler.ts` still a derived `Pick`; forward-looking manifest note (§5.1), not a defect.               |
-| **Version**                        | 0.40.5 (short of the v0.41 `runFact.` gate)              | **0.40.8** (`packages/agent/package.json`). Advanced three patches; still short of the v0.41 retirement gate. Retirement not yet due.       |
+| Item                               | `-08-25` state (`51c04c6`)                               | `646475d` state                                                                                                                                                                                      |
+| ---------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **§8a** (dead logger `export`)     | landed: `OutputChannelFactoryOptions` de-exported        | **still gone.** `src/logger/logUtils.ts:48` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:198`.                                                                   |
+| **§8b / PT-2** (`SessionHandle`)   | landed: `useHostInteractions` removed                    | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits. `SessionHandle` re-exposes no per-concern method.                                                               |
+| **L-3** (dead redaction branch)    | closed; `redactSecrets` single-arg                       | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                                                           |
+| **§7 Tier-1 doors**                | 4 of 8 landed (`export`/`review`/`templates`/`followUp`) | **present & stable.** `src/agent/{export,review,templates,followUp}/index.ts` all exist.                                                                                                             |
+| **M-3** `ModelHandler.ts` god-base | 2,043 LoC                                                | **2,030 LoC** (`wc -l`); **−13**, from the window's simplification sweeps. Genuinely shared behavior, no per-provider copy-paste.                                                                    |
+| **Provider-type-leak floor**       | `M`/`T` leak all four provider SDKs                      | **unchanged.** `ProviderMessage.ts:4-8` still imports message types from `@anthropic-ai/sdk`, `@google/genai`, `openai`, `@openrouter/sdk`.                                                          |
+| **Node flow engine**               | 159 LoC, `BaseNode`/`Flow` only                          | **158 LoC** (`src/agent/node/index.ts`); the only node classes are still `BaseNode` + `Flow` (`:158`), plus the `Action` type alias (`:10`) — no `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md. |
+| **`IModelHandler` port shape**     | derived `Pick<ModelHandler<…>>`, anti-drift              | **unchanged.** `src/agent/types/IModelHandler.ts` still a derived `Pick`; forward-looking manifest note (§5.1), not a defect.                                                                        |
+| **Version**                        | 0.40.5 (short of the v0.41 `runFact.` gate)              | **0.40.8** (`packages/agent/package.json`). Advanced three patches; still short of the v0.41 retirement gate. Retirement not yet due.                                                                |
 
 ## 2. Frozen host deep-import width — shrank on CLI, held elsewhere
 
@@ -75,9 +75,12 @@ task**, re-confirmed at HEAD:
 
 - **Contract:** `ChildRunStrategy<TTurn>` + `ChildRunPorts`
   (`src/agent/runtime/childRunLoop.ts`) — a deep module with a narrow turn-based
-  interface, driven by five independent implementors (in-process TeXRA agent,
-  workflow-script children, external Claude/Codex CLIs behind per-session
-  registries, and background bash).
+  interface, driven by four independent production factories
+  (`nativeSubagentStrategy.ts:203` in-process TeXRA agent,
+  `workflowScriptStrategy.ts:157` workflow-script children, `bash.ts:249`
+  background bash, and `agentCliShared.ts:513` `startAgentCliLoop` — the one
+  factory that backs both the Claude and Codex external CLIs, behind per-session
+  registries).
 - **Recursion-closing seam:** the `AgentEngine` runtime slot filled at
   `src/tools/delegation/nativeSubagentStrategy.ts`, breaking the
   `registry → DelegationTools → executeAgent → registry` cycle.
@@ -129,7 +132,8 @@ Unchanged from `-08-25 §5`; restated in brief:
    `U`/usage is already quarantined to `unknown` (`ModelCell.ts`); the fix
    template applies to `M`, but `T` is load-bearing (`call.raw` read at
    `ToolUseDispatchNode.ts` display-fallback sites) and must route through a
-   handler method first. `scripts/validate-artifacts.mjs` guards the built
+   handler method first. `packages/agent/scripts/validate-artifacts.mjs` guards
+   the built
    package against the leak today.
 3. **Logger + telemetry are process-global singletons with no public plug
    point.** The SDK-correct unlock is injectable owners behind Tier-1 doors. The
