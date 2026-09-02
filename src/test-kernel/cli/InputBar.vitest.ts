@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import { BaseTextInput } from '@cli/chat/tui/input/BaseTextInput';
-import { textInputWrappedRowCount } from '@cli/chat/tui/input/textInputDisplay';
 import type { PastedImageEntry } from '@cli/chat/tui/input/draftAttachments';
 import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from '@cli/chat/tui/input/activeDraft';
 import { triggerAppCtrlC } from '@cli/chat/tui/appInteractionPolicy';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
   InputBar,
   slashSubmitText,
@@ -69,7 +69,7 @@ describe('InputBar disabled message layout', () => {
     const columns = 40;
     const expectedRows = Math.min(
       5,
-      textInputWrappedRowCount(detail, columns - 6),
+      wrapAnsiToWidth(detail, columns - 6).split('\n').length,
     );
     const { instance, stdout } = renderInteractive(
       ink,
@@ -95,6 +95,35 @@ describe('InputBar disabled message layout', () => {
     }
   });
 
+  it('renders the same pre-wrapped path-like message used for row counting', async () => {
+    const { ink, React } = await loadInk();
+    const columns = 20;
+    const detail = 'Cause: /very/long/path/that/does/not/break/session.lock';
+    const wrapped = wrapAnsiToWidth(detail, columns - 6);
+    const expectedRows = wrapped.split('\n').length;
+    const { instance, stdout } = renderInteractive(
+      ink,
+      React.createElement(InputBar, {
+        disabled: true,
+        disabledMessage: detail,
+        onSubmit: vi.fn(),
+      }),
+      { columns, debug: true },
+    );
+
+    try {
+      await waitFor(() => latestRenderedFrame(stdout).includes('session.lock'));
+
+      expect(expectedRows).toBe(4);
+      expect(inputBarContentRows.get()).toBe(expectedRows);
+      for (const line of wrapped.split('\n')) {
+        expect(latestRenderedFrame(stdout)).toContain(line);
+      }
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('does not reserve a caret row for an exact-width disabled message', async () => {
     const { ink, React } = await loadInk();
     const columns = 20;
@@ -112,7 +141,7 @@ describe('InputBar disabled message layout', () => {
     try {
       await waitFor(() => latestRenderedFrame(stdout).includes(detail));
 
-      expect(textInputWrappedRowCount(detail, columns - 6)).toBe(1);
+      expect(wrapAnsiToWidth(detail, columns - 6).split('\n')).toHaveLength(1);
       expect(inputBarContentRows.get()).toBe(1);
     } finally {
       instance.unmount();

@@ -9,15 +9,13 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { writeTextStderr } from '@cli/runtime/logSinks';
+import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import { COLOR_BORDER, COLOR_HINT } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
-import {
-  textInputCappedRowCount,
-  textInputWrappedRowCount,
-} from '../input/textInputDisplay';
+import { textInputCappedRowCount } from '../input/textInputDisplay';
 import {
   DraftAttachmentStore,
   shouldCollapsePaste,
@@ -415,10 +413,13 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // live frame past the terminal (per-keystroke scrollback churn). One frame
   // of lag (signal set post-render) beats a whole draft-lifetime of overflow.
   const inputDisplayWidth = Math.max(1, columns - INPUT_BAR_DECORATION_COLUMNS);
-  const disabledContentRows = props.disabledMessage
+  const disabledDisplayText = props.disabledMessage
+    ? wrapAnsiToWidth(props.disabledMessage, inputDisplayWidth)
+    : undefined;
+  const disabledContentRows = disabledDisplayText
     ? Math.min(
         INPUT_BAR_MAX_CONTENT_ROWS,
-        textInputWrappedRowCount(props.disabledMessage, inputDisplayWidth),
+        disabledDisplayText.split('\n').length,
       )
     : 1;
   const draftContentRows = disabled
@@ -476,7 +477,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
             height={draftContentRows}
             overflowY="hidden"
           >
-            <Text dimColor>{props.disabledMessage}</Text>
+            <Text dimColor>{disabledDisplayText}</Text>
           </Box>
         ) : (
           <Box
