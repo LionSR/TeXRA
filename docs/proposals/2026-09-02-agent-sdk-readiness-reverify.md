@@ -107,7 +107,8 @@ audited surfaces. The candidates checked and cleared:
   the free `debug/info/warn/error` exports (`:222-225`) remain the `loggerSelf`
   test-spy seam (`-08-25 §5.3`, must stay). `redaction.ts`'s
   `PROVIDER_KEY_REDACTION_RULES` (`:28`) is **already tracked** in
-  `config/ratchets/knip-baseline.json:1379` as production-dead / test-only (the
+  `config/ratchets/knip-baseline.json:1382` (`"name"` field) as production-dead /
+  test-only (the
   desktop redaction parity test), not a new finding.
 - **`SessionHandle`.** With PT-2 removed, a scan for one-line
   `return this.<owner>.…` pass-throughs returns **none** — the class's header
