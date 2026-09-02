@@ -43,6 +43,25 @@ import {
 } from '@utils/files/runStorageFs';
 
 // ============================================================================
+// Rejection bookkeeping
+// ============================================================================
+
+/**
+ * The `RejectionProvenance` channels, in the order a summary considers them
+ * when naming the file it blames. One settlement populates exactly one, but
+ * accepting a whole run can produce a mix, so each is recorded per rejection.
+ */
+const REJECTION_CHANNELS = ['feedback', 'reason', 'cause'] as const;
+
+type RejectionChannel = (typeof REJECTION_CHANNELS)[number];
+
+interface RecordedRejection {
+  readonly channel: RejectionChannel;
+  readonly path: string;
+  readonly message: string | undefined;
+}
+
+// ============================================================================
 // Schema
 // ============================================================================
 
@@ -191,12 +210,7 @@ Parameters map directly to subagent-result delivery attributes:
     }[] = [];
     let rejected = 0;
     let unchanged = 0;
-    const rejectionFeedback: string[] = [];
-    const rejectionReasons: string[] = [];
-    const rejectionCauses: string[] = [];
-    let firstUserRejectionPath: string | undefined;
-    let firstPolicyDenialPath: string | undefined;
-    let firstCancellationPath: string | undefined;
+    const rejections: RecordedRejection[] = [];
 
     let totalStripped = 0;
 
@@ -219,15 +233,22 @@ Parameters map directly to subagent-result delivery attributes:
 
       if (approval.action !== 'apply') {
         rejected++;
+        // Narrow the declined approval to the single channel it arrived on.
+        const path = entry.original;
         if ('cause' in approval) {
-          firstCancellationPath ??= entry.original;
-          if (approval.cause) rejectionCauses.push(approval.cause);
+          rejections.push({ channel: 'cause', path, message: approval.cause });
         } else if ('reason' in approval) {
-          firstPolicyDenialPath ??= entry.original;
-          if (approval.reason) rejectionReasons.push(approval.reason);
+          rejections.push({
+            channel: 'reason',
+            path,
+            message: approval.reason,
+          });
         } else {
-          firstUserRejectionPath ??= entry.original;
-          if (approval.feedback) rejectionFeedback.push(approval.feedback);
+          rejections.push({
+            channel: 'feedback',
+            path,
+            message: approval.feedback,
+          });
         }
         results.push(`rejected: ${entry.original}${mappingNote}`);
         continue;
@@ -284,24 +305,28 @@ Parameters map directly to subagent-result delivery attributes:
     // `reason`/`cause` still selects the denial/cancellation wording in
     // buildApprovalRejectedResult.
     if (rejected === changed && acceptedEntries.length === 0) {
-      const presentFirstPaths = [
-        firstUserRejectionPath,
-        firstPolicyDenialPath,
-        firstCancellationPath,
-      ].filter(filterNotNullish);
+      const firstPathOn = (channel: RejectionChannel): string | undefined =>
+        rejections.find((rejection) => rejection.channel === channel)?.path;
+      const messagesOn = (channel: RejectionChannel): string[] =>
+        rejections
+          .filter((rejection) => rejection.channel === channel)
+          .map((rejection) => rejection.message)
+          .filter((message): message is string => !!message);
+
+      const presentFirstPaths =
+        REJECTION_CHANNELS.map(firstPathOn).filter(filterNotNullish);
       const summaryPath =
         presentFirstPaths.length > 1
           ? 'multiple files'
           : (presentFirstPaths[0] ?? prepared[0].original);
+      const feedback = messagesOn('feedback');
       return buildApprovalRejectedResult(summaryPath, 'accept_run_files', {
-        ...(rejectionFeedback.length > 0
-          ? { feedback: rejectionFeedback.join('\n') }
+        ...(feedback.length > 0 ? { feedback: feedback.join('\n') } : {}),
+        ...(firstPathOn('reason') !== undefined
+          ? { reason: messagesOn('reason').join('\n') }
           : {}),
-        ...(firstPolicyDenialPath !== undefined
-          ? { reason: rejectionReasons.join('\n') }
-          : {}),
-        ...(firstCancellationPath !== undefined
-          ? { cause: rejectionCauses.join('\n') || undefined }
+        ...(firstPathOn('cause') !== undefined
+          ? { cause: messagesOn('cause').join('\n') || undefined }
           : {}),
       });
     }
