@@ -40,6 +40,7 @@ import {
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { parseArgs as parseCittyArgs } from 'citty';
@@ -3703,7 +3704,6 @@ const DEFAULT_ROWS = Number(process.env.TUI_VALIDATE_ROWS ?? '40');
 const FRAME_MODE_VIEWPORT = 'viewport';
 const FRAME_MODE_SCROLLBACK = 'scrollback';
 const DEFAULT_FRAME_MODE = FRAME_MODE_VIEWPORT;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function scenarioCols(scenario) {
   return Number(scenario.cols ?? DEFAULT_COLS);

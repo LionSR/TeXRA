@@ -51,9 +51,13 @@ index` dedup loops, `arr[arr.length - 1]` vs. `.at(-1)`, new `Object.assign(`
 ## 2. What was checked and ruled out
 
 - **`.hasOwnProperty()` direct calls:** zero repo-wide.
-- **Hand-rolled sleeps (`new Promise(resolve => setTimeout(...))`):** all 16
-  repo-wide hits are in `src/test-kernel/**` test fixtures (timer-flush
-  waits), none in production code — same conclusion as prior rounds.
+- **Hand-rolled sleeps (`new Promise(resolve => setTimeout(...))`):** within
+  the survey's stated scope (`src/` and `packages/*/src/`), all 16 hits are
+  in `src/test-kernel/**` test fixtures (timer-flush waits), none in
+  production code — same conclusion as prior rounds. That scope excludes
+  repo tooling scripts; `packages/cli/scripts/validate-tui.mjs:3706` defined
+  the same hand-rolled shape outside it and has since been swapped for
+  `node:timers/promises`' `setTimeout` (this PR).
 - **`JSON.parse(JSON.stringify(` deep clones:** all repo-wide hits are
   `src/test-kernel/**` test assertions plus the one already-adjudicated
   `src/agent/workflowScript/parseScript.ts:130` `vm.Script` sandbox literal
@@ -74,12 +78,15 @@ index` dedup loops, `arr[arr.length - 1]` vs. `.at(-1)`, new `Object.assign(`
   shared/prop state" pattern from 2026-08-29's `Object.assign` audit, not a
   new duplicate pattern.
 - **New manual attempt-counter loop in the diff:** the one hit
-  (`MAX_DIRTY_WRITE_RETRIES` loop) is the same
-  `StreamSnapshotStore.retryDirtyWrites` durability-flush loop the
+  (`MAX_DIRTY_WRITE_RETRIES` loop) is the same durability-flush loop the
   2026-08-29/08-30 rounds already traced and ruled a bounded re-persist
   sweep, not `p-retry`-shaped error-driven retry — reappearing in the diff
   only because the surrounding file was reformatted/moved, not because new
-  retry logic was added.
+  retry logic was added. Its owner is
+  `SidecarWriteCoordinator.retryDirtyWrites`
+  (`src/transcript/SidecarWriteCoordinator.ts:156`); `StreamSnapshotStore`
+  only reaches it through `this.writes` (correcting the owner named in
+  earlier rounds, which predates that extraction).
 - **New hand-rolled `debounce`/`throttle` definitions:** zero.
 - **Cross-tree webview duplication:** `git diff --stat` over the three
   parallel frontend trees since `b36051b` shows 105 files changed, but the

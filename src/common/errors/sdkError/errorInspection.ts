@@ -55,8 +55,15 @@ function firstBodyNumberField(
     .find((value) => value !== undefined);
 }
 
-/** Reset hint a message-matched subscription usage-limit body can report. */
-export interface UsageLimitMatch {
+/**
+ * What a quota-limit body can report, whichever detector read it: a reset
+ * hint, and — only from the ChatGPT (Codex) backend — a plan name. One shape
+ * because there is exactly one consumer, the `QUOTA_LIMIT_PARSERS` registry
+ * in `providerErrorFormat`, and it reads both fields the same way no matter
+ * which route produced them.
+ */
+export interface QuotaLimitInfo {
+  readonly planType?: string;
   readonly resetsInSeconds?: number;
 }
 
@@ -69,7 +76,7 @@ export function matchUsageLimitMessage(
   err: unknown,
   rawErrorBody: unknown,
   pattern: RegExp,
-): UsageLimitMatch | null {
+): QuotaLimitInfo | null {
   const message =
     firstBodyStringField(rawErrorBody, 'message') ??
     pickStringField(err, 'message');

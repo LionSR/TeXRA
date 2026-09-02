@@ -1,6 +1,3 @@
-import { matchUsageLimitMessage } from './errorInspection';
-import { detectSdkCredentialRoute } from './sdkRequestEndpoint';
-
 /**
  * Detection + formatting for the Grok (xAI SuperGrok) subscription usage
  * limit. SuperGrok hits the same `api.x.ai` surface as an API key, so the
@@ -10,9 +7,9 @@ import { detectSdkCredentialRoute } from './sdkRequestEndpoint';
  * ran out — the signal that lets the retry UI offer a switch to the
  * stored xAI API key.
  */
-export interface XaiSubscriptionLimit {
-  readonly resetsInSeconds?: number;
-}
+
+import { matchUsageLimitMessage, type QuotaLimitInfo } from './errorInspection';
+import { detectSdkCredentialRoute } from './sdkRequestEndpoint';
 
 /** Distinctive SuperGrok / xAI plan-quota phrasing. Transient 429 rate
  *  limits ("rate limit", "too many requests") do not match and must not
@@ -28,7 +25,7 @@ const USAGE_LIMIT_PATTERN =
 export function parseXaiSubscriptionLimit(
   err: unknown,
   rawErrorBody: unknown,
-): XaiSubscriptionLimit | null {
+): QuotaLimitInfo | null {
   if (detectSdkCredentialRoute(err) !== 'xai-subscription') return null;
   return matchUsageLimitMessage(err, rawErrorBody, USAGE_LIMIT_PATTERN);
 }
