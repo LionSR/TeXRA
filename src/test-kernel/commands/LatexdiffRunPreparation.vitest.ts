@@ -1,3 +1,7 @@
+// Node imports
+import * as path from 'node:path';
+
+// Third-party imports
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -13,16 +17,7 @@ const mocks = vi.hoisted(() => ({
   info: vi.fn(),
   error: vi.fn(),
   checkToolInstalled: vi.fn(),
-  pathToLocation: vi.fn((absolutePath: string) => {
-    if (absolutePath.startsWith('/tmp/')) {
-      return { kind: 'external' as const, absolutePath };
-    }
-    return {
-      kind: 'workspace' as const,
-      absolutePath,
-      relativePath: 'paper.tex',
-    };
-  }),
+  pathToLocation: vi.fn(),
   openTextDocument: vi.fn(async (uri: unknown) => ({ uri })),
   showTextDocument: vi.fn(async () => undefined),
   showQuickPick: vi.fn(),
@@ -148,9 +143,11 @@ vi.mock('vscode', () => ({
 
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 
+const workspaceDiffPath = path.join('/workspace', 'diff-1.tex');
+const externalDiffPath = path.join('/tmp', 'diff-2.tex');
 const mixedResults = [
-  { success: true, diffPath: '/workspace/diff-1.tex' },
-  { success: true, diffPath: '/tmp/diff-2.tex' },
+  { success: true, diffPath: workspaceDiffPath },
+  { success: true, diffPath: externalDiffPath },
 ];
 
 const runConfig = {
@@ -164,6 +161,15 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     vi.clearAllMocks();
     mocks.runLatexdiffHandler = undefined;
     mocks.exists.mockResolvedValue(true);
+    mocks.pathToLocation.mockImplementation((absolutePath: string) =>
+      absolutePath === externalDiffPath
+        ? { kind: 'external' as const, absolutePath }
+        : {
+            kind: 'workspace' as const,
+            absolutePath,
+            relativePath: 'paper.tex',
+          },
+    );
     mocks.prepareBuildDisplay.mockImplementation(async () => true);
     mocks.scheduleViewerDisplay.mockResolvedValue(true);
     mocks.showLoggedMessage.mockResolvedValue(undefined);
@@ -204,7 +210,7 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     expect(mocks.prepareBuildDisplay).toHaveBeenCalledTimes(2);
     expect(mocks.scheduleViewerDisplay).toHaveBeenCalledTimes(1);
     expect(mocks.openTextDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ fsPath: '/workspace/diff-1.tex' }),
+      expect.objectContaining({ fsPath: workspaceDiffPath }),
     );
     expect(mocks.showTextDocument).toHaveBeenCalledTimes(1);
   });
@@ -227,7 +233,7 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
   it('schedules the final viewer for the last prepared diff when a later setup rejects', async () => {
     mocks.prepareBuildDisplay.mockImplementation(
       async (location: { absolutePath: string }) => {
-        if (location.absolutePath === '/workspace/diff-1.tex') return true;
+        if (location.absolutePath === workspaceDiffPath) return true;
         throw new Error('second setup failed');
       },
     );
@@ -241,7 +247,7 @@ describe('texra.runLatexdiff result preparation and final viewer delivery', () =
     );
     expect(mocks.scheduleViewerDisplay).toHaveBeenCalledTimes(1);
     expect(mocks.openTextDocument).toHaveBeenCalledWith(
-      expect.objectContaining({ fsPath: '/workspace/diff-1.tex' }),
+      expect.objectContaining({ fsPath: workspaceDiffPath }),
     );
   });
 });

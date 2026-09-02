@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import {
   afterEach,
   beforeEach,
@@ -401,13 +403,15 @@ describe('buildUserVars with missing configured files', () => {
 });
 
 describe('requiredFilesInternal custom variables', () => {
+  const briefPath = path.resolve('/agents/generic', 'brief.txt');
+
   beforeEach(async () => {
     const { initPlatform } = await import('@platform/platform');
 
     initPlatform(
       createFakePlatform({
         workspacePath: '/workspace',
-        files: { '/agents/generic/brief.txt': 'briefing notes' },
+        files: { [briefPath]: 'briefing notes' },
       }),
     );
   });
@@ -444,7 +448,7 @@ describe('requiredFilesInternal custom variables', () => {
       { BRIEF: 'brief.txt' },
     );
 
-    expect(vars['BRIEF_FILE']).toBe('/agents/generic/brief.txt');
+    expect(vars['BRIEF_FILE']).toBe(briefPath);
     expect(vars['BRIEF_CONTENT']).toBe('briefing notes');
     // The fixed slots the collision guard protects keep their built values.
     expect(vars.MEDIA_FILE).toBeNull();

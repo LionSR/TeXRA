@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Extension (VS Code)
+
+#### Bug Fixes
+
+- **Archive custom-agent output on Windows** — packing generated files into the
+  History folder now works for custom agents.
+
 ## [0.40.7] - 2026-08-31
 
 ### Shared (all surfaces)
