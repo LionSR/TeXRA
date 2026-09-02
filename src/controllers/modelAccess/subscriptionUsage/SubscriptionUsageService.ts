@@ -109,6 +109,13 @@ export class SubscriptionUsageService {
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   >;
   private readonly cache: LRUCache<string, SubscriptionUsageSnapshot>;
+  // lru-cache treats ttl:0 as "no expiration", not "always expired" — a
+  // cacheTtlMs of 0 means the opposite (never retain), so route reads/writes
+  // through a stub when disabled instead of trusting LRUCache with ttl:0.
+  private readonly cacheReader: {
+    get(key: string): SubscriptionUsageSnapshot | undefined;
+    set(key: string, value: SubscriptionUsageSnapshot): void;
+  };
   private readonly pending = new Map<
     string,
     Promise<SubscriptionUsageSnapshot>
@@ -129,6 +136,10 @@ export class SubscriptionUsageService {
       ttlResolution: 0,
       perf: { now: this.now },
     });
+    this.cacheReader =
+      this.cacheTtlMs > 0
+        ? this.cache
+        : { get: () => undefined, set: () => {} };
   }
 
   /** Provider transports are adapters; caching and failure policy stay common. */
@@ -209,7 +220,7 @@ export class SubscriptionUsageService {
     // stale result out of the cache, but the already-waiting caller still
     // receives it — one accepted stale read on a read-only usage display.
     return coalesceAsync<string, SubscriptionUsageSnapshot>(
-      this.cache,
+      this.cacheReader,
       this.pending,
       key,
       () => this.fetchUsage(provider, variant),

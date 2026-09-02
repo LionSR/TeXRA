@@ -781,6 +781,20 @@ describe('SubscriptionUsageService', () => {
     expect(http).toHaveBeenCalledTimes(3);
   });
 
+  // lru-cache treats ttl:0 as "no expiration"; cacheTtlMs:0 must mean the
+  // opposite — never retain a result, so every call refetches.
+  it('never caches when cacheTtlMs is 0', async () => {
+    const http = vi.fn<SubscriptionUsageHttp>(async () =>
+      jsonResponse({ usage: { limit: 100, remaining: 50 } }),
+    );
+    const service = serviceWith(http, credentials(), { cacheTtlMs: 0 });
+
+    await service.getUsage('kimiCode');
+    await service.getUsage('kimiCode');
+
+    expect(http).toHaveBeenCalledTimes(2);
+  });
+
   it('invalidates cached provider snapshots after credentials change', async () => {
     let remaining = 50;
     const http = vi.fn<SubscriptionUsageHttp>(async () =>
