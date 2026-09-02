@@ -6,7 +6,10 @@ import {
   CHATGPT_USAGE_URL,
   parseChatGptUsage,
 } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
-import type { SubscriptionUsageHttp } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
+import {
+  timestampField,
+  type SubscriptionUsageHttp,
+} from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
 import {
   GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
   GLM_CODING_PLAN_USAGE_URL,
@@ -376,6 +379,14 @@ describe('subscription usage parsers', () => {
       ['five_hour', 30],
       ['weekly', 40],
     ]);
+  });
+
+  // A numeric-looking string that fails the epoch check must not fall
+  // through to Date.parse, which accepts some non-ISO numeric strings as
+  // dates (e.g. Date.parse('-1') resolves to 2001-01-01).
+  it('rejects a negative numeric timestamp instead of misreading it as a date', () => {
+    expect(timestampField({ resetAt: -1 }, 'resetAt')).toBeUndefined();
+    expect(timestampField({ resetAt: '-1' }, 'resetAt')).toBeUndefined();
   });
 });
 

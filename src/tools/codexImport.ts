@@ -17,6 +17,8 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
+import { z } from 'zod';
+
 import { isModuleNotFoundError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
@@ -147,18 +149,23 @@ type BundledCodexModel = {
   supported_reasoning_levels?: Array<{ effort?: string }>;
 };
 
+/** Just the shape `catalogSupportsXhigh` depends on — a `models` array. Model
+ *  entries stay `unknown` here and are duck-typed below, so one malformed
+ *  entry elsewhere in the catalog can't take down a lookup for a model it
+ *  doesn't concern. */
+const BundledCodexCatalogSchema = z.object({
+  models: z.array(z.unknown()),
+});
+
 function catalogSupportsXhigh(
   stdout: string,
   model: string,
 ): boolean | undefined {
   try {
     const parsed: unknown = JSON.parse(stdout);
-    if (typeof parsed !== 'object' || parsed == null || !('models' in parsed)) {
-      return undefined;
-    }
-    const models = (parsed as { models: unknown }).models;
-    if (!Array.isArray(models)) return undefined;
-    const entry = models.find(
+    const catalog = BundledCodexCatalogSchema.safeParse(parsed);
+    if (!catalog.success) return undefined;
+    const entry = catalog.data.models.find(
       (item): item is BundledCodexModel =>
         typeof item === 'object' &&
         item != null &&
