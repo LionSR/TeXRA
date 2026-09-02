@@ -53,31 +53,70 @@ import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
 import type { GhIssue, GhPullRequest } from './prTypes';
 
-const GitHubSubscriptionInputSchema = z.strictObject({
-  command: z.enum(['subscribe', 'unsubscribe', 'list', 'find_current']),
-  /**
-   * Subscription target — mirrors GitHub's REST URL shape. Required for
-   * `subscribe`/`unsubscribe`; ignored for `list`/`find_current`.
-   *
-   * - `owner/repo`               — repo-wide coarse subscription.
-   * - `owner/repo/pulls/N`       — per-PR nuanced subscription.
-   * - `owner/repo/issues/N`      — per-issue subscription.
-   */
-  path: z.string().nullish(),
-  /**
-   * Lowest inline check-annotation level to send for PR subscriptions.
-   * Defaults to failures only; use "warning" to include warnings, or
-   * "notice" to include every annotation GitHub reports.
-   */
-  min_annotation_level: z.enum(['failure', 'warning', 'notice']).nullish(),
-  /**
-   * Working directory for `find_current` to resolve the current branch's PR.
-   * Defaults to the agent's working directory.
-   */
-  working_directory: z.string().nullish(),
-});
+const SUBSCRIPTION_PATH_DESCRIPTION =
+  'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
+
+// Branches use looseObject (not strictObject): provider conversion flattens the
+// discriminated union into one advertised object and OpenAI-compatible providers
+// null-fill the properties belonging to the other commands. See AGENTS.md
+// "Tool input schemas".
+const GitHubSubscriptionInputSchema = z.discriminatedUnion('command', [
+  z.looseObject({
+    command: z.literal('subscribe').describe('Start watching the path.'),
+    path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
+    /**
+     * Lowest inline check-annotation level to send for PR subscriptions.
+     * Defaults to failures only; use "warning" to include warnings, or
+     * "notice" to include every annotation GitHub reports.
+     */
+    min_annotation_level: z
+      .enum(['failure', 'warning', 'notice'])
+      .nullish()
+      .describe(
+        'Lowest inline check-annotation level for PR subscriptions. Defaults to failures only; "warning" includes warnings, "notice" includes every annotation.',
+      ),
+  }),
+  z.looseObject({
+    command: z.literal('unsubscribe').describe('Stop watching the path.'),
+    path: z.string().describe(SUBSCRIPTION_PATH_DESCRIPTION),
+  }),
+  z.looseObject({
+    command: z
+      .literal('list')
+      .describe('List active subscriptions on this stream.'),
+  }),
+  z.looseObject({
+    command: z
+      .literal('find_current')
+      .describe(
+        'Resolve the current git branch to its PR path ("owner/repo/pulls/N").',
+      ),
+    /**
+     * Working directory for `find_current` to resolve the current branch's PR.
+     * Defaults to the agent's working directory.
+     */
+    working_directory: z
+      .string()
+      .nullish()
+      .describe(
+        "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
+      ),
+  }),
+]);
 
 type GitHubSubscriptionInput = z.infer<typeof GitHubSubscriptionInputSchema>;
+type SubscribeInput = Extract<
+  GitHubSubscriptionInput,
+  { command: 'subscribe' }
+>;
+type UnsubscribeInput = Extract<
+  GitHubSubscriptionInput,
+  { command: 'unsubscribe' }
+>;
+type FindCurrentInput = Extract<
+  GitHubSubscriptionInput,
+  { command: 'find_current' }
+>;
 
 interface ParsedRepoPath {
   kind: 'repo';
@@ -137,7 +176,7 @@ function slugOf(target: { owner: string; repo: string }): string {
   return `${target.owner}/${target.repo}`;
 }
 
-function requirePath(input: GitHubSubscriptionInput): ParsedPath {
+function requirePath(input: { command: string; path: string }): ParsedPath {
   if (!input.path) {
     throw new ToolError(
       `command="${input.command}" requires a path ("owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N").`,
@@ -162,9 +201,7 @@ function prSubscriptionActivitySentence(
   return `New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups.`;
 }
 
-async function execSubscribe(
-  input: GitHubSubscriptionInput,
-): Promise<ToolResult> {
+async function execSubscribe(input: SubscribeInput): Promise<ToolResult> {
   await requireToken();
   const { streamId } = requireRunStream('github_subscription');
   const target = requirePath(input);
@@ -269,7 +306,7 @@ async function resolveIssueIsPR(
   return res.data.pull_request != null;
 }
 
-function execUnsubscribe(input: GitHubSubscriptionInput): ToolResult {
+function execUnsubscribe(input: UnsubscribeInput): ToolResult {
   const { streamId } = requireRunStream('github_subscription');
   const target = requirePath(input);
   const slug = slugOf(target);
@@ -424,9 +461,7 @@ async function getFindCurrentFallbackInfo(
   };
 }
 
-async function execFindCurrent(
-  input: GitHubSubscriptionInput,
-): Promise<ToolResult> {
+async function execFindCurrent(input: FindCurrentInput): Promise<ToolResult> {
   await requireToken();
   const cwd =
     parseWorkingDirectory(input.working_directory) ??

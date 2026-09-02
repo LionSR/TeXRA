@@ -27,7 +27,9 @@ describe('InlineCommentTool.call', () => {
   it('validates required fields for add', async () => {
     const result = await tool.call({ command: 'add', path: 'p.tex', line: 3 });
     expect(result.status).toBe('error');
-    expect(result.error).toContain('requires path, line, and body');
+    // The discriminated-union schema now rejects a missing `body` up front.
+    expect(result.error).toContain('Invalid input');
+    expect(result.error).toContain('body');
   });
 
   it('reports a missing thread on reply', async () => {
