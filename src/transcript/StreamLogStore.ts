@@ -784,7 +784,7 @@ export class StreamLogStore {
         }
         const diskEntries = this.parsePersistedEntries(streamId, raw);
         const live = this.streams.get(streamId)?.log;
-        if (live && live.size > 0) {
+        if (live && live.head > 0) {
           // A concurrent `append` populated the log during the disk read.
           // Merge disk (history) before the live appends so `save()` writes
           // the union instead of clobbering the authoritative disk copy
@@ -1044,7 +1044,7 @@ export class StreamLogStore {
       if (!logInstance) continue;
       if (!streamIds.has(streamId)) continue;
       let updatedAny = false;
-      for (const entry of logInstance.getRange(0, logInstance.head)) {
+      for (const entry of logInstance.getRange(0)) {
         if (isRunningGroupEntry(entry)) {
           const existingData = isObject(entry.data) ? entry.data : {};
           const updated = logInstance.settle(entry.id, {

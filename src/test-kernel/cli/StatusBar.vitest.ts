@@ -17,6 +17,7 @@ import {
   STREAM_PHASE,
   STREAM_SUBSTATE,
   type StreamPhase,
+  type StreamTabId,
 } from '@shared/schemas';
 
 // The bar renders the short access-route label.
@@ -1012,16 +1013,18 @@ describe('CLI StatusBar display model', () => {
     type PhasedSlice = StreamSlice & { readonly testPhase?: StreamPhase };
 
     function streamSlice(
-      streamId: string,
+      _streamId: string,
       testPhase: StreamPhase | undefined,
     ): PhasedSlice {
-      return { streamId, testPhase } as PhasedSlice;
+      return { testPhase } as PhasedSlice;
     }
 
     function streamMap(
       entries: ReadonlyArray<readonly [string, StreamSlice]>,
-    ): ReadonlyMap<StreamSlice['streamId'], StreamSlice> {
-      return new Map<StreamSlice['streamId'], StreamSlice>(entries);
+    ): ReadonlyMap<StreamTabId, StreamSlice> {
+      return new Map<StreamTabId, StreamSlice>(
+        entries.map(([id, slice]) => [id as StreamTabId, slice] as const),
+      );
     }
 
     const parentOfChild = new Map([['child', 'root']]);

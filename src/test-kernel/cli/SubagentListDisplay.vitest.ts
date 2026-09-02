@@ -104,7 +104,7 @@ function workflowAgentSlice(
   }
   const grouping = workflowPhaseGrouping(sliceOverrides.entries ?? []);
   return {
-    ...emptySlice(streamId),
+    ...emptySlice(),
     ...sliceOverrides,
     entries: grouping.entries,
     ...(sliceOverrides.taskGroups ? {} : { taskGroups: grouping.taskGroups }),
@@ -184,7 +184,7 @@ async function renderSubagentList(
   const published = new Map<StreamTabId, StreamSlice>();
   for (const session of props.sessions ?? []) {
     if (!published.has(session.id)) {
-      published.set(session.id, session.slice ?? emptySlice(session.id));
+      published.set(session.id, session.slice ?? emptySlice());
     }
   }
   streamsSignal.set(published);

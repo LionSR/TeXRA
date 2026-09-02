@@ -2232,11 +2232,11 @@ describe('transcript entry margin collapse', () => {
 });
 
 function sliceWithEntries(
-  streamId: StreamTabId,
+  _streamId: StreamTabId,
   entries: readonly TranscriptRow[],
   init: Partial<StreamSlice> = {},
 ): StreamSlice {
-  return { ...emptySlice(streamId), entries, ...init };
+  return { ...emptySlice(), entries, ...init };
 }
 
 /** Bind a fresh `SessionState` for tests that read stream metadata (child

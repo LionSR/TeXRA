@@ -251,7 +251,7 @@ function projectCompactionIncrementally(
   streamTerminal: boolean,
 ): CompactionActivityProjection {
   let state = fold.compactionProjection;
-  if (!state || state.appliedHead > log.size) {
+  if (!state || state.appliedHead > log.head) {
     state = {
       projection: createCompactionActivityProjection(),
       appliedHead: 0,
@@ -266,7 +266,7 @@ function projectCompactionIncrementally(
     state.projection,
     log.getRange(state.appliedHead),
   );
-  state.appliedHead = log.size;
+  state.appliedHead = log.head;
   if (streamTerminal && !state.terminal) {
     // One settle shape across hosts: the boundary is the projection's own
     // applied head (the default) and the stream's last entry timestamp — the
@@ -581,16 +581,22 @@ function reconcileCompactionRows(
   for (const block of projection.blocks) {
     const row = compactionActivityRow(block);
     const pos = state.indexById.get(row.id);
-    if (pos !== undefined && state.items[pos].block === block) continue;
+    // Compaction rows pass through paint unchanged, so the row carries the
+    // block it was built from: reference equality means the row is current.
+    if (pos !== undefined) {
+      const current = state.items[pos].rendered;
+      if (current.kind === 'compactionActivity' && current.block === block) {
+        continue;
+      }
+    }
     const rendered = transcriptRowForPaint(row);
     if (rendered === null) continue;
     if (pos !== undefined) {
-      state.items[pos].block = block;
       replaceFoldRendered(state, pos, rendered, flags);
     } else {
       insertFoldItem(
         state,
-        { rendered, sortSeq: block.startPosition, tieBreak: 0, rank: 0, block },
+        { rendered, sortSeq: block.startPosition, tieBreak: 0, rank: 0 },
         flags,
       );
     }
