@@ -175,6 +175,11 @@ export class SidecarWriteCoordinator {
     }
   }
 
+  /** Whether any sidecar write for `stream` is still unconfirmed. */
+  hasDirtyWrites(stream: StreamTabId): boolean {
+    return this.dirtyWriteEntries(stream).length > 0;
+  }
+
   /** Drop a stream's write locks and dirty markers (the store owns its record). */
   dropStreamWrites(stream: StreamTabId): void {
     for (const key of [...this.writeMutexes.keys()]) {

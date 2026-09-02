@@ -65,6 +65,14 @@ import {
 // to batch chunks and keeps the transcript feeling live.
 const STREAM_SYNC_THROTTLE_MS = 16;
 
+/** The stream any foreground reader is showing, whatever it reads from it.
+ *  The work-plan reader reads the snapshot store directly, so sidecar
+ *  residency answers to every reader kind — unlike transcript residency
+ *  below, which only the transcript-shaped readers own. */
+export function foregroundReaderStreamId(): StreamTabId | undefined {
+  return foregroundReader.get()?.streamId;
+}
+
 /** A workflow popup and its Ctrl-T reader are two views of the same full
  * transcript projection. Workflows never become the active viewport, so the
  * foreground reader is their presentation-residency owner. */
@@ -544,6 +552,10 @@ export function releaseInactiveStreamTranscript(
   if (!slice) return;
   const phase = streamPhaseFor(streamId)?.phase;
   if (phase === undefined || isActivePhase(phase)) return;
+  // Transcript residency only. The sidecar record answers to a different
+  // rule (terminal children nothing presents) and to a different set of
+  // readers, so `sessionSignalsAdapter` owns its release from one
+  // presentation-change subscription.
   store.requestEviction(streamId);
   const fold = slice.transcriptFold;
   if (fold) {

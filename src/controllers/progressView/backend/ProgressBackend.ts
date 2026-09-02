@@ -164,6 +164,19 @@ export class ProgressBackend {
     this.factApplier = new SessionFactApplier(this.state, this.renderer, {
       deleteStream: (stream, expectedIncarnation, beforeRetainedRepair) =>
         this.deleteStream(stream, expectedIncarnation, beforeRetainedRepair),
+      // The committed selection, plus the target of an activation still in
+      // flight: an activation preloads the sidecar before it selects, so a
+      // terminal status landing in that window must not evict what the
+      // imminent `syncStreamContent` is about to read. Gated on the in-flight
+      // set because `latestActivationTarget` is sticky — it survives a failed
+      // or superseded activation, and would otherwise pin that stream's
+      // record for the rest of the session.
+      isStreamPresented: (stream) =>
+        !this.disposed &&
+        ((this.renderer.isAvailable() &&
+          this.presentation.activeStream === stream) ||
+          (this.latestActivationTarget === stream &&
+            this.inFlightActivationGenerations.has(this.activationGeneration))),
     });
     this.setApprovalBypassState = ui.setApprovalBypassState;
   }
@@ -298,8 +311,7 @@ export class ProgressBackend {
     const generation = ++this.activationGeneration;
     this.latestActivationTarget = stream;
     if (!stream) {
-      const previousStream = this.presentation.activeStream;
-      this.presentation.select('');
+      const previousStream = this.selectPresentedStream('');
       this.releasePresentationLeases();
       if (this.renderer.isAvailable()) {
         this.renderer.onActiveStreamChanged('');
@@ -311,7 +323,7 @@ export class ProgressBackend {
       return true;
     }
     if (!this.renderer.isAvailable()) {
-      this.presentation.select(stream);
+      this.selectPresentedStream(stream);
       this.releasePresentationLeases();
       return true;
     }
@@ -329,21 +341,26 @@ export class ProgressBackend {
     const failures = hydration.filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
-    const closeTranscriptLease = () => {
+    // An activation that never commits leaves behind exactly what it
+    // hydrated: the transcript lease it took, and a sidecar record the
+    // preload above made resident. Nothing later revisits this stream — it
+    // never becomes the committed selection — so both are released here.
+    const abandonActivation = () => {
       if (transcriptLeaseResult.status === 'fulfilled') {
         transcriptLeaseResult.value.close();
       }
+      this.factApplier.retireSidecarIfFinishedChild(stream);
     };
     if (generation !== this.activationGeneration) {
-      closeTranscriptLease();
+      abandonActivation();
       return false;
     }
     if (!this.state.streamLogs.has(stream)) {
-      closeTranscriptLease();
+      abandonActivation();
       return false;
     }
     if (failures.length > 0) {
-      closeTranscriptLease();
+      abandonActivation();
       throw aggregateError(
         failures.map((failure) => failure.reason),
         `Failed to hydrate stream ${stream}`,
@@ -357,7 +374,7 @@ export class ProgressBackend {
     const previousStream = this.presentation.activeStream;
     const previousTranscriptLease = this.transcriptPresentationLease;
     this.transcriptPresentationLease = transcriptLeaseResult.value;
-    this.presentation.select(stream);
+    this.selectPresentedStream(stream);
     if (options.notifyActivation) this.renderer.onActiveStreamChanged(stream);
     this.renderer.syncStreamContent(stream);
     if (previousStream && previousStream !== stream) {
@@ -366,6 +383,22 @@ export class ProgressBackend {
     if (previousTranscriptLease !== transcriptLeaseResult.value)
       previousTranscriptLease?.close();
     return true;
+  }
+
+  /**
+   * Move the committed selection, and retire what it replaced. Every path
+   * that changes the selection goes through this, so a finished child that
+   * was presented — and therefore skipped by the terminal-status rule — is
+   * released exactly once, whichever path replaced it and whether or not a
+   * renderer was available at the time.
+   */
+  private selectPresentedStream(next: PresentedStreamId): PresentedStreamId {
+    const previous = this.presentation.activeStream;
+    this.presentation.select(next);
+    if (previous && previous !== next) {
+      this.factApplier.retireSidecarIfFinishedChild(previous);
+    }
+    return previous;
   }
 
   private releasePresentationLeases(): void {
@@ -856,6 +889,13 @@ export class ProgressBackend {
     if (this.disposed) return;
     this.disposed = true;
     for (const detach of this.detachEventListeners.splice(0)) detach();
+    // Disposal is this host's last "stops presenting", and the session
+    // outlives the window, so nothing else would revisit a finished child
+    // that was still selected. The selection itself is a persisted user
+    // preference and stays as it is; `isStreamPresented` reads `disposed`,
+    // so the rule already sees this host as presenting nothing.
+    const presented = this.presentation.activeStream;
+    if (presented) this.factApplier.retireSidecarIfFinishedChild(presented);
     this.factApplier.dispose();
     this.activationGeneration += 1;
     this.releasePresentationLeases();

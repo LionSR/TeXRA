@@ -20,8 +20,14 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
       if (
         !streamId ||
         !pendingRemovals.has(streamId) ||
-        session.snapshots.getRunMetadata(streamId, { quiet: true }).identity
-          ?.kind !== 'multiAgentWorkflow' ||
+        // The summary mirror, not the sidecar record: a finished child's
+        // record is releasable, and reading a released one here would report
+        // no workflow identity, leave the incarnation unbumped, and let a
+        // pending removal delete the stream the relaunch just re-claimed.
+        (
+          session.transcripts.getSummaryMeta(streamId)?.identity ??
+          session.snapshots.getRunMetadata(streamId, { quiet: true }).identity
+        )?.kind !== 'multiAgentWorkflow' ||
         !session.executions.getAgentHandleByStream(streamId)
       ) {
         return;

@@ -138,6 +138,11 @@ export class StagedDeletionCoordinator {
 
   constructor(private readonly host: StagedDeletionHost) {}
 
+  /** Whether a staging or a failed rollback currently owns `stream`'s namespace. */
+  owns(stream: StreamTabId): boolean {
+    return this.deletionStates.has(stream);
+  }
+
   /**
    * Divert a sidecar write into the buffer of an in-progress staging or failed
    * rollback. Returns `false` when no deletion owns the stream, leaving the

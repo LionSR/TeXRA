@@ -101,6 +101,9 @@ const EMPTY_RUN_USAGE: ReadonlyMap<string, TokenUsageStats> = new Map();
  *  open a file handle per tab. */
 const SEED_IO_CONCURRENCY = 8;
 
+/** Re-drain attempts before a record with still-pending writes stays resident. */
+const MAX_EVICTION_DRAIN_ATTEMPTS = 3;
+
 /**
  * Per-field provenance of one stream's work plan: whether the in-memory value
  * for that field has an established origin — a seeded disk baseline, or a live
@@ -184,6 +187,23 @@ function withoutSummaryMetaFields(
   for (const field of fields) delete remaining[field];
   return Object.keys(remaining).length > 0 ? remaining : undefined;
 }
+
+/**
+ * The mirrored fields one execution owns, and which a handoff to a different
+ * execution therefore invalidates. Everything else in `StreamSummaryMeta` —
+ * `parentStreamId`, `cumulativeUsage` — describes the stream across every run
+ * it has hosted and survives the handoff.
+ */
+const EXECUTION_SCOPED_SUMMARY_META_FIELDS = [
+  'identity',
+  'executionId',
+  'userFollowUpSupport',
+  'agentCategory',
+  'description',
+  'model',
+  'workingDirectory',
+  'command',
+] as const satisfies readonly (keyof StreamSummaryMeta)[];
 
 /**
  * The five execution-scoped facts owned by one run record and replaced or
@@ -575,6 +595,12 @@ export class StreamSnapshotStore {
       ...(record.description !== undefined && {
         description: record.description,
       }),
+      // Usage rides the mirror so a stream whose record has been released
+      // (`requestEviction`) still answers the roster's token column without
+      // re-seeding every finished child.
+      ...(record.usage.size > 0 && {
+        cumulativeUsage: sumUsageStats(record.usage.values()),
+      }),
       ...(config && {
         agentCategory: config.agentCategory,
         ...(config.model !== undefined && { model: config.model }),
@@ -611,7 +637,15 @@ export class StreamSnapshotStore {
   }
 
   private getOrCreateRecord(stream: StreamTabId): StreamRecord {
-    return this.records.getOrCreate(stream);
+    const resident = this.records.get(stream);
+    if (resident) return resident;
+    const record = this.records.getOrCreate(stream);
+    // A record minted for a stream the mirror already knows — a released one
+    // that a late fact touches — starts from what the mirror holds, so
+    // publishing that one field republishes a whole summary that keeps the
+    // rest. Record fields still win: the fallback only fills gaps.
+    record.summaryMetaHydrationFallback = this.summaryMetaSource?.(stream);
+    return record;
   }
 
   private kv(streamId: StreamTabId): KVStore {
@@ -1068,6 +1102,7 @@ export class StreamSnapshotStore {
         ),
       () => {
         if (!isEmptyUsage(delta)) this.writeUsage(stream);
+        this.publishSummaryMeta(stream);
       },
     );
   }
@@ -1138,6 +1173,70 @@ export class StreamSnapshotStore {
   // ==========================================================================
   // Lifecycle
   // ==========================================================================
+
+  /**
+   * Release a stream's resident record once its in-flight seed and sidecar
+   * writes have settled: the sidecar counterpart of the transcript's
+   * terminal-status eviction (`StreamLogStore.requestEviction`). The next
+   * read re-seeds from disk through `preload`, which every presentation path
+   * performs before its synchronous reads, so nothing is lost. A record a
+   * staged deletion owns, one a reader is seeding, or one that gains new seed
+   * work while this waits stays resident: someone else is about to read or
+   * remove it.
+   *
+   * `shouldStillEvict` is re-read after those awaits, the same shape
+   * `StagedDeletionCoordinator.commit` uses: a run that relaunches this
+   * stream while the drain is in flight neither rotates the generation nor
+   * rebinds the seed chain once provenance is established, so the caller's
+   * own liveness rule is what keeps a freshly active record resident.
+   *
+   * Public on purpose, and the one row added to the store-surface baseline:
+   * the session's lifecycle owner requests it for a finished child stream
+   * nobody is presenting, and a host's focus-leave path requests it for the
+   * stream it just stopped presenting. Without it, the record set grows with
+   * every stream a long session touches.
+   */
+  async requestEviction(
+    stream: StreamTabId,
+    shouldStillEvict?: () => boolean,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < MAX_EVICTION_DRAIN_ATTEMPTS; attempt++) {
+      const record = this.records.get(stream);
+      if (!record || this.deletions.owns(stream)) return;
+      const { generation, seedChain } = record;
+      // A reader-driven seed is a caller that asked for this record and will
+      // read it synchronously when its `preload` resolves. Releasing it out
+      // from under that caller would answer its question with an empty
+      // record, so the next release trigger collects it instead. `refreshSeed`
+      // parks the pre-refresh disk state for exactly its own duration, so that
+      // — not the seed queue, which fact-driven mutations share, and whose
+      // work no reader is waiting on — is what names a reader.
+      if (record.seedRefreshBaseline !== undefined) return;
+      // `seedChain` is the newest queued task either path published, so
+      // awaiting it drains the queue as it stood; anything queued behind it
+      // rebinds the field and the identity check below sees that instead.
+      await seedChain;
+      await this.writes.retryDirtyWrites(stream);
+      const current = this.records.get(stream);
+      if (
+        !current ||
+        current.generation !== generation ||
+        current.seedChain !== seedChain ||
+        this.deletions.owns(stream) ||
+        shouldStillEvict?.() === false
+      ) {
+        return;
+      }
+      // A mutation that landed on an already-seeded record during the drain
+      // persists directly, without rebinding `seedChain`, so neither check
+      // above sees it. Evicting would drop its write lock together with the
+      // record and strand the value in neither memory nor disk, so re-drain
+      // instead — and read this with no await between it and the eviction.
+      if (this.writes.hasDirtyWrites(stream)) continue;
+      this.evict(stream);
+      return;
+    }
+  }
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
@@ -1373,12 +1472,21 @@ export class StreamSnapshotStore {
     // The config of the run this stream just left is not this run's config;
     // `run.config` follows `run.start` with the new one. A config carrying no
     // identity yet is this run's until something says otherwise, so only a
-    // KNOWN previous execution drops it.
-    const previous = record.runExecutionId;
+    // KNOWN previous execution drops it. A record minted after a release
+    // knows the previous execution only through the mirror it started from,
+    // so that names the handoff when the record itself cannot.
+    const previous =
+      record.runExecutionId ?? record.summaryMetaHydrationFallback?.executionId;
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
-      record.summaryMetaHydrationFallback = undefined;
+      // Only what the departing execution owned: the stream's parent edge and
+      // its summed usage outlive any single run, and on a record minted after
+      // a release the fallback is their only source until seeding lands.
+      record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
+        record.summaryMetaHydrationFallback,
+        EXECUTION_SCOPED_SUMMARY_META_FIELDS,
+      );
     }
     record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
       record.summaryMetaHydrationFallback,

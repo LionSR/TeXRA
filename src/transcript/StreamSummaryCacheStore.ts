@@ -26,6 +26,7 @@ import {
   AgentCategorySchema,
   ExecutionIdSchema,
   RunIdentitySchema,
+  TokenUsageStatsSchema,
   UserFollowUpSupportSchema,
   type StreamLogEntry,
   type StreamTabId,
@@ -66,6 +67,11 @@ const StreamSummaryMetaSchema = z.object({
   model: z.string().optional(),
   workingDirectory: z.string().optional(),
   command: z.string().optional(),
+  /**
+   * The stream's summed run usage, mirrored so a released sidecar record still
+   * answers the roster's token column. Re-published on every usage write.
+   */
+  cumulativeUsage: TokenUsageStatsSchema.optional(),
 });
 export type StreamSummaryMeta = z.infer<typeof StreamSummaryMetaSchema>;
 

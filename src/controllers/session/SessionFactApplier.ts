@@ -23,7 +23,10 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { streamStageFromStageStart } from '@shared/streams/stage';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import {
+  isActivePhase,
+  isTerminalOutcomePhase,
+} from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { assertNever } from '@utils/core';
 
@@ -94,6 +97,14 @@ type SessionFactApplierOptions = {
     | DeleteStreamResult
     | undefined
     | Promise<void | DeleteStreamResult | undefined>;
+  /**
+   * Whether the host is presenting `stream` right now (focused, selected, or
+   * open in a reader). A presented stream keeps its sidecar record resident
+   * for the reads the presentation makes synchronously; every other finished
+   * child releases it at its terminal status. A host that never presents
+   * finished children may omit this.
+   */
+  isStreamPresented?: (stream: StreamTabId) => boolean;
 };
 
 /**
@@ -633,6 +644,11 @@ export class SessionFactApplier {
   }: UpdateStreamDescriptionPayload): void {
     this.state.setStreamDescription(streamId, description);
     this.renderer.onStreamDescriptionChanged(streamId, description);
+    // Description generation outlives the run it describes, and writing one
+    // makes a released record resident again. The value reaches disk and the
+    // summary mirror either way, so this is another moment the rule can turn
+    // true — not a second rule.
+    this.retireSidecarIfFinishedChild(streamId);
   }
 
   private handleSetParentStream({
@@ -801,6 +817,38 @@ export class SessionFactApplier {
     this.renderer.invalidate(parentStreamId, 'subagents');
   }
 
+  /**
+   * A finished child stream nobody is presenting releases its sidecar record
+   * as well as its transcript. Children are what a long session accumulates;
+   * a root stream stays resident for the host's history views. The store
+   * re-seeds on the next `preload`, which every presentation path performs
+   * before reading, and warns on a synchronous read that skipped it.
+   *
+   * The single owner of that rule, so the two moments it can become true —
+   * the stream finishes while nothing presents it, and a host stops
+   * presenting a stream that already finished — ask the same question. The
+   * rule is re-read after the store's drain: a relaunch or a fresh
+   * presentation during it keeps the record.
+   */
+  retireSidecarIfFinishedChild(streamId: StreamTabId): void {
+    if (!this.isRetiredSidecarCandidate(streamId)) return;
+    withEventErrorHandling(
+      'SessionFacts',
+      `failed to release the sidecar record of finished stream ${streamId}`,
+      () =>
+        this.state.snapshots.requestEviction(streamId, () =>
+          this.isRetiredSidecarCandidate(streamId),
+        ),
+    );
+  }
+
+  private isRetiredSidecarCandidate(streamId: StreamTabId): boolean {
+    const phase = this.state.streamStatus.get(streamId);
+    if (phase === undefined || !isTerminalOutcomePhase(phase)) return false;
+    if (!this.state.getStreamMetadata(streamId).parentStreamId) return false;
+    return this.options.isStreamPresented?.(streamId) !== true;
+  }
+
   private notifyRosterParents(parents: readonly StreamTabId[]): void {
     withEventErrorHandling(
       'SessionFacts',
@@ -871,6 +919,7 @@ export class SessionFactApplier {
     const logHead = this.state.streamLogs.get(streamId)?.head ?? 0;
     if (!isActivePhase(status)) {
       this.state.streamLogs.requestEviction(streamId);
+      this.retireSidecarIfFinishedChild(streamId);
     }
 
     const isNewRunningTransition =
