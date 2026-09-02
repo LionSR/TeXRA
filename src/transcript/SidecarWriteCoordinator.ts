@@ -6,8 +6,8 @@
  * confirmed durable, and retried a bounded number of times by
  * `retryDirtyWrites` before remaining dirt is allowed to fail a flush.
  * Eviction safety is the other half: a write queued before
- * `evict()`/`deleteStream()` drops its chain key must not fire afterward and
- * resurrect the deleted `streamData/{id}/` directory.
+ * `evict()`/`stageDeleteStream()` drops its chain key must not fire afterward
+ * and resurrect the deleted `streamData/{id}/` directory.
  *
  * It reaches the rest of the store only through {@link SidecarWriteHost} —
  * the staged-deletion write buffer, the revocable stream-generation guard,
@@ -104,7 +104,7 @@ export class SidecarWriteCoordinator {
     const mutex = this.writeMutexes.get(chainKey) ?? new Mutex();
     this.writeMutexes.set(chainKey, mutex);
     return mutex.runExclusive(() => {
-      // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
+      // Eviction guard: `evict()`/`stageDeleteStream()` drop this chain key. A
       // write queued before that must NOT fire afterward, or a late `kv()`
       // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
       if (!this.writeMutexes.has(chainKey)) return;

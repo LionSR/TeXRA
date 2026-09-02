@@ -1315,12 +1315,6 @@ export class StreamSnapshotStore {
     };
   }
 
-  /** Delete a stream's sidecars and in-memory state as one committed action. */
-  async deleteStream(stream: StreamTabId): Promise<void> {
-    const deletion = await this.stageDeleteStream(stream);
-    await deletion.commit();
-  }
-
   private setTodos(stream: StreamTabId, todos: TodoItem[]): void {
     // Same eager-apply + overlay shape as the round/usage mutators: a live
     // updateTodos must be readable via getWorkPlan before the stream seeds,
