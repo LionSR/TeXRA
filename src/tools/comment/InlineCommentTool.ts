@@ -94,13 +94,12 @@ const InlineCommentInputSchema = z.discriminatedUnion('command', [
       command: z
         .literal('add')
         .describe('Open a new comment thread on a file range.'),
-      path: z
-        .string()
-        .trim()
-        .min(1)
-        .describe(
-          'File the comment anchors to. Workspace-relative or absolute.',
-        ),
+      path: z.string().trim().min(1).describe(
+        // Provider conversion advertises one `path` for all commands and keeps
+        // this first-declared branch's description (flattenTopLevelUnion), so
+        // it must also carry the list command's guidance.
+        'File the comment anchors to (add), or the file to restrict to (list; omit for all threads). Workspace-relative or absolute.',
+      ),
       line: z
         .int()
         .min(1)
