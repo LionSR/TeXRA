@@ -14,8 +14,8 @@ Each agent execution uses the following state slices:
 - **Run state (`AgentRunStateSnapshot`)** – Records run-level lifecycle data
   such as the total number of rounds executed, aggregate response time, and a
   `RunUsageAccumulator` that aggregates token usage across all rounds. Also a
-  plain Zod-validated object; `recordCycleMetrics`/`recordRound`
-  (`src/agent/core/state/AgentState.ts`) mutate it in place.
+  plain Zod-validated object; `recordCycleMetrics`
+  (`src/agent/core/state/AgentState.ts`) mutates it in place.
 - **Workspace state (`AgentWorkspaceState`)** – A class providing focused
   slices for response assembly, media attachments, reasoning caches, and
   document metrics. Flows mutate these slices independently when composing
