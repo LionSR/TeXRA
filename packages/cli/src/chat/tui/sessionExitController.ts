@@ -210,7 +210,6 @@ export function createSessionExitController(
     });
     switch (sigintAction) {
       case 'clean-exit':
-        session.stopRequested = true;
         ctx.interruptActive();
         requestInputExit();
         return;
@@ -231,7 +230,6 @@ export function createSessionExitController(
         void teardown({ kind: 'signal', exitCode: session.runExitCode });
         return;
       case 'interrupt-and-arm-exit':
-        session.stopRequested = true;
         ctx.interruptActive();
         armExit();
         return;
@@ -243,7 +241,6 @@ export function createSessionExitController(
   // suspended so its flow record survives for resume (see handleSigint).
   const handleTermSignal = (exitCode: number): void => {
     if (ctx.canStopActiveRun()) {
-      session.stopRequested = true;
       ctx.interruptActive();
     }
     void teardown({ kind: 'signal', exitCode });
@@ -327,13 +324,15 @@ export function createSessionExitController(
       disposalFailure = error;
     }
     await ctx.followUpQueue.onIdle();
-    // A suspended (idle/WAITING) root session is resumable: its flow record
-    // survives only if we DON'T interrupt the flow (interrupt clears it). See
-    // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
-    // this state from a resume slot that is still rehydrating.
+    // A suspended (idle/WAITING) root session is resumable, so it is left
+    // uninterrupted: the checkpoint survives either way since #11304/#11315,
+    // but interrupting would persist a CANCELLED outcome, clear approvals and
+    // sweep active children. This is the one owner of that policy — `/exit`
+    // and both signal paths all land here rather than deciding it themselves.
+    // See chatTuiIsResumableIdleOnExit for the live-flow check that
+    // distinguishes this state from a resume slot that is still rehydrating.
     const resumableIdle = ctx.isResumableIdle();
     if (chatTuiRunPending(session) && !resumableIdle) {
-      session.stopRequested = true;
       ctx.interruptActive();
       // Only await a run we actually interrupted/finished. A resumableIdle run
       // is parked at the WAIT node and its runPromise NEVER resolves, so

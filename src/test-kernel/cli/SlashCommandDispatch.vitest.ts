@@ -165,7 +165,6 @@ function createContext(
     processCwd: '/tmp/launcher',
     initialAgent: 'chat',
     initialModel: 'deepseekT',
-    interruptActive: vi.fn(),
     requestInputExit: vi.fn(),
     getApprovalPolicy: () => approvalPolicy,
     setApprovalPolicy: (policy) => {
@@ -924,20 +923,18 @@ describe('handleTuiSlashCommand', () => {
   it('treats /quit as the canonical exit command without echoing it', async () => {
     registerBuiltinSlashCommands();
     const session = createSession();
-    const interruptActive = vi.fn();
     const requestInputExit = vi.fn();
 
     const handled = await handleTuiSlashCommand(
       '/quit',
-      createContext(session, {
-        interruptActive,
-        requestInputExit,
-      }),
+      createContext(session, { requestInputExit }),
     );
 
     expect(handled).toBe(true);
+    // `stopRequested` is set here and nowhere else on this path: the graceful
+    // teardown's `followUpQueue.onIdle()` await depends on it. The interrupt
+    // is deliberately NOT raised — the teardown owns that policy.
     expect(session.stopRequested).toBe(true);
-    expect(interruptActive).toHaveBeenCalledOnce();
     expect(requestInputExit).toHaveBeenCalledOnce();
     expect(activeStreamId.get()).toBeUndefined();
   });

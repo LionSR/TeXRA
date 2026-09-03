@@ -266,7 +266,6 @@ export async function runChat(
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,
-    interruptActive,
     requestInputExit: exitController.requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,

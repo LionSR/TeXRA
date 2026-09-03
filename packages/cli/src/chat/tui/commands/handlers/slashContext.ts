@@ -13,7 +13,6 @@ export interface SlashCommandContext {
   readonly processCwd?: CliContext['cwd'];
   readonly initialAgent: string;
   readonly initialModel: string;
-  readonly interruptActive: () => void;
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
