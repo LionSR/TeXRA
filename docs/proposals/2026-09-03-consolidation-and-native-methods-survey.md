@@ -5,8 +5,13 @@ delete five dead surfaces in the runtime and CLI approval layers`,
 > #11792). Scheduled routine re-ran the standing question — "find
 > duplicate/similar logic to consolidate, and hand-rolled code that a native
 > method or the standard library already covers" — one day after
-> `2026-09-02-consolidation-and-native-methods-survey.md`. **Verdict: nothing
-> new survives scrutiny.** No code changes accompany this entry.
+> `2026-09-02-consolidation-and-native-methods-survey.md`. **Verdict: no
+> duplication newly introduced in this window, but PR review on this entry
+> surfaced two real, pre-existing candidates from
+> `2026-08-25-cli-controller-seam-audit.md` that three prior survey passes
+> (2026-08-29, 2026-08-30, 2026-09-02) and this entry's own first draft all
+> failed to file — now filed as #11809 and #11810.** No code changes
+> accompany this entry.
 
 ## 0. Why this pass is targeted rather than a full re-sweep
 
@@ -66,7 +71,13 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
 - **`JSON.parse(JSON.stringify(` deep clones:** the one production hit,
   `src/agent/workflowScript/parseScript.ts:130`, remains the already-adjudicated
   `vm.Script` sandbox literal, not a clone helper. No new hits.
-- **`.indexOf(...) !== -1` / dedup-via-filter-and-indexOf:** zero.
+- **`.indexOf(...) !== -1` / dedup-via-filter-and-indexOf:** the sweep's
+  regex missed the assignment-in-condition form; one real hit exists,
+  `src/replacement/advanced.ts:329`:
+  `while ((startIdx = text.indexOf(env.start, startIdx)) !== -1)`. This walks
+  every occurrence of a math-environment delimiter and needs the matched
+  _position_ to advance past it, so `.includes()` does not apply — not a
+  candidate, but should have been enumerated rather than reported as zero.
 - **Hand-rolled `Math.random().toString(36)` IDs:** zero in production (one
   hit, in a `test-kernel` fixture).
 - **Hand-rolled `isEqual`/`deepEqual`:** zero.
@@ -85,7 +96,16 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   classification — the same "bounded re-drain reconciling concurrent state,
   not `p-retry`-shaped error-driven retry" species as
   `MAX_DIRTY_WRITE_RETRIES`, adjudicated the same way. Not a candidate.
-- **Hand-rolled `debounce`/`throttle`:** zero.
+- **Hand-rolled `debounce`/`throttle`:** the sweep's regex required the
+  literal function name `debounce`/`throttle` and missed
+  `createFlushableDebounce` (`src/utils/core/index.ts:256`, pre-existing, not
+  new this window). Its own doc comment states the reason a library
+  debouncer doesn't fit: call sites need a synchronous flush escape hatch
+  (run the pending call now, typically pre-teardown) and re-entrant
+  `schedule()` from inside the callback itself — the CLI's transcript sync
+  re-schedules from within its own flush callback, which `es-toolkit`'s
+  invoke-then-cancel debounce silently drops. An accepted exception, not a
+  candidate, but should have been counted rather than reported as zero.
 - **New `Object.assign(` call sites in the diff:** none of the 93 touched
   production files added one; the repo-wide set is unchanged from the prior
   round's already-accepted "mutating an owned, function-local object" pattern.
@@ -107,8 +127,13 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   new shared abstraction added in this window (used by `src/tools/timeouts.ts`
   and elsewhere), replacing per-call-site `AbortSignal.any([...])` composites
   that would otherwise pin a long-lived source signal's listener graph for the
-  source's whole lifetime. This is consolidation _arriving_, not a
-  duplication left behind — nothing further to flag.
+  source's whole lifetime. It has not reached every pre-existing call site,
+  though: `src/auth/fetchWithTimeout.ts:10-23` still builds an undetached
+  `AbortSignal.any([options.signal, controller.signal])` on every call and
+  only aborts it on the timeout path, never on success — the same leak shape,
+  pre-existing (not new this window) and already named, unfiled, in
+  `docs/proposals/2026-08-25-cli-controller-seam-audit.md`
+  ("`fetchWithTimeout` reimplements `AbortSignal.timeout`"). Filed as #11809.
 - **CLI approval dispatch (`packages/cli/src/runtime/approvalAdapter.ts`,
   `packages/cli/src/runtime/approval/approvalPrompts.ts`):** already collapsed
   in this window (part of #11792, not #11775) from a
@@ -117,23 +142,38 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   content — the exact shape a fresh survey would otherwise propose.
 - **Cross-host duplication (CLI / desktop / extension):** the "message-host
   trio" consolidation (#11754) and "share agent-proposal wiring across
-  hosts" (#11756) already landed in this window; the remaining per-host
-  files read in this pass (`desktopAgentExecution.ts`,
-  `ProgressViewMessageHandler.ts`, `chatSessionController.ts`) each own
-  host-specific wiring (Electron IPC, VS Code webview messages, terminal
-  rendering) with no shared logic duplicated across them beyond what the
-  existing base classes already cover.
+  hosts" (#11756) already landed in this window, but neither happened to
+  touch one pre-existing pair: `desktopAgentExecution.ts:521-524` and
+  `ProgressViewMessageHandler.ts:661-664` each build
+  `ProgressFollowUpController` with a byte-identical `workspace: {
+locatePath, exists }` adapter wrapping the same two `WorkspaceFS` static
+  methods. Also already named, unfiled, in the 2026-08-25 seam audit ("Ten
+  inline snapshot-port re-projections... plus a byte-identical `workspace`
+  pair"). Filed as #11810. `chatSessionController.ts` (CLI) owns unrelated
+  terminal-rendering wiring with no shared logic duplicated against either
+  host file.
 
 ## 3. Verdict
 
-No candidate in either lens clears the bar the six prior full-repo rounds and
-the three prior dedicated passes on this exact question set. As with
-2026-09-02, the volume of upstream `refactor:`/`consolidate:` commits landed
-in the 28-commit window between surveys (eleven explicitly targeting this
-class of work — nine consolidation refactors plus two dead-code deletions,
-enumerated in §0 — several landing the exact shape a fresh pass would
-otherwise propose) is itself evidence the surface this routine watches is
-being actively worked, not neglected.
+No _newly introduced_ duplication in the `646475d..d418d45` window clears the
+bar the six prior full-repo rounds and the three prior dedicated passes on
+this exact question set. As with 2026-09-02, the volume of upstream
+`refactor:`/`consolidate:` commits landed in the 28-commit window between
+surveys (eleven explicitly targeting this class of work — nine consolidation
+refactors plus two dead-code deletions, enumerated in §0 — several landing
+the exact shape a fresh pass would otherwise propose) is itself evidence the
+surface this routine watches is being actively worked, not neglected.
+
+That said, this entry's own PR review is itself the counter-example to
+treating "nothing new" as "nothing outstanding": two real, low-risk,
+already-scoped candidates from `2026-08-25-cli-controller-seam-audit.md`
+(`fetchWithTimeout`'s reimplemented, leaking `AbortSignal.timeout`; the
+byte-identical desktop/extension `workspace` adapter) had gone unfiled
+through this entry's first draft and all three prior dedicated passes,
+surviving purely because nobody had turned the audit's table rows into
+tracked issues. Filed now as #11809 and #11810 — the actual output of this
+round.
 
 This entry exists to record that the routine ran and to save the next pass
-from re-treading the same ground; no code changes accompany this cycle.
+from re-treading the same ground; no code changes accompany this cycle, but
+two follow-up issues do.
