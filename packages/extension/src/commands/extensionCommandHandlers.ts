@@ -17,7 +17,6 @@ import {
   AgentCategorySchema,
   FileLocationSchema,
   SETTINGS_TAB_PANEL_BY_NAME,
-  StreamTabIdSchema,
   type AcceptCopyMeta,
   type AgentCategory,
   type FileLocation,
@@ -129,7 +128,6 @@ export interface ExtensionCommandActions {
   downloadArXivSource(): Promise<void>;
   openProgressViewInTab(): Promise<void>;
   openDoc(page: string): Promise<void>;
-  stopAgent(streamId: string): void;
   indentCurrentTeX(): Promise<void>;
   fixCompilation(): Promise<void>;
   getTeXCount(): Promise<void>;
@@ -241,13 +239,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
     z.tuple([z.string()]),
     (actions: ExtensionCommandActions, page) =>
       awaitTrue(actions.openDoc(page)),
-  ),
-  'texra.stopAgent': definedHandler(
-    z.tuple([StreamTabIdSchema]),
-    (actions: ExtensionCommandActions, streamId) => {
-      actions.stopAgent(streamId);
-      return true;
-    },
   ),
   'texra.indentCurrentTeX': (actions) => awaitTrue(actions.indentCurrentTeX()),
   'texra.fixCompilation': (actions) => awaitTrue(actions.fixCompilation()),

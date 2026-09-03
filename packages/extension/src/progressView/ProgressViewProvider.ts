@@ -118,8 +118,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         logger: this.logger,
       },
       lifecycle: {
-        stopStream: (stream, options) =>
-          this.messageHandler.stopStream(stream, options),
         cleanupDeletedStream: (stream) =>
           this.messageHandler.cleanupDeletedStream(stream),
         cleanupDeletedStreams: (options) =>
