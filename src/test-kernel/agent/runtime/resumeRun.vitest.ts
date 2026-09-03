@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import {
-  resumeRun,
-  resumeStreamWithRefusalNotice,
-} from '@agent/runtime/resumeRun';
+import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -96,29 +93,6 @@ describe('resumeRun tool-use queue ownership', () => {
     );
   });
 
-  it('presents a refused stream resume with the shared wording', async () => {
-    const session = createSession();
-    const emit = vi.spyOn(session.interactions, 'emit').mockReturnValue(false);
-    readExecutionStreamIndexMock.mockResolvedValueOnce({
-      byStream: new Map(),
-      unreadable: new Map(),
-    });
-
-    await expect(
-      resumeStreamWithRefusalNotice(STREAM, { session, executeWorkflow }),
-    ).resolves.toBe(false);
-    expect(emit).toHaveBeenCalledWith(
-      'requestShowInstruction',
-      {
-        key: 'resumeRefused',
-        message:
-          'This run cannot accept messages right now. Resume it, or start a new agent task.',
-        showSuppress: false,
-      },
-      { replayWhenAttached: true },
-    );
-  });
-
   it('claims stream recovery before resolving the disk index', async () => {
     const session = createSession();
     const index = createDeferred<{
@@ -127,10 +101,7 @@ describe('resumeRun tool-use queue ownership', () => {
     }>();
     readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
 
-    const resumed = resumeStreamWithRefusalNotice(STREAM, {
-      session,
-      executeWorkflow,
-    });
+    const resumed = resumeStream(STREAM, { session, executeWorkflow });
     expect(
       session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
     ).toEqual({ kind: 'queued' });
@@ -139,7 +110,11 @@ describe('resumeRun tool-use queue ownership', () => {
       byStream: new Map([[STREAM, EXECUTION]]),
       unreadable: new Map(),
     });
-    await expect(resumed).resolves.toBe(true);
+    await expect(resumed).resolves.toEqual({
+      started: true,
+      delivered: true,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
     const options = resumeToolUseFromResumeDataMock.mock
       .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
     expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
@@ -155,16 +130,13 @@ describe('resumeRun tool-use queue ownership', () => {
     }>();
     readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
 
-    const resumed = resumeStreamWithRefusalNotice(STREAM, {
-      session,
-      executeWorkflow,
-    });
+    const resumed = resumeStream(STREAM, { session, executeWorkflow });
     expect(
       session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
     ).toEqual({ kind: 'queued' });
 
     index.resolve({ byStream: new Map(), unreadable: new Map() });
-    await expect(resumed).resolves.toBe(false);
+    await expect(resumed).resolves.toEqual({ failed: 'not_resumable' });
     expect(session.followUps.getAll(STREAM)).toEqual(['raced']);
   });
 

@@ -7,8 +7,7 @@ const mocks = vi.hoisted(() => ({
   resumeStreamWithRefusalNotice: vi.fn(),
 }));
 
-vi.mock('@agent/runtime', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/runtime')>()),
+vi.mock('@controllers/session/resumeStreamPresentation', () => ({
   resumeStreamWithRefusalNotice: mocks.resumeStreamWithRefusalNotice,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({

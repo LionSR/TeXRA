@@ -3,9 +3,9 @@ import * as vscode from 'vscode';
 
 import {
   defaultSession,
-  resumeStreamWithRefusalNotice,
   trackTerminalResultPresentation,
 } from '@agent/runtime';
+import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';

@@ -1,10 +1,10 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  resumeStreamWithRefusalNotice,
   trackTerminalResultPresentation,
   type SessionHandle,
 } from '@agent/runtime';
+import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
