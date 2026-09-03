@@ -54,12 +54,13 @@ commits, all `fix` or a library swap — none adds a wrapper or new surface:
   (`logUtils` — a dependency swap, hand-rolled code retired).
 
 The two commits that landed **after** the `-09-02` doc's own commit `7aa9985`
-are both net-negative refactors:
+(all line counts from `git show --numstat`, i.e. true net deltas, not `--stat`
+histogram widths):
 
-| Commit             | Effect                                                                                                                                                                                                                                                                                          |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `d418d45` (#11792) | **−354 net lines.** Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (−51), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                         |
-| `974d459` (#11775) | **Consolidation.** Gave the staged-deletion rollback path and the `sr`-only recipe a single owner. Net per-file (`git show --numstat`): `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 add / 13 del), `SessionStores.ts` −7 (19 / 26). Indirection removal, not addition. |
+| Commit             | Effect                                                                                                                                                                                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `d418d45` (#11792) | **Net −354** (122 ins / 476 del). Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (net −49), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                                            |
+| `974d459` (#11775) | **Consolidation, net +14** (82 ins / 68 del). Gave the staged-deletion rollback path and the `sr`-only recipe a single owner: `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 / 13), `SessionStores.ts` −7 (19 / 26). Net-positive because logic moved to one owner — indirection removal, not new abstraction. |
 
 No commit in the interval touches the frozen host→`@agent` deep-import width or
 adds a public member; §3's baselines held and §2's structural measurements —
