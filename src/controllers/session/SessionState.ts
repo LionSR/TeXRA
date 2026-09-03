@@ -27,6 +27,7 @@ import {
   type ActiveChildInfo,
   type ContextStateData,
   type ConversationProgress,
+  type SessionEventBody,
   type StreamStage,
   type ExecutionId,
   type RunOutcome,
@@ -37,6 +38,11 @@ import {
   RUN_OUTCOME,
   STREAM_PHASE,
 } from '@shared/schemas';
+import { fold } from '@shared/session/sessionFold';
+import {
+  createSessionView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
@@ -227,6 +233,17 @@ export class SessionState {
   readonly streamStatus: StreamStatusMachine;
   readonly followUps: ToolUseFollowUpQueue;
 
+  /**
+   * The one session state every renderer reads (PRD one-fold-three-renderers,
+   * 5.1): the fold over the facts this session has admitted. Replaced on
+   * every applied event, never mutated. In lane 1 the fact applier feeds it
+   * in process and this class stamps the envelope; lane 2's `SessionEvents`
+   * publisher owns seq, owner token, and timestamp, and the counter below
+   * leaves with it.
+   */
+  view: SessionView = createSessionView();
+  private readonly viewSeq = new Map<StreamTabId, number>();
+
   private readonly logger: ReturnType<typeof createLog>;
   private readonly session: SessionHandle;
 
@@ -259,6 +276,24 @@ export class SessionState {
       }))
       .sort(compareByNewestCreationTime)
       .map((entry) => entry.name);
+  }
+
+  /**
+   * Fold one admitted fact into {@link view}. The owner token is unknown in
+   * process until the publisher stamps it, so a pending approval folds as
+   * interrupted here; the live-owner rule is exercised by the fold's test and
+   * armed by lane 2.
+   */
+  applySessionEvent(streamId: StreamTabId, body: SessionEventBody): void {
+    const seq = (this.viewSeq.get(streamId) ?? 0) + 1;
+    this.viewSeq.set(streamId, seq);
+    this.view = fold(this.view, {
+      ...body,
+      streamId,
+      seq,
+      ownerId: null,
+      timestamp: Date.now(),
+    });
   }
 
   // -- Ephemeral session state ------------------------------------------------

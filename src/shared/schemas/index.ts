@@ -80,3 +80,4 @@ export * from './subscriptionUsage';
 // Layer 7: Composite schemas (depend on multiple layers)
 export * from './streamState';
 export * from './streamSnapshot';
+export * from './sessionEvent';

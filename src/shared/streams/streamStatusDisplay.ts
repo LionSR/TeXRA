@@ -81,6 +81,42 @@ const STREAM_STATUS_LABELS = {
 } as const;
 
 /**
+ * The one status-to-tone mapping (PRD one-fold-three-renderers, G4 and 15):
+ * a fact-only word every host paints in its own colour vocabulary. Keyed by
+ * the same display key as the labels above, so a status that gains a label
+ * must gain a tone in the same edit.
+ */
+export const STREAM_STATUS_TONE = {
+  RUNNING: 'running',
+  SUCCESS: 'success',
+  DANGER: 'danger',
+  NEUTRAL: 'neutral',
+  WARNING: 'warning',
+} as const;
+export type StreamStatusTone =
+  (typeof STREAM_STATUS_TONE)[keyof typeof STREAM_STATUS_TONE];
+
+const STREAM_STATUS_TONES: Record<StreamStatusDisplayKey, StreamStatusTone> = {
+  [STREAM_SUBSTATE.STARTING]: STREAM_STATUS_TONE.RUNNING,
+  [STREAM_PHASE.RUNNING]: STREAM_STATUS_TONE.RUNNING,
+  [STREAM_PHASE.FAILED]: STREAM_STATUS_TONE.DANGER,
+  [STREAM_PHASE.COMPLETED]: STREAM_STATUS_TONE.SUCCESS,
+  [STREAM_PHASE.CANCELLED]: STREAM_STATUS_TONE.NEUTRAL,
+  ready: STREAM_STATUS_TONE.NEUTRAL,
+  [STREAM_PHASE.WAITING]: STREAM_STATUS_TONE.NEUTRAL,
+  [STREAM_SUBSTATE.RESUMING]: STREAM_STATUS_TONE.RUNNING,
+  [STREAM_LIFECYCLE_UNAVAILABLE]: STREAM_STATUS_TONE.WARNING,
+};
+
+/** Tone word for a status, through the same display key as its label. */
+export function streamStatusTone(
+  status: StreamLifecycleStatus,
+  substate?: StreamSubstate,
+): StreamStatusTone {
+  return STREAM_STATUS_TONES[streamStatusDisplayKey(status, substate)];
+}
+
+/**
  * Banner and tooltip copy for a run another TeXRA process holds. Recorded
  * as the stream's unavailable detail and sent as `StreamMetadata.statusDetail`.
  */

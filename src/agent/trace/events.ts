@@ -22,6 +22,7 @@ import type {
   RetryErrorInfo,
   RunIdentity,
   RunOutcome,
+  RunStartEventBody,
   StreamPhase,
   StreamSubstate,
   StreamTabId,
@@ -87,11 +88,17 @@ export interface StageStartEvent extends StageStamp {
   readonly total?: number;
 }
 
-/** Immutable run identity emitted once when a stream enters RUNNING. */
-interface RunStartEvent extends StageStamp {
-  readonly type: 'run.start';
+/**
+ * Immutable run identity emitted once when a stream enters RUNNING: the
+ * fold's existence fact, typed from its `run.start` arm so the trace stays
+ * assignable to the session-event vocabulary. Live emitters always know the
+ * identity; the nullish arm belongs to the legacy importer alone.
+ */
+interface RunStartEvent
+  extends
+    StageStamp,
+    Omit<RunStartEventBody, 'identity' | 'userFollowUpSupport'> {
   readonly streamId: StreamTabId;
-  readonly executionId: ExecutionId;
   readonly identity: RunIdentity;
   readonly userFollowUpSupport?: UserFollowUpSupport;
 }

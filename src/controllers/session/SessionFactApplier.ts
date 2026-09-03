@@ -12,6 +12,7 @@ import { withEventErrorHandling } from '@controllers/session/eventErrorHandling'
 import {
   STREAM_PHASE,
   isGoalInFlight,
+  type SessionEventBody,
   type SetActiveStreamPayload,
   type SetParentStreamPayload,
   type StreamPhase,
@@ -336,6 +337,7 @@ export class SessionFactApplier {
       'SessionFacts',
       `failed to handle ${fact.type} fact`,
       () => {
+        this.foldSessionFact(fact);
         switch (fact.type) {
           case 'goalStateChanged':
             return this.handleGoalStateChanged(fact.payload.streamId);
@@ -467,8 +469,169 @@ export class SessionFactApplier {
     withEventErrorHandling(
       'SessionFacts',
       `failed to handle ${event.type} fact`,
-      () => handle(streamId, event),
+      () => {
+        this.foldRunFact(streamId, event);
+        return handle(streamId, event);
+      },
     );
+  }
+
+  /**
+   * Translate an admitted session fact into the fold's vocabulary and feed
+   * `SessionState.view`. Field naming only: the two shapes mirror each other,
+   * and the store reads (`GoalStore`, the follow-up queue) happen here, in
+   * the controller, so the fold never touches a store. `setActiveStream` has
+   * no arm: `run.start` is the existence fact. A `child.activity` roster has
+   * none either: topology is `parentId`.
+   */
+  private foldSessionFact(fact: SessionFact): void {
+    switch (fact.type) {
+      case 'goalStateChanged': {
+        const { streamId } = fact.payload;
+        const goal = GoalStore.getForStream(streamId);
+        this.fold(streamId, {
+          type: 'goalStateChanged',
+          state: goal
+            ? { active: true, status: goal.status, objective: goal.objective }
+            : { active: false },
+        });
+        return;
+      }
+      case 'inquiryThreadUpdated': {
+        const { parentStreamId } = fact.payload;
+        // A thread with no parent stream has no envelope key in the durable
+        // vocabulary yet (PRD 6 lists inquiries at session level); lane 2's
+        // publisher decides its key, so it stays on the renderer port alone.
+        if (parentStreamId) {
+          this.fold(parentStreamId, {
+            type: 'inquiryThreadUpdated',
+            ...fact.payload,
+          });
+        }
+        return;
+      }
+      case 'updateQueuedFollowUps':
+      case 'followUpSent': {
+        const { streamId } = fact.payload;
+        this.fold(streamId, {
+          type: 'updateQueuedFollowUps',
+          messages: this.state.followUps.getAll(streamId),
+        });
+        return;
+      }
+      case 'setActiveStream':
+        return;
+      case 'updateStreamDescription':
+        this.fold(fact.payload.streamId, {
+          type: 'updateStreamDescription',
+          description: fact.payload.description,
+        });
+        return;
+      case 'status':
+        this.fold(fact.streamId, {
+          type: 'status',
+          phase: fact.phase,
+          previousPhase: fact.previousPhase,
+          cause: fact.cause,
+          substate: fact.substate,
+          runStartedAt: fact.runStartedAt,
+        });
+        return;
+      case 'setParentStream':
+        this.fold(fact.payload.childStreamId, {
+          type: 'setParentStream',
+          parentStreamId: fact.payload.parentStreamId,
+        });
+        return;
+      case 'removeStream':
+        this.fold(fact.payload.streamId, { type: 'removeStream' });
+        return;
+      default:
+        return assertNever(fact, 'Unhandled session fact for the fold');
+    }
+  }
+
+  private foldRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
+    switch (event.type) {
+      case 'usage':
+        this.fold(event.payload.streamId, {
+          type: 'usage',
+          storageKey: event.payload.storageKey,
+          usage: event.payload.usage,
+        });
+        return;
+      case 'context.state':
+        this.fold(streamId, {
+          type: 'context.state',
+          inputTokens: event.inputTokens,
+          contextWindow: event.contextWindow,
+        });
+        return;
+      case 'run.start': {
+        const { streamId: runStream, stageId: _stageId, ...body } = event;
+        this.fold(runStream, body);
+        return;
+      }
+      case 'run.config':
+        this.fold(event.streamId, {
+          type: 'run.config',
+          executionId: event.executionId,
+          config: event.config,
+        });
+        return;
+      case 'updateTodos':
+        this.fold(event.streamId, { type: 'updateTodos', todos: event.todos });
+        return;
+      case 'updatePlan':
+        this.fold(event.streamId, { type: 'updatePlan', plan: event.plan });
+        return;
+      case 'addOutputFiles':
+        this.fold(event.streamId, {
+          type: 'addOutputFiles',
+          filesByRound: event.filesByRound,
+        });
+        return;
+      case 'updateMissingOutputs':
+        this.fold(event.streamId, {
+          type: 'updateMissingOutputs',
+          filesByRound: event.filesByRound,
+        });
+        return;
+      case 'updateCompileFailures':
+        this.fold(event.streamId, {
+          type: 'updateCompileFailures',
+          filesByRound: event.filesByRound,
+        });
+        return;
+      case 'goalPaused':
+        this.fold(event.streamId, { type: 'goalPaused' });
+        return;
+      case 'conversation.progress':
+        this.fold(streamId, {
+          type: 'conversation.progress',
+          progress: event.progress,
+        });
+        return;
+      case 'stage.start':
+        this.fold(streamId, {
+          type: 'stage.start',
+          id: event.id,
+          label: event.label,
+          parentId: event.parentId,
+          kind: event.kind,
+          index: event.index,
+          total: event.total,
+        });
+        return;
+      case 'child.activity':
+        return;
+      default:
+        return assertNever(event, 'Unhandled run fact for the fold');
+    }
+  }
+
+  private fold(streamId: StreamTabId, body: SessionEventBody): void {
+    this.state.applySessionEvent(streamId, body);
   }
 
   /**

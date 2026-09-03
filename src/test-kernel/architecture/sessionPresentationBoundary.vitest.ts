@@ -19,6 +19,14 @@ describe('session and presentation ownership boundary', () => {
     expect(source).not.toMatch(/activeStream|PersistedState|presentation/i);
   });
 
+  it('keeps draft and recording state out of the shared SessionView', () => {
+    const source = productionSource('src/shared/session/sessionView.ts');
+
+    expect(source).not.toMatch(
+      /followUpText|recording|polishedText|transcribedText|shouldFocusFollowUp/,
+    );
+  });
+
   it('keeps focus policy and hydration reactions out of SessionFactApplier', () => {
     const source = productionSource(
       'src/controllers/session/SessionFactApplier.ts',
