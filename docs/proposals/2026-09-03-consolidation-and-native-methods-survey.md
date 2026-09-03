@@ -14,8 +14,10 @@ Six full simplification survey rounds (2026-08-25 through 2026-08-27) and
 three prior dedicated passes on this exact question (2026-08-29, 2026-08-30,
 2026-09-02) already swept the repo end-to-end and found nothing outstanding
 in either lens. Between 2026-09-02's grounding commit (`646475d`) and this
-one, 28 commits landed touching `src/` or `packages/*/src/` — and, as with
-the prior window, a large share of that volume was itself
+one, 28 commits landed, 23 of them touching `src/` or `packages/*/src/` (the
+other five are docs-only, dependency bumps, or a workspace pnpm version
+alignment) — and, as with the prior window, a large share of that volume was
+itself
 already-completed consolidation work: `refactor: give two swallow-and-log
 policies a single owner` (#11784), `refactor: use date-fns for log timestamp
 formatting` (#11777), `Replace custom cache with LRUCache in
@@ -44,10 +46,10 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   `isEqual`/`deepEqual` functions, hand-rolled attempt-counter `for` loops,
   hand-rolled `debounce`/`throttle` definitions, and new `Object.assign(`
   call sites.
-- Read of every production file touched by the 28 commits between `646475d`
-  and `d418d45` (`git diff --stat`, non-test files only — 87 of the 127
-  changed files) to check for newly introduced duplication the tells above
-  would miss (e.g. two host adapters re-solving the same dispatch shape).
+- Read of every production file touched between `646475d` and `d418d45`
+  (`git diff --stat`, non-test files only — 93 of the 127 changed files) to
+  check for newly introduced duplication the tells above would miss (e.g. two
+  host adapters re-solving the same dispatch shape).
 - Targeted read of the four per-provider subscription-quota detection
   modules (`chatgptSubscriptionDetection.ts`, `glmCodingPlanDetection.ts`,
   `kimiCodeSubscriptionDetection.ts`, `xaiSubscriptionDetection.ts`) — the
@@ -73,7 +75,7 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   `SidecarWriteCoordinator.retryDirtyWrites` in the 2026-09-02 round did not
   change shape in this window.
 - **Hand-rolled `debounce`/`throttle`:** zero.
-- **New `Object.assign(` call sites in the diff:** none of the 87 touched
+- **New `Object.assign(` call sites in the diff:** none of the 93 touched
   production files added one; the repo-wide set is unchanged from the prior
   round's already-accepted "mutating an owned, function-local object" pattern.
 - **Per-provider subscription-quota detection files (4 files, one new
@@ -97,7 +99,8 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   source's whole lifetime. This is consolidation _arriving_, not a
   duplication left behind — nothing further to flag.
 - **CLI approval dispatch (`packages/cli/src/runtime/approvalAdapter.ts`,
-  `approvalPrompts.ts`):** already collapsed in this window (part of #11775)
+  `packages/cli/src/runtime/approval/approvalPrompts.ts`):** already collapsed
+  in this window (part of #11775)
   from a `CliDecisionApprovalRequest` discriminated-union dispatch into one
   `decideGated` helper taking an already-computed settlement plus prompt
   content — the exact shape a fresh survey would otherwise propose.
@@ -115,10 +118,11 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
 No candidate in either lens clears the bar the six prior full-repo rounds and
 the three prior dedicated passes on this exact question set. As with
 2026-09-02, the volume of upstream `refactor:`/`consolidate:` commits landed
-in the 28-commit window between surveys (ten explicitly targeting this class
-of work, several landing the exact shape a fresh pass would otherwise
-propose) is itself evidence the surface this routine watches is being
-actively worked, not neglected.
+in the 28-commit window between surveys (eleven explicitly targeting this
+class of work — nine consolidation refactors plus two dead-code deletions,
+enumerated in §0 — several landing the exact shape a fresh pass would
+otherwise propose) is itself evidence the surface this routine watches is
+being actively worked, not neglected.
 
 This entry exists to record that the routine ran and to save the next pass
 from re-treading the same ground; no code changes accompany this cycle.
