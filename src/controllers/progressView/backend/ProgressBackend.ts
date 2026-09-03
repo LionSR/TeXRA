@@ -607,10 +607,22 @@ export class ProgressBackend {
   private async prepareStreamDeletionCore(
     stream: StreamTabId,
   ): Promise<boolean> {
-    const ownedLocally =
-      this.session.executions.getAgentHandleByStream(stream) !== undefined;
-    if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
+    const handle = this.session.executions.getAgentHandleByStream(stream);
+    if (handle && isInFlightPhase(this.session.status.get(stream))) {
       this.stopRun(stream);
+      try {
+        await this.session.executions.runExecutionStep(
+          handle.executionId,
+          async () => undefined,
+        );
+      } catch (error) {
+        // A disposed session or held lifecycle can refuse the barrier. Let the
+        // deletion continue so it can report its own retention outcome.
+        log.warn(
+          `Stream ${stream} could not wait for its execution to release before deletion`,
+          { data: error },
+        );
+      }
     }
     return false;
   }
