@@ -175,7 +175,6 @@ export function createLifecycleOptions(
   overrides: Partial<ProgressBackendOptions['lifecycle']> = {},
 ): ProgressBackendOptions['lifecycle'] {
   return {
-    stopStream: vi.fn(),
     cleanupDeletedStream: vi.fn(),
     cleanupDeletedStreams: vi.fn(),
     rebuildRenderedStreams: vi.fn(async () => {}),

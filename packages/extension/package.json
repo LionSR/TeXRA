@@ -271,11 +271,6 @@
         "icon": "$(cloud-download)"
       },
       {
-        "command": "texra.stopAgent",
-        "title": "Stop Agent",
-        "category": "TeXRA"
-      },
-      {
         "command": "texra.execute",
         "title": "Execute Agent",
         "category": "TeXRA"
@@ -808,10 +803,6 @@
         {
           "command": "texra.showImportOptions",
           "when": "texra.activated"
-        },
-        {
-          "command": "texra.stopAgent",
-          "when": "false"
         },
         {
           "command": "texra.execute",

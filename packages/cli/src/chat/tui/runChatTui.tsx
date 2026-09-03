@@ -258,7 +258,7 @@ export async function runChat(
     patchSessionMeta({ approvalPolicy: policy });
   };
   // The slash-command context is identical at every call site; build it once
-  // lazily so the closures it captures (interruptActive, resetSessionForClear,
+  // lazily so the closures it captures (resetSessionForClear,
   // chatController.resume) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
@@ -266,7 +266,6 @@ export async function runChat(
     processCwd: process.cwd(),
     initialAgent: agent,
     initialModel: model,
-    interruptActive,
     requestInputExit: exitController.requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,

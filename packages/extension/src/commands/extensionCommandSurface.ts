@@ -6,7 +6,6 @@ import {
   signIn as authSignIn,
   signOut as authSignOut,
 } from '@commands/auth/authCommands';
-import { stopAgent as agentStopAgent } from '@commands/agent/agentCommands';
 import { handleCreateAgentWithAI as agentHandleCreateAgentWithAI } from '@commands/agent/agentCreatorCommands';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
@@ -116,7 +115,6 @@ export function createExtensionCommandActions(
         vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
       );
     },
-    stopAgent: agentStopAgent,
     indentCurrentTeX: latexIndentCurrentTeX,
     fixCompilation: latexFixCompilation,
     getTeXCount: latexGetTeXCount,

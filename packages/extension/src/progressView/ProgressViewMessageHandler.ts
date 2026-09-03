@@ -34,6 +34,7 @@ import {
   type TranscriptExportFormat,
   type TranscriptExportOpenKind,
 } from '@controllers/progressView/exportTranscript';
+import { submitProgressFollowUp } from '@controllers/progressView/progressFollowUpSubmit';
 import { SecretManager } from '@frontend/secretManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { RecordingManager } from '@frontend/media/RecordingManager';
@@ -56,10 +57,7 @@ import {
   GETTING_STARTED_COMMANDS,
 } from '@shared/schemas';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  ALL_STREAMS_DELETED_CAUSE,
-  RETRY_REQUEST_CLEARED_CAUSE,
-} from '@shared/copy/interactionCancellation';
+import { ALL_STREAMS_DELETED_CAUSE } from '@shared/copy/interactionCancellation';
 import { unsupportedCommands } from '@shared/utils/dispatcher';
 import {
   cleanupUnscopedApprovals,
@@ -197,22 +195,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.followUpController = this.createFollowUpController();
     this.followUpPolishController = new ProgressFollowUpPolishController();
     this.handlerRegistry = this.createHandlerRegistry();
-  }
-
-  public async stopStream(
-    stream: StreamTabId,
-    options: { clearRetryRequest?: boolean } = {},
-  ): Promise<void> {
-    if (options.clearRetryRequest === true) {
-      this.interactions.cancel({
-        streamId: stream,
-        kind: 'retry',
-        cause: RETRY_REQUEST_CLEARED_CAUSE,
-      });
-    }
-    // Deletion must stop if the command fails; safeExecuteCommand intentionally
-    // absorbs errors for ordinary view actions.
-    await vscode.commands.executeCommand('texra.stopAgent', stream);
   }
 
   public cleanupDeletedStream(stream: StreamTabId): void {
@@ -476,8 +458,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           });
         },
       },
+      // Programmatic send with no composer behind it (the workflow-file "user
+      // modified the suggested output" note), so `acknowledge` is deliberately
+      // a no-op — there is no draft to hand back. Bound inline, exactly as
+      // desktop binds it in desktopAgentExecution.ts.
       sendFollowUp: async (stream, text) => {
-        await this.runViewCommand('texra.sendFollowUp', [{ stream, text }]);
+        await submitProgressFollowUp({
+          session: defaultSession(),
+          streamId: stream,
+          input: { text },
+          acknowledge: () => {},
+          // Warning, not info: the deleted `texra.sendFollowUp` command used
+          // `showWarningMessage`, and a refused follow-up means the model never
+          // received the accepted-file modification notice — easy to miss as an
+          // informational toast.
+          showInfo: this.showWarning,
+        });
       },
     });
   }

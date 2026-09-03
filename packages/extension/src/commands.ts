@@ -10,7 +10,6 @@ import { registerFileSelectionCommands } from '@commands/files/fileSelectionComm
 import { registerOpenFileCommands } from '@commands/files/openFileCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
-import { registerFollowUpCommand } from '@commands/agent/followUpCommand';
 import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 import { registerStateRestoreCommand } from '@commands/taskFormState/stateRestoreCommand';
 import { registerGitCommands } from '@commands/git/gitCommands';
@@ -30,7 +29,6 @@ export function registerCommands(
   registerMergeCommands(context);
   registerStateRestoreCommand(context);
   const settingsViewProvider = new SettingsViewProvider(context);
-  registerFollowUpCommand(context);
   registerOpenFileCommands(context);
   registerMainViewCommands(context);
 

@@ -10,10 +10,11 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  * Read live at stop/kill time so a settings change takes effect immediately.
  *
  * This owns the policy for the *configured* stop surfaces, in every host: the
- * extension stop command and review-run stop, the desktop stream stop, the CLI
- * root-run interrupt (Ctrl-C) and TUI kill action, and the orchestrator
- * `executions` kill tool. Two stop paths deliberately do not consult it, and
- * each declares that at its own call site rather than reading a default:
+ * extension and desktop progress-view stream stop, the extension review-run
+ * stop, the CLI root-run interrupt (Ctrl-C) and TUI kill action, and the
+ * orchestrator `executions` kill tool. Two stop paths deliberately do not
+ * consult it, and each declares that at its own call site rather than reading
+ * a default:
  *
  * - Bare Escape in the CLI TUI is a focus-scoped gesture — "stop only the
  *   focused stream" — so `stopStream` always detaches descendants instead of

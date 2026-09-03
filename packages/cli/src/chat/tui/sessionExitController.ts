@@ -210,7 +210,6 @@ export function createSessionExitController(
     });
     switch (sigintAction) {
       case 'clean-exit':
-        session.stopRequested = true;
         ctx.interruptActive();
         requestInputExit();
         return;
@@ -231,7 +230,6 @@ export function createSessionExitController(
         void teardown({ kind: 'signal', exitCode: session.runExitCode });
         return;
       case 'interrupt-and-arm-exit':
-        session.stopRequested = true;
         ctx.interruptActive();
         armExit();
         return;
@@ -243,7 +241,6 @@ export function createSessionExitController(
   // suspended so its flow record survives for resume (see handleSigint).
   const handleTermSignal = (exitCode: number): void => {
     if (ctx.canStopActiveRun()) {
-      session.stopRequested = true;
       ctx.interruptActive();
     }
     void teardown({ kind: 'signal', exitCode });
@@ -326,15 +323,43 @@ export function createSessionExitController(
       disposalFailed = true;
       disposalFailure = error;
     }
-    await ctx.followUpQueue.onIdle();
-    // A suspended (idle/WAITING) root session is resumable: its flow record
-    // survives only if we DON'T interrupt the flow (interrupt clears it). See
-    // chatTuiIsResumableIdleOnExit for the live-flow check that distinguishes
-    // this state from a resume slot that is still rehydrating.
-    const resumableIdle = ctx.isResumableIdle();
-    if (chatTuiRunPending(session) && !resumableIdle) {
-      session.stopRequested = true;
+    // A suspended (idle/WAITING) root session is resumable, so it is left
+    // uninterrupted: the checkpoint survives either way since #11304/#11315,
+    // but interrupting would persist a CANCELLED outcome, clear approvals and
+    // sweep active children. See chatTuiIsResumableIdleOnExit for the live-flow
+    // check that distinguishes this state from a resume slot that is still
+    // rehydrating.
+    //
+    // Scope: this owns the policy for the GRACEFUL path only — `/exit` and
+    // Ctrl-C's `clean-exit`, both via `requestInputExit`. Signal quits
+    // (`handleTermSignal`, and `handleSigint`'s force/preserve arms) return
+    // above at the `cause.kind === 'signal'` branch and decide for themselves
+    // through `chatTuiSigintAction`/`canStopActiveRun`.
+    //
+    // One residual divergence, deliberately left alone: `clean-exit` calls
+    // `interruptActive()` itself before `requestInputExit()`, outside this
+    // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this arm
+    // skips the interrupt while `clean-exit` still runs one — and
+    // `stopAgentStream`'s child sweep fires even with no root handle. So Ctrl-C
+    // on a finished turn still detaches background children where `/exit` does
+    // not. Converging that means changing Ctrl-C, which is outside the `/exit`
+    // ruling this comment implements.
+    const interruptPendingRun = (): boolean => {
+      if (!chatTuiRunPending(session) || ctx.isResumableIdle()) return false;
       ctx.interruptActive();
+      return true;
+    };
+    // Interrupt an actively-running turn BEFORE draining the queue. A queued
+    // follow-up that already entered its recovery path awaits `dispatch.resume`
+    // (ToolUseFollowUp), which resolves only when the resumed turn finishes and
+    // never observes `stopRequested` — draining first would block the quit
+    // behind a long model turn. Re-check after the drain for a run the drain
+    // itself started.
+    let interrupted = interruptPendingRun();
+    await ctx.followUpQueue.onIdle();
+    interrupted = interruptPendingRun() || interrupted;
+    const resumableIdle = ctx.isResumableIdle();
+    if (interrupted) {
       // Only await a run we actually interrupted/finished. A resumableIdle run
       // is parked at the WAIT node and its runPromise NEVER resolves, so
       // awaiting it would hang the process here.

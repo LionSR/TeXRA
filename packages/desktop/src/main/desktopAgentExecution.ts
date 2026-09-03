@@ -6,7 +6,6 @@ import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import type { SessionStores } from '@agent/storage';
 import {
-  detachSubagentsOnStop,
   dispatchPresentationEvent,
   polishTextWithAI,
   toPresentationDelivery,
@@ -94,7 +93,6 @@ import {
 } from '@shared/copy/executionHistory';
 import {
   ALL_STREAMS_DELETED_CAUSE,
-  RETRY_REQUEST_CLEARED_CAUSE,
   SESSION_DISPOSED_CAUSE,
 } from '@shared/copy/interactionCancellation';
 import { cleanupUnscopedApprovals } from '@tools/approval';
@@ -302,18 +300,6 @@ export class DesktopProgressBridge {
         logger: this.logger,
       },
       lifecycle: {
-        stopStream: (stream, options) => {
-          if (options?.clearRetryRequest === true) {
-            this.session.interactions.cancel({
-              streamId: stream,
-              kind: 'retry',
-              cause: RETRY_REQUEST_CLEARED_CAUSE,
-            });
-          }
-          this.session.executions.stopAgentStream(stream, {
-            detachActiveChildren: detachSubagentsOnStop(),
-          });
-        },
         cleanupDeletedStream: (stream) => {
           this.releaseApprovalsForStream(stream);
           this.workflowFileActions.clearStreamBackups(stream);
