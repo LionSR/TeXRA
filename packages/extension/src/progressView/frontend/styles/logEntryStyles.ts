@@ -11,12 +11,7 @@ export const logEntryStyles = css`
   .log-container {
     flex: 1 1 auto;
     width: 100%;
-    padding: var(--wa-space-xs)
-      max(
-        var(--wa-space-m),
-        calc((100% - var(--conversation-reading-width, 800px)) / 2)
-      )
-      var(--wa-space-s);
+    padding: var(--wa-space-xs) var(--wa-space-m) var(--wa-space-s);
     box-sizing: border-box;
     min-width: 0;
     min-height: 0;
