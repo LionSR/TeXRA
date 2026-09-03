@@ -285,7 +285,6 @@ export class DesktopProgressBridge {
     this.session = options.session;
     this.backend = new ProgressBackend({
       session: this.session,
-      stateOwnership: 'session',
       storage: platform().workspaceState,
       stores: options.sessionStores,
       sendMessage: (message) => this.postToRenderer(message) !== false,
