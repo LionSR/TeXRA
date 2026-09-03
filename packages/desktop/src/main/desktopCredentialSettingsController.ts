@@ -323,27 +323,51 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
   }
 
-  private async signInSubscription(
+  /**
+   * Runs a subscription-provider mutation, reporting any failure through the
+   * shared notify/onError shape and always refreshing auth-dependent data
+   * afterward — the one piece of control flow sign-in, sign-out, and the
+   * preference toggle all share.
+   */
+  private async withSubscriptionAuthChange(
     providerId: SubscriptionProviderId,
+    buildErrorMessage: (
+      provider: ReturnType<typeof subscriptionProvider>,
+      error: unknown,
+    ) => string,
+    work: (provider: ReturnType<typeof subscriptionProvider>) => Promise<void>,
   ): Promise<void> {
     const provider = subscriptionProvider(providerId);
     try {
-      const account = await provider.signIn({
-        transport: 'auto',
-        present: this.signInPresenter(provider.displayName),
-      });
-      await provider.setPreferSubscription(true);
-      await this.options.notifications.showInfoMessage(
-        ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
-      );
+      await work(provider);
     } catch (error) {
       await this.options.notifications.showErrorMessage(
-        `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
+        buildErrorMessage(provider, error),
       );
       this.options.onError(error);
     } finally {
       await this.refreshAfterSubscriptionAuthChange(providerId);
     }
+  }
+
+  private signInSubscription(
+    providerId: SubscriptionProviderId,
+  ): Promise<void> {
+    return this.withSubscriptionAuthChange(
+      providerId,
+      (provider, error) =>
+        `${provider.displayName} sign-in failed: ${toErrorMessage(error)}`,
+      async (provider) => {
+        const account = await provider.signIn({
+          transport: 'auto',
+          present: this.signInPresenter(provider.displayName),
+        });
+        await provider.setPreferSubscription(true);
+        await this.options.notifications.showInfoMessage(
+          ACCOUNT_OUTCOME.signedInAs(provider.displayName, account.label),
+        );
+      },
+    );
   }
 
   /** Also driven by the desktop welcome card, not just the Settings view. */
@@ -394,48 +418,42 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     await this.options.onCredentialChanged();
   }
 
-  private async signOutSubscription(
+  private signOutSubscription(
     providerId: SubscriptionProviderId,
   ): Promise<void> {
-    const provider = subscriptionProvider(providerId);
-    try {
-      await provider.signOut();
-      await this.options.notifications.showInfoMessage(
-        ACCOUNT_OUTCOME.signedOut(provider.displayName),
-      );
-    } catch (error) {
-      await this.options.notifications.showErrorMessage(
+    return this.withSubscriptionAuthChange(
+      providerId,
+      (provider, error) =>
         ACCOUNT_OUTCOME.signOutFailedWithReason(
           provider.displayName,
           toErrorMessage(error),
         ),
-      );
-      this.options.onError(error);
-    } finally {
-      await this.refreshAfterSubscriptionAuthChange(providerId);
-    }
+      async (provider) => {
+        await provider.signOut();
+        await this.options.notifications.showInfoMessage(
+          ACCOUNT_OUTCOME.signedOut(provider.displayName),
+        );
+      },
+    );
   }
 
-  private async setSubscriptionPreference(
+  private setSubscriptionPreference(
     providerId: SubscriptionProviderId,
     enabled: boolean,
   ): Promise<void> {
-    const provider = subscriptionProvider(providerId);
-    try {
-      const update = await provider.setPreferSubscription(enabled);
-      if (update.effective !== enabled) {
-        await this.options.notifications.showWarningMessage(
-          `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-        );
-      }
-    } catch (error) {
-      await this.options.notifications.showErrorMessage(
+    return this.withSubscriptionAuthChange(
+      providerId,
+      (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
-      );
-      this.options.onError(error);
-    } finally {
-      await this.refreshAfterSubscriptionAuthChange(providerId);
-    }
+      async (provider) => {
+        const update = await provider.setPreferSubscription(enabled);
+        if (update.effective !== enabled) {
+          await this.options.notifications.showWarningMessage(
+            `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
+          );
+        }
+      },
+    );
   }
 
   async postProfileData(): Promise<void> {
