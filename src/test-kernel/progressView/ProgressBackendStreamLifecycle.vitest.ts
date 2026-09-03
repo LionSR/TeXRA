@@ -462,7 +462,7 @@ describe('ProgressBackend', () => {
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([child]);
   });
 
-  it('clears retry UI when stopping without deleting', () => {
+  it('clears retry UI when stopping without deleting', async () => {
     const { backend, lifecycle, session } = createIsolatedRecordingBackend();
     const stream = 'standalone-stop' as StreamTabId;
     const cancel = vi.spyOn(session.interactions, 'cancel');
@@ -470,7 +470,7 @@ describe('ProgressBackend', () => {
       .spyOn(session.executions, 'stopAgentStream')
       .mockImplementation(() => {});
 
-    backend.stopStream(stream);
+    await backend.stopStream(stream);
 
     expect(cancel).toHaveBeenCalledWith({
       streamId: stream,

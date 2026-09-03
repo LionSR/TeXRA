@@ -12,8 +12,8 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
  * extension and desktop progress-view stream stop, the extension review-run
  * stop, the CLI root-run interrupt (Ctrl-C) and TUI kill action, and the
  * orchestrator `executions` kill tool. Two stop paths deliberately do not
- * consult it, and
- * each declares that at its own call site rather than reading a default:
+ * consult it, and each declares that at its own call site rather than reading
+ * a default:
  *
  * - Bare Escape in the CLI TUI is a focus-scoped gesture — "stop only the
  *   focused stream" — so `stopStream` always detaches descendants instead of

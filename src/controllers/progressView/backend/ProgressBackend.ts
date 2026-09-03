@@ -462,11 +462,17 @@ export class ProgressBackend {
    * `PROGRESS_VIEW_COMMANDS.STOP_STREAM`) also clears a pending retry request,
    * so the retry UI goes away with the run. Deletion's implicit stop calls
    * {@link stopRun} instead: it is not an answer to a retry prompt.
+   *
+   * Stays `async` even though the body is synchronous: the inbound dispatcher
+   * only attaches `.catch(onError)` when a handler returns a Promise, so a
+   * `void` return would let a synchronous throw from `stopAgentStream` escape
+   * `dispatchInbound` as an unhandled rejection instead of the error log and
+   * user-facing toast.
    */
-  stopStream(stream: StreamTabId): void {
+  async stopStream(stream: StreamTabId): Promise<void> {
     // Session-level cancel, not adapter-level: it settles session-owned pending
-    // interactions *and* forwards to the attached host adapter, so
-    // RETRY_REQUEST_CLEARED_CAUSE still reaches the agent verbatim.
+    // interactions *and* forwards to the attached host adapter, so the
+    // RETRY_REQUEST_CLEARED_CAUSE selector is the one the retry settlement sees.
     this.session.interactions.cancel({
       streamId: stream,
       kind: 'retry',

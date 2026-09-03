@@ -468,7 +468,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           streamId: stream,
           input: { text },
           acknowledge: () => {},
-          showInfo: this.showInfo,
+          // Warning, not info: the deleted `texra.sendFollowUp` command used
+          // `showWarningMessage`, and a refused follow-up means the model never
+          // received the accepted-file modification notice — easy to miss as an
+          // informational toast.
+          showInfo: this.showWarning,
         });
       },
     });
