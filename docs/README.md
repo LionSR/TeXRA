@@ -5,7 +5,10 @@ directory, but they have different publication boundaries.
 
 ## Public website source
 
-- `index.md`, `launch.md`, and `providers.md` are public root pages.
+- `index.md`, `launch.md`, `providers.md`, and `work-using-texra.md` are
+  public root pages, as are `changelog.md` and `terms.md`, which the
+  `sync-content` script generates into the docs root at build time from the
+  repo-root `CHANGELOG.md` and `TERMS_OF_SERVICE.md`.
 - `guide/` contains public user guides, except pages explicitly excluded in
   `.vitepress/publicDocs.js`.
 - `public/` contains static assets copied directly into the website.
