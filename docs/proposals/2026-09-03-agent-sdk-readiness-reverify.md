@@ -38,16 +38,12 @@ The prior pass inspected `646475d`; the interval to this pass's snapshot
 `chore`, 2 `docs`, 1 unprefixed** (`9f156ef` "Replace custom cache with
 LRUCache…") — dominated by refactor and fix, the standing trend. The
 whole-interval diffstat is
-`145 files changed, 4422 insertions(+), 1834 deletions(-)`. Additions by top
-path (`git diff --numstat`, aggregated): **`docs/` 2098** (the two survey/record
-docs), then `src/test-kernel` 537, `src/tools` 368, **`src/agent` 302**,
-`src/controllers` 253, `src/transcript` 244 — spread across the codebase from
-the refactor/fix churn, not concentrated in the two `feat` model-catalog
-commits (`src/model` took just 3 added lines; the model rows live in a
-dependency). So the agent core **was** touched (302 added lines across 8
-commits, below) — the evidence it added no abstraction is the cumulative
-structural end-state at `d418d45` (§2–§4), not any claim the core went
-untouched.
+`145 files changed, 4422 insertions(+), 1834 deletions(-)`; the additions are
+spread across the codebase (docs, test-kernel, tools, `src/agent`, controllers,
+transcript), with `src/agent` taking ~302 of them — so the agent core **was**
+touched. The evidence it added no abstraction is not a claim the core went
+untouched, but the cumulative structural end-state measured at `d418d45`
+(§2–§4).
 
 **Audited-area touches in the interval.** Eight commits touch `src/agent/**`
 (`git log … -- 'src/agent/**'`) — three `refactor`, five `fix` — all
@@ -79,24 +75,35 @@ histogram widths):
 | `974d459` (#11775) | **Consolidation, net +14** (82 ins / 68 del). Gave the staged-deletion rollback path and the `sr`-only recipe a single owner: `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 / 13), `SessionStores.ts` −7 (19 / 26). Net-positive because logic moved to one owner — indirection removal, not new abstraction. |
 
 No commit in the interval widens the frozen host→`@agent` deep-import width
-(§3's baselines held). The one public-surface change is a **tracked, sanctioned
-transition**, not a silent widening: `e599027` (#11762) adds
-`StreamSnapshotStore.requestEviction()` — recorded in
-`config/ratchets/store-public-surface-baseline.json` as "the one sanctioned
-addition" — and `1719dea` (#11788) removes the dead `deleteStream` wrapper, so
-the store's public-method count nets unchanged while the member set did change.
-Both are ratchet-governed. §2's structural measurements, taken at `d418d45`, are
-cumulative over all 28 commits and match the prior pass.
+(§3's baselines held). The runtime public surface saw a **net reduction plus one
+sanctioned, ratchet-recorded addition** — motion in the readiness-positive
+direction, not a silent widening:
+
+- **Removed:** `HostInteractions.showInfoMessage` (`810abdc`, from the exported
+  interface and `SessionHostInteractions`), `SessionEventHub.assertRunSubscribersAttachedBeforeActivation()`
+  (`d418d45`), and the dead `StreamSnapshotStore.deleteStream` wrapper
+  (`1719dea`).
+- **Added (sanctioned):** `StreamSnapshotStore.requestEviction()` (`e599027`),
+  recorded in `config/ratchets/store-public-surface-baseline.json` as "the one
+  sanctioned addition" (its `deleteStream` removal nets the store's method count
+  unchanged).
+
+One **SPI signature refinement** landed too: `03fa583` changed
+`ChildRunStrategy.launch`/`runTurn` to take an `AbortSignal` instead of an
+`AbortController`, updating all four production implementations — a contract
+narrowing, with the implementation _set_ unchanged (§4). §2's structural
+measurements, taken at `d418d45`, are cumulative over all 28 commits and match
+the prior pass.
 
 ## 2. Every tracked structural fact re-verifies at `d418d45`
 
-| Item                               | Expected (`-09-02` @ `646475d`)             | `d418d45` state                                                                                                                                        |
-| ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Node flow engine**               | 158 LoC, `BaseNode` + `Flow` only           | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md. |
-| **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                   | **2,030 LoC** (`wc -l`). Unchanged; genuinely shared behavior, no per-provider copy-paste.                                                             |
-| **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                  | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                                   |
-| **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported   | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.                     |
-| **SDK version**                    | 0.40.8 (short of the v0.41 `runFact.` gate) | **0.40.8** (`packages/agent/package.json`). Unchanged; retirement gate not yet due.                                                                    |
+| Item                               | Expected (`-09-02` @ `646475d`)           | `d418d45` state                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Node flow engine**               | 158 LoC, `BaseNode` + `Flow` only         | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md.                                                                                                                                                                                                             |
+| **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                 | **2,030 LoC** (`wc -l`). Unchanged; genuinely shared behavior, no per-provider copy-paste.                                                                                                                                                                                                                                                                         |
+| **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                                                                                                                                                                                                                                               |
+| **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.                                                                                                                                                                                                                                 |
+| **SDK version**                    | 0.40.8                                    | **0.40.8** (`packages/agent/package.json`), unchanged. Correction to the inherited row: the `runFact.` retirement (TD-2c) already **landed** — no `runFact.` prefix protocol exists under `src/agent` at `d418d45`, and `runFactEvents.ts:34` emits explicit `AgentEvent` arms; the 2026-08-03 checkpoint records it done. There is no pending v0.41 runFact gate. |
 
 ## 3. Frozen host deep-import width — held on every package
 
@@ -110,18 +117,29 @@ deep-import specifiers per package, past the `@agent` barrel):
 | extension           | 9        | **9**     |
 | agent (SDK package) | 7        | **7**     |
 
-The set-based ratchet forbids any new edge and also fails on stale headroom, so
-the lists can only shrink or hold; the "never widen a baseline" invariant is
-structurally enforced. `agent`'s 7 remains at its realistic floor, bounded by
-the provider-type-leak constraint (§5.2 of `-09-02`, carried forward unchanged).
+The set-based ratchet (`hostAgentDeepImportRatchet.vitest.ts`) compares the live
+import set against this checked-in JSON: it fails on an undocumented new edge (a
+live specifier missing from the list) and on stale headroom (a listed specifier
+no longer imported). It does **not** mechanically forbid widening — a commit that
+adds an import _and_ its baseline entry passes both checks. The "never widen a
+baseline" guarantee is therefore the contribution **policy** (CLAUDE.md), which
+the ratchet makes visible and auditable rather than structurally impossible; no
+commit in this interval exercised that escape hatch (all four lists held or
+shrank). `agent`'s 7 remains at its realistic floor, bounded by the
+provider-type-leak constraint (§5.2 of `-09-02`, carried forward unchanged).
 
-## 4. Subagent boundaries — unchanged, still a shipped SPI
+## 4. Subagent boundaries — still a shipped SPI; one in-interval signature refinement
 
 Re-confirmed at HEAD as a **shipped, multi-implementor SPI, not a design task**:
 `ChildRunStrategy<TTurn>` + `ChildRunPorts` (`src/agent/runtime/childRunLoop.ts`)
 — a deep module with a narrow turn-based interface, driven by independent
 production factories (`nativeSubagentStrategy.ts`, `workflowScriptStrategy.ts`,
-background bash, and the shared external-CLI loop). **Only `agentCreator` remains
+background bash, and the shared external-CLI loop). The **contract did change
+once** in the interval — `03fa583` narrowed `launch`/`runTurn` to accept an
+`AbortSignal` rather than an `AbortController`, updating all four
+implementations in lockstep — but the implementation _set_, the deep-module
+shape, and the narrow interface are unchanged; this is a signature refinement,
+not a boundary redesign. **Only `agentCreator` remains
 the one genuine "logical agent not yet running as one"** — a single linear
 `runAgentCreator` (`src/agent/implementations/agentCreator/agentCreatorFlow.ts:440`),
 running inline in the extension host. That boundary stays open **correctly**:
@@ -148,8 +166,11 @@ verdict. This pass re-derived every tracked fact from fresh inspection at
 `d418d45`: the node engine holds at 158 LoC, the model-handler base at 2,030,
 `SessionHandle` and the logger stay clean, and all four deep-import baselines
 held. The 28-commit interval since the prior pass's snapshot (§1) is dominated
-by refactor and fix, touches audited-area files only through fixes and a
-`date-fns` logging swap, and widens no baseline. Nothing found is a defect;
-nothing warrants a speculative edit into the green tree absent a maintainer
-request, which this scheduled firing does not carry. The pass is recorded, not
-acted on.
+by refactor and fix, and it did touch the audited core (three `src/agent`
+refactors and five fixes), the logger (a `date-fns` swap), the runtime public
+surface (a net reduction plus one sanctioned addition), and the subagent SPI (an
+`AbortSignal` signature refinement) — all readiness-positive or neutral, none
+widening a baseline or adding an abstraction layer, with the cumulative
+end-state at `d418d45` verified in §2–§4. Nothing found is a defect; nothing
+warrants a speculative edit into the green tree absent a maintainer request,
+which this scheduled firing does not carry. The pass is recorded, not acted on.
