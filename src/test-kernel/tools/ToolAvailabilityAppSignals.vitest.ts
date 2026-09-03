@@ -80,6 +80,7 @@ describe('tool availability app signals', () => {
             throw new Error('invalid local configuration');
           }),
           check: vi.fn(async () => true),
+          statusLabel: vi.fn(async () => 'Needs setup'),
         },
         {
           id: 'broken-detail',
@@ -100,6 +101,7 @@ describe('tool availability app signals', () => {
         id: 'broken-probe',
         status: 'unknown',
         detected: null,
+        statusLabel: undefined,
         statusDetail: 'Availability check failed: invalid local configuration',
       }),
       expect.objectContaining({

@@ -172,12 +172,14 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
               'status detail',
             )
           : `Availability check failed: ${toErrorMessage(probeFailure)}`;
-        const statusLabel = await resolveOptionalStatus(
-          getStatusLabel,
-          probeResult,
-          name,
-          'status label',
-        );
+        const statusLabel = !probeFailed
+          ? await resolveOptionalStatus(
+              getStatusLabel,
+              probeResult,
+              name,
+              'status label',
+            )
+          : undefined;
         return {
           id,
           tools,
