@@ -11,6 +11,7 @@ import {
   SubscriptionOAuthError,
   type SubscriptionOAuthErrorKind,
 } from '../oauth/subscriptionOAuthError';
+import { SubscriptionSessionBaseSchema } from '../oauth/subscriptionSessionSchema';
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
 export const XaiTokenResponseSchema = z.object({
@@ -31,11 +32,7 @@ export const XaiTokenResponseSchema = z.object({
 export type XaiTokenResponse = z.infer<typeof XaiTokenResponseSchema>;
 
 /** The persisted OAuth session bundle. */
-export const XaiSessionSchema = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
-  idToken: z.string().min(1).optional(),
-  expiresAtMs: z.number(),
+export const XaiSessionSchema = SubscriptionSessionBaseSchema.extend({
   email: z.string().min(1).optional(),
 });
 export type XaiSession = z.infer<typeof XaiSessionSchema>;

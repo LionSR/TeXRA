@@ -13,6 +13,7 @@ import {
   SubscriptionOAuthError,
   type SubscriptionOAuthErrorKind,
 } from '../oauth/subscriptionOAuthError';
+import { SubscriptionSessionBaseSchema } from '../oauth/subscriptionSessionSchema';
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
 export const CodexTokenResponseSchema = z.object({
@@ -26,12 +27,7 @@ export const CodexTokenResponseSchema = z.object({
 export type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
-export const CodexSessionSchema = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
-  idToken: z.string().min(1).optional(),
-  /** Absolute expiry (ms since epoch). */
-  expiresAtMs: z.number(),
+export const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
   accountId: z.string().min(1).optional(),
   email: z.string().min(1).optional(),
 });
