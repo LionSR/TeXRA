@@ -26,8 +26,6 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
   'src/tools/approval/bashApproval.ts',
   'src/tools/approval/toolEditApproval.ts',
   'packages/cli/src/runtime/approval/settleApprovals.ts',
-  'packages/cli/src/runtime/runExecution.ts',
-  'packages/cli/src/chat/chatSessionController.ts',
 ]);
 
 /**
@@ -42,7 +40,6 @@ const SEED_CALL_ALLOWLIST = new Set([
   'packages/cli/src/chat/tui/commands/handlers/approvalCommand.ts',
   'packages/cli/scripts/tui-harness.tsx',
   'packages/extension/src/extension.ts',
-  'packages/extension/src/frontend/vscode/texraConfig.ts',
   'packages/extension/src/settingsView/SettingsViewMessageHandler.ts',
   'packages/desktop/src/main/index.ts',
   'packages/desktop/src/main/desktopSettingsIpc.ts',
