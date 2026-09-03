@@ -135,12 +135,6 @@ export const commandCatalog = [
     icon: '$(cloud-download)',
   },
   {
-    id: 'texra.stopAgent',
-    extensionRegistry: true,
-    title: 'Stop Agent',
-    category: 'TeXRA',
-  },
-  {
     id: 'texra.execute',
     extensionRegistry: true,
     title: 'Execute Agent',

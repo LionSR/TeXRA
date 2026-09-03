@@ -298,10 +298,6 @@
             "when": "texra.activated"
           },
           {
-            "command": "texra.stopAgent",
-            "when": "false"
-          },
-          {
             "command": "texra.execute",
             "when": "texra.activated"
           },

@@ -29,6 +29,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { RETRY_REQUEST_CLEARED_CAUSE } from '@shared/copy/interactionCancellation';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
@@ -461,14 +462,23 @@ describe('ProgressBackend', () => {
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([child]);
   });
 
-  it('clears retry UI when stopping without deleting', async () => {
-    const { backend, lifecycle } = createIsolatedRecordingBackend();
+  it('clears retry UI when stopping without deleting', () => {
+    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
     const stream = 'standalone-stop' as StreamTabId;
+    const cancel = vi.spyOn(session.interactions, 'cancel');
+    const stopAgentStream = vi
+      .spyOn(session.executions, 'stopAgentStream')
+      .mockImplementation(() => {});
 
-    await backend.stopStream(stream);
+    backend.stopStream(stream);
 
-    expect(lifecycle.stopStream).toHaveBeenCalledWith(stream, {
-      clearRetryRequest: true,
+    expect(cancel).toHaveBeenCalledWith({
+      streamId: stream,
+      kind: 'retry',
+      cause: RETRY_REQUEST_CLEARED_CAUSE,
+    });
+    expect(stopAgentStream).toHaveBeenCalledWith(stream, {
+      detachActiveChildren: false,
     });
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
   });
@@ -1187,7 +1197,7 @@ describe('ProgressBackend', () => {
   });
 
   it('stops locally owned streams before bulk cleanup', async () => {
-    const { backend, lifecycle, session } = createIsolatedRecordingBackend();
+    const { backend, session } = createIsolatedRecordingBackend();
     const first = 'owned-first' as StreamTabId;
     const second = 'owned-second' as StreamTabId;
     for (const stream of [first, second]) {
@@ -1201,23 +1211,33 @@ describe('ProgressBackend', () => {
     vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
       {} as never,
     );
+    const stopAgentStream = vi
+      .spyOn(session.executions, 'stopAgentStream')
+      .mockImplementation(() => {});
     stubClearAll(backend);
 
     await backend.deleteAllStreams();
 
-    expect(lifecycle.stopStream).toHaveBeenCalledWith(first);
-    expect(lifecycle.stopStream).toHaveBeenCalledWith(second);
+    expect(stopAgentStream).toHaveBeenCalledWith(first, {
+      detachActiveChildren: false,
+    });
+    expect(stopAgentStream).toHaveBeenCalledWith(second, {
+      detachActiveChildren: false,
+    });
   });
 
   it('aborts bulk cleanup when stopping an owned stream fails', async () => {
     const stopError = new Error('stop failed');
-    const lifecycle = createLifecycleOptions({
-      stopStream: vi.fn().mockRejectedValue(stopError),
-    });
+    const lifecycle = createLifecycleOptions();
     const { backend, session } = createIsolatedRecordingBackend(
       createTestSession(),
       lifecycle,
     );
+    const stopAgentStream = vi
+      .spyOn(session.executions, 'stopAgentStream')
+      .mockImplementation(() => {
+        throw stopError;
+      });
     const stream = 'owned-stop-failure' as StreamTabId;
     backend.state.streamLogs.ensureStream(stream);
     session.status.transition(
@@ -1232,7 +1252,9 @@ describe('ProgressBackend', () => {
 
     await expect(backend.deleteAllStreams()).rejects.toBe(stopError);
 
-    expect(lifecycle.stopStream).toHaveBeenCalledWith(stream);
+    expect(stopAgentStream).toHaveBeenCalledWith(stream, {
+      detachActiveChildren: false,
+    });
     expect(clearAll).not.toHaveBeenCalled();
     expect(lifecycle.cleanupDeletedStream).not.toHaveBeenCalled();
     expect(lifecycle.cleanupDeletedStreams).not.toHaveBeenCalled();

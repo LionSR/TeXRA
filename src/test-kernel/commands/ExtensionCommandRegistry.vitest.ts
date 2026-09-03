@@ -54,7 +54,6 @@ function makeActions(): ExtensionCommandActions {
     downloadArXivSource: asyncNoop(),
     openProgressViewInTab: asyncNoop(),
     openDoc: asyncNoop(),
-    stopAgent: vi.fn(),
     indentCurrentTeX: asyncNoop(),
     fixCompilation: asyncNoop(),
     getTeXCount: asyncNoop(),
@@ -195,14 +194,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     const actions = makeActions();
     await expect(dispatch(actions, 'texra.openDoc', 42)).resolves.toBe(false);
     expect(actions.openDoc).not.toHaveBeenCalled();
-  });
-
-  it('texra.stopAgent forwards parsed streamId', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.stopAgent', 'stream-1'),
-    ).resolves.toBe(true);
-    expect(actions.stopAgent).toHaveBeenCalledExactlyOnceWith('stream-1');
   });
 
   describe('typed file-operation arguments', () => {

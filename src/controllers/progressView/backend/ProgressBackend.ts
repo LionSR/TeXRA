@@ -2,6 +2,7 @@ import PQueue from 'p-queue';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { DeleteStreamResult, SessionStores } from '@agent/storage';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -31,6 +32,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import { RETRY_REQUEST_CLEARED_CAUSE } from '@shared/copy/interactionCancellation';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
 import type { TranscriptPresentationLease } from '@transcript/StreamLogStore';
 import { canUseStreamDataDir } from '@transcript/streamDataPaths';
@@ -44,10 +46,6 @@ type ProgressBackendApprovalOptions = Omit<
 >;
 
 interface ProgressBackendLifecycleOptions {
-  stopStream(
-    stream: StreamTabId,
-    options?: { clearRetryRequest?: boolean },
-  ): Promise<void> | void;
   cleanupDeletedStream(stream: StreamTabId): void;
   cleanupDeletedStreams(options: { allDeleted: boolean }): void;
   rebuildRenderedStreams(options: { syncActiveStream: boolean }): Promise<void>;
@@ -456,9 +454,31 @@ export class ProgressBackend {
     this.factApplier.handleRunFact(...args);
   }
 
-  async stopStream(stream: StreamTabId): Promise<void> {
-    await this.lifecycle.stopStream(stream, {
-      clearRetryRequest: true,
+  /**
+   * Stop `stream`'s run in this process — the one owner of the cancel-then-stop
+   * body both hosts used to duplicate.
+   *
+   * A user-initiated stop (the toolbar button, through
+   * `PROGRESS_VIEW_COMMANDS.STOP_STREAM`) also clears a pending retry request,
+   * so the retry UI goes away with the run. Deletion's implicit stop calls
+   * {@link stopRun} instead: it is not an answer to a retry prompt.
+   */
+  stopStream(stream: StreamTabId): void {
+    // Session-level cancel, not adapter-level: it settles session-owned pending
+    // interactions *and* forwards to the attached host adapter, so
+    // RETRY_REQUEST_CLEARED_CAUSE still reaches the agent verbatim.
+    this.session.interactions.cancel({
+      streamId: stream,
+      kind: 'retry',
+      cause: RETRY_REQUEST_CLEARED_CAUSE,
+    });
+    this.stopRun(stream);
+  }
+
+  /** Stop the run without touching a pending retry request. */
+  private stopRun(stream: StreamTabId): void {
+    this.session.executions.stopAgentStream(stream, {
+      detachActiveChildren: detachSubagentsOnStop(),
     });
   }
 
@@ -596,7 +616,7 @@ export class ProgressBackend {
     const ownedLocally =
       this.session.executions.getAgentHandleByStream(stream) !== undefined;
     if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
-      await this.lifecycle.stopStream(stream);
+      this.stopRun(stream);
     }
     return false;
   }
