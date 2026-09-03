@@ -7,14 +7,17 @@ import type { ProviderMessage } from './ProviderMessage';
  * Common port implemented by all model handlers.
  *
  * Derived from {@link ModelHandler} via `Pick` alone — the port adds nothing
- * of its own, so it can never drift from the base class: adding, renaming, or
- * retyping a member there is automatically reflected here, and a base-class
- * signature change breaks exactly one place (the class) instead of two. Only
- * members consumers actually call through this port are picked. Omitted
- * members are reached
- * through the concrete class instead: this includes internal-only helpers
- * such as `supportsReasoningLevelOverride`, plus
- * `extractResponse`, which `helperModel` calls on its concrete handler.
+ * of its own, so a member's SIGNATURE can never drift from the base class:
+ * retyping one there is reflected here automatically and renaming one breaks
+ * this `Pick`, so a signature only ever needs editing in one place (the class)
+ * rather than two.
+ *
+ * The member SET is curated, not automatic: adding a member to the base class
+ * does not surface it here, by design — only members consumers actually call
+ * through this port are picked. Omitted members are reached through the
+ * concrete class instead, including internal-only helpers such as
+ * `supportsReasoningLevelOverride` and `extractResponse`, which `helperModel`
+ * calls on its concrete handler.
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
  *               ChatCompletionMessageParam for OpenAI). Must extend ProviderMessage.
