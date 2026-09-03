@@ -11,7 +11,9 @@ delete five dead surfaces in the runtime and CLI approval layers`,
 > `2026-08-25-cli-controller-seam-audit.md` that three prior survey passes
 > (2026-08-29, 2026-08-30, 2026-09-02) and this entry's own first draft all
 > failed to file, plus a fourth new hand-rolled-sleep hit this entry's own
-> sweep missed — filed as #11809, #11810, #11811, and #11812.** No code
+> sweep missed — filed as #11809, #11810, #11811, and #11812. #11809's
+> initial "leaked composite" framing was itself disproven by a later review
+> pass plus an empirical GC test and has been corrected (§2).** No code
 > changes accompany this entry.
 
 ## 0. Why this pass is targeted rather than a full re-sweep
@@ -160,14 +162,25 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
 - **New `linkAbortSignals` helper (`src/utils/core/index.ts`):** a genuinely
   new shared abstraction added in this window (used by `src/tools/timeouts.ts`
   and elsewhere), replacing per-call-site `AbortSignal.any([...])` composites
-  that would otherwise pin a long-lived source signal's listener graph for the
-  source's whole lifetime. It has not reached every pre-existing call site,
-  though: `src/auth/fetchWithTimeout.ts:10-23` still builds an undetached
-  `AbortSignal.any([options.signal, controller.signal])` on every call and
-  only aborts it on the timeout path, never on success — the same leak shape,
-  pre-existing (not new this window) and already named, unfiled, in
-  `docs/proposals/2026-08-25-cli-controller-seam-audit.md`
-  ("`fetchWithTimeout` reimplements `AbortSignal.timeout`"). Filed as #11809.
+  in cases where an application-level listener stays attached to the
+  composite indefinitely — that pattern does pin the composite (and its
+  source-side listener) for as long as the source lives, verified below.
+  `src/auth/fetchWithTimeout.ts:10-23` builds an undetached
+  `AbortSignal.any([options.signal, controller.signal])` on every call, which
+  looked like the same shape at first read. **It is not**, verified
+  empirically (Node v22, `--expose-gc` + `FinalizationRegistry`): a composite
+  built the same way and passed straight into a real `fetch()` call _is_
+  collected once the request settles, even with the long-lived source signal
+  still alive and never aborted, because `fetch`/undici removes its own
+  internal abort listener from the given signal once the request completes —
+  and once that listener is gone, nothing else keeps the composite reachable.
+  `fetchWithTimeout`'s composite is handed to `fetch` and touched by nothing
+  else, so it does not leak. (A first pass of this doc asserted the leak
+  and filed #11809 on that basis; a second Codex review pass challenged it,
+  the empirical test above confirmed the challenge, and #11809 has been
+  corrected to drop the leak claim while keeping the still-valid,
+  independent finding: `fetchWithTimeout` hand-rolls a timeout
+  `AbortSignal.timeout()` already covers, for one consumer.)
 - **CLI approval dispatch (`packages/cli/src/runtime/approvalAdapter.ts`,
   `packages/cli/src/runtime/approval/approvalPrompts.ts`):** already collapsed
   in this window (part of #11792, not #11775) from a
@@ -210,21 +223,26 @@ surface this routine watches is being actively worked, not neglected.
 
 That said, this entry's own PR review is itself the counter-example to
 treating "nothing new" as "nothing outstanding": three real candidates from
-`2026-08-25-cli-controller-seam-audit.md` (`fetchWithTimeout`'s
-reimplemented, leaking `AbortSignal.timeout`; the byte-identical
-desktop/extension `workspace` adapter; the desktop/extension resume-result
-skeleton, reinforced by a new copy-pasted block in this very window's
-`810abdc`) had gone unfiled through this entry's first draft and all three
-prior dedicated passes, surviving purely because nobody had turned the
-audit's table rows into tracked issues. Review also caught a fourth,
-independent miss in this entry's own sweep: `scheduleViewerDisplay`
-(`openBuild.ts`) hand-rolls the exact `new Promise(resolve =>
-setTimeout(...))` sleep pattern this survey's tells target, in production
-code the regex's executor-body assumption didn't match. Three of the four
-are low-risk mechanical fixes; the resume-skeleton pair carries a real
-behavior decision the audit itself flagged and this entry preserves rather
-than silently resolving. Filed now as #11809, #11810, #11811, and #11812 —
-the actual output of this round.
+`2026-08-25-cli-controller-seam-audit.md` (`fetchWithTimeout`'s reimplemented
+`AbortSignal.timeout`; the byte-identical desktop/extension `workspace`
+adapter; the desktop/extension resume-result skeleton, reinforced by a new
+copy-pasted block in this very window's `810abdc`) had gone unfiled through
+this entry's first draft and all three prior dedicated passes, surviving
+purely because nobody had turned the audit's table rows into tracked issues.
+Review also caught a fourth, independent miss in this entry's own sweep:
+`scheduleViewerDisplay` (`openBuild.ts`) hand-rolls the exact `new
+Promise(resolve => setTimeout(...))` sleep pattern this survey's tells
+target, in production code the regex's executor-body assumption didn't
+match. Review process caught itself, too: this entry's _own_ first
+adjudication of the `fetchWithTimeout` finding claimed its composite signal
+leaked the same way `linkAbortSignals` was built to prevent; a second Codex
+pass challenged that, and an empirical GC test (§2) proved the challenge
+right — `fetch`'s own listener cleanup means it doesn't leak. #11809 is
+corrected accordingly. All four filed issues are low-risk; the
+resume-skeleton pair (#11811) carries a real behavior decision the audit
+itself flagged and this entry preserves rather than silently resolving.
+Filed now as #11809, #11810, #11811, and #11812 — the actual output of this
+round.
 
 This entry exists to record that the routine ran and to save the next pass
 from re-treading the same ground; no code changes accompany this cycle, but
