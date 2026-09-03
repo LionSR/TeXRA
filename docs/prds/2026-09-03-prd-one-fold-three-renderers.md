@@ -5,9 +5,10 @@ updated: 2026-09-03
 
 # PRD: One fold, three renderers
 
-**Status:** Proposed; requires owner ratification of the four decisions in
-section 17 before lane 2 starts. Lanes 1 and 6 may start on ratification of
-decision 1 alone.
+**Status:** Proposed; requires owner ratification of the eight decisions in
+section 17 before lane 2 starts. Lane 1 may start on ratification of
+decision 1 alone; lane 6 also needs decision 7, which is what it
+implements.
 
 **Decision in one sentence:** every process that shows a TeXRA session runs
 the same pure fold over the same events into one `SessionView`, the
@@ -233,8 +234,14 @@ every pending approval reads as interrupted until the runtime says
 otherwise, which is the safe direction. Agreed with the substrate owner on
 2026-09-03 (the companion proposal, in flight).
 
-- **Existence.** A stream exists iff its `run.start` event exists; it is
-  seq 1 for the stream. `seq` is per stream, the `(stream_id, seq)` key of
+- **Existence.** A stream exists iff its `run.start` event exists and no
+  later `removeStream` fact does; `run.start` is seq 1 for the stream.
+  Deletion is a durable tombstone, not a physical row removal: the `delete`
+  and `deleteAll` requests (8.2) append `removeStream`, which replays like
+  any other event and rides `changes(cursor)` (7.1), so a replay and every
+  other live process reach the same conclusion. Physical removal is
+  retention's business, and it removes a stream's rows only together with
+  its tombstone. `seq` is per stream, the `(stream_id, seq)` key of
   the event table; insert order across streams under the publish permit
   (7.1) is the session order a replay uses. Every stream kind gets one:
   agent, process (`bash@tool`), workflow script, through `RunIdentity.kind`.
@@ -289,7 +296,13 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **Incremental.** An event recomputes the arm for `event.streamId`, then
   walks `parentId` to the root updating each ancestor's `childIds`,
   `rollup`, `approval`, and `group`, then `order` when a top-level stream
-  appeared or changed status: O(depth) work per event, never a whole-view
+  appeared or changed status. An event that _changes_ `parentId` walks two
+  chains, the old and the new: detach is a real runtime transition
+  (`onChildrenDetached` emits `setParentStream` with a null parent,
+  `createSessionStores.ts:30-44`), so a child's parent genuinely moves and
+  the abandoned branch would otherwise keep the child in its `childIds` and
+  its `rollup` forever. The old parent needs no extra bookkeeping: the fold
+  holds it in the view until the event applies. Cost is the same: O(depth) work per event, never a whole-view
   pass. `transcript.run` is memoized on `(streamId, settledSeq)`.
   Recomputing `workflowRunModel` over a whole transcript per event would be
   quadratic.
@@ -309,11 +322,19 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   delta cannot say whether it appends or replaces. `TextChunk` is therefore
   `{ streamId, rowId, from, to, text }` - an append that carries its own
   offsets into the row's in-flight text, the transient analogue of `seq`.
-  The rule is one line: splice at `from` iff `from <= length`, so a
-  re-delivered chunk is idempotent, a chunk with `from > length` is a torn
-  row (resubscribe, 7.4), and a chunk with `from: 0` covering the row
-  replaces it. Replacement needs no second arm and resync needs no second
-  message kind: a resync _is_ a `from: 0` chunk. `settledSeq` never moves.
+  One rule covers every case: **truncate the row at `from`, then append
+  `text`**, for any `from <= length`. A re-delivered chunk is idempotent, a
+  chunk with `from: 0` replaces the row, and two adjacent chunks merge into
+  one exactly - `from` of the first, `to` and concatenated text of the
+  second - which is what lets the framer coalesce instead of drop (7.4). So
+  `from > length` is a defect, not a repair path, and replacement needs no
+  second arm. `settledSeq` never moves.
+- **Durable text wins.** A chunk is a preview of a row the durable events
+  will settle, so a chunk for a row whose finalizing event has already
+  folded is discarded. That makes the merge order of the three arms (7.2)
+  irrelevant by construction: a late chunk cannot mutate settled text, and
+  an early one is overwritten when its event lands. Without the rule the
+  same two inputs give two different rows in two processes.
   `OwnerLiveness` is the other transient arm.
 
 ### 5.3 The row
@@ -372,13 +393,31 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    frozen NDJSON wire keeps its `setActiveStream` line - the CLI projection
    emits it from `run.start`, which is what the line meant to an external
    reader (10.3). Deleting the internal fact does not touch the contract.
-6. **`agentCategory`** (agent runs), **`isRemote`**, and **`ownerId`** are
-   fields on the `run.start` payload; `ownerId` is on every durable event.
-   The launcher has the category from the run config and remoteness from
-   the registry at the reservation commit, and the fold consults neither.
+6. **`category`**, **`isRemote`**, and **`ownerId`** are fields on the
+   `run.start` payload; `ownerId` is on every durable event. `category` is
+   on **every** run, not only agent runs: it is the discriminant of
+   `StreamView` (5.1), and `AGENT_CATEGORIES` is exactly the two arms
+   (`agent.ts:19-22`), so an agent-only field would leave a `process`
+   (`bash@tool`) or workflow-script `run.start` unable to select one. The
+   launcher knows it in all three cases - from the run config for an agent,
+   `toolUse` for a process, `workflow` for a workflow script - and the fold
+   derives nothing.
    Today `StreamIdentityFields` (`stream.ts:227-228`) carries the first two
    beside the identity, sourced from the config, and the tab derivation
    recomputes remoteness (`streamTabInfo.ts:57-63`).
+
+7. **Invalidation hints become snapshots.** `goalStateChanged` carries only
+   a `streamId` and the applier answers it by re-reading `GoalStore`
+   (`SessionFactApplier.ts:339-340`); `updateQueuedFollowUps` and
+   `followUpSent` are handled by `renderer.invalidate(streamId,
+'queuedFollowUps')` (`:344-350`). A browser fold has neither store, so
+   both fields would fold empty and a replay could not reconstruct them.
+   Each event carries its post-mutation snapshot instead - `Goal | null`
+   and the queued-message list - emitted at the mutation boundary, the same
+   correction item 2 makes for the policy and item 5 makes for
+   `setActiveStream`. The general rule for lane 1: an event that says
+   "something changed, go look" is not a fact, and every remaining session
+   fact is audited against it.
 
 The importer emits `run.start` for every legacy stream with `identity`
 nullish where the descriptor has none, and normalizes every other old
@@ -634,18 +673,22 @@ Down, per subscriber: `all(cursor)` then `Stream.groupedWithin(n, "16
 millis")` then `Stream.buffer({ capacity, strategy: 'suspend' })` for
 durable events, which must not drop; suspension parks the framer, never the
 publisher, because the hub is unbounded. Text chunks are append deltas, not
-snapshots, so they are never buffered with the sliding strategy: a slid
-chunk is lost text that no replay recovers, because deltas are not durable.
-Text rides a dropping buffer per stream, and the repair is the chunk's own
-`from`/`to` offsets (5.2): the subscriber applies a chunk iff `from` equals
-the row's current length, so a drop is detected on the _next_ chunk, by the
-one party that knows the row's length, with no chunk index to maintain and
-no dedupe pass. A torn row resubscribes through `all(cursorOf(view))`, and
-the reply is an ordinary chunk with `from: 0` carrying that row's complete
-in-flight text, which replaces it by the same splice rule. There is no
-resync message kind and no replacement arm: the offsets are what make an
-append and a replacement the same operation. A seq gap in durable events is
-handled the same way (7.1). Frame volume equals
+snapshots, so a slid or dropped chunk is lost text that no replay recovers.
+They need neither strategy: the offsets make coalescing lossless, because
+two adjacent chunks for a row merge into one exactly (5.2). The framer
+therefore keeps **one merged chunk per streaming row per frame**, which
+bounds the queue by the number of live rows rather than by the chunk rate,
+and text rides the same `'suspend'` buffer as durable events.
+
+That deletes the entire repair path this section used to carry: no
+per-stream chunk index, no dedupe pass, no drop to detect, no resync
+message kind, and no control output for the pure fold to raise - which it
+could not have raised anyway, since it is a fold and the subscription is
+not its to restart. `from > length` becomes a defect assertion rather than
+a repair. The only resubscribe left is the ordinary one: a reload, or a seq
+gap in durable events (7.1), sends `Subscribe` with the view's cursor, and
+the runtime answers each in-flight row with a `from: 0` chunk that replaces
+it under the same splice rule. Frame volume equals
 today's `LOG_DELTA` framing (`WebviewBridge.ts:11`, 16 ms, text appends
 merged per entry); a row-per-update patch would have shipped every text
 twice, which is one reason patches are not built.
@@ -753,17 +796,28 @@ the same functions in process.
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], owners: OwnerLiveness | null }
+EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], owners: OwnerLiveness | null, catalogs: Catalogs | null }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
 ```
 
-Three messages, not four: a resync is a `Subscribe` whose frames answer
-with `from: 0` chunks for the streaming rows (5.2, 7.4), so the protocol
-needs no `Resync` shape and the fold no replacement arm. Every event
-carries its `streamId` and `seq`, and every chunk its stream and its
-`from`/`to`, so a frame needs no per-stream range. `owners` is the
-latest liveness snapshot, sent on every change and on every subscribe; a
-surface that has never received one folds with `liveOwners` empty (5.2).
+Two shapes on this channel, not three: a resync is a `Subscribe` whose
+frames answer with `from: 0` chunks for the streaming rows (5.2, 7.4), so
+there is no `Resync` shape and no replacement fold arm. Every event carries
+its `streamId` and `seq`, and every chunk its stream and its `from`/`to`,
+so a frame needs no per-stream range.
+
+The two nullable fields are host-owned transient snapshots, sent on every
+change and on every subscribe, and they are the only two. `owners` is the
+liveness snapshot; a surface that has never received one folds with
+`liveOwners` empty (5.2). `catalogs` is the launcher's option lists -
+models, agents, teams, workspace roots - which are neither the user's
+choice (`Surface`, 9) nor a fact about a run (`SessionView`), but do change
+while a webview is open, as a new agent file or an added workspace root.
+That rules out both alternatives: a one-shot request at startup goes stale,
+and a request arm would need a push channel anyway. `owners` already
+established the shape, so `catalogs` is a second field on it, not a fourth
+message. This is what feeds the pickers once lane 4 deletes the
+option-posting commands.
 
 `SessionKey` is the workspace root that keys the `LayerMap` (7.3), and it
 is on every message in both directions. One desktop renderer has N papers
@@ -875,7 +929,8 @@ remount instead of resetting through the tracked-signal registry. Two
 things that look adjacent are deliberately _not_ Surface: the option
 catalogs (`modelOptions$`, `agentOptions$`, `teamOptions$`,
 `workspaceRootOptions$`) are host-provided data, not the user's choices,
-and the banners are request outcomes and host state. The test is whether a
+and arrive as the frame's `catalogs` snapshot (8.1); the banners are
+request outcomes and host state. The test is whether a
 second surface on the same session may hold a different value: a selection
 may, a catalog may not. Two surfaces on one session may select
 different streams. Launch returns
@@ -1008,7 +1063,27 @@ the root, and all three `WorkspaceFS` accessors plus `StorageFS`'s take it
 from there and call those functions. One root read per operation, from
 context, and no process-global workspace left for a second paper to
 disagree with. Every caller stays unchanged because every caller is
-run-scoped or host-scoped. In Effect
+run-scoped or host-scoped.
+
+The other two roots are not that cheap, and this section previously implied
+they were. `config` and `workspaceState` have no equivalent choke point:
+beside the four shared accessors (`getConfig`, `readPlatformSetting`,
+`writePlatformSetting`, `tryWorkspaceState`; 115 call sites, which the
+accessors do cover) there are 12 raw `platform().config` and 23 raw
+`platform().workspaceState` reads spread across host and core files, and
+each resolves the instance built once at startup. With two papers open,
+paper B would read and write paper A's settings and UI state. So the four
+roots move in two steps, not one: `workspace` and `storage` as above, then
+`config` and `workspaceState` as their own named work - the providers
+constructed per session inside `sessionLayer`, the four accessors resolving
+the root from context, and the 35 raw reads routed through them.
+
+That work is a prerequisite of the multi-paper feature, not an optional
+follow-up, so lane 6's acceptance covers it: a desktop process may not open
+a second paper until both steps have landed. Sequencing the feature behind
+it is the alternative to a half-migrated process in which some state is
+per-paper and some is not, which is the shape that produces a bug nobody
+can reproduce. In Effect
 code the roots come from context (7.3); the Promise tier keeps the
 async-local lookup. `buildAgentWorkspaceOptions`'s `additionalDirectories`
 inference (`agentWorkspaceOptions.ts:26-39`) and `pathResolution.ts:167-179`'s
@@ -1062,8 +1137,13 @@ a component.
   `parentId`, and `followUpSupport`. Chips collapse into one popover below
   440 px (the existing container query).
 - **Drawer** (sidebar) or **docked list** (editor tab, at or above 720 px):
-  the real `stream-tabs` with top-level rows grouped by `group` (Running,
-  Waiting on you, Recent), a rollup pill from `rollup` on collapsed parents,
+  the real `stream-tabs` with top-level rows in one section per `group`
+  arm, in union order - Running, Waiting on you, Interrupted, Recent - and
+  the list is written as an exhaustive switch over the union rather than a
+  hardcoded set, so a new arm cannot leave a stream with nowhere to appear
+  (which is how `interrupted` was almost lost). An Interrupted row's
+  primary action is Resume. A rollup pill from `rollup` on collapsed
+  parents,
   the path expanded for `approval === 'descendant'` plus the Surface's
   override, a header with search, new, and close, and a footer with Open
   sessions in editor. Width `min(320px, 100% - 40px)`.
@@ -1232,7 +1312,9 @@ with their replacement.
   proves the event stream reaching it is unchanged;
   `workflowPlainOutput`'s private fold gone.
 - **6:** two papers open in one desktop process, each writing to its own
-  root; relaunch code gone.
+  root - including its own settings and workspace state, both steps of the
+  root migration landed (section 11), since a half-migrated process is the
+  bug nobody can reproduce; `WorkspaceProvider` and the relaunch code gone.
 - **8:** every element on the canvas boards reads a named field; the surface
   mapping has no row without a home.
 
@@ -1280,7 +1362,8 @@ As tests:
 | Effect 4 is a release candidate; names move (`Schema.TaggedError` already renamed on main) | Pin the version the substrate pinned; use `Data.TaggedError`; Appendix A is the verified vocabulary; the guides are older than the package, the package wins |
 | Quadratic fold on fan-out sessions                                                         | Incremental per stream arm, run memoized on `settledSeq`; measured against a recorded 31-call run at lane 1                                                  |
 | Webview bundle growth                                                                      | 61 KB gzipped measured; Schema excluded; re-measure against a production build at lane 4                                                                     |
-| Reconnect loses in-flight text                                                             | Chunks carry `from`/`to`, so a drop is caught on the next chunk and the repair is a `from: 0` chunk with the row's full text; text buffers drop, never slide |
+| Reconnect loses in-flight text                                                             | Chunks carry `from`/`to`, so adjacent ones coalesce losslessly and text never drops; a reconnect is answered with a `from: 0` chunk per in-flight row        |
+| A late chunk mutates settled text                                                          | Durable text wins: a chunk for a row whose finalizing event has folded is discarded, so the merge order of the three arms cannot change the result (5.2)     |
 | A webview folds another paper's events                                                     | `SessionFrames` is per session; the port is demultiplexed once at decode, so the key is not a runtime value below it (7.1)                                   |
 | Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                     |
 | Replay-then-tail gap                                                                       | Subscribe the live tail before the replay read; dedupe on seq                                                                                                |
