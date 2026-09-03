@@ -1,10 +1,8 @@
 import {
   currentSession,
-  defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import {
-  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
@@ -195,7 +193,7 @@ export async function requestToolEditApproval(
   const approvalsEnabled = getConfig<boolean>(TOOL_EDIT_APPROVAL_CONFIG_KEY);
 
   const context = tryUseRunContext();
-  const session = getRunContextSession(context) ?? defaultSession();
+  const session = currentSession();
   const contextStreamId = getRunContextStreamId(context);
   const preparedRequest =
     request.streamId || !contextStreamId

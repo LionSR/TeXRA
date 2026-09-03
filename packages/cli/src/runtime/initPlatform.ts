@@ -12,6 +12,7 @@ import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
+import { DisposableStore } from '@platform/disposable';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
@@ -44,16 +45,13 @@ import type { CliContext } from './cliContext';
 let supabaseAuthInitialized = false;
 let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
-let shutdownHandlersInstalled = false;
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
-// Handler function references installed by installCliShutdownSignalHandlers,
-// keyed by signal — kept so handOffCliShutdownSignalHandlers can remove
-// exactly the listeners it installed (not every SIGINT/SIGTERM listener on
-// the process) once an exclusive owner (the chat TUI) is about to install its
-// own.
-const installedShutdownHandlers: Partial<
-  Record<CliShutdownSignal, () => void>
-> = {};
+// Removers for the listeners installCliShutdownSignalHandlers put on the
+// process — kept so handOffCliShutdownSignalHandlers can remove exactly those
+// (not every SIGINT/SIGTERM listener on the process) once an exclusive owner
+// (the chat TUI) is about to install its own. Undefined means no platform
+// handlers are currently installed.
+let shutdownHandlers: DisposableStore | undefined;
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -125,16 +123,17 @@ export async function runCliPlatformShutdownSequence(
 export function installCliShutdownSignalHandlers(
   lifecycle: LifecycleHost,
 ): void {
-  if (shutdownHandlersInstalled) return;
-  shutdownHandlersInstalled = true;
+  if (shutdownHandlers) return;
+  const handlers = new DisposableStore();
+  shutdownHandlers = handlers;
 
   const install = (signal: CliShutdownSignal, exitCode: number) => {
     const handler = async () => {
       await runCliPlatformShutdownSequence(lifecycle);
       process.exit(exitCode);
     };
-    installedShutdownHandlers[signal] = handler;
     process.once(signal, handler);
+    handlers.add(() => process.removeListener(signal, handler));
   };
 
   install('SIGINT', CliExitCode.Interrupted);
@@ -146,10 +145,10 @@ export function installCliShutdownSignalHandlers(
  * (installed by `installCliShutdownSignalHandlers` above) to a caller that is
  * about to install its own — the chat TUI, immediately before it calls
  * `process.on('SIGINT'/'SIGTERM', ...)` once Ink mounts. Removes exactly the
- * listeners this module installed (tracked in `installedShutdownHandlers`),
- * not every SIGINT/SIGTERM listener on the process, and resets
- * `shutdownHandlersInstalled` so a later `initCliPlatform` first-init could
- * reinstall if the platform is ever torn down and reinitialized.
+ * listeners this module installed (tracked in `shutdownHandlers`), not every
+ * SIGINT/SIGTERM listener on the process, and clears that store so a later
+ * `initCliPlatform` first-init could reinstall if the platform is ever torn
+ * down and reinitialized.
  *
  * Call this right at the handoff point, not any earlier: everything between
  * `initInteractiveCliPlatform()` and this call (onboarding, model
@@ -162,13 +161,8 @@ export function installCliShutdownSignalHandlers(
  * call after an earlier handoff already ran).
  */
 export function handOffCliShutdownSignalHandlers(): void {
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    const handler = installedShutdownHandlers[signal];
-    if (!handler) continue;
-    process.removeListener(signal, handler);
-    delete installedShutdownHandlers[signal];
-  }
-  shutdownHandlersInstalled = false;
+  shutdownHandlers?.dispose();
+  shutdownHandlers = undefined;
 }
 
 /**

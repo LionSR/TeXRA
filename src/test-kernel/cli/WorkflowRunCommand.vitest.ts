@@ -46,16 +46,11 @@ vi.mock('@agent/storage', async (importOriginal) => {
     ),
     deriveResumability: mocks.deriveResumability,
     finalizeRun: mocks.finalizeRun,
-    // Mirrors the real result-object conversion over the same writeResultMeta
-    // fake, so failure injection keeps flowing through mocks.writeResultMeta.
+    // Routed over the same writeResultMeta fake, so failure injection keeps
+    // flowing through mocks.writeResultMeta.
     persistChildRunResultMeta: vi.fn(
       async (_executionId: ExecutionId, meta: unknown) => {
-        try {
-          await mocks.writeResultMeta(meta);
-          return { kind: 'persisted' as const };
-        } catch (err) {
-          return { kind: 'failed' as const, err };
-        }
+        await mocks.writeResultMeta(meta);
       },
     ),
   };
@@ -452,7 +447,6 @@ describe('CLI workflow run command', () => {
 
     expect(exitCode).toBe(0);
     expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
-      enforceCategory: true,
       expectedCategory: AgentCategory.Workflow,
       categoryMismatchMessage: 'Agent "polish" resolved to a non workflow run.',
     });

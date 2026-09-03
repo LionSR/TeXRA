@@ -10,12 +10,7 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  hasCompileFailures,
-  hasRoundOutputs,
-  roundsToPersisted,
-  setCompileFailures,
-} from '../output/outputState';
+import { roundsToPersisted, setCompileFailures } from '../output/outputState';
 import { compileFailuresOf, runCompileCheck } from '../output/compileCheck';
 import { extractFilesFromXml } from '../output/outputFileExtraction';
 import { traceFileLineage } from '../output/lineageMapping';
@@ -98,7 +93,7 @@ export class OutputNode extends BaseNode<
         this.recoverWarn('Output processing'),
       );
 
-      if (hasRoundOutputs(outputState, currentRound)) {
+      if ((outputState.rounds.get(currentRound)?.outputs.length ?? 0) > 0) {
         mapping = traceFileLineage(outputState, diffBaseFiles, currentRound);
 
         // `handleLatexdiffOfOutput` already wraps its whole body in
@@ -109,10 +104,9 @@ export class OutputNode extends BaseNode<
         );
 
         await tryOperation(async () => {
-          const hadCompileFailures = hasCompileFailures(
-            outputState,
-            currentRound,
-          );
+          const hadCompileFailures =
+            (outputState.rounds.get(currentRound)?.compileFailures.length ??
+              0) > 0;
           const check = await runCompileCheck(
             {
               fileService: this.services.fileService,

@@ -18,14 +18,20 @@ describe('tool status formatting', () => {
   it('formats execution todos with the shared status display', () => {
     expect(
       formatTodoSection([
-        { content: 'Write proof', status: TODO_STATUS.COMPLETED },
-        { content: 'Check constants', status: TODO_STATUS.IN_PROGRESS },
-        { content: 'Unknown state', status: 'deferred' },
+        {
+          content: 'Write proof',
+          status: TODO_STATUS.COMPLETED,
+          activeForm: 'Writing proof',
+        },
+        {
+          content: 'Check constants',
+          status: TODO_STATUS.IN_PROGRESS,
+          activeForm: 'Checking constants',
+        },
       ]),
     ).toEqual([
       `${STATUS_DISPLAY[TODO_STATUS.COMPLETED].icon} Write proof`,
       `${STATUS_DISPLAY[TODO_STATUS.IN_PROGRESS].icon} Check constants`,
-      `${STATUS_DISPLAY[TODO_STATUS.PENDING].icon} Unknown state`,
     ]);
   });
 

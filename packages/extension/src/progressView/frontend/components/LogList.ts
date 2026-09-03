@@ -32,14 +32,12 @@ import '@shared/wa/spinner';
 import type {
   StreamLifecycleStatus,
   StreamLogEntry,
-  StreamTabId,
   TaskGroup,
-  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
 import { postMessage } from '@shared/hostBridge';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
+import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
 import { PersistedState } from '@shared/state/PersistedState';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
 import { logListStateKey, webviewStorage } from '../webviewStorage';
@@ -65,9 +63,7 @@ const LogListStateSchema = z.object({
 /** Cached per-stream data and DOM state */
 interface CachedStream {
   groups: TaskGroup[];
-  workflowAttemptId: string | undefined;
-  workflowPlan: WorkflowPlanMarker | undefined;
-  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
+  runModel: WorkflowRunModel | null;
   entries: StreamLogEntry[];
   rows: TranscriptRow[];
   updatedRowIndices: readonly number[];
@@ -75,7 +71,7 @@ interface CachedStream {
   rowGeneration: number;
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
-  status: StreamLifecycleStatus | null;
+  status: StreamLifecycleStatus | undefined;
   /** Whether this cached stream is tool-use. */
   isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */
@@ -134,9 +130,7 @@ export class LogList extends LitElement {
     if (streamId) {
       const entry = this.getOrCreateEntry(streamId);
       entry.groups = this.streamContext.taskGroups;
-      entry.workflowAttemptId = this.streamContext.workflowAttemptId;
-      entry.workflowPlan = this.streamContext.workflowPlan;
-      entry.childProgress = this.streamContext.childProgress;
+      entry.runModel = this.streamContext.runModel;
       entry.entries = this.streamContext.entries;
       entry.rows = this.streamContext.rows;
       entry.updatedRowIndices = this.streamContext.updatedRowIndices;
@@ -178,9 +172,7 @@ export class LogList extends LitElement {
           aria-relevant=${data.terminalMode ? nothing : 'additions'}
           ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
-          .workflowAttemptId=${data.workflowAttemptId}
-          .workflowPlan=${data.workflowPlan}
-          .childProgress=${data.childProgress}
+          .runModel=${data.runModel}
           .entries=${data.entries}
           .rows=${data.rows}
           .updatedRowIndices=${data.updatedRowIndices}
@@ -250,9 +242,7 @@ export class LogList extends LitElement {
 
     const createdEntry: CachedStream = {
       groups: [],
-      workflowAttemptId: undefined,
-      workflowPlan: undefined,
-      childProgress: new Map(),
+      runModel: null,
       entries: [],
       rows: [],
       updatedRowIndices: [],
@@ -260,7 +250,7 @@ export class LogList extends LitElement {
       rowGeneration: 0,
       toggleStates,
       ref: createRef<TaskGroupList>(),
-      status: null,
+      status: undefined,
       isToolUse: false,
       terminalMode: false,
     };

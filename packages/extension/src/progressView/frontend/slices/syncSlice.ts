@@ -37,7 +37,7 @@ export const syncHandlers = {
       }));
     } else {
       const { workPlan, controls } = data;
-      const { goal, ...bypasses } = controls;
+      const { goal, bypasses } = controls;
       updateToolUseState(data.stream, (prev) => ({
         ...prev,
         ...activeStateFields(data),
@@ -45,7 +45,7 @@ export const syncHandlers = {
         todos: workPlan.todos,
         plan: workPlan.plan,
         queuedFollowUps: workPlan.queuedFollowUps,
-        ...bypasses,
+        bypasses,
         goal,
       }));
     }

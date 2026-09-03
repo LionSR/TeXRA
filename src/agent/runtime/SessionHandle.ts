@@ -95,14 +95,7 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
 } & Partial<
     Pick<
       SessionHandle,
-      | 'events'
-      | 'followUps'
-      | 'snapshots'
-      | 'flushers'
-      | 'interactions'
-      | 'modelRetries'
-      | 'responseTextProcessing'
-      | 'workflowControls'
+      'events' | 'snapshots' | 'interactions' | 'responseTextProcessing'
     >
   >;
 
@@ -160,7 +153,7 @@ export class SessionHandle {
     const events = init.events ?? new SessionEventHub();
     const status = new StreamStatusMachine(events);
     const transcripts = init.transcripts;
-    const followUps = init.followUps ?? new ToolUseFollowUpQueue();
+    const followUps = new ToolUseFollowUpQueue();
     const interactions = init.interactions ?? new SessionHostInteractions();
     const approvals = createSessionApprovals(interactions);
     const executions = new ExecutionRegistry({
@@ -192,14 +185,13 @@ export class SessionHandle {
     });
     this.interactions = interactions;
     this.approvals = approvals;
-    this.modelRetries = init.modelRetries ?? new ModelRetryGate();
+    this.modelRetries = new ModelRetryGate();
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
-    this.workflowControls =
-      init.workflowControls ?? new WorkflowControlRegistry();
+    this.workflowControls = new WorkflowControlRegistry();
     // Every session owns exactly one trace-flusher map. There is no
     // process-wide registry: a host drains the session it is shutting down.
-    this.flushers = init.flushers ?? new Map<string, RunTraceFlushEntry>();
+    this.flushers = new Map<string, RunTraceFlushEntry>();
     liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
     // session's shutdown sequence top-to-bottom: drain traces, abort and
@@ -686,13 +678,6 @@ export class SessionHandle {
 /** Live sessions whose background processes must be stopped at shutdown. */
 const liveSessions = new Set<SessionHandle>();
 
-/** Stop background OS processes owned by every live runtime session. */
-export function killAllSessionBackgroundProcesses(): void {
-  for (const session of liveSessions) {
-    session.executions.killBackgroundProcesses();
-  }
-}
-
 /** Visit every live session — for process-shutdown sweeps that must reach
  * session-keyed registries (e.g. the agent-CLI session stores). */
 export function forEachLiveSession(
@@ -781,11 +766,9 @@ export async function settleLiveSessionExecutions(
 let cachedDefaultSession: SessionHandle | undefined;
 let defaultSessionFallbackWarned = false;
 
-type DefaultSessionInit = Omit<SessionHandleInit, 'flushers'>;
-
 /** Install the process-default session after its transcript store is valid. */
 export function initializeDefaultSession(
-  init: DefaultSessionInit,
+  init: SessionHandleInit,
 ): SessionHandle {
   if (cachedDefaultSession) {
     throw new Error('The default session has already been initialized.');

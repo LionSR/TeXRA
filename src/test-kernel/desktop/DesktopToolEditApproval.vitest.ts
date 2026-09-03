@@ -4,9 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionEvent } from '@agent/runtime/SessionEventHub';
 import type { DesktopAgentExecutionHost } from '@desktop/main/desktopAgentExecutionHost';
 import type { DiffSource } from '@hosts/uiHosts';
 
@@ -42,7 +40,7 @@ interface ApprovalControllerOptions {
   resolveToolEditPermission(requestId: string): void;
 }
 
-interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
+interface RecordingRuntimeHost {
   shownToolEditPermissions: ToolEditPermission[];
   resolvedToolEditPermissions: Array<{ requestId: string }>;
 }
@@ -66,7 +64,6 @@ function createApprovalController(
   options: ApprovalControllerOptions,
 ): ApprovalController {
   const controller = new modules.controllerModule.ToolEditApprovalController({
-    interactions: options.interactions,
     session: options.session,
     host: new modules.desktopModule.DesktopToolEditApprovalHost({
       ui: options.ui,
@@ -85,19 +82,10 @@ async function createTempRoot(prefix = 'texra-approval-'): Promise<string> {
   return dir;
 }
 
-function recordSessionEvents(session: SessionHandle): SessionEvent[] {
-  const events: SessionEvent[] = [];
-  session.events.subscribe((event) => events.push(event), {
-    scope: 'session',
-  });
-  return events;
-}
-
 function createRecordingRuntimeHost(): RecordingRuntimeHost {
   return {
     shownToolEditPermissions: [],
     resolvedToolEditPermissions: [],
-    emit: vi.fn(),
   };
 }
 
@@ -370,7 +358,7 @@ describe('desktop tool edit approval', () => {
     'routes proposed-file previews through desktop temp files before rejection',
     async () => {
       const opened: string[] = [];
-      const { requestToolEditApproval, controller, interactions, session } =
+      const { requestToolEditApproval, controller, interactions } =
         await createApprovalFixture({
           ui: createStubDesktopAgentExecutionHost({
             openPath: async (filePath) => {
@@ -378,8 +366,6 @@ describe('desktop tool edit approval', () => {
             },
           }),
         });
-      const emitSpy = vi.spyOn(interactions, 'emit');
-      const sessionEvents = recordSessionEvents(session);
       const { shownToolEditPermissions: shown } = interactions;
 
       const resultPromise = requestToolEditApproval({
@@ -390,17 +376,6 @@ describe('desktop tool edit approval', () => {
         streamId: 'stream-2',
       });
       await vi.waitFor(() => expect(shown).toHaveLength(1));
-      expect(sessionEvents).toContainEqual({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: 'stream-2',
-            suppressViewSwitch: true,
-          },
-        },
-      });
-      expect(emitSpy).toHaveBeenCalledWith('requestEnsureProgressView', {});
       expect(shown[0]).toMatchObject({
         path: '/workspace/notes.txt',
         relativePath: 'notes.txt',

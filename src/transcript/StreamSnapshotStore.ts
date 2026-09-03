@@ -156,19 +156,6 @@ const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
   'updateCompileFailures',
 ] as const satisfies readonly AgentEvent['type'][]);
 
-type SnapshotRunFactType = (typeof SNAPSHOT_RUN_FACT_TYPES)[number];
-
-/** The `AgentEvent` arms named by {@link SNAPSHOT_RUN_FACT_TYPES}. */
-type SnapshotRunFact = Extract<AgentEvent, { type: SnapshotRunFactType }>;
-
-const SNAPSHOT_RUN_FACT_TYPE_SET: ReadonlySet<AgentEvent['type']> = new Set(
-  SNAPSHOT_RUN_FACT_TYPES,
-);
-
-function isSnapshotRunFact(event: AgentEvent): event is SnapshotRunFact {
-  return SNAPSHOT_RUN_FACT_TYPE_SET.has(event.type);
-}
-
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 interface HydratedRunState {
   authorityReadComplete: boolean;
@@ -718,16 +705,8 @@ export class StreamSnapshotStore {
     if (options?.summaryMetaSource) {
       this.summaryMetaSource = options.summaryMetaSource;
     }
-    const detachRunEvents = events.subscribe(
-      (sessionEvent) => {
-        if (sessionEvent.scope !== 'run') return;
-        const { event } = sessionEvent;
-        // The hub filters by `SNAPSHOT_RUN_FACT_TYPES` at runtime but still
-        // types the callback as the whole `SessionEvent`, so narrow to the
-        // subscribed set here. That is what lets the `default` arm below be a
-        // real exhaustiveness check instead of a silent catch-all.
-        if (!isSnapshotRunFact(event)) return;
-
+    const detachRunEvents = events.subscribeRunFacts(
+      ({ event }) => {
         switch (event.type) {
           case 'run.start':
             this.setRunStart(
@@ -783,30 +762,23 @@ export class StreamSnapshotStore {
           }
         }
       },
-      { scope: 'run', types: SNAPSHOT_RUN_FACT_TYPES },
+      { types: SNAPSHOT_RUN_FACT_TYPES },
     );
-    const detachSessionEvents = events.subscribe(
-      (sessionEvent) => {
-        if (sessionEvent.scope !== 'session') return;
-        switch (sessionEvent.event.type) {
-          case 'updateStreamDescription':
-            this.setDescription(
-              sessionEvent.event.payload.streamId,
-              sessionEvent.event.payload.description,
-            );
-            return;
-          case 'setParentStream':
-            this.setParentStream(
-              sessionEvent.event.payload.childStreamId,
-              sessionEvent.event.payload.parentStreamId,
-            );
-            return;
-          default:
-            return;
-        }
-      },
-      { scope: 'session' },
-    );
+    const detachSessionEvents = events.subscribeSessionFacts((fact) => {
+      switch (fact.type) {
+        case 'updateStreamDescription':
+          this.setDescription(fact.payload.streamId, fact.payload.description);
+          return;
+        case 'setParentStream':
+          this.setParentStream(
+            fact.payload.childStreamId,
+            fact.payload.parentStreamId,
+          );
+          return;
+        default:
+          return;
+      }
+    });
 
     return () => {
       detachSessionEvents();

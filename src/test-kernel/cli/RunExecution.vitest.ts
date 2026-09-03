@@ -1293,23 +1293,6 @@ describe('executeCliConfig', () => {
     expect(mocks.writeTextStderrAndWait).not.toHaveBeenCalled();
   });
 
-  /** Stubs a workflow-category result where a tool-use run was expected. */
-  async function runWorkflowCategoryMismatch() {
-    const { AgentCategory } = await import('@shared/schemas');
-    const { executeCliConfig } = await loadRunExecution();
-    mocks.runAgent.mockResolvedValueOnce({
-      category: AgentCategory.Workflow,
-      executionId: 'exec-1',
-      outcome: 'completed',
-      outputs: [],
-      compileFailures: [],
-    });
-    return executeCliConfig(toolUseConfig(), cliContext(), {
-      expectedCategory: AgentCategory.ToolUse,
-      categoryMismatchMessage: 'wrong category',
-    });
-  }
-
   it('reports invalid configs without starting the runtime host', async () => {
     const { executeCliConfig } = await loadRunExecution();
     const invalidConfig = { agentCategory: 'invalid' } as unknown as Parameters<
@@ -1363,48 +1346,5 @@ describe('executeCliConfig', () => {
       expect(Object.hasOwn(result.result, 'terminalStatus')).toBe(false);
       expect(Object.hasOwn(result.result, 'endGroupStatus')).toBe(false);
     }
-  });
-
-  it('marks executions errored when the resolved category is unexpected', async () => {
-    const result = await runWorkflowCategoryMismatch();
-
-    expect(result).toMatchObject({ ok: false });
-    expect(mocks.finalizeRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        executionId: expect.any(String),
-        outcome: RUN_OUTCOME.FAILED,
-        // A category mismatch reports FAILED, so the run's checkpoint
-        // survives and stays resumable (#11315).
-        flowRecord: 'preserve',
-      }),
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith('wrong category');
-    expect(mocks.close).toHaveBeenCalledOnce();
-  });
-
-  it('reports category finalization failures and still returns the mismatch', async () => {
-    const persistenceError = new Error('terminal metadata disk full');
-    mocks.finalizeRun.mockImplementationOnce(async (input) => {
-      input.report?.(
-        new Error(
-          `Failed to persist ${input.outcome} terminal state for execution ${input.executionId}: terminal metadata disk full`,
-          { cause: persistenceError },
-        ),
-      );
-      return { ok: false, error: persistenceError, outcomePersisted: false };
-    });
-
-    await expect(runWorkflowCategoryMismatch()).resolves.toEqual({
-      ok: false,
-      exitCode: CliExitCode.AgentError,
-    });
-
-    expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(
-      1,
-      expect.stringMatching(
-        /^Warning: Failed to persist failed terminal state for execution .+: terminal metadata disk full$/,
-      ),
-    );
-    expect(mocks.writeTextStderr).toHaveBeenNthCalledWith(2, 'wrong category');
   });
 });

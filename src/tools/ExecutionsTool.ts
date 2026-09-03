@@ -12,7 +12,6 @@ import {
   listExecutionWorkspaceFiles,
   unwrapResultMeta,
   type ChildRecord,
-  type TodoEntry,
   listExecutions,
   resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
@@ -34,6 +33,7 @@ import {
   ExecutionIdSchema,
   ToolError,
   type ExecutionId,
+  type TodoItem,
   type ToolResult,
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
@@ -103,7 +103,7 @@ const log = createLog('ExecutionsTool');
 function getRunningTodos(
   session: SessionHandle,
   handle: AgentExecutionHandle,
-): TodoEntry[] {
+): readonly TodoItem[] {
   return session.snapshots.getWorkPlan(handle.childStreamId).todos;
 }
 
@@ -452,7 +452,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     executionId: ExecutionId,
     category: ExecutionDisplayCategory | undefined,
     children: ChildRecord[],
-    todos: TodoEntry[],
+    todos: readonly TodoItem[],
     report: string | null,
     options: {
       readonly workflow?: WorkflowExecutionSnapshot;

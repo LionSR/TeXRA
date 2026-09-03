@@ -1,3 +1,6 @@
+// Local imports - execution requests
+import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+
 // Local imports - team launch
 import type { TeamAvailabilityChoice } from '@common/teams/TeamAvailabilityPreflight';
 import {
@@ -34,11 +37,28 @@ export interface MainViewExecutionLaunchHost {
 type MainViewExecutionLaunchResult =
   | {
       status: 'prepared';
-      preparation: MainViewExecutionPreparationResult;
+      request: ValidatedExecutionRequest;
       infoMessage?: string;
     }
   | { status: 'cancelled' }
-  | { status: 'error'; message: string };
+  | { status: 'error'; message: string; docsCommand?: string };
+
+/**
+ * Fold a preparation outcome into the launch union so hosts branch once. An
+ * invalid preparation is an ordinary launch error, `docsCommand` and all.
+ */
+function toLaunchResult(
+  preparation: MainViewExecutionPreparationResult,
+  infoMessage?: string,
+): MainViewExecutionLaunchResult {
+  return preparation.valid
+    ? { status: 'prepared', request: preparation.request, infoMessage }
+    : {
+        status: 'error',
+        message: preparation.message,
+        docsCommand: preparation.docsCommand,
+      };
+}
 
 /**
  * Resolve an ordinary or team launch into one validated execution request.
@@ -49,10 +69,7 @@ export async function prepareMainViewExecutionLaunch(
   host: MainViewExecutionLaunchHost,
 ): Promise<MainViewExecutionLaunchResult> {
   if (message.session?.launchTarget !== 'team') {
-    return {
-      status: 'prepared',
-      preparation: prepareMainViewExecutionRequest(message),
-    };
+    return toLaunchResult(prepareMainViewExecutionRequest(message));
   }
 
   try {
@@ -90,21 +107,13 @@ export async function prepareMainViewExecutionLaunch(
             resolution.unavailableNames,
           ),
         };
-      case 'ready': {
-        const preparation = prepareMainViewTeamExecutionRequest(
-          message,
-          resolution.fields,
+      case 'ready':
+        return toLaunchResult(
+          prepareMainViewTeamExecutionRequest(message, resolution.fields),
+          resolution.partial
+            ? formatPartialTeamLaunchMessage(resolution.missingNames)
+            : undefined,
         );
-        return resolution.partial
-          ? {
-              status: 'prepared',
-              preparation,
-              infoMessage: formatPartialTeamLaunchMessage(
-                resolution.missingNames,
-              ),
-            }
-          : { status: 'prepared', preparation };
-      }
       default:
         return assertNever(
           resolution,

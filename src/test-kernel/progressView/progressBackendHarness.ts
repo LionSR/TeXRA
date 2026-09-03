@@ -65,9 +65,7 @@ export async function createLiveStoreSession(): Promise<SessionHandle> {
 
 /** Stream controls with every bypass off and no goal — the pre-run default. */
 export const stubStreamControls: GetProgressStreamControls = () => ({
-  bashBypass: false,
-  toolEditBypass: false,
-  superYoloBypass: false,
+  bypasses: { bash: false, toolEdit: false, superYolo: false },
   goal: { active: false },
 });
 

@@ -21,10 +21,11 @@ import {
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import { getStreamTabId } from '@agent/runtime/streamTab';
-import type {
-  ExecutionId,
-  StreamTabId,
-  UserFollowUpSupport,
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type StreamTabId,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 
 // Local file imports
@@ -145,7 +146,8 @@ export async function startDetachedChildRunLoop<TTurn>(
       if (childStream) {
         try {
           await childStream.finalize({
-            outcome: { kind: 'failed', error },
+            outcome: RUN_OUTCOME.FAILED,
+            error,
             persistence: { kind: 'finalize', flowRecord: 'delete' },
             ...(autoCloseOnLaunchFailure && { autoClose: true }),
           });

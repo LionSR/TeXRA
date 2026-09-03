@@ -55,6 +55,30 @@ Event delivery starts at the iterator's first `next()`. Awaiting only `result`
 does not retain trace events, and ending iteration detaches the event source
 while the run itself continues.
 
+## Run results
+
+There is exactly one result shape: `AgentFlowResult`, a union discriminated on
+`category` (`'workflow'` | `'toolUse'`). Both members carry the same run
+identity and accounting — `executionId`, `streamId`, an optional coarse
+`totalCostUsd` covering the run and its subagents, and, on a failed run, a
+structured `error`. A `workflow` result adds `outputs` and `compileFailures`; a
+`toolUse` result adds `response`, `files`, and the `structured` value of a
+`submit_output` tool. Switch on `category` before reading either half.
+
+`run.result` is terminal-only. Internally a tool-use flow also has a
+non-terminal `WAITING` state — the run is parked mid-session waiting on the
+user rather than finished — and the runtime carries a separate waiting shape
+for it. That shape is deliberately not exported and never resolves `result`: a
+parked run has no outcome to report, and this surface has no interactive
+channel to un-park it (see [Current limits](#current-limits)). Watch the trace
+stream if you need to observe a run reaching that state.
+
+Two things a host sees are absent here on purpose. The normalized `cost`
+breakdown and the per-file `diffs` summary live on an internal result type used
+for persistence and host presentation; the embedding contract exposes only the
+coarse `totalCostUsd` and leaves diffing to the embedder, which already owns the
+files.
+
 ## Entry points
 
 | Entry                     | Contents                                                                                                          |

@@ -381,7 +381,7 @@ describe('YAML prompt structure contracts', () => {
       .update(JSON.stringify(markerInventory))
       .digest('hex');
     expect(digest).toBe(
-      '9ec149a7983e8791a7d50ddd715ca7dab9b2a697c07936c573d40ef0af809bdc',
+      '76913c0793d40ae2b610ca69ade62281944e5e02b9f3f2d1238c14972b2a3807',
     );
   });
 

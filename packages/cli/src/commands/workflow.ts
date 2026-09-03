@@ -229,7 +229,6 @@ export async function executeCliWorkflowConfig(
     }
   };
   const execution = await executeCliConfig(config, runContext, {
-    enforceCategory: true,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     onInterruptedExecutionFinalized: recoveryInputIsDurable
@@ -306,10 +305,11 @@ async function persistWorkflowResultMeta(
   executionId: string,
   resultMeta: ReturnType<typeof buildCliWorkflowResultMeta>,
 ): Promise<void> {
-  const result = await persistChildRunResultMeta(executionId, resultMeta);
-  if (result.kind === 'failed') {
+  try {
+    await persistChildRunResultMeta(executionId, resultMeta);
+  } catch (err) {
     writeTextStderr(
-      `Warning: could not persist workflow result metadata: ${toErrorMessage(result.err)}`,
+      `Warning: could not persist workflow result metadata: ${toErrorMessage(err)}`,
     );
   }
 }

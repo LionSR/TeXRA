@@ -54,6 +54,10 @@ import {
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
+import {
+  getLastCheckResults,
+  refreshToolAvailability,
+} from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
@@ -871,16 +875,8 @@ function createWindow(options: {
             await import('@controllers/settingsView/ToolDashboardData');
           return buildToolDashboardItems('desktop', cachedResults);
         },
-        getCachedCheckResults: async () => {
-          const { getLastCheckResults } =
-            await import('@tools/toolAvailability');
-          return getLastCheckResults() ?? undefined;
-        },
-        refreshAvailability: async () => {
-          const { refreshToolAvailability } =
-            await import('@tools/toolAvailability');
-          await refreshToolAvailability();
-        },
+        getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
+        refreshAvailability: refreshToolAvailability,
         planTerminalAction: async (toolId, kind) => {
           const { planToolTerminalAction } =
             await import('@controllers/settingsView/ToolDashboardData');

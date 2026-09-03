@@ -4,7 +4,7 @@
  * (`streamLogs/{stream}.json` + `streamData/{stream}/*`), keyed through the
  * execution→stream mapping.
  */
-import { getExecutionStore, type TodoEntry } from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import { formatToolResultAsText } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 import { KVStore } from '@common/storage/KVStore';
@@ -17,6 +17,7 @@ import {
   type StreamLogEntry,
   type StreamLogEntryOf,
   type StreamTabId,
+  type TodoItem,
   type ToolUseLog,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
@@ -57,16 +58,13 @@ export async function resolveStreamForExecution(
  */
 export async function readCompletedRunTodos(
   executionId: ExecutionId,
-): Promise<TodoEntry[]> {
+): Promise<readonly TodoItem[]> {
   const resolution = await resolveStreamForExecution(executionId);
   if (!resolution) return [];
   const workPlan = await readWorkPlan(
     new KVStore(streamDataDir(resolution.streamId)),
   );
-  return workPlan.todos.map((todo): TodoEntry => ({
-    content: todo.content,
-    status: todo.status,
-  }));
+  return workPlan.todos;
 }
 
 // ============================================================================
@@ -276,8 +274,8 @@ function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
       return webFetchEntryToMessages(entry);
     // ── Deliberately skipped: not conversation content ──────────────────
     // scratchpad is a derived view carved from the modelResponse raw text
-    // (already mapped above); the rest are run diagnostics/status rows that
-    // the legacy conversation.json projection never contained either.
+    // (already mapped above); the rest are run diagnostics/status rows, not
+    // conversation content.
     case MESSAGE_TYPES.SCRATCHPAD:
     case MESSAGE_TYPES.FILE_LIST:
     case MESSAGE_TYPES.MISSING_OUTPUTS:

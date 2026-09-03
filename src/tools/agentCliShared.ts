@@ -30,6 +30,7 @@ import {
   type RunContext,
 } from '@agent/runtime/RunContext';
 import {
+  RUN_OUTCOME,
   ToolError,
   type ExecutionId,
   type StreamTabId,
@@ -260,7 +261,8 @@ export async function launchAgentCliSession(
       } catch (error) {
         try {
           await stream.finalize({
-            outcome: { kind: 'failed', error },
+            outcome: RUN_OUTCOME.FAILED,
+            error,
             persistence: { kind: 'finalize', flowRecord: 'delete' },
           });
         } catch (finalizeError) {

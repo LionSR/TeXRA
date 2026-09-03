@@ -25,7 +25,6 @@ const VALID = {
   prompts: {
     systemPrompt: 'You are a system prompt.\n',
     userRequest: 'Generate the thing.\n',
-    retryPrompt: 'Try again: {{ VALIDATION_ERROR }}\n',
   },
 };
 
@@ -68,14 +67,13 @@ describe('bundled agent-creator template loading', () => {
       // No trimming or other rewriting of multiline block-scalar prompts.
       expect(config[category].systemPrompt).toBe(prompts.systemPrompt);
       expect(config[category].userRequest).toBe(prompts.userRequest);
-      expect(config.retryPrompts[category]).toBe(prompts.retryPrompt);
       expect(config[category].systemPrompt.endsWith('\n')).toBe(true);
     }
     expect(config.templates.workflowSingle).toBe(files.workflowSingle);
     expect(config.templates.toolUse).toBe(files.toolUseTpl);
   });
 
-  it.each(['systemPrompt', 'userRequest', 'retryPrompt'])(
+  it.each(['systemPrompt', 'userRequest'])(
     'rejects empty or whitespace-only %s',
     (field) => {
       for (const blank of ['', '  \n']) {
@@ -90,10 +88,12 @@ describe('bundled agent-creator template loading', () => {
   );
 
   it('rejects misspelled keys inside prompts instead of stripping them', () => {
-    const { retryPrompt, ...rest } = VALID.prompts;
     expect(() =>
-      buildWithWorkflowPrompts({ ...rest, retryPromt: retryPrompt }),
-    ).toThrow('retryPromt');
+      buildWithWorkflowPrompts({
+        ...VALID.prompts,
+        userRequst: 'Generate the thing.\n',
+      }),
+    ).toThrow('userRequst');
   });
 
   it('rejects a missing required prompt field', () => {

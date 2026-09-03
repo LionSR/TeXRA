@@ -18,10 +18,12 @@ import type {
   StreamTabId,
   StreamTabInfo,
   TaskGroup,
-  WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
+import type {
+  ChildRunProgress,
+  WorkflowRunModel,
+} from '@shared/streams/workflowRunModel';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
@@ -70,10 +72,8 @@ export interface StreamLogContextValue {
   /** Current log generation. */
   rowGeneration: number;
   taskGroups: TaskGroup[];
-  /** Newest workflow-attempt boundary, even if its plan body was malformed. */
-  workflowAttemptId: string | undefined;
-  /** The newest valid declared workflow plan, for the run model. */
-  workflowPlan: WorkflowPlanMarker | undefined;
+  /** The active run's workflow display structure, or null when there is none. */
+  runModel: WorkflowRunModel | null;
   /** Live progress of the stream's children, by child stream. */
   childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
   isToolUse: boolean;
@@ -81,7 +81,7 @@ export interface StreamLogContextValue {
   /** Stream name for switch detection in LogList */
   streamName: string | null;
   /** Current active stream status for pre-output empty states. */
-  streamStatus: StreamLifecycleStatus | null;
+  streamStatus: StreamLifecycleStatus | undefined;
   /** Render log output in terminal style (monospace, no timestamps, etc). */
   terminalMode: boolean;
 }
@@ -93,13 +93,12 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   updatedRowBaseGeneration: 0,
   rowGeneration: 0,
   taskGroups: [],
-  workflowAttemptId: undefined,
-  workflowPlan: undefined,
+  runModel: null,
   childProgress: new Map(),
   isToolUse: false,
   hasStreams: false,
   streamName: null,
-  streamStatus: null,
+  streamStatus: undefined,
   terminalMode: false,
 };
 

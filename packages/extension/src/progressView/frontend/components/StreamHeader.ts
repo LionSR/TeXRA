@@ -440,11 +440,6 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
     const stage = state?.stage;
     // Tool-use-only bypass/goal indicators; workflow/process states report off.
     const toolUse = state && isToolUseState(state) ? state : null;
-    const bypassActive = {
-      bash: Boolean(toolUse?.bashBypass),
-      superYolo: Boolean(toolUse?.superYoloBypass),
-      toolEdit: Boolean(toolUse?.toolEditBypass),
-    };
     const goal = toolUse?.goal ?? { active: false };
     const hasExecutionId = Boolean(this.stream.executionId);
     const identity = this.stream.identity;
@@ -492,7 +487,9 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
         this.archived ||
         computedDisabled ||
         (isCopyRunContext && runContext === '');
-      const isActive = Boolean(btn.bypassKind && bypassActive[btn.bypassKind]);
+      const isActive = Boolean(
+        btn.bypassKind && toolUse?.bypasses[btn.bypassKind],
+      );
       // A tooltip only shows on hover, so the copy confirmation also swaps the
       // icon — same pairing as the external-inquiry copy button.
       const copied = isCopyRunContext && this.copyRunContext.state.copied;

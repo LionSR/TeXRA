@@ -1349,7 +1349,6 @@ describe('finalizeRunTerminal', () => {
       const event = await first;
 
       expect(event).toMatchObject({
-        outcomePersisted: true,
         event: {
           type: 'result',
           outcome: RUN_OUTCOME.COMPLETED,
@@ -1445,7 +1444,6 @@ describe('finalizeRunTerminal', () => {
       });
 
       expect(event).toMatchObject({
-        outcomePersisted: false,
         event: {
           type: 'result',
           outcome: RUN_OUTCOME.FAILED,

@@ -271,17 +271,19 @@ other two hosts already agree on, rather than the shared path bending to
 the Memento. `interactionOwnership` needs one ruling: promote to the
 shared registry contract or fence as CLI modality.
 
-**Status at `e00b9317f7` (2026-08-19):** repair 1 **LANDED #10694 then half
-regressed** — both headless `kill` sites gained the explicit
-`{detachActiveChildren: false}` and the deliberate-cascade comment, but #10800
-("simplify agent launch and CLI lifecycle") removed one of the two; only
-`runExecution.ts:406` carries it now. Repair 2 (the quit-asymmetry paragraph at
-`detachSubagentsOnStop`'s declaration) is **OPEN** — that JSDoc still covers
-only the SSOT-and-live-read rationale. Toggle-store unification is **OPEN**:
-#10925 collapsed the settings catalogs but did not move
-`DETACH_SUBAGENTS_ON_STOP` / `ALLOW_ORCHESTRATOR_KILL`, which still declare
-`slots: sameSlot('workspaceState')` and still route through the extension's
-`WorktreeMemento` — the 2026-08-15 ruling recorded above is unexecuted.
+**Status at `e00b9317f7` (2026-08-19), rechecked 2026-09-03:** repair 1
+**LANDED #10694 then half regressed** — both headless `kill` sites gained the
+explicit `{detachActiveChildren: false}` and the deliberate-cascade comment,
+but #10800 ("simplify agent launch and CLI lifecycle") removed one of the two;
+only `runExecution.ts:387` carries it now. Repair 2 (the quit-asymmetry
+paragraph at `detachSubagentsOnStop`'s declaration) is **LANDED** — that JSDoc
+now carries it beside the SSOT-and-live-read rationale. Toggle-store
+unification is **LANDED**: `DETACH_SUBAGENTS_ON_STOP` /
+`ALLOW_ORCHESTRATOR_KILL` are `GlobalStateKey` rows declaring
+`slots: sameSlot('globalState')` and neither appears in `WORKTREE_SHARED_KEYS`,
+so the 2026-08-15 ruling recorded above is executed. Values left in the old
+slot are abandoned, not migrated; each reader warns once via
+`warnAbandonedSlotValue`, which retires after 2026-11-19.
 `interactionOwnership` needed no new ruling: it was already promoted to the
 shared registry contract in `docs/design/2026-08-01-execution-interaction-ownership.md`,
 and the code matches.

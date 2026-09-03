@@ -168,17 +168,9 @@ export function subscribeGoalStateChanges(
   session: Pick<SessionHandle, 'events'>,
   listener: GoalStateChangeListener,
 ): () => void {
-  return session.events.subscribe(
-    (sessionEvent) => {
-      if (
-        sessionEvent.scope === 'session' &&
-        sessionEvent.event.type === 'goalStateChanged'
-      ) {
-        listener(sessionEvent.event.payload);
-      }
-    },
-    { scope: 'session' },
-  );
+  return session.events.subscribeSessionFacts((fact) => {
+    if (fact.type === 'goalStateChanged') listener(fact.payload);
+  });
 }
 
 export const GoalStore = Object.freeze({

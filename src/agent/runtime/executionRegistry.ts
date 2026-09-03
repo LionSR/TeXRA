@@ -65,10 +65,6 @@ export interface ChildExecutionActivation {
   readonly isDetached: () => boolean;
 }
 
-interface TerminateOptions {
-  readonly cascadeChildren?: boolean;
-}
-
 /**
  * Where a follow-up for a stream goes: a live flow context, the stream's
  * retained queue (a WAITING or resuming cursor, or a parent whose children
@@ -286,18 +282,16 @@ export class ExecutionRegistry {
    */
   trackAgentExecution(
     handle: AgentExecutionHandle,
-    options: { readonly status?: StreamPhase } = {},
+    options: { readonly status: StreamPhase },
   ): void {
     this.assertActive();
-    if (options.status) {
-      const previousStatus = this.streamStatus.get(handle.childStreamId);
-      const cause =
-        options.status === STREAM_PHASE.RUNNING &&
-        isTerminalOutcomePhase(previousStatus)
-          ? 'resume'
-          : 'lifecycle';
-      this.streamStatus.transition(handle.childStreamId, options.status, cause);
-    }
+    const previousStatus = this.streamStatus.get(handle.childStreamId);
+    const cause =
+      options.status === STREAM_PHASE.RUNNING &&
+      isTerminalOutcomePhase(previousStatus)
+        ? 'resume'
+        : 'lifecycle';
+    this.streamStatus.transition(handle.childStreamId, options.status, cause);
     this.track(handle);
   }
 
@@ -466,9 +460,11 @@ export class ExecutionRegistry {
     if (options.detachActiveChildren === true) {
       this.detachActiveChildren(handle.childStreamId);
     }
-    const result = this.terminate(handle, visited, {
-      cascadeChildren: options.detachActiveChildren !== true,
-    });
+    const result = this.terminate(
+      handle,
+      visited,
+      options.detachActiveChildren !== true,
+    );
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
     this.notifyWaiters(executionId);
@@ -552,7 +548,7 @@ export class ExecutionRegistry {
   private interruptActiveChildren(
     parentStreamId: StreamTabId,
     visited: Set<string>,
-    options: TerminateOptions,
+    cascadeChildren: boolean,
   ): void {
     // A loop between turns has no handle to interrupt; a loop inside a turn
     // also gets its turn handle terminated below. The activation is keyed
@@ -565,7 +561,7 @@ export class ExecutionRegistry {
     }
     for (const handle of this.handles.values()) {
       if (handle.isOwnedBy(parentStreamId)) {
-        this.terminate(handle, visited, options);
+        this.terminate(handle, visited, cascadeChildren);
       }
     }
   }
@@ -582,17 +578,21 @@ export class ExecutionRegistry {
    * for the difference: a native child between turns would be emitted twice.
    */
   detachActiveChildren(parentStreamId: StreamTabId): readonly StreamTabId[] {
-    const detachedChildStreamIds: StreamTabId[] = [];
+    // A Set, not an array: a child detached mid-turn has both a per-turn
+    // handle and a ChildExecutionActivation under one executionId, so both
+    // loops below reach the same childStreamId and it must still be emitted
+    // (and reported) exactly once.
+    const detachedChildStreamIds = new Set<StreamTabId>();
     for (const activation of this.activeChildActivations(parentStreamId)) {
       activation.detach();
       this.approvals.detachStreamFromParent(activation.childStreamId);
-      detachedChildStreamIds.push(activation.childStreamId);
+      detachedChildStreamIds.add(activation.childStreamId);
     }
     for (const handle of this.handles.values()) {
       if (!handle.isOwnedBy(parentStreamId)) continue;
       this.approvals.detachStreamFromParent(handle.childStreamId);
       handle.detach();
-      detachedChildStreamIds.push(handle.childStreamId);
+      detachedChildStreamIds.add(handle.childStreamId);
     }
     this.emitChildActivity(parentStreamId);
     for (const childStreamId of detachedChildStreamIds) {
@@ -601,7 +601,7 @@ export class ExecutionRegistry {
         parentStreamId: null,
       });
     }
-    return detachedChildStreamIds;
+    return [...detachedChildStreamIds];
   }
 
   /**
@@ -622,15 +622,15 @@ export class ExecutionRegistry {
     if (options.detachActiveChildren === true) {
       this.detachActiveChildren(streamId);
     } else {
-      this.interruptActiveChildren(streamId, visited, {
-        cascadeChildren: true,
-      });
+      this.interruptActiveChildren(streamId, visited, true);
     }
 
     const stopped = rootHandle
-      ? this.terminate(rootHandle, visited, {
-          cascadeChildren: options.detachActiveChildren !== true,
-        })
+      ? this.terminate(
+          rootHandle,
+          visited,
+          options.detachActiveChildren !== true,
+        )
       : false;
     // `terminate()` already publishes CANCELLED for a stream it owned; an
     // ownerless (or already-untracked) stream still needs the write. The
@@ -766,12 +766,12 @@ export class ExecutionRegistry {
   private terminate(
     handle: AgentExecutionHandle,
     visited: Set<string>,
-    options: TerminateOptions,
+    cascadeChildren: boolean,
   ): boolean {
     if (visited.has(handle.executionId)) return false;
     visited.add(handle.executionId);
-    if (options.cascadeChildren === true) {
-      this.interruptActiveChildren(handle.childStreamId, visited, options);
+    if (cascadeChildren) {
+      this.interruptActiveChildren(handle.childStreamId, visited, true);
     }
     // A child execution is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered
@@ -825,11 +825,10 @@ export class ExecutionRegistry {
 
   private releaseChildActivation(
     executionId: string,
-    expected?: ChildExecutionActivation,
+    expected: ChildExecutionActivation,
   ): void {
-    const activation = this.childActivations.get(executionId);
-    if (!activation || (expected && activation !== expected)) return;
+    if (this.childActivations.get(executionId) !== expected) return;
     this.childActivations.delete(executionId);
-    this.interactionOwnership.observeChildActivation(activation, false);
+    this.interactionOwnership.observeChildActivation(expected, false);
   }
 }

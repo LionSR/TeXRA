@@ -118,6 +118,3 @@ prompts:
     - userRequest must be an array with exactly as many entries as rounds (1 or 2).
     - Include {{ INSTRUCTION }} somewhere in the prompts so the user's instructions are passed through.
     - Write prompt text in LaTeX style (\begin{itemize}, \textbf{}, etc.), not markdown.
-
-  retryPrompt: |
-    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

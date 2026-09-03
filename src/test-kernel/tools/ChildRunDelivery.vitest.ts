@@ -43,22 +43,18 @@ describe('child run delivery', () => {
       },
     } satisfies ResultMeta;
 
-    await expect(
-      persistChildRunReport('exec-1' as ExecutionId, 'payload'),
-    ).resolves.toEqual({ kind: 'persisted' });
-    await expect(
-      persistChildRunResultMeta('exec-1' as ExecutionId, resultMeta),
-    ).resolves.toEqual({ kind: 'persisted' });
+    await persistChildRunReport('exec-1' as ExecutionId, 'payload');
+    await persistChildRunResultMeta('exec-1' as ExecutionId, resultMeta);
     expect(mocks.writeReport).toHaveBeenCalledWith('payload');
     expect(mocks.writeResultMeta).toHaveBeenCalledWith(resultMeta);
   });
 
-  it('returns persistence failures', async () => {
+  it('propagates persistence failures', async () => {
     const err = new Error('disk full');
     mocks.writeReport.mockRejectedValue(err);
     await expect(
       persistChildRunReport('exec-1' as ExecutionId, 'payload'),
-    ).resolves.toEqual({ kind: 'failed', err });
+    ).rejects.toBe(err);
   });
 
   it('submits delivery and recovery as one operation', async () => {

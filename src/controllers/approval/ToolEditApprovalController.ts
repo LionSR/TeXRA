@@ -7,7 +7,6 @@
  * what the user edited — lives behind {@link ToolEditApprovalHost}.
  */
 
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import {
   cancellationResultFor,
   matchesCancelSelector,
@@ -86,7 +85,6 @@ export interface ToolEditApprovalHost {
 }
 
 export interface ToolEditApprovalControllerOptions {
-  interactions: Pick<SessionHostInteractions, 'emit'>;
   session: SessionHandle;
   host: ToolEditApprovalHost;
   showToolEditPermission(payload: ToolEditPermission): void;
@@ -362,26 +360,10 @@ export class ToolEditApprovalController {
   }
 
   private publishPrompt(entry: PendingToolEditApproval): void {
-    // Activate the stream that needs approval (without switching the active
-    // tab — the request surfaces as a pending badge on the stream's row,
-    // #8246) and post the prompt; each host supplies the display path its own
-    // way. Revealing the view belongs to the hosts this controller serves: the
-    // permission payload itself is host-neutral.
+    // Post the prompt; each host supplies the display path its own way.
+    // Revealing the stream belongs to the host interactions port, which does
+    // it for every interaction kind before the request is dispatched here.
     withEventErrorHandling(CHANNEL, 'failed to show approval prompt', () => {
-      const { streamId } = entry.request;
-      if (streamId) {
-        this.options.interactions.emit('requestEnsureProgressView', {});
-        this.options.session.events.emit({
-          scope: 'session',
-          event: {
-            type: 'setActiveStream',
-            payload: {
-              streamId,
-              suppressViewSwitch: true,
-            },
-          },
-        });
-      }
       this.options.showToolEditPermission(
         prepareToolEditApprovalPrompt(this.options.session, {
           requestId: entry.requestId,

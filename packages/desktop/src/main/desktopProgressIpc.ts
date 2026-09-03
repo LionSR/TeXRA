@@ -45,11 +45,9 @@ interface DesktopProgressIpcOptions {
   onAsyncError?: (error: unknown) => void;
 }
 
-export type DesktopProgressIpc = DesktopMessageHandler;
-
 export function createDesktopProgressIpc(
   options: DesktopProgressIpcOptions,
-): DesktopProgressIpc {
+): DesktopMessageHandler {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   const onUnsupportedCommand =
     options.onUnsupportedCommand ??

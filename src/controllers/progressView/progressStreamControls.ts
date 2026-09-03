@@ -1,4 +1,5 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { GoalState, StreamTabId } from '@shared/schemas';
 import {
   isApprovalBypassedForStream,
@@ -16,9 +17,7 @@ import { GoalStore } from '@tools/goal';
  * consumer (`LitSessionRenderer`) can forward this return value as-is.
  */
 interface ProgressStreamControls {
-  bashBypass: boolean;
-  toolEditBypass: boolean;
-  superYoloBypass: boolean;
+  bypasses: Record<ApprovalBypassKind, boolean>;
   goal: GoalState;
 }
 
@@ -32,9 +31,11 @@ export function getProgressStreamControls(
 ): ProgressStreamControls {
   const goal = GoalStore.getForStream(streamId);
   return {
-    bashBypass: isBashApprovalBypassedForStream(streamId, session),
-    toolEditBypass: isApprovalBypassedForStream(streamId, session),
-    superYoloBypass: proposalApprovals(session).isBypassed(streamId),
+    bypasses: {
+      bash: isBashApprovalBypassedForStream(streamId, session),
+      toolEdit: isApprovalBypassedForStream(streamId, session),
+      superYolo: proposalApprovals(session).isBypassed(streamId),
+    },
     goal: goal
       ? { active: true, status: goal.status, objective: goal.objective }
       : { active: false },

@@ -2,11 +2,10 @@ import { z } from 'zod';
 
 import { classifyRejection } from '@agent/runtime/HostInteractions';
 import {
-  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { currentSession } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
 import {
   UserQuestionAnswersSchema,
@@ -68,7 +67,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
       allowBypass: false,
       streamId: streamId ?? '',
     };
-    const session = getRunContextSession(context) ?? defaultSession();
+    const session = currentSession();
     const result = await session.interactions.askUserQuestion(permission);
 
     if (result.action !== 'submit') {

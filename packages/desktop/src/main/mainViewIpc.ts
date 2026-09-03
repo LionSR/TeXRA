@@ -23,7 +23,6 @@ import {
 } from './desktopShellIpc.js';
 import { createDesktopViewStateIpc } from './desktopViewStateIpc.js';
 import type { BrowserWindow } from 'electron';
-import type { DesktopProgressIpc } from './desktopProgressIpc.js';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
@@ -32,7 +31,7 @@ interface DesktopMainViewIpcOptions {
   fileSelection: DesktopFileSelection;
   prompt: DesktopPromptIpc;
   settings: DesktopSettingsIpc;
-  progress: DesktopProgressIpc;
+  progress: DesktopMessageHandler;
   onboarding: DesktopMessageHandler;
   /**
    * Editor file I/O, terminal pty sessions, and embedded browser control.

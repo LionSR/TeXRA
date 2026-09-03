@@ -1,8 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { getHelperModelName } from '@agent/runtime';
 import { createLatexExecutionDiscovery } from '@agent/storage';
-import type { ValidatedExecutionRequest } from '@agent/core/state/executionRequests';
+import {
+  validateExecutionRequest,
+  type ValidatedExecutionRequest,
+} from '@agent/core/state/executionRequests';
 import { appSignals } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
@@ -78,11 +82,6 @@ export class DesktopProgressFileActions {
   }
 
   async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
-    const [{ getHelperModelName }, { validateExecutionRequest }] =
-      await Promise.all([
-        import('@agent/runtime'),
-        import('@agent/core/state/executionRequests'),
-      ]);
     const validation = validateExecutionRequest({
       config: {
         agent: 'merge',

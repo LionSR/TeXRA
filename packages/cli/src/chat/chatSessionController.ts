@@ -30,10 +30,7 @@ import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleAppro
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
-import {
-  createCliRuntimeHost,
-  type CliRuntimeHost,
-} from '@cli/runtime/cliPresentationHost';
+import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   runOutcomeExitCode,
   type TurnOutcome,
@@ -390,7 +387,6 @@ export function createChatSessionController(
   const setupRunHost = (
     sessionContext: CliContext,
   ): {
-    readonly presentationHost: CliRuntimeHost;
     readonly approvalsUnavailable: boolean;
     readonly ownExecution: (executionId: ExecutionId) => void;
     readonly finalize: () => void;
@@ -414,16 +410,12 @@ export function createChatSessionController(
         liveOwnerships.delete(ownership);
         detachResultToastOnce();
         detachHostInteractions();
-        if (session.presentationHost === presentationHost) {
-          session.presentationHost = undefined;
-        }
         void presentationHost.close();
       },
     );
     liveOwnerships.add(ownership);
 
     return {
-      presentationHost,
       approvalsUnavailable: cliApprovalPromptsUnavailable(
         sessionContext,
         runtimeSession.approvalPolicy,
@@ -448,7 +440,7 @@ export function createChatSessionController(
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
     const sessionContext = beginRunContext(config);
-    const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
+    const { approvalsUnavailable, ownExecution, finalize } =
       setupRunHost(sessionContext);
     const executionId = generateExecutionId();
     ownExecution(executionId);
@@ -507,7 +499,7 @@ export function createChatSessionController(
       })
       .catch(reportRunFailure)
       .finally(finalize);
-    session.markRunPending(runPromise, presentationHost);
+    session.markRunPending(runPromise);
   };
 
   // -----------------------------------------------------------------------
@@ -598,10 +590,9 @@ export function createChatSessionController(
       syncStreamLog(runtimeSession, streamId);
       focusStream(streamId);
 
-      const { presentationHost, approvalsUnavailable, ownExecution, finalize } =
+      const { approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
       ownExecution(id);
-      session.presentationHost = presentationHost;
 
       // A Ctrl-C during the rehydration awaits above (resume resolution,
       // `ensureLoaded`, `snapshotStore.load`) lands here as
@@ -617,7 +608,6 @@ export function createChatSessionController(
         return;
       }
 
-      let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
       // The seeded batch stays this call's until the stream queue takes it
       // over. Every refusal before that point (the stream already active
       // here, a lost recovery claim, no resumable state, a storage error)
@@ -636,14 +626,11 @@ export function createChatSessionController(
               followUpQueueReady = true;
             },
             isCancellationRequested: () => session.stopRequested,
-            onResult: (result) => {
-              resumedOutcome = result.outcome;
-            },
           });
         })
         .then((result) => {
           if ('started' in result) {
-            settleResumedTurn(resumedOutcome);
+            settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
           } else if (session.stopRequested) {
             session.runExitCode = CliExitCode.Interrupted;
           } else {
@@ -749,10 +736,8 @@ export function createChatSessionController(
 
         const runHost = setupRunHost(sessionContext);
         finalize = runHost.finalize;
-        const { presentationHost, approvalsUnavailable, ownExecution } =
-          runHost;
+        const { approvalsUnavailable, ownExecution } = runHost;
         ownExecution(executionId);
-        session.presentationHost = presentationHost;
         session.streamId = streamId;
         session.executionId = executionId;
         if (!parentStreamId) {
@@ -766,7 +751,6 @@ export function createChatSessionController(
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 
-        let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
         const result = await setCliHelperModel(config.model).then(() => {
           recoveryHandedOff = true;
           return resumeRun(executionId, {
@@ -793,14 +777,11 @@ export function createChatSessionController(
               }
             },
             isCancellationRequested,
-            onResult: (result) => {
-              resumedOutcome = result.outcome;
-            },
           });
         });
 
         if ('started' in result && result.delivered) {
-          settleResumedTurn(resumedOutcome);
+          settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
           return true;
         }
         if (isCancellationRequested()) {

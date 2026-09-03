@@ -71,7 +71,6 @@ function createController(host: ReturnType<typeof createTestHost>['host']) {
   const prompts: ToolEditPermission[] = [];
   const resolved: string[] = [];
   const controller = new ToolEditApprovalController({
-    interactions: { emit: () => false },
     session,
     host,
     showToolEditPermission: (payload) => prompts.push(payload),

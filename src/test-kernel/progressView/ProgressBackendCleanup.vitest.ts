@@ -95,7 +95,10 @@ async function seedOwnedStream(
   }
   registerStream(backend, ids);
   await writeExecutionConfig(ids.executionId, { streamId: ids.stream });
-  await backend.state.flush();
+  await Promise.all([
+    backend.state.streamLogs.flush(),
+    backend.state.snapshots.flush(),
+  ]);
 }
 
 /** Persists sidecars and execution configs for orphaned streams on disk. */
@@ -251,14 +254,14 @@ describe('ProgressBackend cleanup', () => {
   });
 
   it('never derives execution ownership from the stream id: stream state clears, execution survives', async () => {
-    const { backend } = createIsolatedRecordingBackend();
+    const { backend, session } = createIsolatedRecordingBackend();
     const { stream, executionId } = toolStreamAndExecution('a6966c');
 
     try {
       await backend.state.snapshots.load([stream]);
       backend.state.streamLogs.ensureStream(stream);
       await writeExecutionConfig(executionId);
-      await backend.state.flush();
+      await session.flushArtifacts();
       await StorageFS.ensureDir(streamDataDir(stream));
       await GoalStore.start(stream, 'goal on an unowned stream');
       await writeForeignLease(executionId);
@@ -589,14 +592,14 @@ describe('ProgressBackend cleanup', () => {
 
   it('finishes committed staged residue without requiring a reload', async () => {
     const { stream, executionId } = toolStreamAndExecution('c69661');
-    const { backend } = createIsolatedRecordingBackend();
+    const { backend, session } = createIsolatedRecordingBackend();
     snapshotFacts(backend.state.snapshots).setRunConfig(
       stream,
       toolUseConfig('search', 'deepseekproT'),
       executionId,
     );
     await writeExecutionConfig(executionId, { streamId: stream });
-    await backend.state.flush();
+    await session.flushArtifacts();
     await GoalStore.start(stream, 'finish same-session cleanup');
     const deletion = await backend.state.snapshots.stageDeleteStream(stream);
     const deleteStorage = StorageFS.delete.bind(StorageFS);
@@ -728,7 +731,7 @@ describe('ProgressBackend cleanup', () => {
     try {
       registerStream(first.backend, { stream, executionId });
       await writeExecutionConfig(executionId);
-      await first.backend.state.flush();
+      await first.session.flushArtifacts();
     } finally {
       // The second backend reopens the same durable store, so the first one
       // has to be released here rather than at shared teardown.
@@ -794,7 +797,7 @@ describe('ProgressBackend cleanup', () => {
         streamId: session.stream,
         identity: { kind: 'agent', agent: 'search' },
       });
-      await first.backend.state.flush();
+      await first.session.flushArtifacts();
     } finally {
       first.backend.dispose();
       first.session.dispose();

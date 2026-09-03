@@ -109,9 +109,8 @@ interface EphemeralStreamState {
  *
  * Coordinates two persistence stores — `streamLogs` (transcript) and
  * `snapshots` (all per-stream sidecar: output files, usage, todos, plan, and
- * meta) — plus ephemeral in-memory execution state. Workflow
- * instructions live in the log stream (new runs write them directly; legacy
- * runs are backfilled there during load), not in separate progress-view state.
+ * meta) — plus ephemeral in-memory execution state. Workflow instructions
+ * live in the log stream, not in separate progress-view state.
  */
 export class SessionState {
   // -- Persistence managers ---------------------------------------------------
@@ -712,13 +711,5 @@ export class SessionState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.logger.info('[Persistence] State load complete');
-  }
-
-  /**
-   * Flush pending writes from all managers.
-   */
-  async flush(): Promise<void> {
-    this.session.flushPendingTraces();
-    await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
   }
 }

@@ -166,7 +166,6 @@ interface FinalizeRunTerminalParams {
 
 interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
-  readonly outcomePersisted: boolean;
 }
 
 /**
@@ -201,7 +200,6 @@ export async function finalizeRunTerminal(
   // Error facts the run classified for an outcome that did not happen are not
   // facts about this run.
   const error = outcome === params.outcome ? params.error : undefined;
-  let outcomePersisted = false;
   if (params.persistence.kind === 'finalize') {
     const { flowRecord } = params.persistence;
     const finalization = await finalizeRun({
@@ -210,7 +208,6 @@ export async function finalizeRunTerminal(
       flowRecord:
         typeof flowRecord === 'function' ? flowRecord(outcome) : flowRecord,
     });
-    outcomePersisted = finalization.ok || finalization.outcomePersisted;
     if (!finalization.ok) {
       logger.warn('Failed to finalize durable execution state', {
         data: {
@@ -296,7 +293,7 @@ export async function finalizeRunTerminal(
       data: { agentIdentifier: handle.agentName, error: cleanupErr },
     });
   }
-  return { event, outcomePersisted };
+  return { event };
 }
 
 /** Failures finalizeFailedRun already logged, published, and wrapped; the

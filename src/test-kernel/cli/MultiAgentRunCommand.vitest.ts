@@ -263,7 +263,6 @@ describe('CLI multi-agent run command', () => {
     expect(exitCode).toBe(0);
     expect(mocks.executeCliToolUseConfig).toHaveBeenCalledTimes(1);
     expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-      enforceCategory: true,
       recoveryInputIsDurable: true,
       stopAfterCycle: true,
     });

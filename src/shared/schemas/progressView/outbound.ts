@@ -227,9 +227,9 @@ const BypassTypeSchema = z.enum(APPROVAL_BYPASS_KINDS);
 const UpdateBypassMessageSchema = StreamScopedBaseSchema.extend({
   command: z.literal(PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS),
   type: BypassTypeSchema,
-  // The three bypass flags share one boolean schema on the projection;
-  // the envelope maps `type` to the matching flag.
-  bypassActive: pickProjection('bashBypass'),
+  // One boolean per bypass kind on the projection; the envelope carries the
+  // kind in `type` and its new value here.
+  bypassActive: pickProjection('bypasses').valueType,
 });
 
 // `error` is only ever populated (and only ever read) on the `polishError`

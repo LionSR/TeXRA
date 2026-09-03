@@ -5,7 +5,6 @@ import {
   matchesCancelSelector,
   type HostInteractionCancelSelector,
   type UserQuestionSettlement,
-  type PendingInteractionKind,
   type PlanApprovalResult,
   type ProposalResult,
   type RetryResult,
@@ -17,6 +16,7 @@ import type {
   ExternalInquiryPermission,
   PlanApprovalPermission,
   PermissionPayload,
+  ProgressPermissionKind,
   RetryPermission,
   ToolEditPermission,
   UserQuestionPermission,
@@ -115,7 +115,7 @@ const APPROVAL_REQUEST_HANDLER_KEY_MAP = {
   planApproval: true,
   userQuestion: true,
 } satisfies Record<keyof ApprovalRequestHandlerSet, true> &
-  Record<PendingInteractionKind, true>;
+  Record<ProgressPermissionKind, true>;
 
 const APPROVAL_REQUEST_HANDLER_KEYS = Object.keys(
   APPROVAL_REQUEST_HANDLER_KEY_MAP,

@@ -1,5 +1,4 @@
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
   STREAM_PHASE,
   type StreamPhase,
@@ -32,7 +31,6 @@ export class TuiSession {
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedStreamId: StreamTabId | undefined;
   executionId: string | undefined;
-  presentationHost?: CliRuntimeHost;
   runExitCode: CliExitCode = CliExitCode.Success;
   stopRequested = false;
 
@@ -59,20 +57,15 @@ export class TuiSession {
     this._runCompleted = false;
     this.interruptedStreamId = undefined;
     this.executionId = undefined;
-    this.presentationHost = undefined;
     this.runExitCode = CliExitCode.Success;
     this.stopRequested = false;
     this.publish();
   }
 
-  markRunPending(
-    runPromise: Promise<void>,
-    presentationHost?: CliRuntimeHost,
-  ): void {
+  markRunPending(runPromise: Promise<void>): void {
     this._streamId = undefined;
     this._runPromise = runPromise;
     this._runCompleted = false;
-    this.presentationHost = presentationHost;
     this.runExitCode = CliExitCode.Success;
     this.stopRequested = false;
     this.publish();
@@ -95,12 +88,9 @@ export class TuiSession {
    * instead — it never suspends before claiming, so it has no check-then-await
    * window for this primitive to close.
    */
-  tryClaimRootRunSlot(
-    runPromise: Promise<void>,
-    presentationHost?: CliRuntimeHost,
-  ): boolean {
+  tryClaimRootRunSlot(runPromise: Promise<void>): boolean {
     if (!chatTuiCanStartRootRun(this)) return false;
-    this.markRunPending(runPromise, presentationHost);
+    this.markRunPending(runPromise);
     return true;
   }
 

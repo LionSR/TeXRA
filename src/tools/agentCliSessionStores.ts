@@ -1,6 +1,5 @@
 import {
   forEachLiveSession,
-  killAllSessionBackgroundProcesses,
   settleLiveSessionExecutions,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
@@ -55,9 +54,11 @@ export const claudeAgentSessionsFor = claudeAgentSessions.for;
  * wiring.
  */
 function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    killAllSessionBackgroundProcesses(),
-  );
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
+    forEachLiveSession((session) => {
+      session.executions.killBackgroundProcesses();
+    });
+  });
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => {
     forEachLiveSession((session) => {
       codexThreads.registries.get(session)?.interruptAll();

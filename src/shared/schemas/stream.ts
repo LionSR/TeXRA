@@ -90,10 +90,8 @@ export const ExecutionMetaCoreSchema = z.object({
   /**
    * What kind of run this execution is. Required at the write boundary
    * ({@link RegisteredExecutionMeta}); optional here because this schema is
-   * transitively the trace-export schema (immutable pre-migration exports) and
-   * because the idempotent entrance stamper brings old rows forward on disk
-   * rather than at read time. A row without one is un-healed and lists as
-   * `incomplete`.
+   * transitively the trace-export schema (immutable pre-migration exports).
+   * A row without one lists as `incomplete`.
    */
   identity: RunIdentitySchema.optional(),
   /** Runtime behavior declared by the execution source, not UI visibility. */
@@ -117,11 +115,11 @@ export const ExecutionMetaSchema = ExecutionMetaCoreSchema.extend({
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
 /**
- * The write-boundary shape: `registerExecution` (the only birth writer) and
- * the entrance stamper persist metadata with `identity` required. The shared
- * read schema above keeps it optional forever — it is transitively the
- * trace-export schema, and old binaries' read-modify-writes strip unknown
- * fields — so requiredness lives here, at the writers, not on every read.
+ * The write-boundary shape: `registerExecution`, the only birth writer,
+ * persists metadata with `identity` required. The shared read schema above
+ * keeps it optional forever — it is transitively the trace-export schema, and
+ * old binaries' read-modify-writes strip unknown fields — so requiredness
+ * lives here, at the writer, not on every read.
  */
 export type RegisteredExecutionMeta = ExecutionMeta & {
   identity: NonNullable<ExecutionMeta['identity']>;

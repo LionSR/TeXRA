@@ -339,7 +339,9 @@ describe('stream-header', () => {
     it('presses AUTO-EDIT and AUTO-BASH independently', async () => {
       const element = await mount({
         stream: baseStream({ agentCategory: AgentCategory.ToolUse }),
-        state: baseState({ toolEditBypass: true, bashBypass: false }),
+        state: baseState({
+          bypasses: { bash: false, toolEdit: true, superYolo: false },
+        }),
       });
 
       const editButton = element.shadowRoot?.querySelector(

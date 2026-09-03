@@ -12,10 +12,7 @@ import {
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import { ProgressPresentationState } from '@controllers/progressView/backend/ProgressPresentationState';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import {
-  SessionFactApplier,
-  type SessionRunFactEvent,
-} from '@controllers/session/SessionFactApplier';
+import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import { SessionState } from '@controllers/session/SessionState';
 import type { PresentedStreamId } from '@controllers/session/SessionRendererPort';
 import {
@@ -503,10 +500,7 @@ export class ProgressBackend {
       if (!commandRemoval.created) return 'superseded';
       expectedIncarnation = commandRemoval.incarnation;
     }
-    const releaseDeletionClaim = this.state.stores.claimStreamDeletion(
-      stream,
-      expectedIncarnation,
-    );
+    const releaseDeletionClaim = this.state.stores.claimStreamDeletion(stream);
 
     let retained: DeleteStreamResult | undefined;
     try {
@@ -604,17 +598,31 @@ export class ProgressBackend {
 
   /**
    * Per-stream prepare shared by single- and all-delete: stop an in-flight
-   * stream we own locally. The deletion itself runs as a step on the stream's
-   * execution lane (`SessionStores.deleteStream`), so it lands only after the
-   * stopped generation has disposed; nothing here needs to wait for it.
+   * stream we own locally, then wait on its execution lane until the stopped
+   * generation has disposed. The stop itself does not await that disposal, and
+   * the all-delete path deletes without taking the lane (`clearAll` ->
+   * `SessionStores.deleteAll`), so without this barrier the deletion would
+   * still see the execution lease held and retain the stream as active.
    */
   private async prepareStreamDeletionCore(
     stream: StreamTabId,
   ): Promise<boolean> {
-    const ownedLocally =
-      this.session.executions.getAgentHandleByStream(stream) !== undefined;
-    if (ownedLocally && isInFlightPhase(this.session.status.get(stream))) {
+    const handle = this.session.executions.getAgentHandleByStream(stream);
+    if (handle && isInFlightPhase(this.session.status.get(stream))) {
       this.stopRun(stream);
+      try {
+        await this.session.executions.runExecutionStep(
+          handle.executionId,
+          async () => undefined,
+        );
+      } catch (error) {
+        // A disposed session or held lifecycle can refuse the barrier. Let the
+        // deletion continue so it can report its own retention outcome.
+        log.warn(
+          `Stream ${stream} could not wait for its execution to release before deletion`,
+          { data: error },
+        );
+      }
     }
     return false;
   }
@@ -880,24 +888,14 @@ export class ProgressBackend {
   setupEventListeners(): void {
     if (this.disposed) return;
     this.detachEventListeners.push(
-      this.session.events.subscribe(
-        (sessionEvent) => {
-          if (sessionEvent.scope !== 'session') return;
-          this.admitSessionFact(sessionEvent.event);
+      this.session.events.subscribeSessionFacts((fact) => {
+        this.admitSessionFact(fact);
+      }),
+      this.session.events.subscribeRunFacts(
+        (runFact) => {
+          this.factApplier.handleRunFact(runFact.streamId, runFact.event);
         },
-        { scope: 'session' },
-      ),
-      this.session.events.subscribe(
-        (sessionEvent) => {
-          if (sessionEvent.scope !== 'run') return;
-          this.factApplier.handleRunFact(
-            sessionEvent.streamId,
-            // Narrowed by the subscription filter below, which admits only
-            // `RUN_FACT_EVENT_TYPES`.
-            sessionEvent.event as SessionRunFactEvent,
-          );
-        },
-        { scope: 'run', types: RUN_FACT_EVENT_TYPES },
+        { types: RUN_FACT_EVENT_TYPES },
       ),
     );
   }

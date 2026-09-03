@@ -21,7 +21,7 @@ flowchart TD
   replan[TeamPlan planTeamRuns replan]
   items[runtime/orchestration buildCliOrchestrationItems]
   modelList[runtime/modelAccess getCliModelAccessList]
-  defaultModel[resolveChatDefaults + resolveCliRunnableModel]
+  defaultModel[resolveChatDefaults + selectCliRunnableModel]
   picker[orchestration/runOrchestrationTui]
   chat[chat/tui/runChatTui runChat]
   presetRun[runtime/multiAgentRunPlan loadCliMultiAgentRunPlan]
@@ -85,7 +85,7 @@ flowchart LR
   viewport[transcriptViewportMode]
   staticPane[StaticConversationTranscript]
   livePane[ConversationPane]
-  statusBar[StatusBar / StreamTabsStrip / side panels]
+  statusBar[StatusBar / SubagentList / side panels]
 
   runtime --> hub
   runtime --> streamLog
@@ -133,7 +133,7 @@ sequenceDiagram
   O->>MA: resolve default model against same list
   O->>UI: pass model list for second-step picker
   UI-->>C: chosen model or no override
-  C->>MA: resolveCliRunnableModel(default/override, apiMode)
+  C->>MA: selectCliRunnableModel(default/override, apiMode)
   C->>C: persist helper model + write cliState.sessionMeta
   F->>MA: getCliModelAccessList(apiMode)
   F-->>C: selected model

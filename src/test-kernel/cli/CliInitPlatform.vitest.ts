@@ -579,11 +579,12 @@ describe('CLI platform interactive signal ownership', () => {
       // The TUI is about to mount (runChatTui.tsx) — it hands off ownership
       // immediately before installing its own handlers.
       initPlatform.handOffCliShutdownSignalHandlers();
+      // Handoff releases the install-order disposers LIFO, so SIGTERM first.
       expect(registered).toEqual([
         { event: 'SIGINT', kind: 'once' },
         { event: 'SIGTERM', kind: 'once' },
-        { event: 'SIGINT', kind: 'removed' },
         { event: 'SIGTERM', kind: 'removed' },
+        { event: 'SIGINT', kind: 'removed' },
       ]);
 
       process.on('SIGINT', () => undefined);

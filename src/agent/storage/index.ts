@@ -15,7 +15,6 @@
 
 export {
   type ExecutionKVStore,
-  type TodoEntry,
   type ChildRecord,
   getExecutionStore,
   clearStoreCache,
@@ -35,7 +34,6 @@ export {
   registerExecution,
   type FinalizeExecutionInput,
   writeWorkflowExecutionSnapshot,
-  retainFlowRecordUnlessCompleted,
 } from './executionLifecycle';
 export {
   type AgentExecutionListingEntry,

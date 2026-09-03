@@ -127,7 +127,6 @@ function createPortSession(): {
   // Real controller with an inert host: tool-edit approvals are not exercised
   // by these tests, but the port contract requires a full controller.
   const toolEditApprovals = new ToolEditApprovalController({
-    interactions: presentationSink,
     session,
     host: {
       stagePreview: async () => {

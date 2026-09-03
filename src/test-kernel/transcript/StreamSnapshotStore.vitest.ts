@@ -1166,10 +1166,8 @@ describe('StreamSnapshotStore', () => {
     await store.flush();
     const raw = (await readStreamFile(STREAM, 'meta.json')) as {
       executionId?: unknown;
-      runDescriptor?: unknown;
     };
     expect(raw.executionId).toBe(newExecutionId);
-    expect(raw.runDescriptor).toBeUndefined();
   });
 
   it('keeps a same-execution model switch that arrives during async hydration', async () => {

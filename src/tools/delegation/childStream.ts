@@ -5,7 +5,6 @@ import {
   finalizeRunTerminal,
   type RunTerminalPersistence,
 } from '@agent/runtime/AgentRunLifecycle';
-import type { ChildRunOutcome } from '@agent/runtime/childRunLoop';
 import { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
   currentSession,
@@ -17,10 +16,10 @@ import { RUN_OUTCOME, STREAM_PHASE } from '@shared/schemas';
 import type {
   ExecutionId,
   RunIdentity,
+  RunOutcome,
   StreamTabId,
   UserFollowUpSupport,
 } from '@shared/schemas';
-import { deriveRunOutcome } from '@shared/streams/streamStatus';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
 import { formatDuration } from '@utils/core';
@@ -46,8 +45,14 @@ interface FinalizeChildStreamOptions {
     input_tokens: number;
     output_tokens: number;
   } | null;
-  /** Defaults to `{ kind: 'completed' }` when omitted. */
-  outcome?: ChildRunOutcome;
+  /**
+   * The child's report of its own exit. A report, not a verdict: the stream
+   * phase owns the terminal outcome, so an explicit stop/kill that already
+   * landed CANCELLED outranks a FAILED this reports.
+   */
+  outcome: RunOutcome;
+  /** Cause behind a FAILED outcome, for diagnosis. */
+  error?: unknown;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
   /** Durable execution-state action. */
@@ -71,7 +76,7 @@ export interface ChildStream {
    * untracked — callers that must not exit before the terminal status lands
    * (headless CLI session loops) await it.
    */
-  finalize: (options?: FinalizeChildStreamOptions) => Promise<void>;
+  finalize: (options: FinalizeChildStreamOptions) => Promise<void>;
 }
 
 /**
@@ -274,7 +279,7 @@ interface FinalizeChildStreamArgs {
   session: SessionHandle;
   logger: AgentTrace;
   disposeTrace: () => void;
-  options?: FinalizeChildStreamOptions;
+  options: FinalizeChildStreamOptions;
 }
 
 /**
@@ -292,40 +297,36 @@ async function finalizeChildStream(
   // fallible. It must never prevent `finalizeRunTerminal` below from running:
   // a throw here, past `claimTerminalFinalize`'s exactly-once guard, would
   // otherwise strand the handle in the registry forever with no untrack.
-  let outcome: ReturnType<typeof deriveRunOutcome>;
+  let outcome: RunOutcome;
   let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
   try {
-    const outcomeOption = options?.outcome ?? { kind: 'completed' as const };
+    const failed = options.outcome === RUN_OUTCOME.FAILED;
     const errorMessage =
-      outcomeOption.kind === 'failed' && outcomeOption.error != null
-        ? toErrorMessage(outcomeOption.error)
+      failed && options.error != null
+        ? toErrorMessage(options.error)
         : undefined;
 
     if (errorMessage) {
       logger.error(errorMessage);
     }
-    if (options?.wallTimeMs != null) {
+    if (options.wallTimeMs != null) {
       logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
     }
-    const usage = toDeliveryUsage(options?.usage);
+    const usage = toDeliveryUsage(options.usage);
     if (usage) {
       logger.info('Tokens', { data: usage });
     }
 
-    // What the child saw, projected into the shared vocabulary. The stream
-    // phase decides which of this and an already-landed stop is the run's
-    // terminal fact; that resolution lives in `finalizeRunTerminal`.
-    outcome = deriveRunOutcome({
-      failed: outcomeOption.kind === 'failed',
-      cancelled: outcomeOption.kind === 'cancelled',
-    });
-    error =
-      outcomeOption.kind === 'failed'
-        ? {
-            kind: classifyAgentError(outcomeOption.error),
-            message: errorMessage ?? 'Child stream failed',
-          }
-        : undefined;
+    // What the child saw, in the shared vocabulary. The stream phase decides
+    // which of this and an already-landed stop is the run's terminal fact;
+    // that resolution lives in `finalizeRunTerminal`.
+    outcome = options.outcome;
+    error = failed
+      ? {
+          kind: classifyAgentError(options.error),
+          message: errorMessage ?? 'Child stream failed',
+        }
+      : undefined;
   } catch (prologueError) {
     logger.error('Child stream finalize prologue failed', {
       data: { error: prologueError },
@@ -344,15 +345,15 @@ async function finalizeChildStream(
     outcome,
     error,
     isSubagent: handle.isChildExecution,
-    stage: options?.stage,
+    stage: options.stage,
     flushArtifacts: () => session.flushArtifacts(handle.executionId),
     // No trace emit: child-stream results must stay out of `session.onResult`
     // (host toast) consumers — the loop already presents them as follow-ups.
-    persistence: options?.persistence ?? { kind: 'skip' },
+    persistence: options.persistence ?? { kind: 'skip' },
   });
   disposeTrace();
 
-  if (options?.autoClose) {
+  if (options.autoClose) {
     session.events.emit({
       scope: 'session',
       event: {

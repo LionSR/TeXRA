@@ -24,24 +24,25 @@ export async function persistChildRunDelivery(
   message: string,
   resultMeta: ResultMeta | undefined,
 ): Promise<void> {
-  const [report, manifest] = await Promise.all([
+  // `allSettled`, not `all`: both writes are attempted, and the report's
+  // failure outranks the manifest's regardless of which rejected first.
+  const [report, manifest] = await Promise.allSettled([
     persistChildRunReport(executionId, message),
     resultMeta
       ? persistChildRunResultMeta(executionId, resultMeta)
-      : Promise.resolve({ kind: 'persisted' } as const),
+      : Promise.resolve(),
   ]);
   for (const [kind, result] of [
     ['report', report],
     ['result manifest', manifest],
   ] as const) {
-    if (result.kind !== 'failed') continue;
-    if (result.err instanceof ExecutionLeaseLostError) throw result.err;
-    log.warn(`Failed to persist ${kind} for ${executionId}`, {
-      data: result.err,
-    });
+    if (result.status !== 'rejected') continue;
+    const err: unknown = result.reason;
+    if (err instanceof ExecutionLeaseLostError) throw err;
+    log.warn(`Failed to persist ${kind} for ${executionId}`, { data: err });
     throw new Error(
-      `Failed to persist ${kind} for ${executionId}: ${toErrorMessage(result.err)}`,
-      { cause: result.err },
+      `Failed to persist ${kind} for ${executionId}: ${toErrorMessage(err)}`,
+      { cause: err },
     );
   }
 }

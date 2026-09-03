@@ -244,8 +244,8 @@ export class AgentExecutionHandle {
     this.toolUseFlowContext = context;
   }
 
-  detachToolUseFlow(context?: LiveToolUseFlowContext): void {
-    if (context !== undefined && this.toolUseFlowContext !== context) return;
+  detachToolUseFlow(context: LiveToolUseFlowContext): void {
+    if (this.toolUseFlowContext !== context) return;
     this.toolUseFlowContext = undefined;
   }
 

@@ -343,7 +343,6 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
 
     this.toolEditApprovals = new ToolEditApprovalController({
-      interactions: presentationHost,
       session: this.session,
       host: new DesktopToolEditApprovalHost({ ui: this.options.host }),
       showToolEditPermission: (payload) =>
@@ -844,7 +843,6 @@ export class DesktopProgressBridge {
           );
         },
       }),
-      postToRenderer: (message) => this.postToRenderer(message),
       restoreProposalConfig: async (proposal) => {
         await this.agentProposalController.restoreProposalConfig(proposal);
       },
@@ -1215,12 +1213,7 @@ export class DesktopProgressBridge {
         'Failed to present the launch information dialog',
       );
     }
-    const { preparation } = launch;
-    if (!preparation.valid) {
-      await this.options.host.showErrorMessage(preparation.message);
-      return;
-    }
-    return this.runExecution(preparation.request);
+    return this.runExecution(launch.request);
   }
 
   /**
