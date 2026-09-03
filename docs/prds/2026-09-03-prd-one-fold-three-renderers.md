@@ -146,8 +146,10 @@ field names are final unless marked.
 ```ts
 SessionView = {
   streams: Map<StreamTabId, StreamView>,
-  order: StreamTabId[],                       // top-level ids, streamOrdering rule
-  approvals: ApprovalRequest[],               // each carries streamId and requestId
+  // top-level ids, streamOrdering rule
+  order: StreamTabId[],
+  // each carries streamId and requestId
+  approvals: ApprovalRequest[],
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
   inquiries: InquiryThread[],
   goal: GoalState,
@@ -158,8 +160,10 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   // common
   id: StreamTabId
   identity: RunIdentity | null              // null only for legacy imports
-  label: string                              // agent name or fallback from id prefix
-  description: string | null                 // the AI one-liner; title when present
+  // agent name or fallback from id prefix
+  label: string
+  // the AI one-liner; title when present
+  description: string | null
   model: string | null, modelLabel: string | null
   worktree: WorktreeInfo | null              // from run.start payload
   status: StreamStatus, substate: StreamSubstate | null, statusDetail: string | null
@@ -169,7 +173,8 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   stage: StreamStage | null
   followUpSupport: UserFollowUpSupport
   parentId: StreamTabId | null
-  ancestors: { id: StreamTabId, label: string }[]   // root first; evicted parent keeps its last label
+  // root first; evicted parent keeps its last label
+  ancestors: { id: StreamTabId, label: string }[]
   childIds: StreamTabId[]                    // streamOrdering rule
   rollup: { total: number, running: number, finished: number }
   approval: 'none' | 'own' | 'descendant'
@@ -186,7 +191,8 @@ TranscriptView = {
   taskGroups: TaskGroup[],                   // taskGroupProjection
   compaction: CompactionBlock[],             // compactionActivityProjection
   settledSeq: number,                        // last durable seq folded
-  run: WorkflowRunModel | null,              // workflow arm; retained-phase filter folded in
+  // workflow arm; retained-phase filter folded in
+  run: WorkflowRunModel | null,
 }
 ```
 
@@ -306,18 +312,22 @@ class SessionEvents extends Context.Service<SessionEvents, {
   static readonly layer = Layer.effect(SessionEvents, Effect.gen(function* () {
     const hub = yield* PubSub.unbounded<SessionEvent>()
     const gate = yield* Semaphore.make(1)
-    const durable = yield* DurableWrite        // provided by the persistence cutover
+    // provided by the persistence cutover
+    const durable = yield* DurableWrite
     const publish = Effect.fn('SessionEvents.publish')(function* (event) {
       yield* gate.withPermit(Effect.gen(function* () {
-        if (isDurable(event)) { event = yield* durable.append(event) }   // assigns seq, INSERT under BEGIN IMMEDIATE
+        // assigns seq, INSERT under BEGIN IMMEDIATE
+        if (isDurable(event)) { event = yield* durable.append(event) }
         yield* PubSub.publish(hub, event)
       }))
     })
     const events = (streamId, fromSeq) => {
-      // open the live tail FIRST, then read the replay, then concat and dedupe on seq
+    // open the live tail FIRST, then read the replay, then concat and dedupe on seq
+
       const live = Stream.fromPubSub(hub).pipe(Stream.filter((e) => e.streamId === streamId))
       return Stream.unwrapScoped(Effect.gen(function* () {
-        const tail = yield* Stream.toQueueScoped(live)          // subscribed now
+        // subscribed now
+        const tail = yield* Stream.toQueueScoped(live)
         const replay = durable.read(streamId, fromSeq)
         return Stream.concat(replay, Stream.fromQueue(tail)).pipe(dedupeBySeq)
       }))
@@ -428,7 +438,8 @@ class Invalid    extends Data.TaggedError('Invalid')<{ issues: string[] }> {}
 type RequestError = NotOwner | Unavailable | Rejected | Invalid
 
 // src/controllers/session/SessionRequests.ts
-request: (req: RuntimeRequest) => Effect.Effect<Outcome, RequestError>   // Effect.fn('SessionRequests.request')
+// Effect.fn('SessionRequests.request')
+request: (req: RuntimeRequest) => Effect.Effect<Outcome, RequestError>
 ```
 
 The interaction scope (`executionInteractionOwnership.ts:36-56`, already
@@ -535,7 +546,8 @@ Surface = {
   selected: StreamTabId | null
   drafts: Map<StreamTabId, { text: string; images: PastedImage[]; polished: string | null; transcribed: string | null }>
   recording: boolean
-  expanded: Map<StreamTabId, 'expanded' | 'collapsed'>   // override on top of approval === 'descendant'
+  // override on top of approval === 'descendant'
+  expanded: Map<StreamTabId, 'expanded' | 'collapsed'>
   focusedRow: RowId | null
   scroll: Map<StreamTabId, number>
   drawerOpen: boolean
@@ -1008,10 +1020,107 @@ consumes is Zod under `src/shared/schemas`, so `src/shared` gains no
 Layers and duals with their locations, as classified on 2026-09-03; the
 full ledger with verdicts is `docs/proposals/2026-09-03-projection-adapter-ledger.md`.
 
-- Session read path: `src/controllers/progressView/backend/LitSessionRenderer.ts:47, 142, 211, 460, 503`; `WebviewBridge.ts:11, 33-35, 115-121, 132`; `packages/extension/src/progressView/frontend/slices/*` (1,205 lines); `store.ts:88, 142`; `progressState.ts:119, 137, 145-168, 261, 385`; `streamTree.ts:22-25, 36-40, 86-99`; `components/messageIndex.ts:93, 228-559`; CLI `state/subscribeStreamLog.ts:56, 151, 520-575`, `transcriptFold.ts:550, 813, 900`, `streamViews.ts:26-34, 130-139, 180-206`, `childExecutions.ts:70-110`, `approvalQueue.ts:195-203`, `sessionSignalsAdapter.ts:53-109, 236, 262`.
-- Wire and infrastructure: `src/shared/ipc.ts` (244 commands); `src/shared/schemas/progressView/inbound.ts:262-312`; `mainView/inbound.ts:308-322`; `src/shared/signals.ts:39-54`; `streamContexts.ts:56-175`; `mainViewContexts.ts:19-24`; `MainApp.ts:229-234`; `StreamConversation.ts:87-142`; `src/shared/state/PersistedState.ts:18-36, 76`; `webview/frontend/persistence.ts:63, 174-309`; `progressView/frontend/webviewStorage.ts:12`; `pendingStateManager.ts:9-14`; `ProgressPresentationState.ts:13-49`.
-- Write path: `HostInteractions.ts:353-378, 403`; `progressHostInteractions.ts:90, 105, 363-439`; `ProgressViewCommandHandlers.ts:133, 305-312, 334, 361, 378-395, 437, 449-455, 601-618`; `ProgressViewMessageHandler.ts:238, 515-524, 677-700, 699-808, 869-880`; `desktopAgentExecution.ts:284-447, 670, 771-794, 796-799, 925-926`; `progressFollowUpSubmit.ts:37-86`; `chatSubmitDriver.ts:118, 206, 233, 255-270, 279-338`; `chatSessionController.ts:408-430, 450-862`; `approvalAdapter.ts:53, 96, 151-153, 261-268`; `settleApprovals.ts:159`; `subscribeApprovals.ts:143, 156-176, 306-344, 861-874`; `workflowControlRegistry.ts:9-10, 30-41`; `executionInteractionOwnership.ts:34-56`; `executionRegistry.ts:125-131, 405-613`.
-- Facts and lifecycle: `SessionEventHub.ts:23-55, 78-100`; `src/agent/trace/events.ts:91-105, 373-393, 410`; `AgentLaunchContext.ts:93, 412-421, 602-605`; `childStream.ts:124, 174`; `SessionFactApplier.ts:201, 255, 286-300, 641-646, 667-690, 772, 937-942`; `streamTabInfo.ts:57-63`; `streamInfoUtils.ts:24-42`; `RunContext.ts:78, 159-161`; `SessionHandle.ts:108-140, 679-687, 805-838`.
-- Roots and desktop: `src/platform/platform.ts:38-75`; `storageFS.ts:18-20`; `workspaceFS.ts:21-26`; `StreamLogStore.ts:400-406`; `KVStore.ts:44-58`; `executionLease.ts:35-40, 267`; `runStorageFs.ts:29-38`; `agentWorkspaceOptions.ts:26-39`; `pathResolution.ts:167-179`; `bash.ts:391-393, 505`; `packages/desktop/src/main/index.ts:267-268, 276, 577-596, 1202-1232, 1366-1383`; `desktopTaskShell.ts:26-68, 472-476`; `pdfOverlay.ts:39-45`; `desktopPreviewHost.ts:61, 88-97`; `renderer/main.ts:288-294, 372-389, 416-470, 1031-1080`; `renderer/messageRoutes.ts:92-102`; `desktopIpcTypes.ts:119-139`.
-- Paint: `src/shared/transcript/toolRowModel.ts:58-61, 287`; `toolRowSections.ts:565, 661`; `transcriptRow.ts:108-113, 185, 222-227, 237-241`; `projectTranscriptRow.ts:377, 557`; `streamStatusDisplay.ts:42-82, 174-212`; `statusIndicatorStyles.ts:26-55`; `StreamTab.styles.ts:29-46`; `groupStyles.ts:23-38`; `BackgroundTasksPanel.ts:248, 540-622`; `SubagentListDisplay.ts:22-40, 63, 70-89`; `toolFormatters.ts:60, 67, 78-93, 106, 131-136`; `toolRenderers.tsx:161-171, 259-272, 354-365`; `transcriptRowLines.ts:23-24, 36, 80, 130, 146-152`; `UserMessage.ts:204-252`; `workflowPlainOutput.ts:32-42, 65-66, 86-90, 114-137, 153-184`; `runProgressRenderer.ts:124-133, 180-203, 276-280, 410-420, 524-530`; `sessionProgressSubscription.ts:66-186`; `packages/agent/src/index.ts:78-150, 245`.
-- Shell: `src/shared/wa/viewHeader.ts:34-75`; `MainViewProvider.ts:100-105, 213-236, 405-438`; `ProgressViewProvider.ts:50-60, 98-104, 213-231, 236, 248-257, 275-305, 318-322, 349, 430-438`; `ProgressViewMessageHandler.ts:300-307`; `packages/extension/package.json:652-677`; `InstructionPanel.ts` (784 lines); `FollowUpInput.ts:79-104, 174-260`; `FollowUpInput.styles.ts:135`; `ConversationContent.styles.ts:116`; `StreamHeader.ts:309-375, 668-689`; `StreamTabs.ts:130-142, 380-398, 419-424, 506`; `LatexDiffsSection.ts:197-248`; `FileSelectGroup.ts:68`; `MainApp.ts:129, 141, 280-296, 529-583, 595-627`; `ProgressApp.ts:109-135, 138-200, 243, 268-272`; `packages/desktop/src/renderer/taskShell.css:9-135, 466-540, 706-800`; `taskShell.ts:40-200`; `docs/prds/2026-05-08-electron-shell-layout.md` sections 6, 12.
+- Session read path:
+  - `src/controllers/progressView/backend/LitSessionRenderer.ts:47, 142, 211, 460, 503`
+  - `WebviewBridge.ts:11, 33-35, 115-121, 132`
+  - `packages/extension/src/progressView/frontend/slices/*` (1,205 lines)
+  - `store.ts:88, 142`
+  - `progressState.ts:119, 137, 145-168, 261, 385`
+  - `streamTree.ts:22-25, 36-40, 86-99`
+  - `components/messageIndex.ts:93, 228-559`
+  - CLI `state/subscribeStreamLog.ts:56, 151, 520-575`, `transcriptFold.ts:550, 813, 900`, `streamViews.ts:26-34, 130-139, 180-206`, `childExecutions.ts:70-110`, `approvalQueue.ts:195-203`, `sessionSignalsAdapter.ts:53-109, 236, 262`
+- Wire and infrastructure:
+  - `src/shared/ipc.ts` (244 commands)
+  - `src/shared/schemas/progressView/inbound.ts:262-312`
+  - `mainView/inbound.ts:308-322`
+  - `src/shared/signals.ts:39-54`
+  - `streamContexts.ts:56-175`
+  - `mainViewContexts.ts:19-24`
+  - `MainApp.ts:229-234`
+  - `StreamConversation.ts:87-142`
+  - `src/shared/state/PersistedState.ts:18-36, 76`
+  - `webview/frontend/persistence.ts:63, 174-309`
+  - `progressView/frontend/webviewStorage.ts:12`
+  - `pendingStateManager.ts:9-14`
+  - `ProgressPresentationState.ts:13-49`
+- Write path:
+  - `HostInteractions.ts:353-378, 403`
+  - `progressHostInteractions.ts:90, 105, 363-439`
+  - `ProgressViewCommandHandlers.ts:133, 305-312, 334, 361, 378-395, 437, 449-455, 601-618`
+  - `ProgressViewMessageHandler.ts:238, 515-524, 677-700, 699-808, 869-880`
+  - `desktopAgentExecution.ts:284-447, 670, 771-794, 796-799, 925-926`
+  - `progressFollowUpSubmit.ts:37-86`
+  - `chatSubmitDriver.ts:118, 206, 233, 255-270, 279-338`
+  - `chatSessionController.ts:408-430, 450-862`
+  - `approvalAdapter.ts:53, 96, 151-153, 261-268`
+  - `settleApprovals.ts:159`
+  - `subscribeApprovals.ts:143, 156-176, 306-344, 861-874`
+  - `workflowControlRegistry.ts:9-10, 30-41`
+  - `executionInteractionOwnership.ts:34-56`
+  - `executionRegistry.ts:125-131, 405-613`
+- Facts and lifecycle:
+  - `SessionEventHub.ts:23-55, 78-100`
+  - `src/agent/trace/events.ts:91-105, 373-393, 410`
+  - `AgentLaunchContext.ts:93, 412-421, 602-605`
+  - `childStream.ts:124, 174`
+  - `SessionFactApplier.ts:201, 255, 286-300, 641-646, 667-690, 772, 937-942`
+  - `streamTabInfo.ts:57-63`
+  - `streamInfoUtils.ts:24-42`
+  - `RunContext.ts:78, 159-161`
+  - `SessionHandle.ts:108-140, 679-687, 805-838`
+- Roots and desktop:
+  - `src/platform/platform.ts:38-75`
+  - `storageFS.ts:18-20`
+  - `workspaceFS.ts:21-26`
+  - `StreamLogStore.ts:400-406`
+  - `KVStore.ts:44-58`
+  - `executionLease.ts:35-40, 267`
+  - `runStorageFs.ts:29-38`
+  - `agentWorkspaceOptions.ts:26-39`
+  - `pathResolution.ts:167-179`
+  - `bash.ts:391-393, 505`
+  - `packages/desktop/src/main/index.ts:267-268, 276, 577-596, 1202-1232, 1366-1383`
+  - `desktopTaskShell.ts:26-68, 472-476`
+  - `pdfOverlay.ts:39-45`
+  - `desktopPreviewHost.ts:61, 88-97`
+  - `renderer/main.ts:288-294, 372-389, 416-470, 1031-1080`
+  - `renderer/messageRoutes.ts:92-102`
+  - `desktopIpcTypes.ts:119-139`
+- Paint:
+  - `src/shared/transcript/toolRowModel.ts:58-61, 287`
+  - `toolRowSections.ts:565, 661`
+  - `transcriptRow.ts:108-113, 185, 222-227, 237-241`
+  - `projectTranscriptRow.ts:377, 557`
+  - `streamStatusDisplay.ts:42-82, 174-212`
+  - `statusIndicatorStyles.ts:26-55`
+  - `StreamTab.styles.ts:29-46`
+  - `groupStyles.ts:23-38`
+  - `BackgroundTasksPanel.ts:248, 540-622`
+  - `SubagentListDisplay.ts:22-40, 63, 70-89`
+  - `toolFormatters.ts:60, 67, 78-93, 106, 131-136`
+  - `toolRenderers.tsx:161-171, 259-272, 354-365`
+  - `transcriptRowLines.ts:23-24, 36, 80, 130, 146-152`
+  - `UserMessage.ts:204-252`
+  - `workflowPlainOutput.ts:32-42, 65-66, 86-90, 114-137, 153-184`
+  - `runProgressRenderer.ts:124-133, 180-203, 276-280, 410-420, 524-530`
+  - `sessionProgressSubscription.ts:66-186`
+  - `packages/agent/src/index.ts:78-150, 245`
+- Shell:
+  - `src/shared/wa/viewHeader.ts:34-75`
+  - `MainViewProvider.ts:100-105, 213-236, 405-438`
+  - `ProgressViewProvider.ts:50-60, 98-104, 213-231, 236, 248-257, 275-305, 318-322, 349, 430-438`
+  - `ProgressViewMessageHandler.ts:300-307`
+  - `packages/extension/package.json:652-677`
+  - `InstructionPanel.ts` (784 lines)
+  - `FollowUpInput.ts:79-104, 174-260`
+  - `FollowUpInput.styles.ts:135`
+  - `ConversationContent.styles.ts:116`
+  - `StreamHeader.ts:309-375, 668-689`
+  - `StreamTabs.ts:130-142, 380-398, 419-424, 506`
+  - `LatexDiffsSection.ts:197-248`
+  - `FileSelectGroup.ts:68`
+  - `MainApp.ts:129, 141, 280-296, 529-583, 595-627`
+  - `ProgressApp.ts:109-135, 138-200, 243, 268-272`
+  - `packages/desktop/src/renderer/taskShell.css:9-135, 466-540, 706-800`
+  - `taskShell.ts:40-200`
+  - `docs/prds/2026-05-08-electron-shell-layout.md` sections 6, 12
