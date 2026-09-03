@@ -89,9 +89,7 @@ interface SyncHarness {
 
 async function createSyncHarness(
   getControls: GetProgressStreamControls = () => ({
-    bashBypass: false,
-    toolEditBypass: false,
-    superYoloBypass: false,
+    bypasses: { bash: false, toolEdit: false, superYolo: false },
     goal: { active: false },
   }),
 ): Promise<SyncHarness> {
@@ -155,8 +153,7 @@ describe('progress view stream-content projection', () => {
         queuedFollowUps: [],
       },
       controls: {
-        toolEditBypass: false,
-        superYoloBypass: false,
+        bypasses: { bash: false, toolEdit: false, superYolo: false },
         goal: { active: false },
       },
       activeState: {
@@ -278,9 +275,7 @@ describe('progress view stream-content projection', () => {
       (streamId) => {
         expect(streamId).toBe(controlledStream);
         return {
-          bashBypass: true,
-          toolEditBypass: true,
-          superYoloBypass: true,
+          bypasses: { bash: true, toolEdit: true, superYolo: true },
           goal: {
             active: true,
             status: 'active',
@@ -301,8 +296,7 @@ describe('progress view stream-content projection', () => {
       action: 'render',
       category: AgentCategory.ToolUse,
       controls: {
-        toolEditBypass: true,
-        superYoloBypass: true,
+        bypasses: { bash: true, toolEdit: true, superYolo: true },
         goal: {
           active: true,
           status: 'active',

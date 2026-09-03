@@ -7,6 +7,7 @@ import { ProgressEvents } from '@progressView/frontend/events';
 // Local imports - shared contracts
 import {
   WORKFLOW_TASK_STATUS_LABEL,
+  type StreamTabId,
   type WorkflowCallIdentity,
   type WorkflowCallProgress,
 } from '@shared/schemas';
@@ -73,17 +74,22 @@ export function formatWorkflowDeclaredTaskTemplate(
 }
 
 /** Render one workflow call as a status card updated in place by log id;
- *  `liveParts` are the in-flight segments the run model joins to it. */
+ *  `liveParts` are the in-flight segments the run model joins to it, and
+ *  `childStreamId` is the stream this card opens. Both are resolved by the
+ *  caller — the run model refuses a stream two cards claim, and passing its
+ *  answer in (rather than defaulting to the card's own field) keeps an
+ *  unresolved id from silently reviving the raw one. */
 export function formatWorkflowCallTemplate(
   row: WorkflowTaskRow,
-  liveParts: readonly string[] = [],
+  liveParts: readonly string[],
+  childStreamId: StreamTabId | undefined,
 ): TemplateResult {
   const { call, detail } = row;
-  const hasChildStream = call.childStreamId !== undefined;
+  const hasChildStream = childStreamId !== undefined;
   const openChildStream = (event: Event): void => {
-    if (call.childStreamId === undefined) return;
+    if (childStreamId === undefined) return;
     event.currentTarget?.dispatchEvent(
-      ProgressEvents.streamSwitch({ streamId: call.childStreamId }),
+      ProgressEvents.streamSwitch({ streamId: childStreamId }),
     );
   };
   const handleKeydown = (event: KeyboardEvent): void => {

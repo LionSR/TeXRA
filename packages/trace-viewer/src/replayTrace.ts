@@ -257,9 +257,7 @@ export function replayTrace(trace: TraceDocument): void {
         queuedFollowUps: [],
       },
       controls: {
-        bashBypass: false,
-        toolEditBypass: false,
-        superYoloBypass: false,
+        bypasses: { bash: false, toolEdit: false, superYolo: false },
         goal: { active: false },
       },
     }),

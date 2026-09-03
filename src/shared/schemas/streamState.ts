@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { GoalStateSchema } from './goal';
 import { AgentCategory, AgentCategorySchema } from './agent';
 import { RunIdentitySchema } from './runIdentity';
@@ -190,9 +191,9 @@ const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   todos: z.array(TodoItemSchema).prefault([]),
   plan: PlanSchema.nullable().prefault(null),
   queuedFollowUps: z.array(z.string()).prefault([]),
-  bashBypass: z.boolean().optional(),
-  toolEditBypass: z.boolean().optional(),
-  superYoloBypass: z.boolean().optional(),
+  bypasses: z
+    .record(z.enum(APPROVAL_BYPASS_KINDS), z.boolean())
+    .prefault({ bash: false, toolEdit: false, superYolo: false }),
   goal: GoalStateSchema.prefault({ active: false }),
   // Frontend-owned (nested under ui)
   ui: ToolUseUIStateSchema.prefault({}),

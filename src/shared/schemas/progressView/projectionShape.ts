@@ -9,6 +9,7 @@
  */
 import { z } from 'zod';
 
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { GoalStateSchema } from '../goal';
 import { StreamTabIdSchema } from '../identifiers';
 import { CompileFailureSchema, OutputFileInfoSchema } from '../output';
@@ -35,9 +36,7 @@ const StreamContentProjectionLeaves = {
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
   queuedFollowUps: z.array(z.string()),
-  bashBypass: z.boolean(),
-  toolEditBypass: z.boolean(),
-  superYoloBypass: z.boolean(),
+  bypasses: z.record(z.enum(APPROVAL_BYPASS_KINDS), z.boolean()),
   goal: GoalStateSchema,
 };
 
@@ -62,9 +61,7 @@ const WorkPlanSectionSchema = z.strictObject({
 });
 
 const ControlsSectionSchema = z.strictObject({
-  bashBypass: StreamContentProjectionLeaves.bashBypass,
-  toolEditBypass: StreamContentProjectionLeaves.toolEditBypass,
-  superYoloBypass: StreamContentProjectionLeaves.superYoloBypass,
+  bypasses: StreamContentProjectionLeaves.bypasses,
   goal: StreamContentProjectionLeaves.goal,
 });
 

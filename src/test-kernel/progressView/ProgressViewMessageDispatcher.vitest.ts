@@ -99,9 +99,7 @@ describe('SyncStreamContentMessageSchema', () => {
     runUsage: {},
     workPlan: { todos: [], plan: null, queuedFollowUps: [] },
     controls: {
-      bashBypass: false,
-      toolEditBypass: false,
-      superYoloBypass: false,
+      bypasses: { bash: false, toolEdit: false, superYolo: false },
       goal: { active: false },
     },
   } as const;

@@ -15,10 +15,8 @@ import {
   type GettingStartedAction,
   type StreamLifecycleStatus,
   type StreamLogEntry,
-  type StreamTabId,
   type TaskGroup,
   type WorkflowCallProgress,
-  type WorkflowPlanMarker,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import { designTokens } from '@shared/styles';
@@ -34,8 +32,6 @@ import {
   formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
   workflowPhaseRows,
-  workflowRunModel,
-  type ChildRunProgress,
   type WorkflowPhaseModel,
   type WorkflowRowGroup,
   type WorkflowRunModel,
@@ -46,16 +42,12 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import {
-  isInFlightPhase,
-  workflowRunSettled,
-} from '@shared/streams/streamStatus';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { terminalStatusIcon } from '@shared/wa/statusIcons';
@@ -116,26 +108,6 @@ const taskGroupListStyles = css`
   }
 `;
 
-/**
- * Maps a group's `StreamPhase`/`RunOutcome` status to a steady wa-icon name.
- * Each terminal phase gets its own icon; an unrecognized status renders as
- * running.
- */
-function getStatusIcon(status: string): TeXRAIconName {
-  switch (status) {
-    case STREAM_PHASE.FAILED:
-      return terminalStatusIcon('failed');
-    case STREAM_PHASE.COMPLETED:
-      return terminalStatusIcon('completed');
-    case STREAM_PHASE.CANCELLED:
-      return terminalStatusIcon('cancelled');
-    // Running and every unrecognized status share the plain steady-state
-    // circle (running is the default look for a live group).
-    default:
-      return terminalStatusIcon('running');
-  }
-}
-
 const WORKFLOW_ROW_GROUPS = ['queued', 'declared'] as const;
 
 /** Toggle-store key of one phase's counted group of quiet cards. */
@@ -177,13 +149,8 @@ export class TaskGroupList extends LitElement {
    */
   @property({ attribute: false }) entries: StreamLogEntry[] = [];
 
-  /**
-   * Existing row indices updated by the most recent backend delta.
-   * Null means the producer did not provide delta metadata, so fall back
-   * to reference scans.
-   */
-  @property({ attribute: false }) updatedRowIndices: readonly number[] | null =
-    null;
+  /** Existing row indices updated by the most recent backend delta. */
+  @property({ attribute: false }) updatedRowIndices: readonly number[] = [];
 
   /** Generation immediately before updatedRowIndices was collected. */
   @property({ attribute: false }) updatedRowBaseGeneration = 0;
@@ -198,23 +165,12 @@ export class TaskGroupList extends LitElement {
   @property({ type: Boolean }) isToolUse = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) streamStatus: StreamLifecycleStatus | null =
-    null;
+  @property({ attribute: false }) streamStatus:
+    StreamLifecycleStatus | undefined = undefined;
 
-  /** Newest workflow-attempt boundary, even if its plan body was malformed. */
-  @property({ attribute: false }) workflowAttemptId: string | undefined =
-    undefined;
-
-  /** The newest attempt's valid declared workflow plan. */
-  @property({ attribute: false }) workflowPlan: WorkflowPlanMarker | undefined =
-    undefined;
-
-  /** Live progress of this stream's children, by child stream — the model
-   *  joins it to the cards that opened them. */
-  @property({ attribute: false }) childProgress: ReadonlyMap<
-    StreamTabId,
-    ChildRunProgress
-  > = new Map();
+  /** The run's workflow display structure, computed by the state selector;
+   *  null when this stream declares no workflow. */
+  @property({ attribute: false }) runModel: WorkflowRunModel | null = null;
 
   /** Toggle state store for persistence */
   @property({ attribute: false }) toggleStates: ToggleStateStore | null = null;
@@ -229,14 +185,6 @@ export class TaskGroupList extends LitElement {
   private previousStatuses = new Map<string, string>();
 
   private readonly index = new TranscriptIndex();
-
-  /**
-   * The shared workflow run model — the fold the CLI popup paints, over the
-   * same task groups, rows, plan, and settled state — rebuilt in willUpdate
-   * whenever one of those inputs changes. Null for a stream with no phases
-   * and no plan.
-   */
-  private model: WorkflowRunModel | null = null;
 
   /** The model's opened phases by task-group id, for the group tree. */
   private phaseModels = new Map<string, WorkflowPhaseModel>();
@@ -310,16 +258,12 @@ export class TaskGroupList extends LitElement {
     if (groupsChanged) {
       this.checkForCompletedRuns();
     }
-    if (
-      groupsChanged ||
-      rowsChanged ||
-      changedProperties.has('rowGeneration') ||
-      changedProperties.has('workflowAttemptId') ||
-      changedProperties.has('workflowPlan') ||
-      changedProperties.has('childProgress') ||
-      changedProperties.has('streamStatus')
-    ) {
-      this.rebuildRunModel();
+    if (changedProperties.has('runModel')) {
+      this.phaseModels = new Map(
+        (this.runModel?.phases ?? [])
+          .filter((phase) => phase.opened)
+          .map((phase) => [phase.key, phase]),
+      );
     }
 
     const renderWindowsStale = this.index.apply({
@@ -333,9 +277,10 @@ export class TaskGroupList extends LitElement {
       previousRows: changedProperties.get('rows') as
         TranscriptRow[] | undefined,
       rowsChanged,
-      deltaIndices: this.canUseUpdatedRowIndices()
-        ? (this.updatedRowIndices ?? [])
-        : null,
+      deltaIndices:
+        this.updatedRowBaseGeneration === this.processedRowGeneration
+          ? this.updatedRowIndices
+          : null,
     });
     if (renderWindowsStale) {
       this.resetRenderWindows();
@@ -344,13 +289,6 @@ export class TaskGroupList extends LitElement {
 
   override updated(): void {
     this.processedRowGeneration = this.rowGeneration;
-  }
-
-  private canUseUpdatedRowIndices(): boolean {
-    return (
-      this.updatedRowIndices !== null &&
-      this.updatedRowBaseGeneration === this.processedRowGeneration
-    );
   }
 
   /**
@@ -375,28 +313,6 @@ export class TaskGroupList extends LitElement {
       nextStatuses.set(group.id, group.status);
     }
     this.previousStatuses = nextStatuses;
-  }
-
-  private rebuildRunModel(): void {
-    const model =
-      this.workflowAttemptId !== undefined ||
-      this.workflowPlan !== undefined ||
-      this.groups.some((group) => group.kind === 'phase')
-        ? workflowRunModel({
-            taskGroups: this.groups,
-            rows: this.rows,
-            workflowAttemptId: this.workflowAttemptId,
-            plan: this.workflowPlan,
-            runSettled: workflowRunSettled(this.streamStatus ?? undefined),
-            childProgress: this.childProgress,
-          })
-        : null;
-    this.model = model;
-    this.phaseModels = new Map(
-      (model?.phases ?? [])
-        .filter((phase) => phase.opened)
-        .map((phase) => [phase.key, phase]),
-    );
   }
 
   private resetRenderWindows(): void {
@@ -542,7 +458,7 @@ export class TaskGroupList extends LitElement {
 
   /** Whole-run tally above a multi-agent workflow's phases. */
   private renderRunBand(node: GroupTree): TemplateResult | typeof nothing {
-    const model = this.model;
+    const model = this.runModel;
     if (this.isToolUse || !model || model.tally.total === 0) return nothing;
     if (!node.children.some((child) => this.phaseModels.has(child.group.id))) {
       return nothing;
@@ -597,11 +513,15 @@ export class TaskGroupList extends LitElement {
           case 'task': {
             // The card plus the model's live join for it; the board has no
             // clock, so elapsed is left to the popup.
-            const live = this.model?.liveOf.get(row.row.id);
-            return guard([row.row, live], () =>
+            const live = this.runModel?.liveOf.get(row.row.id);
+            // The model owns the link rule: a stream two cards claim is
+            // nobody's, so read the resolved id rather than the raw field.
+            const childStreamId = this.runModel?.childStreamOf.get(row.row.id);
+            return guard([row.row, live, childStreamId], () =>
               formatWorkflowCallTemplate(
                 row.row,
                 formatWorkflowCallLiveParts(row.row.call, live),
+                childStreamId,
               ),
             );
           }
@@ -629,7 +549,8 @@ export class TaskGroupList extends LitElement {
    * for that phase. The model drops them once the run settles.
    */
   private renderDeclaredPhases(): TemplateResult | typeof nothing {
-    const declared = this.model?.phases.filter((phase) => !phase.opened) ?? [];
+    const declared =
+      this.runModel?.phases.filter((phase) => !phase.opened) ?? [];
     if (declared.length === 0) return nothing;
     return html`${repeat(
       declared,
@@ -681,7 +602,7 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
-    const statusIcon = getStatusIcon(group.status);
+    const statusIcon = terminalStatusIcon(group.status);
     const phase = this.phaseModels.get(group.id);
     const title =
       group.kind === 'round' && group.index !== undefined
@@ -727,7 +648,7 @@ export class TaskGroupList extends LitElement {
   private renderGroupBody(node: GroupTree, isRoot: boolean): TemplateResult {
     const phase = this.phaseModels.get(node.group.id);
     const rows =
-      phase || (isRoot && this.model !== null)
+      phase || (isRoot && this.runModel !== null)
         ? node.rows.filter((row) => row.kind !== 'workflowTask')
         : node.rows;
     return html`${phase ? this.renderPhaseRows(phase) : nothing}${this.renderRowEntries(
@@ -748,7 +669,7 @@ export class TaskGroupList extends LitElement {
     const { group } = node;
     if (
       group.kind === 'phase' &&
-      this.model !== null &&
+      this.runModel !== null &&
       !this.phaseModels.has(group.id)
     ) {
       return nothing;
@@ -848,7 +769,7 @@ export class TaskGroupList extends LitElement {
       this.entries.length === 0 &&
       this.groups.length === 0
     ) {
-      const active = isInFlightPhase(this.streamStatus ?? undefined);
+      const active = isInFlightPhase(this.streamStatus);
       return html`
         <div class="log-placeholder">
           ${
@@ -889,7 +810,7 @@ export class TaskGroupList extends LitElement {
         (item) => item.key,
         (item) => {
           if ('row' in item) {
-            return this.model !== null && item.row.kind === 'workflowTask'
+            return this.runModel !== null && item.row.kind === 'workflowTask'
               ? nothing
               : this.renderLogEntry(item.row);
           }
@@ -897,8 +818,8 @@ export class TaskGroupList extends LitElement {
         },
       )}
       ${
-        this.model?.unphasedPhase
-          ? this.renderPhaseRows(this.model.unphasedPhase)
+        this.runModel?.unphasedPhase
+          ? this.renderPhaseRows(this.runModel.unphasedPhase)
           : nothing
       }
       ${this.renderDeclaredPhases()}

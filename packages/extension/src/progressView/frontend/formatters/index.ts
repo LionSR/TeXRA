@@ -62,7 +62,10 @@ const ROW_FORMATTERS: RowFormatters = {
   statistics: formatStatisticsTemplate,
   contextManagement: formatContextManagementTemplate,
   progressStatus: formatProgressStatusTemplate,
-  workflowTask: formatWorkflowCallTemplate,
+  // No run model on this path, so the card's own field is the only link
+  // source; a model-backed board passes the model's resolved id instead.
+  workflowTask: (row) =>
+    formatWorkflowCallTemplate(row, [], row.call.childStreamId),
   compactionActivity: formatCompactionActivityTemplate,
   phase: formatDefaultLogMessageTemplate,
   log: formatDefaultLogMessageTemplate,

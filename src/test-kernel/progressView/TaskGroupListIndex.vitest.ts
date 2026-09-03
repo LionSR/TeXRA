@@ -28,7 +28,11 @@ import {
   type WorkflowTaskRow,
 } from '@shared/transcript';
 import { ToggleStateStore } from '@shared/state/ToggleStateStore';
-import type { ChildRunProgress } from '@shared/streams/workflowRunModel';
+import {
+  workflowRunModel,
+  type ChildRunProgress,
+  type WorkflowRunModel,
+} from '@shared/streams/workflowRunModel';
 
 // Local file imports
 import {
@@ -49,9 +53,7 @@ type TaskGroupListInternals = HTMLElement & {
   isToolUse: boolean;
   terminal: boolean;
   toggleStates: ToggleStateStore | null;
-  workflowAttemptId: string | undefined;
-  workflowPlan: WorkflowPlanMarker | undefined;
-  childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
+  runModel: WorkflowRunModel | null;
   updateComplete: Promise<boolean>;
   readonly index: TranscriptIndex;
   willUpdate: (changedProperties: Map<string, unknown>) => void;
@@ -149,11 +151,29 @@ function renderList(
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): Promise<TaskGroupListInternals> {
+  const { toggleStates, workflowAttemptId, workflowPlan, childProgress } =
+    options;
+  // The board takes the run model ready-made from the state selector; build
+  // the same one here, gated exactly as `activeRunModel$` gates it.
+  const runModel =
+    workflowAttemptId !== undefined ||
+    workflowPlan !== undefined ||
+    groups.some((group) => group.kind === 'phase')
+      ? workflowRunModel({
+          taskGroups: groups,
+          rows,
+          workflowAttemptId,
+          plan: workflowPlan,
+          runSettled: false,
+          childProgress: childProgress ?? new Map(),
+        })
+      : null;
   return mountComponent<TaskGroupListInternals>('task-group-list', {
     hasStreams: true,
     groups,
     rows,
-    ...options,
+    runModel,
+    ...(toggleStates === undefined ? {} : { toggleStates }),
   });
 }
 
@@ -660,6 +680,42 @@ describe('task-group-list workflow-script phase rendering (#8722)', () => {
       'reviewer@claude-opus-4#child-1',
       'reviewer@claude-opus-4#child-1',
     ]);
+  });
+
+  it('drops the link when two cards claim the same child stream', async () => {
+    const run = runGroup('Run: workflow');
+    const phase = createGroup('phase-review', STREAM_PHASE.RUNNING, {
+      name: 'Review',
+      startTime: 2,
+      parentGroupId: 'run',
+      kind: 'phase',
+    });
+    const contested = 'reviewer@claude-opus-4#child-1' as StreamTabId;
+    const rows: TranscriptRow[] = [
+      workflowTaskRow('phase-review', 'agent-a', 3, {
+        id: 'reviewer',
+        label: 'Review manuscript',
+        phase: 'Review',
+        status: 'completed',
+        childStreamId: contested,
+      }),
+      workflowTaskRow('phase-review', 'agent-b', 4, {
+        id: 'critic',
+        label: 'Check argument',
+        phase: 'Review',
+        status: 'completed',
+        childStreamId: contested,
+      }),
+    ];
+
+    const list = await renderList([run, phase], rows);
+
+    const content = groupContent(list, 'phase-review');
+    for (const id of ['agent-a', 'agent-b']) {
+      const card = content?.querySelector<HTMLElement>(`[data-log-id="${id}"]`);
+      expect(card?.getAttribute('role')).toBeNull();
+      expect(card?.getAttribute('tabindex')).toBeNull();
+    }
   });
 
   it('hides superseded phase headers and failed cards after a resume', async () => {
