@@ -86,29 +86,31 @@ histogram widths):
 | `d418d45` (#11792) | **Net −354** (122 ins / 476 del). Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (net −49), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                                            |
 | `974d459` (#11775) | **Consolidation, net +14** (82 ins / 68 del). Gave the staged-deletion rollback path and the `sr`-only recipe a single owner: `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 / 13), `SessionStores.ts` −7 (19 / 26). Net-positive because logic moved to one owner — indirection removal, not new abstraction. |
 
-No commit in the interval widens the frozen host→`@agent` deep-import width
-(§3's baselines held). The runtime public surface saw a **net reduction plus one
-sanctioned, ratchet-recorded addition** — motion in the readiness-positive
-direction, not a silent widening:
+The section above is a **characterization**, not an exhaustive signature-diff:
+the interval carries other public-surface simplifications too (e.g. `03fa583`
+also removed `SessionHandle.onResult`'s `replayMissed` option and
+`AgentExecutionHandle.attachToolUseFlow`'s optional signal; `d418d45` removed
+the dependency argument from `createLatexExecutionDiscovery` before deleting
+the module). These are all removals or narrowings, consistent with the trend
+below. What the verdict rests on is the **cumulative end-state at `d418d45`**
+(§2–§4), not an exhaustive interval diff — the reason the tracked-fact table is
+built to be re-runnable against any snapshot.
 
-- **Removed:** `HostInteractions.showInfoMessage` (`810abdc`, from the exported
-  interface and `SessionHostInteractions`), `SessionEventHub.assertRunSubscribersAttachedBeforeActivation()`
-  (`d418d45`), and the dead `StreamSnapshotStore.deleteStream` wrapper
-  (`1719dea`).
-- **Added (sanctioned):** `StreamSnapshotStore.requestEviction()` (`e599027`),
-  recorded in `config/ratchets/store-public-surface-baseline.json` as "the one
-  sanctioned addition." This _is_ a baseline widening — the store method-count
-  went 21→22 at `e599027` — later offset by the `deleteStream` removal
-  (22→21), so the end-state cardinality matches but the interval did contain one
-  sanctioned, ratchet-recorded store-surface addition. (The host→`@agent`
-  deep-import baselines, §3, held throughout.)
+Bounded claims about baseline motion in the interval:
 
-One **SPI signature refinement** landed too: `03fa583` changed
-`ChildRunStrategy.launch`/`runTurn` to take an `AbortSignal` instead of an
-`AbortController`, updating all four production implementations — a contract
-narrowing, with the implementation _set_ unchanged (§4). §2's structural
-measurements, taken at `d418d45`, are cumulative over all 28 commits and match
-the prior pass.
+- **Host→`@agent` deep-import baselines:** held on every package (§3, ratchet-checked).
+- **Public store-method surface:** transiently widened 21→22 (`e599027` adds
+  `StreamSnapshotStore.requestEviction()`, recorded in
+  `config/ratchets/store-public-surface-baseline.json` as "the one sanctioned
+  addition"), then 22→21 (`1719dea` removes the dead `deleteStream`) — one
+  sanctioned, ratchet-recorded addition offset by a removal.
+- **SPI signature refinement on the subagent boundary:** `03fa583` changed
+  `ChildRunStrategy.launch`/`runTurn` to take an `AbortSignal` instead of an
+  `AbortController`; all four production implementations updated in lockstep,
+  boundary shape and implementation set unchanged (§4).
+
+§2's structural measurements, taken at `d418d45`, are cumulative over all 28
+commits and match the prior pass.
 
 ## 2. Every tracked structural fact re-verifies at `d418d45`
 
@@ -168,9 +170,13 @@ is a hand-maintained `Pick<ModelHandler<…>>` — the correct anti-drift choice
 internally, a manifest-design note for a public SDK; (2) the provider-SDK type
 leak (`M`/`T`) is the floor on `agent`'s 7 specifiers; (3) logger + telemetry are
 process-global singletons whose SDK-correct unlock (injectable owners behind
-Tier-1 doors) is designed for logging, unspecified for usage/telemetry; (4) two
-of eight Tier-1 doors remain open (`agentCreatorFlow`, `core/state`), both
-gated; (5) `HostInteractions` required/optional is an open maintainer contract
+Tier-1 doors) is designed for logging, unspecified for usage/telemetry;
+(4) **correction to the inherited row:** the eight named Tier-1 doors
+(`index`/`runtime`/`storage`/`trace`/`followUp`/`export`/`review`/`templates`)
+all have `index.ts` at `d418d45` and are **present**. The two open items
+(`agentCreatorFlow`, `core/state`) are **leaf surfaces still to be fronted
+behind existing doors**, not two members of the eight-door manifest — a
+distinction prior passes elided; (5) `HostInteractions` required/optional is an open maintainer contract
 decision; (6) result-taxonomy documentation; (7) publication remains gated on
 the named-external-consumer hold.
 
