@@ -79,11 +79,6 @@ type ExecutionMetaInput = z.input<typeof ExecutionMetaSchema>;
 // Domain types — Zod schemas as source of truth
 // ============================================================================
 
-/** Display shape for a completed todo item. */
-export interface TodoEntry {
-  content?: string;
-  status?: string;
-}
 const WorkspaceFilePathArraySchema = z.array(z.string());
 
 /** Stored data for a child execution record (without the derived `id` field). */

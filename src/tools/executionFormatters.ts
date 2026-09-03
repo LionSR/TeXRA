@@ -6,11 +6,7 @@
  * and `showSummary` only fetch and delegate here.
  */
 
-import type {
-  ChildRecord,
-  ExecutionListingEntry,
-  TodoEntry,
-} from '@agent/storage';
+import type { ChildRecord, ExecutionListingEntry } from '@agent/storage';
 import {
   isAgentRunRecord,
   type RunRecord,
@@ -30,9 +26,9 @@ import type {
   ExecutionMeta,
   RunIdentity,
   RunOutcome,
-  TodoStatus,
+  TodoItem,
 } from '@shared/schemas';
-import { runIdentityName, STATUS_DISPLAY, TODO_STATUS } from '@shared/schemas';
+import { runIdentityName, STATUS_DISPLAY } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
 /**
@@ -153,25 +149,15 @@ export function formatListingLine(entry: ExecutionListingEntry): string {
   return `${entry.id}  ${ts}  ${agent}${categoryTag}${modelTag}  [${formatStatusInfo(info)}]${parentSuffix}${descSuffix}`;
 }
 
-function getTodoStatusIcon(status: string | undefined): string {
-  return (
-    STATUS_DISPLAY[status as TodoStatus]?.icon ??
-    STATUS_DISPLAY[TODO_STATUS.PENDING].icon
-  );
-}
-
 /** Format todo items as a checklist. */
-export function formatTodoSection(todos: TodoEntry[]): string[] {
-  return todos.map((t) => {
-    const icon = getTodoStatusIcon(t.status);
-    return `${icon} ${t.content ?? '(no description)'}`;
-  });
+export function formatTodoSection(todos: readonly TodoItem[]): string[] {
+  return todos.map((t) => `${STATUS_DISPLAY[t.status].icon} ${t.content}`);
 }
 
 /** Format a todo header with counts. */
 export function formatTodoHeader(
   executionId: string,
-  todos: TodoEntry[],
+  todos: readonly TodoItem[],
 ): string {
   const completed = todos.filter((t) => t.status === 'completed').length;
   const inProgress = todos.filter((t) => t.status === 'in_progress').length;
@@ -282,7 +268,7 @@ export function buildSummaryTailLines(
   executionId: ExecutionId,
   category: ExecutionDisplayCategory | undefined,
   hasChildren: boolean,
-  todos: TodoEntry[],
+  todos: readonly TodoItem[],
   report: string | null,
   options: { readonly suppressReport?: boolean } = {},
 ): string[] {

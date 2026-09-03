@@ -267,10 +267,8 @@ beforeEach(() => {
     mocks.releaseExecutionLeaseAfterArtifacts(session, executionId),
   );
   mocks.finalizeRun.mockResolvedValue({ ok: true });
-  mocks.persistChildRunReport.mockImplementation(async (_id, msg: string) => {
-    return { kind: 'persisted' as const, msg };
-  });
-  mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
+  mocks.persistChildRunReport.mockResolvedValue(undefined);
+  mocks.persistChildRunResultMeta.mockResolvedValue(undefined);
   mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
 });
 

@@ -362,7 +362,7 @@ describe('completedRunArchive facade', () => {
     );
 
     expect(await readCompletedRunTodos(executionId)).toEqual([
-      { content: 'Fix the bug', status: 'completed' },
+      { content: 'Fix the bug', status: 'completed', activeForm: 'Fixing' },
     ]);
   });
 

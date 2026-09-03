@@ -94,29 +94,17 @@ vi.mock('@agent/storage/executionLease', async (importOriginal) => ({
 // imports the store module-internally rather than through the mocked
 // `@agent/storage` index; route it through the store spy the way the deleted
 // delegation-side module did.
-vi.mock('@agent/storage/childRunPersistence', () => {
-  const persist = async (
-    write: () => Promise<unknown>,
-  ): Promise<{ kind: 'persisted' } | { kind: 'failed'; err: unknown }> => {
-    try {
-      await write();
-      return { kind: 'persisted' };
-    } catch (err) {
-      return { kind: 'failed', err };
-    }
-  };
-  return {
-    persistChildRunReport: (executionId: ExecutionId, message: string) =>
-      persist(() => mocks.getExecutionStore(executionId).writeReport(message)),
-    persistChildRunResultMeta: (
-      executionId: ExecutionId,
-      resultMeta: unknown,
-    ) =>
-      persist(() =>
-        mocks.getExecutionStore(executionId).writeResultMeta(resultMeta),
-      ),
-  };
-});
+vi.mock('@agent/storage/childRunPersistence', () => ({
+  persistChildRunReport: async (executionId: ExecutionId, message: string) => {
+    await mocks.getExecutionStore(executionId).writeReport(message);
+  },
+  persistChildRunResultMeta: async (
+    executionId: ExecutionId,
+    resultMeta: unknown,
+  ) => {
+    await mocks.getExecutionStore(executionId).writeResultMeta(resultMeta);
+  },
+}));
 
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: mocks.computeModelOptionsData,

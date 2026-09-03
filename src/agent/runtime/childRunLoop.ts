@@ -51,6 +51,7 @@ import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import {
   RUN_OUTCOME,
   type ExecutionId,
+  type RunOutcome,
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -107,17 +108,6 @@ export interface ChildRunPorts {
 }
 
 /**
- * A child run's reported terminal outcome, shared with the tool-layer child
- * stream that finalizes one. A report, not a verdict: the stream phase owns
- * the terminal outcome, so an explicit stop/kill that already landed
- * CANCELLED outranks a non-zero exit this reports.
- */
-export type ChildRunOutcome =
-  | { kind: 'completed' }
-  | { kind: 'failed'; error?: unknown }
-  | { kind: 'cancelled' };
-
-/**
  * Presentation/lifecycle port for agent-CLI child streams. The concrete
  * tool-layer stream satisfies this structurally, but the generic driver
  * declares the handful of hooks it needs here so it never imports a concrete
@@ -138,8 +128,15 @@ interface ChildStreamPort {
    * Resolves once the shared terminal finalizer has persisted, settled, and
    * untracked.
    */
-  finalize(options?: {
-    outcome?: ChildRunOutcome;
+  finalize(options: {
+    /**
+     * The child's report of its own exit. A report, not a verdict: the stream
+     * phase owns the terminal outcome, so an explicit stop/kill that already
+     * landed CANCELLED outranks a FAILED this reports.
+     */
+    outcome: RunOutcome;
+    /** Cause behind a FAILED outcome, for diagnosis. */
+    error?: unknown;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
     /** Durable execution-state action. */
@@ -1115,18 +1112,14 @@ export function startChildRunLoop<TTurn>(
           // CANCELLED still outranks this report, while a failure that
           // already terminalized the phase keeps its diagnosis instead of
           // publishing FAILED with no error facts at all.
-          let loopOutcome: ChildRunOutcome;
-          if (sawTurnFailure) {
-            loopOutcome = { kind: 'failed', error: lastTurnErr };
-          } else if (loop.isInterrupted()) {
-            loopOutcome = { kind: 'cancelled' };
-          } else {
-            loopOutcome = { kind: 'completed' };
-          }
           await childStream.finalize({
-            outcome: loopOutcome,
+            outcome: deriveRunOutcome({
+              failed: sawTurnFailure,
+              cancelled: loop.isInterrupted(),
+            }),
+            error: lastTurnErr,
             stage: sessionStage,
-            // loopOutcome can be failed or cancelled here; only a completed
+            // The outcome can be failed or cancelled here; only a completed
             // child has a consumed cursor worth deleting (#11315).
             persistence: {
               kind: 'finalize',

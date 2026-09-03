@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import {
+  RUN_OUTCOME,
   STREAM_PHASE,
   type ExecutionId,
   type StreamTabId,
@@ -110,7 +111,10 @@ describe('child stream progress events', () => {
 
       expect(childStream.childStreamId).toBe(childStreamId);
 
-      await childStream.finalize({ autoClose: true });
+      await childStream.finalize({
+        outcome: RUN_OUTCOME.COMPLETED,
+        autoClose: true,
+      });
 
       expect(
         sessionFactPayloads(recorded.events, 'setActiveStream'),
@@ -190,7 +194,7 @@ describe('child stream progress events', () => {
         config,
       },
     );
-    await firstRun.finalize();
+    await firstRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     expect(defaultSession().status.get(workflowRelaunchChildStreamId)).toBe(
       STREAM_PHASE.COMPLETED,
     );
@@ -229,7 +233,7 @@ describe('child stream progress events', () => {
         }),
       );
     } finally {
-      await relaunched.finalize();
+      await relaunched.finalize({ outcome: RUN_OUTCOME.COMPLETED });
       recorded.detach();
     }
   });
@@ -279,7 +283,7 @@ describe('child stream progress events', () => {
       ).toContainEqual(
         expect.objectContaining({ streamId: setupRetryChildStreamId }),
       );
-      await retried.finalize();
+      await retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
       trackExecution.mockRestore();
       recorded.detach();
@@ -326,7 +330,7 @@ describe('child stream progress events', () => {
         category: AgentCategory.Workflow,
       });
 
-      await childStream.finalize();
+      await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
       recorded.detach();
     }
@@ -354,7 +358,7 @@ describe('child stream progress events', () => {
         },
       ]);
 
-      await childStream.finalize();
+      await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
       detach();
     }
@@ -367,7 +371,10 @@ describe('child stream progress events', () => {
     try {
       const childStream = startBashChild(noProjectionAutoCloseExecutionId);
 
-      await childStream.finalize({ autoClose: true });
+      await childStream.finalize({
+        outcome: RUN_OUTCOME.COMPLETED,
+        autoClose: true,
+      });
 
       expect(active.events).toEqual([]);
       expect(facts).toContainEqual({
@@ -388,7 +395,10 @@ describe('child stream progress events', () => {
     try {
       const childStream = startBashChild(executionId);
 
-      await childStream.finalize({ autoClose: true });
+      await childStream.finalize({
+        outcome: RUN_OUTCOME.COMPLETED,
+        autoClose: true,
+      });
 
       expect(
         sessionFactPayloads(recorded.events, 'removeStream'),
@@ -472,7 +482,7 @@ describe('child stream progress events', () => {
       childStream.waitForInput();
       childStream.beginTurn();
       childStream.failTurn();
-      await childStream.finalize({ outcome: { kind: 'failed' } });
+      await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
     } finally {
       recorded.detach();
     }
@@ -528,7 +538,7 @@ describe('child stream progress events', () => {
       childStream.waitForInput();
       childStream.beginTurn();
       childStream.failTurn();
-      await childStream.finalize({ outcome: { kind: 'failed' } });
+      await childStream.finalize({ outcome: RUN_OUTCOME.FAILED });
 
       expect(defaultSession().status.get(stoppedChildStreamId)).toBe(
         STREAM_PHASE.CANCELLED,
@@ -559,7 +569,7 @@ describe('child stream progress events', () => {
     );
     expect(handle).toBeDefined();
 
-    await childStream.finalize({ outcome: { kind: 'cancelled' } });
+    await childStream.finalize({ outcome: RUN_OUTCOME.CANCELLED });
 
     await expect(handle?.result).resolves.toMatchObject({
       type: 'result',
@@ -579,10 +589,8 @@ describe('child stream progress events', () => {
     expect(handle).toBeDefined();
 
     await childStream.finalize({
-      outcome: {
-        kind: 'failed',
-        error: new Error('child process exited 1'),
-      },
+      outcome: RUN_OUTCOME.FAILED,
+      error: new Error('child process exited 1'),
     });
 
     expect(defaultSession().status.get(failedChildStreamId)).toBe(

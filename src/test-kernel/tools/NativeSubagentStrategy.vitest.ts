@@ -187,8 +187,8 @@ describe('NativeSubagentStrategy', () => {
     mocks.throwDeliveryFormatting = false;
     mocks.throwErrorFormatting = false;
     mocks.deliverChildRunFollowUp.mockResolvedValue({ kind: 'delivered' });
-    mocks.persistChildRunReport.mockResolvedValue({ kind: 'persisted' });
-    mocks.persistChildRunResultMeta.mockResolvedValue({ kind: 'skipped' });
+    mocks.persistChildRunReport.mockResolvedValue(undefined);
+    mocks.persistChildRunResultMeta.mockResolvedValue(undefined);
     mocks.writeTurnState.mockResolvedValue(undefined);
     mocks.finalizeRun.mockResolvedValue({ ok: true });
   });

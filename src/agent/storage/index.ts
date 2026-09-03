@@ -15,7 +15,6 @@
 
 export {
   type ExecutionKVStore,
-  type TodoEntry,
   type ChildRecord,
   getExecutionStore,
   clearStoreCache,

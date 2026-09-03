@@ -578,17 +578,21 @@ export class ExecutionRegistry {
    * for the difference: a native child between turns would be emitted twice.
    */
   detachActiveChildren(parentStreamId: StreamTabId): readonly StreamTabId[] {
-    const detachedChildStreamIds: StreamTabId[] = [];
+    // A Set, not an array: a child detached mid-turn has both a per-turn
+    // handle and a ChildExecutionActivation under one executionId, so both
+    // loops below reach the same childStreamId and it must still be emitted
+    // (and reported) exactly once.
+    const detachedChildStreamIds = new Set<StreamTabId>();
     for (const activation of this.activeChildActivations(parentStreamId)) {
       activation.detach();
       this.approvals.detachStreamFromParent(activation.childStreamId);
-      detachedChildStreamIds.push(activation.childStreamId);
+      detachedChildStreamIds.add(activation.childStreamId);
     }
     for (const handle of this.handles.values()) {
       if (!handle.isOwnedBy(parentStreamId)) continue;
       this.approvals.detachStreamFromParent(handle.childStreamId);
       handle.detach();
-      detachedChildStreamIds.push(handle.childStreamId);
+      detachedChildStreamIds.add(handle.childStreamId);
     }
     this.emitChildActivity(parentStreamId);
     for (const childStreamId of detachedChildStreamIds) {
@@ -597,7 +601,7 @@ export class ExecutionRegistry {
         parentStreamId: null,
       });
     }
-    return detachedChildStreamIds;
+    return [...detachedChildStreamIds];
   }
 
   /**
