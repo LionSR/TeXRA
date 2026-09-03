@@ -24,13 +24,15 @@ shape, and no structural refactor is warranted.** The pass-through wrappers,
 convenience barrels, and single-caller factories the standing question hunts for
 are not present. This is the **seventh consecutive** green pass (`-08-19`
 through `-09-03`). The `646475d..d418d45` interval is 28 commits (§1) —
-dominated by refactor and fix, with no wrapper layer added and no baseline
-widened — and the cumulative structural end-state measured at `d418d45` (§2)
-holds against the prior pass. Consistent with the routine's default (no
+dominated by refactor and fix; its only new core structure is one _justified_
+dedup extraction (`IncarnationMap`, evaluated in §1), its only public-surface
+growth is one _sanctioned_, ratchet-recorded store method (offset by a removal),
+and the host→`@agent` deep-import baselines held — and the cumulative structural
+end-state measured at `d418d45` (§2) holds against the prior pass. Consistent with the routine's default (no
 maintainer request accompanies a scheduled firing), the pass is **recorded, not
 acted on**.
 
-## 1. The `646475d..d418d45` interval — 28 commits, no baseline widened
+## 1. The `646475d..d418d45` interval — 28 commits: deletions, fixes, one justified core extraction
 
 The prior pass inspected `646475d`; the interval to this pass's snapshot
 `d418d45` is **28 commits** (`git rev-list --count`). By subject prefix
@@ -46,12 +48,21 @@ untouched, but the cumulative structural end-state measured at `d418d45`
 (§2–§4).
 
 **Audited-area touches in the interval.** Eight commits touch `src/agent/**`
-(`git log … -- 'src/agent/**'`) — three `refactor`, five `fix` — all
-simplification or bug-fix, none introducing an abstraction layer:
+(`git log … -- 'src/agent/**'`) — three `refactor`, five `fix`. Two of the
+refactors are pure deletion/consolidation; the third introduces one new class,
+evaluated below and judged justified:
 
 - `refactor`: `d418d45` (#11792, five dead surfaces deleted — see table),
   `974d459` (#11775, staged-deletion single-owner — see table), `b024fba`
   (#11780, extract `IncarnationMap` for `SessionStores`' nested deletion maps).
+  **`b024fba` does add an abstraction** — a new `IncarnationMap` class (`SessionStores.ts`
+  net +43) — so the "no new abstraction" question must be answered for it, not
+  assumed: it has **three call sites** within `SessionStores` and encapsulates
+  real nested-map bookkeeping, clearing the repo's factory/class bar (multiple
+  callers + real logic; AGENTS.md) and dedup'ing repeated logic. It is a
+  justified extraction, the opposite of the single-caller/speculative
+  indirection the standing question flags — but it _is_ new structure in the
+  core, recorded here rather than waved past.
 - `fix`: `e2118c5` (#11786, stop double-emitting the parent-edge clear on
   detach), `3422b5f` (#11785, keep a live reservation when restart repair holds
   a stream), `d4fd6a9` (#11787, read both child-policy toggles through the
@@ -61,9 +72,10 @@ simplification or bug-fix, none introducing an abstraction layer:
 
 Plus one logger touch — `a251cd8` (#11777) `refactor`: use `date-fns` for log
 timestamp formatting (`logUtils`, a dependency swap retiring hand-rolled code).
-The model handler (`src/agent/modelHandlers/ModelHandler.ts`, counted within the
-`src/agent` 302) saw no net structural change — §2 confirms it holds at
-2,030 LoC.
+The model handler (`src/agent/modelHandlers/ModelHandler.ts`) is **unchanged in
+the interval** — `git diff --numstat 646475d..d418d45 --` returns no row for it,
+so it contributes none of the `src/agent` 302 — and is separately re-measured at
+2,030 LoC (§2).
 
 The two commits that landed **after** the `-09-02` doc's own commit `7aa9985`
 (all line counts from `git show --numstat`, i.e. true net deltas, not `--stat`
@@ -85,8 +97,11 @@ direction, not a silent widening:
   (`1719dea`).
 - **Added (sanctioned):** `StreamSnapshotStore.requestEviction()` (`e599027`),
   recorded in `config/ratchets/store-public-surface-baseline.json` as "the one
-  sanctioned addition" (its `deleteStream` removal nets the store's method count
-  unchanged).
+  sanctioned addition." This _is_ a baseline widening — the store method-count
+  went 21→22 at `e599027` — later offset by the `deleteStream` removal
+  (22→21), so the end-state cardinality matches but the interval did contain one
+  sanctioned, ratchet-recorded store-surface addition. (The host→`@agent`
+  deep-import baselines, §3, held throughout.)
 
 One **SPI signature refinement** landed too: `03fa583` changed
 `ChildRunStrategy.launch`/`runTurn` to take an `AbortSignal` instead of an
@@ -168,9 +183,10 @@ verdict. This pass re-derived every tracked fact from fresh inspection at
 held. The 28-commit interval since the prior pass's snapshot (§1) is dominated
 by refactor and fix, and it did touch the audited core (three `src/agent`
 refactors and five fixes), the logger (a `date-fns` swap), the runtime public
-surface (a net reduction plus one sanctioned addition), and the subagent SPI (an
-`AbortSignal` signature refinement) — all readiness-positive or neutral, none
-widening a baseline or adding an abstraction layer, with the cumulative
-end-state at `d418d45` verified in §2–§4. Nothing found is a defect; nothing
+surface (a net reduction plus one sanctioned, ratchet-recorded addition), and the
+subagent SPI (an `AbortSignal` signature refinement). The one new core structure
+is a justified dedup extraction (`IncarnationMap`, §1); no _unsanctioned_
+baseline widening or _unnecessary_ abstraction appears, and the cumulative
+end-state at `d418d45` is verified in §2–§4. Nothing found is a defect; nothing
 warrants a speculative edit into the green tree absent a maintainer request,
 which this scheduled firing does not carry. The pass is recorded, not acted on.
