@@ -323,7 +323,6 @@ export function createSessionExitController(
       disposalFailed = true;
       disposalFailure = error;
     }
-    await ctx.followUpQueue.onIdle();
     // A suspended (idle/WAITING) root session is resumable, so it is left
     // uninterrupted: the checkpoint survives either way since #11304/#11315,
     // but interrupting would persist a CANCELLED outcome, clear approvals and
@@ -331,9 +330,22 @@ export function createSessionExitController(
     // and both signal paths all land here rather than deciding it themselves.
     // See chatTuiIsResumableIdleOnExit for the live-flow check that
     // distinguishes this state from a resume slot that is still rehydrating.
-    const resumableIdle = ctx.isResumableIdle();
-    if (chatTuiRunPending(session) && !resumableIdle) {
+    const interruptPendingRun = (): boolean => {
+      if (!chatTuiRunPending(session) || ctx.isResumableIdle()) return false;
       ctx.interruptActive();
+      return true;
+    };
+    // Interrupt an actively-running turn BEFORE draining the queue. A queued
+    // follow-up that already entered its recovery path awaits `dispatch.resume`
+    // (ToolUseFollowUp), which resolves only when the resumed turn finishes and
+    // never observes `stopRequested` — draining first would block the quit
+    // behind a long model turn. Re-check after the drain for a run the drain
+    // itself started.
+    let interrupted = interruptPendingRun();
+    await ctx.followUpQueue.onIdle();
+    interrupted = interruptPendingRun() || interrupted;
+    const resumableIdle = ctx.isResumableIdle();
+    if (interrupted) {
       // Only await a run we actually interrupted/finished. A resumableIdle run
       // is parked at the WAIT node and its runPromise NEVER resolves, so
       // awaiting it would hang the process here.
