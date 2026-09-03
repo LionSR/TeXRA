@@ -177,7 +177,7 @@ The per-workspace roots move off the frozen `platform()` object onto a
 `currentSession()` exactly as interactions and executions already are.
 `platform()` keeps the process-true ports: `fs`, `globalState`, `secrets`,
 `lifecycle`, `processes`, `fileLocks`. The cheap and correct route for the
-118 `StorageFS` and 154 `WorkspaceFS` call sites is that the two static
+117 `StorageFS` and 154 `WorkspaceFS` production call sites is that the two static
 classes read their base path from `currentSession()`; only their two
 `getBasePath` bodies change, because every caller is run-scoped or
 host-scoped. `additionalDirectories` inference in `agentWorkspaceOptions.ts`
@@ -246,8 +246,9 @@ same day:
    fact for a stream: a stream exists iff its `event_sequence` row exists,
    and `run.start` is seq 1 that creates it. Conditions: every stream kind
    gets one (agent, process, workflow script) through `RunIdentity.kind`; a
-   launch that fails after reservation emits its terminal `run.end` on the
-   same failure path, so a reserved-but-never-run stream folds to failed,
+   launch that fails after reservation reaches its terminal `status` fact
+   (`STREAM_PHASE.FAILED`, `compensateActivatedFailure`) on the same
+   failure path - there is no `run.end` event and the PRD adds none - so a reserved-but-never-run stream folds to failed,
    never to a ghost; `isRemote` and `agentCategory` derive from `identity`
    in the fold; `suppressViewSwitch` is surface state and travels with the
    surface, never as an event; the importer emits `run.start` for every
@@ -415,7 +416,7 @@ sessionLayer(root))`, keyed by workspace root, with `idleTimeToLive` and
 - Errors are `Data.TaggedError` classes: `NotOwner`, `Unavailable`,
   `Rejected`, `Invalid`, a `Schema`-free union matched with `catchTag` and
   `catchTags`; everything unexpected is `Effect.orDie` with one
-  `tapErrorCause` log at the boundary. A request naming a stream that the
+  `tapCause` log at the boundary (rc.112 has no `tapErrorCause`). A request naming a stream that the
   seq proves must exist is a defect, not a failure. Error payloads crossing
   the bridge are plain tagged objects under the Zod union.
 - **Amendment to the substrate's section 7:** Effect Schema is used nowhere,

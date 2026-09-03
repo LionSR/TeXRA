@@ -393,7 +393,7 @@ needs `userFollowUpSupport` surfaced to the frontend
 
 **Desktop: the cross-paper index has no status.** The sidecar holds only
 `{path, createdAt}` (`workspaceStorage.ts:123-132`). Run storage is read
-through a process-wide `StorageFS` singleton (`storageFS.ts:18-20`, 121 call
+through a process-wide `StorageFS` singleton (`storageFS.ts:18-20`, 117 call
 sites) with no root parameter. `meta.json` yields description, parent, and
 outcome, but status is live-only and pending approvals are in memory. So the
 honest read-only phase lists recent descriptions from other papers with no
