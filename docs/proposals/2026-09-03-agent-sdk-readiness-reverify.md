@@ -46,9 +46,10 @@ whole-interval diffstat is
 `145 files changed, 4422 insertions(+), 1834 deletions(-)`; the additions are
 spread across the codebase (docs, test-kernel, tools, `src/agent`, controllers,
 transcript), with `src/agent` taking ~302 of them — so the agent core **was**
-touched. The evidence it added no abstraction is not a claim the core went
-untouched, but the cumulative structural end-state measured at `d418d45`
-(§2–§4).
+touched. The evidence it added no **unnecessary** abstraction — the interval's
+one new class, `IncarnationMap`, is evaluated below as a justified dedup
+extraction — is not a claim the core went untouched, but the cumulative
+structural end-state measured at `d418d45` (§2–§4).
 
 **Audited-area touches in the interval.** Eight commits touch `src/agent/**`
 (`git log … -- 'src/agent/**'`) — three `refactor`, five `fix`. Two of the
@@ -60,9 +61,11 @@ evaluated below and judged justified:
   (#11780, extract `IncarnationMap` for `SessionStores`' nested deletion maps).
   **`b024fba` does add an abstraction** — a new `IncarnationMap` class (`SessionStores.ts`
   net +43) — so the "no new abstraction" question must be answered for it, not
-  assumed: it has **three call sites** within `SessionStores` and encapsulates
-  real nested-map bookkeeping, clearing the repo's factory/class bar (multiple
-  callers + real logic; AGENTS.md) and dedup'ing repeated logic. It is a
+  assumed: it has **two `new IncarnationMap` construction sites** within
+  `SessionStores` (`pendingStreamDeletions` and `streamDeletionClaims`, ~10
+  method invocations across them) and encapsulates real nested-map bookkeeping,
+  clearing the repo's factory/class bar (multiple consumers + real logic;
+  AGENTS.md) and dedup'ing repeated logic. It is a
   justified extraction, the opposite of the single-caller/speculative
   indirection the standing question flags — but it _is_ new structure in the
   core, recorded here rather than waved past.
@@ -125,6 +128,7 @@ commits and match the prior pass.
 | **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                 | **2,030 LoC** (`wc -l`). Unchanged; genuinely shared behavior, no per-provider copy-paste.                                                                                                                                                                                                                                                                         |
 | **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                                                                                                                                                                                                                                               |
 | **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.                                                                                                                                                                                                                                 |
+| **L-3** (dead redaction branch)    | `redactSecrets` single-arg                | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                                                                                                                                                                                                                         |
 | **SDK version**                    | 0.40.8                                    | **0.40.8** (`packages/agent/package.json`), unchanged. Correction to the inherited row: the `runFact.` retirement (TD-2c) already **landed** — no `runFact.` prefix protocol exists under `src/agent` at `d418d45`, and `runFactEvents.ts:34` emits explicit `AgentEvent` arms; the 2026-08-03 checkpoint records it done. There is no pending v0.41 runFact gate. |
 
 ## 3. Frozen host deep-import width — held on every package
