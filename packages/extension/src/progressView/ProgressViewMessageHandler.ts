@@ -649,10 +649,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         return modelOptions;
       },
       state: this.snapshotPort,
-      workspace: {
-        locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
-        exists: (relativePath) => WorkspaceFS.exists(relativePath),
-      },
+      workspace: WorkspaceFS,
     });
   }
 
