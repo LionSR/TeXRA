@@ -21,6 +21,12 @@ const log = createLog('AudioUtils');
 
 const RECORDINGS_DIR = 'recordings';
 
+/**
+ * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
+ * `stopRecordingAndTranscribe` gives up waiting and reads the file anyway.
+ */
+const SOX_SHUTDOWN_TIMEOUT_MS = 5000;
+
 // Store active recording process
 let activeRecordingProcess: Subprocess | null = null;
 let activeRecordingPath: string | null = null;
@@ -151,11 +157,19 @@ export async function stopRecordingAndTranscribe(): Promise<{
     }
 
     const recordingPath = activeRecordingPath;
-    activeRecordingProcess.kill('SIGTERM');
+    const recording = activeRecordingProcess;
+    recording.kill('SIGTERM');
     resetRecordingState();
 
-    // Wait for file to be written
-    await delay(500);
+    // Await the process this module already holds rather than guessing how
+    // long sox needs to flush. `execa` was started with `reject: false`, so
+    // this settles on exit instead of throwing. The bounded race is a
+    // backstop for a wedged sox — without it a process that ignores SIGTERM
+    // would hang the tool, which the old fixed sleep could not do.
+    await Promise.race([
+      recording.catch(() => undefined),
+      delay(SOX_SHUTDOWN_TIMEOUT_MS),
+    ]);
 
     if (!AbsoluteFS.existsSync(recordingPath)) {
       return { success: false, text: '', error: 'Recording file not found' };
