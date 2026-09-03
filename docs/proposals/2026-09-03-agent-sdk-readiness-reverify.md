@@ -26,10 +26,10 @@ request accompanies a scheduled firing), the pass is **recorded, not acted on**.
 
 ## 1. Two merges since `-09-02` — both readiness-positive, on audited surfaces
 
-| Commit             | Effect                                                                                                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Commit             | Effect                                                                                                                                                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `d418d45` (#11792) | **−354 net lines.** Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (−51), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export. |
-| `974d459` (#11775) | **Consolidation.** Gave the staged-deletion rollback path and the `sr`-only recipe a single owner (`StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −17, `SessionStores.ts` net −4). Indirection removal, not addition.                                    |
+| `974d459` (#11775) | **Consolidation.** Gave the staged-deletion rollback path and the `sr`-only recipe a single owner (`StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −17, `SessionStores.ts` net −4). Indirection removal, not addition.                                   |
 
 Neither touches the frozen host→`@agent` deep-import width or adds a public
 member. The window's motion is deletion and single-ownership — the standing
@@ -37,13 +37,13 @@ trend.
 
 ## 2. Every tracked structural fact re-verifies at `d418d45`
 
-| Item                               | Expected (`-09-02` @ `646475d`)              | `d418d45` state                                                                                                                    |
-| ---------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Item                               | Expected (`-09-02` @ `646475d`)             | `d418d45` state                                                                                                                                        |
+| ---------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Node flow engine**               | 158 LoC, `BaseNode` + `Flow` only           | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md. |
-| **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                    | **2,030 LoC** (`wc -l`). Unchanged; genuinely shared behavior, no per-provider copy-paste.                                          |
-| **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                   | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                |
-| **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported    | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.  |
-| **SDK version**                    | 0.40.8 (short of the v0.41 `runFact.` gate)  | **0.40.8** (`packages/agent/package.json`). Unchanged; retirement gate not yet due.                                                 |
+| **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                   | **2,030 LoC** (`wc -l`). Unchanged; genuinely shared behavior, no per-provider copy-paste.                                                             |
+| **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                  | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                                   |
+| **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported   | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.                     |
+| **SDK version**                    | 0.40.8 (short of the v0.41 `runFact.` gate) | **0.40.8** (`packages/agent/package.json`). Unchanged; retirement gate not yet due.                                                                    |
 
 ## 3. Frozen host deep-import width — held on every package
 
