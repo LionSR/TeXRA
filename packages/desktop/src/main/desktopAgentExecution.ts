@@ -1185,7 +1185,7 @@ export class DesktopProgressBridge {
     return true;
   }
 
-  /** Internal launch path; every entry point above funnels through it. */
+  /** Internal launch path; every launch entry point funnels through it. */
   private runExecution(
     request: ValidatedExecutionRequest,
     options: DesktopRunExecutionOptions = {},
