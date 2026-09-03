@@ -326,10 +326,24 @@ export function createSessionExitController(
     // A suspended (idle/WAITING) root session is resumable, so it is left
     // uninterrupted: the checkpoint survives either way since #11304/#11315,
     // but interrupting would persist a CANCELLED outcome, clear approvals and
-    // sweep active children. This is the one owner of that policy — `/exit`
-    // and both signal paths all land here rather than deciding it themselves.
-    // See chatTuiIsResumableIdleOnExit for the live-flow check that
-    // distinguishes this state from a resume slot that is still rehydrating.
+    // sweep active children. See chatTuiIsResumableIdleOnExit for the live-flow
+    // check that distinguishes this state from a resume slot that is still
+    // rehydrating.
+    //
+    // Scope: this owns the policy for the GRACEFUL path only — `/exit` and
+    // Ctrl-C's `clean-exit`, both via `requestInputExit`. Signal quits
+    // (`handleTermSignal`, and `handleSigint`'s force/preserve arms) return
+    // above at the `cause.kind === 'signal'` branch and decide for themselves
+    // through `chatTuiSigintAction`/`canStopActiveRun`.
+    //
+    // One residual divergence, deliberately left alone: `clean-exit` calls
+    // `interruptActive()` itself before `requestInputExit()`, outside this
+    // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this arm
+    // skips the interrupt while `clean-exit` still runs one — and
+    // `stopAgentStream`'s child sweep fires even with no root handle. So Ctrl-C
+    // on a finished turn still detaches background children where `/exit` does
+    // not. Converging that means changing Ctrl-C, which is outside the `/exit`
+    // ruling this comment implements.
     const interruptPendingRun = (): boolean => {
       if (!chatTuiRunPending(session) || ctx.isResumableIdle()) return false;
       ctx.interruptActive();
