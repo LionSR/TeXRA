@@ -11,6 +11,7 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -105,10 +106,9 @@ function resolveWorkspaceFile(workspacePath: string, filePath: string): string {
 function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   const absolutePath = resolveWorkspaceFile(workspacePath, filePath);
   // relativeToRoot shares the canonicalize-then-compare fallback
-  // createNodeWorkspace().asRelativePath uses, so a native dialog pick that
+  // WorkspaceFS.relativePath uses, so a native dialog pick that
   // resolves through a symlink (e.g. a symlinked folder inside the workspace)
-  // lands workspace-relative here too, matching WorkspaceFS.relativePath for
-  // the same absolute path. Unlike asRelativePath's identity fallback, an
+  // lands workspace-relative here too. Unlike that identity fallback, an
   // outside-workspace pick stays an explicit normalized absolute path — the
   // renderer must be able to open a file chosen outside the workspace.
   return (
@@ -121,7 +121,7 @@ export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
   const getWorkspacePath =
-    options.getWorkspacePath ?? (() => platform().workspace.getWorkspacePath());
+    options.getWorkspacePath ?? (() => workspaceRoots().workspace);
   const onError = createDesktopErrorReporter(options.onError);
 
   function runAsync(work: Promise<void>): void {

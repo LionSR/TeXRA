@@ -23,6 +23,7 @@ import {
 } from './desktopDiffMessages.js';
 import { DesktopSetLogMessageSchema } from './desktopLogMessages.js';
 import { DesktopOnboardingSetStateMessageSchema } from './desktopOnboardingMessages.js';
+import { DesktopPapersMessageSchema } from './desktopPaperMessages.js';
 import {
   DesktopClosePdfMessageSchema,
   DesktopShowPdfMessageSchema,
@@ -76,4 +77,6 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   DesktopToggleLayoutMessageSchema,
   DesktopSetLogMessageSchema,
   DesktopOnboardingSetStateMessageSchema,
+  // Papers
+  DesktopPapersMessageSchema,
 ]);

@@ -26,6 +26,7 @@ import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { isCodexSubscriptionActive } from '@model/providerCapabilities';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import { platform as currentPlatform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 
 const credentialLog = createLog('Setup Credentials');
@@ -145,7 +146,7 @@ export async function getChatGptSubscriptionStatus(): Promise<{
 export const texraScopedConfig = Object.freeze({
   get(key: string): unknown {
     assertTexraScopedKey(key);
-    return currentPlatform().config.get(key);
+    return workspaceRoots().config.get(key);
   },
   async update(
     key: string,
@@ -153,7 +154,7 @@ export const texraScopedConfig = Object.freeze({
     target: 'user' | 'workspace',
   ): Promise<void> {
     assertTexraScopedKey(key);
-    await currentPlatform().config.update(
+    await workspaceRoots().config.update(
       key,
       value,
       target === 'workspace' ? 'workspace' : 'global',

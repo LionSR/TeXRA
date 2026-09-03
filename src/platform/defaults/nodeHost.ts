@@ -30,9 +30,10 @@ import { nodeFileLocks } from './fileLocks';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { nodeProcesses } from './nodeProcesses';
-import { createNodeWorkspace } from './nodeWorkspace';
+import { canonicalizeWorkspacePath } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
+import { workspaceRoots, type WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
@@ -50,26 +51,19 @@ import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node defaults (filesystem, workspace provider, config provider, and
- * the no-op tool-availability host) are filled in by the helper.
+ * shared Node defaults (filesystem, file locks, process identity, and the
+ * no-op tool-availability host) are filled in by the helper. The
+ * per-workspace services are not here: hosts build them with
+ * {@link createNodeWorkspaceRoots}.
  */
 export interface NodePlatformServices {
-  /**
-   * Config source: the workspace + global stores to build the file-backed
-   * provider from, or an already-constructed provider for hosts that resolve
-   * configuration some other way (the SDK's process-local
-   * `MemoryConfigProvider`).
-   */
-  readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly globalState: StateStore;
-  readonly workspaceState: StateStore;
-  readonly storage: StorageProvider;
+  /** Global storage path source; the workspace path follows the session roots. */
+  readonly storage: Pick<StorageProvider, 'getGlobalStoragePath'>;
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Current workspace root, read lazily so the host can update it later. */
-  readonly getWorkspacePath: () => string | undefined;
   /** Host-specific availability overrides merged over the no-op defaults. */
   readonly toolAvailability?: Partial<ToolAvailabilityHost>;
   /** Editor-host subscription models; defaults to the unavailable port. */
@@ -78,10 +72,42 @@ export interface NodePlatformServices {
   readonly toolMissingHandler?: ToolMissingHandler;
 }
 
-function toConfigProvider(
-  config: JsonConfigProviderOptions | ConfigProvider,
-): ConfigProvider {
-  return 'workspace' in config ? new JsonConfigProvider(config) : config;
+/** The per-workspace services a Node host opens for one workspace folder. */
+export interface NodeWorkspaceRootsInit {
+  readonly workspacePath: string | undefined;
+  /** The storage provider opened for this workspace; its path is pinned here. */
+  readonly storage: Pick<StorageProvider, 'getStoragePath'>;
+  /**
+   * Config source: the workspace + global stores to build the file-backed
+   * provider from, or an already-constructed provider for hosts that resolve
+   * configuration some other way (the SDK's process-local
+   * `MemoryConfigProvider`).
+   */
+  readonly config: JsonConfigProviderOptions | ConfigProvider;
+  readonly workspaceState: StateStore;
+}
+
+/**
+ * Build the `WorkspaceRoots` for one workspace folder: the canonical physical
+ * root, the pinned storage path, and the config/state stores opened for it.
+ * Every host (and the desktop, once per open paper) builds its roots here so
+ * canonicalization and the config-provider choice cannot drift.
+ */
+export function createNodeWorkspaceRoots(
+  init: NodeWorkspaceRootsInit,
+): WorkspaceRoots {
+  return {
+    workspace:
+      init.workspacePath == null
+        ? undefined
+        : canonicalizeWorkspacePath(init.workspacePath),
+    storage: init.storage.getStoragePath(),
+    config:
+      'workspace' in init.config
+        ? new JsonConfigProvider(init.config)
+        : init.config,
+    workspaceState: init.workspaceState,
+  };
 }
 
 export interface NodeAgentDirectoryBootstrapOptions {
@@ -106,19 +132,20 @@ const agentDirectoryBootstrapMutex = new KeyedMutex<string>();
  * extension) or an SDK embedder.
  *
  * Centralizes the default building blocks every host would otherwise restate
- * in its own `initPlatform` literal (`nodeFilesystem`, `createNodeWorkspace`,
- * `nodeFileLocks`, the config provider, the no-op tool-availability host)
- * while preserving the rule that only composition roots call
- * `initPlatform(...)`.
+ * in its own `initPlatform` literal (`nodeFilesystem`, `nodeFileLocks`, the
+ * no-op tool-availability host) while preserving the rule that only
+ * composition roots call `initPlatform(...)`.
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
-    config: toConfigProvider(services.config),
     globalState: services.globalState,
-    workspaceState: services.workspaceState,
     fs: nodeFilesystem,
-    workspace: createNodeWorkspace(services.getWorkspacePath),
-    storage: services.storage,
+    storage: {
+      getGlobalStoragePath: () => services.storage.getGlobalStoragePath(),
+      // The session's storage root, not a process-wide one: the file
+      // execution lease reads this member and must land beside `StorageFS`.
+      getStoragePath: () => workspaceRoots().storage,
+    },
     fileLocks: nodeFileLocks,
     processes: nodeProcesses,
     secrets: services.secrets,

@@ -37,10 +37,7 @@ import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import {
-  createFakePlatform,
-  FakeConfigProvider,
-} from '@test/support/FakePlatform';
+import { FakeConfigProvider } from '@test/support/FakePlatform';
 
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
@@ -317,19 +314,15 @@ function buildVars(
 
 describe('buildUserVars with missing configured files', () => {
   beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-
-    initPlatform(
-      createFakePlatform({
-        workspacePath: '/workspace',
-        files: {
-          '/workspace/present.tex': 'present input',
-          '/workspace/context.tex': 'present context',
-          '/workspace/.texra/storage/memories/present.md':
-            '---\nmodifiedBy: user\nmodifiedAt: 2026-06-20T14:30:45.123Z\n---\nRemember this convention.',
-        },
-      }),
-    );
+    await installPlatform({
+      workspacePath: '/workspace',
+      files: {
+        '/workspace/present.tex': 'present input',
+        '/workspace/context.tex': 'present context',
+        '/workspace/.texra/storage/memories/present.md':
+          '---\nmodifiedBy: user\nmodifiedAt: 2026-06-20T14:30:45.123Z\n---\nRemember this convention.',
+      },
+    });
   });
 
   it('keeps prompt file metadata in sync with readable prompt XML', async () => {
@@ -406,14 +399,10 @@ describe('requiredFilesInternal custom variables', () => {
   const briefPath = path.resolve('/agents/generic', 'brief.txt');
 
   beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-
-    initPlatform(
-      createFakePlatform({
-        workspacePath: '/workspace',
-        files: { [briefPath]: 'briefing notes' },
-      }),
-    );
+    await installPlatform({
+      workspacePath: '/workspace',
+      files: { [briefPath]: 'briefing notes' },
+    });
   });
 
   // A required file named after a file category generates the fixed X_FILE /

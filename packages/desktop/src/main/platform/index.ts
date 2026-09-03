@@ -3,9 +3,12 @@ import { app } from 'electron';
 import { initializeBundledPrompts } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/shared/workspacePath.js';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform } from '@platform/platform';
+import {
+  initProcessWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -14,6 +17,7 @@ import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
+  createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import {
@@ -36,7 +40,13 @@ import {
 } from './paths.js';
 import { showDesktopWarningDialog } from './warningDialog.js';
 export interface ElectronPlatformInitResult {
+  /** The folder named on the command line, opened as a paper at launch. */
   workspacePath: string | undefined;
+  /**
+   * The no-workspace roots: what the window shows before a folder is open,
+   * and what every paper's roots are built beside.
+   */
+  processRoots: WorkspaceRoots;
   lifecycle: LifecycleHost;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
@@ -65,19 +75,19 @@ export async function initializeElectronPlatform(
   const globalStateStore = await JsonStore.open(
     join(userDataPath, 'state', 'global.json'),
   );
-  const storedWorkspacePath = globalStateStore.get<string>(
-    DESKTOP_WORKSPACE_PATH_STATE_KEY,
-  );
-  const workspacePath = resolveWorkspacePath({ storedWorkspacePath });
+  const workspacePath = resolveWorkspacePath();
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
   const dataRoot = resolveDesktopDataRoot(userDataPath);
-  const storage = new WorkspaceStorageProvider(dataRoot, workspacePath);
+  // The process roots are the no-workspace roots. Each open paper gets its
+  // own roots (desktopPapers.ts); this pair only backs the window before a
+  // folder is open.
+  const storage = new WorkspaceStorageProvider(dataRoot, undefined);
   const workspaceStateStore = await openNodeWorkspaceStateStore(storage);
   const configStores = await openTexraConfigStores(
     storage,
-    workspacePath,
+    undefined,
     (message) => console.warn(`[desktop] ${message}`),
   );
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
@@ -91,9 +101,7 @@ export async function initializeElectronPlatform(
   });
   initPlatform(
     createNodePlatform({
-      config: configStores,
       globalState: globalStateStore,
-      workspaceState: workspaceStateStore,
       storage,
       secrets: new ElectronSecrets(secretsStore, {
         showWarningMessage: showDesktopWarningDialog,
@@ -101,9 +109,15 @@ export async function initializeElectronPlatform(
       lifecycle,
       agentResume,
       agentDirectories,
-      getWorkspacePath: () => workspacePath,
     }),
   );
+  const processRoots = createNodeWorkspaceRoots({
+    workspacePath: undefined,
+    storage,
+    config: configStores,
+    workspaceState: workspaceStateStore,
+  });
+  initProcessWorkspaceRoots(processRoots);
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes();
@@ -160,6 +174,7 @@ export async function initializeElectronPlatform(
 
   return {
     workspacePath,
+    processRoots,
     lifecycle,
     dataRoot,
     resourcesPath,

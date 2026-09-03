@@ -5,7 +5,7 @@
  *
  * Called at extension activation and after any git-author setting change.
  */
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   applyGitAuthorSettings,
   readGitAuthorSettingsFromState,
@@ -13,6 +13,6 @@ import {
 
 export function applyGitAuthorConfig(): void {
   applyGitAuthorSettings(
-    readGitAuthorSettingsFromState(platform().workspaceState),
+    readGitAuthorSettingsFromState(workspaceRoots().workspaceState),
   );
 }

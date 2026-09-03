@@ -11,11 +11,9 @@
 import type {
   AgentResumePort,
   AgentDirectoriesPort,
-  ConfigProvider,
   StateStore,
   FileSystemProvider,
   ToolMissingHandler,
-  WorkspaceProvider,
   StorageProvider,
   LifecycleHost,
   ToolAvailabilityHost,
@@ -26,8 +24,13 @@ import type { LanguageModelPort } from './languageModel';
 import type { PlatformSecrets } from './secrets';
 
 /**
- * The complete set of platform services a host must provide.
+ * The process-true platform services a host must provide.
  * Frozen after initialization — immutable for the lifetime of the process.
+ *
+ * Per-workspace services (the workspace root, its storage path, its config
+ * and its state) are not here: they are `WorkspaceRoots`
+ * (`@platform/workspaceRoots`), carried by each `SessionHandle`, so one
+ * process can hold sessions rooted in several folders.
  *
  * Note on logging: channel-output logging is its own subsystem
  * (`@logger/logUtils`). Hosts wire the per-channel sink factory via
@@ -35,11 +38,13 @@ import type { PlatformSecrets } from './secrets';
  * doesn't carry a log backend.
  */
 export interface Platform {
-  readonly config: ConfigProvider;
   readonly globalState: StateStore;
-  readonly workspaceState: StateStore;
   readonly fs: FileSystemProvider;
-  readonly workspace: WorkspaceProvider;
+  /**
+   * Storage paths. The global path is process-true; `getStoragePath()` answers
+   * with the calling context's `WorkspaceRoots.storage` so the one remaining
+   * caller (the file execution lease) follows the session like `StorageFS`.
+   */
   readonly storage: StorageProvider;
   readonly fileLocks: FileLockProvider;
   readonly processes: ProcessesPort;
@@ -94,9 +99,4 @@ export function tryPlatform(): Readonly<Platform> | null {
 /** Get global state if the platform has been initialized. */
 export function tryGlobalState(): StateStore | null {
   return _platform?.globalState ?? null;
-}
-
-/** Get workspace state if the platform has been initialized. */
-export function tryWorkspaceState(): StateStore | null {
-  return _platform?.workspaceState ?? null;
 }

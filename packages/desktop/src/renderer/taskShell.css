@@ -385,6 +385,32 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   font-size: var(--font-size-xs);
 }
 
+/* The paper this window shows: the rail's active-stream styling. */
+.task-project-row.is-active::part(base) {
+  background: var(--wa-color-list-active-bg);
+  color: var(--wa-color-list-active-fg);
+}
+
+.task-project-row.is-active,
+.task-project-row.is-active .task-project-mark,
+.task-project-row.is-active .task-project-copy small,
+.task-project-row.is-active .task-project-chevron {
+  color: var(--wa-color-list-active-fg);
+}
+
+.task-project-add {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-project-add::part(base) {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 4px 8px;
+}
+
 .task-project-files {
   min-height: 0;
   margin: 3px 0 2px 14px;

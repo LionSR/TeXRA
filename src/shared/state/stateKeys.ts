@@ -7,8 +7,8 @@
  * the VS Code module.
  *
  * The stores these keys address are reached through the platform port —
- * `platform().workspaceState` / `platform().globalState` (or the
- * bootstrap-tolerant `tryWorkspaceState()` / `tryGlobalState()`) from
+ * `workspaceRoots().workspaceState` / `platform().globalState` (or the
+ * bootstrap-tolerant `tryWorkspaceRoots()` / `tryGlobalState()`) from
  * `@platform/platform`. Each host wires its own implementation at startup.
  */
 

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -113,7 +114,7 @@ describe('GlobTool match metadata', () => {
           path.join(externalDistPath, 'external.tex'),
           'external',
         );
-        await platform().workspaceState.update(
+        await workspaceRoots().workspaceState.update(
           WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
           false,
         );

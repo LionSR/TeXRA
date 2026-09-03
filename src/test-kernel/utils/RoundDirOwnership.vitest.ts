@@ -13,7 +13,6 @@ import { describe, expect, it } from 'vitest';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -35,12 +34,12 @@ async function installTempWorkspace(prefix: string): Promise<string> {
   const storageRoot = path.join(tempDir, 'storage');
   await mkdir(workspaceDir, { recursive: true });
 
+  const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
   await installFakePlatform(
-    { workspacePath: workspaceDir },
+    { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
     {
       fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      storage,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },

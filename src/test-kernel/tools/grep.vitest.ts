@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { setupPlatform } from '@test/support/setupPlatform';
 import * as gitignoreUtils from '@tools/gitignore';
@@ -153,7 +153,7 @@ describe('GrepTool execution', () => {
       timedOut: false,
       exitCode: 0,
     });
-    await platform().workspaceState.update(
+    await workspaceRoots().workspaceState.update(
       WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
       false,
     );
@@ -169,7 +169,7 @@ describe('GrepTool execution', () => {
       expect(executeSpy).toHaveBeenCalledOnce();
       expect(executeSpy.mock.calls[0]?.[0]).not.toContain('--ignore-file');
     } finally {
-      await platform().workspaceState.update(
+      await workspaceRoots().workspaceState.update(
         WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
         true,
       );

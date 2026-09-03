@@ -58,6 +58,7 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -132,7 +133,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // load would throw before that happens.
     this.settingsHost = new SettingsViewHost({
       state: {
-        workspaceState: platform().workspaceState,
+        workspaceState: workspaceRoots().workspaceState,
         globalState: platform().globalState,
       },
       memoryPrompt: new VscodePromptHost(),
@@ -502,8 +503,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private settingsStores(): SettingsStores {
     return {
-      config: platform().config,
-      workspaceState: platform().workspaceState,
+      config: workspaceRoots().config,
+      workspaceState: workspaceRoots().workspaceState,
       globalState: platform().globalState,
     };
   }

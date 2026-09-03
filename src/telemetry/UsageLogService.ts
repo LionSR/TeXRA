@@ -6,7 +6,7 @@ import pTimeout from 'p-timeout';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { UsageRoute } from '@shared/schemas';
 import {
   TELEMETRY_ENABLED_DEFAULT,
@@ -106,7 +106,9 @@ function isTelemetryEnabledBySetting(): boolean {
   // has not initialized its platform yet.
   if (isTelemetryDisabledByEnv()) return false;
 
-  const inspection = platform().config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
+  const inspection = workspaceRoots().config.inspect<unknown>(
+    TELEMETRY_ENABLED_KEY,
+  );
   const configuredValues = [
     inspection?.globalValue,
     inspection?.workspaceValue,

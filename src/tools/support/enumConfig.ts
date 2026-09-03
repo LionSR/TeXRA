@@ -4,7 +4,7 @@
  * those parsers to the active workspace state.
  */
 
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 
 /**
  * Build a workspace-state accessor for an enum setting: reads the persisted
@@ -16,7 +16,7 @@ export function createEnumStateGetter<T extends string>(
   parse: (raw: string) => T,
 ): () => T {
   return (): T => {
-    const raw = platform().workspaceState.get<string>(key, fallback);
+    const raw = workspaceRoots().workspaceState.get<string>(key, fallback);
     return parse(raw);
   };
 }

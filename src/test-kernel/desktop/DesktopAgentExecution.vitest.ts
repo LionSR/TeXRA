@@ -382,11 +382,8 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     tryResumeStream: (streamId, recovery) =>
       resumeDelegate.tryResumeStream(streamId, recovery),
   };
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform({ files: options.files }, { agentResume }));
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform({ files: options.files }, { agentResume });
   mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
       options.retrieveSessionResumeData ?? vi.fn(async () => null),

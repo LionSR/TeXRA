@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
@@ -29,7 +30,14 @@ type BareRunIdentity = Partial<
     RunScope,
     'streamId' | 'executionId' | 'agentName' | 'workingDirectory' | 'session'
   >
->;
+> & {
+  /**
+   * Workspace roots for a context that has no session yet: a host opening a
+   * paper's stores before its `SessionHandle` exists. A session, when present,
+   * carries its own roots.
+   */
+  readonly roots?: WorkspaceRoots;
+};
 
 interface BareRunContext extends RunContextCommon, BareRunIdentity {
   readonly kind: 'bare';
@@ -131,6 +139,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     session: options.session,
+    roots: options.roots,
     get model() {
       return modelCell?.modelId;
     },
@@ -153,6 +162,31 @@ export function withRunContext<T>(
   fn: () => T | Promise<T>,
 ): T | Promise<T> {
   return runContextScope.run(context, fn);
+}
+
+/**
+ * Run host code in the scope of one session, so session-rooted services
+ * (`StorageFS`, `WorkspaceFS`, `currentSession()`) resolve to that session
+ * outside any agent run. A host holding several sessions in one process (the
+ * desktop, one per open paper) wraps every touch of a session's storage.
+ */
+export function runInSession<T>(
+  session: SessionHandle,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
+  return withRunContext(createRunContext({ session }), fn);
+}
+
+/**
+ * Run host code in the scope of one workspace's roots before that workspace
+ * has a session: the desktop opens a paper's transcript store this way, then
+ * hands the store to the paper's `SessionHandle`.
+ */
+export function runInWorkspace<T>(
+  roots: WorkspaceRoots,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
+  return withRunContext(createRunContext({ roots }), fn);
 }
 
 /** Return the active run context when called from a run, otherwise undefined. */
@@ -214,4 +248,15 @@ export function getRunContextSession(
   context: RunContext | undefined = tryUseRunContext(),
 ): SessionHandle | undefined {
   return getRunContextField('session', context);
+}
+
+/**
+ * Return the workspace roots for a context: a launch context's session roots,
+ * or a bare context's explicit roots, else its session's roots.
+ */
+export function getRunContextRoots(
+  context: RunContext | undefined = tryUseRunContext(),
+): WorkspaceRoots | undefined {
+  if (context?.kind === 'launch') return context.runScope.session.roots;
+  return context?.roots ?? context?.session?.roots;
 }

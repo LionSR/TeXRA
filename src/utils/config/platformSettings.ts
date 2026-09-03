@@ -1,4 +1,5 @@
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { settingByKey, type SettingHost } from '@shared/schemas';
 import { readSetting, writeSetting } from '@shared/config/settingsAccess';
 
@@ -8,6 +9,19 @@ function requireEntry(key: string) {
     throw new Error(`No setting catalog entry for key: ${key}`);
   }
   return entry;
+}
+
+/**
+ * The three setting slots for the calling context: the session's workspace
+ * config and state, and the process global state.
+ */
+function settingsStores() {
+  const roots = workspaceRoots();
+  return {
+    config: roots.config,
+    workspaceState: roots.workspaceState,
+    globalState: platform().globalState,
+  };
 }
 
 /**
@@ -30,9 +44,7 @@ export function readPlatformSetting<T>(
   key: string,
   host: SettingHost = 'vscode',
 ): T {
-  // `Platform` structurally supplies the `config`/`workspaceState`/`globalState`
-  // slots `readSetting` reads from, so it passes as `SettingsStores` directly.
-  return readSetting(requireEntry(key), platform(), host) as T;
+  return readSetting(requireEntry(key), settingsStores(), host) as T;
 }
 
 /**
@@ -44,5 +56,5 @@ export function writePlatformSetting(
   key: string,
   value: unknown,
 ): Promise<void> {
-  return writeSetting(requireEntry(key), value, platform());
+  return writeSetting(requireEntry(key), value, settingsStores());
 }

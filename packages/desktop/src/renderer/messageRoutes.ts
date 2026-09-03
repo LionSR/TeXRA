@@ -19,6 +19,10 @@ import {
 } from '../shared/desktopShellMessages';
 import { DesktopOnboardingSetStateMessageSchema } from '../shared/desktopOnboardingMessages';
 import {
+  DesktopPapersMessageSchema,
+  type DesktopPapersMessage,
+} from '../shared/desktopPaperMessages';
+import {
   DesktopCloseDiffMessageSchema,
   DesktopShowDiffMessageSchema,
   type DesktopShowDiffMessage,
@@ -87,6 +91,8 @@ interface DesktopMessageRouteHandlers {
   renameBrowserTab(tabId: string, title: string): void;
   /** Adopts a freshly reported environment summary and repaints the shell. */
   environment(summary: DesktopEnvironmentSummary): void;
+  /** Adopts the open papers and which one this window shows. */
+  papers(message: DesktopPapersMessage): void;
 }
 
 function messageRoute<T>(
@@ -196,6 +202,9 @@ export function createMessageRoutes(
     ),
     messageRoute(DesktopEnvironmentStateMessageSchema, (message) =>
       handlers.environment(message.environment),
+    ),
+    messageRoute(DesktopPapersMessageSchema, (message) =>
+      handlers.papers(message),
     ),
   ];
 }

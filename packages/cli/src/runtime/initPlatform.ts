@@ -10,7 +10,8 @@ import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
-import { initPlatform, platform, tryPlatform } from '@platform/platform';
+import { initPlatform, tryPlatform } from '@platform/platform';
+import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
 import { DisposableStore } from '@platform/disposable';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -18,6 +19,7 @@ import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
+  createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
@@ -43,7 +45,6 @@ import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
 
 let supabaseAuthInitialized = false;
-let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the
@@ -239,7 +240,6 @@ export async function initInteractiveCliPlatform(
 export async function initCliPlatform(
   context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
 ): Promise<void> {
-  cliWorkspaceCwd = context.cwd;
   quietPlatformLogs = context.quietLogs;
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
@@ -259,7 +259,7 @@ export async function initCliPlatform(
     // directory cannot be written.
     const configStores = await openTexraConfigStores(
       stateStores.storage,
-      cliWorkspaceCwd,
+      context.cwd,
       showPersistentConfigWarning,
     );
     // Same severity and wording as the extension/desktop hosts: a shutdown
@@ -277,9 +277,7 @@ export async function initCliPlatform(
     });
     initPlatform(
       createNodePlatform({
-        config: configStores,
         globalState: stateStores.globalState,
-        workspaceState: stateStores.workspaceState,
         storage: stateStores.storage,
         secrets: getCliSecrets(context.storageRoot),
         lifecycle,
@@ -288,13 +286,20 @@ export async function initCliPlatform(
             (await cliResumeHandler?.(streamId, recovery)) ?? false,
         },
         agentDirectories,
-        getWorkspacePath: () => cliWorkspaceCwd,
         toolAvailability: {
           isTexraCliEntrypoint: () =>
             isTexraCliEntrypointPath(readCliEntrypointPath()),
         },
       }),
     );
+    // One process, one paper: the process roots are the `--cwd` workspace.
+    const roots = createNodeWorkspaceRoots({
+      workspacePath: context.cwd,
+      storage: stateStores.storage,
+      config: configStores,
+      workspaceState: stateStores.workspaceState,
+    });
+    initProcessWorkspaceRoots(roots);
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
     installTexraAccountProbes();
@@ -350,7 +355,7 @@ export async function initCliPlatform(
 
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
-    applyCliGitAuthorConfig(platform().config);
+    applyCliGitAuthorConfig(roots.config);
 
     // Route CLI model traffic to the same Supabase usage log the extension
     // writes to, tagged with editorType 'cli' and the CLI version.

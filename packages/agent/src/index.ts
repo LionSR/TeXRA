@@ -28,6 +28,10 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { createLog } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
+import {
+  initProcessWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import { initNodeAgentRuntime } from '@platform/defaults/nodeAgentRuntime';
 import type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -70,9 +74,18 @@ export interface HostInteractions {
   cancel(selector?: HostInteractionCancelSelector): void;
 }
 
+/**
+ * The process platform together with the workspace roots the package's runs
+ * work in. `nodePlatform()` builds both; an embedder supplying its own
+ * platform names its workspace roots beside it.
+ */
+export interface AgentPlatform extends Platform {
+  readonly roots: WorkspaceRoots;
+}
+
 /** Input accepted by the public package-level run function. */
 export interface RunAgentInput {
-  readonly platform: Platform;
+  readonly platform: AgentPlatform;
   readonly agent: string;
   readonly instruction: string;
   readonly interactions: HostInteractions;
@@ -242,7 +255,10 @@ export function runAgent(input: RunAgentInput): AgentRun {
         'The agent package is already using another platform in this process.',
       );
     }
-    if (!activePlatform) initPlatform(input.platform);
+    if (!activePlatform) {
+      initPlatform(input.platform);
+      initProcessWorkspaceRoots(input.platform.roots);
+    }
     if (!runtimeInitialized) {
       initNodeAgentRuntime(input.platform.lifecycle);
       runtimeInitialized = true;

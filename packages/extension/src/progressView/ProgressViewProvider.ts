@@ -21,7 +21,7 @@ import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApp
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { DisposableStore } from '@platform/disposable';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { AgentProposalPermission, StreamTabId } from '@shared/schemas';
 import {
   formatActiveStreamRetention,
@@ -97,7 +97,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
     const runtimeSession = defaultSession();
     this.backend = new ProgressBackend({
       session: runtimeSession,
-      storage: platform().workspaceState,
+      storage: workspaceRoots().workspaceState,
       sendMessage: async (message) => {
         const webview = this.getActiveWebview();
         if (!webview) return false;

@@ -2,19 +2,28 @@ import '@test/support/defaultSessionTestSetup';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import {
+  createRunContext,
+  runInSession,
+  withRunContext,
+} from '@agent/runtime/RunContext';
 import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { clearStreamStatusForTest } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { StorageFS } from '@utils/files/storageFS';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
@@ -39,6 +48,44 @@ describe('session isolation', () => {
       // Resolution falls back to the default session outside any run.
       expect(currentSession()).toBe(defaultSession());
     } finally {
+      sessionB.dispose();
+    }
+  });
+
+  it('two sessions in one process write under their own roots', async () => {
+    const paperA = createFakeWorkspaceRoots({
+      workspacePath: '/papers/a',
+      storagePath: '/storage/a',
+    });
+    const paperB = createFakeWorkspaceRoots({
+      workspacePath: '/papers/b',
+      storagePath: '/storage/b',
+    });
+    const sessionA = createTestSession({ roots: paperA });
+    const sessionB = createTestSession({ roots: paperB });
+    try {
+      await runInSession(sessionA, async () => {
+        expect(WorkspaceFS.getPath()).toBe('/papers/a');
+        await StorageFS.ensureDir('.');
+        await StorageFS.write('note.txt', 'from a');
+      });
+      await runInSession(sessionB, async () => {
+        expect(WorkspaceFS.getPath()).toBe('/papers/b');
+        await StorageFS.ensureDir('.');
+        await StorageFS.write('note.txt', 'from b');
+      });
+      const read = async (file: string) =>
+        Buffer.from(await platform().fs.readFile(file)).toString('utf8');
+      expect(await read('/storage/a/note.txt')).toBe('from a');
+      expect(await read('/storage/b/note.txt')).toBe('from b');
+      // Outside both scopes the process roots answer, not either paper.
+      expect(workspaceRoots().workspace).toBe('/workspace');
+      expect(WorkspaceFS.getPath()).toBe('/workspace');
+      expect(platform().storage.getStoragePath()).toBe(
+        '/workspace/.texra/storage',
+      );
+    } finally {
+      sessionA.dispose();
       sessionB.dispose();
     }
   });

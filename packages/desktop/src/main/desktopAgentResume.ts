@@ -1,6 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
+  runInSession,
   trackTerminalResultPresentation,
   type SessionHandle,
 } from '@agent/runtime';
@@ -17,11 +18,15 @@ interface DesktopResumeContext {
   readonly isCancellationRequested: () => boolean;
 }
 
-/** Process-lifetime owner of desktop stream resumption. */
+/**
+ * Process-lifetime owner of desktop stream resumption. One process holds a
+ * session per open paper; a stream resumes in the session whose transcripts
+ * hold it, inside that session's scope.
+ */
 export class DesktopProcessResumeOwner {
-  private context: DesktopResumeContext | undefined;
+  private readonly contexts = new Set<DesktopResumeContext>();
 
-  /** Attach the canonical process session after platform initialization. */
+  /** Attach one paper's session once it is ready. */
   attach(options: { session: SessionHandle }): () => void {
     let cancelled = false;
     const context: DesktopResumeContext = {
@@ -29,10 +34,10 @@ export class DesktopProcessResumeOwner {
       logger: createChannelTrace('DesktopAgentResume'),
       isCancellationRequested: () => cancelled,
     };
-    this.context = context;
+    this.contexts.add(context);
     return () => {
       cancelled = true;
-      if (this.context === context) this.context = undefined;
+      this.contexts.delete(context);
     };
   }
 
@@ -40,9 +45,15 @@ export class DesktopProcessResumeOwner {
     streamId: StreamTabId,
     recovery?: RecoveryContinuation,
   ): Promise<boolean> {
-    const context = this.context;
-    if (!context) return Promise.resolve(false);
-    return resumeDesktopStream(streamId, context, recovery);
+    for (const context of this.contexts) {
+      if (!context.session.transcripts.has(streamId)) continue;
+      return Promise.resolve(
+        runInSession(context.session, () =>
+          resumeDesktopStream(streamId, context, recovery),
+        ),
+      );
+    }
+    return Promise.resolve(false);
   }
 }
 

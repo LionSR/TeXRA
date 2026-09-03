@@ -17,20 +17,23 @@ import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import {
   WORKBENCH_KIND_META,
+  workspaceInitials,
   type WorkbenchPlacement,
   type WorkbenchTab,
 } from '../shared/desktopTaskShell.js';
+import type { DesktopPaperSummary } from '../shared/desktopPaperMessages.js';
 
 interface TaskSidebarModel {
   readonly files: Node;
   readonly filesExpanded: boolean;
-  readonly hasWorkspace: boolean;
+  /** Every open paper; the window shows `activeRoot`. */
+  readonly papers: readonly DesktopPaperSummary[];
+  readonly activeRoot: string | undefined;
   readonly initials: string;
   readonly projectSectionPosition: number;
   readonly sessions: Node;
   readonly streamCount: number;
   readonly workspaceName: string;
-  readonly workspacePath?: string;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
 }
@@ -40,6 +43,7 @@ interface TaskSidebarCallbacks {
   onSearch(): void;
   onToggleFiles(): void;
   onOpenFolder(): void;
+  onSelectPaper(root: string): void;
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
@@ -71,16 +75,100 @@ function sidebarAction(options: {
   `;
 }
 
+/**
+ * One row per open paper. The active row toggles its file tree and carries
+ * the same active styling as a rail stream; any other row asks the window to
+ * show that paper.
+ */
+function paperRow(
+  paper: DesktopPaperSummary,
+  model: TaskSidebarModel,
+  callbacks: TaskSidebarCallbacks,
+): TemplateResult {
+  const active = paper.root === model.activeRoot;
+  let disclosureIcon: TeXRAIconName = 'arrow-right';
+  if (active) {
+    disclosureIcon = model.filesExpanded ? 'chevron-down' : 'chevron-right';
+  }
+  return html`
+    <wa-button
+      type="button"
+      class="task-project-row btn-ghost ${active ? 'is-active' : ''}"
+      appearance="plain"
+      size="s"
+      title=${paper.root}
+      aria-current=${active ? 'true' : nothing}
+      @click=${
+        active
+          ? callbacks.onToggleFiles
+          : () => callbacks.onSelectPaper(paper.root)
+      }
+    >
+      <span class="task-project-mark icon-surface is-size-m">
+        ${workspaceInitials(paper.root)}
+      </span>
+      <span class="task-project-copy">
+        <strong>${paper.name}</strong>
+        <small>${active ? 'Local workspace' : 'Open paper'}</small>
+      </span>
+      ${waIcon(disclosureIcon, {
+        className: 'task-project-chevron',
+        slot: 'end',
+      })}
+    </wa-button>
+    ${
+      active
+        ? html`
+            <div class="task-project-files" ?hidden=${!model.filesExpanded}>
+              ${model.files}
+            </div>
+          `
+        : nothing
+    }
+  `;
+}
+
 export function taskSidebarTemplate(
   model: TaskSidebarModel,
   callbacks: TaskSidebarCallbacks,
 ): TemplateResult {
-  let projectDisclosureIcon: TeXRAIconName = 'arrow-up-right-from-square';
-  if (model.hasWorkspace) {
-    projectDisclosureIcon = model.filesExpanded
-      ? 'chevron-down'
-      : 'chevron-right';
-  }
+  const papers =
+    model.papers.length > 0
+      ? html`
+          ${model.papers.map((paper) => paperRow(paper, model, callbacks))}
+          <wa-button
+            type="button"
+            class="task-project-add btn-ghost"
+            appearance="plain"
+            size="s"
+            @click=${callbacks.onOpenFolder}
+          >
+            ${waIcon('folder-open', { slot: 'start' })}
+            <span>Open folder</span>
+          </wa-button>
+        `
+      : html`
+          <wa-button
+            type="button"
+            class="task-project-row btn-ghost"
+            appearance="plain"
+            size="s"
+            title="Open a project folder"
+            @click=${callbacks.onOpenFolder}
+          >
+            <span class="task-project-mark icon-surface is-size-m">
+              ${model.initials}
+            </span>
+            <span class="task-project-copy">
+              <strong>${model.workspaceName}</strong>
+              <small>Get started</small>
+            </span>
+            ${waIcon('arrow-up-right-from-square', {
+              className: 'task-project-chevron',
+              slot: 'end',
+            })}
+          </wa-button>
+        `;
 
   // The nested split panel can connect before its slotted parent has a height.
   // Web Awesome recovers its pixel position from this attribute after resize.
@@ -126,36 +214,10 @@ export function taskSidebarTemplate(
           ${waIcon('ellipsis')}
         </span>
         <section slot="start" class="task-sidebar-section task-project-section">
-          <div class="task-sidebar-section-label">Project</div>
-          <wa-button
-            type="button"
-            class="task-project-row btn-ghost"
-            appearance="plain"
-            size="s"
-            title=${model.workspacePath ?? 'Open a project folder'}
-            @click=${
-              model.hasWorkspace
-                ? callbacks.onToggleFiles
-                : callbacks.onOpenFolder
-            }
-          >
-            <span class="task-project-mark icon-surface is-size-m">
-              ${model.initials}
-            </span>
-            <span class="task-project-copy">
-              <strong>${model.workspaceName}</strong>
-              <small
-                >${model.hasWorkspace ? 'Local workspace' : 'Get started'}</small
-              >
-            </span>
-            ${waIcon(projectDisclosureIcon, {
-              className: 'task-project-chevron',
-              slot: 'end',
-            })}
-          </wa-button>
-          <div class="task-project-files" ?hidden=${!model.filesExpanded}>
-            ${model.files}
+          <div class="task-sidebar-section-label">
+            ${model.papers.length > 1 ? 'Papers' : 'Project'}
           </div>
+          ${papers}
         </section>
 
         <section slot="end" class="task-sidebar-section task-history-section">

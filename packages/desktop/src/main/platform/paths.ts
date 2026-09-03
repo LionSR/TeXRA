@@ -4,10 +4,7 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index';
-import {
-  getWorkspacePathInput,
-  type WorkspacePathOptions,
-} from '@desktop/shared/workspacePath.js';
+import { parseWorkspacePathFromArgv } from '@desktop/shared/workspacePath.js';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 
@@ -20,10 +17,13 @@ interface ResourcesPathOptions {
   resourcesPath?: string;
 }
 
+/** The folder named on the command line, canonicalized, or undefined. */
 export function resolveWorkspacePath(
-  options: WorkspacePathOptions = {},
+  options: { argv?: readonly string[] } = {},
 ): string | undefined {
-  const workspacePath = getWorkspacePathInput(options);
+  const workspacePath = parseWorkspacePathFromArgv(
+    options.argv ?? process.argv.slice(1),
+  );
   return workspacePath == null
     ? undefined
     : canonicalizeWorkspacePath(workspacePath);

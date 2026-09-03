@@ -9,7 +9,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 import { getDefaultUnavailableToolNames } from '@tools/registry';
 
@@ -83,8 +82,8 @@ async function createExecution(options: {
   repairRestartedStreams?: ReturnType<typeof vi.fn>;
 }): Promise<DesktopExecution> {
   vi.resetModules();
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform());
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform();
   mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData: vi.fn(async () => null),
   }));

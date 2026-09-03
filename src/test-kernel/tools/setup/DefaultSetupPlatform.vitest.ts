@@ -6,6 +6,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import * as codexAuth from '@auth/codex';
 import * as providerCapabilities from '@model/providerCapabilities';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   __resetSetupPlatformForTests,
@@ -55,7 +56,7 @@ describe('shared setup capabilities', () => {
     );
     await texraScopedConfig.update('texra.bib.defaultPath', 'main.bib', 'user');
     expect(
-      platform().config.inspect('texra.bib.defaultPath')?.globalValue,
+      workspaceRoots().config.inspect('texra.bib.defaultPath')?.globalValue,
     ).toBe('main.bib');
   });
 

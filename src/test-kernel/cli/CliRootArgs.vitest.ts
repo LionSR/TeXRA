@@ -76,30 +76,23 @@ async function initNodeBackedPlatform(options: {
   storagePath: string;
   globalStoragePath: string;
 }): Promise<void> {
-  const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
-    await Promise.all([
-      import('@platform/platform'),
-      import('@platform/defaults/nodeFilesystem'),
-      import('@test/support/FakePlatform'),
-    ]);
-  initPlatform(
-    createFakePlatform(
-      {
-        workspacePath: process.cwd(),
-        storagePath: options.storagePath,
-        globalStoragePath: options.globalStoragePath,
-      },
-      { fs: nodeFilesystem },
-    ),
+  const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
+    import('@test/support/setupPlatform'),
+    import('@platform/defaults/nodeFilesystem'),
+  ]);
+  await installPlatform(
+    {
+      workspacePath: process.cwd(),
+      storagePath: options.storagePath,
+      globalStoragePath: options.globalStoragePath,
+    },
+    { fs: nodeFilesystem },
   );
 }
 
 async function initDefaultFakePlatform(): Promise<void> {
-  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
-    import('@platform/platform'),
-    import('@test/support/FakePlatform'),
-  ]);
-  initPlatform(createFakePlatform());
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform();
 }
 
 async function withExternalDirs(

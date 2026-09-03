@@ -22,7 +22,7 @@ import {
   getStreamTabId,
 } from '@agent/runtime/streamTab';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
@@ -390,7 +390,7 @@ export class BashTool extends defineTool({
 
     const cwd =
       parseWorkingDirectory(getRunContextWorkingDirectory(runContext)) ??
-      platform().workspace.getWorkspacePath();
+      workspaceRoots().workspace;
 
     // Request approval before executing the command.
     const approval = await requestBashApproval({ command: input.command, cwd });

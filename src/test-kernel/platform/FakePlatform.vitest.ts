@@ -10,12 +10,14 @@ import { describe, it } from 'vitest';
 // Local imports
 import { FileType, type FileSystemProvider } from '@platform/interfaces';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 
 // Local file imports
 import {
   FakeFileSystemProvider,
   createFakePlatform,
+  createFakeWorkspaceRoots,
 } from '../support/FakePlatform';
 
 type ProviderCase = {
@@ -80,32 +82,29 @@ async function rejectsWithCode(
 }
 
 describe('FakePlatform', () => {
-  it('installs a default fake platform from vitest setup', () => {
-    assert.equal(platform().workspace.getWorkspacePath(), '/workspace');
+  it('installs a default fake platform and roots from vitest setup', () => {
+    assert.equal(workspaceRoots().workspace, '/workspace');
     assert.equal(platform().fs instanceof FakeFileSystemProvider, true);
+    // The process storage port follows the installed roots.
+    assert.equal(platform().storage.getStoragePath(), workspaceRoots().storage);
   });
 
   it('provides overridable platform services for tests', async () => {
-    const platform = createFakePlatform({
+    const options = {
       config: { enabled: true },
       globalState: { version: 2 },
       workspaceState: { task: 'active' },
       files: { '/workspace/src/main.tex': 'hello' },
       secrets: { token: 'secret-value' },
-    });
+    };
+    const platform = createFakePlatform(options);
+    const roots = createFakeWorkspaceRoots(options);
 
-    assert.equal(platform.config.get('enabled', false), true);
+    assert.equal(roots.config.get('enabled', false), true);
     assert.equal(platform.globalState.get('version', 0), 2);
-    assert.equal(platform.workspaceState.get('task', 'idle'), 'active');
-    assert.equal(
-      platform.workspace.asRelativePath('/workspace/src/main.tex'),
-      'src/main.tex',
-    );
-    assert.equal(platform.workspace.asRelativePath('/workspace'), '');
-    assert.equal(
-      platform.storage.getStoragePath(),
-      '/workspace/.texra/storage',
-    );
+    assert.equal(roots.workspaceState.get('task', 'idle'), 'active');
+    assert.equal(roots.workspace, '/workspace');
+    assert.equal(roots.storage, '/workspace/.texra/storage');
     assert.equal(await platform.secrets.get('token'), 'secret-value');
     assert.equal(
       Buffer.from(
@@ -116,62 +115,54 @@ describe('FakePlatform', () => {
   });
 
   it('can model a missing workspace root', () => {
-    const platform = createFakePlatform({ workspacePath: undefined });
+    const roots = createFakeWorkspaceRoots({ workspacePath: undefined });
 
-    assert.equal(platform.workspace.getWorkspacePath(), undefined);
-    assert.equal(
-      platform.workspace.asRelativePath('/outside/main.tex'),
-      '/outside/main.tex',
-    );
+    assert.equal(roots.workspace, undefined);
   });
 
   it('supports fake config updates', async () => {
-    const platform = createFakePlatform({
+    const { config } = createFakeWorkspaceRoots({
       config: { enabled: true },
     });
 
-    await platform.config.update('enabled', false, 'global');
-    await platform.config.update('enabled', true, 'global');
+    await config.update('enabled', false, 'global');
+    await config.update('enabled', true, 'global');
 
-    assert.equal(platform.config.get('enabled', true), true);
-    assert.equal(platform.config.isExplicitlySet('enabled'), true);
-    assert.deepEqual(platform.config.inspect('enabled'), {
+    assert.equal(config.get('enabled', true), true);
+    assert.equal(config.isExplicitlySet('enabled'), true);
+    assert.deepEqual(config.inspect('enabled'), {
       globalValue: true,
       workspaceValue: undefined,
     });
   });
 
   it('mirrors texra config aliases', async () => {
-    const platform = createFakePlatform();
+    const { config } = createFakeWorkspaceRoots();
 
-    await platform.config.update('texra.files.exclude', ['node_modules']);
-    await platform.config.update('texra.files.include', ['src']);
+    await config.update('texra.files.exclude', ['node_modules']);
+    await config.update('texra.files.include', ['src']);
 
-    assert.deepEqual(platform.config.get('files.exclude', []), [
-      'node_modules',
-    ]);
-    assert.equal(platform.config.isExplicitlySet('files.exclude'), true);
-    assert.deepEqual(platform.config.inspect('files.exclude'), {
+    assert.deepEqual(config.get('files.exclude', []), ['node_modules']);
+    assert.equal(config.isExplicitlySet('files.exclude'), true);
+    assert.deepEqual(config.inspect('files.exclude'), {
       globalValue: undefined,
       workspaceValue: ['node_modules'],
     });
   });
 
   it('writes config aliases to the exact caller key', async () => {
-    const platform = createFakePlatform();
+    const { config } = createFakeWorkspaceRoots();
 
-    await platform.config.update('texra.files.exclude', ['dist']);
-    await platform.config.update('files.exclude', ['node_modules']);
+    await config.update('texra.files.exclude', ['dist']);
+    await config.update('files.exclude', ['node_modules']);
 
-    assert.deepEqual(platform.config.get('files.exclude', []), [
-      'node_modules',
-    ]);
-    assert.deepEqual(platform.config.get('texra.files.exclude', []), ['dist']);
+    assert.deepEqual(config.get('files.exclude', []), ['node_modules']);
+    assert.deepEqual(config.get('texra.files.exclude', []), ['dist']);
 
-    await platform.config.update('files.exclude', undefined);
+    await config.update('files.exclude', undefined);
 
-    assert.deepEqual(platform.config.get('files.exclude', []), ['dist']);
-    assert.equal(platform.config.isExplicitlySet('texra.files.exclude'), true);
+    assert.deepEqual(config.get('files.exclude', []), ['dist']);
+    assert.equal(config.isExplicitlySet('texra.files.exclude'), true);
   });
 
   it('supports custom overrides while retaining other fakes', () => {
@@ -179,7 +170,7 @@ describe('FakePlatform', () => {
     const platform = createFakePlatform({}, { fs });
 
     assert.equal(platform.fs, fs);
-    assert.ok(platform.config);
+    assert.ok(platform.globalState);
     assert.ok(platform.secrets);
   });
 

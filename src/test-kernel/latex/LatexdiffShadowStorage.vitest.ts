@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as logger from '@logger/logUtils';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { getCoreSettingDefault } from '@shared/schemas';
@@ -42,14 +41,12 @@ describe('LaTeXdiffService shadow output', () => {
     workspaceDir: string,
     storageRoot: string,
   ): Promise<void> {
+    const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     return installPlatform(
-      {
-        workspacePath: workspaceDir,
-      },
+      { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
       {
         fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+        storage,
         globalState: new MemoryStateStore(),
         workspaceState: new MemoryStateStore(),
       },

@@ -380,7 +380,7 @@ export async function buildCliContext(
   const env = init.env ?? process.env;
   const cwd = await resolveCliCwd(init.globalArgs.cwd);
   // Workspace file first, user file second — the same order
-  // `platform().config` gives the extension and desktop hosts.
+  // `workspaceRoots().config` gives the extension and desktop hosts.
   const [loadedConfig, userApprovalPolicy] = await Promise.all([
     loadWorkspaceCliConfig(cwd),
     loadUserApprovalPolicy(init.storageRoot),

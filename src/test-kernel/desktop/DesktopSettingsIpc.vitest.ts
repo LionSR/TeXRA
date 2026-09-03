@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StateStore } from '@platform/interfaces';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
@@ -431,8 +431,8 @@ describe('desktop settings IPC', () => {
     const malformed = { goalId: 'not-valid' };
 
     async function seedMalformedGoal(): Promise<void> {
-      await platform().workspaceState.update('goals:index', [streamId]);
-      await platform().workspaceState.update(goalKey, malformed);
+      await workspaceRoots().workspaceState.update('goals:index', [streamId]);
+      await workspaceRoots().workspaceState.update(goalKey, malformed);
     }
 
     it('reports a malformed goal without throwing or posting a fallback list', async () => {
@@ -461,7 +461,7 @@ describe('desktop settings IPC', () => {
           command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
         }),
       );
-      expect(platform().workspaceState.get(goalKey)).toEqual(malformed);
+      expect(workspaceRoots().workspaceState.get(goalKey)).toEqual(malformed);
     });
 
     it('continues initial settings delivery after a malformed goal', async () => {

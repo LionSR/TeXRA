@@ -47,6 +47,10 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
 import {
+  processWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
+import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -95,7 +99,11 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
 } & Partial<
     Pick<
       SessionHandle,
-      'events' | 'snapshots' | 'interactions' | 'responseTextProcessing'
+      | 'events'
+      | 'snapshots'
+      | 'interactions'
+      | 'responseTextProcessing'
+      | 'roots'
     >
   >;
 
@@ -112,6 +120,13 @@ export class SessionHandle {
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
   readonly transcripts: StreamLogStore;
+  /**
+   * The workspace this session works on: the four per-workspace host roots.
+   * Runs and `runInSession` scopes resolve `StorageFS`/`WorkspaceFS` and the
+   * workspace config/state through these, so several sessions in one process
+   * each write under their own folder.
+   */
+  readonly roots: WorkspaceRoots;
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   /** Session-owned per-stream sidecar store for runs launched in this session. */
@@ -169,6 +184,10 @@ export class SessionHandle {
     this.events = events;
     this.status = status;
     this.transcripts = transcripts;
+    // Process roots unless the host names a folder: the extension, the CLI,
+    // and the SDK build exactly one session over the process roots; the
+    // desktop opens one session per paper and passes that paper's roots.
+    this.roots = init.roots ?? processWorkspaceRoots();
     this.followUps = followUps;
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no

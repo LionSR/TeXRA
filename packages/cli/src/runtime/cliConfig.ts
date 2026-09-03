@@ -372,7 +372,7 @@ export async function loadWorkspaceCliConfig(
  * The user-level layer of `texra.approvalPolicy`
  * (`~/.texra/global-storage/config.json`).
  *
- * The extension and desktop hosts resolve this row through `platform().config`,
+ * The extension and desktop hosts resolve this row through `workspaceRoots().config`,
  * which layers the project `.texra/config.json` over the user file. The CLI
  * resolves its approval policy in `buildCliContext`, before `initCliPlatform`
  * creates that provider, so it reads the user layer here rather than standing

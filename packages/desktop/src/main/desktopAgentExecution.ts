@@ -283,7 +283,7 @@ export class DesktopProgressBridge {
     this.session = options.session;
     this.backend = new ProgressBackend({
       session: this.session,
-      storage: platform().workspaceState,
+      storage: this.session.roots.workspaceState,
       stores: options.sessionStores,
       sendMessage: (message) => this.postToRenderer(message) !== false,
       hasTarget: () => true,
@@ -1218,7 +1218,7 @@ export class DesktopProgressBridge {
    * Empty when no workspace is open so the caller resolves no matches.
    */
   private async listWorkspaceCandidateFiles(): Promise<string[]> {
-    const workspacePath = platform().workspace.getWorkspacePath();
+    const workspacePath = this.session.roots.workspace;
     if (!workspacePath) return [];
 
     const files = [

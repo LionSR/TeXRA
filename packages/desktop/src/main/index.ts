@@ -13,12 +13,7 @@ import {
 } from 'electron';
 import PQueue from 'p-queue';
 
-import type { SessionStores } from '@agent/storage';
-import {
-  agentResponseTextConnector,
-  attachTerminalResultToast,
-  SessionHandle,
-} from '@agent/runtime';
+import { runInSession } from '@agent/runtime';
 import {
   computeAgentOptionsData,
   getAgent,
@@ -35,15 +30,11 @@ import {
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
-import {
-  TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-  type TexraApprovalPolicy,
-} from '@shared/approvalPolicy';
+import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
@@ -59,8 +50,7 @@ import {
   refreshToolAvailability,
 } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
-import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import { ephemeralTranscriptWarning } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
@@ -74,13 +64,17 @@ import {
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
-import { initializeDesktopProcessStores } from './desktopProcessStores.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
+import {
+  openDesktopPaperRegistry,
+  readRememberedDesktopPapers,
+  type DesktopPaper,
+  type DesktopPaperRegistry,
+} from './desktopPapers.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
-import { handoffDesktopWorkspaceRelaunchFromMainProcess } from './desktopWorkspaceRelaunch.js';
 import {
   bootstrapDesktopWindowLifecycle,
   installDesktopBeforeQuitWiring,
@@ -89,6 +83,7 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
+import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -145,15 +140,7 @@ import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
-import {
-  DESKTOP_WORKSPACE_PATH_STATE_KEY,
-  serializeWorkspacePresenceArg,
-  withWorkspacePathArg,
-} from '../shared/workspacePath.js';
-import type {
-  DesktopAgentExecutionOptions,
-  DesktopProgressBridge,
-} from './desktopAgentExecution.js';
+import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 import type { DesktopAgentExecutionHost } from './desktopAgentExecutionHost.js';
 
 const moduleDirname = import.meta.dirname;
@@ -168,12 +155,6 @@ const credentialLog = createLog('Setup Credentials');
 const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
-// Both the relaunch payload and the "a relaunch is under way" fact. It stays
-// set from the folder pick until the process is replaced, so `window-all-closed`
-// leaves quitting to the relaunch path instead of racing it; only the user
-// keeping a dirty editor clears it.
-let pendingWorkspaceRelaunch:
-  { selectedPath: string; args: string[] } | undefined;
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Serializes the lifecycle promises returned by each window's diff-host
 // disposal. The disposal call itself still starts synchronously in the
@@ -183,9 +164,9 @@ let continueQuitAfterWindowClose: (() => void) | undefined;
 // removals finish before the process exits instead of racing the quit flow.
 const diffHostDisposeQueue = new PQueue({ concurrency: 1 });
 
-// Playwright relaunch tests need a deterministic Electron profile so
-// app-scoped stores survive across child processes. Normal desktop launches
-// keep Electron's default userData path.
+// Playwright tests need a deterministic Electron profile so app-scoped stores
+// survive across launches. Normal desktop launches keep Electron's default
+// userData path.
 const e2eUserDataPath = process.env.TEXRA_DESKTOP_E2E_USER_DATA_PATH;
 if (e2eUserDataPath) {
   app.setPath('userData', resolvePath(e2eUserDataPath));
@@ -260,18 +241,27 @@ function installContentSecurityPolicy(): void {
   });
 }
 
+/** Warn once a window exists when a paper's transcripts could not persist. */
+function warnIfEphemeral(paper: DesktopPaper): void {
+  const { mode } = paper.session.transcripts;
+  if (mode.kind !== 'ephemeral') return;
+  void showDesktopWarningDialog(ephemeralTranscriptWarning(mode.reason)).catch(
+    (error: unknown) => console.error(error),
+  );
+}
+
 function createWindow(options: {
-  workspacePath: string | undefined;
+  papers: DesktopPaperRegistry;
   authCoordinator: DesktopAuthCoordinator;
   authCallbackState: DesktopAuthCallbackState;
-  processSession: SessionHandle;
-  sessionStores: SessionStores;
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
 }): void {
+  const activePaper = () => options.papers.active();
+  const initialPaper = activePaper();
   const initialWindowTitle = getDesktopWindowTitle(
-    options.processSession,
-    options.workspacePath,
+    initialPaper.session,
+    initialPaper.root,
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -309,12 +299,6 @@ function createWindow(options: {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      additionalArguments: [
-        serializeWorkspacePresenceArg(options.workspacePath != null),
-        ...(options.workspacePath
-          ? [`--texra-workspace-path=${options.workspacePath}`]
-          : []),
-      ],
     },
   });
   mainWindow = window;
@@ -322,13 +306,20 @@ function createWindow(options: {
   // creation, and the `closed` handler disposes the store (LIFO) instead of
   // running a hand-ordered teardown ledger.
   const windowResources = new DisposableStore();
-  windowResources.add(
-    installDesktopWindowTitle(
-      window,
-      options.processSession,
-      options.workspacePath,
-    ),
-  );
+  // Paper root: every resource bound to the paper the window shows (its
+  // title, its settings surface, its progress bridge) registers here and is
+  // replaced when the window switches papers.
+  let paperResources = new DisposableStore();
+  let attachedPaper: DesktopPaper | undefined;
+  windowResources.add(() => {
+    const paper = attachedPaper;
+    attachedPaper = undefined;
+    if (paper) void runInSession(paper.session, () => paperResources.dispose());
+    else paperResources.dispose();
+  });
+  // The root the renderer asked to switch to; lands once the renderer has
+  // reloaded (a dirty editor can veto the reload and clear it).
+  let pendingPaperActivation: string | undefined;
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -572,26 +563,32 @@ function createWindow(options: {
   };
   initializeDesktopSetupAuth();
   windowResources.add(registerDesktopSetupSignIn(signInForRemoteAgentCatalog));
-  const folderPickerDefaultPath = options.workspacePath ?? app.getPath('home');
+  const folderPickerDefaultPath = () =>
+    activePaper().root ?? app.getPath('home');
+
+  /**
+   * Show another open paper. The renderer reloads into it: the
+   * will-prevent-unload handler below clears the request when the user keeps
+   * a dirty editor, and the reload's navigation commits it otherwise.
+   */
+  const selectPaper = (root: string) => {
+    if (root === activePaper().root) return;
+    if (!options.papers.list().some((paper) => paper.root === root)) return;
+    pendingPaperActivation = root;
+    window.webContents.reload();
+  };
 
   const openWorkspaceFolder = async () => {
     const result = await dialog.showOpenDialog(window, {
       title: 'Open Workspace Folder',
-      defaultPath: folderPickerDefaultPath,
+      defaultPath: folderPickerDefaultPath(),
       properties: ['openDirectory'],
     });
     const selectedPath = result.canceled ? undefined : result.filePaths[0];
     if (!selectedPath) return;
-    pendingWorkspaceRelaunch = {
-      selectedPath,
-      args: withWorkspacePathArg(process.argv.slice(1), selectedPath),
-    };
-    // Attempt the close unconditionally: the renderer decides whether there is
-    // anything to discard, and the will-prevent-unload handler above clears the
-    // pending relaunch when the user keeps editing. The replacement is
-    // scheduled only from the closed handler, after unsaved changes can no
-    // longer cancel it.
-    window.close();
+    const paper = await options.papers.open(selectedPath);
+    warnIfEphemeral(paper);
+    if (paper.root !== undefined) selectPaper(paper.root);
   };
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
@@ -654,19 +651,17 @@ function createWindow(options: {
       void onboardingIpcRef.current?.refreshOnboardingFunnel();
     },
   };
-  const agentExecutionOptions: DesktopAgentExecutionOptions = {
-    postToRenderer: postToRendererIfAlive,
-    host: agentExecutionHost,
-    session: options.processSession,
-    sessionStores: options.sessionStores,
-    resourcesPath: options.resourcesPath,
-  };
+  // One progress bridge per paper, created lazily for the paper the window
+  // shows and released when the window switches papers or closes. The
+  // session outlives it; reattachment replays through `interactions.use`.
   let agentExecution: DesktopProgressBridge | undefined;
   let agentExecutionLoad: Promise<DesktopProgressBridge> | undefined;
-  // Aborted once the window is closed: the signal is both the presentation
-  // cancellation token and this window's "gone" fact.
-  const presentationAbort = new AbortController();
-  windowResources.add(() => {
+  // Aborted when the bridge is released: the signal is both the presentation
+  // cancellation token and the bridge's "gone" fact.
+  let presentationAbort = new AbortController();
+  const releaseAgentExecution = () => {
+    // Abort first, cancelling an in-flight lazy load.
+    presentationAbort.abort();
     if (agentExecution) {
       agentExecution.dispose();
     } else {
@@ -678,37 +673,50 @@ function createWindow(options: {
           }
         });
     }
-  });
-  // Registered after the execution disposer: LIFO disposal aborts first,
-  // cancelling an in-flight lazy load.
-  windowResources.add(() => presentationAbort.abort());
+    agentExecution = undefined;
+    agentExecutionLoad = undefined;
+    presentationAbort = new AbortController();
+  };
   const getAgentExecution = async (): Promise<DesktopProgressBridge> => {
     if (agentExecution) return agentExecution;
-    if (presentationAbort.signal.aborted) {
+    const abort = presentationAbort;
+    if (abort.signal.aborted) {
       throw new Error(
         'Cannot load desktop agent execution after window close.',
       );
     }
 
-    agentExecutionLoad ??= import('./desktopAgentExecution.js')
-      .then(async ({ createDesktopAgentExecution }) => {
-        const created = await createDesktopAgentExecution({
-          ...agentExecutionOptions,
-          presentationSignal: presentationAbort.signal,
-        });
-        if (presentationAbort.signal.aborted) {
-          created.dispose();
-          throw new Error(
-            'Desktop window closed before agent execution finished loading.',
-          );
-        }
-        agentExecution = created;
-        return created;
-      })
-      .catch((error: unknown) => {
-        agentExecutionLoad = undefined;
+    if (!agentExecutionLoad) {
+      const paper = activePaper();
+      const load: Promise<DesktopProgressBridge> = Promise.resolve(
+        runInSession(paper.session, () =>
+          import('./desktopAgentExecution.js').then(
+            async ({ createDesktopAgentExecution }) => {
+              const created = await createDesktopAgentExecution({
+                postToRenderer: postToRendererIfAlive,
+                host: agentExecutionHost,
+                session: paper.session,
+                sessionStores: paper.stores,
+                resourcesPath: options.resourcesPath,
+                presentationSignal: abort.signal,
+              });
+              if (abort.signal.aborted) {
+                created.dispose();
+                throw new Error(
+                  'Desktop window closed before agent execution finished loading.',
+                );
+              }
+              agentExecution = created;
+              return created;
+            },
+          ),
+        ),
+      ).catch((error: unknown) => {
+        if (agentExecutionLoad === load) agentExecutionLoad = undefined;
         throw error;
       });
+      agentExecutionLoad = load;
+    }
     return agentExecutionLoad;
   };
   const fileSelection = createDesktopFileSelection({
@@ -727,7 +735,7 @@ function createWindow(options: {
     onError: reportAsyncError,
   });
   const agentSettingsController = new DefaultDesktopAgentSettingsController({
-    workspaceState: platform().workspaceState,
+    workspaceState: options.papers.activeWorkspaceState,
     globalState: platform().globalState,
     registry: {
       loadAgents,
@@ -756,7 +764,7 @@ function createWindow(options: {
       selectCustomAgentDirectory: async () => {
         const result = await dialog.showOpenDialog(window, {
           title: 'Select Custom Agents Folder',
-          defaultPath: folderPickerDefaultPath,
+          defaultPath: folderPickerDefaultPath(),
           properties: ['openDirectory', 'createDirectory'],
         });
         return result.canceled ? undefined : result.filePaths[0];
@@ -783,9 +791,9 @@ function createWindow(options: {
   const subscriptionUsage = new SubscriptionUsageService();
   const credentialSettingsController =
     new DefaultDesktopCredentialSettingsController({
-      workspaceState: platform().workspaceState,
+      workspaceState: options.papers.activeWorkspaceState,
       globalState: platform().globalState,
-      config: platform().config,
+      config: options.papers.activeConfig,
       secrets: platform().secrets,
       renderer: {
         postToRenderer: postToRendererIfAlive,
@@ -865,7 +873,7 @@ function createWindow(options: {
   const toolingSettingsController = new DefaultDesktopToolingSettingsController(
     {
       onError: reportAsyncError,
-      workspaceState: platform().workspaceState,
+      workspaceState: options.papers.activeWorkspaceState,
       globalState: platform().globalState,
       renderer: {
         postToRenderer: postToRendererIfAlive,
@@ -936,23 +944,66 @@ function createWindow(options: {
     },
     onError: reportAsyncError,
   };
-  const settingsIpc = createDesktopSettingsIpc({
-    postToRenderer: postToRendererIfAlive,
-    agentSettingsController,
-    credentialSettingsController,
-    toolingSettingsController,
-    state: {
-      globalState: platform().globalState,
-      workspaceState: platform().workspaceState,
-    },
-    config: platform().config,
-    ui: settingsUi,
-    session: options.processSession,
-  });
-  settingsIpcRef.current = settingsIpc;
-  // Both hold window-scoped subscriptions (goal state and app signals) that
-  // would otherwise accumulate one listener per macOS dock reactivation.
-  windowResources.add(() => settingsIpc.dispose());
+  const requireSettingsIpc = (): DesktopSettingsIpc => {
+    const settingsIpc = settingsIpcRef.current;
+    if (!settingsIpc) throw new Error('Desktop settings IPC is not attached.');
+    return settingsIpc;
+  };
+  const postPapers = () => {
+    postToRendererIfAlive({
+      command: DESKTOP_PAPER_COMMANDS.PAPERS,
+      ...options.papers.summary(),
+    });
+  };
+  /**
+   * Bind the window to the paper it shows. The settings surface subscribes to
+   * the paper's session (goal facts, approval policy), the title follows its
+   * activity, and the progress bridge is built lazily for it; all three are
+   * released when the window switches papers.
+   */
+  const attachActivePaper = () => {
+    const paper = activePaper();
+    if (paper === attachedPaper) return;
+    const previous = attachedPaper;
+    const previousResources = paperResources;
+    attachedPaper = paper;
+    paperResources = new DisposableStore();
+    if (previous) {
+      void runInSession(previous.session, () => previousResources.dispose());
+    }
+    paperResources.add(
+      installDesktopWindowTitle(window, paper.session, paper.root),
+    );
+    const settingsIpc = createDesktopSettingsIpc({
+      postToRenderer: postToRendererIfAlive,
+      agentSettingsController,
+      credentialSettingsController,
+      toolingSettingsController,
+      state: {
+        globalState: platform().globalState,
+        workspaceState: paper.roots.workspaceState,
+      },
+      config: paper.roots.config,
+      ui: settingsUi,
+      session: paper.session,
+    });
+    settingsIpcRef.current = settingsIpc;
+    // Holds paper-scoped subscriptions (goal state and app signals) that
+    // would otherwise accumulate one listener per switch or dock reactivation.
+    paperResources.add(() => {
+      if (settingsIpcRef.current === settingsIpc) {
+        settingsIpcRef.current = undefined;
+      }
+      settingsIpc.dispose();
+    });
+    paperResources.add(releaseAgentExecution);
+  };
+  windowResources.add(
+    options.papers.onChange(() => {
+      attachActivePaper();
+      postPapers();
+    }),
+  );
   windowResources.add(() => toolingSettingsController.dispose());
   const progressIpc = createDesktopProgressIpc({
     source: {
@@ -1022,11 +1073,11 @@ function createWindow(options: {
         return launchDesktopAgent(
           { kind: 'fresh', ...preparation.request },
           {
-            session: options.processSession,
+            session: activePaper().session,
           },
         );
       },
-      signInWithChatGpt: () => settingsIpc.signInChatGpt(),
+      signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
       // The desktop shell can't host the VS Code getting-started walkthrough, so
       // the State 0 walkthrough button opens the desktop docs externally — the
       // closest desktop analog, reusing the same docs URL the Help menu's
@@ -1040,7 +1091,7 @@ function createWindow(options: {
   // switches don't need cache invalidation. Both lambdas map a missing
   // workspace to the host's empty-result convention.
   const getRecentCommits = async () => {
-    const workspacePath = options.workspacePath;
+    const workspacePath = activePaper().root;
     if (!workspacePath) {
       return { commits: [] as string[], isGitRepo: false };
     }
@@ -1049,7 +1100,7 @@ function createWindow(options: {
     });
   };
   const getEnvironmentSummary = async () => {
-    const workspacePath = options.workspacePath;
+    const workspacePath = activePaper().root;
     if (!workspacePath) {
       return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
     }
@@ -1077,7 +1128,7 @@ function createWindow(options: {
   // renderer through the IPC bridge installed just below, so they post via
   // `ipcRef.current` rather than capturing a bridge that doesn't exist yet.
   const ptyHost = createDesktopPtyHost({
-    cwd: options.workspacePath,
+    cwd: () => activePaper().root,
     onData: (sessionId, data) =>
       postToRendererIfAlive({
         command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_DATA,
@@ -1154,8 +1205,13 @@ function createWindow(options: {
         detail: 'Discard the changes and continue?',
       }),
     isFatalShutdownRequested: isFatalDesktopShutdownRequested,
-    clearPendingWorkspaceRelaunch: () => {
-      pendingWorkspaceRelaunch = undefined;
+    clearPendingPaperActivation: () => {
+      pendingPaperActivation = undefined;
+    },
+    commitPendingPaperActivation: () => {
+      const root = pendingPaperActivation;
+      pendingPaperActivation = undefined;
+      if (root !== undefined) options.papers.activate(root);
     },
     clearContinueQuitAfterWindowClose: () => {
       continueQuitAfterWindowClose = undefined;
@@ -1169,13 +1225,20 @@ function createWindow(options: {
     },
     fileSelection,
     prompt: promptController,
-    settings: settingsIpc,
+    settings: {
+      handleMessage: (message) =>
+        settingsIpcRef.current?.handleMessage(message) ?? false,
+    },
     progress: progressIpc,
     onboarding: onboardingIpc,
+    papers: options.papers.ipc({ select: selectPaper, postPapers }),
     globalState: platform().globalState,
+    inActiveSession: (dispatch) => {
+      void runInSession(activePaper().session, dispatch);
+    },
     logs: {
       readLog: () =>
-        readDesktopLogSnapshot({ workspacePath: options.workspacePath }),
+        readDesktopLogSnapshot({ workspacePath: activePaper().root }),
       copyLog: async (text) => clipboard.writeText(text),
       exportLog: async (text) => {
         const result = await dialog.showSaveDialog(window, {
@@ -1194,13 +1257,11 @@ function createWindow(options: {
     onAsyncError: reportAsyncError,
   });
   ipcRef.current = mainViewIpc;
+  attachActivePaper();
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),
   );
   window.once('closed', () => {
-    // Read, never cleared: `window-all-closed` fires after this handler and
-    // must still see the relaunch so it defers quitting to the branch below.
-    const workspaceRelaunch = pendingWorkspaceRelaunch;
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
     try {
@@ -1214,40 +1275,7 @@ function createWindow(options: {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    if (workspaceRelaunch) {
-      void (async () => {
-        try {
-          await platform().globalState.update(
-            DESKTOP_WORKSPACE_PATH_STATE_KEY,
-            workspaceRelaunch.selectedPath,
-          );
-        } catch (error) {
-          reportBackgroundError(error);
-        }
-        // Consumed. The synchronous `window-all-closed` in this same turn has
-        // already seen the pending value and deferred quitting; clearing here
-        // stops a later window's closed handler (macOS dock reactivation
-        // during the drain) from scheduling a second relaunch.
-        if (pendingWorkspaceRelaunch === workspaceRelaunch) {
-          pendingWorkspaceRelaunch = undefined;
-        }
-        // The development supervisor owns Vite and the Electron child. Let it
-        // replace the child so the new process keeps a live renderer URL.
-        handoffDesktopWorkspaceRelaunchFromMainProcess(workspaceRelaunch.args, {
-          supervised: process.env.TEXRA_DESKTOP_DEV_SUPERVISED === '1',
-          send:
-            typeof process.send === 'function'
-              ? (args) => process.send?.(args)
-              : undefined,
-          relaunch: (args) => app.relaunch({ args }),
-        });
-        // Use the lifecycle-aware path so the process session drains before
-        // Electron starts the replacement process.
-        app.quit();
-      })();
-    } else {
-      continueQuit?.();
-    }
+    continueQuit?.();
   });
   let windowPresented = false;
   const presentWindow = (): void => {
@@ -1283,42 +1311,22 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         processResumeOwner,
       );
       const { lifecycle } = platformInit;
-      // A broken transcript directory must not reject whenReady: degrade to
-      // an in-memory store and warn once the window exists, exactly as the
-      // CLI TUI does. The degraded session also cannot resume — nothing is
-      // persisted for a later launch to pick up, and `SessionHandle` skips
-      // restart repair on a non-persistent store.
-      const transcripts = await StreamLogStore.openOrEphemeral();
-      const processSession = new SessionHandle({
-        transcripts,
-        restartRepair: 'deferred',
-        responseTextProcessing: createTexraResponseTextProcessing(
-          agentResponseTextConnector,
-        ),
-      });
-      const detachTerminalResultToast = attachTerminalResultToast(
-        processSession,
-        processSession.interactions,
-        { replayWhenAttached: true },
-      );
-      // Fill-later slot for the process-resume attachment made below: the
-      // BEFORE drain detaches it first (before agent shutdown), and the
-      // idempotent store makes the ON-phase repeat a no-op.
+      // Slot for every paper's resume attachment: the BEFORE drain detaches
+      // them first (before agent shutdown), and the idempotent store makes the
+      // ON-phase repeat a no-op.
       const agentResumeHandler = new DisposableStore();
       // Process root: session-lifetime resources register at creation and are
-      // disposed LIFO in the ON phase (process stores → result toast →
-      // session).
+      // disposed LIFO in the ON phase (every paper's process stores → result
+      // toast → session, most recently opened first).
       const processResources = new DisposableStore();
-      processResources.add(() => processSession.dispose());
-      processResources.add(detachTerminalResultToast);
-      let sessionStores!: SessionStores;
+      let papers!: DesktopPaperRegistry;
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [() => agentResumeHandler.dispose()],
         afterAgentShutdown: [() => killActiveRecording()],
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: () => processSession.flushArtifacts(),
+        flushArtifacts: () => papers.flushArtifacts(),
         // Each window's closed handler starts diff temp-dir removal before the
         // quit lifecycle drains; awaiting idle keeps the process alive until
         // the directories are actually gone.
@@ -1335,19 +1343,45 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // the same process-session shutdown used by an ordinary application
       // exit. Once this block completes, the lifecycle owns that cleanup.
       try {
-        const processStores =
-          await initializeDesktopProcessStores(processSession);
-        processResources.add(() => processStores.dispose());
-        await processSession.waitUntilReady();
-        processSession.setApprovalPolicy(
-          readPlatformSetting<TexraApprovalPolicy>(
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          ),
+        papers = await openDesktopPaperRegistry({
+          dataRoot: platformInit.dataRoot,
+          processRoots: platformInit.processRoots,
+          globalState: platform().globalState,
+          attachSession: (session) => {
+            agentResumeHandler.add(processResumeOwner.attach({ session }));
+          },
+          warn: (message) => console.warn(`[desktop] ${message}`),
+        });
+        processResources.add(() => papers.dispose());
+        // Reopen the folder named on the command line and every folder left
+        // open last time; a folder that no longer opens is reported and
+        // dropped from the window, never from the remembered list's peers.
+        const launchRoot = platformInit.workspacePath;
+        const rememberedRoots = await readRememberedDesktopPapers(
+          platform().globalState,
         );
-        sessionStores = processStores.stores;
-        agentResumeHandler.add(
-          processResumeOwner.attach({ session: processSession }),
-        );
+        for (const root of new Set([
+          ...(launchRoot ? [launchRoot] : []),
+          ...rememberedRoots,
+        ])) {
+          try {
+            await papers.open(root);
+          } catch (error) {
+            console.error(
+              `[desktop] Could not open paper ${root}: ${toErrorMessage(error)}`,
+            );
+          }
+        }
+        papers.activate(launchRoot ?? papers.list()[0]?.root);
+        // Project skills follow the paper the window shows.
+        const syncRuntimeSkills = () =>
+          initializeNodeRuntimeSkills({
+            host: 'desktop',
+            cwd: papers.active().root ?? app.getPath('home'),
+            resourcesPath: platformInit.resourcesPath,
+          });
+        syncRuntimeSkills();
+        papers.onChange(syncRuntimeSkills);
         // Ask the renderer to close before draining process services. A dirty
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
@@ -1363,7 +1397,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
 
         void initializeDesktopCrashReporting({
           sensitivePaths: [
-            platformInit.workspacePath,
+            ...papers.list().map((paper) => paper.root),
             app.getPath('userData'),
             platformInit.dataRoot,
           ],
@@ -1380,18 +1414,14 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         installContentSecurityPolicy();
         reopenMainWindow = () =>
           createWindow({
-            workspacePath: platformInit.workspacePath,
+            papers,
             authCoordinator,
             authCallbackState,
-            processSession,
-            sessionStores,
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();
-        if (transcripts.mode.kind === 'ephemeral') {
-          void showDesktopWarningDialog(
-            ephemeralTranscriptWarning(transcripts.mode.reason),
-          ).catch((error: unknown) => console.error(error));
+        for (const paper of [papers.active(), ...papers.list()]) {
+          warnIfEphemeral(paper);
         }
 
         app.on('activate', () => {
@@ -1408,6 +1438,5 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
 }
 
 app.on('window-all-closed', () => {
-  if (pendingWorkspaceRelaunch) return;
   if (process.platform !== 'darwin') app.quit();
 });

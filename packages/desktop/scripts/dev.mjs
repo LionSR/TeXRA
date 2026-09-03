@@ -112,34 +112,16 @@ function stop(exitCode) {
   forceStopTimer.unref();
 }
 
-function isRelaunchArgs(message) {
-  return (
-    Array.isArray(message) &&
-    message.length > 0 &&
-    message.every((arg) => typeof arg === 'string')
-  );
-}
-
 function launchElectron(rendererUrl, args) {
-  let relaunchArgs;
   const electron = spawnLogged(electronPath, [packageRoot, ...args], {
     env: {
       ...process.env,
       ELECTRON_RENDERER_URL: rendererUrl,
       NODE_ENV: 'development',
-      TEXRA_DESKTOP_DEV_SUPERVISED: '1',
     },
-    stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
-  });
-  electron.on('message', (message) => {
-    if (isRelaunchArgs(message)) relaunchArgs = message;
   });
   electron.once('exit', (code) => {
     if (stopping) return;
-    if (relaunchArgs) {
-      launchElectron(rendererUrl, relaunchArgs);
-      return;
-    }
     stop(code ?? 0);
   });
 }

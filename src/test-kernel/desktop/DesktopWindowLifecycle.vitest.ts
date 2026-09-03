@@ -13,23 +13,31 @@ describe('desktop window lifecycle', () => {
   it('skips initial renderer navigation and cleans up on reload', () => {
     const webContents = new FakeWebContents();
     const disposeRendererResources = vi.fn();
+    const commitPendingPaperActivation = vi.fn();
     bootstrapDesktopWindowLifecycle({
       webContents,
       workspaceIpc: { disposeRendererResources },
       showDiscardDialog: () => 0,
       isFatalShutdownRequested: () => false,
-      clearPendingWorkspaceRelaunch: vi.fn(),
+      clearPendingPaperActivation: vi.fn(),
+      commitPendingPaperActivation,
       clearContinueQuitAfterWindowClose: vi.fn(),
     });
     webContents.emit('did-navigate');
     expect(disposeRendererResources).not.toHaveBeenCalled();
+    expect(commitPendingPaperActivation).not.toHaveBeenCalled();
     webContents.emit('did-navigate');
     expect(disposeRendererResources).toHaveBeenCalledOnce();
+    // The paper switch lands before the old renderer's resources go.
+    expect(commitPendingPaperActivation).toHaveBeenCalledOnce();
+    expect(
+      commitPendingPaperActivation.mock.invocationCallOrder[0],
+    ).toBeLessThan(disposeRendererResources.mock.invocationCallOrder[0]!);
   });
 
   it('allows discard and clears continuations when editing continues', () => {
     const webContents = new FakeWebContents();
-    const clearPendingWorkspaceRelaunch = vi.fn();
+    const clearPendingPaperActivation = vi.fn();
     const clearContinueQuitAfterWindowClose = vi.fn();
     const showDiscardDialog = vi.fn(() => 0);
     bootstrapDesktopWindowLifecycle({
@@ -37,21 +45,22 @@ describe('desktop window lifecycle', () => {
       workspaceIpc: { disposeRendererResources: vi.fn() },
       showDiscardDialog,
       isFatalShutdownRequested: () => false,
-      clearPendingWorkspaceRelaunch,
+      clearPendingPaperActivation,
+      commitPendingPaperActivation: vi.fn(),
       clearContinueQuitAfterWindowClose,
     });
     const keepEditing = { preventDefault: vi.fn() };
     showDiscardDialog.mockReturnValueOnce(0);
     webContents.emit('will-prevent-unload', keepEditing);
     expect(keepEditing.preventDefault).not.toHaveBeenCalled();
-    expect(clearPendingWorkspaceRelaunch).toHaveBeenCalledOnce();
+    expect(clearPendingPaperActivation).toHaveBeenCalledOnce();
     expect(clearContinueQuitAfterWindowClose).toHaveBeenCalledOnce();
 
     const discard = { preventDefault: vi.fn() };
     showDiscardDialog.mockReturnValueOnce(1);
     webContents.emit('will-prevent-unload', discard);
     expect(discard.preventDefault).toHaveBeenCalledOnce();
-    expect(clearPendingWorkspaceRelaunch).toHaveBeenCalledOnce();
+    expect(clearPendingPaperActivation).toHaveBeenCalledOnce();
 
     const fatal = { preventDefault: vi.fn() };
     const fatalWebContents = new FakeWebContents();
@@ -61,7 +70,8 @@ describe('desktop window lifecycle', () => {
       workspaceIpc: { disposeRendererResources: vi.fn() },
       showDiscardDialog,
       isFatalShutdownRequested: () => true,
-      clearPendingWorkspaceRelaunch: clearFatalRelaunch,
+      clearPendingPaperActivation: clearFatalRelaunch,
+      commitPendingPaperActivation: vi.fn(),
       clearContinueQuitAfterWindowClose,
     });
     fatalWebContents.emit('will-prevent-unload', fatal);

@@ -9,7 +9,7 @@ import {
   expandRunInputs,
   withExpandedRunInputs,
 } from '@cli/runtime/workflowInputs';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('CLI workflow input lifecycle', () => {
@@ -21,14 +21,13 @@ describe('CLI workflow input lifecycle', () => {
   });
 
   async function installFakePlatform() {
-    const fakePlatform = createFakePlatform({
+    const host = createFakeHost({
       globalStoragePath: path.join(root, 'global-storage'),
       storagePath: path.join(root, 'workspace-storage'),
       workspacePath: root,
     });
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(fakePlatform);
-    return fakePlatform;
+    await installFakeHost(host);
+    return host.platform;
   }
 
   it('removes materialized stdin input on platform shutdown', async () => {

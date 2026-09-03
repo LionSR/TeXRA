@@ -33,6 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { confirmModal } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   agentKey,
   SETTINGS_VIEW_CMD,
@@ -68,7 +69,7 @@ export class AgentHandlers {
     ) => Promise<void>,
   ) {
     const controllers = createSettingsAgentControllers({
-      workspaceState: platform().workspaceState,
+      workspaceState: workspaceRoots().workspaceState,
       globalState: platform().globalState,
       getCustomAgentDirectory: () => agentDirectories.custom(),
       getSourceDirectory: (source) => agentDirectories.getDirectory(source),

@@ -16,13 +16,13 @@ import {
   type ConfigTarget,
   type StateStore,
   type StorageProvider,
-  type WorkspaceProvider,
   type AgentDirectoriesPort,
   type ProcessesPort,
 } from '@platform/interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
+import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
@@ -451,27 +451,6 @@ export class FakeFileSystemProvider implements FileSystemProvider {
   }
 }
 
-class FakeWorkspaceProvider implements WorkspaceProvider {
-  constructor(private readonly workspacePath: string | undefined) {}
-
-  getWorkspacePath(): string | undefined {
-    return this.workspacePath;
-  }
-
-  asRelativePath(filePath: string): string {
-    if (!this.workspacePath) {
-      return filePath;
-    }
-    const workspacePath = normalizePath(this.workspacePath);
-    const normalized = normalizePath(filePath);
-    const relative = path.posix.relative(workspacePath, normalized);
-    if (relative.startsWith('..') || path.posix.isAbsolute(relative)) {
-      return filePath;
-    }
-    return relative.replaceAll('\\', '/');
-  }
-}
-
 // A real directory: instance-presence sockets are genuine OS objects that
 // live under the global storage root even when everything else is faked.
 // Lazy and worker-shared so the thousands of per-test FakePlatform instances
@@ -479,13 +458,11 @@ class FakeWorkspaceProvider implements WorkspaceProvider {
 let sharedFakeGlobalStoragePath: string | undefined;
 
 class FakeStorageProvider implements StorageProvider {
-  constructor(
-    private readonly storagePath = '/workspace/.texra/storage',
-    private globalStoragePath?: string,
-  ) {}
+  constructor(private globalStoragePath?: string) {}
 
+  /** The session's storage root, exactly as the production platform answers. */
   getStoragePath(): string {
-    return this.storagePath;
+    return workspaceRoots().storage;
   }
 
   getGlobalStoragePath(): string {
@@ -582,6 +559,31 @@ export interface FakePlatformOptions {
   globalStoragePath?: string;
 }
 
+/**
+ * Overrides for one fake host: the process platform's ports plus the two
+ * workspace-root ports a suite substitutes (a scoped config provider, a
+ * hand-built state store). The workspace and storage paths come from
+ * `FakePlatformOptions`.
+ */
+export type FakeHostOverrides = Partial<Platform> &
+  Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>>;
+
+/** The workspace roots a fake host installs beside its platform. */
+export function createFakeWorkspaceRoots(
+  options: FakePlatformOptions = {},
+  overrides: Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState'>> = {},
+): WorkspaceRoots {
+  return {
+    workspace: Object.hasOwn(options, 'workspacePath')
+      ? options.workspacePath
+      : '/workspace',
+    storage: options.storagePath ?? '/workspace/.texra/storage',
+    config: overrides.config ?? new FakeConfigProvider(options.config),
+    workspaceState:
+      overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
+  };
+}
+
 const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   custom: async () => '/workspace/.texra/agents',
   builtIn: async () => '/workspace/resources/agents',
@@ -592,21 +594,11 @@ export function createFakePlatform(
   options: FakePlatformOptions = {},
   overrides: Partial<Platform> = {},
 ): Platform {
-  const workspacePath = Object.hasOwn(options, 'workspacePath')
-    ? options.workspacePath
-    : '/workspace';
-
   const lockTails = new Map<string, Promise<void>>();
   return {
-    config: new FakeConfigProvider(options.config),
     globalState: new FakeStateStore(options.globalState),
-    workspaceState: new FakeStateStore(options.workspaceState),
     fs: new FakeFileSystemProvider(options.files),
-    workspace: new FakeWorkspaceProvider(workspacePath),
-    storage: new FakeStorageProvider(
-      options.storagePath,
-      options.globalStoragePath,
-    ),
+    storage: new FakeStorageProvider(options.globalStoragePath),
     processes: new FakeProcesses(),
     fileLocks: {
       async runExclusive<T>(

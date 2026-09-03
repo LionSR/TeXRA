@@ -17,7 +17,7 @@ import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { computeSelectWindowSize } from '@cli/tui/selectWindow';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   AGENT_MODE_PRESETS,
   agentKeyOf,
@@ -265,7 +265,7 @@ export function AgentRosterForm(
         selectedAgentKeys(data.record.agentKeys.toolUse, data.agents.toolUse),
       ),
       (value) => {
-        const cwd = platform().workspace.getWorkspacePath();
+        const cwd = workspaceRoots().workspace;
         write(async () => {
           if (!cwd) {
             throw new Error(

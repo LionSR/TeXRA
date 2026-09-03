@@ -3,8 +3,6 @@ import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { handoffDesktopWorkspaceRelaunchFromMainProcess } from '@desktop/main/desktopWorkspaceRelaunch';
-import { withWorkspacePathArg } from '@desktop/shared/workspacePath';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
@@ -190,92 +188,15 @@ describe('desktop development launcher', () => {
     expect(electronCall?.options.env).toMatchObject({
       ELECTRON_RENDERER_URL: `http://127.0.0.1:${port}`,
       NODE_ENV: 'development',
-      TEXRA_DESKTOP_DEV_SUPERVISED: '1',
     });
-    expect(electronCall?.options.stdio).toEqual([
-      'inherit',
-      'inherit',
-      'inherit',
-      'ipc',
-    ]);
     expect(events).toEqual(['main-watch', 'port', 'vite', 'ready', 'electron']);
     expect(fetch).toHaveBeenCalledOnce();
     expect(children.every((child) => !child.killed)).toBe(true);
   });
 
-  it('hands the exact workspace relaunch arguments to the supervised development process', () => {
-    const args = withWorkspacePathArg(['/desktop'], '/tmp/new-paper');
-    const send = vi.fn();
-    const relaunch = vi.fn();
-
-    handoffDesktopWorkspaceRelaunchFromMainProcess(args, {
-      supervised: true,
-      send,
-      relaunch,
-    });
-
-    expect(send).toHaveBeenCalledOnce();
-    expect(send).toHaveBeenCalledWith(args);
-    expect(relaunch).not.toHaveBeenCalled();
-  });
-
-  it('relaunches packaged desktop with the exact workspace arguments', () => {
-    const args = withWorkspacePathArg(['/desktop'], '/tmp/new-paper');
-    const send = vi.fn();
-    const relaunch = vi.fn();
-
-    handoffDesktopWorkspaceRelaunchFromMainProcess(args, {
-      supervised: false,
-      send,
-      relaunch,
-    });
-
-    expect(relaunch).toHaveBeenCalledOnce();
-    expect(relaunch).toHaveBeenCalledWith(args);
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it('launches Electron with the exact valid IPC relaunch arguments', async () => {
-    const { calls, children, port } = await launchDesktopDev();
-    const replacementArgs = [
-      '/desktop',
-      '--texra-workspace-path=/tmp/new-paper',
-    ];
-
-    children[4]?.emit('message', replacementArgs);
-    children[4]?.emit('exit', 0, null);
-    await vi.waitFor(() => expect(calls).toHaveLength(6));
-
-    expect(calls[5]?.args.slice(1)).toEqual(replacementArgs);
-    expect(calls[5]?.options.env).toMatchObject({
-      ELECTRON_RENDERER_URL: `http://127.0.0.1:${port}`,
-      TEXRA_DESKTOP_DEV_SUPERVISED: '1',
-    });
-  });
-
-  it('does not relaunch Electron after a child exits without an IPC handoff', async () => {
+  it('stops the launcher when the Electron child exits', async () => {
     const { calls, children } = await launchDesktopDev();
 
-    children[4]?.emit('exit', 0, null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(calls).toHaveLength(5);
-  });
-
-  it('does not relaunch Electron after a child exits with an invalid IPC payload', async () => {
-    const { calls, children } = await launchDesktopDev();
-
-    children[4]?.emit('message', ['--workspace', 1]);
-    children[4]?.emit('exit', 0, null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(calls).toHaveLength(5);
-  });
-
-  it('does not relaunch Electron after a child exits with an empty IPC payload', async () => {
-    const { calls, children } = await launchDesktopDev();
-
-    children[4]?.emit('message', []);
     children[4]?.emit('exit', 0, null);
     await new Promise((resolve) => setTimeout(resolve, 0));
 

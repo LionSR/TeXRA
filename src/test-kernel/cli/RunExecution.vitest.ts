@@ -8,7 +8,7 @@ import type { executeCliRequest } from '@cli/runtime/runExecution';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { ExecutionId, StreamTabId, TodoItem } from '@shared/schemas';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTempDirPlatform,
@@ -54,8 +54,7 @@ async function installFreshDefaultSession(): Promise<void> {
 }
 
 async function installStoragePlatform(): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(await createTempDirPlatform('texra-run-', tempDirs));
+  await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
 vi.mock('@agent/runtime/runAgent', () => ({
@@ -258,11 +257,10 @@ function mockCancelledOutcome(): void {
 
 /** Loads executeCliRequest against a fresh fake platform for shutdown tests. */
 async function installFakePlatform() {
-  const { initPlatform } = await import('@platform/platform');
-  const platform = createFakePlatform();
-  initPlatform(platform);
+  const host = createFakeHost();
+  await installFakeHost(host);
   const { executeCliRequest } = await loadRunExecution();
-  return { platform, executeCliRequest };
+  return { platform: host.platform, executeCliRequest };
 }
 
 describe('executeCliRequest', () => {

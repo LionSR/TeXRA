@@ -1,6 +1,6 @@
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { platform, tryPlatform } from '@platform/platform';
+import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import { getCoreSettingDefault } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -25,7 +25,7 @@ const log = createLog('configUtils');
  * @returns The configured, catalog-default, or caller-fallback value
  */
 export function getConfig<T>(path: string, defaultValue?: T): T {
-  const configured = platform().config.get<T | undefined>(path);
+  const configured = workspaceRoots().config.get<T | undefined>(path);
   if (configured !== undefined) return configured;
   const catalogDefault = getCoreSettingDefault(path) as T | undefined;
   return catalogDefault === undefined ? (defaultValue as T) : catalogDefault;
@@ -40,7 +40,7 @@ export function getConfigBeforePlatformInit<T>(
   path: string,
   defaultValue: T,
 ): T {
-  return tryPlatform()?.config.get(path, defaultValue) ?? defaultValue;
+  return tryWorkspaceRoots()?.config.get(path, defaultValue) ?? defaultValue;
 }
 
 /**
@@ -72,7 +72,7 @@ export function getValidatedConfig<T>(
   if (result.success) return result.data;
   // Warn only when the user explicitly set the value (global, workspace, or
   // workspace folder); an unset setting failing the schema is normal.
-  if (platform().config.isExplicitlySet(path)) {
+  if (workspaceRoots().config.isExplicitlySet(path)) {
     log.warn(
       `Ignoring invalid value for setting "${path}": ${toErrorMessage(result.error)}`,
     );

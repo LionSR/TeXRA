@@ -53,6 +53,8 @@ describe('CLI transcript session policy', () => {
 
   it('selects ephemeral mode only through the explicit interactive policy', async () => {
     vi.resetModules();
+    const { installPlatform } = await import('@test/support/setupPlatform');
+    await installPlatform();
     const { initializeCliTranscriptSession } =
       await import('@cli/runtime/transcriptSession');
     const warning = vi.fn();
@@ -99,21 +101,21 @@ describe('CLI transcript session policy', () => {
   it('reclaims an orphaned stream sidecar when a headless session opens', async () => {
     vi.resetModules();
     const [
-      { initPlatform },
+      { installFakeHost },
       { createTempDirPlatform },
       { StreamLogStore, StreamSnapshotStore },
       { initializeDefaultSession, teardownDefaultSession },
       { GoalStore },
       { initializeCliTranscriptSession },
     ] = await Promise.all([
-      import('@platform/platform'),
+      import('@test/support/setupPlatform'),
       import('@test/support/tempDirPlatform'),
       import('@transcript'),
       import('@agent/runtime/SessionHandle'),
       import('@tools/goal'),
       import('@cli/runtime/transcriptSession'),
     ]);
-    initPlatform(
+    await installFakeHost(
       await createTempDirPlatform('texra-cli-orphan-sweep-', tempDirs),
     );
     const orphan = 'orphaned-cli-stream' as StreamTabId;

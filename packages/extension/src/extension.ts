@@ -71,15 +71,17 @@ import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform } from '@platform/platform';
+import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
+  createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import {
   formatTexraApprovalPolicy,
@@ -340,10 +342,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     const config = await createExtensionTexraConfig(storage, undefined);
     initPlatform(
       createNodePlatform({
-        config,
         globalState: context.globalState,
-        workspaceState: context.workspaceState,
-        getWorkspacePath: () => undefined,
         storage,
         secrets: new VscodeSecrets(context),
         lifecycle,
@@ -351,6 +350,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
         agentResume: {
           tryResumeStream: tryResumeFromResumeData,
         },
+      }),
+    );
+    initProcessWorkspaceRoots(
+      createNodeWorkspaceRoots({
+        workspacePath: undefined,
+        storage,
+        config,
+        workspaceState: context.workspaceState,
       }),
     );
     registerSupabaseAuth(context);
@@ -383,11 +390,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
     registerWalkthroughWorkspaceAction(context, false);
     return;
   }
-  const rawWorkspacePath = () =>
-    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const workspace = createNodeWorkspace(rawWorkspacePath);
-  const workspaceRoot = workspace.getWorkspacePath();
-  if (!workspaceRoot) return;
+  const rawWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!rawWorkspacePath) return;
+  const workspaceRoot = canonicalizeWorkspacePath(rawWorkspacePath);
 
   try {
     process.loadEnvFile(path.join(workspaceRoot, '.env'));
@@ -415,23 +420,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  const storage = createNodeStorageProvider({
-    workspacePath: workspace.getWorkspacePath(),
-  });
-  const config = await createExtensionTexraConfig(
-    storage,
-    workspace.getWorkspacePath(),
-  );
+  const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  const config = await createExtensionTexraConfig(storage, workspaceRoot);
   // Shared by the `Platform` tool-availability port and the setup platform's
   // extensions port, which both answer the same question.
   const isVscodeExtensionInstalled = (id: string) =>
     vscode.extensions.getExtension(id) !== undefined;
   initPlatform(
     createNodePlatform({
-      config,
       globalState: context.globalState,
-      workspaceState,
-      getWorkspacePath: rawWorkspacePath,
       storage,
       secrets: new VscodeSecrets(context),
       lifecycle,
@@ -453,6 +450,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
           void vscode.commands.executeCommand(command, ...args);
         }
       },
+    }),
+  );
+  initProcessWorkspaceRoots(
+    createNodeWorkspaceRoots({
+      workspacePath: workspaceRoot,
+      storage,
+      config,
+      workspaceState,
     }),
   );
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this

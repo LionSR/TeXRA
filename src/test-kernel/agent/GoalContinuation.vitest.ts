@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -108,7 +108,10 @@ describe('maybeBuildGoalContinuation', () => {
     await GoalStore.start(STREAM_ID, 'objective');
     // Flip just the flag — keep the same workspaceState so the active
     // goal is still on disk. Otherwise the test passes trivially.
-    (platform().config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
+    (workspaceRoots().config as FakeConfigProvider).set(
+      GOAL_FEATURE_FLAG_KEY,
+      false,
+    );
     const out = await maybeBuildGoalContinuation(STREAM_ID);
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.

@@ -11,8 +11,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 // Local imports
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { executeCommand, executeCommandSync } from '@utils/system/execUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
@@ -338,7 +337,7 @@ describe('executeCommandSync', () => {
 
   setupPlatform(async () => {
     const storageRoot = await makeTempDir('texra-exec-utils-', tempDirs);
-    return createFakePlatform(
+    return createFakeHost(
       {
         workspacePath: process.cwd(),
         storagePath: join(storageRoot, 'storage'),

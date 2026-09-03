@@ -2,10 +2,6 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin.js';
 import { installElectronHostBridge } from './hostBridge.js';
-import {
-  hasResolvedWorkspacePath,
-  parseWorkspacePathFromArgv,
-} from '../shared/workspacePath.js';
 
 const rendererWindow = globalThis as typeof globalThis & {
   addEventListener?: (
@@ -37,7 +33,7 @@ installElectronHostBridge({
   sendToMain: (channel, message) => ipcRenderer.send(channel, message),
 });
 
-contextBridge.exposeInMainWorld('texraDesktop', {
-  hasWorkspace: hasResolvedWorkspacePath(),
-  workspacePath: parseWorkspacePathFromArgv(process.argv.slice(1)),
-});
+// Host marker only: `BaseWebviewApp.isDesktopHost` reads its presence. The
+// open papers and the one this window shows arrive over the bridge
+// (`desktopPaperMessages.ts`), not through preload arguments.
+contextBridge.exposeInMainWorld('texraDesktop', {});

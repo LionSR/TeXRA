@@ -1,59 +1,93 @@
 /**
  * Standardized per-suite fake platform override.
  *
- * `vitest.config.mjs` installs a default `createFakePlatform()` before every
- * test file (see `setupFakePlatform.ts`), so most suites need nothing else.
- * Suites that need custom options/overrides (a seeded workspace, a real
- * `nodeFilesystem`, stubbed secrets, etc.) should call `setupPlatform(...)`
- * once — at module scope or inside a `describe` — instead of hand-wiring
- * `initPlatform(createFakePlatform(...))` in a `beforeAll`/`beforeEach`. It
- * installs the requested platform before each test in the current suite and
- * restores the suite-default fake platform afterward, so overrides never
+ * `vitest.config.mjs` installs a default `createFakePlatform()` (and its
+ * workspace roots) before every test file (see `setupFakePlatform.ts`), so
+ * most suites need nothing else. Suites that need custom options/overrides (a
+ * seeded workspace, a real `nodeFilesystem`, stubbed secrets, etc.) should
+ * call `setupPlatform(...)` once — at module scope or inside a `describe` —
+ * instead of hand-wiring `initPlatform(...)` in a `beforeAll`/`beforeEach`.
+ * It installs the requested platform before each test in the current suite
+ * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
  */
 import { afterEach, beforeEach } from 'vitest';
 
 import type { Platform } from '@platform/platform';
-import { createFakePlatform, type FakePlatformOptions } from './FakePlatform';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  createFakePlatform,
+  createFakeWorkspaceRoots,
+  type FakeHostOverrides,
+  type FakePlatformOptions,
+} from './FakePlatform';
 
-type PlatformBuilder = () => Platform | Promise<Platform>;
+/** A process platform and the workspace roots installed beside it. */
+export interface FakeHost {
+  readonly platform: Platform;
+  readonly roots: WorkspaceRoots;
+}
 
-/**
- * Installs a fake platform right now. `initPlatform` is restricted to
- * composition roots by lint, so this is the one place test helpers reach for
- * it dynamically — suites needing an ad hoc, one-off platform install
- * (rather than the standard per-test `setupPlatform` wiring below) should
- * call this instead of hand-rolling the dynamic import.
- */
-export async function installPlatform(
+type HostBuilder = () => FakeHost | Promise<FakeHost>;
+
+/** Build both halves of a fake host from one option bag. */
+export function createFakeHost(
   options: FakePlatformOptions = {},
-  overrides: Partial<Platform> = {},
-): Promise<void> {
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(createFakePlatform(options, overrides));
+  overrides: FakeHostOverrides = {},
+): FakeHost {
+  const { config, workspaceState, ...platformOverrides } = overrides;
+  return {
+    platform: createFakePlatform(options, platformOverrides),
+    roots: createFakeWorkspaceRoots(options, { config, workspaceState }),
+  };
 }
 
 /**
- * Installs a fake platform for every test in the current suite.
+ * Installs a fake host right now. `initPlatform` is restricted to composition
+ * roots by lint, so this is the one place test helpers reach for it — suites
+ * needing an ad hoc, one-off install (rather than the standard per-test
+ * `setupPlatform` wiring below) call this instead.
  *
- * Pass `FakePlatformOptions`/`Partial<Platform>` overrides for the common
- * case — a fresh `createFakePlatform(options, overrides)` is built for every
- * test. Pass a builder function instead when the platform must be computed
- * per test (a real `nodeFilesystem`, a per-test temp dir, captured state from
- * an earlier step, etc.).
+ * Both platform modules are imported at call time, not statically: a suite
+ * that calls `vi.resetModules()` gets fresh module instances, and the install
+ * must land in the instances the code under test will import next.
+ */
+export async function installFakeHost(host: FakeHost): Promise<void> {
+  const [{ initPlatform }, { initProcessWorkspaceRoots }] = await Promise.all([
+    import('@platform/platform'),
+    import('@platform/workspaceRoots'),
+  ]);
+  initPlatform(host.platform);
+  initProcessWorkspaceRoots(host.roots);
+}
+
+/** Installs a fake host built from `options`/`overrides` right now. */
+export async function installPlatform(
+  options: FakePlatformOptions = {},
+  overrides: FakeHostOverrides = {},
+): Promise<void> {
+  await installFakeHost(createFakeHost(options, overrides));
+}
+
+/**
+ * Installs a fake host for every test in the current suite.
+ *
+ * Pass `FakePlatformOptions`/`FakeHostOverrides` for the common case — a
+ * fresh fake host is built for every test. Pass a builder function instead
+ * when the host must be computed per test (a real `nodeFilesystem`, a
+ * per-test temp dir, captured state from an earlier step, etc.).
  */
 export function setupPlatform(
-  optionsOrBuilder: FakePlatformOptions | PlatformBuilder = {},
-  overrides: Partial<Platform> = {},
+  optionsOrBuilder: FakePlatformOptions | HostBuilder = {},
+  overrides: FakeHostOverrides = {},
 ): void {
-  const buildPlatform: PlatformBuilder =
+  const buildHost: HostBuilder =
     typeof optionsOrBuilder === 'function'
       ? optionsOrBuilder
-      : () => createFakePlatform(optionsOrBuilder, overrides);
+      : () => createFakeHost(optionsOrBuilder, overrides);
 
   beforeEach(async () => {
-    const { initPlatform } = await import('@platform/platform');
-    initPlatform(await buildPlatform());
+    await installFakeHost(await buildHost());
   });
 
   afterEach(async () => {

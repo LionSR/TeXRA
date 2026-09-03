@@ -69,6 +69,12 @@ const mocks = vi.hoisted(() => ({
     builtInToolUse: vi.fn(),
   })),
   createNodePlatform: vi.fn(() => ({})),
+  createNodeWorkspaceRoots: vi.fn(() => ({
+    workspace: '/workspace',
+    storage: '/workspace/.texra/storage',
+    config: { get: (_key: string, def: unknown) => def },
+    workspaceState: {},
+  })),
   initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   initNodeAgentRuntime: vi.fn(),
@@ -126,6 +132,7 @@ vi.mock('@platform/platform', () => ({
 vi.mock('@platform/defaults/nodeHost', () => ({
   bootstrapNodeAgentDirectories: mocks.bootstrapNodeAgentDirectories,
   createNodePlatform: mocks.createNodePlatform,
+  createNodeWorkspaceRoots: mocks.createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
@@ -160,7 +167,7 @@ vi.mock('@platform/defaults/nodeStores', () => ({
 vi.mock('@platform/defaults/nodeFilesystem', () => ({ nodeFilesystem: {} }));
 
 vi.mock('@platform/defaults/nodeWorkspace', () => ({
-  createNodeWorkspace: vi.fn(() => ({})),
+  canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
 
 vi.mock('@cli/runtime/cliStateStores', () => ({

@@ -4,7 +4,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isGoalEnabled } from '@tools/goal';
 
 // Must be called after initPlatform(): predicates read host services
-// (platform().config, platform().globalState).
+// (workspaceRoots().config, platform().globalState).
 export function registerAgentFeatures(): void {
   SharedToolInjectionRegistry.register({
     toolName: 'memory',

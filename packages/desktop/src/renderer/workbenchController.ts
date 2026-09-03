@@ -34,6 +34,8 @@ interface WorkbenchControllerDeps {
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopTaskShellState;
+  /** Root of the paper this window shows; new terminals start there. */
+  getWorkspacePath(): string | undefined;
   updateShell(next: DesktopTaskShellState): void;
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
@@ -59,6 +61,7 @@ export function createWorkbenchController({
   settingsView,
   logsPane,
   getState,
+  getWorkspacePath,
   updateShell,
   postMessage,
 }: WorkbenchControllerDeps): WorkbenchController {
@@ -147,7 +150,7 @@ export function createWorkbenchController({
       updateShell(
         openWorkbenchTab(getState(), {
           kind,
-          target: window.texraDesktop?.workspacePath ?? '',
+          target: getWorkspacePath() ?? '',
         }),
       );
       return;
@@ -175,7 +178,7 @@ export function createWorkbenchController({
     const next = openWorkbenchTab(getState(), {
       kind: 'terminal',
       placement: 'bottom',
-      target: window.texraDesktop?.workspacePath ?? '',
+      target: getWorkspacePath() ?? '',
     });
     const terminal = activeWorkbenchTab(next, 'bottom');
     if (terminal?.kind !== 'terminal') return;
