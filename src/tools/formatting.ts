@@ -54,7 +54,7 @@ export function formatLinesWithNumbers(
 // Shared file-view formatting
 // ============================================================================
 
-export interface FileViewOptions {
+interface FileViewOptions {
   /** Display path used in the summary (e.g., "src/foo.ts" or "/memories/notes.md"). */
   path: string;
   /** All lines of the file. */
@@ -71,7 +71,7 @@ export interface FileViewOptions {
   summarySuffix?: string;
 }
 
-export interface FileViewResult {
+interface FileViewResult {
   status: 'executed';
   output: string;
   summary: string;

@@ -61,9 +61,9 @@ interface UsageMonitorModelInfo {
 }
 
 /**
- * Runtime dependencies for UsageMonitor.
+ * Runtime dependencies for UsageMonitor — the individual run facts it reads,
+ * never a whole run context:
  *
- * Takes individual fields instead of full AgentExecutionContext:
  * - logger: For error logging and the single `usage` trace event
  * - executionId: Keys the per-stream usage map (immutable)
  * - runStageId: The run stage this execution opened, used only to stamp the
@@ -77,14 +77,15 @@ interface UsageMonitorContext {
   streamId: StreamTabId;
 }
 
+/** Label for the run flavor named in this monitor's diagnostics. */
+type UsageMonitorRunKind = 'workflow' | 'tool-use';
+
 /**
  * Handles recording usage statistics to the log and progress view.
  *
  * Cost is computed once during normalization and stored in the accumulator.
  * This class simply reads the pre-computed totals - no cost recomputation needed.
  */
-type UsageMonitorRunKind = 'workflow' | 'tool-use';
-
 export class UsageMonitor {
   /**
    * The most recent run totals seen by {@link recordUsage}. Cached so a failed

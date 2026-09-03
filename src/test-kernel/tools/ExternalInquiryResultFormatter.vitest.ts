@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ExternalInquiryThreadManifest } from '@tools/inquiry/externalInquiryStorage';
-import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
+import {
+  collectKnownSessionLinks,
+  type ExternalInquiryThreadManifest,
+} from '@tools/inquiry/externalInquiryStorage';
 
 function manifestWithSessionLinks(
   turns: Array<{ turnIndex: number; sessionLinks?: string[] | null }>,

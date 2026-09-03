@@ -22,8 +22,9 @@ import { buildDetailsSummary } from '../formatters/htmlBuilders';
 import { bannerDetailsWaDetailsStyles } from '../styles/logEntryStyles';
 import { contextManagementStyles } from './ContextManagement.styles';
 
-/** Stat item to display */
-export interface StatItem {
+/** Stat item to display. Local to this renderer (icon-resolved); the
+ *  transcript's own `StatItem` is the key-based row shape it derives from. */
+interface StatItem {
   icon: TeXRAIconName;
   label: string;
   value: string;

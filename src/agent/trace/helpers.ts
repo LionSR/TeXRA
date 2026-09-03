@@ -7,10 +7,9 @@
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
  *
- * Subscribers continue to receive the same events they did when these
- * lived as methods on `TexraTrace` — `TexraTranscriptRecorder` maps
- * every domain `key` here onto a TeXRA `MessageType`, and `level=error`
- * with `messageType: ERROR` renders the same way it always did.
+ * `TexraTranscriptRecorder` maps every domain `key` here onto a TeXRA
+ * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
+ * error row.
  */
 import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
 import {

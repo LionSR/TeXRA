@@ -470,22 +470,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         <Text aria-hidden color={COLOR_HINT}>
           {POINTER}{' '}
         </Text>
-        {disabled && props.disabledMessage ? (
-          <Box
-            flexGrow={1}
-            flexShrink={1}
-            height={draftContentRows}
-            overflowY="hidden"
-          >
+        <Box
+          flexGrow={1}
+          flexShrink={1}
+          height={draftContentRows}
+          overflowY="hidden"
+        >
+          {disabled && props.disabledMessage ? (
             <Text dimColor>{disabledDisplayText}</Text>
-          </Box>
-        ) : (
-          <Box
-            flexGrow={1}
-            flexShrink={1}
-            height={draftContentRows}
-            overflowY="hidden"
-          >
+          ) : (
             <BaseTextInput
               value={value}
               focus={keyboardActive && !disabled && !reverseSearchOpen}
@@ -520,8 +513,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               onInputChunkSubmit={handleInputChunkSubmit}
               onSubmit={showPalette ? () => undefined : handleSubmit}
             />
-          </Box>
-        )}
+          )}
+        </Box>
       </Box>
     </Box>
   );

@@ -522,44 +522,32 @@ export class SessionHostInteractions implements HostInteractions {
   requestToolEditApproval(
     request: ToolEditApprovalRequest,
   ): Promise<ToolEditApprovalResult> {
-    return this.enqueue<ToolEditApprovalResult>(
-      'toolEdit',
-      request.streamId,
-      (interactions) => interactions.requestToolEditApproval?.(request),
-      (cause) => cancellationResultFor('toolEdit', cause),
+    return this.enqueue('toolEdit', request.streamId, (interactions) =>
+      interactions.requestToolEditApproval?.(request),
     );
   }
 
   requestBashApproval(
     request: HostBashApprovalRequest,
   ): Promise<BashSettlement> {
-    return this.enqueue<BashSettlement>(
-      'bash',
-      request.streamId,
-      (interactions) => interactions.requestBashApproval?.(request),
-      (cause) => cancellationResultFor('bash', cause),
+    return this.enqueue('bash', request.streamId, (interactions) =>
+      interactions.requestBashApproval?.(request),
     );
   }
 
   requestPlanApproval(
     request: HostPlanApprovalRequest,
   ): Promise<PlanApprovalResult> {
-    return this.enqueue<PlanApprovalResult>(
-      'planApproval',
-      request.streamId,
-      (interactions) => interactions.requestPlanApproval?.(request),
-      (cause) => cancellationResultFor('planApproval', cause),
+    return this.enqueue('planApproval', request.streamId, (interactions) =>
+      interactions.requestPlanApproval?.(request),
     );
   }
 
   requestAgentProposal(
     request: HostAgentProposalRequest,
   ): Promise<ProposalResult> {
-    return this.enqueue<ProposalResult>(
-      'proposal',
-      request.streamId,
-      (interactions) => interactions.requestAgentProposal?.(request),
-      (cause) => cancellationResultFor('proposal', cause),
+    return this.enqueue('proposal', request.streamId, (interactions) =>
+      interactions.requestAgentProposal?.(request),
     );
   }
 
@@ -567,22 +555,18 @@ export class SessionHostInteractions implements HostInteractions {
     request: HostRetryRequest,
     options?: HostRetryInteractionOptions,
   ): Promise<RetryResult> {
-    return this.enqueue<RetryResult>(
-      'retry',
-      request.streamId,
-      (interactions) => interactions.requestRetry?.(request, options),
-      (cause) => cancellationResultFor('retry', cause),
+    return this.enqueue('retry', request.streamId, (interactions) =>
+      interactions.requestRetry?.(request, options),
     );
   }
 
   askUserQuestion(
     request: HostUserQuestionRequest,
   ): Promise<UserQuestionSettlement> {
-    return this.enqueue<UserQuestionSettlement>(
+    return this.enqueue(
       'userQuestion',
       request.streamId || undefined,
       (interactions) => interactions.askUserQuestion?.(request),
-      (cause) => cancellationResultFor('userQuestion', cause),
     );
   }
 
@@ -658,14 +642,22 @@ export class SessionHostInteractions implements HostInteractions {
     return this.attachments.at(-1);
   }
 
-  private enqueue<TResult>(
-    kind: ProgressPermissionKind,
+  /**
+   * Register one response-bearing request. Its cancellation fallback is
+   * derived from `kind` through {@link cancellationResultFor} rather than
+   * supplied beside it, so a request can never be paired with another kind's
+   * cancellation result, and the settled type follows the same key.
+   */
+  private enqueue<K extends SettledInteractionKind>(
+    kind: K,
     streamId: StreamTabId | null | undefined,
-    dispatch: (interactions: HostInteractions) => Promise<TResult> | undefined,
-    cancellationResult: (cause?: string) => TResult,
-  ): Promise<TResult> {
+    dispatch: (
+      interactions: HostInteractions,
+    ) => Promise<HostInteractionResultByKind[K]> | undefined,
+  ): Promise<HostInteractionResultByKind[K]> {
+    type TResult = HostInteractionResultByKind[K];
     if (this.disposed) {
-      return Promise.resolve(cancellationResult());
+      return Promise.resolve(cancellationResultFor(kind));
     }
 
     return new Promise<TResult>((resolve, reject) => {
@@ -673,7 +665,7 @@ export class SessionHostInteractions implements HostInteractions {
         kind,
         streamId: streamId ?? undefined,
         dispatch,
-        cancellationResult,
+        cancellationResult: (cause) => cancellationResultFor(kind, cause),
         settle: (result) => resolve(result as TResult),
         reject,
         cancellationRequested: false,

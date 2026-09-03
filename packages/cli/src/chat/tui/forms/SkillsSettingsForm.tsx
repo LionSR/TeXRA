@@ -27,7 +27,7 @@ interface SkillsSettingsData {
   readonly issueCount: number;
 }
 
-export interface SkillsSettingsFormProps {
+interface SkillsSettingsFormProps {
   readonly availableRows?: number;
   readonly stores: SettingsStores;
   readonly onClose: () => void;

@@ -42,8 +42,8 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
 import {
+  collectKnownSessionLinks,
   getThreadSummary,
   getOpenTurnDraft,
   listThreadsByStatus,
@@ -242,6 +242,9 @@ export class ExternalInquiryTool extends defineTool({
     // and stay usable in contexts without a wired runtime host.
     switch (input.command) {
       case 'ask': {
+        // Guard only: interactions exist iff the run context carries a
+        // session, so `executeAsk` reaches them through that one session
+        // rather than carrying a second handle to the same object.
         requireInteractions('inquiry', context);
         return this.executeAsk({
           input,

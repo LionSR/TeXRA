@@ -177,27 +177,6 @@ describe('JsonRpcConnection', () => {
     });
   });
 
-  it('replies to server-to-client requests via the registered handler', async () => {
-    const { connection, serverSends, collectClientFrames } = makePair();
-    connection.onServerRequest('client/echo', async (params) => params);
-
-    serverSends({
-      jsonrpc: '2.0',
-      id: 99,
-      method: 'client/echo',
-      params: { hello: 'world' },
-    });
-
-    const frames = await collectClientFrames();
-    expect(frames).toEqual([
-      {
-        jsonrpc: '2.0',
-        id: 99,
-        result: { hello: 'world' },
-      },
-    ]);
-  });
-
   it('rejects pending requests when the connection is disposed', async () => {
     const { connection } = makePair();
     const pending = connection.request('never').catch((err: Error) => err);

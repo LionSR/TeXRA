@@ -94,35 +94,6 @@ function extractNamedDocuments(content: string): NamedDocument[] {
 }
 
 /**
- * Extract multiple document elements from an XML container tag
- * Used as a fallback for extracting documents when XML parsing fails
- */
-function extractMultipleTextFromTag(
-  inputContent: string,
-  containerTag?: string,
-): NamedDocument[] {
-  // If containerTag is provided, try to extract content from within that container
-  if (containerTag) {
-    const containerRegex = new RegExp(
-      `<${containerTag}>(.*?)<\/${containerTag}>`,
-      's',
-    );
-    const containerMatch = inputContent.match(containerRegex);
-
-    if (containerMatch?.[1]) {
-      const documents = extractNamedDocuments(containerMatch[1]);
-      if (documents.length > 0) {
-        return documents;
-      }
-      // If no documents found in container, will fall through to the fallback
-    }
-  }
-
-  // Fallback: extract documents directly from the input content
-  return extractNamedDocuments(inputContent);
-}
-
-/**
  * Extract content from XML document element for multiple document case
  * we should have a fall back to regex if this fails
  */
@@ -213,7 +184,15 @@ export function extractDocuments(
   containerTag: string,
   preferredName?: string,
 ): MultipleExtractionResult {
-  const documents = extractMultipleTextFromTag(outputContent, containerTag);
+  // Primary tier: `<document name="...">` children inside the container tag,
+  // falling back to a whole-response scan when the container is absent or
+  // holds none of them.
+  const container = outputContent.match(
+    new RegExp(`<${containerTag}>(.*?)<\/${containerTag}>`, 's'),
+  )?.[1];
+  const inContainer = container ? extractNamedDocuments(container) : [];
+  const documents =
+    inContainer.length > 0 ? inContainer : extractNamedDocuments(outputContent);
   if (documents.length > 0) {
     return { documents, method: 'simple' };
   }

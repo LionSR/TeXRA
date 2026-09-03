@@ -208,7 +208,6 @@ class StreamTab extends LitElement {
           'tab-container': true,
           'is-active': this.active,
           'is-compact': this.compact,
-          'has-children': hasChildren,
           [`status-${statusKey}`]: Boolean(statusKey),
           'has-pending-approval': this.hasPendingApproval,
         })}

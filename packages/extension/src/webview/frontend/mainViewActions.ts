@@ -13,6 +13,7 @@ import { postMessage } from '@shared/hostBridge';
 import type {
   ActionDetail,
   CompareMessage,
+  DocumentFileType,
   LatexdiffMessage,
   LatexDiffsActionDetail,
   LatexdiffvcMessage,
@@ -20,18 +21,15 @@ import type {
   MainViewExecuteMessage,
   MergeMessage,
   MultiFiles,
+  MultipleDocumentFileType,
   PackLatexdiffvcMessage,
   PackMultipleMessage,
+  SessionType,
 } from '@shared/schemas';
 import { buildMainViewExecuteMessage } from '@shared/mainView/executionFormState';
 
 // Local imports - main view
-import {
-  SESSION_TYPES,
-  type DocumentFileType,
-  type MultipleDocumentFileType,
-  type SessionType,
-} from './constants';
+import { SESSION_TYPES } from './constants';
 import {
   agentConfigBanner$,
   apiKeyBanner$,

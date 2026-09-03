@@ -1,10 +1,7 @@
-import {
-  formatGoalTime,
-  goalElapsedMs,
-  type StreamTabId,
-} from '@shared/schemas';
+import { goalElapsedMs, type StreamTabId } from '@shared/schemas';
 import { GoalStore, isGoalEnabled } from '@tools/goal';
 import { renderPrompt } from '@utils/prompt';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { getContinuationTemplate } from '../runtime/bundledPrompts';
 
@@ -38,6 +35,6 @@ export async function maybeBuildGoalContinuation(
   const template = await getContinuationTemplate();
   return renderPrompt(template, {
     objective: goal.objective,
-    timeUsed: formatGoalTime(goalElapsedMs(goal)),
+    timeUsed: formatCompactDuration(goalElapsedMs(goal)),
   });
 }

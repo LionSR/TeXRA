@@ -114,15 +114,6 @@ export class FileManager {
     }
   }
 
-  // Multi-list categories are user-owned (only mutated through the picker /
-  // drag-drop / Add opened) so we don't push disk listings into them — just
-  // refresh the still-single-slot base-file dropdown and the empty-workspace banner.
-  async handleRefreshAllFiles(): Promise<void> {
-    const inputFiles = await getFileLister().list('input');
-    this.postBaseFiles(inputFiles, { preserveBaseFile: true });
-    this.postGettingStartedBanner(inputFiles.length === 0);
-  }
-
   async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
     const fileType = message.fileType ?? 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(

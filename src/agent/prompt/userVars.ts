@@ -46,17 +46,6 @@ import { StorageFS } from '@utils/files/storageFS';
 /** Relative path from an agent directory to the shared LaTeX style rules file. */
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
 
-/**
- * Fixed runtime template variables owned by `buildUserVars`.
- *
- * Agent-creation templates render once when a YAML file is produced, then the
- * generated agent renders again at runtime. These tokens must pass through the
- * creation render literally so the runtime render can substitute them later.
- * User-defined `requiredFilesInternal` variables are intentionally not in this
- * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
- * disabled until there is a separate validation story for them.
- */
-
 /** Transient user-variable key carrying the run's live model id. */
 export const USER_VAR_MODEL = 'MODEL';
 /** Transient user-variable key carrying the current user instruction. */
@@ -67,6 +56,16 @@ const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(
   USER_VAR_RUNTIME_TOKENS,
 );
 
+/**
+ * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
+ *
+ * Agent-creation templates render once when a YAML file is produced, then the
+ * generated agent renders again at runtime. These tokens must pass through the
+ * creation render literally so the runtime render can substitute them later.
+ * User-defined `requiredFilesInternal` variables are intentionally not in this
+ * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
+ * disabled until there is a separate validation story for them.
+ */
 export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
@@ -299,7 +298,10 @@ type FileCategoryConfig = {
   single?: keyof AgentConfig;
 };
 
-const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
+const FILE_CATEGORIES: Record<
+  FileCategoryPrefix | 'MEDIA',
+  FileCategoryConfig
+> = {
   INPUT: { multiple: 'inputFiles' },
   CONTEXT: { multiple: 'contextFiles' },
   MEDIA: { multiple: 'mediaFiles' },
@@ -307,9 +309,11 @@ const FILE_CATEGORIES: Record<string, FileCategoryConfig> = {
 };
 
 /** Get the multi-list for a category (filtering empties) */
-function getCategoryFiles(config: AgentConfig, category: string): string[] {
+function getCategoryFiles(
+  config: AgentConfig,
+  category: FileCategoryPrefix | 'MEDIA',
+): string[] {
   const cat = FILE_CATEGORIES[category];
-  if (!cat) return [];
   const list = (config[cat.multiple] as string[] | undefined) ?? [];
   const single = cat.single ? (config[cat.single] as string | null) : null;
   return unique([single, ...list].filter(isNonEmptyString));

@@ -12,7 +12,7 @@
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { getCodexStatus } from '@auth/codex';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import type { TerminalRunResult, TerminalRunner } from '@hosts/uiHosts';
+import type { TerminalRunner } from '@hosts/uiHosts';
 import { createLog } from '@logger/logUtils';
 import {
   API_PROVIDERS,
@@ -31,7 +31,7 @@ import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 const credentialLog = createLog('Setup Credentials');
 
 /** Per-provider API key surface. */
-export interface SetupSecretsAdapter {
+interface SetupSecretsAdapter {
   deleteApiKey(provider: ApiProvider): Promise<void>;
   /**
    * Whether a usable key is resolved for the provider (secret storage, then
@@ -71,21 +71,6 @@ interface SetupExtensionAdapter {
   install(extensionId: string): Promise<void>;
 }
 
-/**
- * Integrated-terminal surface. The setup agent uses this for commands
- * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
- * other interactive TTY prompts, and any flow where the user must type
- * into the running process.
- *
- * Implementations should prefer VS Code's stable `Terminal.shellIntegration`
- * API (since 1.93) so the agent can read back exit code + output. When
- * shell integration is unavailable the implementation may return an
- * `undefined` exit code with empty output — the caller treats that the
- * same as "user interrupted", since neither path tells us anything
- * actionable.
- */
-export type { TerminalRunResult };
-
 /** Host-varying setup capabilities. */
 export interface SetupPlatform {
   /** Product surface currently running the shared setup agent. */
@@ -111,20 +96,15 @@ function assertTexraScopedKey(key: string): void {
 /** TeXRA account status shared by every host. */
 export async function getSetupAuthStatus(): Promise<{
   authenticated: boolean;
-  remoteAgentCatalogAvailable: boolean;
   email?: string;
 }> {
   const authenticated = await SupabaseClient.isAuthenticated();
   if (!authenticated) {
-    return { authenticated: false, remoteAgentCatalogAvailable: false };
+    return { authenticated: false };
   }
 
   const user = await SupabaseClient.getUser();
-  return {
-    authenticated: true,
-    remoteAgentCatalogAvailable: true,
-    email: user?.email,
-  };
+  return { authenticated: true, email: user?.email };
 }
 
 /** Value-free credential capability exposed to setup tools. */

@@ -98,6 +98,19 @@ export interface TerminalRunResult {
   timedOut: boolean;
 }
 
+/**
+ * Integrated-terminal surface. The setup agent uses this for commands
+ * the captured-stdio `bash` tool cannot handle: `sudo` password prompts,
+ * other interactive TTY prompts, and any flow where the user must type
+ * into the running process.
+ *
+ * Implementations should prefer VS Code's stable `Terminal.shellIntegration`
+ * API (since 1.93) so the agent can read back exit code + output. When
+ * shell integration is unavailable the implementation may return an
+ * `undefined` exit code with empty output — the caller treats that the
+ * same as "user interrupted", since neither path tells us anything
+ * actionable.
+ */
 export interface TerminalRunner {
   runCommand(request: TerminalRunRequest): Promise<TerminalRunResult>;
 }

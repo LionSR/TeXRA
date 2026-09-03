@@ -13,7 +13,7 @@ export const TraceDataSchema = TraceDocumentSchema.extend({
   entries: z.array(TraceStreamLogEntrySchema),
 });
 
-export type TraceData = z.infer<typeof TraceDataSchema>;
+type TraceData = z.infer<typeof TraceDataSchema>;
 
 /** Parse an exported trace before replaying it through the trusted UI path. */
 export function parseTraceData(raw: unknown): TraceData {

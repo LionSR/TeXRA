@@ -80,7 +80,7 @@ export interface RunLatexdiffForExecutionParams {
   readonly progress: DiffProgressReporter;
 }
 
-export interface LatexdiffExecutionResult {
+interface LatexdiffExecutionResult {
   readonly outcome: DiffRunOutcome;
   /** Resolved execution, when one was identified. */
   readonly executionId?: ExecutionId;

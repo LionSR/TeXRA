@@ -173,17 +173,6 @@ function requireSupportedMedia(
   if (unsupported) throw new Error(IMAGE_INPUT_ONLY_ERROR);
 }
 
-function requireLanguageModelPort(): LanguageModelPort {
-  const port = platform().languageModel;
-  if (!port.isAvailable()) {
-    throw new LanguageModelPortError(
-      LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
-      'The VS Code Language Model API is unavailable in this host. Copilot models require a compatible VS Code extension host.',
-    );
-  }
-  return port;
-}
-
 /** Model handler for subscription-backed models exposed through `vscode.lm`. */
 export class ModelHandlerVscodeLm extends ModelHandler<
   LanguageModelMessage,
@@ -213,7 +202,14 @@ export class ModelHandlerVscodeLm extends ModelHandler<
   }
 
   async getClient(): Promise<LanguageModelPort> {
-    return requireLanguageModelPort();
+    const port = platform().languageModel;
+    if (!port.isAvailable()) {
+      throw new LanguageModelPortError(
+        LANGUAGE_MODEL_PORT_ERROR_CODE.HOST_UNAVAILABLE,
+        'The VS Code Language Model API is unavailable in this host. Copilot models require a compatible VS Code extension host.',
+      );
+    }
+    return port;
   }
 
   /**

@@ -5,6 +5,7 @@
 // Third-party imports
 import {
   logWebFetch,
+  logWebSearch,
   startCompactionActivity,
   type AgentTrace,
   type CompactionActivityOperation,
@@ -13,13 +14,13 @@ import {
   extractWebFetchResultFields,
   mapAnthropicWebSearchEntries,
   type WebFetchResult,
+  type WebSearchResult,
 } from '@agent/types/ServerTools';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type {
   CompactionActivityOutcome,
   StreamDiagnostics,
 } from '@shared/schemas';
-import { emitServerToolResult } from './serverToolResultEmission';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
 // BetaMessageStream is only exported from lib/ — not re-exported from the SDK's
 // public resources/ entry point. The BetaMessageStream class is what
@@ -193,9 +194,7 @@ export class AnthropicStreamHandler {
 
     this.compactionActivity?.finish(compactionOutcome);
 
-    // Finalize output stream
-    this.state.outputStream?.finalize();
-    this.state.outputStream = null;
+    this.finalizeOutputStream();
 
     // Clear state to prevent memory leaks
     this.state.pendingServerTools.clear();
@@ -352,14 +351,15 @@ export class AnthropicStreamHandler {
     const entries = mapAnthropicWebSearchEntries(block.content);
 
     // Emit to progress view
-    if (entries.length > 0 || query) {
-      emitServerToolResult(this.logger, this.config.progressViewEnabled, {
+    if ((entries.length > 0 || query) && this.config.progressViewEnabled) {
+      const result: WebSearchResult = {
         query,
         results: entries,
         provider: 'anthropic',
         callId: block.tool_use_id,
         status: 'completed',
-      });
+      };
+      logWebSearch(this.logger, result);
     }
   }
 

@@ -157,8 +157,10 @@ export async function runAgent(
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
 
         if (shouldRegister) {
+          // `launchStreamId` is the same id: `applyHelperModelPreference` only
+          // ever swaps `model`, so `config.agent` is `request.config.agent`.
           await registerExecution(executionId, config, config.agent, {
-            streamId: getStreamTabId(config.agent, { executionId }),
+            streamId: launchStreamId,
             identity: { kind: 'agent', agent: config.agent },
             userFollowUpSupport,
           });

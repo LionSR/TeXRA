@@ -51,7 +51,7 @@ import {
 } from './subscriptionBindings';
 import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
-import type { GhIssue, GhPullRequest } from './prTypes';
+import type { GhIssue } from './prTypes';
 
 const SUBSCRIPTION_PATH_DESCRIPTION =
   'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
@@ -489,10 +489,7 @@ async function execFindCurrent(input: FindCurrentInput): Promise<ToolResult> {
     throw new ToolError('HEAD is detached: cannot infer a PR branch.');
   }
   const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-  const res =
-    await ghGet<
-      Array<{ number: number; html_url: string } & Partial<GhPullRequest>>
-    >(apiPath);
+  const res = await ghGet<Array<{ number: number; html_url: string }>>(apiPath);
   if (res.status !== 200) {
     throw new ToolError(`Unexpected GitHub response status: ${res.status}`);
   }

@@ -22,7 +22,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const log = createLog('JsonRpcConnection');
 
 type NotificationHandler = (params: unknown) => void;
-type ServerRequestHandler = (params: unknown) => Promise<unknown>;
 
 export class JsonRpcConnection {
   private readonly conn: MessageConnection;
@@ -42,10 +41,6 @@ export class JsonRpcConnection {
 
   onNotification(method: string, handler: NotificationHandler): void {
     this.conn.onNotification(method, handler);
-  }
-
-  onServerRequest(method: string, handler: ServerRequestHandler): void {
-    this.conn.onRequest(method, handler);
   }
 
   notify(method: string, params?: unknown): void {

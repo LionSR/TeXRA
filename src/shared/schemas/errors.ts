@@ -78,6 +78,20 @@ export type ProviderErrorClassification = z.infer<
 >;
 
 /**
+ * The independent classification markers older persisted records carried before
+ * the canonical `classification` field. One owner for the list, shared by both
+ * legacy readers below so they cannot drift apart.
+ */
+const LEGACY_CLASSIFICATION_KEYS = [
+  'exhaustionReason',
+  'missingApiKey',
+  'contextWindow',
+  'isCredentialExhausted',
+  'isUpstreamCreditDepleted',
+  'isChatGptSubscriptionLimited',
+] as const;
+
+/**
  * Normalizes persisted provider errors at the storage readers below. Older
  * records carried independent classification markers; preserve their original
  * runtime precedence (missing API key, context window, then exhaustion) while
@@ -94,21 +108,14 @@ function normalizeLegacyProviderErrorFields(value: unknown): unknown {
     record = { ...rest, userRetryable: retryable };
   }
 
-  const legacyClassificationKeys = [
-    'exhaustionReason',
-    'missingApiKey',
-    'contextWindow',
-    'isCredentialExhausted',
-    'isUpstreamCreditDepleted',
-    'isChatGptSubscriptionLimited',
-  ] as const;
-  const hasLegacyClassification = legacyClassificationKeys.some((key) =>
-    Object.hasOwn(record, key),
-  );
+  if (!LEGACY_CLASSIFICATION_KEYS.some((key) => Object.hasOwn(record, key))) {
+    return record;
+  }
+
+  // A record carrying the canonical field *and* a legacy marker is mixed, not
+  // migratable: surface it as a parse failure rather than guessing which wins.
   if ('classification' in record) {
-    return hasLegacyClassification
-      ? { ...record, classification: { kind: undefined } }
-      : record;
+    return { ...record, classification: { kind: undefined } };
   }
 
   const {
@@ -135,8 +142,6 @@ function normalizeLegacyProviderErrorFields(value: unknown): unknown {
   } else if (isCredentialExhausted === true) {
     kind = 'relay-limit';
   }
-
-  if (!hasLegacyClassification) return record;
 
   // Preserve malformed present values as a parse failure rather than silently
   // treating corrupted persisted data as unclassified.
@@ -218,10 +223,10 @@ export type ProviderErrorPartial = z.infer<typeof ProviderErrorPartialSchema>;
 export function getExhaustionReason(
   errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
 ): ExhaustionReason | undefined {
-  const kind = errorDetails?.classification?.kind;
-  return ExhaustionReasonSchema.safeParse(kind).success
-    ? (kind as ExhaustionReason)
-    : undefined;
+  const parsed = ExhaustionReasonSchema.safeParse(
+    errorDetails?.classification?.kind,
+  );
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Whether an identical retry needs a credential or route change first. */
@@ -248,12 +253,7 @@ export type RetryErrorInfo = z.infer<typeof RetryErrorInfoSchema>;
 
 const legacyRetryErrorFields = [
   'retryable',
-  'exhaustionReason',
-  'missingApiKey',
-  'contextWindow',
-  'isCredentialExhausted',
-  'isUpstreamCreditDepleted',
-  'isChatGptSubscriptionLimited',
+  ...LEGACY_CLASSIFICATION_KEYS,
   'isRelayError',
 ] as const;
 

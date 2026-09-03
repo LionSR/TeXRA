@@ -132,9 +132,10 @@ export interface PendingApprovalSummary {
   readonly kind: PendingApprovalKind;
 }
 
-const CURRENT = signal<PendingApproval | undefined>(undefined);
-
-export const currentApproval = CURRENT;
+/** The approval the modal is showing, or `undefined` when none is
+ *  foregrounded. Projected from the queue head by {@link presentForeground};
+ *  every other surface reads it. */
+export const currentApproval = signal<PendingApproval | undefined>(undefined);
 
 /**
  * `preparing` holds a slot for a request that cannot be shown yet: invisible
@@ -213,7 +214,7 @@ function foregroundItem(): ApprovalQueueItem | undefined {
 
 function presentForeground(): void {
   const item = foregroundItem();
-  if (!item || CURRENT.get()) return;
+  if (!item || currentApproval.get()) return;
 
   if (!item.presented) {
     item.presented = true;
@@ -230,7 +231,7 @@ function presentForeground(): void {
   }
   if (foregroundItem() !== item) return;
 
-  CURRENT.set({
+  currentApproval.set({
     payload: item.payload,
     decide: (decision) => {
       settleItems((candidate) => candidate === item, decision);
@@ -251,7 +252,7 @@ function updateQueue(
   const previousForeground = foregroundItem();
   QUEUE.set(mutate());
   const foregroundChanged = previousForeground !== foregroundItem();
-  if (foregroundChanged) CURRENT.set(undefined);
+  if (foregroundChanged) currentApproval.set(undefined);
   settle?.();
   if (foregroundChanged) presentForeground();
 }

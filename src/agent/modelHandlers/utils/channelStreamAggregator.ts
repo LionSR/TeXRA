@@ -17,14 +17,14 @@ export abstract class ChannelStreamAggregator {
   protected readonly toolCalls = new ToolCallAccumulator();
 
   /** Appends a content delta, ignoring empty strings. */
-  protected pushContent(delta: string | undefined | null): void {
+  pushContent(delta: string | undefined | null): void {
     if (delta) {
       this.contentParts.push(delta);
     }
   }
 
   /** Appends a reasoning delta, ignoring empty strings. */
-  protected pushReasoning(delta: string | undefined | null): void {
+  pushReasoning(delta: string | undefined | null): void {
     if (delta) {
       this.reasoningParts.push(delta);
     }

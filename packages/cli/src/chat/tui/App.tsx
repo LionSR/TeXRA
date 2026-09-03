@@ -255,11 +255,18 @@ export function App(props: AppProps): React.JSX.Element {
   );
 
   const stdin = useStdin();
-  const foregroundOpen =
-    activeApprovalVisible ||
-    activeForm !== undefined ||
-    infoPane !== undefined ||
-    foregroundReader !== undefined;
+  // One owner of "a foreground surface is up": the surface kind itself.
+  // `undefined` is exactly the no-surface case (every reader target carries a
+  // `kind`), so nothing derives that fact a second time and the two can never
+  // disagree.
+  const foregroundKind = foregroundSurfaceKind({
+    activeFormOpen: activeForm !== undefined,
+    formBusy,
+    infoPaneOpen: infoPane !== undefined,
+    pendingApproval: activeApprovalVisible,
+    readerKind: foregroundReader?.kind,
+  });
+  const foregroundOpen = foregroundKind !== undefined;
   const childInputHidden =
     focusedChildFollowUpRoute({
       activeStreamId,
@@ -483,13 +490,6 @@ export function App(props: AppProps): React.JSX.Element {
     dispatchChildListSelection({ kind: 'focusStream', streamId });
     focusStreamAndPromoteApprovals(streamId);
   }, []);
-  const foregroundKind = foregroundSurfaceKind({
-    activeFormOpen: activeForm !== undefined,
-    formBusy,
-    infoPaneOpen: infoPane !== undefined,
-    pendingApproval: activeApprovalVisible,
-    readerKind: foregroundReader?.kind,
-  });
   const approvalKind =
     foregroundKind === 'approval' ? pending?.payload.kind : undefined;
   const foregroundMaxRows = foregroundMaxRowsForKind({

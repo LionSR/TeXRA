@@ -175,12 +175,14 @@ export async function resolveCliAgent(
   await loadAgents({ includeRemote: false });
   const agent = lookupCliAgent(name, lookupCategory);
 
-  if (!agent) {
-    await loadAgents();
-    return lookupCliAgent(name, lookupCategory);
-  }
-
-  if (name.includes(':') || !(await SupabaseClient.isAuthenticated())) {
+  // Keep the local hit only when a remote-inclusive reload could not change
+  // it: a source-qualified name already pins its tier, and a signed-out
+  // session has no remote catalog to prefer. Every other case (including a
+  // local miss) falls through to the full load below.
+  if (
+    agent &&
+    (name.includes(':') || !(await SupabaseClient.isAuthenticated()))
+  ) {
     return agent;
   }
 

@@ -52,7 +52,7 @@ interface ChatExportResult {
   readonly absolutePath: string;
 }
 
-export interface LatexExportResult extends ChatExportResult {
+interface LatexExportResult extends ChatExportResult {
   /** Absolute path to the compiled PDF, or undefined if compilation failed. */
   readonly pdfPath?: string;
   /** Tail of the LaTeX compile log, present when compilation failed. */

@@ -301,13 +301,12 @@ Durability: the journal is keyed by meta.name and the agent field within this se
 
     const { meta, defaultAgent } = await runPhase(() => {
       const { meta } = parseWorkflowScript(script);
-      const resolved = requireWorkflowOrToolUseAgent(
-        input.agent,
-        runScope.delegationAgentScope ?? undefined,
-      );
       return {
         meta,
-        defaultAgent: resolved.agent,
+        defaultAgent: requireWorkflowOrToolUseAgent(
+          input.agent,
+          runScope.delegationAgentScope ?? undefined,
+        ),
       };
     });
     // Named checkpoint, not content- or toolCallId-keyed: a retrying model

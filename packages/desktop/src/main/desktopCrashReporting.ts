@@ -1,6 +1,6 @@
 import { createDesktopCrashEventScrubber } from './desktopCrashEventScrubber.js';
 
-export interface DesktopCrashReportingInitOptions {
+interface DesktopCrashReportingInitOptions {
   sensitivePaths: readonly (string | undefined)[];
   log?: Pick<Console, 'debug' | 'error'>;
 }

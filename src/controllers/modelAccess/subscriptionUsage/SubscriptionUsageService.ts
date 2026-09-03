@@ -72,9 +72,10 @@ interface SubscriptionUsageServiceInit {
 }
 
 interface SubscriptionUsageAdapter {
-  readonly resolveVariant?: () => boolean | string | Promise<boolean | string>;
+  /** Credential-derived request variant (today: the GLM region flag). */
+  readonly resolveVariant?: () => boolean | Promise<boolean>;
   readonly fetch: (
-    variant: boolean | string | undefined,
+    variant: boolean | undefined,
   ) => Promise<ParsedSubscriptionUsage | null>;
 }
 
@@ -202,7 +203,7 @@ export class SubscriptionUsageService {
     options: { readonly forceRefresh?: boolean } = {},
   ): Promise<SubscriptionUsageSnapshot> {
     const adapter = this.adapters[provider];
-    let variant: boolean | string | undefined;
+    let variant: boolean | undefined;
     try {
       variant = await adapter.resolveVariant?.();
     } catch {
@@ -261,7 +262,7 @@ export class SubscriptionUsageService {
 
   private async fetchUsage(
     provider: SubscriptionUsageProvider,
-    variant: boolean | string | undefined,
+    variant: boolean | undefined,
   ): Promise<SubscriptionUsageSnapshot> {
     try {
       const parsed = await this.adapters[provider].fetch(variant);

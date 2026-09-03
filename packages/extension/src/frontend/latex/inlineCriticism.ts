@@ -41,10 +41,16 @@ const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
 const CODE_TOOL = 'criticize:tool';
 
+/** What {@link registerInlineCriticism} attached the feature to. */
+interface CriticismRegistration {
+  readonly context: vscode.ExtensionContext;
+  readonly events: SessionEventHub;
+}
+
 let collection: vscode.DiagnosticCollection | undefined;
 let runFactUnsubscribe: (() => void) | undefined;
-let extensionContext: vscode.ExtensionContext | undefined;
-let sessionEvents: SessionEventHub | undefined;
+/** The single owner of the context and event hub `enable` works against. */
+let registration: CriticismRegistration | undefined;
 
 /** Criticism severity (0–5) → VS Code DiagnosticSeverity. */
 function mapSeverity(severity: number): vscode.DiagnosticSeverity {
@@ -137,12 +143,12 @@ function handleAddOutputFiles(payload: AddOutputFilesPayload): void {
   );
 }
 
-function enable(context: vscode.ExtensionContext): void {
+function enable({ context, events }: CriticismRegistration): void {
   if (collection) return;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
   runFactUnsubscribe = subscribeAddOutputFilesRunFact(
-    sessionEvents ?? defaultSession().events,
+    events,
     handleAddOutputFiles,
   );
   log.info('Inline criticism diagnostics enabled');
@@ -197,9 +203,8 @@ export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   events: SessionEventHub = defaultSession().events,
 ): void {
-  extensionContext = context;
-  sessionEvents = events;
-  if (isInlineCriticismEnabled()) enable(context);
+  registration = { context, events };
+  if (isInlineCriticismEnabled()) enable(registration);
   context.subscriptions.push({ dispose: disable });
 }
 
@@ -214,11 +219,11 @@ export async function setInlineCriticismEnabled(
     GlobalStateKey.INLINE_CRITICISM_ENABLED,
     enabled,
   );
-  if (!extensionContext) {
+  if (!registration) {
     throw new Error(
       'setInlineCriticismEnabled called before registerInlineCriticism',
     );
   }
-  if (enabled) enable(extensionContext);
+  if (enabled) enable(registration);
   else disable();
 }

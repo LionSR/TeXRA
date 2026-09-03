@@ -7,7 +7,7 @@ import {
 
 import { ListForm } from './_shared/ListForm';
 
-export interface ApprovalPolicyFormProps {
+interface ApprovalPolicyFormProps {
   readonly currentPolicy: TexraApprovalPolicy;
   readonly availableRows?: number;
   readonly onSelect: (value: TexraApprovalPolicy) => void;

@@ -22,10 +22,8 @@ import type {
 } from '@shared/schemas';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
-import { formatDuration } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { toDeliveryUsage } from './deliveryEnvelope';
 
 interface CreateChildStreamOptions {
   streamPrefix: string;
@@ -40,11 +38,6 @@ interface CreateChildStreamOptions {
 }
 
 interface FinalizeChildStreamOptions {
-  wallTimeMs?: number;
-  usage?: {
-    input_tokens: number;
-    output_tokens: number;
-  } | null;
   /**
    * The child's report of its own exit. A report, not a verdict: the stream
    * phase owns the terminal outcome, so an explicit stop/kill that already
@@ -309,14 +302,6 @@ async function finalizeChildStream(
     if (errorMessage) {
       logger.error(errorMessage);
     }
-    if (options.wallTimeMs != null) {
-      logger.info(`Completed in ${formatDuration(options.wallTimeMs)}`);
-    }
-    const usage = toDeliveryUsage(options.usage);
-    if (usage) {
-      logger.info('Tokens', { data: usage });
-    }
-
     // What the child saw, in the shared vocabulary. The stream phase decides
     // which of this and an already-landed stop is the run's terminal fact;
     // that resolution lives in `finalizeRunTerminal`.

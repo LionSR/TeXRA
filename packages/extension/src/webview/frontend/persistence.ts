@@ -9,7 +9,7 @@
  *
  * Both paths apply state through `applyState`, which owns output-file reset
  * and per-mode instruction restore. Behavior is pinned by
- * `src/test-kernel/webview/MainAppPersistenceRestore.vitest.mts`.
+ * `src/test-kernel/webview/MainAppPersistenceRestore.vitest.ts`.
  *
  * ## Single writer
  *

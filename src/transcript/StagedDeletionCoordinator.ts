@@ -336,8 +336,14 @@ export class StagedDeletionCoordinator {
     return { restored, pendingCleanup, discarded };
   }
 
-  /** Restore writes buffered behind a staging attempt after live data returns. */
-  private async replayStagedWrites(
+  /**
+   * Replay the writes buffered behind a staging attempt once live data is back,
+   * then release every owner without an await-sized gap. The loop re-reads
+   * `writes` after each awaited batch, so writes that arrived during a batch
+   * are drained too; it exits only once the buffer is empty (or a failed batch
+   * restores its values and throws, leaving ownership held).
+   */
+  private async drainStagedWrites(
     stream: StreamTabId,
     state: DeletionState,
   ): Promise<void> {
@@ -357,16 +363,6 @@ export class StagedDeletionCoordinator {
         throw error;
       }
     }
-  }
-
-  /** Drain buffered writes and release every owner without an await-sized gap. */
-  private async drainStagedWrites(
-    stream: StreamTabId,
-    state: DeletionState,
-  ): Promise<void> {
-    do {
-      await this.replayStagedWrites(stream, state);
-    } while (state.writes.size > 0);
     this.releaseDeletionOwnership(stream, state);
   }
 

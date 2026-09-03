@@ -35,7 +35,6 @@ import {
   formatCliAccountAccessSummary,
   type CliAccountStatus,
   type CliModelAccessSelection,
-  type CliModelAccessStatus,
 } from './modelAccessRoute';
 
 export type CliOrchestrationAction =

@@ -207,14 +207,15 @@ export function createMarkdownProcessor(
     // heading mid-sentence (".**Heading**" → no break). Force one.
     const formatted = protectedContent.replaceAll(/\.(\*\*[A-Z])/g, '.\n$1');
 
-    const restoreProtectedLatex = (value: string): string => {
-      let restored = value;
-      if (config.protectLatexMath) {
-        restored = macroProtection.restore(restored);
-        restored = mathProtection.restore(restored);
-      }
-      return restoreLatexReferences(restored, refPlaceholder, refs, format);
-    };
+    // Each protection carries its own restore — identity when that shield is
+    // off — so `protectLatexMath` is not re-read here.
+    const restoreProtectedLatex = (value: string): string =>
+      restoreLatexReferences(
+        mathProtection.restore(macroProtection.restore(value)),
+        refPlaceholder,
+        refs,
+        format,
+      );
 
     // markdown-it v15's `render(src, env)` forwards `env` to renderer rules,
     // so the env object — carrying `restoreProtectedLatex` — reaches them

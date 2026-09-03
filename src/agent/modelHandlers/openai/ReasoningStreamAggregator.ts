@@ -20,14 +20,6 @@ export class ReasoningStreamAggregator extends ChannelStreamAggregator {
   private lastChunkWithChoices: ChatCompletionChunk | undefined;
   private usageChunk: ChatCompletionChunk | undefined;
 
-  appendContent(delta: string): void {
-    this.pushContent(delta);
-  }
-
-  appendReasoning(delta: string): void {
-    this.pushReasoning(delta);
-  }
-
   consumeChunk(chunk: ChatCompletionChunk): void {
     if (chunk.choices.length > 0) {
       this.lastChunkWithChoices = chunk;

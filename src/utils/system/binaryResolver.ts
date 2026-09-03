@@ -18,12 +18,12 @@ export interface ResolvedBinaryCommand {
   resolvedPath: string;
 }
 
-export interface BinaryResolverOptions {
+interface BinaryResolverOptions {
   findTool(toolName: string): string | null;
   isWindows: boolean;
 }
 
-export interface BinaryCommandOptions {
+interface BinaryCommandOptions {
   resolvedPath?: string;
 }
 

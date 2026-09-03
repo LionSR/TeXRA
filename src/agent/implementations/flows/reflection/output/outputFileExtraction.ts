@@ -162,7 +162,7 @@ export async function extractFilesFromXml(
           if (deps.baseFiles.length > 0) {
             await replaceInputCommands(deps.baseFiles, locations, logger);
           }
-          ensureRoundData(state, currRound).outputs = processedPairs;
+          data.outputs = processedPairs;
         },
         {
           logger,

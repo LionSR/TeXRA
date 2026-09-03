@@ -64,28 +64,12 @@ export function configureDelegatedChildApprovals(
 }
 
 /**
- * Clean up all approval state for a deleted stream in the owning session.
- * Cancels pending host interactions; `forgetStreamAncestry` clears the
- * stream's ancestry edges and its explicit bypass values.
- */
-function cleanupApprovalsForStream(
-  streamId: StreamTabId,
-  session: SessionHandle = defaultSession(),
-): void {
-  session.interactions.cancel({
-    streamId,
-    cause: 'Stream resources released.',
-  });
-  session.approvals.forgetStreamAncestry(streamId);
-}
-
-/**
- * Release all agent resources held for a deleted stream: approval state
- * (bypass flags and pending host interactions) AND the follow-up queue. These
- * two always need to be cleared together when a stream is removed, so this is
- * the single function hosts should call instead of
- * combining {@link cleanupApprovalsForStream} + `session.followUps.release`
- * manually.
+ * Release all agent resources held for a deleted stream: approval state AND
+ * the follow-up queue. Cancels pending host interactions;
+ * `forgetStreamAncestry` clears the stream's ancestry edges and its explicit
+ * bypass values; `followUps.terminalize` drops the queue. These always need to
+ * be cleared together when a stream is removed, so this is the single function
+ * hosts should call.
  *
  * Host-specific teardown (webview state, backup files, goal store, etc.)
  * remains the caller's responsibility after this returns.
@@ -94,14 +78,18 @@ export function releaseStreamResources(
   streamId: StreamTabId,
   session: SessionHandle = defaultSession(),
 ): void {
-  cleanupApprovalsForStream(streamId, session);
+  session.interactions.cancel({
+    streamId,
+    cause: 'Stream resources released.',
+  });
+  session.approvals.forgetStreamAncestry(streamId);
   session.followUps.terminalize(streamId);
 }
 
 /**
  * Cancel pending host interactions in `session` that have no concrete stream
  * context (streamId is undefined or empty). These would otherwise survive a
- * per-stream {@link cleanupApprovalsForStream} loop because they do not equal
+ * per-stream {@link releaseStreamResources} loop because they do not equal
  * any concrete StreamTabId. Bypass and proposal state are always
  * streamId-keyed and are not affected here.
  *

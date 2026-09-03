@@ -87,8 +87,7 @@ export function formatMissingOutputsTemplate(
   }
 
   // prettier-ignore
-  const listItems = missing.map((f) => {
-    const filePath = String(f);
+  const listItems = missing.map((filePath) => {
     const basename = getBasename(filePath);
     return html`<li class="detail-item" title=${filePath}>${waIcon('triangle-exclamation')} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${basename}</bdi>`)}</li>`;
   });

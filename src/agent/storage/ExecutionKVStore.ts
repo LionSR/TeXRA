@@ -61,10 +61,9 @@ const KEYS = {
 const RESERVED_KEY_NAMES = new Set<string>(Object.values(SINGLE_VALUE_KEYS));
 
 /**
- * True when `key` is one of ExecutionKVStore's reserved keys — a single-value
- * key (meta, config, report, workspace-files, result-meta) or a per-child
- * record key (`child-{id}`). Exported so callers
- * that walk an execution's storage directory (e.g.
+ * True when `key` is one of ExecutionKVStore's reserved keys — any
+ * `SINGLE_VALUE_KEYS` name or a per-child record key (`child-{id}`). Exported
+ * so callers that walk an execution's storage directory (e.g.
  * `src/tools/executions/executionKvFiles.ts`) can recognize internal KV
  * entries without re-deriving this vocabulary themselves.
  */
@@ -211,15 +210,14 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
 
   /**
    * Read a key and validate it against a schema, returning the parsed value
-   * or `null` when the key is absent. Permissive typed readers also return
-   * `null` after warning about malformed data; durable repair selects the
-   * throwing policy so corruption remains distinct from absence. This is the
-   * single validation boundary shared by both policies.
+   * or `null` when the key is absent. These readers are permissive: malformed
+   * data warns and also reads as `null`. `readValidatedMeta` is the one reader
+   * that must keep corruption distinct from absence, and owns that throwing
+   * policy itself.
    */
   private async readValidated<T>(
     key: string,
     schema: z.ZodType<T>,
-    malformed: 'return-null' | 'throw' = 'return-null',
   ): Promise<T | null> {
     const raw = await this.read(key);
     if (raw === undefined) return null;
@@ -231,7 +229,6 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
       )}`,
       { data: result.error },
     );
-    if (malformed === 'throw') throw result.error;
     return null;
   }
 

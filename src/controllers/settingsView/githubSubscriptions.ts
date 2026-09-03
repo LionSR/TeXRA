@@ -1,7 +1,4 @@
 // Local imports - GitHub subscriptions
-import { SharedIssuePollingSource } from '@tools/github/IssuePollingSource';
-import { SharedPRPollingSource } from '@tools/github/PRPollingSource';
-import { SharedRepoPollingSource } from '@tools/github/RepoPollingSource';
 import {
   issueSubscriptionRegistry,
   prSubscriptionRegistry,
@@ -36,15 +33,9 @@ export function listGitHubSubscriptionEntries(
   }
 
   return [
-    ...prSubscriptionRegistry
-      .list(SharedPRPollingSource.activeKeys())
-      .map(toEntry),
-    ...repoSubscriptionRegistry
-      .list(SharedRepoPollingSource.activeKeys())
-      .map(toEntry),
-    ...issueSubscriptionRegistry
-      .list(SharedIssuePollingSource.activeKeys())
-      .map(toEntry),
+    ...prSubscriptionRegistry.list().map(toEntry),
+    ...repoSubscriptionRegistry.list().map(toEntry),
+    ...issueSubscriptionRegistry.list().map(toEntry),
   ];
 }
 

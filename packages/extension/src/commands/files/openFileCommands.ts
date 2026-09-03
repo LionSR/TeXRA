@@ -11,10 +11,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('openFileCommands');
 
-interface OpenLabelOptions {
-  notifyNotFound?: boolean;
-}
-
 function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   const range = new vscode.Range(pos, pos);
   editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
@@ -33,16 +29,19 @@ async function openFile(file: string, line?: number): Promise<void> {
   }
 }
 
-async function openLabel(
-  label: string,
-  options: OpenLabelOptions = {},
-): Promise<boolean> {
+/**
+ * Locate a `\label{…}` across the input and context files and reveal it.
+ * Returns whether a match was opened; the "not found" message belongs to the
+ * caller (`ProgressWorkflowFileActionsController.openLabel`), which owns it
+ * for every host.
+ */
+async function openLabel(label: string): Promise<boolean> {
   const candidates = new Set([
     ...(await getFileLister().list('input')),
     ...(await getFileLister().list('context')),
   ]);
 
-  const opened = await openFirstLabelMatch(
+  return openFirstLabelMatch(
     label,
     candidates,
     async (file) => {
@@ -63,14 +62,6 @@ async function openLabel(
       revealPosition(editor, doc.positionAt(index));
     },
   );
-  if (opened) {
-    return true;
-  }
-
-  if (options.notifyNotFound ?? true) {
-    vscode.window.showInformationMessage(`Label "${label}" not found.`);
-  }
-  return false;
 }
 
 export function registerOpenFileCommands(

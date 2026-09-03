@@ -209,7 +209,7 @@ async function handleRequestEnsureProgressView(
 }
 
 /**
- * Builds the extension's presentation-event handler map. Every
+ * Builds the extension's presentation host over its handler map. Every
  * `RuntimePresentationEvent` key is required by
  * `PresentationEventHandlers<RuntimePresentationEventPayloads>` — omitting
  * one here is a compile error rather than a silently dropped event (CLAUDE.md,
@@ -220,30 +220,25 @@ async function handleRequestEnsureProgressView(
  * `SessionHostInteractions` (the runtime) owns replaying an event emitted
  * before this host attaches, via `AgentRuntimeEmitOptions.replayWhenAttached`.
  */
-function createPresentationEventHandlers(
-  progressViewProvider: ProgressViewProvider,
-): PresentationEventHandlers<RuntimePresentationEventPayloads> {
-  return {
-    requestOpenFile: handleRequestOpenFile,
-    requestShowInstruction: handleRequestShowInstruction,
-    showAgentConfigBanner: handleShowAgentConfigBanner,
-    requestShowError: handleRequestShowError,
-    requestEnsureProgressView: (payload) =>
-      handleRequestEnsureProgressView(payload, progressViewProvider).catch(
-        (err) => {
-          log.warn(
-            `Failed to reveal the progress view: ${toErrorMessage(err)}`,
-          );
-          return false;
-        },
-      ),
-  };
-}
-
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
 ): Pick<SessionHostInteractions, 'emit'> {
-  const handlers = createPresentationEventHandlers(progressViewProvider);
+  const handlers: PresentationEventHandlers<RuntimePresentationEventPayloads> =
+    {
+      requestOpenFile: handleRequestOpenFile,
+      requestShowInstruction: handleRequestShowInstruction,
+      showAgentConfigBanner: handleShowAgentConfigBanner,
+      requestShowError: handleRequestShowError,
+      requestEnsureProgressView: (payload) =>
+        handleRequestEnsureProgressView(payload, progressViewProvider).catch(
+          (err) => {
+            log.warn(
+              `Failed to reveal the progress view: ${toErrorMessage(err)}`,
+            );
+            return false;
+          },
+        ),
+    };
   return {
     emit<K extends RuntimePresentationEvent>(
       event: K,

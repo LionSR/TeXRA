@@ -10,6 +10,7 @@ import {
   getRunContextExecutionId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
+import type { FileStat } from '@platform/interfaces';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
@@ -296,7 +297,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 
     const stats = await StorageFS.stat(resolvedPath);
     if (isDirectory(stats.type)) {
-      const allEntries = await this.buildDirectoryListing(resolvedPath);
+      const allEntries = await this.buildDirectoryListing(resolvedPath, stats);
       recordToolFileRead(inputPath);
 
       const { page, start, end, total } = paginateToolListing(
@@ -522,8 +523,11 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     );
   }
 
-  private async buildDirectoryListing(resolvedPath: string): Promise<string[]> {
-    const rootStats = await StorageFS.stat(resolvedPath);
+  /** Rows for an already-stat'ed directory; `rootStats` is the caller's snapshot so the root row and the is-a-directory decision are one observation. */
+  private async buildDirectoryListing(
+    resolvedPath: string,
+    rootStats: FileStat,
+  ): Promise<string[]> {
     const rows = [
       formatListingRow(resolvedPath, rootStats.size, rootStats.mtime, null),
     ];

@@ -7,7 +7,14 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  css,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
@@ -189,9 +196,9 @@ export class ToolCard extends LitElement {
   @state() private guideExpanded = false;
 
   /** Reveal the install buttons immediately when a tool first reports missing. */
-  override willUpdate(changed: Map<string, unknown>): void {
+  override willUpdate(changed: PropertyValues<this>): void {
     if (!changed.has('item')) return;
-    const prev = changed.get('item') as ToolDashboardItem | undefined;
+    const prev = changed.get('item');
     if (prev?.status !== 'not-found' && this.item.status === 'not-found') {
       this.guideExpanded = true;
     }

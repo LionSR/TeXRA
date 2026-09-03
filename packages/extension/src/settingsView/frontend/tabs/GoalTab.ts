@@ -5,13 +5,13 @@ import { repeat } from 'lit/directives/repeat.js';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { formatGoalTime, goalElapsedMs, type Goal } from '@shared/schemas';
+import { goalElapsedMs, type Goal } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import type { MetaPart } from '@shared/wa/metaStrip';
-import { capitalize } from '@utils/text/stringUtils';
+import { capitalize, formatCompactDuration } from '@utils/text/stringUtils';
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -119,7 +119,7 @@ export class GoalTab extends LitElement {
     const metaParts: MetaPart[] = [
       html`<code class="stream-id" dir="ltr">${item.streamId}</code>`,
       html`<span title="Wall-clock duration since this Goal started"
-        >duration ${formatGoalTime(goalElapsedMs(item))}</span
+        >duration ${formatCompactDuration(goalElapsedMs(item))}</span
       >`,
     ];
     return html`

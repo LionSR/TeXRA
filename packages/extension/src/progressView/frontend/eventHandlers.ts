@@ -120,9 +120,7 @@ export function handleFollowUpChange(
 }
 
 /** Resolve one tool-use stream's trimmed follow-up text, or null if unavailable. */
-function getFollowUpText(
-  streamId: StreamTabId,
-): { streamId: StreamTabId; text: string } | null {
+function getFollowUpText(streamId: StreamTabId): string | null {
   const state = appState.get();
   const streamState = state.streamStates.get(streamId);
   if (!streamState || !isToolUseState(streamState)) return null;
@@ -130,43 +128,45 @@ function getFollowUpText(
   const text = streamState.ui.followUpText?.trim() ?? '';
   if (!text) return null;
 
-  return { streamId, text };
+  return text;
 }
 
 export function handleFollowUpSend(
   event: CustomEvent<FollowUpSendDetail>,
 ): void {
-  const result = getFollowUpText(event.detail.streamId);
-  if (!result) return;
+  const { streamId } = event.detail;
+  const text = getFollowUpText(streamId);
+  if (!text) return;
 
   // Orphan gate: only attach images whose [fileName] token survives in the
   // submitted text (the user may have deleted a pasted chip before sending).
   const attached = event.detail.images.filter((img) =>
-    result.text.includes(`[${img.fileName}]`),
+    text.includes(`[${img.fileName}]`),
   );
 
   // The draft (text and image chips) stays put until the host acks admission
   // with FOLLOW_UP_RESULT; a refused send hands it straight back to the user.
-  updateToolUseState(result.streamId, (prev) =>
+  updateToolUseState(streamId, (prev) =>
     create(prev, (draft) => {
       draft.ui.followUpSending = true;
     }),
   );
   postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
-    stream: result.streamId,
-    text: result.text,
+    stream: streamId,
+    text,
     ...(attached.length > 0 ? { images: attached } : {}),
   });
 }
 
 export function handleFollowUpPolish(): void {
   const streamId = appState.get().activeStreamId;
-  const result = streamId ? getFollowUpText(streamId) : null;
-  if (!result) return;
+  if (!streamId) return;
+  const text = getFollowUpText(streamId);
+  if (!text) return;
 
   postMessage(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP, {
-    stream: result.streamId,
-    text: result.text,
+    stream: streamId,
+    text,
   });
 }
 

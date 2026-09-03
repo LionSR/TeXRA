@@ -162,11 +162,3 @@ export type SettingsSnapshotPosters = Record<
   SettingsViewSnapshot,
   () => void | Promise<void>
 >;
-
-/** Rebroadcasts the settings-view snapshot a state-setting write belongs to. */
-export async function postStateSettingSnapshot(
-  snapshot: SettingsViewSnapshot,
-  posters: SettingsSnapshotPosters,
-): Promise<void> {
-  await posters[snapshot]();
-}

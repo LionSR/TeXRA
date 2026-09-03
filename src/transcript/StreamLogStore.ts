@@ -40,10 +40,6 @@ import {
   type StreamSummaryMeta,
 } from './StreamSummaryCacheStore';
 
-// The summary-meta wire contract lives with the summary-cache lane; the
-// specifier stays here so existing importers keep working.
-export type { StreamSummaryMeta } from './StreamSummaryCacheStore';
-
 const SAVE_MAX_WAIT_MS = 300;
 export const STREAM_LOGS_DIR = WORKSPACE_STORAGE_LAYOUT.streamLogs;
 export const STREAM_LOG_SUMMARIES_DIR =

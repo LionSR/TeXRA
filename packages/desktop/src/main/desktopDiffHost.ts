@@ -21,7 +21,7 @@ import {
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
 
-export interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
+interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   /**
    * Falls back to the OS default editor (writes a `.diff` patch file and
    * calls `openPath`). Used when the renderer overlay is unavailable.

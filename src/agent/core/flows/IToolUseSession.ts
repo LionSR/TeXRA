@@ -6,7 +6,6 @@ import type { FollowUpQueueBatch } from '@agent/followUp/FollowUpQueue';
  * (`SessionHandle.followUps`), never through this consumer surface.
  */
 export interface IToolUseSession {
-  appendSyntheticFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
   waitForFollowUp(signal: AbortSignal): Promise<FollowUpQueueBatch | null>;

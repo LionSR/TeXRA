@@ -1219,19 +1219,6 @@ export function StaticConversationTranscript({
   // the phase, gated on the scrollback owner having a slice at all.
   const status = streamPhaseFor(scrollbackStreamId)?.phase;
 
-  const buildFreshItems = (): readonly StaticTranscriptItem[] =>
-    buildStaticTranscriptItems({
-      streams,
-      status,
-      childRosters,
-      executionLabels: subagentExecutionLabels,
-      meta: sessionMeta,
-      maxRows,
-      parentStream,
-      scrollbackStreamId,
-      width: normalizedWidth,
-    }).items;
-
   const [state, setState] = useState<StaticTranscriptState>(() =>
     buildStaticTranscriptState({
       childRosters,
@@ -1249,7 +1236,22 @@ export function StaticConversationTranscript({
     }),
   );
 
-  const items = state.ownerKey === ownerKey ? state.items : buildFreshItems();
+  // On an owner switch the committed state still belongs to the previous
+  // owner, so this render paints a fresh build; the effect below replaces it.
+  const items =
+    state.ownerKey === ownerKey
+      ? state.items
+      : buildStaticTranscriptItems({
+          streams,
+          status,
+          childRosters,
+          executionLabels: subagentExecutionLabels,
+          meta: sessionMeta,
+          maxRows,
+          parentStream,
+          scrollbackStreamId,
+          width: normalizedWidth,
+        }).items;
 
   useEffect(() => {
     setState((current) =>

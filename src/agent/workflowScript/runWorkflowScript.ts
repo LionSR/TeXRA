@@ -431,8 +431,9 @@ export async function runWorkflowScript(
         'agent(prompt, options?) requires a non-empty string prompt.',
       );
     }
-    // Arguments crossed the bridge as JSON text (see sandbox.ts marshalArgs),
-    // so `rawOptions` is already plain, accessor-free host data, and the parse
+    // Arguments crossed the bridge as JSON text — stringified realm-side by
+    // the sandbox's bridge prelude, decoded host-side by its parseArgs — so
+    // `rawOptions` is already plain, accessor-free host data, and the parse
     // below builds the fresh object the call carries onward. Only the fields
     // the call actually supplied travel with it: an option the guest omitted
     // stays absent, so a spurious empty list can never change the journal key
@@ -909,7 +910,7 @@ export async function runWorkflowScript(
           },
           argsJson,
           filesJson,
-          realmPreludes: [ORCHESTRATION_PRELUDE],
+          realmPrelude: ORCHESTRATION_PRELUDE,
         },
         {
           timeoutMs,

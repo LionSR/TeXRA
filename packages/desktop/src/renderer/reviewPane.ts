@@ -4,11 +4,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import {
-  DESKTOP_THEME_KIND,
-  type DesktopThemeKind,
-  type Theme,
-} from '@shared/schemas';
+import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -28,7 +24,7 @@ interface ReviewPaneController {
   readonly element: HTMLElement;
   clear(): void;
   open(payload: DesktopShowDiffMessage): void;
-  setTheme(theme: DesktopThemeKind): void;
+  setTheme(theme: Theme): void;
 }
 
 export function createReviewPane(): ReviewPaneController {

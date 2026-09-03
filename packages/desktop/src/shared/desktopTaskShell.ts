@@ -11,17 +11,6 @@
 import type { TeXRAIconName } from '@shared/wa/iconNames';
 import { clamp, getBasename } from '@utils/core';
 
-const WORKBENCH_KINDS = [
-  'editor',
-  'terminal',
-  'browser',
-  'review',
-  'settings',
-  'logs',
-] as const;
-
-export type WorkbenchKind = (typeof WORKBENCH_KINDS)[number];
-
 export const WORKBENCH_PLACEMENTS = ['right', 'bottom'] as const;
 export type WorkbenchPlacement = (typeof WORKBENCH_PLACEMENTS)[number];
 
@@ -32,9 +21,12 @@ interface WorkbenchKindMeta {
   readonly singleton: boolean;
 }
 
-export const WORKBENCH_KIND_META: Readonly<
-  Record<WorkbenchKind, WorkbenchKindMeta>
-> = {
+/**
+ * The workbench surfaces. Sole definition of the set: `WorkbenchKind` is its
+ * key type, so a surface cannot exist without its metadata (and a stray key
+ * fails the exhaustive `switch` in `workbenchController`).
+ */
+export const WORKBENCH_KIND_META = {
   editor: {
     defaultPlacement: 'right',
     icon: 'file-code',
@@ -71,7 +63,9 @@ export const WORKBENCH_KIND_META: Readonly<
     label: 'Logs',
     singleton: true,
   },
-};
+} as const satisfies Record<string, WorkbenchKindMeta>;
+
+export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
 
 export interface WorkbenchTab {
   readonly id: string;

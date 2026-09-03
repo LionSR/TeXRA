@@ -33,12 +33,7 @@ import {
 } from '@agent/followUp/ToolFileInteractionContext';
 import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, ToolResult } from '@shared/schemas';
-import {
-  formatGoalTime,
-  goalElapsedMs,
-  isGoalInFlight,
-  ToolError,
-} from '@shared/schemas';
+import { goalElapsedMs, isGoalInFlight, ToolError } from '@shared/schemas';
 import { requireStreamId } from '@tools/contextHelpers';
 import {
   GoalStore,
@@ -51,6 +46,7 @@ import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { assertNever, generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
 const logger = createLog('PlanTool');
 
@@ -58,7 +54,7 @@ function formatGoalView(goal: Goal): string {
   return [
     `Goal: ${goal.goalId}`,
     `Status: ${goal.status}`,
-    `Time elapsed: ${formatGoalTime(goalElapsedMs(goal))}`,
+    `Time elapsed: ${formatCompactDuration(goalElapsedMs(goal))}`,
   ].join('\n');
 }
 

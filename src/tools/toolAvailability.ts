@@ -1,10 +1,11 @@
 /**
  * External tool availability checks with caching.
  *
- * Runs `check` (main probe) and `detailCheck` (human-readable detail) in
- * parallel, caches the results, and broadcasts `toolAvailabilityChanged`
- * when inputs change so subscribed UIs refresh without re-probing. Tool
- * definitions (what to check + UI metadata) live in
+ * Runs every group's checks concurrently — one shared `probe` per group feeds
+ * its `check` (availability), `statusLabel` (badge), and `detailCheck`
+ * (human-readable detail) — caches the results, and broadcasts
+ * `toolAvailabilityChanged` when inputs change so subscribed UIs refresh
+ * without re-probing. Tool definitions (what to check + UI metadata) live in
  * {@link @tools/externalToolDefs}.
  *
  * Used by:

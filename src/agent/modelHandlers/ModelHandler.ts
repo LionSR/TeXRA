@@ -16,10 +16,7 @@ import {
   TraceEmitter,
 } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import {
-  hasEndTag,
-  type AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,
@@ -115,7 +112,6 @@ import {
   type MediaAttachmentContext,
 } from './support/mediaAttachmentPolicy';
 import {
-  resolveBaseUrl,
   resolveProxyEndpoint,
   shouldUseOpenRouter,
   type ProxyConfig,
@@ -535,7 +531,7 @@ export abstract class ModelHandler<
   /**
    * Build the {@link ProxyConfig} route for the current config plus a
    * caller-resolved OpenRouter decision. A per-model custom base URL always
-   * wins, matching `resolveBaseUrl`'s documented precedence.
+   * wins, matching `resolveProxyEndpoint`'s documented precedence.
    */
   private buildProxyConfig(useOpenRouter: boolean): ProxyConfig {
     if (this.config.baseUrl) {
@@ -661,7 +657,7 @@ export abstract class ModelHandler<
       activeRoute !== undefined
         ? activeRoute === 'openrouter'
         : shouldUseOpenRouter(this.config);
-    return resolveBaseUrl(this.buildProxyConfig(useOpenRouter));
+    return resolveProxyEndpoint(this.buildProxyConfig(useOpenRouter)).baseUrl;
   }
 
   /** Stable endpoint identity used to coordinate retries for one client. */
@@ -1546,7 +1542,7 @@ export abstract class ModelHandler<
 
     messages.push(this.createAssistantMessage(fileContent));
 
-    if (hasEndTag(fileContent)) {
+    if (fileContent.includes(OUTPUT_END_TAG)) {
       this.logger.debug(
         'End tag detected - skipping model call (response already added above)',
       );
@@ -1620,7 +1616,7 @@ export abstract class ModelHandler<
     newResponse: string,
     _agentSetting: AgentSetting,
   ): boolean {
-    const hasResponseEndTag = hasEndTag(newResponse);
+    const hasResponseEndTag = newResponse.includes(OUTPUT_END_TAG);
     const shouldContinue =
       isTokenLimitStopReason(stopReason) && !hasResponseEndTag;
 

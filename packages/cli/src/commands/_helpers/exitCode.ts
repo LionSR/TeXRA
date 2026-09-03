@@ -9,10 +9,6 @@ export function setExitCode(code: number): void {
   pendingExitCode = code;
 }
 
-export function resetExitCode(): void {
-  pendingExitCode = CliExitCode.Success;
-}
-
 export function getExitCode(): number {
   return pendingExitCode;
 }

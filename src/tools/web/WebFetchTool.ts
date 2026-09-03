@@ -82,7 +82,7 @@ const WebFetchInputSchema = z.strictObject({
     .describe('Optional instruction describing what to extract from the page.'),
 });
 
-export type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
+type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
 
 const BLOCKED_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
 const PRIVATE_IPV4_PATTERNS = [

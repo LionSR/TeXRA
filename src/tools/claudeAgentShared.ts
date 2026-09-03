@@ -138,25 +138,12 @@ export function buildClaudeToolUseLog(params: {
   toolName: string;
   input: unknown;
   status: ToolUseStatus;
-  isError?: boolean;
-  output?: unknown;
-  errorMessage?: string;
 }): ToolUseLog {
   const summarySource = describeToolInput(params.toolName, params.input);
   return {
     toolName: `claude:${params.toolName}`,
     summary: truncateSummary(summarySource, SUMMARY_MAX_LENGTH),
     input: toToolInputRecord(params.toolName, params.input),
-    // Unlike `input`, a tool_result's `output` is routinely a plain string
-    // (or other non-object value) — that's a normal outcome, not a
-    // protocol violation, so it's stored as-is (matching `ToolUseLog.output`'s
-    // `unknown` type) with no record cast and no warning.
-    ...(params.output !== undefined && { output: params.output }),
-    ...(params.isError &&
-      params.errorMessage && {
-        error: params.errorMessage,
-        isError: true,
-      }),
     status: params.status,
   };
 }

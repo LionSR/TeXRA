@@ -247,13 +247,10 @@ beforeEach(async () => {
       );
     }
     return {
-      agent: {
-        name,
-        source: 'builtInWorkflow',
-        category: 'workflow',
-        path: `/agents/${name}.yaml`,
-      },
-      category: 'workflow' as const,
+      name,
+      source: 'builtInWorkflow',
+      category: 'workflow',
+      path: `/agents/${name}.yaml`,
     };
   });
   mocks.createRehydratedChildStream.mockImplementation(

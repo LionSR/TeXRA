@@ -118,7 +118,6 @@ export function buildCreatorConfig(files: CreatorTemplateFiles): CreatorConfig {
 
 interface AgentBlueprint {
   category: AgentCategory;
-  agentName: string;
   filePath: string;
   aiVars: Record<string, string>;
   fallbackTemplate: string;
@@ -253,7 +252,6 @@ export interface AgentCreatorUI {
   promptDescription(title: string, prompt: string): Promise<string | undefined>;
   pickTools(
     agentName: string,
-    description: string,
     suggestedGroups: string[],
   ): Promise<{ tools: string[]; groups: string[] } | undefined>;
   getCustomAgentDir(): Promise<string>;
@@ -325,14 +323,12 @@ async function buildAgentBlueprint(
   if (category === 'toolUse') {
     const picked = await ui.pickTools(
       agentName,
-      description,
       suggestToolGroups(description),
     );
     if (!picked) return undefined;
     const targetDir = await ui.getCustomAgentDir();
     return {
       category: 'toolUse',
-      agentName,
       filePath: path.join(targetDir, `${agentName}.yaml`),
       aiVars: {
         ...base,
@@ -350,7 +346,6 @@ async function buildAgentBlueprint(
   const targetDir = await ui.getCustomAgentDir();
   return {
     category: 'workflow',
-    agentName,
     filePath: path.join(targetDir, `${agentName}.yaml`),
     aiVars: { ...base },
     fallbackTemplate: config.templates.workflowSingle,

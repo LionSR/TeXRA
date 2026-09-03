@@ -273,7 +273,7 @@ export async function getTeXCount(
   }
 }
 
-export interface TeXCountStat {
+interface TeXCountStat {
   label: string;
 }
 

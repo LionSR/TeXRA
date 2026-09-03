@@ -32,13 +32,13 @@ function capOutput(output: string): string {
   );
 }
 
-export interface LakeCommandResult {
+interface LakeCommandResult {
   exitCode: number;
   stdout: string;
   stderr: string;
 }
 
-export interface LakeCommandOptions {
+interface LakeCommandOptions {
   workspaceRoot: string;
   lakeCommand: string;
   args: readonly string[];

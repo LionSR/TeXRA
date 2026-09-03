@@ -3,8 +3,8 @@ import type {
   ExternalInquiryPermission,
   InquiryThreadUpdatedEvent,
 } from '@shared/schemas';
-import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
+  collectKnownSessionLinks,
   getOpenTurnDraft,
   listThreadsByStatus,
   manifestToTranscript,

@@ -58,7 +58,7 @@ import {
 } from '@test/support/inkTestHarness.ts';
 import { waitForCondition as waitFor } from '@test/support/asyncTestUtils';
 import { createRunTrace } from '@transcript';
-import type { StreamSummaryMeta } from '@transcript/StreamLogStore';
+import type { StreamSummaryMeta } from '@transcript/StreamSummaryCacheStore';
 
 vi.mock('@cli/runtime/shortcutLabels', async (importOriginal) => {
   const actual =

@@ -104,12 +104,12 @@ export interface SubscriptionOAuthCoordinatorInit<
   client: SubscriptionOAuthClient;
   now?: () => number;
   /**
-   * Provider error type. When set, the public mutating/refreshing methods
-   * (signOut, completeLoginWithCode, storeTokens, getFreshSession) rethrow
+   * Provider error type. The public mutating/refreshing methods (signOut,
+   * completeLoginWithCode, storeTokens, getFreshSession) rethrow
    * {@link SubscriptionOAuthError} as this type so callers see the provider's
    * own error vocabulary.
    */
-  errorType?: ProviderAuthErrorCtor;
+  errorType: ProviderAuthErrorCtor;
 }
 
 export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
@@ -117,7 +117,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly client: SubscriptionOAuthClient;
   private readonly now: () => number;
-  private readonly errorType?: ProviderAuthErrorCtor;
+  private readonly errorType: ProviderAuthErrorCtor;
   private refreshInFlight: Promise<S> | null = null;
   private readonly sessionMutations = new PQueue({ concurrency: 1 });
   private sessionGeneration = 0;
@@ -130,14 +130,12 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     this.errorType = init.errorType;
   }
 
-  /** Map shared-machine errors into the provider error type, when configured. */
+  /** Map shared-machine errors into the provider's own error type. */
   private async mapErrors<T>(op: () => Promise<T>): Promise<T> {
-    const ErrorType = this.errorType;
-    if (!ErrorType) return op();
     try {
       return await op();
     } catch (error) {
-      rethrowAsProviderAuthError(error, ErrorType);
+      rethrowAsProviderAuthError(error, this.errorType);
     }
   }
 

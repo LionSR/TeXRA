@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import {
   classifyRejection,
   type BashSettlement,
@@ -15,7 +13,6 @@ import {
 } from '@agent/runtime/RunContext';
 import {
   BASH_APPROVAL_CONFIG_KEY,
-  StreamTabIdSchema,
   type BashPermission,
   type StreamTabId,
   type ToolResult,
@@ -30,13 +27,6 @@ import { errorResult } from '@tools/core/result';
 import { generateShortId } from '@utils/core';
 import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-
-const BashApprovalRequestSchema = z.object({
-  command: z.string(),
-  cwd: z.string().nullish(),
-  streamId: StreamTabIdSchema.nullish(),
-});
-type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
@@ -90,7 +80,7 @@ export function prepareBashApprovalPrompt(
 }
 
 export async function requestBashApproval(
-  request: BashApprovalRequest,
+  request: HostBashApprovalRequest,
 ): Promise<BashSettlement> {
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 

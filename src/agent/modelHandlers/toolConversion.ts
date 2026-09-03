@@ -444,11 +444,14 @@ const ANTHROPIC_TOOL_TYPE_MAP: Record<string, AnthropicNativeToolType> = {
 };
 
 /**
- * Web tools restricted to direct invocation (`allowed_callers: ['direct']`).
- * This bypasses Anthropic's dynamic-filtering-via-code-execution path, which
- * would otherwise require a code execution container (container_id).
+ * Anthropic's native web tools. One registry for both facts that key off this
+ * exact pair: they are native only when the model supports them (Anthropic
+ * ships the two on the same model set), and they are restricted to direct
+ * invocation (`allowed_callers: ['direct']`), which bypasses Anthropic's
+ * dynamic-filtering-via-code-execution path — that path would otherwise
+ * require a code execution container (container_id).
  */
-const DIRECT_ONLY_WEB_TOOLS = new Set(['web_search', 'web_fetch']);
+const NATIVE_WEB_TOOLS = new Set(['web_search', 'web_fetch']);
 
 /**
  * Convert generic ToolDefinition objects to OpenAI ChatCompletionTool format.
@@ -548,30 +551,20 @@ export function toAnthropicTools(
 ): ToolUnion[] {
   const { supportsNativeWebSearch = false } = options;
 
-  /** Tools that require an explicit capability flag to use as native. */
-  const CONDITIONAL_NATIVE_TOOLS: Record<string, boolean> = {
-    web_search: supportsNativeWebSearch,
-    web_fetch: supportsNativeWebSearch,
-  };
-
   return defs.map<ToolUnion>((d) => {
     // Check for native/server tools
     const remoteType = d.forceFunctionCall
       ? undefined
       : ANTHROPIC_TOOL_TYPE_MAP[d.name];
-    if (remoteType) {
-      const gated = CONDITIONAL_NATIVE_TOOLS[d.name];
-      // If not gated (undefined) or explicitly enabled, use native tool
-      if (gated !== false) {
-        // Restrict web tools to direct invocation to avoid requiring a
-        // code execution container.
-        const needsDirectOnly = DIRECT_ONLY_WEB_TOOLS.has(d.name);
-        return {
-          name: d.name,
-          type: remoteType,
-          ...(needsDirectOnly ? { allowed_callers: ['direct'] } : {}),
-        } as ToolUnion;
-      }
+    // Web tools are native only when the model supports them; every other
+    // mapped tool is unconditionally native.
+    const isWebTool = NATIVE_WEB_TOOLS.has(d.name);
+    if (remoteType && (!isWebTool || supportsNativeWebSearch)) {
+      return {
+        name: d.name,
+        type: remoteType,
+        ...(isWebTool ? { allowed_callers: ['direct'] } : {}),
+      } as ToolUnion;
     }
 
     return {

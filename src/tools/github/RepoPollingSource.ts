@@ -174,11 +174,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
     return this.register(key, () => createInitialState(input), onEvent);
   }
 
-  protected formatErrorEvent(
-    _key: RepoKey,
-    state: SubscriptionState,
-    detail: string,
-  ): string {
+  protected formatErrorEvent(state: SubscriptionState, detail: string): string {
     return formatRepoSubscriptionError(state.slug, detail);
   }
 

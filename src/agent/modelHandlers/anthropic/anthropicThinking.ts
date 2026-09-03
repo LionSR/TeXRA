@@ -20,10 +20,6 @@ const SONNET_5_FULLNAME = 'claude-sonnet-5';
 const FABLE_FAMILY_PREFIX = 'claude-fable-';
 const MYTHOS_FAMILY_PREFIX = 'claude-mythos-';
 
-// Native context-window sizes come from llm-zoo. Opus 4.6/4.7/4.8/5,
-// Sonnet 4.6/5, and the Mythos-class models have a 1M context window at
-// standard pricing (no beta header needed); other Claude models use 200K.
-
 /**
  * Model patterns that require temperature removal when thinking is enabled.
  * Per Anthropic docs, Claude 4 and Opus 5 don't support temperature with

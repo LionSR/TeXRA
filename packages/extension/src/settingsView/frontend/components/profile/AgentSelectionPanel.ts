@@ -46,26 +46,23 @@ function agentKey(agent: AgentSelectionItem): string {
   return agentKeyFromSourceName(agent.source, agent.name);
 }
 
-type SourceTone = 'builtin' | 'custom' | 'remote' | 'inline';
-
 /**
- * Per-source presentation: section heading name, list-row tone, and the badge
- * (icon + label) shown for non-built-in origins in both list and detail panes.
- * The badge is read from the shared `AGENT_DECORATORS.properties` table so
- * this pane and the launcher dropdown cannot drift on glyph or label; the two
- * built-in sources have no row there and carry no badge.
+ * Per-source presentation: section heading name and the badge (icon + label)
+ * shown for non-built-in origins in both list and detail panes. The badge is
+ * read from the shared `AGENT_DECORATORS.properties` table so this pane and
+ * the launcher dropdown cannot drift on glyph or label; the two built-in
+ * sources have no row there and carry no badge.
  */
 function sourceMeta(source: AgentSource): {
   displayName: string;
-  tone: SourceTone;
   badge?: { icon: TeXRAIconName; label: string };
 } {
   const { properties } = AGENT_DECORATORS;
   if (!(source in properties)) {
-    return { displayName: 'Built-in', tone: 'builtin' };
+    return { displayName: 'Built-in' };
   }
   const badge = properties[source as keyof typeof properties];
-  return { displayName: badge.label, tone: source as SourceTone, badge };
+  return { displayName: badge.label, badge };
 }
 
 @customElement('agent-selection-panel')
@@ -301,7 +298,8 @@ export class AgentSelectionPanel extends UnsupportedCommandsMixin(LitElement) {
 
   /** Detail-pane actions in render order, each with the condition that shows it. */
   private renderDetailActions(agent: AgentSelectionItem): TemplateResult[] {
-    const builtIn = sourceMeta(agent.source).tone === 'builtin';
+    // Only the two built-in sources lack a decorator row, hence no badge.
+    const builtIn = sourceMeta(agent.source).badge === undefined;
     const isCustom = agent.source === AGENT_SOURCE.CUSTOM;
     const actions: ReadonlyArray<{
       readonly when: boolean;

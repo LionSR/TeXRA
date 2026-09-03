@@ -98,30 +98,9 @@ interface WritableFileTarget {
 type WritableTargetPreparation =
   { blocked: ToolResult } | { target: WritableFileTarget };
 
-type EditableFileLoad =
-  { blocked: ToolResult } | { exists: boolean; originalContent: string };
-
 interface ResolveWritableTargetOptions {
   missing?: 'allow' | 'require';
   validate?: (target: { path: string; displayPath: string }) => void;
-}
-
-/** Apply the shared read-before-edit gate, then load the current content. */
-async function loadEditableFile(
-  path: string,
-  missing: 'allow' | 'require' = 'require',
-): Promise<EditableFileLoad> {
-  const exists = await WorkspaceFS.exists(path);
-  const blocked = requireFileReadForEdit(path, exists);
-  if (blocked) {
-    return { blocked };
-  }
-
-  return {
-    exists,
-    originalContent:
-      exists || missing === 'require' ? await WorkspaceFS.read(path) : '',
-  };
 }
 
 /** Resolve, authorize, read-gate, and load a workspace file for editing. */
@@ -137,15 +116,23 @@ export async function resolveWritableTarget(
 
   const path = resolved.fsPath;
   options.validate?.({ path, displayPath });
-  const loaded = await loadEditableFile(path, options.missing);
-  if ('blocked' in loaded) {
-    return loaded;
+
+  // Shared read-before-edit gate, then the current content.
+  const exists = await WorkspaceFS.exists(path);
+  const blocked = requireFileReadForEdit(path, exists);
+  if (blocked) {
+    return { blocked };
   }
+
   return {
     target: {
       path,
       displayPath,
-      ...loaded,
+      exists,
+      originalContent:
+        exists || (options.missing ?? 'require') === 'require'
+          ? await WorkspaceFS.read(path)
+          : '',
     },
   };
 }

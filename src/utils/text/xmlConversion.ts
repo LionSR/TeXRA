@@ -83,14 +83,6 @@ function convertLatexToMarkdown(latex: string): string {
 }
 
 /**
- * Convert HTML content to Markdown using Turndown.
- * Internal helper for formatContent fallback.
- */
-function convertHtmlToMarkdown(html: string): string {
-  return createHtmlToMarkdown().turndown(html);
-}
-
-/**
  * Pandoc reference rewrites, compiled once at module load.
  *
  * Pandoc emits references in three shapes, each carrying the same
@@ -171,7 +163,9 @@ export async function formatContent(content: string): Promise<string> {
   if (pandocResult !== null) return pandocResult;
 
   let result = trimmed;
-  if (HTML_PATTERN.test(result)) result = convertHtmlToMarkdown(result);
+  if (HTML_PATTERN.test(result)) {
+    result = createHtmlToMarkdown().turndown(result);
+  }
   if (LATEX_PATTERN.test(result)) result = convertLatexToMarkdown(result);
   return result;
 }

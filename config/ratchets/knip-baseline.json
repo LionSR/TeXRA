@@ -1688,12 +1688,6 @@
       "name": "__resetSetupPlatformForTests"
     },
     {
-      "file": "src/tools/setup/platform.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "TerminalRunResult"
-    },
-    {
       "file": "src/tools/timeouts.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -1752,18 +1746,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "BinaryResolverService"
-    },
-    {
-      "file": "src/utils/system/binaryResolver.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "BinaryCommandOptions"
-    },
-    {
-      "file": "src/utils/system/binaryResolver.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "BinaryResolverOptions"
     }
   ]
 }

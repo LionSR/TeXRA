@@ -53,7 +53,6 @@ import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
-import { tagOpenAISdkError } from './openAISdkError';
 import { normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
@@ -404,7 +403,7 @@ export class ModelHandlerOpenAI<
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
       if (delta) {
         output.append(delta);
-        streamingAggregator?.appendContent(delta);
+        streamingAggregator?.pushContent(delta);
       }
     };
 
@@ -413,7 +412,7 @@ export class ModelHandlerOpenAI<
       const reasoningDelta = this.extractReasoningDelta(chunk);
       if (reasoningDelta) {
         thinking.append(reasoningDelta);
-        streamingAggregator?.appendReasoning(reasoningDelta);
+        streamingAggregator?.pushReasoning(reasoningDelta);
       }
     };
 
@@ -579,14 +578,6 @@ export class ModelHandlerOpenAI<
       convertContentToString,
       mergeConsecutiveRoles: this.mergeConsecutiveRoles,
     };
-  }
-
-  protected override get sdkErrorTagger() {
-    return tagOpenAISdkError;
-  }
-
-  override get supportsForcedToolChoice(): boolean {
-    return true;
   }
 
   /** Creates a chat completion after SDK-boundary error tagging is installed. */

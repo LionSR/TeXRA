@@ -17,7 +17,7 @@ import {
 import { BaseTextInput } from '../input/BaseTextInput';
 import { FormFrame } from './_shared/FormFrame';
 
-export interface ApiKeyEntryFormProps {
+interface ApiKeyEntryFormProps {
   readonly provider: ApiProvider;
   /** Optional error from a failed save, shown so the user can retry in place. */
   readonly error?: string;

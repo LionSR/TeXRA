@@ -27,7 +27,7 @@ const WebSearchInputSchema = z.strictObject({
   ),
 });
 
-export type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
+type WebSearchInput = z.infer<typeof WebSearchInputSchema>;
 
 // ============================================================================
 // Response schemas (DuckDuckGo is an external network boundary — validate it)

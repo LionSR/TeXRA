@@ -46,7 +46,7 @@ interface AgentRosterData {
   readonly agents: ByCategory<readonly AgentEntry[]>;
 }
 
-export interface AgentRosterFormProps {
+interface AgentRosterFormProps {
   readonly availableRows?: number;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;

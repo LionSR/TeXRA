@@ -64,7 +64,7 @@ const CrossrefSearchInputSchema = z.discriminatedUnion('command', [
   }),
 ]);
 
-export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
+type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
 
 /**
  * Extended QueryWorksParams to include filter field.

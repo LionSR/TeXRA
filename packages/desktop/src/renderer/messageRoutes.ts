@@ -4,7 +4,7 @@
 // main.ts-scoped closures the routes act on; the route bodies only ever reach
 // renderer state through them.
 
-import { SetThemeMessageSchema, type DesktopThemeKind } from '@shared/schemas';
+import { SetThemeMessageSchema, type Theme } from '@shared/schemas';
 import {
   DesktopSetLogMessageSchema,
   type DesktopSetLogMessage,
@@ -66,7 +66,7 @@ interface DesktopMessageRouteHandlers {
     show(): void;
     hide(): void;
   };
-  applyTheme(theme: DesktopThemeKind): void;
+  applyTheme(theme: Theme): void;
   logs: { applySnapshot(message: DesktopSetLogMessage): void };
   review: {
     open(message: DesktopShowDiffMessage): void;
@@ -85,10 +85,8 @@ interface DesktopMessageRouteHandlers {
   };
   openTerminalCommand(initialCommand: string): void;
   renameBrowserTab(tabId: string, title: string): void;
-  environment: {
-    set(summary: DesktopEnvironmentSummary | undefined, loading: boolean): void;
-    rerender(): void;
-  };
+  /** Adopts a freshly reported environment summary and repaints the shell. */
+  environment(summary: DesktopEnvironmentSummary): void;
 }
 
 function messageRoute<T>(
@@ -196,9 +194,8 @@ export function createMessageRoutes(
     messageRoute(DesktopBrowserStateMessageSchema, (message) =>
       handlers.renameBrowserTab(message.tabId, message.title),
     ),
-    messageRoute(DesktopEnvironmentStateMessageSchema, (message) => {
-      handlers.environment.set(message.environment, false);
-      handlers.environment.rerender();
-    }),
+    messageRoute(DesktopEnvironmentStateMessageSchema, (message) =>
+      handlers.environment(message.environment),
+    ),
   ];
 }

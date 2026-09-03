@@ -84,15 +84,6 @@ export {
   type UpdateProfileMessage,
 } from './profileViewMessages';
 
-export type {
-  ClaudeAgentEffort,
-  ClaudeAgentModel,
-  ClaudeAgentPermissionMode,
-  CodexApprovalPolicy,
-  CodexReasoningEffort,
-  CodexSandboxMode,
-} from './agentCliSettings';
-
 /**
  * The set of settings tabs — single source of truth for tab names. The wire
  * format is the derived panel name (`SET_TAB.tab`), so order carries no

@@ -13,7 +13,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
 // Local imports - shared schemas and types
-import type { LaunchTarget } from '@shared/schemas';
+import type { LaunchTarget, SessionType } from '@shared/schemas';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens, selectStyles } from '@shared/styles';
@@ -36,7 +36,7 @@ import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { MainViewEvents } from '../events';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { handleImagePaste } from '../pasteHandler';
-import { SESSION_TYPES, type SessionType } from '../constants';
+import { SESSION_TYPES } from '../constants';
 import { sessionContext, type SessionContextValue } from '../mainViewContexts';
 import { instructionPanelStyles } from './InstructionPanel.styles';
 import '@awesome.me/webawesome/dist/components/select/select.js';

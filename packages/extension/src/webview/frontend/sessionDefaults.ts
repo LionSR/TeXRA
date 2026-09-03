@@ -1,6 +1,5 @@
-// Local imports - webview constants
-import type { CheckboxValues } from '@shared/schemas';
-import type { SessionType } from './constants';
+// Local imports - shared schemas
+import type { CheckboxValues, SessionType } from '@shared/schemas';
 
 interface SessionDefaults {
   fileInputEnabled: boolean;

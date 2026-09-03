@@ -40,12 +40,11 @@ export const streamTabStyles = css`
     --stream-status-color: var(--wa-color-text-link);
   }
 
-  .tab-container.status-initializing,
   .tab-container.status-starting {
     --stream-status-color: var(--color-warning);
   }
 
-  /* Finished states (stopped/completed/cancelled/ready) keep the
+  /* Finished states (completed/cancelled/ready) and unavailable keep the
      transparent default: the rail only lights up while something is
      happening or needs attention. */
 
@@ -218,7 +217,6 @@ export const streamTabStyles = css`
       .status-running,
       .status-waiting,
       .status-resuming,
-      .status-initializing,
       .status-starting,
       .status-failed,
       .status-error,
@@ -355,7 +353,6 @@ export const streamTabStyles = css`
       .status-running,
       .status-waiting,
       .status-resuming,
-      .status-initializing,
       .status-starting,
       .has-pending-approval
     ) {
@@ -385,7 +382,6 @@ export const streamTabStyles = css`
         .status-running,
         .status-waiting,
         .status-resuming,
-        .status-initializing,
         .status-starting,
         .status-failed,
         .status-error,

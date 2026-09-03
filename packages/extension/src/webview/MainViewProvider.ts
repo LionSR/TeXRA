@@ -18,10 +18,7 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import {
-  planOnboardingFunnelTransition,
-  type OnboardingFunnelState,
-} from '@controllers/onboarding/onboardingFunnel';
+import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
@@ -39,6 +36,7 @@ import {
   MainViewPersistedStateSchema,
   agentKeyOf,
   AgentCategory,
+  type OnboardingFunnelState,
 } from '@shared/schemas';
 import {
   readOnboardingFlags,
@@ -347,8 +345,9 @@ export class MainViewProvider
     this._viewDisposables.add(
       webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
-
-    this.setupInitialState(webviewView);
+    // Nothing is posted here: pending restores wait for WEBVIEW_READY
+    // (onWebviewReady → flushPendingState) so they land after the launcher
+    // has installed its message listener.
   }
 
   protected override cleanupView(): void {
@@ -362,16 +361,6 @@ export class MainViewProvider
     }
     setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     super.cleanupView();
-  }
-
-  private setupInitialState(webviewView: vscode.WebviewView): void {
-    // REQUEST_BASE_FILE is inbound-only (no outbound schema), so the
-    // assertion passes it through unchecked.
-    this.postToWebview(webviewView, {
-      command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-    });
-    // Pending restores wait for WEBVIEW_READY (onWebviewReady → flushPendingState)
-    // so they land after the launcher has installed its message listener.
   }
 
   /**

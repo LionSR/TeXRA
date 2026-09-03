@@ -16,7 +16,8 @@ interface EnvironmentPopoverDeps {
 
 interface EnvironmentPopoverController {
   template(workspacePath: string | undefined): TemplateResult;
-  set(summary: DesktopEnvironmentSummary | undefined, loading: boolean): void;
+  /** Adopts the summary the main process just reported, ending the request. */
+  set(summary: DesktopEnvironmentSummary): void;
   close(): void;
 }
 
@@ -233,9 +234,9 @@ export function createEnvironmentPopover({
 
   return {
     template: environmentPopoverTemplate,
-    set(summary, loading) {
+    set(summary) {
       environmentSummary = summary;
-      environmentLoading = loading;
+      environmentLoading = false;
     },
     close() {
       environmentPopoverOpen = false;

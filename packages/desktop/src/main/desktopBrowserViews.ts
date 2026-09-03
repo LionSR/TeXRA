@@ -22,7 +22,7 @@ import {
 
 import { tryParseUrl } from '@utils/core';
 
-export interface DesktopBrowserViewsOptions {
+interface DesktopBrowserViewsOptions {
   getWindow(): BaseWindow | undefined;
   /** Opens a URL outside the app (used for schemes we refuse to embed). */
   openExternalUrl(url: string): Promise<void>;

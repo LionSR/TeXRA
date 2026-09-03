@@ -65,8 +65,6 @@ interface HelperModelCompletion {
   userPrompt: string;
   /** Optional system prompt. */
   systemPrompt?: string;
-  /** Sampling temperature (defaults to 0 for deterministic helper calls). */
-  temperature?: number;
   /** Cancel this auxiliary request and its bounded retries. */
   signal?: AbortSignal;
 }
@@ -82,7 +80,7 @@ interface HelperModelCompletion {
  */
 export async function runHelperModelCompletion(
   kit: HelperModelKit,
-  { userPrompt, systemPrompt, temperature = 0, signal }: HelperModelCompletion,
+  { userPrompt, systemPrompt, signal }: HelperModelCompletion,
 ): Promise<string> {
   signal?.throwIfAborted();
   const messages = await kit.handler.initializeMessages(
@@ -98,7 +96,8 @@ export async function runHelperModelCompletion(
       kit.handler.createResponse({
         client: kit.client,
         messages,
-        temperature,
+        // Helper calls are deterministic one-shots, never sampled.
+        temperature: 0,
         systemPrompt,
         signal,
       }),

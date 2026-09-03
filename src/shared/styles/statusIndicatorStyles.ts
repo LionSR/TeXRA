@@ -28,8 +28,7 @@ export const statusIndicatorStyles: CSSResult = css`
   }
 
   .status-indicator.is-completed,
-  .status-indicator.is-cancelled,
-  .status-indicator.is-held {
+  .status-indicator.is-cancelled {
     background-color: var(--color-text-muted);
   }
 

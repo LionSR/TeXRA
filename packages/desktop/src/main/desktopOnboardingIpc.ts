@@ -1,12 +1,10 @@
-import {
-  planOnboardingFunnelTransition,
-  type OnboardingFunnelState,
-} from '@controllers/onboarding/onboardingFunnel';
+import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { StateStore } from '@platform/interfaces';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   readOnboardingFlags,
   setFirstRunDone,
