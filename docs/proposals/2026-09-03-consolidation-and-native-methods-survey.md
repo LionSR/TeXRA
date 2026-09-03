@@ -117,17 +117,30 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   because an operation failed. No `catch`, no backoff, no error
   classification — the same "bounded re-drain reconciling concurrent state,
   not `p-retry`-shaped error-driven retry" species as
-  `MAX_DIRTY_WRITE_RETRIES`, adjudicated the same way. Not a candidate.
+  `MAX_DIRTY_WRITE_RETRIES`, adjudicated the same way. Not a candidate. A
+  third, pre-existing instance the sweep's `i`-only variable-name regex also
+  missed: `src/tools/delegation/inBandSubagentExecution.ts:624`'s `for (let
+attempt = 0; attempt < nextAttempt; attempt += 1)`, scanning a bounded
+  range `[0, nextAttempt)` of persisted durable-attempt sequence numbers
+  looking for a recoverable one — already classified by the 2026-08-30 round
+  as this same durable-reconciliation species. Not a candidate.
 - **Hand-rolled `debounce`/`throttle`:** the sweep's regex required the
-  literal function name `debounce`/`throttle` and missed
+  literal function name `debounce`/`throttle` and missed two hits.
   `createFlushableDebounce` (`src/utils/core/index.ts:256`, pre-existing, not
-  new this window). Its own doc comment states the reason a library
+  new this window): its own doc comment states the reason a library
   debouncer doesn't fit: call sites need a synchronous flush escape hatch
   (run the pending call now, typically pre-teardown) and re-entrant
   `schedule()` from inside the callback itself — the CLI's transcript sync
   re-schedules from within its own flush callback, which `es-toolkit`'s
-  invoke-then-cancel debounce silently drops. An accepted exception, not a
-  candidate, but should have been counted rather than reported as zero.
+  invoke-then-cancel debounce silently drops. `AnnotationFetchBudget`
+  (`src/tools/github/annotationFetchBudget.ts:38-72`, a hand-rolled
+  continuous-refill token bucket, pre-existing): its own doc comment gives
+  the reason `p-throttle` doesn't fit — callers need a synchronous,
+  non-blocking `tryClaim`/defer check with an injectable clock for
+  deterministic tests, where `p-throttle` only offers an async
+  queue-and-wait contract. Both accepted exceptions with a stated,
+  checkable rationale, not candidates, but should have been counted rather
+  than reported as zero.
 - **Defensive-copy-then-iterate of a mutated collection:** not one of this
   survey's stated tells, but a related native-construct nit surfaced by
   review: `packages/cli/src/chat/chatSessionController.ts:372` iterates
