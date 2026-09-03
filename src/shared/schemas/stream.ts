@@ -9,11 +9,14 @@ import { PersistedWorkflowExecutionSnapshotSchema } from './workflowExecutionSna
  * The retired 7-value live-status vocabulary. **Read-only residue** — no
  * production code decides anything from it any more (#7993 steps 2-3 moved
  * every live producer and host reader to `StreamPhase` + `StreamSubstate`).
- * It survives for one reason: the standalone trace-viewer's file import
- * (`replayTrace.ts`) parses externally-authored `trace.json` exports through
- * `StreamLifecycleStatusSchema` and `StreamSnapshot.status` (§8.3's
- * permanent boundary — a static exported file stays legacy-shaped
- * forever).
+ * It survives for one reason: externally-authored `trace.json` exports
+ * (§8.3's permanent boundary — a static exported file stays legacy-shaped
+ * forever) still carry these values, and `LegacyStreamStatusAsPhaseSchema`
+ * (`@shared/schemas/streamSnapshot`) normalizes them into `StreamPhase` at
+ * that one parse entry point, inside `StreamSnapshotSchema.status`. The live
+ * wire union {@link StreamLifecycleStatusSchema} below does NOT accept them:
+ * its one field (`BackendOwnedFieldsSchema.status`) is written only by
+ * same-bundle producers already typed `StreamPhase | 'ready' | 'unavailable'`.
  *
  * The trait table that used to hang off this enum is gone: membership
  * questions are answered by the `StreamPhase` predicates in
@@ -32,7 +35,9 @@ export const STREAM_STATUS = {
 } as const;
 
 export const StreamStatusSchema = z.enum(STREAM_STATUS);
-export type StreamStatus = z.infer<typeof StreamStatusSchema>;
+/** Local to this module: the only consumer is `streamStatusToLifecycleStatus`
+ *  below. `StreamStatusSchema` stays exported for the snapshot parse boundary. */
+type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
 export const EXECUTION_STATUS = {
   COMPLETED: 'completed',
@@ -196,7 +201,6 @@ export const StreamLifecycleStatusSchema = z.union([
   StreamPhaseSchema,
   z.literal(STREAM_STATUS.READY),
   z.literal(STREAM_LIFECYCLE_UNAVAILABLE),
-  StreamStatusSchema.transform(streamStatusToLifecycleStatus),
 ]);
 
 const WorktreeInfoSchema = z.object({

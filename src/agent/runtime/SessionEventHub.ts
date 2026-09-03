@@ -11,7 +11,6 @@ import type {
   UpdateQueuedFollowUpsPayload,
   UpdateStreamDescriptionPayload,
 } from '@shared/schemas';
-import { isDevAssertionMode } from '@shared/utils/devAssertionMode';
 
 const logger = createLog('SessionEventHub');
 
@@ -82,11 +81,6 @@ interface SubscriberRegistration {
  */
 export class SessionEventHub {
   private readonly subscribers = new Set<SubscriberRegistration>();
-  private runScopeSubscriberCount = 0;
-  private readonly runScopeSubscriberCountsByStream = new Map<
-    StreamTabId,
-    number
-  >();
 
   emit(event: SessionEvent): void {
     for (const registration of this.subscribers) {
@@ -122,32 +116,9 @@ export class SessionEventHub {
       types: filter.types ? new Set(filter.types) : undefined,
     };
     this.subscribers.add(registration);
-    const { scope, streamId } = registration;
-    if (scope !== 'session') {
-      if (streamId) {
-        this.runScopeSubscriberCountsByStream.set(
-          streamId,
-          (this.runScopeSubscriberCountsByStream.get(streamId) ?? 0) + 1,
-        );
-      } else {
-        this.runScopeSubscriberCount += 1;
-      }
-    }
 
     return () => {
-      if (!this.subscribers.delete(registration)) return;
-      if (scope === 'session') return;
-      if (!streamId) {
-        this.runScopeSubscriberCount -= 1;
-        return;
-      }
-      const nextCount =
-        (this.runScopeSubscriberCountsByStream.get(streamId) ?? 1) - 1;
-      if (nextCount > 0) {
-        this.runScopeSubscriberCountsByStream.set(streamId, nextCount);
-      } else {
-        this.runScopeSubscriberCountsByStream.delete(streamId);
-      }
+      this.subscribers.delete(registration);
     };
   }
 
@@ -202,25 +173,5 @@ export class SessionEventHub {
       },
       { scope: 'session' },
     );
-  }
-
-  /**
-   * Dev/test guard for startup-resume ordering: run-scoped subscribers must be
-   * attached before a launch activates the stream. Production logs the
-   * violation so startup can continue; tests and opt-in dev runs throw.
-   */
-  assertRunSubscribersAttachedBeforeActivation(streamId: StreamTabId): void {
-    if (
-      this.runScopeSubscriberCount > 0 ||
-      (this.runScopeSubscriberCountsByStream.get(streamId) ?? 0) > 0
-    ) {
-      return;
-    }
-
-    const message = `No run-scoped session event subscribers attached for ${streamId} before activation`;
-    if (isDevAssertionMode()) {
-      throw new Error(message);
-    }
-    logger.warn(message);
   }
 }

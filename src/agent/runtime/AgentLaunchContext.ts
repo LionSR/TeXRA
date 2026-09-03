@@ -405,7 +405,6 @@ async function assembleAgentLaunchContext(
   modelHandler.setAgentCategory(setting.agentCategory);
   modelHandler.setLogger(agentLogger);
 
-  session.events.assertRunSubscribersAttachedBeforeActivation(streamId);
   input.signal?.throwIfAborted();
   input.onBeforeActivation?.(streamId);
 

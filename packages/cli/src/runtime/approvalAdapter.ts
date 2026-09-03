@@ -19,7 +19,6 @@ import {
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
-import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
@@ -30,7 +29,6 @@ import {
   type CliApprovalContent,
   type CliApprovalDecision,
   type CliApprovalPromptHooks,
-  type CliDecisionApprovalRequest,
   askApproval,
   queueCliApprovalQuestion,
 } from './approval/approvalPrompts';
@@ -78,46 +76,20 @@ async function decideToolEdit(
   return toToolEditResult(decision, request.proposedContent);
 }
 
-function summarizeApprovalEvent(
-  request: CliDecisionApprovalRequest,
-): CliApprovalContent {
-  switch (request.type) {
-    case 'showPlanApproval':
-      return {
-        summary: `Plan approval requested:\n${JSON.stringify(request.payload.plan, null, 2)}`,
-      };
-    case 'showAgentProposal':
-      return buildAgentProposalApprovalContent(request.payload);
-    case 'showRetryRequest':
-      // The prompt surface owns the retry hint: the operator must see the
-      // `/api personal` / coding-plan switch guidance in the prompt they
-      // actually answer, not only in the pre-prompt stderr line.
-      // `formatRetryRequestMessage` is the single retry formatter.
-      return { summary: formatRetryRequestMessage(request.payload) };
-    default:
-      return assertNever(request, 'Unhandled CLI approval request kind');
-  }
-}
-
-async function decideApprovalEvent(
-  request: CliDecisionApprovalRequest,
+/**
+ * Settle a policy-gated approval: take the caller's already-computed policy
+ * settlement when there is one, otherwise prompt with the caller's content.
+ * `prompted` distinguishes a human answer from an automatic settlement.
+ */
+async function decideGated(
   context: CliContext,
   hooks: CliApprovalPromptHooks,
+  immediate: ApprovalDecision | undefined,
+  content: CliApprovalContent,
   options: { writeRejectionToStderr?: boolean } = {},
 ): Promise<{ decision: ApprovalDecision; prompted: boolean }> {
-  const isRetry = request.type === 'showRetryRequest';
-  const immediate = isRetry
-    ? settleRetry(request.payload, context)
-    : settleExecutable(context);
-
-  if (isRetry) {
-    if (!immediate) hooks.beforePrompt?.();
-    writeTextStderr(formatRetryRequestMessage(request.payload));
-  }
-
   if (immediate) return { decision: immediate, prompted: false };
 
-  const content = summarizeApprovalEvent(request);
   const decision = await askApproval(context, content, hooks);
   if (!decision.accepted && options.writeRejectionToStderr) {
     writeTextStderr(
@@ -255,26 +227,41 @@ export function createHeadlessCliHostInteractions(
       return toApprovalSettlement(decision);
     },
     async requestPlanApproval(request) {
-      const { decision, prompted } = await decideApprovalEvent(
-        { type: 'showPlanApproval', payload: request },
+      const { decision, prompted } = await decideGated(
         context,
         hooks,
+        settleExecutable(context),
+        {
+          summary: `Plan approval requested:\n${JSON.stringify(request.plan, null, 2)}`,
+        },
       );
       return toPromptedApprovalSettlement(decision, prompted);
     },
     async requestAgentProposal(request: HostAgentProposalRequest) {
-      const { decision, prompted } = await decideApprovalEvent(
-        { type: 'showAgentProposal', payload: request },
+      const { decision, prompted } = await decideGated(
         context,
         hooks,
+        settleExecutable(context),
+        buildAgentProposalApprovalContent(request),
       );
       return toPromptedApprovalSettlement(decision, prompted);
     },
     async requestRetry(request: HostRetryRequest) {
-      const { decision, prompted } = await decideApprovalEvent(
-        { type: 'showRetryRequest', payload: request },
+      const immediate = settleRetry(request, context);
+      // The pre-prompt hook fires here and again inside `askApproval`; that
+      // double call is pre-existing retry behavior, not a bug to "fix".
+      if (!immediate) hooks.beforePrompt?.();
+      // The prompt surface owns the retry hint: the operator must see the
+      // `/api personal` / coding-plan switch guidance in the prompt they
+      // actually answer, not only in the pre-prompt stderr line.
+      // `formatRetryRequestMessage` is the single retry formatter.
+      const summary = formatRetryRequestMessage(request);
+      writeTextStderr(summary);
+      const { decision, prompted } = await decideGated(
         context,
         hooks,
+        immediate,
+        { summary },
         { writeRejectionToStderr: true },
       );
       return toRetryResult(decision, prompted);

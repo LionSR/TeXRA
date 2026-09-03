@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   clearStoreCache,
+  createLatexExecutionDiscovery,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
@@ -16,13 +17,17 @@ import type { ExecutionId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 
-function config(agent: string): AgentConfig {
+function config(
+  agent: string,
+  inputFiles: readonly string[] = [],
+): AgentConfig {
   return AgentConfigSchema.parse({
     agent,
     model: 'deepseekT',
     instruction: 'Test execution listing.',
     agentCategory: AgentCategory.ToolUse,
     workingDirectory: '/workspace',
+    inputFiles,
   });
 }
 
@@ -300,5 +305,55 @@ describe('execution listing normalization', () => {
     expect(entries.filter(isUserVisibleExecution).map(({ id }) => id)).toEqual([
       rootId,
     ]);
+  });
+
+  it('projects agent runs and stream ids for latexdiff execution discovery', async () => {
+    const rootId = 'ab1001' as ExecutionId;
+    const childId = 'ab1002' as ExecutionId;
+    const processId = 'ab1003' as ExecutionId;
+    const rootStore = getExecutionStore(rootId);
+    await rootStore.writeMeta({
+      timestamp: '2026-07-15T10:00:00.000Z',
+      identity: { kind: 'agent', agent: 'assistant' },
+      streamId: 'assistant@deepseekT#ab1001',
+    });
+    await rootStore.writeRunRecord(config('assistant', ['main.tex']));
+    await writeExecution(
+      childId,
+      '2026-07-15T09:00:00.000Z',
+      config('delegated', ['child.tex']),
+      rootId,
+    );
+    const processStore = getExecutionStore(processId);
+    await processStore.writeMeta({
+      timestamp: '2026-07-15T08:00:00.000Z',
+      identity: { kind: 'process', tool: 'bash' },
+    });
+    await processStore.writeRunRecord({ name: 'bash', instruction: 'ls -la' });
+
+    const discovery = createLatexExecutionDiscovery();
+
+    // Unlike a history listing, latexdiff discovery keeps delegated children
+    // and drops non-agent rows.
+    expect(await discovery.listAgentRuns()).toEqual([
+      {
+        id: rootId,
+        timestamp: '2026-07-15T10:00:00.000Z',
+        agent: 'assistant',
+        model: 'deepseekT',
+        inputFiles: ['main.tex'],
+      },
+      {
+        id: childId,
+        timestamp: '2026-07-15T09:00:00.000Z',
+        agent: 'delegated',
+        model: 'deepseekT',
+        inputFiles: ['child.tex'],
+      },
+    ]);
+    expect(await discovery.readStreamId(rootId)).toBe(
+      'assistant@deepseekT#ab1001',
+    );
+    expect(await discovery.readStreamId(childId)).toBeUndefined();
   });
 });
