@@ -10,15 +10,19 @@ delete five dead surfaces in the runtime and CLI approval layers`,
 > surfaced three real, pre-existing candidates from
 > `2026-08-25-cli-controller-seam-audit.md` that three prior survey passes
 > (2026-08-29, 2026-08-30, 2026-09-02) and this entry's own first draft all
-> failed to file — now filed as #11809, #11810, and #11811.** No code changes
-> accompany this entry.
+> failed to file, plus a fourth new hand-rolled-sleep hit this entry's own
+> sweep missed — filed as #11809, #11810, #11811, and #11812.** No code
+> changes accompany this entry.
 
 ## 0. Why this pass is targeted rather than a full re-sweep
 
 Six full simplification survey rounds (2026-08-25 through 2026-08-27) and
 three prior dedicated passes on this exact question (2026-08-29, 2026-08-30,
-2026-09-02) already swept the repo end-to-end and found nothing outstanding
-in either lens. Between 2026-09-02's grounding commit (`646475d`) and this
+2026-09-02) _reported_ nothing outstanding in either lens — a description
+this entry's own §3 revises: three real, applicable candidates from the
+2026-08-25 audit had gone unfiled through all of them, surfaced only by this
+entry's own PR review. Between 2026-09-02's grounding commit (`646475d`) and
+this
 one, 28 commits landed, 23 of them touching `src/` or `packages/*/src/` (the
 other five are docs-only, dependency bumps, or a workspace pnpm version
 alignment) — and, as with the prior window, a large share of that volume was
@@ -66,15 +70,21 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
 
 - **`.hasOwnProperty()` direct calls:** zero repo-wide.
 - **Hand-rolled sleeps:** the sweep's regex required `setTimeout` as the
-  direct executor body and missed the nested form; one production hit
-  exists, `src/platform/defaults/lifecycleHost.ts:70-72`:
+  direct executor body and missed two production hits with a nested or
+  wrapped form. `src/platform/defaults/lifecycleHost.ts:70-72`:
   `new Promise<void>((resolve) => onAbort(signal, () => setTimeout(resolve, 0)))`,
   raced against a shutdown-phase promise. Structurally not a plain sleep —
   the delay only starts once `signal` aborts, giving shutdown handlers one
   macrotask to settle after the abort fires, not a fixed wait from now — so
   it is not a direct `node:timers/promises` `setTimeout(ms)` swap without
   restructuring the abort-then-yield sequencing. Plausibly intentional, but
-  should have been enumerated rather than reported as test-only. All other
+  should have been enumerated rather than reported as test-only.
+  `packages/extension/src/frontend/latex/openBuild.ts:234-255`'s
+  `scheduleViewerDisplay`, by contrast, _is_ the plain case: an unconditional
+  `new Promise<boolean>((resolve) => setTimeout(async () => { ... resolve(...) }, ms))`
+  in the Node-based extension-host frontend, straightforwardly rewritable as
+  an `async` function awaiting `node:timers/promises`' `setTimeout`. A real
+  miss, not an accepted exception — filed as #11812. All other
   remaining hits are `src/test-kernel/**` timer-flush fixtures — same
   conclusion as every prior round for those.
 - **`JSON.parse(JSON.stringify(` deep clones:** the one production hit,
@@ -206,11 +216,16 @@ desktop/extension `workspace` adapter; the desktop/extension resume-result
 skeleton, reinforced by a new copy-pasted block in this very window's
 `810abdc`) had gone unfiled through this entry's first draft and all three
 prior dedicated passes, surviving purely because nobody had turned the
-audit's table rows into tracked issues. Two are low-risk mechanical fixes;
-the third carries a real behavior decision the audit itself flagged and
-this entry preserves rather than silently resolving. Filed now as #11809,
-#11810, and #11811 — the actual output of this round.
+audit's table rows into tracked issues. Review also caught a fourth,
+independent miss in this entry's own sweep: `scheduleViewerDisplay`
+(`openBuild.ts`) hand-rolls the exact `new Promise(resolve =>
+setTimeout(...))` sleep pattern this survey's tells target, in production
+code the regex's executor-body assumption didn't match. Three of the four
+are low-risk mechanical fixes; the resume-skeleton pair carries a real
+behavior decision the audit itself flagged and this entry preserves rather
+than silently resolving. Filed now as #11809, #11810, #11811, and #11812 —
+the actual output of this round.
 
 This entry exists to record that the routine ran and to save the next pass
 from re-treading the same ground; no code changes accompany this cycle, but
-three follow-up issues do.
+four follow-up issues do.
