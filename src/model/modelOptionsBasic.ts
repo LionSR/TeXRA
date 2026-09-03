@@ -35,16 +35,16 @@ export function isRetiredModel(model: string): boolean {
  */
 export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   // First entry is the picker / new-chat default (`DEFAULT_AGENT_MODEL`).
-  // Do not lead with Gemini — Sonnet is the quality default.
-  'sonnet5T',
-  'opus5T',
-  'fable51',
+  // Do not lead with Gemini — GPT is the quality default.
   'gpt56',
   'gpt56-',
   'gpt56--',
+  'sonnet5T',
+  'opus5T',
+  'fable51',
   'gemini38f',
   'gemini31p',
-  'musespark13',
+
   'deepseekT',
   'deepseekproT',
   'kimi26T',
@@ -54,6 +54,7 @@ export const PREFERRED_DEFAULT_MODELS: readonly string[] = [
   'glm53flash',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
   'grok45',
+  'musespark13',
 ];
 
 /**

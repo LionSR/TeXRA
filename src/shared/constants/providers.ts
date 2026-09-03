@@ -254,7 +254,7 @@ export const DEFAULT_HELPER_MODEL = 'deepseek';
  * Keep this aligned with the first default-list entry — the picker leads
  * with that model, and it must not be a Gemini id.
  */
-export const DEFAULT_AGENT_MODEL = 'sonnet5T';
+export const DEFAULT_AGENT_MODEL = 'gpt56';
 
 /**
  * Zod schema for one provider control rendered in the Models tab (without its
