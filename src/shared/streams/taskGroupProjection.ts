@@ -21,6 +21,17 @@ import {
  * Current producers write `TaskGroupStatus`. A trace exported before the
  * status migration can still contain the legacy `EndGroupStatus`, so the
  * read projection maps it to the same canonical value used by persistence.
+ *
+ * Permanent, not a dated shim (ruled in
+ * docs/proposals/2026-07-03-session-scoped-runtime-architecture.md §8.3 and
+ * recorded in §8.6). In-app this arm is unreachable — `StreamLogStore`
+ * normalizes every persisted row at read (`normalizeGroupStatusEntry`). Its
+ * one live input is the standalone trace viewer, which forwards a static
+ * exported `trace.json`'s `trace.entries` verbatim into this same pipeline
+ * (`packages/trace-viewer/src/replayTrace.ts`); those files are never
+ * rewritten, so the legacy vocabulary never ages out. Removing the arm would
+ * not delete dead code: `TraceGroupLogPayloadSchema.status` catches to
+ * `undefined`, so a legacy 'error' would silently project as COMPLETED.
  */
 function taskGroupEndStatus(
   value: TaskGroupStatus | EndGroupStatus | undefined,
