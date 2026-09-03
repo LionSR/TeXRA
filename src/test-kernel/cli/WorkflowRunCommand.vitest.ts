@@ -447,7 +447,6 @@ describe('CLI workflow run command', () => {
 
     expect(exitCode).toBe(0);
     expect(mocks.executeCliConfig.mock.calls[0]?.[2]).toMatchObject({
-      enforceCategory: true,
       expectedCategory: AgentCategory.Workflow,
       categoryMismatchMessage: 'Agent "polish" resolved to a non workflow run.',
     });

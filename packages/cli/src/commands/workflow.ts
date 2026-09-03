@@ -229,7 +229,6 @@ export async function executeCliWorkflowConfig(
     }
   };
   const execution = await executeCliConfig(config, runContext, {
-    enforceCategory: true,
     executionId: options.executionId,
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     onInterruptedExecutionFinalized: recoveryInputIsDurable

@@ -100,9 +100,10 @@ describe('CLI platform signal handlers', () => {
 
     handOffCliShutdownSignalHandlers();
 
+    // The install-order disposers are released LIFO, so SIGTERM first.
     expect(removed).toEqual([
-      ['SIGINT', handlers.get('SIGINT')],
       ['SIGTERM', handlers.get('SIGTERM')],
+      ['SIGINT', handlers.get('SIGINT')],
     ]);
 
     // A second handoff (e.g. a stray second call) is a no-op, not a crash or

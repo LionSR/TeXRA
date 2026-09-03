@@ -219,7 +219,6 @@ export async function runMultiAgentPreset(
       };
 
       const execution = await executeCliToolUseConfig(config, runContext, {
-        enforceCategory: true,
         stopAfterCycle: true,
         recoveryInputIsDurable: stdinInputPath === undefined,
         categoryMismatchMessage: `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,

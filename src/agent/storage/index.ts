@@ -34,7 +34,6 @@ export {
   registerExecution,
   type FinalizeExecutionInput,
   writeWorkflowExecutionSnapshot,
-  retainFlowRecordUnlessCompleted,
 } from './executionLifecycle';
 export {
   type AgentExecutionListingEntry,

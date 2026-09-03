@@ -12,7 +12,6 @@ import {
   ExecutionLeaseLostError,
   type ResumabilityDecision,
   finalizeRun,
-  retainFlowRecordUnlessCompleted,
 } from '@agent/storage';
 import { validateExecutionRequest } from '@agent/core/state/executionRequests';
 import { AgentError } from '@common/errors';
@@ -55,7 +54,8 @@ type CliWorkflowOutputHandler = (
 ) => ReturnType<RunAgentWorkflowOutput>;
 
 interface CliExecuteOptions {
-  /** Forwarded to `runAgent`. */
+  /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
+   *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
   /** Stop a tool-use execution after one model/tool cycle. */
   readonly stopAfterCycle?: boolean;
@@ -82,8 +82,9 @@ type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
 
 export interface CliConfigExecuteOptions<
   C extends AgentCategory | undefined = undefined,
-> extends CliExecuteOptions {
-  /** Defensive post-run guard for command paths that must stay in one category. */
+> extends Omit<CliExecuteOptions, 'enforceCategory'> {
+  /** Pins the category this command path must stay in: enforced before the
+   *  run by `runAgent`, and the narrowing key for the returned result. */
   readonly expectedCategory?: C;
   readonly categoryMismatchMessage?: string;
   /**
@@ -134,31 +135,24 @@ export async function executeCliConfig<
   const request: RunAgentRequest = resumedExecutionId
     ? { kind: 'resume', ...validation.request, executionId }
     : { kind: 'fresh', ...validation.request, executionId };
-  const execution = await executeCliRequest(
-    request,
-    runContext,
-    executeOptions,
-  );
+  const execution = await executeCliRequest(request, runContext, {
+    ...executeOptions,
+    enforceCategory: expectedCategory !== undefined,
+  });
   if (!execution.ok) {
     return execution;
   }
   const { result } = execution;
 
   if (expectedCategory !== undefined && result.category !== expectedCategory) {
-    await finalizeRun({
-      executionId,
-      outcome: RUN_OUTCOME.FAILED,
-      // Reported FAILED, so the run's own checkpoint outlives the mismatch
-      // and stays resumable (#11315).
-      flowRecord: retainFlowRecordUnlessCompleted(RUN_OUTCOME.FAILED),
-      report: (finalizationError) =>
-        writeTextStderr(`Warning: ${toErrorMessage(finalizationError)}`),
-    });
-    writeTextStderr(
+    // Unreachable: `enforceCategory` above makes the launch throw before the
+    // run whenever the resolved agent setting disagrees, and `result.category`
+    // is stamped from that same resolved setting. Kept as an invariant so the
+    // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
+    throw new Error(
       categoryMismatchMessage ??
         `Agent resolved to a non ${expectedCategory} run.`,
     );
-    return { ok: false, exitCode: CliExitCode.AgentError };
   }
 
   return {
@@ -320,7 +314,6 @@ export async function executeCliRequest(
     launchVerdict.finalizationFailureReported = true;
     reportFinalizationFailure(error);
   };
-  const leaseAcquired = pDefer<ExecutionId | undefined>();
   const shutdownFinalizationDone = pDefer<void>();
   const recoveryNoticeStarted = pDefer<void>();
   let shutdownStatusFinalized: Promise<boolean> | undefined;
@@ -334,7 +327,9 @@ export async function executeCliRequest(
   const finalizeShutdownStatus = (): Promise<boolean> => {
     if (launchVerdict.kind !== 'interrupted') return Promise.resolve(false);
     shutdownStatusFinalized ??= (async () => {
-      const executionId = await leaseAcquired.promise;
+      // Both call sites run after runAgent has already published (or failed to
+      // publish) the lease, so the plain variable is the settled answer.
+      const executionId = ownedExecutionId;
       if (!executionId) return false;
       try {
         const terminalStatusPersisted = (
@@ -449,49 +444,41 @@ export async function executeCliRequest(
     },
   );
   const openWorkflowOutput = options.openWorkflowOutput;
-  const invoke = async (): Promise<ExecuteAgentResult> => {
-    try {
-      return await runAgent(request, {
-        session,
-        enforceCategory: options.enforceCategory,
-        openWorkflowOutput:
-          openWorkflowOutput === undefined
-            ? undefined
-            : (result) =>
-                openWorkflowOutput(result, tryCommitWorkflowOutputPublication),
-        modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
-        launchSignal: launchAbortController.signal,
-        beforeLeaseRelease: async () => {
-          const handled = await finalizeShutdownStatus();
-          if (
-            launchVerdict.kind === 'interrupted' &&
-            launchVerdict.artifactFailure !== undefined
-          ) {
-            const error = launchVerdict.artifactFailure;
-            launchVerdict.artifactFailure = undefined;
-            throw error;
-          }
-          return handled;
-        },
-        onExecutionLeaseAcquired: (executionId) => {
-          ownedExecutionId = executionId;
-          leaseAcquired.resolve(executionId);
-        },
-        stopAfterCycle: options.stopAfterCycle,
-        approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
-          runContext,
-          runContext.approvalPolicy,
-        ),
-        onApprovalPolicyDenial: () =>
-          warnApprovalDenied(runContext, 'Tool or edit approval'),
-        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-      });
-    } finally {
-      // Unblock an in-flight shutdown when acquisition failed before a scope
-      // became available. Promise resolution is one-shot after success.
-      leaseAcquired.resolve(undefined);
-    }
-  };
+  const invoke = async (): Promise<ExecuteAgentResult> =>
+    runAgent(request, {
+      session,
+      enforceCategory: options.enforceCategory,
+      openWorkflowOutput:
+        openWorkflowOutput === undefined
+          ? undefined
+          : (result) =>
+              openWorkflowOutput(result, tryCommitWorkflowOutputPublication),
+      modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
+      launchSignal: launchAbortController.signal,
+      beforeLeaseRelease: async () => {
+        const handled = await finalizeShutdownStatus();
+        if (
+          launchVerdict.kind === 'interrupted' &&
+          launchVerdict.artifactFailure !== undefined
+        ) {
+          const error = launchVerdict.artifactFailure;
+          launchVerdict.artifactFailure = undefined;
+          throw error;
+        }
+        return handled;
+      },
+      onExecutionLeaseAcquired: (executionId) => {
+        ownedExecutionId = executionId;
+      },
+      stopAfterCycle: options.stopAfterCycle,
+      approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
+        runContext,
+        runContext.approvalPolicy,
+      ),
+      onApprovalPolicyDenial: () =>
+        warnApprovalDenied(runContext, 'Tool or edit approval'),
+      runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+    });
 
   let runResult:
     | { readonly ok: true; readonly result: ExecuteAgentResult }

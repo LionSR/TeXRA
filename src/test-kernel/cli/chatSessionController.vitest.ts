@@ -181,7 +181,6 @@ interface SessionFixture {
   readonly streamId?: StreamTabId;
   readonly interruptedStreamId?: StreamTabId;
   readonly executionId?: string;
-  readonly presentationHost?: CliRuntimeHost;
   readonly runPromise?: Promise<void>;
   readonly runCompleted?: boolean;
   readonly stopRequested?: boolean;
@@ -194,13 +193,8 @@ function makeSession(overrides: SessionFixture = {}): TuiSession {
   if (overrides.streamId) session.streamId = overrides.streamId;
   session.interruptedStreamId = overrides.interruptedStreamId;
   session.executionId = overrides.executionId;
-  session.presentationHost = overrides.presentationHost;
   session.stopRequested = overrides.stopRequested ?? false;
   return session;
-}
-
-function makePresentationHost(): CliRuntimeHost {
-  return { emit: vi.fn() } as unknown as CliRuntimeHost;
 }
 
 function makeSessionContext(): CliContext {
@@ -625,7 +619,6 @@ describe('createChatSessionController', () => {
   it('reads the shared detach-subagents setting key when stopping an active stream', () => {
     const session = makeSession({
       streamId: 'stream-1',
-      presentationHost: makePresentationHost(),
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -643,7 +636,6 @@ describe('createChatSessionController', () => {
   it('stops the focused root while preserving its agent children', () => {
     const session = makeSession({
       streamId: 'root-stream',
-      presentationHost: makePresentationHost(),
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
@@ -664,7 +656,6 @@ describe('createChatSessionController', () => {
   it('stops one focused child without stopping the root session', () => {
     const session = makeSession({
       streamId: 'root-stream',
-      presentationHost: makePresentationHost(),
     });
     const ctrl = createChatSessionController(makeInit({ session }));
 
