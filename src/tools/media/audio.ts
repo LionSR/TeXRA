@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { execa, type Subprocess } from 'execa';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { createLog } from '@logger/logUtils';
 import { delay } from '@utils/core';
@@ -166,6 +165,10 @@ export async function stopRecordingAndTranscribe(): Promise<{
       return { success: false, text: '', error: 'Recording file is empty' };
     }
 
+    // Imported lazily so the OpenAI SDK stays out of the desktop main
+    // process's startup bundle — transcription is the only path that needs it.
+    const { ModelHandlerOpenAI } =
+      await import('@agent/modelHandlers/openai/modelHandlerOpenAI');
     const handler = new ModelHandlerOpenAI(MODEL_CONFIGS['gpt4o']);
     const client = await handler.getClient();
     const result = await client.audio.transcriptions.create({
