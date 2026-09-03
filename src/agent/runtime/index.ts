@@ -78,7 +78,6 @@ export {
 export {
   lookupStreamExecutionId,
   resumeRun,
-  resumeStream,
   resumeStreamWithRefusalNotice,
 } from './resumeRun';
 export type { ResumeRunOptions } from './resumeRun';

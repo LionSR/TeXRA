@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import {
   resumeRun,
-  resumeStream,
   resumeStreamWithRefusalNotice,
 } from '@agent/runtime/resumeRun';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -128,7 +127,10 @@ describe('resumeRun tool-use queue ownership', () => {
     }>();
     readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
 
-    const resumed = resumeStream(STREAM, { session, executeWorkflow });
+    const resumed = resumeStreamWithRefusalNotice(STREAM, {
+      session,
+      executeWorkflow,
+    });
     expect(
       session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
     ).toEqual({ kind: 'queued' });
@@ -137,11 +139,7 @@ describe('resumeRun tool-use queue ownership', () => {
       byStream: new Map([[STREAM, EXECUTION]]),
       unreadable: new Map(),
     });
-    await expect(resumed).resolves.toEqual({
-      started: true,
-      delivered: true,
-      outcome: RUN_OUTCOME.COMPLETED,
-    });
+    await expect(resumed).resolves.toBe(true);
     const options = resumeToolUseFromResumeDataMock.mock
       .calls[0]?.[1] as ResumeToolUseFromResumeDataOptions;
     expect(options.drainedFollowUps?.map((item) => item.text)).toEqual([
@@ -157,13 +155,16 @@ describe('resumeRun tool-use queue ownership', () => {
     }>();
     readExecutionStreamIndexMock.mockReturnValueOnce(index.promise);
 
-    const resumed = resumeStream(STREAM, { session, executeWorkflow });
+    const resumed = resumeStreamWithRefusalNotice(STREAM, {
+      session,
+      executeWorkflow,
+    });
     expect(
       session.followUps.submit(STREAM, { text: 'raced' }, 'recoverable'),
     ).toEqual({ kind: 'queued' });
 
     index.resolve({ byStream: new Map(), unreadable: new Map() });
-    await expect(resumed).resolves.toEqual({ failed: 'not_resumable' });
+    await expect(resumed).resolves.toBe(false);
     expect(session.followUps.getAll(STREAM)).toEqual(['raced']);
   });
 

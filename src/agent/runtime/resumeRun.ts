@@ -111,7 +111,7 @@ export interface ResumeRunOptions extends Pick<
  * Resume a stream through the single host entry path. Recovery is claimed
  * synchronously, before the stream-to-execution index can perform disk I/O.
  */
-export async function resumeStream(
+async function resumeStream(
   streamId: StreamTabId,
   options: ResumeRunOptions,
 ): Promise<ResumeRunResult> {
