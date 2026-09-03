@@ -718,9 +718,8 @@ describe('ProgressBackend', () => {
     );
     // The presentation no-ops, but the sidecar store is session-owned, so it
     // keeps recording: disposing one window/webview must not stop the runtime
-    // persisting an in-flight run's outputs. The desktop already behaved this
-    // way (its `stateOwnership: 'session'` backend never detached the store);
-    // the extension now matches it.
+    // persisting an in-flight run's outputs. Desktop and the extension behave
+    // identically here — neither backend detaches the store on dispose.
     expect(backend.state.snapshots.getOutputFiles(streamId)).toEqual({
       1: [outputFile],
     });

@@ -29,6 +29,7 @@ import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { createSessionStores } from '@controllers/session/createSessionStores';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -503,6 +504,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
     ],
   });
   await runtimeSession.waitUntilReady();
+  // The extension's presentation is its own process owner, so it runs the
+  // shared startup sweep here at activation, mirroring the CLI
+  // (`initializeCliTranscriptSession`) and desktop (`initializeDesktopProcessStores`)
+  // hosts rather than deferring it to a later, lazily-constructed presentation.
+  await createSessionStores(runtimeSession).sweepLeftoverStreams();
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );

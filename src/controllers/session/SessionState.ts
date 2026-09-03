@@ -690,25 +690,21 @@ export class SessionState {
     return deletion;
   }
 
-  async load(stateOwnership: 'backend' | 'session' = 'backend'): Promise<void> {
+  async load(): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
     // ProgressBackend waits for SessionHandle readiness before entering this
     // method. The session owns transcript opening and sidecar hydration; a
-    // presentation must never reload those live stores.
+    // presentation must never reload those live stores. The startup sweep
+    // (dropping leftover background shells, then orphaned persisted state) is
+    // every host's own responsibility at process bring-up, before any
+    // presentation attaches — see `sweepLeftoverStreams`'s callers.
     await this.stores.waitForPendingStreamDeletions();
 
     this.logger.info(
       `[Persistence] Discovered ${this.streamLogs.keys().length} stream(s)`,
     );
 
-    // The extension's presentation *is* its process owner, so it runs the
-    // shared startup sweep here; the desktop and CLI run it from theirs, where
-    // this state is not the owner of these stores. Sweeping before the loop
-    // below means no metadata is built for a stream this load then deletes.
-    if (stateOwnership === 'backend') {
-      await this.stores.sweepLeftoverStreams();
-    }
     // No all-streams metadata loop: stream metadata is assembled lazily in
     // `getStreamMetadata` from the always-resident summary mirror, so a load
     // has nothing to seed per stream (#9947).

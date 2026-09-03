@@ -548,7 +548,7 @@ describe('ProgressBackend cleanup', () => {
       await expectStored(`executions/${orphan.executionId}`, true);
       await expectStored(`executions/${historyExecution}`, true);
 
-      await backend.state.load();
+      await backend.state.stores.sweepLeftoverStreams();
 
       await expectStored(streamDataDir(orphan.stream), false);
       await expectStored(`executions/${orphan.executionId}`, false);
@@ -574,7 +574,7 @@ describe('ProgressBackend cleanup', () => {
       await expectStored(streamDataDir(stream), false);
       expect(await seed.listStagedDeletions()).toContain(stream);
 
-      await backend.state.load();
+      await backend.state.stores.sweepLeftoverStreams();
 
       expect(await backend.state.snapshots.listStagedDeletions()).not.toContain(
         stream,
@@ -691,7 +691,9 @@ describe('ProgressBackend cleanup', () => {
       const failureSpy = install(backend, failing);
 
       try {
-        await expect(backend.state.load()).resolves.toBeUndefined();
+        await expect(
+          backend.state.stores.sweepLeftoverStreams(),
+        ).resolves.toBeUndefined();
 
         expect(warnSpy).toHaveBeenCalledWith(
           'SessionStores',
@@ -738,6 +740,7 @@ describe('ProgressBackend cleanup', () => {
     try {
       await second.session.waitUntilReady();
       await second.backend.state.load();
+      await second.backend.state.stores.sweepLeftoverStreams();
 
       expect(second.backend.state.streamLogs.has(stream)).toBe(true);
       await second.backend.state.snapshots.preload([stream]);
@@ -751,7 +754,7 @@ describe('ProgressBackend cleanup', () => {
     }
   });
 
-  it('sweeps leftover background shells at load, keeping real sessions', async () => {
+  it('sweeps leftover background shells at startup, keeping real sessions', async () => {
     // The sweep reads the persisted identity meta (kind 'process'), the
     // authority since the legacy name-prefix reader was retired.
     const shell = {
@@ -801,6 +804,7 @@ describe('ProgressBackend cleanup', () => {
     try {
       await second.session.waitUntilReady();
       await second.backend.state.load();
+      await second.backend.state.stores.sweepLeftoverStreams();
 
       expect(second.backend.state.streamLogs.has(shell.stream)).toBe(false);
       await expectStored(streamDataDir(shell.stream), false);

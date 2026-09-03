@@ -67,12 +67,6 @@ export interface ProgressBackendOptions {
   /** Session that owns this backend's coordination state. */
   session: SessionHandle;
   /**
-   * `session` when the caller has already loaded and swept the session's
-   * stores at process start. A process-owned session has opened the canonical
-   * live store, so a replacement presentation must not reload or sweep it.
-   */
-  stateOwnership?: 'backend' | 'session';
-  /**
    * Commands this host's progressView inbound registry declares
    * `unsupported(...)` — pass `() => unsupportedCommands(registry)`. Threaded
    * to {@link LitSessionRenderer} so the frontend's capability gating stays a
@@ -103,7 +97,6 @@ export class ProgressBackend {
   private readonly lifecycle: ProgressBackendLifecycleOptions;
   private readonly reportTranscriptLoadError: ProgressBackendOptions['reportTranscriptLoadError'];
   private readonly postMessage: (message: ProgressViewOutboundMessage) => void;
-  private readonly stateOwnership: 'backend' | 'session';
   private readonly hasPendingPermissions: (streamId: string) => boolean;
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private readonly detachEventListeners: Array<() => void> = [];
@@ -115,7 +108,6 @@ export class ProgressBackend {
 
   constructor(options: ProgressBackendOptions) {
     this.session = options.session;
-    this.stateOwnership = options.stateOwnership ?? 'backend';
     this.lifecycle = options.lifecycle;
     this.reportTranscriptLoadError = options.reportTranscriptLoadError;
     this.postMessage = (message) => {
@@ -849,7 +841,7 @@ export class ProgressBackend {
   load(): Promise<void> {
     return this.enqueueStorageOperation(async () => {
       await this.session.waitUntilReady();
-      await this.state.load(this.stateOwnership);
+      await this.state.load();
     });
   }
 
