@@ -168,6 +168,8 @@ SessionView = {
 StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamView])
   // common
   id: StreamTabId
+  // the run currently on this stream; a resume mints a new one, latest wins
+  executionId: ExecutionId
   identity: RunIdentity | null              // null only for legacy imports
   // launch facts from the run.start payload, never derived (5.2)
   isRemote: boolean
@@ -192,6 +194,7 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   approval: 'none' | 'own' | 'descendant'
   group: 'running' | 'waiting' | 'interrupted' | 'recent'
   usage: RunUsageMap
+  context: ContextStateData | null           // latest `context.state`
   transcript: TranscriptView
   // toolUse arm; goal is per stream (GoalStore.getForStream)
   todos, plan, goal, outputs, missingOutputs, compileFailures
@@ -267,6 +270,19 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   known label.
 - **`order`** and `childIds` use `streamOrdering` (newest creation first,
   ties by name).
+- **`executionId`** is the latest `run.start` for the stream. A stream
+  outlives its executions - a resume mints a new `ExecutionId` on the same
+  `StreamTabId` (`RunScope.ts:18`) - so it is a fold field, not identity
+  (`RunIdentity` deliberately carries no execution id). Carrying it is what
+  lets the execution-scoped requests of 8.2 (`skip`, `retry`, `kill`) name
+  the execution the surface actually saw: a request against a superseded
+  execution then fails as `Unavailable` instead of landing on its successor,
+  which a `streamId`-only request could not distinguish.
+- **`context`** is latest-of-type over `context.state`, already a canonical
+  run fact. Both renderers show it live today - `UsagePanel` through
+  `ToolUseStreamContent` and `WorkflowStreamContent`, and the TUI status
+  bar's occupancy gauge - and it is cumulative-per-run, not derivable from
+  `usage`.
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
 - **`settledSeq`** is the last durable seq folded; text deltas do not
   advance it.
@@ -289,10 +305,16 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `identity: null` and a label from the id prefix, as today. The exported
   trace format itself stays a permanent read boundary for the trace viewer
   and is untouched by this PRD (decision 5).
-- **Live text.** Text and thinking deltas are not durable. The fold accepts
-  a transient chunk arm that updates the in-progress row at chunk boundaries
-  (the existing `StreamingTextAccumulator` logic) without touching
-  `settledSeq`. `OwnerLiveness` is the other transient arm.
+- **Live text.** Text and thinking deltas are not durable, and a positionless
+  delta cannot say whether it appends or replaces. `TextChunk` is therefore
+  `{ streamId, rowId, from, to, text }` - an append that carries its own
+  offsets into the row's in-flight text, the transient analogue of `seq`.
+  The rule is one line: splice at `from` iff `from <= length`, so a
+  re-delivered chunk is idempotent, a chunk with `from > length` is a torn
+  row (resubscribe, 7.4), and a chunk with `from: 0` covering the row
+  replaces it. Replacement needs no second arm and resync needs no second
+  message kind: a resync _is_ a `from: 0` chunk. `settledSeq` never moves.
+  `OwnerLiveness` is the other transient arm.
 
 ### 5.3 The row
 
@@ -346,7 +368,10 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    stream creation, a metadata hint, and a focus request
    (`SessionFactApplier.ts:671-690`); creation is `run.start`, the hints
    are payload fields (item 6), focus is `Surface.select`.
-   `suppressViewSwitch` travels with the surface, never as an event.
+   `suppressViewSwitch` travels with the surface, never as an event. The
+   frozen NDJSON wire keeps its `setActiveStream` line - the CLI projection
+   emits it from `run.start`, which is what the line meant to an external
+   reader (10.3). Deleting the internal fact does not touch the contract.
 6. **`agentCategory`** (agent runs), **`isRemote`**, and **`ownerId`** are
    fields on the `run.start` payload; `ownerId` is on every durable event.
    The launcher has the category from the run config and remoteness from
@@ -437,6 +462,7 @@ class SessionEvents extends Context.Service<
   static readonly transportLayer = Layer.effect(
     SessionEvents,
     Effect.gen(function* () {
+      // this session's frames: the port is demultiplexed once, above (7.4)
       const frames = yield* SessionFrames;
       return {
         publish: () => Effect.die(new Error('webview cannot publish')),
@@ -493,6 +519,18 @@ no database and no publisher: it decodes the `EventsFrame`s of 8.1 through
 three fields are exactly the three fold arms - `events`, `chunks`, and
 `owners` (7.2). A webview that reaches for `publish` is a defect, not a
 silent no-op: it issues a `runtime.request` (8.2) instead.
+
+`SessionFrames` takes no `SessionKey`, because it _is_ one session's frames.
+A webview has one `postMessage` port and N open papers, so the port is
+demultiplexed exactly once, where the frames are decoded: the bridge reads
+`frame.session` and hands the frame to that session's `LayerMap` entry
+(7.3), which builds its own `SessionFrames` over its own stream. Below that
+one point the key is not a runtime value any code can compare wrongly, so a
+fold consuming another paper's events is unrepresentable rather than
+filtered against. The alternative - one process-wide frame stream plus a
+`session` argument on every read - is precisely the shape in which
+overlapping stream ids or cursors can cross papers, with a filter left to
+be trusted at each call.
 
 ### 7.2 `SessionView`
 
@@ -598,12 +636,16 @@ durable events, which must not drop; suspension parks the framer, never the
 publisher, because the hub is unbounded. Text chunks are append deltas, not
 snapshots, so they are never buffered with the sliding strategy: a slid
 chunk is lost text that no replay recovers, because deltas are not durable.
-Text rides a dropping buffer per stream, each chunk carries a per-stream
-chunk index, and a drop seen by the framer or an index gap seen by the
-subscriber tears the subscription down and resubscribes through
-`all(cursorOf(view))` with a `Resync` carrying the complete in-flight text
-of every streaming row, so the row is replaced, never appended to. A seq gap
-in durable events is handled the same way (7.1). Frame volume equals
+Text rides a dropping buffer per stream, and the repair is the chunk's own
+`from`/`to` offsets (5.2): the subscriber applies a chunk iff `from` equals
+the row's current length, so a drop is detected on the _next_ chunk, by the
+one party that knows the row's length, with no chunk index to maintain and
+no dedupe pass. A torn row resubscribes through `all(cursorOf(view))`, and
+the reply is an ordinary chunk with `from: 0` carrying that row's complete
+in-flight text, which replaces it by the same splice rule. There is no
+resync message kind and no replacement arm: the offsets are what make an
+append and a replacement the same operation. A seq gap in durable events is
+handled the same way (7.1). Frame volume equals
 today's `LOG_DELTA` framing (`WebviewBridge.ts:11`, 16 ms, text appends
 merged per entry); a row-per-update patch would have shipped every text
 twice, which is one reason patches are not built.
@@ -713,11 +755,13 @@ the same functions in process.
 ```ts
 EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], owners: OwnerLiveness | null }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
-Resync      = { session: SessionKey, cursor: SessionCursor, inflight: TextChunk[] }  // full text per streaming row
 ```
 
-Every event carries its `streamId` and `seq`, and every chunk its stream
-and chunk index, so a frame needs no per-stream range. `owners` is the
+Three messages, not four: a resync is a `Subscribe` whose frames answer
+with `from: 0` chunks for the streaming rows (5.2, 7.4), so the protocol
+needs no `Resync` shape and the fold no replacement arm. Every event
+carries its `streamId` and `seq`, and every chunk its stream and its
+`from`/`to`, so a frame needs no per-stream range. `owners` is the
 latest liveness snapshot, sent on every change and on every subscribe; a
 surface that has never received one folds with `liveOwners` empty (5.2).
 
@@ -800,8 +844,8 @@ Surface = {
   session: SessionKey
   selected: StreamTabId | null
   drafts: Map<StreamTabId, Draft>
-  // the new-task composer: a draft with no stream to key it by
-  launchDraft: Draft
+  // the new-task composer: the existing MainViewPersistedState, per session
+  launch: LaunchSurface
   recording: boolean
   // override on top of approval === 'descendant'
   expanded: Map<StreamTabId, 'expanded' | 'collapsed'>
@@ -815,8 +859,25 @@ Surface = {
 `Draft` is `{ text, images: PastedImage[], polished: string | null,
 transcribed: string | null }`. A desktop renderer holds one `Surface` per
 open paper, so a paper with no streams at all is still a distinct surface
-with its own `session` and its own `launchDraft`, rather than one of many
-indistinguishable `selected: null`s. Two surfaces on one session may select
+with its own `session` and its own composer, rather than one of many
+indistinguishable `selected: null`s.
+
+`LaunchSurface` is not a new type: it is `MainViewPersistedState`
+(`store.ts:26`, `MainViewPersistedStateSchema`) moved under `Surface` and
+keyed per session. It already owns every launcher selection the composer
+needs to build a `validatedRequest` - `sessionType`, `launchTarget`,
+`selectedTeamId`, `workingDirectory`, `agent` and `model`, `commit`, the
+single, multi, and context file selections, the checkbox values, and the
+per-category instruction drafts, which are the new-task draft. The roughly
+twenty module-level signals in `mainViewState.ts:76-122` become reads of
+that one record, which is what makes them survive a paper switch and a
+remount instead of resetting through the tracked-signal registry. Two
+things that look adjacent are deliberately _not_ Surface: the option
+catalogs (`modelOptions$`, `agentOptions$`, `teamOptions$`,
+`workspaceRootOptions$`) are host-provided data, not the user's choices,
+and the banners are request outcomes and host state. The test is whether a
+second surface on the same session may hold a different value: a selection
+may, a catalog may not. Two surfaces on one session may select
 different streams. Launch returns
 the stream id (`onBeforeActivation` already hands it out,
 `AgentLaunchContext.ts:93`) and the launching surface selects it. "Reply to
@@ -825,9 +886,9 @@ the existing `PersistedState` owner for that view, interaction state only.
 The signal record holds Maps; the persisted form is a Zod schema beside it
 in which each Map is an entry array (`[StreamTabId, V][]`), parsed and
 rebuilt into Maps at load, because webview state crosses `JSON.stringify`
-and a Map serializes to `{}`. Persisted per view and session: `selected`, `drafts` and
-`launchDraft` (text only; images and the polished and transcribed variants
-are not), `expanded`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
+and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
+today), `drafts` (text only; images and the polished and transcribed
+variants are not), `expanded`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
 `session` (it is the key), `recording`, `focusedRow`.
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
@@ -891,10 +952,19 @@ popup renders `transcript.run` verbatim.
 
 ### 10.3 Headless and SDK
 
-`runProgressRenderer.ts` and the NDJSON subscription
-(`sessionProgressSubscription.ts:67-180`) read the fold; the NDJSON
-vocabulary is frozen (texra-action contract) and is implemented as one
-reader of `SessionView`. `workflowPlainOutput.ts` (204 lines, its own event
+`runProgressRenderer.ts` reads the fold. The NDJSON subscription does not,
+and should not: `sessionProgressSubscription.ts:60-96, 104-181` is two
+exhaustive switches with no cumulative state, one event to at most one
+line, and its `setTaskState` line carries a whole `AgentConfig` through
+`agentConfigToTaskState`. Routing a frozen external wire through the view
+would put `TaskState` fields in `SessionView` that no renderer shows, and
+would then make the projection diff two views to recover the event that
+produced a line. It stays a per-event projection and reads
+`SessionEvents.all()` directly. That is the division: the fold is what
+_renders_, the event stream is what _serializes_, and the projection is the
+one place internal vocabulary is translated to the frozen wire - including
+the `setActiveStream` line, which survives the deletion of the fact
+(section 6, item 5) because the projection emits it from `run.start`. `workflowPlainOutput.ts` (204 lines, its own event
 fold, terminal gate, status table, and model-label swap) renders
 `transcript.run` to text. `packages/agent` exports `SessionViewService` and
 the request union so external consumers stop re-folding raw events
@@ -920,9 +990,25 @@ sites), and
 none of the session stores take a root (`StreamLogStore.open()`,
 `KVStore`, `executionLease.ts:267`, `runStorageFs.ts:29-38`).
 
-The cheap and correct route: the two static classes read their base path
-from the current session's `WorkspaceRoots`; only their two `getBasePath`
-bodies change, because every caller is run-scoped or host-scoped. In Effect
+`getBasePath` is not the only reader, and re-pointing it alone would leave
+the split codex named: `WorkspaceFS.getPath()` and `relativePath()` each
+call `platform().workspace` independently and `locatePath()` uses both
+(the three accessors at `workspaceFS.ts:21-39`, `locatePath` at 50-51),
+so file I/O could target paper B
+while path classification still resolved against paper A.
+
+The route is a deletion, not three re-pointings. `WorkspaceProvider` has
+exactly one implementation - `createNodeWorkspace`, taken by every host
+including the extension (`nodeHost.ts:120`, `extension.ts:388`) - and its
+whole body is two already-exported pure functions of the root,
+`relativeToRoot(root, filePath)` and `canonicalizeWorkspacePath(root)`
+(`nodeWorkspace.ts:51-82`). So `workspace` leaves `platform()` outright
+rather than being re-pointed at a session: `WorkspaceRoots.workspace` is
+the root, and all three `WorkspaceFS` accessors plus `StorageFS`'s take it
+from there and call those functions. One root read per operation, from
+context, and no process-global workspace left for a second paper to
+disagree with. Every caller stays unchanged because every caller is
+run-scoped or host-scoped. In Effect
 code the roots come from context (7.3); the Promise tier keeps the
 async-local lookup. `buildAgentWorkspaceOptions`'s `additionalDirectories`
 inference (`agentWorkspaceOptions.ts:26-39`) and `pathResolution.ts:167-179`'s
@@ -1141,7 +1227,9 @@ with their replacement.
   groups, rollups, breadcrumbs, and run board as the other host for the
   same event log; the sidebar and the editor tab show the same conversation
   at once; the bundle delta is recorded.
-- **5:** NDJSON output byte-identical to today's for a recorded session;
+- **5:** NDJSON output byte-identical to today's for a recorded session -
+  the projection is unchanged and still reads events (10.3), so the lane
+  proves the event stream reaching it is unchanged;
   `workflowPlainOutput`'s private fold gone.
 - **6:** two papers open in one desktop process, each writing to its own
   root; relaunch code gone.
@@ -1192,7 +1280,8 @@ As tests:
 | Effect 4 is a release candidate; names move (`Schema.TaggedError` already renamed on main) | Pin the version the substrate pinned; use `Data.TaggedError`; Appendix A is the verified vocabulary; the guides are older than the package, the package wins |
 | Quadratic fold on fan-out sessions                                                         | Incremental per stream arm, run memoized on `settledSeq`; measured against a recorded 31-call run at lane 1                                                  |
 | Webview bundle growth                                                                      | 61 KB gzipped measured; Schema excluded; re-measure against a production build at lane 4                                                                     |
-| Reconnect loses in-flight text                                                             | `Resync` carries the full in-flight text of every streaming row; text buffers drop and resync, never slide; text deltas are not durable by decision          |
+| Reconnect loses in-flight text                                                             | Chunks carry `from`/`to`, so a drop is caught on the next chunk and the repair is a `from: 0` chunk with the row's full text; text buffers drop, never slide |
+| A webview folds another paper's events                                                     | `SessionFrames` is per session; the port is demultiplexed once at decode, so the key is not a runtime value below it (7.1)                                   |
 | Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                     |
 | Replay-then-tail gap                                                                       | Subscribe the live tail before the replay read; dedupe on seq                                                                                                |
 | Another process commits an event this one never sees (the hub is process-local)            | The tail is the local hub merged with the store's `changes(cursor)` feed, deduped on `(streamId, seq)`; a seq gap alone cannot detect it (7.1, decision 6)   |
@@ -1223,6 +1312,12 @@ As tests:
    exposes `changes(cursor)`, a cross-process feed of committed events,
    beside `read` and `readAll` (7.1). Without it a process that only reads
    goes stale whenever another process owns the run.
+7. `WorkspaceProvider` leaves `platform()` rather than being re-pointed at
+   a session (section 11). It has one implementation and its body is two
+   pure functions of the root, so the port is the process-global, not a
+   wrapper around one.
+8. The frozen NDJSON wire is a projection of the event stream, not a reader
+   of `SessionView` (10.3). The fold renders; the event stream serializes.
 
 Already agreed with the persistence owner and recorded in the companion
 proposal (in flight in another branch, see Lineage): the six event changes
@@ -1298,7 +1393,7 @@ src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
 src/controllers/session/SessionEvents.ts     Context.Service; durableLayer (publish under one permit, all(cursor), events(streamId, fromSeq)) and transportLayer
 src/controllers/session/sessionSources.ts    OwnerLivenessSource, TextChunkSource; a runtime and a webview layer each
-src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Resync, Response; SessionFrames service shape
+src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Response, TextChunk; SessionFrames service shape (per session)
 src/controllers/session/SessionView.ts       Context.Service; ref + changes; fold fiber forkScoped
 src/controllers/session/WorkspaceRoots.ts    Context.Service; Layer.succeed per session
 src/controllers/session/SessionRequests.ts   request(): Effect<Outcome, RequestError>; ownership scope
