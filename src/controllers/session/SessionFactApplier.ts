@@ -40,7 +40,7 @@ const RETAINED_FINISHED_CHILDREN_CAP = 200;
 type RunFactType = (typeof RUN_FACT_EVENT_TYPES)[number];
 
 /** The run-fact vocabulary `RUN_FACT_EVENT_TYPES` subscriptions deliver. */
-export type SessionRunFactEvent = Extract<AgentEvent, { type: RunFactType }>;
+type SessionRunFactEvent = Extract<AgentEvent, { type: RunFactType }>;
 
 type RunFactHandlers = {
   [K in RunFactType]: (

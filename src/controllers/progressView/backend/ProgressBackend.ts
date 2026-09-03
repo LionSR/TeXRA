@@ -12,10 +12,7 @@ import {
 import { LitSessionRenderer } from '@controllers/progressView/backend/LitSessionRenderer';
 import { ProgressPresentationState } from '@controllers/progressView/backend/ProgressPresentationState';
 import type { GetProgressStreamControls } from '@controllers/progressView/progressStreamControls';
-import {
-  SessionFactApplier,
-  type SessionRunFactEvent,
-} from '@controllers/session/SessionFactApplier';
+import { SessionFactApplier } from '@controllers/session/SessionFactApplier';
 import { SessionState } from '@controllers/session/SessionState';
 import type { PresentedStreamId } from '@controllers/session/SessionRendererPort';
 import {
@@ -880,24 +877,14 @@ export class ProgressBackend {
   setupEventListeners(): void {
     if (this.disposed) return;
     this.detachEventListeners.push(
-      this.session.events.subscribe(
-        (sessionEvent) => {
-          if (sessionEvent.scope !== 'session') return;
-          this.admitSessionFact(sessionEvent.event);
+      this.session.events.subscribeSessionFacts((fact) => {
+        this.admitSessionFact(fact);
+      }),
+      this.session.events.subscribeRunFacts(
+        (runFact) => {
+          this.factApplier.handleRunFact(runFact.streamId, runFact.event);
         },
-        { scope: 'session' },
-      ),
-      this.session.events.subscribe(
-        (sessionEvent) => {
-          if (sessionEvent.scope !== 'run') return;
-          this.factApplier.handleRunFact(
-            sessionEvent.streamId,
-            // Narrowed by the subscription filter below, which admits only
-            // `RUN_FACT_EVENT_TYPES`.
-            sessionEvent.event as SessionRunFactEvent,
-          );
-        },
-        { scope: 'run', types: RUN_FACT_EVENT_TYPES },
+        { types: RUN_FACT_EVENT_TYPES },
       ),
     );
   }

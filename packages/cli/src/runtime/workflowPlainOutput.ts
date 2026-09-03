@@ -151,10 +151,8 @@ export function attachWorkflowPlainOutput(
   options: WorkflowPlainOutputOptions,
 ): () => void {
   const projections = new Map<StreamTabId, WorkflowStreamProjection>();
-  const detachRunEvents = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'run') return;
-      const { streamId, event } = sessionEvent;
+  const detachRunEvents = events.subscribeRunFacts(
+    ({ streamId, event }) => {
       if (event.type === 'run.start') {
         if (event.identity.kind === 'multiAgentWorkflow') {
           projections.set(
@@ -169,42 +167,34 @@ export function attachWorkflowPlainOutput(
       }
       projections.get(streamId)?.event(event);
     },
-    {
-      scope: 'run',
-      types: WORKFLOW_PLAIN_EVENT_TYPES,
-    },
+    { types: WORKFLOW_PLAIN_EVENT_TYPES },
   );
-  const detachSessionEvents = events.subscribe(
-    (sessionEvent) => {
-      if (sessionEvent.scope !== 'session') return;
-      const { event } = sessionEvent;
-      if (event.type === 'removeStream') {
-        projections.delete(event.payload.streamId);
-        return;
-      }
-      if (event.type !== 'status') return;
-      const projection = projections.get(event.streamId);
-      if (!projection) return;
-      switch (event.phase) {
-        case STREAM_PHASE.COMPLETED:
-        case STREAM_PHASE.CANCELLED:
-        case STREAM_PHASE.FAILED:
-          projection.complete(event.phase);
-          // A finished stream projects nothing further; a rerun under the
-          // same id starts from its own `run.start`. Dropping it here keeps
-          // the map (and each projection's per-call line memo) from growing
-          // by one entry per workflow stream for the process lifetime.
-          projections.delete(event.streamId);
-          break;
-        case STREAM_PHASE.RUNNING:
-        case STREAM_PHASE.WAITING:
-          break;
-        default:
-          assertNever(event.phase, 'Unhandled workflow stream status');
-      }
-    },
-    { scope: 'session' },
-  );
+  const detachSessionEvents = events.subscribeSessionFacts((event) => {
+    if (event.type === 'removeStream') {
+      projections.delete(event.payload.streamId);
+      return;
+    }
+    if (event.type !== 'status') return;
+    const projection = projections.get(event.streamId);
+    if (!projection) return;
+    switch (event.phase) {
+      case STREAM_PHASE.COMPLETED:
+      case STREAM_PHASE.CANCELLED:
+      case STREAM_PHASE.FAILED:
+        projection.complete(event.phase);
+        // A finished stream projects nothing further; a rerun under the
+        // same id starts from its own `run.start`. Dropping it here keeps
+        // the map (and each projection's per-call line memo) from growing
+        // by one entry per workflow stream for the process lifetime.
+        projections.delete(event.streamId);
+        break;
+      case STREAM_PHASE.RUNNING:
+      case STREAM_PHASE.WAITING:
+        break;
+      default:
+        assertNever(event.phase, 'Unhandled workflow stream status');
+    }
+  });
 
   return () => {
     detachSessionEvents();
