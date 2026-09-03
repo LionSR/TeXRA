@@ -4,11 +4,12 @@
  * Server tools are executed by the provider (Anthropic, OpenAI, Google) rather
  * than locally. This module provides a unified abstraction layer.
  *
- * Uses native SDK types where available for better type safety and maintainability.
- * Zod schemas are the single source of truth; types are derived via z.infer<>.
+ * Uses native SDK types where available for better type safety and
+ * maintainability. The normalized result types below describe an in-process
+ * representation rather than a validation boundary — nothing parses them — so
+ * they are declared directly, the same call `@agent/export/schemas` makes for
+ * the export IR.
  */
-
-import { z } from 'zod';
 
 import { createLog } from '@logger/logUtils';
 import { isObject, tryParseUrl } from '@utils/core';
@@ -32,71 +33,57 @@ import type {
 const log = createLog('ServerTools');
 
 // ============================================================================
-// Web Search Result Schemas - Single Source of Truth
+// Web Search Result Types - Single Source of Truth
 // ============================================================================
 
-/**
- * Schema for a single web search result entry.
- * Normalized across all providers.
- */
-const WebSearchResultEntrySchema = z.object({
+/** A single web search result entry, normalized across all providers. */
+type WebSearchResultEntry = {
   /** URL of the search result */
-  url: z.string(),
+  url: string;
   /** Title of the page */
-  title: z.string(),
+  title: string;
   /** Domain extracted from URL */
-  domain: z.string().optional(),
-});
+  domain?: string;
+};
 
-/** A single web search result entry - derived from schema. */
-type WebSearchResultEntry = z.infer<typeof WebSearchResultEntrySchema>;
-
-/**
- * Schema for unified web search result across all providers.
- */
-const WebSearchResultSchema = z.object({
+/** Unified web search result across all providers. */
+export type WebSearchResult = {
   /** The search query that was executed */
-  query: z.string(),
+  query: string;
   /** Search result entries */
-  results: z.array(WebSearchResultEntrySchema),
+  results: WebSearchResultEntry[];
   /** Provider that executed the search */
-  provider: z.enum(['anthropic', 'openai']),
+  provider: 'anthropic' | 'openai';
   /** Unique identifier for this search call */
-  callId: z.string().optional(),
+  callId?: string;
   /** Status of the search */
-  status: z.enum(['completed', 'in_progress', 'failed']),
-});
-
-/** Unified web search result - derived from schema. */
-export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
+  status: 'completed' | 'in_progress' | 'failed';
+};
 
 // ============================================================================
-// Web Fetch Result Schemas - Single Source of Truth
+// Web Fetch Result Types - Single Source of Truth
 // ============================================================================
 
 /**
- * Schema for unified web fetch result.
+ * Unified web fetch result.
  * Represents a single URL fetch performed by the Anthropic server-side tool.
  */
-const WebFetchResultSchema = z.object({
+export type WebFetchResult = {
   /** The URL that was fetched */
-  url: z.string(),
+  url: string;
   /** Title of the fetched document (if available) */
-  title: z.string().optional(),
+  title?: string;
   /** Provider that executed the fetch */
-  provider: z.literal('anthropic'),
+  provider: 'anthropic';
   /** Unique identifier for this fetch call */
-  callId: z.string(),
+  callId: string;
   /** Status of the fetch */
-  status: z.enum(['completed', 'failed']),
+  status: 'completed' | 'failed';
   /** Error code if fetch failed */
-  errorCode: z.string().optional(),
+  errorCode?: string;
   /** Fetched document text, size-capped via {@link capWebFetchContent} (#7508). */
-  content: z.string().optional(),
-});
-
-/** Unified web fetch result - derived from schema. */
-export type WebFetchResult = z.infer<typeof WebFetchResultSchema>;
+  content?: string;
+};
 
 // ============================================================================
 // Server Tool Content Block Types

@@ -17,10 +17,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
-import {
-  createRunStorageLocation,
-  pathToLocation,
-} from '@utils/files/fileLocation';
+import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { type TaskRunFileService } from '@utils/files/taskRunStorage';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -282,13 +279,9 @@ async function compileOne(
     `r${currentRound}`,
     safeName,
   );
-  const logDest = pathToLocation(
-    path.join(opts.compileRoot, `r${currentRound}_${safeName}.log`),
-  );
-  const logRelativePath = path.join(
-    'compile',
-    `r${currentRound}_${safeName}.log`,
-  );
+  const logFileName = `r${currentRound}_${safeName}.log`;
+  const logAbsolutePath = path.join(opts.compileRoot, logFileName);
+  const logRelativePath = path.join('compile', logFileName);
   const { executionId } = ctx.fileService;
 
   const target: CompileTarget = {
@@ -301,7 +294,7 @@ async function compileOne(
   };
 
   const clearStaleLogs = (): Promise<void> =>
-    AbsoluteFS.delete(logDest.absolutePath).catch(() => undefined);
+    AbsoluteFS.delete(logAbsolutePath).catch(() => undefined);
 
   let compileResult: CompileLatex2PdfResult;
   try {
@@ -348,7 +341,7 @@ async function compileOne(
     });
     return writeCompileFailure({
       ...target,
-      logDest,
+      logAbsolutePath,
       logRelativePath,
       failureLogExcerpt: `Compile check errored for ${displayName}\n\n${message}`,
     });
@@ -369,18 +362,19 @@ async function compileOne(
 
   const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${compileResult.logTail}`;
   ctx.logger.warn(`Compile check: ${displayName} failed`, {
-    data: path.relative(opts.runDirectory, logDest.absolutePath),
+    data: path.relative(opts.runDirectory, logAbsolutePath),
   });
   return writeCompileFailure({
     ...target,
-    logDest,
+    logAbsolutePath,
     logRelativePath,
     failureLogExcerpt,
   });
 }
 
 interface WriteCompileFailureArgs extends CompileTarget {
-  logDest: FileLocation;
+  /** Absolute path of this failure's collision-free `compile/*.log` slot. */
+  logAbsolutePath: string;
   logRelativePath: string;
   failureLogExcerpt: string;
 }
@@ -398,7 +392,7 @@ async function writeCompileFailure({
   currentRound,
   outputFile,
   executionId,
-  logDest,
+  logAbsolutePath,
   logRelativePath,
   failureLogExcerpt,
 }: WriteCompileFailureArgs): Promise<{
@@ -408,7 +402,7 @@ async function writeCompileFailure({
 }> {
   try {
     await AbsoluteFS.ensureDir(opts.compileRoot);
-    await AbsoluteFS.write(logDest.absolutePath, `${failureLogExcerpt}\n`);
+    await AbsoluteFS.write(logAbsolutePath, `${failureLogExcerpt}\n`);
   } catch (writeErr) {
     ctx.logger.warn(
       `Compile check: failed to persist log for ${displayName}: ${toErrorMessage(writeErr)}`,
@@ -417,7 +411,7 @@ async function writeCompileFailure({
   }
 
   const logLocation = createRunStorageLocation(
-    logDest.absolutePath,
+    logAbsolutePath,
     logRelativePath,
     executionId,
   );

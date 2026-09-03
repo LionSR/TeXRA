@@ -3,10 +3,7 @@ import { configuredApiKeyProviders } from '@model/apiProviders';
 import { platform } from '@platform/platform';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
-import type {
-  SubscriptionUsageProvider,
-  SubscriptionUsageSnapshot,
-} from '@shared/schemas';
+import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
 import { OWN_API_KEYS } from '@shared/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
@@ -19,7 +16,6 @@ import {
   formatCliModelAccessRouteInline,
   cliCodingPlanStatus,
   type CliAccountStatus,
-  type CliModelAccessStatus,
 } from './modelAccessRoute';
 import {
   mergeCliTexraAccountStatus,
@@ -27,12 +23,9 @@ import {
 } from './modelAccessSelection';
 import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 
-interface SubscriptionUsageReader {
-  getUsage(
-    provider: SubscriptionUsageProvider,
-    options?: { readonly forceRefresh?: boolean },
-  ): Promise<SubscriptionUsageSnapshot>;
-}
+/** The one method this module needs, derived from the service that owns it —
+ *  the same narrowing the desktop credential controller uses. */
+type SubscriptionUsageReader = Pick<SubscriptionUsageService, 'getUsage'>;
 
 const SubscriptionUsage = new SubscriptionUsageService();
 

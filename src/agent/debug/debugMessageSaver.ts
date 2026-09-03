@@ -23,16 +23,6 @@ interface DebugSaveOptions {
 
 type DebugObjectType = 'messages' | 'response';
 
-/**
- * Whether to persist what TeXRA sends to and receives from the model.
- *
- * The one current setting covers request messages, responses, and the final
- * input prompt.
- */
-function shouldSaveModelIO(): boolean {
-  return getConfig<boolean>('texra.debug.saveModelIO');
-}
-
 interface SaveDebugParams {
   object: unknown;
   objectType: DebugObjectType;
@@ -51,7 +41,10 @@ export async function maybeSaveDebugObject({
   context,
   fileOptions = {},
 }: SaveDebugParams): Promise<void> {
-  if (!shouldSaveModelIO() || context.isRemote) return;
+  // `texra.debug.saveModelIO` is the one setting covering request messages,
+  // responses, and the final input prompt.
+  if (!getConfig<boolean>('texra.debug.saveModelIO') || context.isRemote)
+    return;
 
   const { logger, modelName, executionId } = context;
   const { baseName = objectType, continuationCount } = fileOptions;

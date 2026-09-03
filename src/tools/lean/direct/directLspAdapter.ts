@@ -149,10 +149,10 @@ export function createDirectLspLeanAdapter(
     return tracked;
   }
 
-  async function endUse(root: string, session?: LeanSession): Promise<void> {
+  async function endUse(root: string, session: LeanSession): Promise<void> {
     const tracked = sessions.get(root);
     if (!tracked) return;
-    if (session && tracked.session !== session) return;
+    if (tracked.session !== session) return;
     tracked.inFlight = Math.max(0, tracked.inFlight - 1);
     if (tracked.inFlight > 0) return;
     tracked.lastUsedAt = now();
@@ -227,10 +227,10 @@ export function createDirectLspLeanAdapter(
     tracked.idleTimer = timer;
   }
 
-  function forgetSession(root: string, session?: LeanSession): void {
+  function forgetSession(root: string, session: LeanSession): void {
     const tracked = sessions.get(root);
     if (!tracked) return;
-    if (session && tracked.session !== session) return;
+    if (tracked.session !== session) return;
     if (tracked.idleTimer) clearTimeout(tracked.idleTimer);
     sessions.delete(root);
   }

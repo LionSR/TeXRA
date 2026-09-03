@@ -27,7 +27,7 @@ interface BeforeQuitApp {
   quit(): void;
 }
 
-export interface DesktopWindowLifecycleWiring {
+interface DesktopWindowLifecycleWiring {
   webContents: EventSource;
   workspaceIpc: DisposableRendererResources;
   showDiscardDialog(): number;

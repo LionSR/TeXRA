@@ -1,7 +1,7 @@
 // Transcript region for the current stream's in-flight assistant/tool rows.
 // Finalized history is owned by the static scrollback renderer.
 
-import { Box, Text } from 'ink';
+import { Box } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
@@ -11,7 +11,6 @@ import {
   activeStreamId as activeStreamIdSignal,
   streamPhaseFor,
   streams as streamsSignal,
-  type StreamSlice,
 } from '../state/cliState';
 import {
   sessionStateRevision,

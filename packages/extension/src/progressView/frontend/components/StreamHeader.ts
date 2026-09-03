@@ -388,8 +388,8 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
   /**
    * The full stream state. The header derives its status/substate/progress/
    * stage display and the tool-use-only bypass/goal indicators from this one
-   * object, so containers bind a single `.state` property instead of the
-   * nine-prop sync surface the old `renderStreamHeader` wrapper maintained.
+   * object, so containers bind a single `.state` property instead of a
+   * per-field sync surface.
    */
   @property({ attribute: false }) state: StreamState | null = null;
 

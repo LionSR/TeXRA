@@ -93,11 +93,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     return this.register(key, () => createInitialState(issue), onEvent);
   }
 
-  protected formatErrorEvent(
-    _key: string,
-    state: SubscriptionState,
-    detail: string,
-  ): string {
+  protected formatErrorEvent(state: SubscriptionState, detail: string): string {
     return formatIssueSubscriptionError(
       state.slug,
       state.issue.issueNumber,

@@ -31,7 +31,7 @@ import { resolveGitHubTokenSource } from '@tools/github/githubAuth';
 const credentialLog = createLog('Setup Credentials');
 
 /** Per-provider API key surface. */
-export interface SetupSecretsAdapter {
+interface SetupSecretsAdapter {
   deleteApiKey(provider: ApiProvider): Promise<void>;
   /**
    * Whether a usable key is resolved for the provider (secret storage, then

@@ -37,7 +37,7 @@ export interface ApprovalTempFiles {
   readonly cleanup: () => Promise<void>;
 }
 
-export interface WriteApprovalTempFilesInput {
+interface WriteApprovalTempFilesInput {
   readonly directory: string;
   /** Seeds the file extension shown in the diff view; not a write target. */
   readonly targetPath: string;

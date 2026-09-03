@@ -1022,9 +1022,9 @@ const MESSAGE_ROUTES = createMessageRoutes({
   openTerminalCommand: workbench.openTerminalCommand,
   renameBrowserTab: (tabId, title) =>
     updateShell(renameWorkbenchTab(shellState, tabId, title)),
-  environment: {
-    set: (summary, loading) => environmentPopover.set(summary, loading),
-    rerender: rerenderShell,
+  environment: (summary) => {
+    environmentPopover.set(summary);
+    rerenderShell();
   },
 });
 

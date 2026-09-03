@@ -26,13 +26,11 @@ import type { TemplateResult } from 'lit';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /**
- * The value shapes the `UPDATE_STATE_SETTING` boundary accepts — imported
- * from the wire schema so this cannot drift from what the backend validates
- * (the selected catalog entry's own schema performs the narrower per-key
- * validation backend-side).
+ * Write one catalog key. `null` clears it back to the catalog default.
+ * `StateSettingValue` is the wire schema's own type, so the accepted value
+ * shapes cannot drift from what the backend validates (the selected catalog
+ * entry's schema performs the narrower per-key validation backend-side).
  */
-
-/** Write one catalog key. `null` clears it back to the catalog default. */
 export function postStateSetting(key: string, value: StateSettingValue): void {
   postMessage(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING, { key, value });
 }

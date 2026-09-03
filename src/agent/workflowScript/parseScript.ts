@@ -1,6 +1,6 @@
 import * as vm from 'node:vm';
 
-import { parse, type Node, type Program } from 'acorn';
+import { parse, type AnyNode, type Program } from 'acorn';
 import { full as walkAst } from 'acorn-walk';
 import { z } from 'zod';
 
@@ -35,22 +35,18 @@ function parseProgram(source: string): Program {
 
 function rejectsModuleLoading(program: Program): boolean {
   let rejected = false;
-  walkAst(program, (node: Node) => {
+  walkAst(program, (node: AnyNode) => {
     if (node.type === 'ImportDeclaration' || node.type === 'ImportExpression') {
       rejected = true;
       return;
     }
-    const moduleLoad = node as Node & {
-      callee?: Node & { name?: string };
-      tag?: Node & { name?: string };
-    };
     if (
       (node.type === 'CallExpression' &&
-        moduleLoad.callee?.type === 'Identifier' &&
-        moduleLoad.callee.name === 'require') ||
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require') ||
       (node.type === 'TaggedTemplateExpression' &&
-        moduleLoad.tag?.type === 'Identifier' &&
-        moduleLoad.tag.name === 'require')
+        node.tag.type === 'Identifier' &&
+        node.tag.name === 'require')
     ) {
       rejected = true;
     }

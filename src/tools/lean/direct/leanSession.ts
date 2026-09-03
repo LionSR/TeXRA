@@ -51,7 +51,7 @@ interface OpenedFile {
   }>;
 }
 
-export interface LeanSessionOptions {
+interface LeanSessionOptions {
   workspaceRoot: string;
   lakeCommand: string;
   onExit?: () => void;

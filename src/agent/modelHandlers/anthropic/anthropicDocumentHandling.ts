@@ -19,9 +19,9 @@ import type { Anthropic } from '@anthropic-ai/sdk';
 import type {
   DocumentBlockParam,
   ContentBlockParam,
+  FileDocumentSource,
   MessageParam,
 } from '@anthropic-ai/sdk/resources/messages';
-import type { BetaRequestDocumentBlock } from '@anthropic-ai/sdk/resources/beta/messages';
 
 const log = createLog('AnthropicDocuments');
 
@@ -50,24 +50,18 @@ export function extractDocumentBlocks(
 }
 
 /**
- * Yields every document block across messages with its typed source, descending
- * into tool_result content. Shared by source analysis and upload replacement so
- * both walk messages identically.
+ * Yields every document block across messages, descending into tool_result
+ * content. Shared by source analysis and upload replacement so both walk
+ * messages identically.
  */
-function* iterateDocumentSources(messages: MessageParam[]): Generator<{
-  block: DocumentBlockParam;
-  source: BetaRequestDocumentBlock['source'];
-}> {
+function* iterateDocumentBlocks(
+  messages: MessageParam[],
+): Generator<DocumentBlockParam> {
   for (const message of messages) {
     if (!Array.isArray(message.content)) {
       continue;
     }
-    for (const block of extractDocumentBlocks(message.content)) {
-      yield {
-        block,
-        source: block.source as BetaRequestDocumentBlock['source'],
-      };
-    }
+    yield* extractDocumentBlocks(message.content);
   }
 }
 
@@ -85,7 +79,7 @@ export function analyzeDocumentSources(
   let hasFileSource = false;
   let hasBase64Pdf = false;
 
-  for (const { source } of iterateDocumentSources(messages)) {
+  for (const { source } of iterateDocumentBlocks(messages)) {
     if (source.type === 'file') {
       hasFileSource = true;
     } else if (
@@ -178,7 +172,8 @@ export async function replaceDocumentDataWithUploads(
   let uploaded = false;
   let hasFileReference = false;
 
-  for (const { block, source } of iterateDocumentSources(messages)) {
+  for (const block of iterateDocumentBlocks(messages)) {
+    const source = block.source;
     if (source.type === 'file') {
       hasFileReference = true;
       continue;
@@ -201,7 +196,7 @@ export async function replaceDocumentDataWithUploads(
     const filename = (block.title ?? 'document.pdf').trim() || 'document.pdf';
     const sanitizedFilename = sanitizeAnthropicFilename(filename);
     let buffer: Buffer | undefined;
-    let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
+    let uploadedSource: FileDocumentSource | undefined;
 
     try {
       buffer = Buffer.from(base64Data, 'base64');
@@ -222,7 +217,7 @@ export async function replaceDocumentDataWithUploads(
       uploadedSource = {
         type: 'file',
         file_id: fileId,
-      } as BetaRequestDocumentBlock['source'];
+      };
 
       if (pageCount > 0) {
         onPageCount(fileId, pageCount);
@@ -233,7 +228,7 @@ export async function replaceDocumentDataWithUploads(
 
     if (uploadedSource) {
       delete (source as { data?: string }).data;
-      (block as BetaRequestDocumentBlock).source = uploadedSource;
+      block.source = uploadedSource;
       uploaded = true;
       hasFileReference = true;
     }

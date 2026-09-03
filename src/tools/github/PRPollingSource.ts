@@ -260,7 +260,6 @@ export class PRPollingSource extends PollingSourceBase<
   }
 
   protected formatErrorEvent(
-    _key: string,
     state: PRSubscriptionState,
     detail: string,
   ): string {

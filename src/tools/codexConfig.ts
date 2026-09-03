@@ -46,7 +46,7 @@ const getCodexReasoningEffort = createEnumStateGetter(
  * type. Preserve the requested level only after the resolved binary has been
  * checked; otherwise cap it to `high`.
  */
-export type CodexCliReasoningEffort = Extract<
+type CodexCliReasoningEffort = Extract<
   ModelReasoningEffort,
   'low' | 'medium' | 'high' | 'xhigh'
 >;

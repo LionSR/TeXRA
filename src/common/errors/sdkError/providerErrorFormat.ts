@@ -334,8 +334,9 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     quotaLimit?.exhaustionReason ??
     (isUpstreamCreditDepleted ? 'upstream-credit' : undefined);
   const isCredentialExhausted = exhaustionReason !== undefined;
+  const hasMissingApiKey = hasMissingApiKeyErrorMarker(err);
   let markerClassification: ProviderErrorClassification | undefined;
-  if (hasMissingApiKeyErrorMarker(err)) {
+  if (hasMissingApiKey) {
     markerClassification = { kind: 'missing-api-key' };
   } else if (hasContextWindowErrorMarker(err)) {
     markerClassification = { kind: 'context-window' };
@@ -372,6 +373,16 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     );
   }
 
+  // The status this error resolves to outside the SDK-matched path, shared by
+  // the context-window guard and the unrecognized-error return below. Routed
+  // through the shared resolver so a misleading sub-400 code (an SSE 200, a
+  // wrapper's errno) cannot outrank a status inferable from the body. The
+  // SDK-matched path resolves its own, adding the matched entry's fallback.
+  const statusCode = resolveErrorStatusCode(
+    detectStatusCode(err),
+    rawErrorBody,
+  );
+
   // Context-window overflow — deterministic: a retry resends the same
   // oversized payload and fails again. Handler-level recovery (compaction,
   // dropping previous_response_id) runs before the error reaches this
@@ -379,20 +390,15 @@ export function formatProviderHttpError(err: unknown): ProviderError {
   // Guarded on the status code because isContextWindowError also matches by
   // message wording, and a retryable provider error (e.g. a 429 mentioning
   // tokens) must keep its retry affordance.
-  const overflowStatusCode = resolveErrorStatusCode(
-    detectStatusCode(err),
-    rawErrorBody,
-  );
   if (
     isContextWindowError(err) &&
-    (overflowStatusCode === undefined ||
-      !isRetryableStatusCode(overflowStatusCode))
+    (statusCode === undefined || !isRetryableStatusCode(statusCode))
   ) {
     return terminalError(
       `${extractedMessage ?? 'Conversation exceeds the model context window.'} ` +
         'Retrying would resend the same oversized request. Start a new ' +
         'session, or reduce attached files and tool output.',
-      hasMissingApiKeyErrorMarker(err)
+      hasMissingApiKey
         ? { kind: 'missing-api-key' }
         : { kind: 'context-window' },
     );
@@ -424,14 +430,7 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  // Unrecognized error — extract what we can. Route through the shared
-  // resolver so a misleading sub-400 code (an SSE 200, a wrapper's errno)
-  // cannot outrank a status inferable from the body, exactly as it cannot on
-  // the SDK-matched path above.
-  const statusCode = resolveErrorStatusCode(
-    detectStatusCode(err),
-    rawErrorBody,
-  );
+  // Unrecognized error — extract what we can, on the status resolved above.
   const provider = detectProvider(err);
   const requestId = detectRequestId(err);
   const { statusText, message } = describeHttpError(

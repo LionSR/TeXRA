@@ -110,18 +110,18 @@ function getRunningTodos(
 interface SizedEntry {
   readonly path: string;
   readonly size: number;
-  readonly isDir: boolean;
+  readonly isDirectory: boolean;
 }
 
 /**
  * Format entries as right-aligned "<size>  <path>" lines (`<dir>` for
- * directories). `/files` and `/workspace-files` render the same shape, so each
- * normalizes its own entry shape to `SizedEntry` first — `listFiles` and
- * `listWorkspaceFiles` source entries with differently-named directory flags.
+ * directories). `/files` and `/workspace-files` render the same shape, and
+ * both source listings already carry these fields, so each passes its entries
+ * straight through.
  */
 function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
   return entries.map((entry) => {
-    const sizeStr = entry.isDir ? '<dir>' : formatBytes(entry.size);
+    const sizeStr = entry.isDirectory ? '<dir>' : formatBytes(entry.size);
     return `${sizeStr.padStart(8)}  ${entry.path}`;
   });
 }
@@ -783,13 +783,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       return executed('No files generated for this execution.');
     }
 
-    const lines = formatSizedEntryLines(
-      files.map((file) => ({
-        path: file.path,
-        size: file.size,
-        isDir: file.isDirectory,
-      })),
-    );
+    const lines = formatSizedEntryLines(files);
 
     return executed(
       `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
@@ -831,13 +825,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
 
-    const lines = formatSizedEntryLines(
-      entries.map((entry) => ({
-        path: entry.path,
-        size: entry.size,
-        isDir: entry.isDirectory,
-      })),
-    );
+    const lines = formatSizedEntryLines(entries);
 
     return executed(
       `Workspace files for /executions/${executionId}/workspace-files:\n\n` +

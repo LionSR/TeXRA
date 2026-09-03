@@ -106,6 +106,7 @@ import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsCon
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
 import {
   createDesktopSettingsIpc,
+  type DesktopSettingsIpc,
   type DesktopSettingsUiHost,
 } from './desktopSettingsIpc.js';
 import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
@@ -349,7 +350,7 @@ function createWindow(options: {
     postToRenderer: postToRendererIfAlive,
   });
   const settingsIpcRef: {
-    current?: ReturnType<typeof createDesktopSettingsIpc>;
+    current?: DesktopSettingsIpc;
   } = {};
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;

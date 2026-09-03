@@ -33,7 +33,6 @@ import { nodeProcesses } from './nodeProcesses';
 import { createNodeWorkspace } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
-import { platform } from '../platform';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
@@ -58,8 +57,8 @@ export interface NodePlatformServices {
   /**
    * Config source: the workspace + global stores to build the file-backed
    * provider from, or an already-constructed provider for hosts that resolve
-   * configuration some other way (the SDK's process-local memory provider, the
-   * extension's transition-aware subclass).
+   * configuration some other way (the SDK's process-local
+   * `MemoryConfigProvider`).
    */
   readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly globalState: StateStore;

@@ -21,10 +21,6 @@ export class SubscriptionUsageHttpError extends Error {
   }
 }
 
-function assertSubscriptionUsageResponse(response: Response): void {
-  if (!response.ok) throw new SubscriptionUsageHttpError(response.status);
-}
-
 /**
  * The one subscription-usage request every provider adapter makes. Only the
  * URL and headers differ per provider, so the GET, the abort wiring, and the
@@ -44,7 +40,7 @@ export async function fetchSubscriptionUsage(
     headers: request.headers,
     signal: request.signal,
   });
-  assertSubscriptionUsageResponse(response);
+  if (!response.ok) throw new SubscriptionUsageHttpError(response.status);
   return response.json();
 }
 

@@ -53,7 +53,6 @@ import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
 } from '../support/reasoningEffort';
-import { tagOpenAISdkError } from './openAISdkError';
 import { normalizeOpenAIUsage } from './openAIUsage';
 import {
   appendUserTextToChatMessages,
@@ -579,14 +578,6 @@ export class ModelHandlerOpenAI<
       convertContentToString,
       mergeConsecutiveRoles: this.mergeConsecutiveRoles,
     };
-  }
-
-  protected override get sdkErrorTagger() {
-    return tagOpenAISdkError;
-  }
-
-  override get supportsForcedToolChoice(): boolean {
-    return true;
   }
 
   /** Creates a chat completion after SDK-boundary error tagging is installed. */

@@ -128,7 +128,6 @@ interface RunToolUseFlowResult {
 
 export interface ToolUseFlowContext {
   readonly ownerSession: SessionHandle;
-  readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: RunModelHandler;
   interrupt(): void;
   requestImmediateCompaction(): void;
@@ -358,7 +357,6 @@ export async function runToolUseFlow(
 
   const flowContext: ToolUseFlowContext = {
     ownerSession: runSession,
-    session: sessionLifecycle,
     get modelHandler() {
       return services.modelCell.handler;
     },

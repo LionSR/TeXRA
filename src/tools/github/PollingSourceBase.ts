@@ -203,7 +203,7 @@ export abstract class PollingSourceBase<
   ): Promise<void> {}
 
   /** Subclass: format a halted-subscription error event for the listener. */
-  protected abstract formatErrorEvent(key: K, state: S, detail: string): string;
+  protected abstract formatErrorEvent(state: S, detail: string): string;
 
   activeKeys(): readonly K[] {
     return [...this.subscriptions.keys()];
@@ -372,7 +372,7 @@ export abstract class PollingSourceBase<
 
   /** Emit a formatted halted-subscription error, then detach the key. */
   private emitErrorAndDetach(key: K, state: S, detail: string): void {
-    this.emit(state, this.formatErrorEvent(key, state, detail));
+    this.emit(state, this.formatErrorEvent(state, detail));
     this.detach(key);
   }
 
@@ -496,7 +496,7 @@ export abstract class PollingSourceBase<
       this.logger.warn(`Auth error for ${key}; stopping subscription.`, {
         data: err,
       });
-      this.emit(state, this.formatErrorEvent(key, state, err.message));
+      this.emit(state, this.formatErrorEvent(state, err.message));
       appSignals.emit('githubTokenInvalid', { message: err.message });
       this.detach(key);
       return;

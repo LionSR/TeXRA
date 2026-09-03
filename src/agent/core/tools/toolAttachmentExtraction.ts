@@ -4,6 +4,7 @@ import {
   type ToolFileAttachment,
   type ToolResult,
   ToolResultSchema,
+  type ValidationErrorDiagnostics,
   ValidationErrorDiagnosticsSchema,
 } from '@shared/schemas';
 
@@ -17,13 +18,12 @@ import {
  */
 function sanitizeDiagnostics(
   diagnostics: unknown,
-): { type: 'validation_error'; formatted: unknown } | undefined {
+): ValidationErrorDiagnostics | undefined {
   if (diagnostics === undefined) return undefined;
   const validationError =
     ValidationErrorDiagnosticsSchema.safeParse(diagnostics);
   if (!validationError.success) return undefined;
-  const { type, formatted } = validationError.data;
-  return { type, formatted };
+  return validationError.data;
 }
 
 /**

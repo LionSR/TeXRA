@@ -172,13 +172,12 @@ export class WorkspaceStorageProvider implements StorageProvider {
     this.activeWorkspacePath = workspacePath;
   }
 
-  private storagePathFor(workspacePath: string | undefined): string {
-    return resolveWorkspaceStoragePath(this.storageRoot, workspacePath);
-  }
-
   getStoragePath(): string {
     const workspacePath = this.activeWorkspacePath;
-    const storagePath = this.storagePathFor(workspacePath);
+    const storagePath = resolveWorkspaceStoragePath(
+      this.storageRoot,
+      workspacePath,
+    );
     if (this.initializedStoragePaths.has(storagePath)) return storagePath;
 
     // The legacy rename must precede directory creation because it stops once

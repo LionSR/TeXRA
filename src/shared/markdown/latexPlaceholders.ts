@@ -77,11 +77,11 @@ export function protectPatternsInto(
   let out = content;
   for (const pattern of patterns) {
     out = out.replaceAll(pattern, (match, ...args: unknown[]) => {
-      const offset = args.at(-2) as number;
-      const source = args.at(-1) as string;
       if (preserveBlockquotePrefixes && match.includes('\n')) {
         // Keep Markdown blockquote prefixes visible to the parser instead of
         // collapsing an entire quoted display span into one placeholder line.
+        const offset = args.at(-2) as number;
+        const source = args.at(-1) as string;
         const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
         const firstLinePrefix = source.slice(firstLineStart, offset);
         const firstContainerPrefix =
@@ -115,20 +115,19 @@ export function protectPatternsInto(
               prefix !== undefined ||
               (remainingLines[index]?.trim().length ?? 0) > 0,
           );
-        if (!isQuotedSpan) {
-          const index = items.push(match) - 1;
-          return `@@${tag}-${index}@@`;
+        if (isQuotedSpan) {
+          return lines
+            .map((line, lineIndex) => {
+              const retainedPrefix =
+                lineIndex === 0 ? '' : (remainingPrefixes[lineIndex - 1] ?? '');
+              const contentPrefix =
+                lineIndex === 0 ? '' : (availablePrefixes[lineIndex - 1] ?? '');
+              const index = items.push(line.slice(contentPrefix.length)) - 1;
+              return `${retainedPrefix}@@${tag}-${index}@@`;
+            })
+            .join('\n');
         }
-        return lines
-          .map((line, lineIndex) => {
-            const retainedPrefix =
-              lineIndex === 0 ? '' : (remainingPrefixes[lineIndex - 1] ?? '');
-            const contentPrefix =
-              lineIndex === 0 ? '' : (availablePrefixes[lineIndex - 1] ?? '');
-            const index = items.push(line.slice(contentPrefix.length)) - 1;
-            return `${retainedPrefix}@@${tag}-${index}@@`;
-          })
-          .join('\n');
+        // An unquoted span falls through to the whole-match placeholder below.
       }
       const index = items.push(match) - 1;
       return `@@${tag}-${index}@@`;

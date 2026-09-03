@@ -15,7 +15,6 @@ import {
   ChatExportController,
   type ExportInputStatus,
   type HtmlExportOutcome,
-  type LatexExportResult,
 } from './ChatExportController';
 
 export type TranscriptExportFormat = 'html' | 'md' | 'tex';
@@ -89,44 +88,6 @@ function exportedFileMessage(storagePath: string): string {
   return `Transcript exported: ${path.basename(storagePath)}`;
 }
 
-type LatexExportOutcome =
-  | {
-      readonly kind: 'compiled';
-      readonly pathToOpen: string;
-      readonly message: string;
-    }
-  | {
-      readonly kind: 'compileFailed';
-      readonly pathToOpen: string;
-      readonly message: string;
-      readonly logDetail?: string;
-    };
-
-/** Decide which file to open and what to say for a LaTeX export result. */
-function describeLatexExportResult(
-  result: LatexExportResult,
-): LatexExportOutcome {
-  if (result.pdfPath) {
-    const pdfFilename = path
-      .basename(result.storagePath)
-      .replace(/\.tex$/, '.pdf');
-    return {
-      kind: 'compiled',
-      pathToOpen: result.pdfPath,
-      message: `Transcript exported and compiled: ${pdfFilename}`,
-    };
-  }
-  return {
-    kind: 'compileFailed',
-    pathToOpen: result.absolutePath,
-    message:
-      'LaTeX compilation failed. The .tex source file has been opened instead.',
-    logDetail: result.logTail
-      ? `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`
-      : undefined,
-  };
-}
-
 /**
  * Ask the host for a format, write the export, and open the result.
  *
@@ -175,20 +136,24 @@ async function exportLatex(
   ports: TranscriptExportPorts,
 ): Promise<void> {
   const result = await controller.exportAsLatex(executionId, input);
-  const outcome = describeLatexExportResult(result);
-  if (outcome.kind === 'compileFailed' && outcome.logDetail) {
-    ports.reportDetail?.(outcome.logDetail, {
-      storagePath: result.storagePath,
-      logTail: result.logTail,
-    });
+  if (result.pdfPath) {
+    const pdfFilename = path
+      .basename(result.storagePath)
+      .replace(/\.tex$/, '.pdf');
+    await ports.openPath(result.pdfPath, 'pdf');
+    await ports.showInfo(`Transcript exported and compiled: ${pdfFilename}`);
+    return;
   }
-  await ports.openPath(
-    outcome.pathToOpen,
-    outcome.kind === 'compiled' ? 'pdf' : 'text',
+  if (result.logTail) {
+    ports.reportDetail?.(
+      `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
+      { storagePath: result.storagePath, logTail: result.logTail },
+    );
+  }
+  await ports.openPath(result.absolutePath, 'text');
+  await ports.showWarning(
+    'LaTeX compilation failed. The .tex source file has been opened instead.',
   );
-  await (outcome.kind === 'compiled'
-    ? ports.showInfo(outcome.message)
-    : ports.showWarning(outcome.message));
 }
 
 async function exportHtml(

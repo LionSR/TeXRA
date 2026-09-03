@@ -26,7 +26,6 @@ export function renderBannerFrame(options: {
   readonly frameClassName?: string;
   readonly calloutClassName?: string;
   readonly role?: string;
-  readonly ariaLabel?: string;
   readonly body: TemplateResult;
 }): TemplateResult {
   return html`
@@ -38,7 +37,6 @@ export function renderBannerFrame(options: {
         appearance=${ifDefined(options.appearance)}
         size=${ifDefined(options.size)}
         role=${ifDefined(options.role)}
-        aria-label=${ifDefined(options.ariaLabel)}
       >
         ${options.icon ? waIcon(options.icon, { slot: 'icon' }) : nothing}
         ${options.body}

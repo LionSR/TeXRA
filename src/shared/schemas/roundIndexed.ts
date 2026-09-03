@@ -147,15 +147,6 @@ export function cloneRoundIndexed<T>(
 // Persisted-file parse entry
 // ============================================================================
 
-function warnDroppedItem(
-  kind: string,
-  error: { issues: readonly { path: PropertyKey[]; message: string }[] },
-): void {
-  console.warn(
-    `[roundIndexed] Dropping malformed ${kind} entry: ${formatZodIssuesMessage(error.issues)}`,
-  );
-}
-
 /**
  * Parse a persisted round-indexed sidecar file (`outputFiles.json`,
  * `missingOutputs.json`, `compileFailures.json`) into the canonical record.
@@ -175,28 +166,6 @@ export function parsePersistedRoundIndexed<T>(
 ): RoundIndexed<T> {
   if (raw === undefined) return {};
 
-  const toRounds = (record: Record<string, unknown>): RoundIndexed<T> => {
-    const rounds: RoundIndexed<T> = {};
-    for (const [key, value] of Object.entries(record)) {
-      const round = RoundKeySchema.safeParse(key);
-      if (!round.success) continue;
-      if (!Array.isArray(value)) {
-        console.warn(
-          `[roundIndexed] Dropping non-array round "${key}" in ${kind}.`,
-        );
-        continue;
-      }
-      const items = value.flatMap((item) => {
-        const parsed = itemSchema.safeParse(item);
-        if (parsed.success) return [parsed.data];
-        warnDroppedItem(kind, parsed.error);
-        return [];
-      });
-      if (items.length > 0) rounds[round.data] = items;
-    }
-    return rounds;
-  };
-
   const result = z.record(z.string(), z.unknown()).safeParse(raw);
   if (!result.success) {
     console.warn(
@@ -204,5 +173,26 @@ export function parsePersistedRoundIndexed<T>(
     );
     return {};
   }
-  return toRounds(result.data);
+
+  const rounds: RoundIndexed<T> = {};
+  for (const [key, value] of Object.entries(result.data)) {
+    const round = RoundKeySchema.safeParse(key);
+    if (!round.success) continue;
+    if (!Array.isArray(value)) {
+      console.warn(
+        `[roundIndexed] Dropping non-array round "${key}" in ${kind}.`,
+      );
+      continue;
+    }
+    const items = value.flatMap((item) => {
+      const parsed = itemSchema.safeParse(item);
+      if (parsed.success) return [parsed.data];
+      console.warn(
+        `[roundIndexed] Dropping malformed ${kind} entry: ${formatZodIssuesMessage(parsed.error.issues)}`,
+      );
+      return [];
+    });
+    if (items.length > 0) rounds[round.data] = items;
+  }
+  return rounds;
 }

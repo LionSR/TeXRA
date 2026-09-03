@@ -420,8 +420,12 @@ export class ProgressBackend {
    * Admit one session fact through the applier, then apply presentation
    * policy for an accepted attachment. A refused attachment (removed stream)
    * must not activate or lease.
+   *
+   * Public so tests and rare host seeds can inject a fact directly;
+   * production reaches it through the hub subscription in
+   * {@link setupEventListeners}.
    */
-  private admitSessionFact(
+  applySessionFact(
     fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
   ): boolean {
     const admitted = this.factApplier.handleSessionFact(fact);
@@ -429,13 +433,6 @@ export class ProgressBackend {
       this.handleStreamPresentationRequest(fact.payload);
     }
     return admitted;
-  }
-
-  /** Inject a session fact (tests / rare host seeds). Prefer the hub in production. */
-  applySessionFact(
-    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
-  ): boolean {
-    return this.admitSessionFact(fact);
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
@@ -889,7 +886,7 @@ export class ProgressBackend {
     if (this.disposed) return;
     this.detachEventListeners.push(
       this.session.events.subscribeSessionFacts((fact) => {
-        this.admitSessionFact(fact);
+        this.applySessionFact(fact);
       }),
       this.session.events.subscribeRunFacts(
         (runFact) => {

@@ -36,6 +36,7 @@ import type {
   ModelOptionData,
   MultiFiles,
   OnboardingFunnelState,
+  SessionType,
   SingleFiles,
   TeamOptionData,
   WorkspaceRootOptionData,
@@ -43,7 +44,7 @@ import type {
 import { byCategory, type ByCategory } from '@shared/schemas';
 
 // Local imports - main view
-import { SESSION_TYPES, type SessionType } from './constants';
+import { SESSION_TYPES } from './constants';
 import {
   DEFAULT_CHECKBOX_VALUES,
   DEFAULT_FILE_OPTIONS,

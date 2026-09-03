@@ -123,8 +123,6 @@ interface ConversationMessage {
   content?: unknown;
   // Google GenAI uses `parts` instead of `content`
   parts?: unknown[];
-  // OpenAI Chat Completions: tool_calls on assistant messages
-  tool_calls?: unknown[];
   [key: string]: unknown;
 }
 

@@ -56,7 +56,7 @@ export class WaitingTermination {
    * `finalizeRunTerminal` already claimed both leave this a no-op, with no
    * `streamStatus` re-read: a stop can neither abandon a live run nor publish
    * a second outcome. That also covers the window
-   * `resumeQueuedToolUseFromResumeData` opens by flipping the stream to
+   * `resumeQueuedToolUse` (`resumeRun.ts`) opens by flipping the stream to
    * RUNNING/RESUMING before the resumed run installs its own context — the
    * suspended handle it replaces is still parked, so a stop landing there
    * still tears the stalled resume down.

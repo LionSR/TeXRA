@@ -297,7 +297,6 @@ interface WaIconOptions {
   // 'start' / 'end' for wa-button; 'icon' for wa-callout / wa-card.
   readonly slot?: 'start' | 'end' | 'icon';
   readonly className?: string;
-  readonly variant?: 'solid' | 'regular';
   readonly label?: string;
   // Native `title` tooltip. Purely visual — a decorative icon with a hover
   // tooltip stays `aria-hidden` (only `label` exposes it to assistive tech).
@@ -306,6 +305,9 @@ interface WaIconOptions {
 
 // Lit template for <wa-icon>. Decorative icons stay hidden from assistive
 // technology; icon-only controls pass a label as required by Web Awesome.
+// `variant` is fixed: `texraIconResolver` keys on the name alone and the
+// registered set is Font Awesome free-solid, so there is no second variant to
+// resolve.
 export function waIcon(
   name: TeXRAIconName,
   options: WaIconOptions = {},
@@ -314,7 +316,7 @@ export function waIcon(
     id=${ifDefined(options.id)}
     library=${TEXRA_ICON_LIBRARY}
     name=${name}
-    variant=${options.variant ?? 'solid'}
+    variant="solid"
     canvas="auto"
     slot=${ifDefined(options.slot)}
     class=${ifDefined(options.className)}

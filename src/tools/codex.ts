@@ -147,39 +147,25 @@ function toProgressTodos(item: TodoListItem): TodoItem[] {
   }));
 }
 
-/** Log a completed codex thread item to the child stream's logger. */
-function logCodexItem(
-  item: ThreadItem,
-  childStreamId: StreamTabId,
-  logger: AgentTrace,
-): void {
+/**
+ * Log a completed codex thread item that has no tool card, straight to the
+ * child stream's logger. Every item type `buildCodexLiveToolLog` renders
+ * (command_execution, mcp_tool_call, todo_list, and a file_change carrying at
+ * least one change) is already on screen by the time an item completes: the
+ * `item.completed` handler calls this only when `publishCodexItemProgress`
+ * reports that it rendered nothing.
+ */
+function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
   switch (item.type) {
-    case 'command_execution': {
-      emitToolUseCard(logger, buildCodexCommandToolLog(item));
-      break;
-    }
-    case 'file_change': {
-      const fileLog = buildCodexFileChangeToolLog(item);
-      if (fileLog) emitToolUseCard(logger, fileLog);
-      break;
-    }
     case 'agent_message':
       logger.info(item.text, { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
       break;
     case 'reasoning':
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
-    case 'mcp_tool_call': {
-      emitToolUseCard(logger, buildCodexMcpToolLog(item));
-      break;
-    }
     case 'web_search':
       logWebSearch(logger, { query: item.query });
       break;
-    case 'todo_list': {
-      publishCodexTodos(childStreamId, toProgressTodos(item), logger);
-      break;
-    }
     case 'error':
       logger.error(item.message);
       break;
@@ -311,7 +297,7 @@ export async function runStreamedTurn(
             refs: itemLogRefs,
           });
           if (!wasRenderedAsProgress) {
-            logCodexItem(item, childStreamId, logger);
+            logCodexItem(item, logger);
           }
           if (item.type === 'agent_message') {
             responseParts.push(item.text);

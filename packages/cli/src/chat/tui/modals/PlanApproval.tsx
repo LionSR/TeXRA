@@ -20,7 +20,7 @@ import {
 import { confirmCardCompactChromeRows } from './ConfirmCardState';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
-export interface PlanApprovalProps {
+interface PlanApprovalProps {
   readonly autoApproveAll: boolean;
   readonly availableRows?: number;
   readonly payload: PlanApprovalPermission;

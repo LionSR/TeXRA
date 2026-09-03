@@ -574,7 +574,7 @@ function getTaskIcon(child: ActiveChildInfo): TeXRAIconName {
  * success).
  */
 function streamStatusBadgeVariant(
-  status: string | undefined,
+  status: ActiveChildInfo['status'],
 ): 'neutral' | 'brand' | 'success' | 'danger' {
   switch (status) {
     case STREAM_PHASE.RUNNING:

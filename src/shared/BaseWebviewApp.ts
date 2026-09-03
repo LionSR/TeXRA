@@ -7,51 +7,9 @@ import { postMessage } from '@shared/hostBridge';
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,
-  type Theme,
 } from '@shared/schemas';
 import { SignalWatcher } from '@shared/signals';
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
-
-import type { ZodError } from 'zod';
-
-interface CommonMessageContext {
-  setTheme: (theme: Theme) => void;
-  setDebugMode: (enabled: boolean) => void;
-  restoreState: (message: StateRestoreMessage) => void;
-  onSchemaError?: (context: string, error: ZodError) => void;
-}
-
-function handleCommonMessage(
-  raw: unknown,
-  context: CommonMessageContext,
-): boolean {
-  const result = CommonViewMessageSchema.safeParse(raw);
-  if (!result.success) {
-    context.onSchemaError?.(
-      '[CommonMessage] Schema validation failed.',
-      result.error,
-    );
-    return false;
-  }
-
-  switch (result.data.command) {
-    case COMMON_COMMANDS.THEME_SET:
-      context.setTheme(result.data.theme);
-      return true;
-    case COMMON_COMMANDS.DEBUG_MODE_SET:
-      context.setDebugMode(result.data.debugMode);
-      return true;
-    case COMMON_COMMANDS.STATE_RESTORE:
-      context.restoreState(result.data);
-      return true;
-    case COMMON_COMMANDS.WEBVIEW_READY:
-      return true;
-    // Every other common command falls through to `default`: unknown commands
-    // (including SWITCH_VIEW) are passed to the subclass's handleMessage.
-    default:
-      return false;
-  }
-}
 
 /**
  * Base class for Lit-powered webview apps.
@@ -66,18 +24,44 @@ abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   protected debugMode = false;
 
   private readonly messageListener = (event: MessageEvent) => {
-    const handled = handleCommonMessage(event.data, {
-      setTheme: () => {},
-      setDebugMode: (enabled) => {
-        this.debugMode = enabled;
-      },
-      restoreState: (message) => this.onStateRestore(message),
-      onSchemaError: (context, error) => this.logSchemaError(context, error),
-    });
-    if (!handled) {
+    if (!this.handleCommonMessage(event.data)) {
       this.handleMessage(event.data as TMessage);
     }
   };
+
+  /**
+   * Handle the commands every webview app shares, reporting whether this class
+   * consumed the message. An unparseable payload and any command not listed
+   * below (including SWITCH_VIEW) report `false` so the subclass's
+   * `handleMessage` still sees them.
+   */
+  private handleCommonMessage(raw: unknown): boolean {
+    const result = CommonViewMessageSchema.safeParse(raw);
+    if (!result.success) {
+      this.logSchemaError(
+        '[CommonMessage] Schema validation failed.',
+        result.error,
+      );
+      return false;
+    }
+
+    switch (result.data.command) {
+      case COMMON_COMMANDS.DEBUG_MODE_SET:
+        this.debugMode = result.data.debugMode;
+        return true;
+      case COMMON_COMMANDS.STATE_RESTORE:
+        this.onStateRestore(result.data);
+        return true;
+      // THEME_SET carries no work here: the theme reaches these apps through
+      // the host's own document classes (`@shared/wa/waColorScheme` observes
+      // them), so the message is only consumed so it stops before the subclass.
+      case COMMON_COMMANDS.THEME_SET:
+      case COMMON_COMMANDS.WEBVIEW_READY:
+        return true;
+      default:
+        return false;
+    }
+  }
 
   /**
    * True when this webview is mounted by the Electron desktop renderer.

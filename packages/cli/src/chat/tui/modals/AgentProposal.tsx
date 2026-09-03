@@ -28,7 +28,7 @@ import {
 } from './ScrollableModalText';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
-export interface AgentProposalProps {
+interface AgentProposalProps {
   readonly availableRows?: number;
   readonly payload: AgentProposalPermission;
   readonly onDecide: (decision: ApprovalDecision) => void;

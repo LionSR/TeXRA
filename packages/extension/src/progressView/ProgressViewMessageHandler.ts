@@ -584,12 +584,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async pickTranscriptExportFormat(): Promise<
     TranscriptExportFormat | undefined
   > {
+    // The shared choices are already quick-pick items: `label` and
+    // `description` carry the presentation, `format` rides along as the answer.
     const picked = await vscode.window.showQuickPick(
-      TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => ({
-        label: choice.label,
-        description: choice.description,
-        format: choice.format,
-      })),
+      TRANSCRIPT_EXPORT_FORMAT_CHOICES,
       {
         title: 'Export transcript',
         placeHolder: 'Choose a format',

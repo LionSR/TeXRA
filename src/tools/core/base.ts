@@ -24,22 +24,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  */
 export abstract class BaseTool<T> implements ITool {
   readonly definition: ToolDefinition;
-  readonly schema: ZodType<T, T>;
+  private readonly schema: ZodType<T, T>;
 
   protected constructor(definition: ToolDefinition, schema: ZodType<T, T>) {
     this.definition = definition;
     this.schema = schema;
-  }
-
-  validate(input: unknown): T | Promise<T> {
-    try {
-      return this.schema.parse(input);
-    } catch (error) {
-      if (error instanceof z.core.$ZodAsyncError) {
-        return this.schema.parseAsync(input);
-      }
-      throw error;
-    }
   }
 
   /**
@@ -62,9 +51,15 @@ export abstract class BaseTool<T> implements ITool {
       // Synchronous validation must stay synchronous: awaiting unconditionally
       // would defer execute() by a microtask, so a tool that dispatches a host
       // interaction before its first await would no longer do so in the
-      // caller's synchronous turn.
-      const validated = this.validate(rawInput);
-      const input = validated instanceof Promise ? await validated : validated;
+      // caller's synchronous turn. Only a schema with async refinements —
+      // which reports itself by throwing $ZodAsyncError — pays for the await.
+      let input: T;
+      try {
+        input = this.schema.parse(rawInput);
+      } catch (error) {
+        if (!(error instanceof z.core.$ZodAsyncError)) throw error;
+        input = await this.schema.parseAsync(rawInput);
+      }
       // await is required here - without it, rejections bypass the catch block
       return await this.execute(input);
     } catch (err) {

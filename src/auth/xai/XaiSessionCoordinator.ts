@@ -14,7 +14,6 @@ import {
 import {
   XAI_AUTHORIZE_URL,
   XAI_CLIENT_ID,
-  XAI_DEFAULT_EXPIRES_IN_SEC,
   XAI_PLAN,
   XAI_REFERRER,
   XAI_SCOPE,
@@ -79,12 +78,14 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
       );
     }
     // Refresh keys off the *access* token. Prefer access JWT exp over
-    // id_token.exp (which can outlive the access token). Decode each token
-    // once; do not use extractXaiClaims (email-only and would re-decode).
+    // id_token.exp (which can outlive the access token). Each token is
+    // decoded exactly once here and the email claim reuses that decode.
+    // `expires_in` is already normalized to a positive number by
+    // XaiTokenResponseSchema, so no second default is applied here.
     const idClaims = tokens.id_token ? decodeXaiJwtClaims(tokens.id_token) : {};
     const accessClaims = decodeXaiJwtClaims(tokens.access_token);
-    const expiresInSec = tokens.expires_in ?? XAI_DEFAULT_EXPIRES_IN_SEC;
-    const expiresAtMs = accessClaims.expiresAtMs ?? nowMs + expiresInSec * 1000;
+    const expiresAtMs =
+      accessClaims.expiresAtMs ?? nowMs + tokens.expires_in * 1000;
     return {
       accessToken: tokens.access_token,
       refreshToken,

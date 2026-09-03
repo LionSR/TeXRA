@@ -188,27 +188,19 @@ export class SettingsApp extends SettingsAppBase {
   // Provider-key entry flow. Lives here (not in a leaf component) because it
   // branches on `isDesktopHost` — a `BaseWebviewApp` capability — to choose
   // between the in-webview modal (desktop) and the host prompt (VS Code).
-  private openProviderKeyFlow(target: {
-    provider: string;
-    displayName: string;
-  }): void {
+  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
+    const { provider } = event.detail;
+    const status = providerKeyStatuses
+      .get()
+      .find((entry) => entry.provider === provider);
     if (!this.isDesktopHost) {
-      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, {
-        provider: target.provider,
-      });
+      postMessage(SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY, { provider });
       return;
     }
 
-    providerKeyModal.set(target);
-  }
-
-  private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
-    const status = providerKeyStatuses
-      .get()
-      .find((entry) => entry.provider === event.detail.provider);
-    this.openProviderKeyFlow({
-      provider: event.detail.provider,
-      displayName: status?.displayName ?? event.detail.provider,
+    providerKeyModal.set({
+      provider,
+      displayName: status?.displayName ?? provider,
     });
   }
 

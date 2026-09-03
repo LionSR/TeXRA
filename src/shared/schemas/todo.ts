@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { StreamTabIdSchema } from './identifiers';
+import type { StreamTabId } from './identifiers';
 
 export const TODO_STATUS = {
   PENDING: 'pending',
@@ -23,8 +23,12 @@ export const TodoItemSchema = z.strictObject({
 });
 export type TodoItem = z.infer<typeof TodoItemSchema>;
 
-const UpdateTodosPayloadSchema = z.strictObject({
-  streamId: StreamTabIdSchema,
-  todos: z.array(TodoItemSchema),
-});
-export type UpdateTodosPayload = z.infer<typeof UpdateTodosPayloadSchema>;
+/**
+ * Payload for a todo update. Declared as a plain type, not a schema: nothing
+ * ever parses it — producers build the shape and consumers read it — so a Zod
+ * schema would own no boundary (same rule as `UpdatePlanPayload` in `plan.ts`).
+ */
+export interface UpdateTodosPayload {
+  streamId: StreamTabId;
+  todos: TodoItem[];
+}

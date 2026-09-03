@@ -118,7 +118,6 @@ export function buildCreatorConfig(files: CreatorTemplateFiles): CreatorConfig {
 
 interface AgentBlueprint {
   category: AgentCategory;
-  agentName: string;
   filePath: string;
   aiVars: Record<string, string>;
   fallbackTemplate: string;
@@ -332,7 +331,6 @@ async function buildAgentBlueprint(
     const targetDir = await ui.getCustomAgentDir();
     return {
       category: 'toolUse',
-      agentName,
       filePath: path.join(targetDir, `${agentName}.yaml`),
       aiVars: {
         ...base,
@@ -350,7 +348,6 @@ async function buildAgentBlueprint(
   const targetDir = await ui.getCustomAgentDir();
   return {
     category: 'workflow',
-    agentName,
     filePath: path.join(targetDir, `${agentName}.yaml`),
     aiVars: { ...base },
     fallbackTemplate: config.templates.workflowSingle,

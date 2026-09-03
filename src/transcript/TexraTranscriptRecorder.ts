@@ -382,10 +382,6 @@ export function attachTranscriptRecorder(
     }
   };
 
-  const scheduleStreamUpdate = (state: StreamSinkState): void => {
-    if (!state.updateDebounce.pending) state.updateDebounce.schedule();
-  };
-
   const flushPending = (): void => {
     if (pendingFailure !== undefined) throw pendingFailure;
     try {
@@ -705,8 +701,8 @@ export function attachTranscriptRecorder(
           // out the coalescing interval. Later chunks coalesce.
           if (!state.created || state.buffer.length === 0) {
             flushStream(state, event.id);
-          } else {
-            scheduleStreamUpdate(state);
+          } else if (!state.updateDebounce.pending) {
+            state.updateDebounce.schedule();
           }
           return;
         }

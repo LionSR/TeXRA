@@ -43,7 +43,7 @@ export function isLeanServerActive(info: LeanServerInfo): boolean {
   return info.status === 'starting' || info.status === 'running';
 }
 
-export interface RegisterLeanServerInit {
+interface RegisterLeanServerInit {
   readonly id: string;
   readonly workspaceRoot: string;
   readonly mode: LeanServerMode;
@@ -60,7 +60,7 @@ export function registerLeanServer(init: RegisterLeanServerInit): void {
   });
 }
 
-export interface UpdateLeanServerPatch {
+interface UpdateLeanServerPatch {
   readonly status?: LeanServerStatus;
   readonly errorMessage?: string;
 }

@@ -570,8 +570,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       await bootstrapNodeAgentDirectories({
         channel: 'extension',
         resourcesPath: path.join(context.extensionPath, 'resources'),
-        currentVersion: vscode.extensions.getExtension(context.extension.id)
-          ?.packageJSON.version,
+        currentVersion: context.extension.packageJSON?.version,
         versionStateKey: GlobalStateKey.LAST_KNOWN_VERSION,
       });
       await registerAgentDirectoryRoots(context);

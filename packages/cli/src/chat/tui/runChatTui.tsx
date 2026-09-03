@@ -69,15 +69,9 @@ import {
   applyInitialCliAgentSelection,
   chatToolUseAgentUsageError,
 } from './commands/handlers/agentModelCommands';
-import {
-  applyCliModelAccessSelection,
-  applyCliProviderApiKey,
-} from './commands/handlers/modelAccessCommands';
+import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
-import {
-  loginFromChat,
-  logoutFromChat,
-} from './commands/handlers/loginCommands';
+import { loginFromChat } from './commands/handlers/loginCommands';
 import { type SlashCommandContext } from './commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
@@ -468,9 +462,10 @@ export async function runChat(
       applyCliModelSelection(nextModel, slashCommandContext()),
     onModelAccessSelect: (route, output) =>
       applyCliModelAccessSelection(route, slashCommandContext(), output),
-    onApiKeySave: (provider, key) => applyCliProviderApiKey(provider, key),
+    // `onApiKeySave` and `onLogoutSelect` are deliberately absent: the
+    // registry's own defaults are exactly these handlers. Only `/login` needs
+    // an override, to carry this session's CliContext.
     onLoginSelect: (value, output) => loginFromChat(value, context, output),
-    onLogoutSelect: (value, output) => logoutFromChat(value, output),
     onMemorySelect: showCliMemoryPreview,
     onSkillSelect: submitDriver.activateSkill,
     onResumeSelect: chatController.resume,
@@ -551,8 +546,7 @@ export async function runChat(
     followUpQueue,
     getApprovalPolicy,
     flushArtifacts: () => runtimeSession.flushArtifacts(),
-    repaintAfterTerminalResume: () =>
-      viewportController.repaintAfterTerminalResume(),
+    repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     suspendTerminalTitle: terminalTitleUpdates.suspend,
     resumeTerminalTitle: terminalTitleUpdates.resume,
     canStopActiveRun,

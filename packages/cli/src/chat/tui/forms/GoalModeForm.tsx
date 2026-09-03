@@ -4,7 +4,7 @@ import type { SelectItem } from '@cli/tui/ui/Select';
 
 import { ListForm } from './_shared/ListForm';
 
-export interface GoalModeFormProps {
+interface GoalModeFormProps {
   readonly autoApproveAll: boolean;
   readonly availableRows?: number;
   readonly onToggle: (enabled: boolean) => void;

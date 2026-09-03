@@ -13,6 +13,7 @@ import {
   extractToolAttachments,
   type ExtractedToolAttachments,
 } from '@agent/core/tools/toolAttachmentExtraction';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { withToolFileInteractionContext } from '@agent/followUp/ToolFileInteractionContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import {
@@ -271,7 +272,7 @@ export class ToolUseDispatchNode extends BaseNode<
   /** Invoke a tool with error handling, returning an error result if the tool is missing. */
   private async invokeToolSafely(
     call: SdkToolCall,
-    tool: { call(input: unknown): Promise<ToolResult> } | undefined,
+    tool: ITool | undefined,
     parsedInput: unknown,
     onExecutionReady: (() => void) | undefined,
     onToolOutput: ((chunk: string) => void) | undefined,

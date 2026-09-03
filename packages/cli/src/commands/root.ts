@@ -26,7 +26,7 @@ import {
   detectUnknownCliFlag,
   formatUnknownCliFlag,
 } from './_helpers/dispatch';
-import { getExitCode, resetExitCode } from './_helpers/exitCode';
+import { getExitCode, setExitCode } from './_helpers/exitCode';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
@@ -144,7 +144,7 @@ export const rootCommand = withUsageSections(
 export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
-  resetExitCode();
+  setExitCode(CliExitCode.Success);
   let rawArgs = reorderGlobalFlags(
     normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );

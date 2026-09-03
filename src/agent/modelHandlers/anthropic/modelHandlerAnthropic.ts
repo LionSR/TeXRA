@@ -188,10 +188,8 @@ function collectFileReferenceCounts(
     ) {
       counts.clear();
     }
-    for (const block of extractDocumentBlocks(contentBlocks)) {
-      const source = block.source as
-        { type: string; file_id?: string } | undefined;
-      if (source?.type === 'file' && source.file_id) {
+    for (const { source } of extractDocumentBlocks(contentBlocks)) {
+      if (source.type === 'file' && source.file_id) {
         counts.set(source.file_id, (counts.get(source.file_id) ?? 0) + 1);
       }
     }

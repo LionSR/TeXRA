@@ -17,7 +17,6 @@ import type {
   CacheControlEphemeral,
   MessageParam,
   ContentBlockParam,
-  ContentBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 export const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
@@ -56,11 +55,8 @@ type CacheControlCompactionBlock = Extract<
 >;
 
 const isCompactionCacheControlBlock = (
-  block: ContentBlockParam | ContentBlock | BetaContentBlockParam | undefined,
-): block is CacheControlCompactionBlock => {
-  if (block == null || typeof block !== 'object') return false;
-  return (block as { type?: string }).type === 'compaction';
-};
+  block: ContentBlockParam | BetaContentBlockParam,
+): block is CacheControlCompactionBlock => block.type === 'compaction';
 
 /** Options for setting up context management configuration. */
 interface ContextManagementSetupOptions {

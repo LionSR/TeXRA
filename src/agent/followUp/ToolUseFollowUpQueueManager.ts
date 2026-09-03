@@ -134,7 +134,7 @@ export class ToolUseFollowUpQueue {
       this.entries.get(streamId) ??
       (createIfMissing ? this.createEntry(streamId) : undefined);
     if (!entry || entry.owner) return undefined;
-    return this.claim(entry, streamId, 'recovery') as FollowUpRecoveryLease;
+    return this.claim(entry, streamId, 'recovery');
   }
 
   useRecovery(
@@ -193,9 +193,7 @@ export class ToolUseFollowUpQueue {
     }
 
     const lease = this.claim(entry, streamId, 'recovery');
-    return lease
-      ? { kind: 'queued', lease: lease as FollowUpRecoveryLease }
-      : { kind: 'queued' };
+    return lease ? { kind: 'queued', lease } : { kind: 'queued' };
   }
 
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
@@ -303,13 +301,21 @@ export class ToolUseFollowUpQueue {
     return entry;
   }
 
-  private claim(
+  /**
+   * Mint the entry's single lease. Generic over the consumer kind so a
+   * `'recovery'` claim yields a {@link FollowUpRecoveryLease} by construction,
+   * rather than a widened lease each caller has to assert back down.
+   */
+  private claim<K extends FollowUpConsumerKind>(
     entry: QueueEntry,
     streamId: StreamTabId,
-    kind: FollowUpConsumerKind,
-  ): FollowUpConsumerLease | undefined {
+    kind: K,
+  ): (FollowUpConsumerLease & { readonly kind: K }) | undefined {
     if (entry.owner) return undefined;
-    const lease: FollowUpConsumerLease = { streamId, kind };
+    const lease: FollowUpConsumerLease & { readonly kind: K } = {
+      streamId,
+      kind,
+    };
     entry.owner = lease;
     return lease;
   }

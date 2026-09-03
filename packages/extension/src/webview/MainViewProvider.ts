@@ -347,8 +347,9 @@ export class MainViewProvider
     this._viewDisposables.add(
       webviewView.onDidDispose(this.cleanupView.bind(this)),
     );
-
-    this.setupInitialState(webviewView);
+    // Nothing is posted here: pending restores wait for WEBVIEW_READY
+    // (onWebviewReady → flushPendingState) so they land after the launcher
+    // has installed its message listener.
   }
 
   protected override cleanupView(): void {
@@ -362,16 +363,6 @@ export class MainViewProvider
     }
     setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
     super.cleanupView();
-  }
-
-  private setupInitialState(webviewView: vscode.WebviewView): void {
-    // REQUEST_BASE_FILE is inbound-only (no outbound schema), so the
-    // assertion passes it through unchecked.
-    this.postToWebview(webviewView, {
-      command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
-    });
-    // Pending restores wait for WEBVIEW_READY (onWebviewReady → flushPendingState)
-    // so they land after the launcher has installed its message listener.
   }
 
   /**

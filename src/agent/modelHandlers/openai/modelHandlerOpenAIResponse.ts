@@ -71,7 +71,6 @@ import {
   computeOpenAIResponsePrice,
   normalizeOpenAIResponseUsage,
 } from './openAIUsage';
-import { tagOpenAISdkError } from './openAISdkError';
 import { normalizeOpenAIResponseError } from './openAIResponseErrors';
 import {
   formatAttachmentSummary,
@@ -950,20 +949,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
   }
 
   /**
-   * Create a response using the Responses API.
-   * The handler submits only the messages that were not part of the previous
-   * request and relies on `previous_response_id` for conversation context.
-   *
-   * Supports automatic conversation compaction when cumulative input tokens
-   * exceed the configured threshold (texra.model.compactionThresholdPercent).
-   *
-   * @returns Result containing the response and optionally updated messages if compaction occurred
-   */
-  protected override get sdkErrorTagger() {
-    return tagOpenAISdkError;
-  }
-
-  /**
    * Single-turn guard: concurrent callers would race on the chain-state
    * collaborator's anchor and conversation bookkeeping.
    */
@@ -974,10 +959,6 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       this.compaction.retrySource = null;
       return run();
     });
-  }
-
-  override get supportsForcedToolChoice(): boolean {
-    return true;
   }
 
   /** Select the mutually-exclusive background / streaming / WebSocket transport. */
@@ -1301,6 +1282,16 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
     }
   }
 
+  /**
+   * Create a response using the Responses API.
+   * The handler submits only the messages that were not part of the previous
+   * request and relies on `previous_response_id` for conversation context.
+   *
+   * Supports automatic conversation compaction when cumulative input tokens
+   * exceed the configured threshold (texra.model.compactionThresholdPercent).
+   *
+   * @returns Result containing the response and optionally updated messages if compaction occurred
+   */
   protected override async createResponseImpl(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
@@ -1928,14 +1919,13 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
       );
     }
     const providerOutputText = responseObject.output_text ?? '';
-    let newResponse = this.normalizeResponseText(providerOutputText);
     if (!providerOutputText.trim() && Array.isArray(responseObject.output)) {
       // Mutates responseObject.output_text from output message parts.
       addOutputText(responseObject);
-      newResponse = this.normalizeResponseText(
-        responseObject.output_text ?? '',
-      );
     }
+    let newResponse = this.normalizeResponseText(
+      responseObject.output_text ?? '',
+    );
 
     const stopReason =
       responseObject.status === 'completed'

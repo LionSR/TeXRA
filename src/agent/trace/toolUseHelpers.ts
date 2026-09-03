@@ -56,9 +56,8 @@ export function endToolUseCard(
 
 /**
  * Fast-tool variant: open AND close a card in one shot when the call is
- * already complete. Matches the legacy `emitToolUse(payload, gid)` shape
- * where `payload.status` may be terminal and `toolName` may be missing
- * (falls back to `'unknown'`, mirroring the original behavior).
+ * already complete. `payload.status` may already be terminal, and `toolName`
+ * may be missing (it falls back to `'unknown'`).
  */
 export function emitToolUseCard(
   trace: AgentTrace,

@@ -20,8 +20,14 @@ export function createDocumentHandlers(host: MainViewInboundHost) {
 
     [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: (m) =>
       host.fileManager.handleGetCurrentFile(m),
+    // Multi-list categories are user-owned (only mutated through the picker /
+    // drag-drop / Add opened) so a refresh pushes no disk listing into them —
+    // it is exactly the base-file request with the current selection kept.
     [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: () =>
-      host.fileManager.handleRefreshAllFiles(),
+      host.fileManager.handleRequestBaseFile({
+        command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
+        preserveBaseFile: true,
+      }),
     [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: (m) =>
       host.fileManager.handleAddOpenedFiles(m.fileType),
     [MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES]: (m) =>

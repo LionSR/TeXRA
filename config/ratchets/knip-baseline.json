@@ -1752,18 +1752,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "BinaryResolverService"
-    },
-    {
-      "file": "src/utils/system/binaryResolver.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "BinaryCommandOptions"
-    },
-    {
-      "file": "src/utils/system/binaryResolver.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "BinaryResolverOptions"
     }
   ]
 }

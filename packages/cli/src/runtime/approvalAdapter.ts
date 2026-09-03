@@ -15,10 +15,7 @@ import {
   type UserQuestionAnswers,
 } from '@shared/schemas';
 import { handleExternalInquiryAction } from '@tools/inquiry/inquiryActions';
-import {
-  type ToolEditApprovalRequest,
-  type ToolEditApprovalResult,
-} from '@tools/approval/toolEditApproval';
+import { type ToolEditApprovalResult } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
@@ -61,19 +58,6 @@ export function toToolEditResult(
   return settled.action === 'approve'
     ? { action: 'apply', appliedContent: proposedContent }
     : settled;
-}
-
-async function decideToolEdit(
-  request: ToolEditApprovalRequest,
-  context: CliContext,
-  hooks: CliApprovalPromptHooks,
-): Promise<ToolEditApprovalResult> {
-  const decision = await askApproval(
-    context,
-    buildToolEditApprovalContent(request),
-    hooks,
-  );
-  return toToolEditResult(decision, request.proposedContent);
 }
 
 /**
@@ -215,8 +199,13 @@ export function createHeadlessCliHostInteractions(
   return {
     emit: hooks.emit,
     setApprovalBypassState: hooks.setApprovalBypassState,
-    requestToolEditApproval(request) {
-      return decideToolEdit(request, context, hooks);
+    async requestToolEditApproval(request) {
+      const decision = await askApproval(
+        context,
+        buildToolEditApprovalContent(request),
+        hooks,
+      );
+      return toToolEditResult(decision, request.proposedContent);
     },
     async requestBashApproval(request) {
       const decision = await askApproval(

@@ -14,7 +14,6 @@ import {
   isEmptyUsage,
   type ContextStateData,
   type TokenUsageStats,
-  type UsageRoute,
 } from '@shared/schemas';
 import { designTokens } from '@shared/styles';
 import { usageCostLabel, usageRouteBadge } from '@shared/copy/modelAccess';
@@ -50,27 +49,6 @@ function fillColor(percent: number): string {
   if (percent <= 65) return 'var(--color-success)';
   if (percent <= 80) return 'var(--color-warning)';
   return 'var(--color-status-error)';
-}
-
-/**
- * Free-tier decision for the visible footer badge: `null` when the route has
- * no badge (plain cost), otherwise `free` (subscription route with zero
- * cost) plus the badge's compact label. Only
- * {@link UsagePanel.renderCostRoute} consumes this; the aria summary's shared
- * {@link usageCostLabel} re-derives the same `subscription && cost === 0`
- * predicate from `usageRouteBadge`, so changing a subscription route touches
- * both.
- */
-function usageRouteDecision(
-  cost: number,
-  route: UsageRoute | undefined,
-): { free: boolean; compactLabel: string } | null {
-  const badge = usageRouteBadge(route);
-  if (!badge) return null;
-  return {
-    free: badge.subscription && cost === 0,
-    compactLabel: badge.compactLabel,
-  };
 }
 
 @customElement('usage-panel')
@@ -275,21 +253,29 @@ export class UsagePanel extends LitElement {
     `;
   }
 
+  /**
+   * The visible footer cost: a plain amount when the route carries no badge,
+   * `Free · <route>` for a subscription route that billed nothing, and the
+   * amount beside the route otherwise. The aria summary's shared
+   * {@link usageCostLabel} re-derives the same `subscription && cost === 0`
+   * predicate from `usageRouteBadge`, so changing a subscription route
+   * touches both.
+   */
   private renderCostRoute(cost: number): TemplateResult {
-    const decision = usageRouteDecision(cost, this.usage?.usageRoute);
-    if (!decision) return html`${formatCostUsd(cost)}`;
+    const badge = usageRouteBadge(this.usage?.usageRoute);
+    if (!badge) return html`${formatCostUsd(cost)}`;
 
-    if (decision.free) {
+    if (badge.subscription && cost === 0) {
       return html`<span
         id="usage-route-badge"
         class="run-summary__route run-summary__route--free"
-        >Free · ${decision.compactLabel}</span
+        >Free · ${badge.compactLabel}</span
       >`;
     }
 
     return html`${formatCostUsd(cost)} ·
       <span id="usage-route-badge" class="run-summary__route">
-        ${decision.compactLabel}
+        ${badge.compactLabel}
       </span>`;
   }
 

@@ -193,9 +193,7 @@ export class AnthropicStreamHandler {
 
     this.compactionActivity?.finish(compactionOutcome);
 
-    // Finalize output stream
-    this.state.outputStream?.finalize();
-    this.state.outputStream = null;
+    this.finalizeOutputStream();
 
     // Clear state to prevent memory leaks
     this.state.pendingServerTools.clear();

@@ -82,36 +82,6 @@ async function readStoragePrefix(
   };
 }
 
-/**
- * Builds a preview of content with truncation info.
- * @param content - The full file content to preview
- * @returns Preview text and line count when the caller supplied complete content
- */
-function buildPreview(
-  content: string,
-  options: { truncated: boolean; exactLineCount: boolean },
-): {
-  preview: string;
-  lineCount?: number;
-} {
-  const lines = splitContentLines(content);
-  const lineCount = options.exactLineCount ? lines.length : undefined;
-  const previewLines = lines.slice(0, MAX_PREVIEW_LINES);
-  let preview = previewLines.join('\n');
-  let truncated = lines.length > MAX_PREVIEW_LINES || options.truncated;
-
-  if (preview.length > MAX_PREVIEW_CHARS) {
-    preview = preview.slice(0, MAX_PREVIEW_CHARS);
-    truncated = true;
-  }
-
-  if (truncated) {
-    preview = `${preview}\n...`;
-  }
-
-  return { preview, lineCount };
-}
-
 async function readMemoryMeta(storagePath: string, stats: { size: number }) {
   try {
     const { text: raw } = await readStoragePrefix(
@@ -132,18 +102,37 @@ async function readMemoryMeta(storagePath: string, stats: { size: number }) {
   }
 }
 
+/**
+ * Read the head of a memory file and project it into the bounded preview the
+ * settings view and the CLI show: at most {@link MAX_PREVIEW_LINES} lines and
+ * {@link MAX_PREVIEW_CHARS} characters, with a trailing `...` whenever
+ * anything was left out. `lineCount` is reported only when the whole file fit
+ * inside the scan window, since a partial read cannot count the rest.
+ */
 export async function loadMemoryPreview(
   storagePath: string,
 ): Promise<MemoryPreview> {
-  const { text: raw, truncated } = await readStoragePrefix(
+  const { text: raw, truncated: scanTruncated } = await readStoragePrefix(
     storagePath,
     PREVIEW_SCAN_BYTES,
   );
   const { content } = parseFrontmatter(raw);
-  return {
-    storagePath,
-    ...buildPreview(content, { truncated, exactLineCount: !truncated }),
-  };
+
+  const lines = splitContentLines(content);
+  const lineCount = scanTruncated ? undefined : lines.length;
+  let preview = lines.slice(0, MAX_PREVIEW_LINES).join('\n');
+  let truncated = lines.length > MAX_PREVIEW_LINES || scanTruncated;
+
+  if (preview.length > MAX_PREVIEW_CHARS) {
+    preview = preview.slice(0, MAX_PREVIEW_CHARS);
+    truncated = true;
+  }
+
+  if (truncated) {
+    preview = `${preview}\n...`;
+  }
+
+  return { storagePath, preview, lineCount };
 }
 
 async function* walkDir(

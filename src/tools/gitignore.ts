@@ -19,7 +19,7 @@ type GitignoreSource = {
   content: string;
 };
 
-export type GitignoreMatcher = {
+type GitignoreMatcher = {
   ignores: (relativePath: string) => boolean;
   ignoreFiles: string[];
 };

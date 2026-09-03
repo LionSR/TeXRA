@@ -13,6 +13,7 @@ import { attachSdkRequestBaseURL } from '@common/errors/sdkError/sdkRequestEndpo
 
 // Local file imports
 import { logOpenAICompatibleClientConfig } from './openAIChatHelpers';
+import { tagOpenAISdkError } from './openAISdkError';
 
 /**
  * Shared mechanics for handlers that talk to an OpenAI-compatible endpoint
@@ -43,6 +44,19 @@ export abstract class OpenAICompatibleModelHandler<
       this.config.provider === ModelProvider.OPENAI &&
       this.capabilities.supportsReasoning
     );
+  }
+
+  /** Every handler on this base talks to the `openai` SDK, so they all tag
+   *  thrown errors at that one boundary with the same tagger. */
+  protected override get sdkErrorTagger() {
+    return tagOpenAISdkError;
+  }
+
+  /** The OpenAI-compatible wire format can force one named tool via
+   *  `tool_choice`. Providers that reject a named choice under some
+   *  configuration (DeepSeek while thinking) override this. */
+  override get supportsForcedToolChoice(): boolean {
+    return true;
   }
 
   /**
