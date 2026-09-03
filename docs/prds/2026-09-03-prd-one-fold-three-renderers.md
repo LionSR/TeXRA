@@ -161,8 +161,8 @@ SessionView = {
   approvals: ApprovalRequest[],
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
   inquiries: InquiryThread[],
-  // owner ids whose process is alive; a fold input, never persisted
-  liveOwners: OwnerId[],
+  // this process's local truth: a fold input, never durable, never persisted
+  local: { liveOwners: OwnerId[], unreadable: Map<StreamTabId, string> },
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
 
@@ -170,7 +170,7 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   // common
   id: StreamTabId
   // the run currently on this stream; a resume mints a new one, latest wins
-  executionId: ExecutionId
+  executionId: ExecutionId                   // immutable; from run.start
   identity: RunIdentity | null              // null only for legacy imports
   // launch facts from the run.start payload, never derived (5.2)
   isRemote: boolean
@@ -222,14 +222,15 @@ SessionView` and loses its metadata cache and its own topology.
 
 ### 5.2 Fold rules
 
-The fold's input is `FoldInput = SessionEvent | TextChunk | OwnerLiveness`.
+The fold's input is `FoldInput = SessionEvent | TextChunk | LocalRuntimeState`.
 Every fact below derives from the durable events of section 6 except owner
 liveness, which is process state and not an event: the runtime's lease
 reader (`executionLease.ts`, a pid probe on the lease owner) emits an
-`OwnerLiveness` snapshot, the set of owner ids whose process is alive, on
+`LocalRuntimeState` snapshot - the owner ids whose process is alive, and
+the streams this process could not read (see "Unavailable" below) - on
 every change and on every subscribe, and the fold keeps the latest snapshot
-in `liveOwners`. The snapshot is transient like a text chunk: never durable,
-never a seq. A replay with no snapshot folds with `liveOwners` empty, so
+in `local`. The snapshot is transient like a text chunk: never durable,
+never a seq. A replay with no snapshot folds with `local` empty, so
 every pending approval reads as interrupted until the runtime says
 otherwise, which is the safe direction. Agreed with the substrate owner on
 2026-09-03 (the companion proposal, in flight).
@@ -238,7 +239,8 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   later `removeStream` fact does; `run.start` is seq 1 for the stream.
   Deletion is a durable tombstone, not a physical row removal: the `delete`
   and `deleteAll` requests (8.2) append `removeStream`, which replays like
-  any other event and rides `changes(cursor)` (7.1), so a replay and every
+  any other event and reaches every process through the one ordered read
+  of 7.1, so a replay and every
   other live process reach the same conclusion. Physical removal is
   retention's business, and it removes a stream's rows only together with
   its tombstone. `seq` is per stream, the `(stream_id, seq)` key of
@@ -256,7 +258,7 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   every durable event and `StreamView.ownerId` is the latest one, so a
   resume in another process moves ownership without a new fact kind.
 - **`group === 'waiting'`** iff an `approval.requested` exists without its
-  `approval.resolved` AND `stream.ownerId` is in `liveOwners`. Without a
+  `approval.resolved` AND `stream.ownerId` is in `local.liveOwners`. Without a
   live owner the same pair folds to `group === 'interrupted'`, never
   `'waiting'`, because nothing is listening for the answer; `'interrupted'`
   is the fourth arm of the union (5.1) and the group a host offers `resume`
@@ -277,14 +279,29 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   known label.
 - **`order`** and `childIds` use `streamOrdering` (newest creation first,
   ties by name).
-- **`executionId`** is the latest `run.start` for the stream. A stream
-  outlives its executions - a resume mints a new `ExecutionId` on the same
-  `StreamTabId` (`RunScope.ts:18`) - so it is a fold field, not identity
-  (`RunIdentity` deliberately carries no execution id). Carrying it is what
-  lets the execution-scoped requests of 8.2 (`skip`, `retry`, `kill`) name
-  the execution the surface actually saw: a request against a superseded
-  execution then fails as `Unavailable` instead of landing on its successor,
-  which a `streamId`-only request could not distinguish.
+- **`executionId`** comes from `run.start` and never changes. There is one
+  `run.start` per stream by the existence rule above, and a resume keeps the
+  id rather than minting one: `executeAgent` passes `resume.executionId`
+  straight back into `buildAgentLaunchContext` (`executeAgent.ts:541-549`),
+  because the checkpoint, the lease, and every execution-scoped store live
+  under it. The fold carries it only because `RunIdentity` deliberately does
+  not, and the execution-scoped requests of 8.2 (`skip`, `retry`, `kill`)
+  name it.
+- **Unavailable.** Two conditions read as unavailable today and they are
+  not the same kind of fact. A stream whose lease is held by another live
+  process is now _derivable_: `ownerId` is not this process and is in
+  `local.liveOwners`. A stream whose run state this process could not read at
+  startup (`markUnavailable` with `streamUnreadableMessage`,
+  `restartRepair.ts:232-240`) is genuinely local - another process may read
+  the same run fine - so it belongs to the same transient arm as liveness,
+  as `local.unreadable[streamId]`, and it supplies `statusDetail`. That is
+  why the arm is `LocalRuntimeState` and not `OwnerLiveness`: it was always
+  "what this process knows that the events cannot say", and liveness was
+  only its first field. A stream in `unreadable` renders read-only with
+  Delete as its one action. Today the hold lives in
+  `StreamStatusService`'s process-local map and reaches the UI through
+  `holdState` (`LitSessionRenderer.ts:429`, `childExecutions.ts:98`), which
+  no webview fold can call.
 - **`context`** is latest-of-type over `context.state`, already a canonical
   run fact. Both renderers show it live today - `UsagePanel` through
   `ToolUseStreamContent` and `WorkflowStreamContent`, and the TUI status
@@ -329,13 +346,21 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   second - which is what lets the framer coalesce instead of drop (7.4). So
   `from > length` is a defect, not a repair path, and replacement needs no
   second arm. `settledSeq` never moves.
-- **Durable text wins.** A chunk is a preview of a row the durable events
-  will settle, so a chunk for a row whose finalizing event has already
-  folded is discarded. That makes the merge order of the three arms (7.2)
+- **A chunk never precedes its row.** The producer appends a row's creating
+  event before streaming any text for it - the append is under the publish
+  permit and returns before the emitter streams - and within one frame the
+  `events` array folds before the `chunks` array (8.1), which is a total
+  order the framer already has. So no chunk can arrive for a row that does
+  not exist, and the fold needs no chunk buffer: a buffer would need an
+  eviction policy for chunks whose row never comes, which is a second
+  failure mode in place of an ordering the producers already own.
+- **Durable text wins.** At the other end, a chunk is a preview of a row the
+  durable events will settle, so a chunk for a row whose finalizing event
+  has already folded is discarded. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
   an early one is overwritten when its event lands. Without the rule the
   same two inputs give two different rows in two processes.
-  `OwnerLiveness` is the other transient arm.
+  `LocalRuntimeState` is the other transient arm.
 
 ### 5.3 The row
 
@@ -450,49 +475,48 @@ class SessionEvents extends Context.Service<
   static readonly durableLayer = Layer.effect(
     SessionEvents,
     Effect.gen(function* () {
-      const hub = yield* PubSub.unbounded<SessionEvent>();
+      // a WAKE signal, not an event channel: it carries no payload
+      const hub = yield* PubSub.unbounded<void>();
       const gate = yield* Semaphore.make(1);
       // provided by the persistence cutover
       const durable = yield* DurableWrite;
       const publish = Effect.fn('SessionEvents.publish')(function* (event) {
-        // uninterruptible: an append that fans out to nobody is a gap every
-        // live subscriber carries until it resubscribes
+        // uninterruptible: a commit that wakes nobody is a stall every live
+        // subscriber carries until something else commits
         yield* gate.withPermit(
           Effect.uninterruptible(
             Effect.gen(function* () {
               // assigns seq, INSERT under BEGIN IMMEDIATE
-              if (isDurable(event)) {
-                event = yield* durable.append(event);
-              }
-              yield* PubSub.publish(hub, event);
+              if (isDurable(event)) yield* durable.append(event);
+              yield* PubSub.publish(hub, undefined);
             }),
           ),
         );
       });
-      // this process's own publishes, merged with every commit made by any
-      // other process holding this session open (the cross-process feed)
-      const tail = (cursor) =>
-        Stream.merge(Stream.fromPubSub(hub), durable.changes(cursor));
-      // open the live tail FIRST, then read the replay, then concat and
-      // dedupe on (streamId, seq)
-      const subscribeThenReplay = (cursor, replay) =>
+      // "look again": this process's commits and, from the store, any other
+      // process's. Neither carries events; both only say the table moved.
+      const wake = Stream.merge(Stream.fromPubSub(hub), durable.commits);
+      // ONE ordered source: the table, read forward from the cursor
+      const from = (cursor) =>
         Stream.unwrap(
           Effect.gen(function* () {
-            // subscribed now
-            const live = yield* Stream.toQueue(tail(cursor), { capacity });
-            return Stream.concat(replay, Stream.fromQueue(live)).pipe(
-              dedupeBySeq,
+            const at = yield* Ref.make(cursor);
+            const forward = Stream.unwrap(
+              Ref.get(at).pipe(
+                Effect.map((c) => durable.readAll(c).pipe(advancing(at))),
+              ),
+            );
+            return Stream.concat(
+              forward,
+              wake.pipe(Stream.flatMap(() => forward, { concurrency: 1 })),
             );
           }),
         );
+      const all = from;
       const events = (streamId, fromSeq) =>
-        subscribeThenReplay(
-          cursorFor(streamId, fromSeq),
-          durable.read(streamId, fromSeq),
-        ).pipe(Stream.filter((e) => e.streamId === streamId));
-      // insert order; rows at or below cursor[streamId] are skipped
-      const all = (cursor) =>
-        subscribeThenReplay(cursor, durable.readAll(cursor));
+        from(cursorFor(streamId, fromSeq)).pipe(
+          Stream.filter((e) => e.streamId === streamId),
+        );
       return { publish, events, all };
     }),
   );
@@ -516,39 +540,47 @@ class SessionEvents extends Context.Service<
 }
 ```
 
-Invariants: the durable write is in the publish path, under the same
-permit as seq assignment and fan-out, so seq order and insert order cannot
-diverge and no subscriber persists anything. The hub is unbounded because
-bounded parks the publisher behind the slowest subscriber (which would
-stall the durable write path) and sliding or dropping lose durable events.
-The invariant that makes unbounded safe: no subscriber fiber ever awaits a
-remote; backpressure lives at each transport framer (7.4). The live
-subscription opens before the replay read or `concat` has a gap. The rc.112
-names are `Stream.toQueue(stream, { capacity })` (already scoped) and
-`Stream.unwrap`; the v3 `toQueueScoped` and `unwrapScoped` are gone. Both
-are verified against `node_modules/effect/dist/Stream.d.ts`.
+One ordered source, and it is the table. The hub used to carry events and
+be merged with a cross-process feed; two concurrent sources cannot be put
+back in order by a dedupe, and the interleaving is real - this process can
+read another's seq N, commit N+1, and deliver N+1 before the feed delivers
+N, folding a stale snapshot over a fresh one. So the hub now carries no
+payload at all: it is a wake, saying only that the table moved, and every
+subscriber reads forward from its own cursor in `(stream_id, seq)` order.
+One source cannot duplicate, so `dedupeBySeq` is gone; one source cannot
+reorder, so no reorder buffer exists; and there is no replay-then-tail
+seam, so the "subscribe before you read" invariant and its scoped queue are
+gone with it.
 
-The hub is process-local, so it is a latency optimization and never the
-whole tail: when a second TeXRA process has the same session open (a CLI
-run beside the extension, a resume that moved ownership), its commits reach
-this process only through the store. `durable.changes(cursor)` is that
-cross-process feed - a notify or a polled table tail, the persistence
-owner's choice - and the tail is the merge of the two, deduped on
-`(streamId, seq)`, so a subscriber that publishes nothing itself still
-converges. Waiting for a seq gap would not do: a gap is only visible once a
-_later_ row for the same stream arrives locally, which for a stream owned
-by another process never happens. This is decision 6, not yet agreed with
-the persistence owner.
+The two wakes are `PubSub.publish` on this process's commit and
+`durable.commits` from the store for every other process's. That is a
+weaker ask of the persistence owner than the ordered feed this section
+asked for before: a commit notification (a WAL commit counter, a poll, a
+notify) that carries nothing and may fire spuriously, because a wake that
+finds no new rows costs one indexed read. It stays decision 6 and is still
+unagreed; without it, a process that only reads goes stale whenever another
+process owns the run, since a seq gap is only visible once a _later_ row
+for the same stream arrives locally.
 
-The permit section is `Effect.uninterruptible`, so neither an interrupt nor
-a failure can land between the append and the fan-out: the append either
-fails before anything is visible or its event reaches the hub, and
-`PubSub.publish` on an unbounded hub does not suspend. A subscriber that
-observes a seq gap treats it as overflow and resubscribes (7.4) - a repair,
-not the cross-process mechanism, which is the paragraph above. `SessionCursor` is the per-stream `settledSeq` map the view already
-holds, so `all(cursorOf(view))` is the resubscribe call; a stream absent
-from the cursor replays from its `run.start`. `events(streamId, fromSeq)`
-stays for single-stream readers (the trace viewer, the NDJSON subscription).
+The durable write is in the publish path, under the same permit as seq
+assignment and the wake, so seq order and insert order cannot diverge and
+no subscriber persists anything. The permit section is
+`Effect.uninterruptible`, so neither an interrupt nor a failure can land
+between the append and the wake: the append either fails before anything is
+visible, or it commits and the wake fires. The hub is unbounded because
+bounded parks the publisher behind the slowest subscriber, which would
+stall the durable write path; with a payload-free wake there is nothing to
+lose by coalescing anyway. Backpressure lives at each transport framer
+(7.4).
+
+`SessionCursor` is the per-stream `settledSeq` map the view already holds,
+so `all(cursorOf(view))` is both the initial subscribe and the resubscribe;
+a stream absent from the cursor reads from its `run.start`.
+`events(streamId, fromSeq)` stays for single-stream readers (the trace
+viewer, the NDJSON subscription). The rc.112 names used above -
+`Stream.unwrap`, `Stream.flatMap`, `Ref.make`/`Ref.get` - are verified
+against `node_modules/effect/dist`; the v3 `toQueueScoped` and
+`unwrapScoped` are gone and are no longer needed here.
 
 Two layers implement this one shape. `durableLayer` runs in the extension
 host, the desktop main process, and the CLI, and is the only one that
@@ -556,7 +588,7 @@ resolves `DurableWrite`. `transportLayer` runs in a webview, where there is
 no database and no publisher: it decodes the `EventsFrame`s of 8.1 through
 `SessionFrames`, the one service a webview's process layer provides, whose
 three fields are exactly the three fold arms - `events`, `chunks`, and
-`owners` (7.2). A webview that reaches for `publish` is a defect, not a
+`local` (7.2). A webview that reaches for `publish` is a defect, not a
 silent no-op: it issues a `runtime.request` (8.2) instead.
 
 `SessionFrames` takes no `SessionKey`, because it _is_ one session's frames.
@@ -586,8 +618,8 @@ class SessionViewService extends Context.Service<
     SessionViewService,
     Effect.gen(function* () {
       const events = yield* SessionEvents;
-      // lease reader in the runtime; the frames' owners field in a webview
-      const liveness = yield* OwnerLivenessSource;
+      // lease reader in the runtime; the frames' local field in a webview
+      const liveness = yield* LocalRuntimeSource;
       // the delta path in the runtime; the frames' chunks field in a webview
       const chunks = yield* TextChunkSource;
       const ref = yield* SubscriptionRef.make(emptySessionView);
@@ -614,8 +646,8 @@ does (7.5). Synchronous reads use `SubscriptionRef.getUnsafe`, never
 `runSync`. The three merged streams are exactly the three arms of
 `FoldInput` (5.2), and each transient one has a source service with a
 process-specific layer, so the fold fiber is the same code everywhere.
-`OwnerLivenessSource` is the lease reader's `SubscriptionRef` in the
-runtime and the `owners` field of each frame (8.1) in a webview.
+`LocalRuntimeSource` is the lease reader and restart repair's shared `SubscriptionRef` in the
+runtime and the `local` field of each frame (8.1) in a webview.
 `TextChunkSource` is the model handler's existing delta path in the runtime
 (the stream `StreamingTextAccumulator` consumes today) and the `chunks`
 field of each frame in a webview. Without that third arm the in-process
@@ -645,7 +677,7 @@ const sessionLayer = (roots: WorkspaceRoots.Shape) =>
     SessionRequests.layer,
   ).pipe(
     Layer.provide(
-      Layer.mergeAll(OwnerLivenessSource.layer, TextChunkSource.layer),
+      Layer.mergeAll(LocalRuntimeSource.layer, TextChunkSource.layer),
     ),
     Layer.provide(Database.layer),
     Layer.provide(Layer.succeed(WorkspaceRoots, roots)),
@@ -759,7 +791,7 @@ bump.
 One `ManagedRuntime.make(processLayer)` per process, module-owned at the
 existing entry, disposed on the existing shutdown path. The runtime
 processes take `SessionEvents.durableLayer` with the runtime's
-`OwnerLivenessSource` and `TextChunkSource`; every webview entry takes
+`LocalRuntimeSource` and `TextChunkSource`; every webview entry takes
 `SessionEvents.transportLayer` over `SessionFrames` and never resolves
 `Database` or `DurableWrite` (7.1). The entries:
 `packages/extension/src/extension.ts`, the desktop main entry, the CLI
@@ -796,7 +828,7 @@ the same functions in process.
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], owners: OwnerLiveness | null, catalogs: Catalogs | null }
+EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, catalogs: Catalogs | null }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
 ```
 
@@ -807,14 +839,14 @@ its `streamId` and `seq`, and every chunk its stream and its `from`/`to`,
 so a frame needs no per-stream range.
 
 The two nullable fields are host-owned transient snapshots, sent on every
-change and on every subscribe, and they are the only two. `owners` is the
-liveness snapshot; a surface that has never received one folds with
-`liveOwners` empty (5.2). `catalogs` is the launcher's option lists -
+change and on every subscribe, and they are the only two. `local` is this
+process's runtime snapshot - live owner ids and unreadable streams (5.2);
+a surface that has never received one folds with `local` empty. `catalogs` is the launcher's option lists -
 models, agents, teams, workspace roots - which are neither the user's
 choice (`Surface`, 9) nor a fact about a run (`SessionView`), but do change
 while a webview is open, as a new agent file or an added workspace root.
 That rules out both alternatives: a one-shot request at startup goes stale,
-and a request arm would need a push channel anyway. `owners` already
+and a request arm would need a push channel anyway. `local` already
 established the shape, so `catalogs` is a second field on it, not a fourth
 message. This is what feeds the pickers once lane 4 deletes the
 option-posting commands.
@@ -1297,7 +1329,7 @@ with their replacement.
   rows, and `workflowRunModel` output; the presentation-boundary test
   rejects draft and recording names in `sessionView.ts`; every stream kind
   has a `run.start`; a launch that fails after reservation folds to failed;
-  the same log with an empty `liveOwners` folds every pending approval to
+  the same log with an empty `local` folds every pending approval to
   interrupted, never waiting.
 - **2:** one runtime per process entry; no `runSync` outside entries and
   bridges; `SessionEvents.publish` under one permit; a `TestClock` test
@@ -1367,7 +1399,8 @@ As tests:
 | A webview folds another paper's events                                                     | `SessionFrames` is per session; the port is demultiplexed once at decode, so the key is not a runtime value below it (7.1)                                   |
 | Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                     |
 | Replay-then-tail gap                                                                       | Subscribe the live tail before the replay read; dedupe on seq                                                                                                |
-| Another process commits an event this one never sees (the hub is process-local)            | The tail is the local hub merged with the store's `changes(cursor)` feed, deduped on `(streamId, seq)`; a seq gap alone cannot detect it (7.1, decision 6)   |
+| Another process commits an event this one never sees (the hub is process-local)            | The store's `commits` wake joins the local one; both only say the table moved, and every subscriber reads forward in seq order (7.1, decision 6)             |
+| Two event sources interleave out of order                                                  | There is one source: the table. The hub carries no payload, so nothing can arrive ahead of the read it triggers (7.1)                                        |
 | Async-local session lookup inside Effect fibers                                            | Forbidden in Effect code; roots from context; lint the import in `src/controllers/session`                                                                   |
 | Two programs editing `SessionHandle`                                                       | Lane 6 before the cutover branch if ready; otherwise one-line swap after                                                                                     |
 | Convergence adds lines                                                                     | Measured per lane; framed as one-state and deletion wins, not line counts                                                                                    |
@@ -1392,8 +1425,9 @@ As tests:
    `warn`. The exported-trace reader (`TraceStreamLogEntrySchema`) is a
    permanent boundary and is unchanged.
 6. **With the persistence owner, not yet agreed:** the durable store
-   exposes `changes(cursor)`, a cross-process feed of committed events,
-   beside `read` and `readAll` (7.1). Without it a process that only reads
+   exposes `commits`, a notification that the event table moved (7.1). It
+   carries no events and may fire spuriously, so a WAL commit counter, a
+   poll, or a notify all satisfy it. Without it a process that only reads
    goes stale whenever another process owns the run.
 7. `WorkspaceProvider` leaves `platform()` rather than being re-pointed at
    a session (section 11). It has one implementation and its body is two
@@ -1419,7 +1453,8 @@ work through the TS 6 tsserver).
 
 Corrected in this revision after re-checking the dist: the tail names are
 `Stream.toQueue(stream, { capacity })` and `Stream.unwrap` (the v3
-`toQueueScoped` and `unwrapScoped` are gone); the Cause-tapping combinator
+`toQueueScoped` and `unwrapScoped` are gone; 7.1 no longer needs the queue
+at all); the Cause-tapping combinator
 is `tapCause`, not `tapErrorCause`; and rc.112 exports no `catch` or
 `catchAll` (the family is `catchTag`, `catchTags`, `catchCause`,
 `catchDefect`, `catchReason(s)`, `catchIf`, `catchFilter`,
@@ -1427,7 +1462,7 @@ is `tapCause`, not `tapErrorCause`; and rc.112 exports no `catch` or
 `Stream.mergeAll(streams, { concurrency })` and `Effect.die` are present.
 
 Not verified, to confirm at lane start: the shape the persistence cutover
-gives `changes(cursor)` (a notify or a polled tail; decision 6); whether
+gives `commits` (a counter, a poll, or a notify; decision 6); whether
 `TranscriptIndex` can be deleted without a render regression; net lines
 after each lane; the render cost of the memoized run model at fan-out
 scale.
@@ -1447,7 +1482,7 @@ scale.
 | Subscribe as stream | `Stream.fromPubSub(hub)`                                                                         | `effect`         | subscribes when run; open before replay                                                            |
 | Fold                | `Stream.scan(initial, f)`                                                                        | `effect`         | emits initial first, then one state per element                                                    |
 | Merge inputs        | `Stream.merge(a, b)`, `Stream.mergeAll(streams, { concurrency })`                                | `effect`         | events, liveness, and text chunks into one fold; `concurrency` is required                         |
-| Tail into a queue   | `Stream.toQueue(stream, { capacity })`, `Stream.unwrap(effect)`, `Stream.fromQueue`              | `effect`         | already scoped; the v3 `toQueueScoped` / `unwrapScoped` do not exist                               |
+| Cursor read loop    | `Stream.unwrap(effect)`, `Stream.flatMap(f, { concurrency })`, `Ref.make`/`Ref.get`              | `effect`         | one ordered read per wake (7.1); the v3 `toQueueScoped` / `unwrapScoped` do not exist              |
 | Atomic section      | `Effect.uninterruptible(effect)`                                                                 | `effect`         | around append plus fan-out under the permit                                                        |
 | Ref                 | `SubscriptionRef.make(a)`, `SubscriptionRef.changes(ref)`, `.set`, `.update`, `.getUnsafe`       | `effect`         | no coalescing; no `Stream.fromSubscriptionRef`                                                     |
 | Framing             | `Stream.groupedWithin(n, "16 millis")`, `Stream.buffer({ capacity, strategy })`, `Stream.concat` | `effect`         | `Duration.Input` accepts `"16 millis"`                                                             |
@@ -1475,7 +1510,7 @@ src/shared/session/requestErrors.ts      Data.TaggedError NotOwner | Unavailable
 src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
 src/controllers/session/SessionEvents.ts     Context.Service; durableLayer (publish under one permit, all(cursor), events(streamId, fromSeq)) and transportLayer
-src/controllers/session/sessionSources.ts    OwnerLivenessSource, TextChunkSource; a runtime and a webview layer each
+src/controllers/session/sessionSources.ts    LocalRuntimeSource, TextChunkSource; a runtime and a webview layer each
 src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Response, TextChunk; SessionFrames service shape (per session)
 src/controllers/session/SessionView.ts       Context.Service; ref + changes; fold fiber forkScoped
 src/controllers/session/WorkspaceRoots.ts    Context.Service; Layer.succeed per session
