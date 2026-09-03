@@ -36,3 +36,21 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+--------------------------------------------------------------------------------
+
+Font Awesome Free
+https://fontawesome.com
+
+Icon artwork from the `@fortawesome/free-solid-svg-icons` package is imported by
+`src/shared/wa/webAwesomeIcons.ts` and bundled into TeXRA's shipped hosts, so
+the icons are redistributed with this product.
+
+Icons: CC BY 4.0 License (https://creativecommons.org/licenses/by/4.0/)
+Code:  MIT License
+
+Copyright (c) Fonticons, Inc. (https://fontawesome.com)
+
+The Font Awesome Free download is licensed under a Creative Commons Attribution
+4.0 International License and applies to all icons packaged as SVG and JS file
+types. Full Font Awesome Free license: https://fontawesome.com/license/free.
