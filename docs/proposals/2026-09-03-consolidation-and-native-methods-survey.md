@@ -65,9 +65,18 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
 ## 2. What was checked and ruled out
 
 - **`.hasOwnProperty()` direct calls:** zero repo-wide.
-- **Hand-rolled sleeps:** zero in production `src/`/`packages/*/src/`
-  (all remaining hits are `src/test-kernel/**` timer-flush fixtures) — same
-  conclusion as every prior round.
+- **Hand-rolled sleeps:** the sweep's regex required `setTimeout` as the
+  direct executor body and missed the nested form; one production hit
+  exists, `src/platform/defaults/lifecycleHost.ts:70-72`:
+  `new Promise<void>((resolve) => onAbort(signal, () => setTimeout(resolve, 0)))`,
+  raced against a shutdown-phase promise. Structurally not a plain sleep —
+  the delay only starts once `signal` aborts, giving shutdown handlers one
+  macrotask to settle after the abort fires, not a fixed wait from now — so
+  it is not a direct `node:timers/promises` `setTimeout(ms)` swap without
+  restructuring the abort-then-yield sequencing. Plausibly intentional, but
+  should have been enumerated rather than reported as test-only. All other
+  remaining hits are `src/test-kernel/**` timer-flush fixtures — same
+  conclusion as every prior round for those.
 - **`JSON.parse(JSON.stringify(` deep clones:** the one production hit,
   `src/agent/workflowScript/parseScript.ts:130`, remains the already-adjudicated
   `vm.Script` sandbox literal, not a clone helper. No new hits.
@@ -78,8 +87,9 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   every occurrence of a math-environment delimiter and needs the matched
   _position_ to advance past it, so `.includes()` does not apply — not a
   candidate, but should have been enumerated rather than reported as zero.
-- **Hand-rolled `Math.random().toString(36)` IDs:** zero in production (one
-  hit, in a `test-kernel` fixture).
+- **Hand-rolled `Math.random().toString(36)` IDs:** zero in production (two
+  hits, both in the same `test-kernel` fixture —
+  `src/test-kernel/agent/runtime/ChildRunLoop.vitest.ts:106,114`).
 - **Hand-rolled `isEqual`/`deepEqual`:** zero.
 - **Hand-rolled attempt-counter `for` loops:** the recurring
   `MAX_DIRTY_WRITE_RETRIES` durability-flush loop already traced to
@@ -106,6 +116,18 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   re-schedules from within its own flush callback, which `es-toolkit`'s
   invoke-then-cancel debounce silently drops. An accepted exception, not a
   candidate, but should have been counted rather than reported as zero.
+- **Defensive-copy-then-iterate of a mutated collection:** not one of this
+  survey's stated tells, but a related native-construct nit surfaced by
+  review: `packages/cli/src/chat/chatSessionController.ts:372` iterates
+  `[...liveOwnerships]`, a spread copy of a `Set`, so that each
+  `ownership.release()` call (which deletes only _that_ ownership from the
+  live `Set`, confirmed by reading the callback at line 414) can safely
+  mutate the collection mid-loop. Deleting the current element during a
+  `Set` iterator's traversal is well-defined, so the copy is unnecessary —
+  `for (const ownership of liveOwnerships)` would do. Real, correct, and
+  genuinely tiny (one allocation removed, no behavior change); not filed as
+  a separate issue per this survey's own bar for thin candidates, and out of
+  scope for a docs-only PR to fix inline.
 - **New `Object.assign(` call sites in the diff:** none of the 93 touched
   production files added one; the repo-wide set is unchanged from the prior
   round's already-accepted "mutating an owned, function-local object" pattern.
