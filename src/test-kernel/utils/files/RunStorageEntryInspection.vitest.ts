@@ -162,7 +162,7 @@ describe('inspectRunStorageEntry', () => {
     ).rejects.toThrow('Denied');
   });
 
-  it('recovers execution identity from current and legacy absolute paths', () => {
+  it('recovers execution identity from absolute run-storage paths', () => {
     expect(
       runStorageLocationFromAnyAbsolutePath(
         storagePath('executions', executionId, 'r2', 'result.tex'),
@@ -171,15 +171,6 @@ describe('inspectRunStorageEntry', () => {
       kind: 'runStorage',
       executionId,
       relativePath: 'r2/result.tex',
-    });
-    expect(
-      runStorageLocationFromAnyAbsolutePath(
-        storagePath('taskRuns', executionId, 'result.tex'),
-      ),
-    ).toMatchObject({
-      kind: 'runStorage',
-      executionId,
-      relativePath: 'result.tex',
     });
     expect(
       runStorageLocationFromAnyAbsolutePath(
@@ -204,15 +195,6 @@ describe('inspectRunStorageEntry', () => {
       kind: 'runStorage',
       executionId,
       relativePath: 'r1/draft.tex',
-    });
-    expect(
-      fileService.locateSource(
-        storagePath('taskRuns', executionId, 'legacy.tex'),
-      ),
-    ).toMatchObject({
-      kind: 'runStorage',
-      executionId,
-      relativePath: 'legacy.tex',
     });
   });
 });

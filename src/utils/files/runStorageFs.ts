@@ -4,7 +4,6 @@ import { promises as fs } from 'node:fs';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
 import {
   resolveRunOriginalSnapshotPath,
@@ -163,39 +162,25 @@ export function runStorageLocationFromAbsolutePath(
   return createRunStorageLocation(absolutePath, relativePath, executionId);
 }
 
-/**
- * Recover execution identity from an absolute run-storage path.
- *
- * The released extension may retain transcripts and resume records containing
- * absolute `taskRuns` paths. Keep parsing those paths without probing the
- * filesystem until that released-data retention policy expires (#6981).
- */
+/** Recover execution identity from an absolute run-storage path. */
 export function runStorageLocationFromAnyAbsolutePath(
   absolutePath: string,
 ): RunStorageFileLocation | undefined {
   if (!path.isAbsolute(absolutePath)) return undefined;
 
-  const roots = [
-    StorageFS.fullPath(resolveRunStoragePath()),
-    StorageFS.fullPath(WORKSPACE_STORAGE_LAYOUT.legacyRuns),
-  ];
-  for (const root of roots) {
-    const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
-    if (!runRelativePath) continue;
+  const root = StorageFS.fullPath(resolveRunStoragePath());
+  const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
+  if (!runRelativePath) return undefined;
 
-    const [rawExecutionId, ...entrySegments] = getPathSegments(runRelativePath);
-    const executionId = ExecutionIdSchema.safeParse(rawExecutionId);
-    if (!executionId.success || entrySegments.length === 0) return undefined;
+  const [rawExecutionId, ...entrySegments] = getPathSegments(runRelativePath);
+  const executionId = ExecutionIdSchema.safeParse(rawExecutionId);
+  if (!executionId.success || entrySegments.length === 0) return undefined;
 
-    const relativePath = entrySegments.join('/');
-    return createRunStorageLocation(
-      path.resolve(root, runRelativePath),
-      relativePath,
-      executionId.data,
-    );
-  }
-
-  return undefined;
+  return createRunStorageLocation(
+    path.resolve(root, runRelativePath),
+    entrySegments.join('/'),
+    executionId.data,
+  );
 }
 
 export async function ensureParentDir(filePath: string): Promise<void> {

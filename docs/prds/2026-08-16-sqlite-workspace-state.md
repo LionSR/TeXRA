@@ -130,14 +130,12 @@ workspace storage today                     workspace storage after
                                             ├── pasted/  recordings/
                                             │                 (user-media caches: pasted
                                             │                  images, audio — documents)
-                                            └── taskRuns/     (legacy, until #6981
-                                                               retention drains it)
 ```
 
-Legacy `taskRuns/` (`WORKSPACE_STORAGE_LAYOUT.legacyRuns`) is grandfathered:
-it stays read-only on its existing #6981 retention path, is never migrated
-into rows, and its layout key retires when that policy drains it. It is the
-one deliberate exception to the §2 rule, time-bounded by retention.
+Legacy `taskRuns/` is not part of the target layout. Its last writer was
+retired on 2026-02-12, its absolute-path reader and the
+`WORKSPACE_STORAGE_LAYOUT.legacyRuns` key were deleted (#11771 ruling 1), and
+any residual directory is inert on disk. There is no §2 exception.
 
 Engine: `node:sqlite` (fallback: `better-sqlite3`, accepting the packaging
 cost, if Stage 0 finds the built-in flagged or unfit on any host). Schema and
@@ -711,7 +709,7 @@ public surfaces (`store-public-surface-baseline`); hosts-as-renderers plane
 rules untouched. **Added:** the §2 rule, pinned by a new architecture test.
 The test lands at Stage 1 as a **shrinking ratchet, not a strict gate**: it
 starts with an explicit allowlist of the not-yet-migrated directories
-(`streamLogSummaries/`, `streamData/`, `streamData.deleting/`, `taskRuns/` — the staged-
+(`streamLogSummaries/`, `streamData/`, `streamData.deleting/` — the staged-
 deletion namespace `StagedDeletionCoordinator` renames into, retained in
 the baseline through the **Stage-7** deletion-protocol cutover that retires
 the coordinator — `streamLogs/`, `executions/` KV records, lease/lock
@@ -739,11 +737,7 @@ After Stage 6 one **importer-owned temporary** entry remains alongside the perma
 `*.pre-sqlite-backup`, which the §5 retirement window requires for 90 days
 and two releases — the importer-removal PR deletes the backups and this
 ratchet entry together. Strict (permanent entries only) is that removal
-PR's exit criterion, not Stage 6's — and strictness is additionally
-conditional on legacy `taskRuns/` having drained under #6981's own
-retirement condition, which is independent of the importer window: if the
-importer retires first, `taskRuns/` remains a shrinking temporary entry
-until #6981 removes it, never a re-widen.
+PR's exit criterion, not Stage 6's.
 
 ## 8. Non-goals
 
@@ -766,8 +760,7 @@ normalization of entry payload internals; no publication of this doc
   `{ texra.db, texra.db-wal, texra.db-shm, original, memories, state.json,
 config.json, _workspace.json, pasted, recordings }` plus the per-execution
   artifacts
-  area (§5 Stage 5) — and legacy `taskRuns/` until #6981 retention drains
-  it (§3.1 exception). The §7 `exports` allowlist entry is a category for
+  area (§5 Stage 5). The §7 `exports` allowlist entry is a category for
   caller-chosen destinations outside the workspace-storage bucket, not a
   `WORKSPACE_STORAGE_LAYOUT` key. §7 and this criterion therefore enumerate
   the same bucket set by construction; a divergence between the two lists is
