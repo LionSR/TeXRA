@@ -219,6 +219,9 @@ jobs:
       - name: Check tsconfig paths are in sync with the root
         run: pnpm run check:tsconfig-paths
 
+      - name: Check package NOTICE files match the root NOTICE
+        run: pnpm run check:notice
+
       - name: Check remote-agents catalog generates
         run: npm run sync:remote-agents
 

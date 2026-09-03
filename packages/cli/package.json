@@ -26,7 +26,8 @@
   "files": [
     "dist",
     "!dist/bin/tui-harness.js",
-    "LICENSE.txt"
+    "LICENSE.txt",
+    "NOTICE.txt"
   ],
   "type": "module",
   "bin": {
