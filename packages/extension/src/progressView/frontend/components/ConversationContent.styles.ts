@@ -29,12 +29,8 @@ export const conversationContentStyles: CSSResult = css`
   }
 
   .conversation-column {
-    width: min(
-      var(--conversation-reading-width, 800px),
-      calc(100% - 2 * var(--wa-space-m))
-    );
+    width: calc(100% - 2 * var(--wa-space-m));
     min-width: 0;
-    margin-inline: auto;
     box-sizing: border-box;
   }
 

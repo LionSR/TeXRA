@@ -56,12 +56,10 @@ import './LogList';
 export class StreamConversation extends SignalWatcher(LitElement) {
   static override styles = css`
     :host {
-      /* Body text renders at --wa-font-size-m (13px from the host), so 800px
-         put the measure near 127 characters per line — roughly double the
-         60-75 that keeps the eye finding the next line. Code blocks and
-         diffs are free to overflow this column. */
-      --conversation-reading-width: 680px;
-      --conversation-header-width: 1040px;
+      /* The transcript spans the panel instead of a fixed reading column:
+         each consumer (.conversation-column, .log-container, .log-header)
+         applies its own inline gutter. Code blocks and diffs are free to
+         overflow the content box. */
 
       container-type: inline-size;
       display: flex;

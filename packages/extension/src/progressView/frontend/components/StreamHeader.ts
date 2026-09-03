@@ -185,11 +185,7 @@ export class StreamHeader extends UnsupportedCommandsMixin(LitElement) {
       }
 
       .log-header {
-        padding: var(--wa-space-2xs)
-          max(
-            var(--wa-space-m),
-            calc((100% - var(--conversation-header-width, 1040px)) / 2)
-          );
+        padding: var(--wa-space-2xs) var(--wa-space-m);
         font-size: var(--font-size-sm);
         display: flex;
         align-items: center;
