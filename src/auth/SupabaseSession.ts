@@ -23,9 +23,8 @@ import {
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
 // Public entry point for the session value-object helpers and coordinator.
-// Fetch timeout behavior is owned by `@auth/fetchWithTimeout`. Only the symbols
-// consumers actually use are forwarded; the Zod schemas and callback/parse
-// option types stay internal to `supabaseSessionTypes`.
+// Only the symbols consumers actually use are forwarded; the Zod schemas and
+// callback/parse option types stay internal to `supabaseSessionTypes`.
 export {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseStoredSupabaseSession,

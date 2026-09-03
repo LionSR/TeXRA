@@ -58,12 +58,15 @@ describe('main-view execution launch controller', () => {
 
   it('prepares ordinary launches without loading the team catalog', async () => {
     const message: MainViewExecuteMessage = {};
-    const preparation = { valid: false as const, message: 'ordinary' };
-    mocks.prepareMainViewExecutionRequest.mockReturnValue(preparation);
+    const request = { agentName: 'ordinary' };
+    mocks.prepareMainViewExecutionRequest.mockReturnValue({
+      valid: true,
+      request,
+    });
 
     await expect(
       prepareMainViewExecutionLaunch(message, createHost()),
-    ).resolves.toEqual({ status: 'prepared', preparation });
+    ).resolves.toEqual({ status: 'prepared', request });
     expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
   });
 
@@ -124,21 +127,24 @@ describe('main-view execution launch controller', () => {
       },
       cli: { multiAgentPresetId: 'physicist' },
     };
-    const preparation = { valid: false as const, message: 'invalid model' };
+    const request = { agentName: 'team-root' };
     mocks.resolveTeamLaunch.mockResolvedValue({
       status: 'ready',
       fields,
       partial: true,
       missingNames: ['writer'],
     });
-    mocks.prepareMainViewTeamExecutionRequest.mockReturnValue(preparation);
+    mocks.prepareMainViewTeamExecutionRequest.mockReturnValue({
+      valid: true,
+      request,
+    });
     const message = teamMessage();
 
     await expect(
       prepareMainViewExecutionLaunch(message, host),
     ).resolves.toEqual({
       status: 'prepared',
-      preparation,
+      request,
       infoMessage: 'Partial: writer',
     });
     expect(mocks.prepareMainViewTeamExecutionRequest).toHaveBeenCalledWith(
@@ -160,7 +166,7 @@ describe('main-view execution launch controller', () => {
     expect(host.signInForRemoteAgentCatalog).toHaveBeenCalledOnce();
   });
 
-  it('surfaces catalog errors and returns no preparation', async () => {
+  it('surfaces catalog errors as a launch error', async () => {
     const host = createHost();
     mocks.resolveTeamLaunch.mockRejectedValue(new Error('catalog unavailable'));
 

@@ -1213,12 +1213,7 @@ export class DesktopProgressBridge {
         'Failed to present the launch information dialog',
       );
     }
-    const { preparation } = launch;
-    if (!preparation.valid) {
-      await this.options.host.showErrorMessage(preparation.message);
-      return;
-    }
-    return this.runExecution(preparation.request);
+    return this.runExecution(launch.request);
   }
 
   /**

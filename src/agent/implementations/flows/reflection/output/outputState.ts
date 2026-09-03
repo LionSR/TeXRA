@@ -109,14 +109,6 @@ export function ensureRoundData(
   return data;
 }
 
-export function hasRoundOutputs(state: OutputState, round: number): boolean {
-  return (state.rounds.get(round)?.outputs.length ?? 0) > 0;
-}
-
-export function hasCompileFailures(state: OutputState, round: number): boolean {
-  return (state.rounds.get(round)?.compileFailures.length ?? 0) > 0;
-}
-
 export function getOutputFilesByRound(
   state: OutputState,
 ): RoundIndexed<OutputFileInfo> {

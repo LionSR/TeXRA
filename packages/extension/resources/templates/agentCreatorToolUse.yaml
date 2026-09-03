@@ -62,6 +62,3 @@ prompts:
     - Do NOT include a userPrefix section: tool-use agents don't receive pre-loaded files.
     - Include exactly these tools: {{ SELECTED_TOOLS }}.
     - The systemPrompt should guide the agent on how to use its specific tools effectively.
-
-  retryPrompt: |
-    The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.

@@ -13,7 +13,6 @@ import {
   type SupabaseSession,
   type SupabaseSessionStorage,
 } from '@auth/SupabaseSession';
-import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type {
   Session as SupabaseNativeSession,
@@ -588,49 +587,5 @@ describe('SupabaseSession', () => {
         assert.equal(coordinator.getLastRefreshFailure(), failure);
       },
     );
-
-    it('preserves upstream abort signals when adding a timeout', async () => {
-      const upstream = new AbortController();
-      let fetchSignal: AbortSignal | undefined;
-
-      await fetchWithTimeout(
-        'https://example.com',
-        { signal: upstream.signal },
-        30_000,
-        'timeout',
-        async (_url, init) => {
-          fetchSignal = init?.signal ?? undefined;
-          upstream.abort();
-          assert.equal(fetchSignal?.aborted, true);
-          return new Response(null, { status: 204 });
-        },
-      );
-
-      assert.ok(fetchSignal);
-    });
-
-    it('preserves upstream abort errors instead of reporting timeout', async () => {
-      const upstream = new AbortController();
-
-      await assert.rejects(
-        fetchWithTimeout(
-          'https://example.com',
-          { signal: upstream.signal },
-          30_000,
-          'timeout',
-          async (_url, init) => {
-            upstream.abort();
-            throw new DOMException(
-              init?.signal?.reason ?? 'Aborted',
-              'AbortError',
-            );
-          },
-        ),
-        (error) =>
-          error instanceof DOMException &&
-          error.name === 'AbortError' &&
-          error.message !== 'timeout',
-      );
-    });
   });
 });

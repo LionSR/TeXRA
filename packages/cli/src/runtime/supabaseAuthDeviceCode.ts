@@ -10,7 +10,6 @@ import { z } from 'zod';
 
 // Local imports - auth
 import { DEVICE_AUTH_BASE_URL } from '@auth/config';
-import { fetchWithTimeout } from '@auth/fetchWithTimeout';
 import {
   parseTokenExchangeResponse,
   type GitHubTokenExchangeResponse,
@@ -20,6 +19,7 @@ import {
   deviceCodePending,
   pollUntilDeviceAuthorized,
 } from '@auth/oauth/deviceCodePoll';
+import { isTimeoutError, withRequestTimeout } from '@tools/timeouts';
 
 const DEVICE_AUTH_REQUEST_TIMEOUT_MS = 30000;
 
@@ -69,17 +69,23 @@ export function formatCliDeviceAuthMessage(
 export async function requestDeviceAuthorization(
   hooks: DeviceAuthPollHooks = {},
 ): Promise<DeviceAuthorization> {
-  const response = await fetchWithTimeout(
-    `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/code`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: hooks.signal,
-    },
+  const response = await withRequestTimeout(
     DEVICE_AUTH_REQUEST_TIMEOUT_MS,
-    'Device sign-in request timed out',
-    hooks.fetchImpl,
-  );
+    hooks.signal,
+    (signal) =>
+      (hooks.fetchImpl ?? fetch)(
+        `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/code`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal,
+        },
+      ),
+  ).catch((error: unknown) => {
+    throw isTimeoutError(error)
+      ? new Error('Device sign-in request timed out')
+      : error;
+  });
   if (!response.ok) {
     throw new Error(
       `Device sign-in is unavailable right now (HTTP ${response.status}). Try again, or use \`texra login --no-browser\`.`,
@@ -121,23 +127,31 @@ export async function pollForDeviceSession(
     attempt: async () => {
       let response: Response;
       try {
-        response = await fetchWithTimeout(
-          `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/token`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_code: authorization.device_code }),
-            signal: hooks.signal,
-          },
+        response = await withRequestTimeout(
           DEVICE_AUTH_REQUEST_TIMEOUT_MS,
-          'Device sign-in poll timed out',
-          hooks.fetchImpl,
+          hooks.signal,
+          (signal) =>
+            (hooks.fetchImpl ?? fetch)(
+              `${hooks.baseUrl ?? DEVICE_AUTH_BASE_URL}/token`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  device_code: authorization.device_code,
+                }),
+                signal,
+              },
+            ),
         );
       } catch (error) {
         hooks.signal?.throwIfAborted();
         // Headless/SSH connections blip; tolerate a few in a row before failing.
         transientFailures += 1;
-        if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) throw error;
+        if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) {
+          throw isTimeoutError(error)
+            ? new Error('Device sign-in poll timed out')
+            : error;
+        }
         return deviceCodePending();
       }
 

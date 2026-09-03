@@ -121,13 +121,6 @@ let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let lifecycleHost: LifecycleHost | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
-function createExtensionLifecycleHost(): LifecycleHost {
-  return createLifecycleHost({
-    onError: (phase, error) =>
-      log.error(`Lifecycle ${phase} handler failed`, { data: error }),
-  });
-}
-
 function shutdownExtension(): Promise<void> {
   if (extensionShutdownPromise) return extensionShutdownPromise;
 
@@ -340,7 +333,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const lifecycle = createExtensionLifecycleHost();
+    const lifecycle = createLifecycleHost();
     lifecycleHost = lifecycle;
     agentDirectories.initialize();
     const storage = createNodeStorageProvider();
@@ -416,7 +409,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         gitRepoRoot,
       )
     : context.workspaceState;
-  const lifecycle = createExtensionLifecycleHost();
+  const lifecycle = createLifecycleHost();
   lifecycleHost = lifecycle;
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => clearVscodeLeanServerEntries());
   const languageModel = createLanguageModelPort(context);

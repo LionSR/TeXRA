@@ -60,13 +60,12 @@ const PromptStringSchema = z.string().refine((value) => value.trim() !== '', {
 
 // Top level stays non-strict: templates carry metadata (name, description,
 // settings) that this loader does not consume. The prompts block is strict so
-// a misspelled key (e.g. `retryPromt`) fails the load instead of being
-// stripped and silently replaced by the built-in fallback.
+// a misspelled key (e.g. `userRequst`) fails the load instead of being
+// silently stripped.
 const ParsedCreatorYamlSchema = z.object({
   prompts: z.strictObject({
     systemPrompt: PromptStringSchema,
     userRequest: PromptStringSchema,
-    retryPrompt: PromptStringSchema.optional(),
   }),
 });
 
@@ -83,8 +82,8 @@ function parseCreatorTemplate(
   return parsed.data;
 }
 
-const DEFAULT_RETRY_PROMPT =
-  'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Please fix and return only the YAML.';
+const RETRY_PROMPT =
+  'The previous attempt failed validation: {{ VALIDATION_ERROR }}. Fix it and return only the YAML.\n';
 
 /** Raw bytes of the four bundled template files, already read by the host. */
 export interface CreatorTemplateFiles {
@@ -107,8 +106,8 @@ export function buildCreatorConfig(files: CreatorTemplateFiles): CreatorConfig {
     workflow: wf.prompts,
     toolUse: tu.prompts,
     retryPrompts: {
-      workflow: wf.prompts.retryPrompt ?? DEFAULT_RETRY_PROMPT,
-      toolUse: tu.prompts.retryPrompt ?? DEFAULT_RETRY_PROMPT,
+      workflow: RETRY_PROMPT,
+      toolUse: RETRY_PROMPT,
     },
     templates: {
       workflowSingle: files.workflowSingle,

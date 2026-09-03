@@ -108,7 +108,7 @@ describe('MainView execution handlers', () => {
     mocks.showInformationMessage.mockReturnValue(infoPromise);
     mocks.prepareMainViewExecutionLaunch.mockResolvedValue({
       status: 'prepared',
-      preparation: { valid: true, request },
+      request,
       infoMessage: 'Continuing without writer',
     });
 

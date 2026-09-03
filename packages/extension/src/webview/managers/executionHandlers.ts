@@ -81,10 +81,23 @@ export async function handleExecute(
   });
   if (launch.status === 'cancelled') return;
   if (launch.status === 'error') {
-    observeNotification(
-      vscode.window.showErrorMessage(launch.message),
-      'Error',
-    );
+    logErrorMessage(CHANNEL, 'Execution launch failed', launch.message);
+    const { docsCommand } = launch;
+    if (docsCommand) {
+      const openDocs = 'Open file management guide';
+      const choice = await vscode.window.showErrorMessage(
+        launch.message,
+        openDocs,
+      );
+      if (choice === openDocs) {
+        void vscode.commands.executeCommand('texra.openDoc', docsCommand);
+      }
+    } else {
+      observeNotification(
+        vscode.window.showErrorMessage(launch.message),
+        'Error',
+      );
+    }
     return;
   }
   if (launch.infoMessage) {
@@ -93,32 +106,8 @@ export async function handleExecute(
       'Information',
     );
   }
-  const { preparation } = launch;
-  if (!preparation.valid) {
-    logErrorMessage(
-      CHANNEL,
-      'AgentConfig validation failed',
-      preparation.message,
-    );
-    if (preparation.docsCommand) {
-      const openDocs = 'Open file management guide';
-      const choice = await vscode.window.showErrorMessage(
-        preparation.message,
-        openDocs,
-      );
-      if (choice === openDocs) {
-        void vscode.commands.executeCommand(
-          'texra.openDoc',
-          preparation.docsCommand,
-        );
-      }
-    } else {
-      vscode.window.showErrorMessage(preparation.message);
-    }
-    return;
-  }
 
-  await vscode.commands.executeCommand('texra.execute', preparation.request);
+  await vscode.commands.executeCommand('texra.execute', launch.request);
 }
 
 export function handleFileOperation(message: FileOperationMessage): void {
