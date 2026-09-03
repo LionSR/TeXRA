@@ -70,10 +70,21 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
 - **Hand-rolled `Math.random().toString(36)` IDs:** zero in production (one
   hit, in a `test-kernel` fixture).
 - **Hand-rolled `isEqual`/`deepEqual`:** zero.
-- **Hand-rolled attempt-counter `for` loops:** zero new hits; the recurring
+- **Hand-rolled attempt-counter `for` loops:** the recurring
   `MAX_DIRTY_WRITE_RETRIES` durability-flush loop already traced to
   `SidecarWriteCoordinator.retryDirtyWrites` in the 2026-09-02 round did not
-  change shape in this window.
+  change shape in this window. One genuinely new instance: `e599027`
+  (#11762) adds a `MAX_EVICTION_DRAIN_ATTEMPTS` loop to
+  `StreamSnapshotStore.requestEviction` (`src/transcript/StreamSnapshotStore.ts:1203`).
+  Read in full: each iteration awaits the record's in-flight seed chain and
+  `retryDirtyWrites`, then re-checks the record's identity (generation,
+  seed-chain reference, ownership, a caller liveness check) before evicting;
+  it loops (bounded at 3 attempts) only when a write lands on an
+  already-seeded record during the drain, re-armed by a fresh mutation, not
+  because an operation failed. No `catch`, no backoff, no error
+  classification — the same "bounded re-drain reconciling concurrent state,
+  not `p-retry`-shaped error-driven retry" species as
+  `MAX_DIRTY_WRITE_RETRIES`, adjudicated the same way. Not a candidate.
 - **Hand-rolled `debounce`/`throttle`:** zero.
 - **New `Object.assign(` call sites in the diff:** none of the 93 touched
   production files added one; the repo-wide set is unchanged from the prior
@@ -100,8 +111,8 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   duplication left behind — nothing further to flag.
 - **CLI approval dispatch (`packages/cli/src/runtime/approvalAdapter.ts`,
   `packages/cli/src/runtime/approval/approvalPrompts.ts`):** already collapsed
-  in this window (part of #11775)
-  from a `CliDecisionApprovalRequest` discriminated-union dispatch into one
+  in this window (part of #11792, not #11775) from a
+  `CliDecisionApprovalRequest` discriminated-union dispatch into one
   `decideGated` helper taking an already-computed settlement plus prompt
   content — the exact shape a fresh survey would otherwise propose.
 - **Cross-host duplication (CLI / desktop / extension):** the "message-host
