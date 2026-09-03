@@ -81,7 +81,13 @@ jobs:
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Visual Studio Marketplace
-        uses: HaaLeo/publish-vscode-extension@v2
+        # Pinned to the COMMIT `v2` resolves to: this action receives the
+        # Marketplace and Open VSX publish credentials, so a moved tag would
+        # hand them to code nobody reviewed. Actions requires a commit SHA, so
+        # resolve with `git ls-remote <repo> 'refs/tags/v2^{}'` — plain
+        # `refs/tags/v2` yields the annotated tag object, which does not
+        # resolve. Bump the SHA and the trailing tag together.
+        uses: HaaLeo/publish-vscode-extension@ca5561daa085dee804bf9f37fe0165785a9b14db # v2
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
@@ -89,7 +95,13 @@ jobs:
           skipDuplicate: true
 
       - name: Publish to Open VSX
-        uses: HaaLeo/publish-vscode-extension@v2
+        # Pinned to the COMMIT `v2` resolves to: this action receives the
+        # Marketplace and Open VSX publish credentials, so a moved tag would
+        # hand them to code nobody reviewed. Actions requires a commit SHA, so
+        # resolve with `git ls-remote <repo> 'refs/tags/v2^{}'` — plain
+        # `refs/tags/v2` yields the annotated tag object, which does not
+        # resolve. Bump the SHA and the trailing tag together.
+        uses: HaaLeo/publish-vscode-extension@ca5561daa085dee804bf9f37fe0165785a9b14db # v2
         with:
           pat: ${{ secrets.OVSX_PAT }}
           registryUrl: https://open-vsx.org

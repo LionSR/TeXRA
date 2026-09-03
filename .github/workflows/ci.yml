@@ -255,6 +255,16 @@ jobs:
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
 
+      # The docs-root boundary decides what the texra.ai site publishes. It
+      # runs inside `docs:build` (via `check:content`), but that job is gated
+      # off on code-only PRs and on pushes to main — exactly the paths where a
+      # root-level doc gets added alongside code. An unclassified root doc
+      # could therefore freeze the deploy with CI green. This job is the
+      # ungated one, so it also runs here; the overlap on docs-only PRs is
+      # harmless.
+      - name: Check docs root boundary is classified
+        run: node docs/scripts/check-root-docs.mjs
+
       - name: Check browser-safe utils counts resolve
         run: node scripts/check-browser-safe-utils.mjs
 
