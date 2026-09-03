@@ -81,7 +81,10 @@ jobs:
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
       - name: Publish to Visual Studio Marketplace
-        uses: HaaLeo/publish-vscode-extension@v2
+        # Pinned to the v2 tag's commit: this action receives the Marketplace
+        # and Open VSX publish credentials, so a moved tag would hand them to
+        # code nobody reviewed. Bump the SHA and the trailing tag together.
+        uses: HaaLeo/publish-vscode-extension@4004fc217b5ac892b15a1c3cbe6458de97242dde # v2
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
@@ -89,7 +92,10 @@ jobs:
           skipDuplicate: true
 
       - name: Publish to Open VSX
-        uses: HaaLeo/publish-vscode-extension@v2
+        # Pinned to the v2 tag's commit: this action receives the Marketplace
+        # and Open VSX publish credentials, so a moved tag would hand them to
+        # code nobody reviewed. Bump the SHA and the trailing tag together.
+        uses: HaaLeo/publish-vscode-extension@4004fc217b5ac892b15a1c3cbe6458de97242dde # v2
         with:
           pat: ${{ secrets.OVSX_PAT }}
           registryUrl: https://open-vsx.org

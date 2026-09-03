@@ -255,6 +255,14 @@ jobs:
       - name: Check guidance file references resolve
         run: node scripts/check-guidance-refs.mjs
 
+      # The docs-root boundary decides what the texra.ai site publishes. It
+      # only ran as `docs/package.json`'s `check:content`, which no CI job
+      # invokes — `docs build` runs `format:check` + `docs:build` and is gated
+      # off on code-only PRs. An unclassified root doc could therefore freeze
+      # the deploy with CI green. This job is the ungated one, so it runs here.
+      - name: Check docs root boundary is classified
+        run: node docs/scripts/check-root-docs.mjs
+
       - name: Check browser-safe utils counts resolve
         run: node scripts/check-browser-safe-utils.mjs
 

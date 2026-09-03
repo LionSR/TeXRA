@@ -104,6 +104,16 @@ jobs:
           else
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "reason=$REVIEW_PROVIDER token is not configured" >> "$GITHUB_OUTPUT"
+            # Say so loudly. Every later step is gated on this flag, so the job
+            # otherwise ends green and the check reads "reviewed" when nothing
+            # was reviewed. Not a failure: fork PRs legitimately have no
+            # provider credentials and must still be mergeable.
+            echo "::warning title=Code review skipped::$REVIEW_PROVIDER token is not configured; no automated review ran for this PR."
+            {
+              echo "### :warning: Automated review skipped"
+              echo
+              echo "\`$REVIEW_PROVIDER\` token is not configured, so no automated review ran."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Checkout repository under review
