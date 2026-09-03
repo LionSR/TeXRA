@@ -35,10 +35,9 @@ interface GoalEntryStore {
 /**
  * A per-stream map of per-incarnation values that prunes itself: deleting a
  * stream's last incarnation also removes the stream's now-empty inner map,
- * so `size`, `countFor`, and `allValues` only ever see live entries. Used for
- * `pendingStreamDeletions` and `streamDeletionClaims`, which both key first
- * by stream, then by incarnation, and both need to prune-when-empty at every
- * write — this centralizes that dance instead of repeating it at each site.
+ * so `size` and `allValues` only ever see live entries. Used for
+ * `pendingStreamDeletions`, which keys first by stream, then by incarnation,
+ * and needs to prune-when-empty at every write.
  */
 class IncarnationMap<K2, V> {
   private readonly byStream = new Map<StreamTabId, Map<K2, V>>();
@@ -62,11 +61,6 @@ class IncarnationMap<K2, V> {
     if (!byIncarnation) return;
     byIncarnation.delete(incarnation);
     if (byIncarnation.size === 0) this.byStream.delete(stream);
-  }
-
-  /** Number of incarnations tracked for `stream`, 0 if none. */
-  countFor(stream: StreamTabId): number {
-    return this.byStream.get(stream)?.size ?? 0;
   }
 
   allValues(): V[] {
@@ -157,10 +151,7 @@ export class SessionStores {
     number | undefined,
     Promise<DeleteStreamResult>
   >();
-  private readonly streamDeletionClaims = new IncarnationMap<
-    number,
-    Set<symbol>
-  >();
+  private readonly streamDeletionClaims = new Map<StreamTabId, Set<symbol>>();
   private pendingDeleteAll: Promise<DeleteAllStreamsResult> | undefined;
   private readonly deletionQueue = new PQueue({ concurrency: 1 });
 
@@ -181,14 +172,9 @@ export class SessionStores {
    * first await. The process-level desktop fallback uses this synchronous
    * signal to distinguish a live projection from a genuinely headless run.
    */
-  claimStreamDeletion(
-    stream: StreamTabId,
-    expectedIncarnation: number,
-  ): () => void {
-    const claims =
-      this.streamDeletionClaims.get(stream, expectedIncarnation) ??
-      new Set<symbol>();
-    this.streamDeletionClaims.set(stream, expectedIncarnation, claims);
+  claimStreamDeletion(stream: StreamTabId): () => void {
+    const claims = this.streamDeletionClaims.get(stream) ?? new Set<symbol>();
+    this.streamDeletionClaims.set(stream, claims);
     const claim = Symbol(stream);
     claims.add(claim);
     let released = false;
@@ -196,23 +182,20 @@ export class SessionStores {
       if (released) return;
       released = true;
       claims.delete(claim);
-      if (claims.size === 0) {
-        this.streamDeletionClaims.delete(stream, expectedIncarnation);
-      }
+      if (claims.size === 0) this.streamDeletionClaims.delete(stream);
     };
   }
 
   /**
    * Whether a live presentation currently owns this stream's removal.
    *
-   * The desktop process store deliberately does not need to duplicate the
-   * state-side incarnation counter: it only decides whether to start a
-   * headless fallback in the removal microtask. Any outstanding claim means
-   * that a presentation already owns that decision, and claims are released
-   * when its deletion settles or fails.
+   * The desktop process store only decides whether to start a headless
+   * fallback in the removal microtask. Any outstanding claim means that a
+   * presentation already owns that decision, and claims are released when its
+   * deletion settles or fails.
    */
   hasStreamDeletionClaim(stream: StreamTabId): boolean {
-    return this.streamDeletionClaims.countFor(stream) > 0;
+    return this.streamDeletionClaims.has(stream);
   }
 
   /**

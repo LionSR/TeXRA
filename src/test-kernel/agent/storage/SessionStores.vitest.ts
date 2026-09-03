@@ -325,7 +325,7 @@ describe('SessionStores deletion coordination', () => {
         snapshots: new StreamSnapshotStore(),
       });
 
-      const releaseClaim = stores.claimStreamDeletion(stream, 1);
+      const releaseClaim = stores.claimStreamDeletion(stream);
       expect(stores.hasStreamDeletionClaim(stream)).toBe(true);
 
       releaseClaim();

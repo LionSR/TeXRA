@@ -14,7 +14,6 @@ import type {
   AgentProposal,
   ProgressViewInboundHandlerRegistry,
   ProgressViewInboundMessage,
-  ProgressViewOutboundMessage,
   StreamTabId,
 } from '@shared/schemas';
 import { AgentCategory, isPlainAgentIdentity } from '@shared/schemas';
@@ -514,8 +513,6 @@ export interface ProgressViewSecondTierActions {
    * hosts without one leave it unset.
    */
   readonly onPolishProgress?: (message: string) => void;
-  /** Post a message to the renderer. */
-  readonly postToRenderer: (message: ProgressViewOutboundMessage) => void;
   /** Restore an agent proposal config into the main view (delegates to agentProposalController). */
   readonly restoreProposalConfig: (proposal: AgentProposal) => Promise<void>;
   /** Retry request settlement. */

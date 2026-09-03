@@ -250,9 +250,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       onPolishProgress: (message) => {
         polishProgress?.report({ message });
       },
-      postToRenderer: (message) => {
-        this.postToActiveView(message);
-      },
       restoreProposalConfig: async (proposal) => {
         const restored =
           await this.agentProposalController.restoreProposalConfig(proposal);

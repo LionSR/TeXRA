@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   ToolEditApprovalController,
@@ -101,7 +100,7 @@ vi.mock('vscode', () => {
   };
 });
 
-interface RecordingRuntimeHost extends Pick<SessionHostInteractions, 'emit'> {
+interface RecordingRuntimeHost {
   readonly shown: ToolEditPermission[];
   readonly resolved: Array<{ requestId: string }>;
 }
@@ -144,12 +143,10 @@ function createApprovalHarness(
   const interactions: RecordingRuntimeHost = {
     shown: [],
     resolved: [],
-    emit: vi.fn(),
   };
   const session = createTestSession();
   sessions.push(session);
   const controller = new ToolEditApprovalController({
-    interactions,
     session,
     host: new VscodeToolEditApprovalHost(storageRoot),
     ...prompts(interactions),

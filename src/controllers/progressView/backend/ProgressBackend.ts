@@ -500,10 +500,7 @@ export class ProgressBackend {
       if (!commandRemoval.created) return 'superseded';
       expectedIncarnation = commandRemoval.incarnation;
     }
-    const releaseDeletionClaim = this.state.stores.claimStreamDeletion(
-      stream,
-      expectedIncarnation,
-    );
+    const releaseDeletionClaim = this.state.stores.claimStreamDeletion(stream);
 
     let retained: DeleteStreamResult | undefined;
     try {
@@ -601,9 +598,11 @@ export class ProgressBackend {
 
   /**
    * Per-stream prepare shared by single- and all-delete: stop an in-flight
-   * stream we own locally. The deletion itself runs as a step on the stream's
-   * execution lane (`SessionStores.deleteStream`), so it lands only after the
-   * stopped generation has disposed; nothing here needs to wait for it.
+   * stream we own locally, then wait on its execution lane until the stopped
+   * generation has disposed. The stop itself does not await that disposal, and
+   * the all-delete path deletes without taking the lane (`clearAll` ->
+   * `SessionStores.deleteAll`), so without this barrier the deletion would
+   * still see the execution lease held and retain the stream as active.
    */
   private async prepareStreamDeletionCore(
     stream: StreamTabId,

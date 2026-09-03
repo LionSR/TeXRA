@@ -161,7 +161,6 @@ function createSecondTierActions(
     restoreRunConfig: vi.fn(),
     applyFollowUpPlan: vi.fn(),
     capturePolishReporter: vi.fn(() => polishReporter),
-    postToRenderer: vi.fn(),
     restoreProposalConfig: vi.fn(),
     retry: {
       submit: vi.fn(),

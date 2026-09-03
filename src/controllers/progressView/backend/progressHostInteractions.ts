@@ -363,6 +363,7 @@ export function createProgressHostInteractions(
     requestToolEditApproval(
       request: ToolEditApprovalRequest,
     ): Promise<ToolEditApprovalResult> {
+      revealStream(request.streamId);
       return options.getToolEditApprovals().requestApproval(request);
     },
 

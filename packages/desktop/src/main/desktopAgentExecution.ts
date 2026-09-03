@@ -343,7 +343,6 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
 
     this.toolEditApprovals = new ToolEditApprovalController({
-      interactions: presentationHost,
       session: this.session,
       host: new DesktopToolEditApprovalHost({ ui: this.options.host }),
       showToolEditPermission: (payload) =>
@@ -844,7 +843,6 @@ export class DesktopProgressBridge {
           );
         },
       }),
-      postToRenderer: (message) => this.postToRenderer(message),
       restoreProposalConfig: async (proposal) => {
         await this.agentProposalController.restoreProposalConfig(proposal);
       },
