@@ -7,10 +7,10 @@ delete five dead surfaces in the runtime and CLI approval layers`,
 > method or the standard library already covers" — one day after
 > `2026-09-02-consolidation-and-native-methods-survey.md`. **Verdict: no
 > duplication newly introduced in this window, but PR review on this entry
-> surfaced two real, pre-existing candidates from
+> surfaced three real, pre-existing candidates from
 > `2026-08-25-cli-controller-seam-audit.md` that three prior survey passes
 > (2026-08-29, 2026-08-30, 2026-09-02) and this entry's own first draft all
-> failed to file — now filed as #11809 and #11810.** No code changes
+> failed to file — now filed as #11809, #11810, and #11811.** No code changes
 > accompany this entry.
 
 ## 0. Why this pass is targeted rather than a full re-sweep
@@ -111,8 +111,10 @@ setTimeout(...))`), `JSON.parse(JSON.stringify(` deep clones, `.filter(...)`
   round's already-accepted "mutating an owned, function-local object" pattern.
 - **Per-provider subscription-quota detection files (4 files, one new
   reference this round):** each file's distinguishing signal is genuinely
-  different — GLM matches a numeric `code` field plus a `Asia/Shanghai`
-  timestamp parse, Kimi Code matches a request-endpoint stamp plus a message
+  different — GLM matches a numeric-looking string `code` field (via
+  `pickStringField`, tested against a `ReadonlySet<string>`, e.g. `'1310'`)
+  plus a `Asia/Shanghai` timestamp parse, Kimi Code matches a request-endpoint
+  stamp plus a message
   regex, xAI matches a credential-route stamp plus a different message
   regex, ChatGPT/Codex matches a `type` discriminant field. All four already
   route their common parts (`errorBodyCandidates`, `pickStringField`,
@@ -151,7 +153,17 @@ locatePath, exists }` adapter wrapping the same two `WorkspaceFS` static
   inline snapshot-port re-projections... plus a byte-identical `workspace`
   pair"). Filed as #11810. `chatSessionController.ts` (CLI) owns unrelated
   terminal-rendering wiring with no shared logic duplicated against either
-  host file.
+  host file. A second pair also survived this window's host consolidations:
+  `desktopAgentResume.ts:50-116` and `resumeFromResumeData.ts:19-70` run an
+  identical six-step resume-result skeleton (already named, unfiled, as the
+  2026-08-25 audit's C11 row), and `810abdc` (#11789, in-window) reinforced
+  it by adding the same new `requestShowInstruction` settlement block to
+  both files independently rather than to one shared implementation. Unlike
+  the workspace-adapter pair, C11 carries an explicit caveat blocking a
+  silent fold — desktop's skeleton has a `hasAuthoritativeStream` precheck
+  the extension's lacks, so unifying is a behavior decision, not a
+  mechanical dedup ("Flag explicitly; do not fold silently," per the audit).
+  Filed as #11811 with that decision named as the prerequisite.
 
 ## 3. Verdict
 
@@ -165,15 +177,18 @@ the exact shape a fresh pass would otherwise propose) is itself evidence the
 surface this routine watches is being actively worked, not neglected.
 
 That said, this entry's own PR review is itself the counter-example to
-treating "nothing new" as "nothing outstanding": two real, low-risk,
-already-scoped candidates from `2026-08-25-cli-controller-seam-audit.md`
-(`fetchWithTimeout`'s reimplemented, leaking `AbortSignal.timeout`; the
-byte-identical desktop/extension `workspace` adapter) had gone unfiled
-through this entry's first draft and all three prior dedicated passes,
-surviving purely because nobody had turned the audit's table rows into
-tracked issues. Filed now as #11809 and #11810 — the actual output of this
-round.
+treating "nothing new" as "nothing outstanding": three real candidates from
+`2026-08-25-cli-controller-seam-audit.md` (`fetchWithTimeout`'s
+reimplemented, leaking `AbortSignal.timeout`; the byte-identical
+desktop/extension `workspace` adapter; the desktop/extension resume-result
+skeleton, reinforced by a new copy-pasted block in this very window's
+`810abdc`) had gone unfiled through this entry's first draft and all three
+prior dedicated passes, surviving purely because nobody had turned the
+audit's table rows into tracked issues. Two are low-risk mechanical fixes;
+the third carries a real behavior decision the audit itself flagged and
+this entry preserves rather than silently resolving. Filed now as #11809,
+#11810, and #11811 — the actual output of this round.
 
 This entry exists to record that the routine ran and to save the next pass
 from re-treading the same ground; no code changes accompany this cycle, but
-two follow-up issues do.
+three follow-up issues do.
