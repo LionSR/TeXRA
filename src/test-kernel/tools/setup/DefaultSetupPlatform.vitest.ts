@@ -74,13 +74,12 @@ describe('shared setup capabilities', () => {
     await expect(setupSecrets.storedApiKeyExists('openai')).resolves.toBe(true);
   });
 
-  it('reports a signed-in account with remote-catalog access', async () => {
+  it('reports a signed-in account', async () => {
     vi.spyOn(SupabaseClient, 'isAuthenticated').mockResolvedValue(true);
     vi.spyOn(SupabaseClient, 'getUser').mockResolvedValue(null);
 
     await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: true,
-      remoteAgentCatalogAvailable: true,
       email: undefined,
     });
   });
@@ -89,7 +88,6 @@ describe('shared setup capabilities', () => {
     await expect(setupSecrets.anyUsableCredentialExists()).resolves.toBe(true);
     await expect(getSetupAuthStatus()).resolves.toEqual({
       authenticated: false,
-      remoteAgentCatalogAvailable: false,
     });
   });
 

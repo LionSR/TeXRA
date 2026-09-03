@@ -23,7 +23,6 @@ import {
 } from '@shared/schemas';
 import {
   applyStateSettingUpdate,
-  postStateSettingSnapshot,
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 import { unsupported, unsupportedCommands } from '@shared/utils/dispatcher';
@@ -284,10 +283,7 @@ export function createDesktopSettingsIpc(
         formatError(`${prefix} "${label}"`, result.error),
       );
     }
-    await postStateSettingSnapshot(
-      result.entry.surfaces.settingsView,
-      stateSettingSnapshotPosters,
-    );
+    await stateSettingSnapshotPosters[result.entry.surfaces.settingsView]();
     if (result.kind !== 'applied') return;
     const invalidatesModelOptions =
       result.entry.onWrite?.invalidatesModelOptions === true;

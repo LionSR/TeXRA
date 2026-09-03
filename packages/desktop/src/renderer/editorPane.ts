@@ -17,7 +17,7 @@ import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import type { DesktopThemeKind } from '@shared/schemas';
+import type { Theme } from '@shared/schemas';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { renderEmptyState } from '@shared/wa/emptyState';
 import { renderLoadingState } from '@shared/wa/loadingState';
@@ -71,7 +71,7 @@ interface EditorPane {
   open(path: string): Promise<void>;
   /** Refreshes the file tree from disk. */
   refresh(): Promise<void>;
-  setTheme(theme: DesktopThemeKind): void;
+  setTheme(theme: Theme): void;
   /** Re-lays-out Monaco after its container resizes or becomes visible. */
   layout(): void;
   hasUnsavedChanges(): boolean;
@@ -97,7 +97,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let latestOpenRequest = 0;
   let treeNodes: readonly EditorTreeNode[] = [];
   let openPath: string | undefined;
-  let theme: DesktopThemeKind = 'dark';
+  let theme: Theme = 'dark';
   let treeError: string | undefined;
   let treeLoading = true;
   let refreshPromise: Promise<void> | undefined;

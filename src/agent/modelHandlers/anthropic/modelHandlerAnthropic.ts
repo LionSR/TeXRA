@@ -11,10 +11,7 @@ import {
 
 // Local imports
 import { startCompactionActivity } from '@agent/trace';
-import {
-  type AgentSetting,
-  hasEndTag,
-} from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type {
   AgentWorkspaceState,
   ThinkingBlock,
@@ -51,6 +48,7 @@ import type {
   MediaAttachmentKind,
   StreamDiagnostics,
 } from '@shared/schemas';
+import { OUTPUT_END_TAG } from '@shared/schemas';
 import { countPdfPagesInBuffer } from '@utils/media/pdfPageCount';
 
 // Local file imports
@@ -1357,7 +1355,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const shouldContinue =
       (stopReason === ANTHROPIC_STOP.MAX_TOKENS ||
         stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) &&
-      !hasEndTag(newResponse);
+      !newResponse.includes(OUTPUT_END_TAG);
 
     if (!shouldContinue && stopReason === ANTHROPIC_STOP.STOP_SEQUENCE) {
       this.logger.debug('Response complete (end tag found)');

@@ -252,7 +252,6 @@ export interface AgentCreatorUI {
   promptDescription(title: string, prompt: string): Promise<string | undefined>;
   pickTools(
     agentName: string,
-    description: string,
     suggestedGroups: string[],
   ): Promise<{ tools: string[]; groups: string[] } | undefined>;
   getCustomAgentDir(): Promise<string>;
@@ -324,7 +323,6 @@ async function buildAgentBlueprint(
   if (category === 'toolUse') {
     const picked = await ui.pickTools(
       agentName,
-      description,
       suggestToolGroups(description),
     );
     if (!picked) return undefined;

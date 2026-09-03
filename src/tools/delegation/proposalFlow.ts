@@ -63,17 +63,17 @@ export function requireVisibleAgent(
 
 /**
  * Resolve an agent across both Workflow and ToolUse rosters, returning the
- * first match and its category. Used by delegate_multi_agents where the outer
- * `agent` parameter accepts both kinds.
+ * first match. Used by delegate_multi_agents where the outer `agent` parameter
+ * accepts both kinds.
  */
 export function requireWorkflowOrToolUseAgent(
   name: string,
   scope?: AgentDelegationScope,
-): { agent: AgentEntry; category: AgentCategory } {
+): AgentEntry {
   const searched = [AgentCategory.Workflow, AgentCategory.ToolUse] as const;
   for (const category of searched) {
     const agent = getDelegationAgent(category, name, scope);
-    if (agent) return { agent, category };
+    if (agent) return agent;
   }
   // Both rosters were searched, so both belong in the message: rethrowing the
   // workflow-only error would advertise half the candidates the caller had.

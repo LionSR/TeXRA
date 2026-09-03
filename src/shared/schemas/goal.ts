@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import { formatCompactDuration } from '@utils/text/stringUtils';
-
 import { StreamTabIdSchema } from './identifiers';
 
 export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
@@ -59,6 +57,3 @@ export type Goal = z.infer<typeof GoalSchema>;
 export function goalElapsedMs(goal: { createdAt: string }): number {
   return Math.max(0, Date.now() - new Date(goal.createdAt).getTime());
 }
-
-/** Hour-aware duration formatter for Goal timings. */
-export const formatGoalTime = formatCompactDuration;

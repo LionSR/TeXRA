@@ -4,7 +4,7 @@
 // main.ts-scoped closures the routes act on; the route bodies only ever reach
 // renderer state through them.
 
-import { SetThemeMessageSchema, type DesktopThemeKind } from '@shared/schemas';
+import { SetThemeMessageSchema, type Theme } from '@shared/schemas';
 import {
   DesktopSetLogMessageSchema,
   type DesktopSetLogMessage,
@@ -66,7 +66,7 @@ interface DesktopMessageRouteHandlers {
     show(): void;
     hide(): void;
   };
-  applyTheme(theme: DesktopThemeKind): void;
+  applyTheme(theme: Theme): void;
   logs: { applySnapshot(message: DesktopSetLogMessage): void };
   review: {
     open(message: DesktopShowDiffMessage): void;

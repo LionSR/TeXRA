@@ -9,7 +9,7 @@ import OpenAI, { OpenAIError } from 'openai';
 import { addOutputText } from 'openai/lib/ResponsesParser';
 
 // Local imports
-import { logProgressStatus } from '@agent/trace';
+import { logProgressStatus, logWebSearch } from '@agent/trace';
 import { parseToolInput } from '@agent/core/flows/toolCallParsing';
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
@@ -62,7 +62,6 @@ import {
   unknownMediaCategoryWarning,
 } from '../support/mediaClassification';
 import { shouldUseOpenRouter } from '../support/ProxyConfigResolver';
-import { emitServerToolResult } from '../support/serverToolResultEmission';
 import {
   getDeclaredMaxReasoningEffort,
   toOpenAIReasoningEffort,
@@ -540,8 +539,11 @@ export class ModelHandlerOpenAIResponse extends OpenAICompatibleModelHandler<
         this.createThinkingStream({ atPhaseSignal: true }),
       createOutputStream: () => this.createOutputStream(),
       extractText: (response) => this.extractResponse(response, '').text,
-      emitWebSearchResult: (result) =>
-        emitServerToolResult(this.logger, this.progressViewEnabled, result),
+      emitWebSearchResult: (result) => {
+        if (this.progressViewEnabled) {
+          logWebSearch(this.logger, result);
+        }
+      },
       logger: this.logger,
     });
   }

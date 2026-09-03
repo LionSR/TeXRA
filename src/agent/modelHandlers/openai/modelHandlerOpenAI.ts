@@ -403,7 +403,7 @@ export class ModelHandlerOpenAI<
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
       if (delta) {
         output.append(delta);
-        streamingAggregator?.appendContent(delta);
+        streamingAggregator?.pushContent(delta);
       }
     };
 
@@ -412,7 +412,7 @@ export class ModelHandlerOpenAI<
       const reasoningDelta = this.extractReasoningDelta(chunk);
       if (reasoningDelta) {
         thinking.append(reasoningDelta);
-        streamingAggregator?.appendReasoning(reasoningDelta);
+        streamingAggregator?.pushReasoning(reasoningDelta);
       }
     };
 

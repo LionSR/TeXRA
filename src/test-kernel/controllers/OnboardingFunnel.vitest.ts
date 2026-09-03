@@ -4,9 +4,9 @@ import {
   deriveOnboardingFunnelState,
   planOnboardingFunnelTransition,
   type OnboardingFunnelInputs,
-  type OnboardingFunnelState,
   type OnboardingFunnelTransition,
 } from '@controllers/onboarding/onboardingFunnel';
+import type { OnboardingFunnelState } from '@shared/schemas';
 import {
   backfillFirstRunDone,
   getDefaultTeamId,

@@ -78,7 +78,7 @@ import {
 
 import {
   applyStateSettingUpdate,
-  postStateSettingSnapshot as dispatchStateSettingSnapshot,
+  type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 
 import { unsupportedCommands } from '@shared/utils/dispatcher';
@@ -585,7 +585,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async postStateSettingSnapshot(
     snapshot: SettingsViewSnapshot,
   ): Promise<void> {
-    await dispatchStateSettingSnapshot(snapshot, {
+    const posters: SettingsSnapshotPosters = {
       approval: () => this.rebroadcastSnapshot('approval'),
       'git-author': () => {
         // Git identity is also process env, so the write must reach `git`
@@ -604,7 +604,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         await this.withActiveWebview((w) => this.sendSkillsList(w));
       },
       telemetry: () => this.rebroadcastSnapshot('telemetry'),
-    });
+    };
+    await posters[snapshot]();
   }
 
   // ============================================================

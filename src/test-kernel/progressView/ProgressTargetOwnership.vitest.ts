@@ -120,15 +120,15 @@ function createProvider() {
     activateStream: vi.fn(async () => undefined),
     approvalHandlers: {},
     syncRenderedStreams: vi.fn(async () => {}),
+    renderer: {
+      isAvailable: () => true,
+      setPlacement: vi.fn(),
+      sendStreamMetadata: vi.fn(() => undefined),
+    },
   };
   injected.backend = backend;
   const logger = { error: vi.fn() };
   injected.logger = logger;
-  injected.renderer = {
-    isAvailable: () => true,
-    setPlacement: vi.fn(),
-    sendStreamMetadata: vi.fn(() => undefined),
-  };
   return { provider, mainViewProvider, sidebarView, backend, state };
 }
 

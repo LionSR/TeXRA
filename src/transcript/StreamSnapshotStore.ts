@@ -90,7 +90,7 @@ import {
   type StreamData,
 } from './streamSnapshotRead';
 import type PQueue from 'p-queue';
-import type { StreamSummaryMeta } from './StreamLogStore';
+import type { StreamSummaryMeta } from './StreamSummaryCacheStore';
 
 const log = createLog('StreamSnapshotStore');
 

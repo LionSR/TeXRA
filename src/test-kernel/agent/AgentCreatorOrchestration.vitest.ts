@@ -130,7 +130,6 @@ describe('agent creator orchestration', () => {
 
     expect(ui.pickTools).toHaveBeenCalledWith(
       'researcher',
-      'Search papers and edit files',
       expect.arrayContaining([
         'File Operations',
         'Web & Search',

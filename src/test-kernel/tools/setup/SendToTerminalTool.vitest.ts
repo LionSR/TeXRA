@@ -9,14 +9,12 @@ import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
 import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
+import type { TerminalRunResult } from '@hosts/uiHosts';
 import type { ConfigProvider } from '@platform/interfaces';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
-import {
-  setSetupPlatform,
-  type TerminalRunResult,
-} from '@tools/setup/platform';
+import { setSetupPlatform } from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';

@@ -42,8 +42,8 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
 import {
+  collectKnownSessionLinks,
   getThreadSummary,
   getOpenTurnDraft,
   listThreadsByStatus,

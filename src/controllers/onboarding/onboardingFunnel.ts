@@ -17,8 +17,6 @@
 
 import type { OnboardingFunnelState } from '@shared/schemas';
 
-export type { OnboardingFunnelState };
-
 export interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
   hasCredential: boolean;

@@ -50,17 +50,17 @@ type ProxyLogger = { debug: (message: string) => void };
 /**
  * The base-URL route for one API request, as a discriminated union over
  * `route` instead of a bag of optional booleans. Each variant carries exactly
- * the fields `resolveBaseUrl` needs for that route — the precedence
- * documented on `resolveBaseUrl` (custom > everything else) is enforced by
- * callers picking exactly one variant, not by priority-ordered `if` checks
+ * the fields `resolveProxyEndpoint` needs for that route — the precedence
+ * documented on `resolveProxyEndpoint` (custom > everything else) is enforced
+ * by callers picking exactly one variant, not by priority-ordered `if` checks
  * inside the resolver.
  *
  * The 'direct' variant covers the remaining precedence tiers (improved
  * connection proxy, OpenRouter, per-provider custom endpoint, provider
  * default): those aren't caller-selectable — which one applies depends on
- * global settings and provider metadata resolved inside `resolveBaseUrl` —
- * so they stay an internal cascade parameterized by `useOpenRouter`, the one
- * fact every call site already knows.
+ * global settings and provider metadata resolved inside
+ * `resolveProxyEndpoint` — so they stay an internal cascade parameterized by
+ * `useOpenRouter`, the one fact every call site already knows.
  */
 export type ProxyConfig =
   | {
@@ -85,7 +85,7 @@ export function shouldUseOpenRouter(config: ModelRoutingConfig): boolean {
 }
 
 /**
- * Resolves the base URL for API requests.
+ * Resolves the base URL (and any usage classification) for API requests.
  *
  * Priority order (mutually exclusive):
  * 1. Custom base URL (per-model override) — `route: 'custom'`
@@ -93,15 +93,10 @@ export function shouldUseOpenRouter(config: ModelRoutingConfig): boolean {
  * 3. Per-provider custom endpoint (dashboard settings)
  * 4. Provider default URLs
  *
- * Tiers 2-4 are the internal cascade of `route: 'direct'` (see
- * {@link resolveProxyEndpoint}): none of them is caller-selectable, since
- * which one applies depends on global settings and provider metadata read
- * here, not on a decision the caller has already made.
+ * Tiers 2-4 are the internal cascade of `route: 'direct'`: none of them is
+ * caller-selectable, since which one applies depends on global settings and
+ * provider metadata read here, not on a decision the caller has already made.
  */
-export function resolveBaseUrl(config: ProxyConfig): string | null {
-  return resolveProxyEndpoint(config).baseUrl;
-}
-
 export function resolveProxyEndpoint(config: ProxyConfig): {
   readonly baseUrl: string | null;
   readonly usageRoute?: 'glm-coding-plan-subscription';

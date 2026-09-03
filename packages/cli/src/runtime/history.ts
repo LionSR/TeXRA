@@ -59,11 +59,12 @@ import {
 
 const HISTORY_ENTRY_CONCURRENCY = 8;
 
-/** First group wins on a path collision; generated output precedes workspace. */
+/** A run's generated files and its edited workspace files render alike.
+ *  First group wins on a path collision; generated output precedes workspace. */
 function mergeHistoryFiles(
-  ...fileGroups: readonly (readonly CliHistoryFile[])[]
-): CliHistoryFile[] {
-  const files = new Map<string, CliHistoryFile>();
+  ...fileGroups: readonly (readonly RunGeneratedFile[])[]
+): RunGeneratedFile[] {
+  const files = new Map<string, RunGeneratedFile>();
   for (const group of fileGroups) {
     for (const file of group) {
       if (!files.has(file.path)) files.set(file.path, file);
@@ -99,7 +100,7 @@ interface CliHistoryDetails {
   readonly report: string | null;
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
-  readonly files: readonly CliHistoryFile[];
+  readonly files: readonly RunGeneratedFile[];
   /** Whether a category-valid flow record is available for resumption. */
   readonly hasFlowRecord: boolean;
   readonly currentModel?: string;
@@ -116,9 +117,6 @@ export interface CliHistoryConversationPreviewMessage {
   readonly content: string;
   readonly truncated: boolean;
 }
-
-/** A run's generated files and its edited workspace files render alike. */
-type CliHistoryFile = RunGeneratedFile;
 
 /** Rows the resume surfaces offer. Both the launcher's resume browser and the
  *  `/resume` form read this, and the launcher's Resume row counts against it,

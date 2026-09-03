@@ -66,7 +66,7 @@ import { clearAllStreamStatusesForTest } from '@test/support/streamStatusTestUti
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import { splitTranscriptEntries } from '@test/support/transcriptRowFixtures';
 import { createRunTrace } from '@transcript';
-import type { StreamSummaryMeta } from '@transcript/StreamLogStore';
+import type { StreamSummaryMeta } from '@transcript/StreamSummaryCacheStore';
 
 // The `workflow-script#` prefix is what marks this stream as a child run whose
 // full log output surfaces when focused.

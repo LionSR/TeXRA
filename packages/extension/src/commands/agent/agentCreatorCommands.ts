@@ -117,7 +117,7 @@ function buildVSCodeUI(): AgentCreatorUI {
       return vscode.window.showInputBox({ title, prompt });
     },
 
-    async pickTools(agentName, _description, suggestedGroups) {
+    async pickTools(agentName, suggestedGroups) {
       const suggested = new Set(suggestedGroups);
       const items: vscode.QuickPickItem[] = Object.entries(TOOL_GROUPS).map(
         ([label, group]) => ({

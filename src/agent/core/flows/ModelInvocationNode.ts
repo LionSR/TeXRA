@@ -197,13 +197,13 @@ export class ModelInvocationNode<
   }
 
   /** Rebuilds the run's client for the configured credential, logging failure. */
-  private async rebindClient(context: string): Promise<void> {
+  private async rebindClient(): Promise<void> {
     const { logger, modelCell } = this.services;
     try {
       await modelCell.rebind();
-      logger.debug(`Refreshed model client ${context}`);
+      logger.debug('Refreshed model client before manual retry');
     } catch (rebindError) {
-      logger.warn(`Failed to refresh model client ${context}`, {
+      logger.warn('Failed to refresh model client before manual retry', {
         data: rebindError,
       });
     }
@@ -496,7 +496,7 @@ export class ModelInvocationNode<
       // Refreshing is cheap and keeps the cached client in sync with
       // current secrets/config.
       if (result.clientPrepared !== true) {
-        await this.rebindClient('before manual retry');
+        await this.rebindClient();
       }
     }
 

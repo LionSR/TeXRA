@@ -17,8 +17,6 @@ export const DESKTOP_THEME_KIND = {
   HIGH_CONTRAST: 'high-contrast',
 } as const satisfies Record<string, Theme>;
 
-export type DesktopThemeKind = Theme;
-
 export const SetThemeMessageSchema = z.object({
   command: z.literal(COMMON_COMMANDS.THEME_SET),
   theme: ThemeSchema,

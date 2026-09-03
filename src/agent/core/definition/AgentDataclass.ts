@@ -4,7 +4,6 @@ import {
   AgentCategory,
   AgentCategorySchema,
   AgentNameSchema,
-  OUTPUT_END_TAG,
   ToolDefinitionSchema,
 } from '@shared/schemas';
 
@@ -110,11 +109,6 @@ export const AgentRootSettingInputSchema = z.discriminatedUnion(
     }),
   ],
 );
-
-/** Whether `fileContent` already contains the protocol's closing tag. */
-export function hasEndTag(fileContent: string): boolean {
-  return fileContent.includes(OUTPUT_END_TAG);
-}
 
 export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),

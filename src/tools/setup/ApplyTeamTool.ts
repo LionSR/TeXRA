@@ -85,7 +85,7 @@ ${describeTeams()}`,
     const state = { getAgents: getAgentsByCategory };
     const roster = createWorkspaceAgentRosterController();
     const { signIn } = getSetupPlatform();
-    const authenticated = await getSetupAuthStatus();
+    const authStatus = await getSetupAuthStatus();
 
     // Applying the roster and recording it as the default team both go
     // through this tool's adapter — the Settings "apply team" action commits
@@ -115,8 +115,7 @@ ${describeTeams()}`,
     const result = await applyTeamRosterWithPreflight(input.teamId, {
       catalog,
       loadLocalCatalog: () => loadAgents({ includeRemote: false }),
-      canAccessRemoteCatalog: async () =>
-        authenticated.remoteAgentCatalogAvailable,
+      canAccessRemoteCatalog: async () => authStatus.authenticated,
       providedChoice: input.unavailableAction ?? undefined,
       choose: async () => undefined,
       signIn,

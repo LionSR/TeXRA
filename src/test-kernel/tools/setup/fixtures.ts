@@ -1,5 +1,6 @@
 // Local imports
-import type { SetupPlatform, TerminalRunResult } from '@tools/setup/platform';
+import type { TerminalRunResult } from '@hosts/uiHosts';
+import type { SetupPlatform } from '@tools/setup/platform';
 
 /**
  * Build a fully stubbed host-varying `SetupPlatform` for tool unit tests.

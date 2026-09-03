@@ -1,7 +1,7 @@
 import { nativeTheme } from 'electron';
 
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
-import { DESKTOP_THEME_KIND, type DesktopThemeKind } from '@shared/schemas';
+import { DESKTOP_THEME_KIND, type Theme } from '@shared/schemas';
 
 import {
   createCommandHandler,
@@ -13,7 +13,7 @@ interface DesktopViewStateIpc extends DesktopMessageHandler {
   dispose(): void;
 }
 
-function getNativeTheme(): DesktopThemeKind {
+function getNativeTheme(): Theme {
   if (nativeTheme.shouldUseHighContrastColors) {
     return DESKTOP_THEME_KIND.HIGH_CONTRAST;
   }

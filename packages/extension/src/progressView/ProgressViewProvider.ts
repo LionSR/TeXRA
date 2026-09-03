@@ -74,7 +74,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
   public readonly backend: ProgressBackend;
   public readonly toolEditApprovals: ToolEditApprovalController;
   public readonly state: ProgressBackend['state'];
-  public readonly renderer: ProgressBackend['renderer'];
 
   protected readonly contentProvider: BundledViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
@@ -114,7 +113,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
         this.reportTranscriptLoadError(error, stream),
       approvals: {
         canSend: () =>
-          this.target?.ready === true && this.renderer.isAvailable(),
+          this.target?.ready === true && this.backend.renderer.isAvailable(),
         logger: this.logger,
       },
       lifecycle: {
@@ -133,7 +132,6 @@ export class ProgressViewProvider extends BaseWebviewProvider {
       },
     });
     this.state = this.backend.state;
-    this.renderer = this.backend.renderer;
 
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -256,7 +254,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     if (!this.getActiveWebview()) return Promise.resolve();
 
-    this.renderer.setPlacement(target.placement);
+    this.backend.renderer.setPlacement(target.placement);
 
     return this.backend.syncRenderedStreams({ syncActiveStream });
   }
@@ -273,7 +271,7 @@ export class ProgressViewProvider extends BaseWebviewProvider {
 
     target.ready = true;
     this.syncFullView();
-    if (!this.renderer.isAvailable()) return;
+    if (!this.backend.renderer.isAvailable()) return;
 
     await replayApprovalRequestHandlers(this.backend.approvalHandlers);
     // YOLO / Super YOLO state is already sent by syncFullView() before replay.

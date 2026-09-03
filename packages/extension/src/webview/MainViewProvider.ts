@@ -18,10 +18,7 @@ import {
   EXTENSION_CATEGORIES,
   getFilterExtensions,
 } from '@common/files/fileTypeUtils';
-import {
-  planOnboardingFunnelTransition,
-  type OnboardingFunnelState,
-} from '@controllers/onboarding/onboardingFunnel';
+import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
 import { OnboardingRefreshQueue } from '@controllers/onboarding/OnboardingRefreshQueue';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import {
@@ -39,6 +36,7 @@ import {
   MainViewPersistedStateSchema,
   agentKeyOf,
   AgentCategory,
+  type OnboardingFunnelState,
 } from '@shared/schemas';
 import {
   readOnboardingFlags,
