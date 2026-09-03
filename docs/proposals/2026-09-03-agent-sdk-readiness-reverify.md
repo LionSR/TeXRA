@@ -7,11 +7,15 @@
 > unready surface; design subagent boundaries" — against the plan of record
 > ([`2026-07-09-agent-sdk-north-star.md`](./2026-07-09-agent-sdk-north-star.md))
 > and the most recent prior pass
-> ([`-09-02`](./2026-09-02-agent-sdk-readiness-reverify.md), written at
-> `646475d`). This pass re-derived each tracked fact from fresh direct inspection
-> at `d418d45` — two commits past the prior pass — and reached the **same
-> top-line verdict: the alignment holds.** Every claim below carries a
-> `file:line`, config path, or count checked at `d418d45`.
+> ([`-09-02`](./2026-09-02-agent-sdk-readiness-reverify.md), whose inspected
+> snapshot was `646475d`). This pass re-derived each tracked fact from fresh
+> direct inspection at `d418d45` — **28 commits** past the prior pass's snapshot
+> (26 code + 2 docs; only the last two landed after the `-09-02` doc's own commit
+> `7aa9985`) — and reached the **same top-line verdict: the alignment holds.**
+> The structural measurements below are taken at `d418d45` and so reflect the
+> cumulative end-state of the whole `646475d..d418d45` interval, not a two-commit
+> delta. Every claim below carries a `file:line`, config path, or count checked
+> at `d418d45`.
 
 ## 0. Verdict
 
@@ -19,21 +23,47 @@
 shape, and no structural refactor is warranted.** The pass-through wrappers,
 convenience barrels, and single-caller factories the standing question hunts for
 are not present. This is the **seventh consecutive** green pass (`-08-19`
-through `-09-03`). Both commits merged since `-09-02` are net-negative
-refactors on audited surfaces — readiness-positive, adding no wrapper layer and
-widening no baseline. Consistent with the routine's default (no maintainer
-request accompanies a scheduled firing), the pass is **recorded, not acted on**.
+through `-09-03`). The `646475d..d418d45` interval is 28 commits (§1) —
+dominated by refactor and fix, with no wrapper layer added and no baseline
+widened — and the cumulative structural end-state measured at `d418d45` (§2)
+holds against the prior pass. Consistent with the routine's default (no
+maintainer request accompanies a scheduled firing), the pass is **recorded, not
+acted on**.
 
-## 1. Two merges since `-09-02` — both readiness-positive, on audited surfaces
+## 1. The `646475d..d418d45` interval — 28 commits, none surface-widening
 
-| Commit             | Effect                                                                                                                                                                                                                                                                  |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `d418d45` (#11792) | **−354 net lines.** Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (−51), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export. |
-| `974d459` (#11775) | **Consolidation.** Gave the staged-deletion rollback path and the `sr`-only recipe a single owner (`StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −17, `SessionStores.ts` net −4). Indirection removal, not addition.                                   |
+The prior pass inspected `646475d`; the interval to this pass's snapshot
+`d418d45` is **28 commits** (`git rev-list --count`): 26 code + 2 docs. By
+subject prefix it is **15 `refactor`, ~11 `fix`, 2 `feat(model)`, 2
+`chore(deps)`** — dominated by simplification, deletion, and single-ownership
+consolidation, the standing trend. The whole-interval diffstat is
+`145 files changed, 4422 insertions(+), 1834 deletions(-)`; the insertions are
+concentrated in the two `feat(model)` catalog additions (Muse Spark 1.3
+`bc5bdcc`/#11764, Gemini 3.8 Flash `a3f01c1`/#11761) and dep bumps, not new
+abstraction in the audited core.
 
-Neither touches the frozen host→`@agent` deep-import width or adds a public
-member. The window's motion is deletion and single-ownership — the standing
-trend.
+**Audited-area touches in the interval** (files this routine tracks) are four
+commits, all `fix` or a library swap — none adds a wrapper or new surface:
+
+- `3422b5f` (#11785) `fix(agent)`: keep a live reservation when restart repair
+  holds a stream (`SessionHandle`/stream lifecycle).
+- `810abdc` (#11789) `fix`: stop dropping the extension's resume-failure notice.
+- `03fa583` (#11757) `fix`: release per-subagent/per-request state in long CLI
+  runs (`childRunLoop`/`HostInteractions` substrate).
+- `a251cd8` (#11777) `refactor`: use `date-fns` for log timestamp formatting
+  (`logUtils` — a dependency swap, hand-rolled code retired).
+
+The two commits that landed **after** the `-09-02` doc's own commit `7aa9985`
+are both net-negative refactors:
+
+| Commit             | Effect                                                                                                                                                                                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `d418d45` (#11792) | **−354 net lines.** Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (−51), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                         |
+| `974d459` (#11775) | **Consolidation.** Gave the staged-deletion rollback path and the `sr`-only recipe a single owner. Net per-file (`git show --numstat`): `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 add / 13 del), `SessionStores.ts` −7 (19 / 26). Indirection removal, not addition. |
+
+No commit in the interval touches the frozen host→`@agent` deep-import width or
+adds a public member; §3's baselines held and §2's structural measurements —
+taken at `d418d45`, so cumulative over all 28 commits — match the prior pass.
 
 ## 2. Every tracked structural fact re-verifies at `d418d45`
 
@@ -94,7 +124,9 @@ Seven consecutive passes (`-08-19` through `-09-03`) now find a green top-line
 verdict. This pass re-derived every tracked fact from fresh inspection at
 `d418d45`: the node engine holds at 158 LoC, the model-handler base at 2,030,
 `SessionHandle` and the logger stay clean, and all four deep-import baselines
-held. The two merges this window (#11792, #11775) were both net-negative
-refactors on audited surfaces. Nothing found is a defect; nothing warrants a
-speculative edit into the green tree absent a maintainer request, which this
-scheduled firing does not carry. The pass is recorded, not acted on.
+held. The 28-commit interval since the prior pass's snapshot (§1) is dominated
+by refactor and fix, touches audited-area files only through fixes and a
+`date-fns` logging swap, and widens no baseline. Nothing found is a defect;
+nothing warrants a speculative edit into the green tree absent a maintainer
+request, which this scheduled firing does not carry. The pass is recorded, not
+acted on.
