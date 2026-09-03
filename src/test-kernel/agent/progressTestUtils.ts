@@ -10,7 +10,6 @@ import {
   type BashSettlement,
   type HostInteractionCancelSelector,
   type HostInteractions,
-  type PendingInteractionKind,
   type PlanApprovalResult,
   type ProposalResult,
   type RetrySettlement,
@@ -29,7 +28,11 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type {
+  ExecutionId,
+  ProgressPermissionKind,
+  StreamTabId,
+} from '@shared/schemas';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens typed
@@ -327,7 +330,7 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
     dispose: () => cancelWhere({}),
   };
   function cancelWhere(selector: HostInteractionCancelSelector): void {
-    const match = (kind: PendingInteractionKind, streamId?: string) =>
+    const match = (kind: ProgressPermissionKind, streamId?: string) =>
       matchesCancelSelector(
         { kind, streamId: streamId || undefined },
         selector,

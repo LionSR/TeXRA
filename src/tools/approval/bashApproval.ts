@@ -7,11 +7,9 @@ import {
 } from '@agent/runtime/HostInteractions';
 import {
   currentSession,
-  defaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import {
-  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
@@ -97,7 +95,7 @@ export async function requestBashApproval(
   const approvalsEnabled = getConfig<boolean>(BASH_APPROVAL_CONFIG_KEY);
 
   const context = tryUseRunContext();
-  const session = getRunContextSession(context) ?? defaultSession();
+  const session = currentSession();
   const streamId = request.streamId ?? getRunContextStreamId(context);
   const isStreamBypassed = Boolean(
     streamId && session.approvals.bash.bypass.isBypassed(streamId),

@@ -50,12 +50,18 @@ import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKe
  * that generation returned but its drained follow-up batch was replayed onto
  * the stream queue instead of being consumed: the input still awaits
  * delivery, so a follow-up wake reports it as queued while an explicit resume
- * settles the turn it just ran. A refusal carries the reason a host words
- * with `describeFollowUpFailure`. Unexpected failures (storage errors, the
- * run itself throwing) reject.
+ * settles the turn it just ran. `outcome` carries the resumed tool-use run's
+ * raw result (terminal or WAITING), absent on the workflow path and when the
+ * run never returned one. A refusal carries the reason a host words with
+ * `describeFollowUpFailure`. Unexpected failures (storage errors, the run
+ * itself throwing) reject.
  */
 export type ResumeRunResult =
-  | { readonly started: true; readonly delivered: boolean }
+  | {
+      readonly started: true;
+      readonly delivered: boolean;
+      readonly outcome?: AgentRuntimeFlowResult['outcome'];
+    }
   | { readonly failed: FollowUpFailureReason };
 
 export interface ResumeRunOptions extends Pick<
@@ -88,11 +94,6 @@ export interface ResumeRunOptions extends Pick<
    * one signal that the queue has taken ownership of `extraFollowUps`.
    */
   readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
-  /**
-   * Fires with the resumed tool-use run's raw outcome (terminal or WAITING)
-   * right before `'started'` is returned.
-   */
-  readonly onResult?: (result: AgentRuntimeFlowResult) => void;
   /**
    * Workflow launch owns stream acquisition and status transitions through
    * `runAgent`; each host supplies its own launcher.
@@ -383,7 +384,6 @@ async function resumeQueuedToolUse(
       },
     });
     if (followUps.length > 0) restoreFollowUps();
-    options.onResult?.(runResult);
   } catch (error) {
     resumeError = { error };
     // A rejection before the wait node acknowledges consumption must replay
@@ -415,7 +415,11 @@ async function resumeQueuedToolUse(
   // Cancellation at flow attachment means the run was never reached; a replay
   // means it ran and returned with the batch back on the stream queue.
   if (cancelledAtFlowAttachment) return REFUSED;
-  return { started: true, delivered: !followUpsRestored };
+  return {
+    started: true,
+    delivered: !followUpsRestored,
+    outcome: runResult?.outcome,
+  };
 }
 
 function toFollowUpBatchItem(item: FollowUpQueueInput): FollowUpQueueBatchItem {

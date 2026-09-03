@@ -937,7 +937,8 @@ describe('ProgressBackend', () => {
   });
 
   it('preserves logHead on status updates that evict unfocused streams', async () => {
-    const { backend, messages } = await createPersistentRecordingBackend();
+    const { backend, messages, session } =
+      await createPersistentRecordingBackend();
     const focused = 'focused-stream' as StreamTabId;
     const background = 'background-stream' as StreamTabId;
 
@@ -966,7 +967,7 @@ describe('ProgressBackend', () => {
         text: 'seed-2',
       });
       // Durability must drain first; dirty streams only queue release.
-      await backend.state.flush();
+      await session.flushArtifacts();
       const expectedHead = backend.state.streamLogs.get(background)?.head;
       expect(expectedHead).toBeGreaterThan(0);
 

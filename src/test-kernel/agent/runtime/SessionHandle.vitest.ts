@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   SessionHandle,
   defaultSession,
-  killAllSessionBackgroundProcesses,
+  forEachLiveSession,
 } from '@agent/runtime/SessionHandle';
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { type Plan, type StreamTabId } from '@shared/schemas';
@@ -55,14 +55,18 @@ describe('SessionHandle', () => {
 
     await Promise.resolve();
     expect(dispose).not.toHaveBeenCalled();
-    killAllSessionBackgroundProcesses();
+    forEachLiveSession((live) => {
+      live.executions.killBackgroundProcesses();
+    });
     expect(killBackgroundProcesses).toHaveBeenCalledOnce();
 
     releaseWriter();
     await shutdown;
     expect(dispose).toHaveBeenCalledOnce();
 
-    killAllSessionBackgroundProcesses();
+    forEachLiveSession((live) => {
+      live.executions.killBackgroundProcesses();
+    });
     expect(killBackgroundProcesses).toHaveBeenCalledOnce();
   });
 

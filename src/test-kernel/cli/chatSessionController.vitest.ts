@@ -1181,17 +1181,10 @@ describe('createChatSessionController', () => {
 
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
-    mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        options.onResult?.({
-          category: 'toolUse',
-          outcome: STREAM_PHASE.WAITING,
-          executionId: 'exec-resume' as ExecutionId,
-          streamId: 'stream-resume' as StreamTabId,
-        } as never);
-        return STARTED;
-      },
-    );
+    mocks.resumeRun.mockImplementationOnce(async () => ({
+      ...STARTED,
+      outcome: STREAM_PHASE.WAITING,
+    }));
     // A fake store, like every other resume test: the real store against
     // this harness's storage-less platform now fails loudly (KVStore no
     // longer converts I/O errors into misses), which resume() treats as a
@@ -1404,17 +1397,12 @@ describe('createChatSessionController', () => {
       makeInit({ session, snapshotStore }),
     );
     mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        options.onResult?.({
-          category: 'toolUse',
-          outcome: options.isCancellationRequested?.()
-            ? RUN_OUTCOME.CANCELLED
-            : RUN_OUTCOME.COMPLETED,
-          executionId: 'exec-resume' as ExecutionId,
-          streamId: 'stream-resume' as StreamTabId,
-        } as never);
-        return STARTED;
-      },
+      async (_id: ExecutionId, options: ResumeRunOptions) => ({
+        ...STARTED,
+        outcome: options.isCancellationRequested?.()
+          ? RUN_OUTCOME.CANCELLED
+          : RUN_OUTCOME.COMPLETED,
+      }),
     );
 
     const resumeStarted = ctrl.resume('aaaaaa' as ExecutionId);
@@ -1470,17 +1458,10 @@ describe('createChatSessionController', () => {
       executionId: 'exec-1',
       config,
     });
-    mocks.resumeRun.mockImplementationOnce(
-      async (_id: ExecutionId, options: ResumeRunOptions) => {
-        options.onResult?.({
-          category: 'toolUse',
-          outcome: STREAM_PHASE.WAITING,
-          executionId: 'exec-1' as ExecutionId,
-          streamId: 'stream-1' as StreamTabId,
-        } as never);
-        return STARTED;
-      },
-    );
+    mocks.resumeRun.mockImplementationOnce(async () => ({
+      ...STARTED,
+      outcome: STREAM_PHASE.WAITING,
+    }));
     const init = makeInit({ session, snapshotStore });
     const ctrl = createChatSessionController(init);
 

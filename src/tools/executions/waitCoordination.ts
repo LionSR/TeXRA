@@ -5,7 +5,6 @@
  */
 
 import {
-  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
@@ -63,7 +62,7 @@ export function listenForFollowUp(ac: AbortController): () => void {
   const streamId = getRunContextStreamId(context);
   if (!streamId) return () => {};
 
-  const session = getRunContextSession(context) ?? currentSession();
+  const session = currentSession();
   return session.events.subscribeSessionFacts((fact) => {
     if (fact.type === 'followUpSent' && fact.payload.streamId === streamId) {
       ac.abort();

@@ -19,12 +19,11 @@ import { z } from 'zod';
 
 import {
   getRunContextExecutionId,
-  getRunContextSession,
   getRunContextStreamId,
   tryUseRunContext,
 } from '@agent/runtime/RunContext';
 import {
-  defaultSession,
+  currentSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { createLog } from '@logger/logUtils';
@@ -249,7 +248,7 @@ export class ExternalInquiryTool extends defineTool({
           streamId,
           interactions,
           executionId,
-          session: getRunContextSession(context),
+          session: currentSession(),
         });
       }
       case 'read':
@@ -264,7 +263,7 @@ export class ExternalInquiryTool extends defineTool({
     streamId: StreamTabId | undefined;
     interactions: ReturnType<typeof requireInteractions>;
     executionId?: ExecutionId;
-    session?: SessionHandle;
+    session: SessionHandle;
   }): Promise<ToolResult> {
     const { input, streamId, interactions, executionId, session } = args;
     if (!streamId) {
@@ -272,7 +271,6 @@ export class ExternalInquiryTool extends defineTool({
         'inquiry { command: "ask" } requires an active stream context.',
       );
     }
-    const ownerSession = session ?? defaultSession();
     const questionContext = input.context ?? undefined;
     const suggestSearch = input.suggestSearch ?? undefined;
     const attachFiles = input.attachFiles ?? undefined;
@@ -298,7 +296,7 @@ export class ExternalInquiryTool extends defineTool({
     // own presentation focus (the extension/desktop progress views badge the
     // stream row, the CLI TUI activates on modal present) — #8246.
     interactions.emit('requestEnsureProgressView', {});
-    ownerSession.events.emit({
+    session.events.emit({
       scope: 'session',
       event: {
         type: 'setActiveStream',
@@ -321,8 +319,7 @@ export class ExternalInquiryTool extends defineTool({
       draft: getOpenTurnDraft(manifest),
       transcript: manifestToTranscript(manifest),
     };
-    const interaction =
-      ownerSession.interactions.openExternalInquiry(permission);
+    const interaction = session.interactions.openExternalInquiry(permission);
     if (!interaction) {
       throw new Error('HostInteractions.openExternalInquiry is required');
     }
@@ -331,7 +328,7 @@ export class ExternalInquiryTool extends defineTool({
     // Background Tasks panel: announce the open thread.
     const summary = await getThreadSummary(manifest.threadId);
     if (summary) {
-      ownerSession.events.emit({
+      session.events.emit({
         scope: 'session',
         event: {
           type: 'inquiryThreadUpdated',

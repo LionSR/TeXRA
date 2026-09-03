@@ -617,7 +617,6 @@ export function createChatSessionController(
         return;
       }
 
-      let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
       // The seeded batch stays this call's until the stream queue takes it
       // over. Every refusal before that point (the stream already active
       // here, a lost recovery claim, no resumable state, a storage error)
@@ -636,14 +635,11 @@ export function createChatSessionController(
               followUpQueueReady = true;
             },
             isCancellationRequested: () => session.stopRequested,
-            onResult: (result) => {
-              resumedOutcome = result.outcome;
-            },
           });
         })
         .then((result) => {
           if ('started' in result) {
-            settleResumedTurn(resumedOutcome);
+            settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
           } else if (session.stopRequested) {
             session.runExitCode = CliExitCode.Interrupted;
           } else {
@@ -766,7 +762,6 @@ export function createChatSessionController(
         focusStream(streamId);
         session.runExitCode = CliExitCode.Success;
 
-        let resumedOutcome: TurnOutcome = RUN_OUTCOME.COMPLETED;
         const result = await setCliHelperModel(config.model).then(() => {
           recoveryHandedOff = true;
           return resumeRun(executionId, {
@@ -793,14 +788,11 @@ export function createChatSessionController(
               }
             },
             isCancellationRequested,
-            onResult: (result) => {
-              resumedOutcome = result.outcome;
-            },
           });
         });
 
         if ('started' in result && result.delivered) {
-          settleResumedTurn(resumedOutcome);
+          settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
           return true;
         }
         if (isCancellationRequested()) {

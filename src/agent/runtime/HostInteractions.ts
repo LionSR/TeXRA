@@ -5,7 +5,7 @@ import type {
   AgentProposalPermission,
   FileLocation,
   PlanApprovalPermission,
-  ProgressPermissionKind as PendingInteractionKind,
+  ProgressPermissionKind,
   RetryPermission,
   StreamTabId,
   UserQuestionAnswers,
@@ -25,8 +25,6 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-export type { ProgressPermissionKind as PendingInteractionKind } from '@shared/schemas';
 
 const logger = createLog('SessionHostInteractions');
 
@@ -306,14 +304,14 @@ export interface HostApprovalBypassStateUpdate {
  */
 export interface HostInteractionCancelSelector {
   readonly streamId?: StreamTabId | null;
-  readonly kind?: PendingInteractionKind;
+  readonly kind?: ProgressPermissionKind;
   readonly cause?: string;
 }
 
 /** Shared selector predicate for the ports' pending registries. */
 export function matchesCancelSelector(
   pending: {
-    readonly kind: PendingInteractionKind;
+    readonly kind: ProgressPermissionKind;
     readonly streamId?: StreamTabId;
   },
   selector: HostInteractionCancelSelector,
@@ -386,7 +384,7 @@ interface HostInteractionAttachment {
 }
 
 interface PendingSessionInteraction {
-  readonly kind: PendingInteractionKind;
+  readonly kind: ProgressPermissionKind;
   readonly streamId?: StreamTabId;
   readonly dispatch: (
     interactions: HostInteractions,
@@ -661,7 +659,7 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   private enqueue<TResult>(
-    kind: PendingInteractionKind,
+    kind: ProgressPermissionKind,
     streamId: StreamTabId | null | undefined,
     dispatch: (interactions: HostInteractions) => Promise<TResult> | undefined,
     cancellationResult: (cause?: string) => TResult,

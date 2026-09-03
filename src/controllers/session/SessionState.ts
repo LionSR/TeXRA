@@ -713,12 +713,4 @@ export class SessionState {
 
     this.logger.info('[Persistence] State load complete');
   }
-
-  /**
-   * Flush pending writes from all managers.
-   */
-  async flush(): Promise<void> {
-    this.session.flushPendingTraces();
-    await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
-  }
 }
