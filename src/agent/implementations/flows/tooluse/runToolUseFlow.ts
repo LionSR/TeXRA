@@ -505,9 +505,9 @@ export async function runToolUseFlow(
       );
       activePersistedFlow = pf;
       pf.setServices(services);
-      // Note: the flow record is the resume SSOT and the transcript sidecar
-      // owns completed-run display/export (#7246 Decision 1) — the old
-      // per-step `conversation.json`/`todos.json` projections are gone.
+      // The flow record is the resume SSOT and the transcript sidecar owns
+      // completed-run display/export (#7246 Decision 1), so the only thing
+      // this projection persists per step is the touched workspace files.
       pf.setProjection(async (s, store) => {
         const currentTouchedFiles = extractTouchedFiles(s.stateSlices);
         if (currentTouchedFiles.length) {

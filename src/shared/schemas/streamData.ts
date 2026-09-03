@@ -30,9 +30,8 @@ export const STREAM_TAB_META_SCHEMA_VERSION = 1;
 /**
  * On-disk shape of `meta.json`. The stream sidecar carries a foreign key
  * (`executionId`) into `executions/{id}/` — identity and config live there,
- * never as a sidecar copy. Pre-FK sidecars carried a whole `runDescriptor`;
- * that retired shape is no longer read — the unknown key is stripped and the
- * sidecar simply has no FK.
+ * never as a sidecar copy. A sidecar written before the FK existed simply has
+ * none; unknown keys from any retired shape are stripped on read.
  */
 export const StreamTabMetaSchema = z.object({
   schemaVersion: z

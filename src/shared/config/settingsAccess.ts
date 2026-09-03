@@ -67,6 +67,11 @@ const abandonedSlotWarned = new Set<string>();
  * outlives its purpose. Abandoning it *silently* is the defect: to the user the
  * toggle simply reverts, with nothing anywhere saying why. Called from the
  * runtime reader — the moment the old value would have changed the outcome.
+ *
+ * Temporary: introduced 2026-08-19 with the `globalState` slot move for
+ * `DETACH_SUBAGENTS_ON_STOP` / `ALLOW_ORCHESTRATOR_KILL`. Remove after
+ * 2026-11-19 (three months on, per AGENTS.md), deleting this function,
+ * `abandonedSlotWarned` and both call sites together.
  */
 export function warnAbandonedSlotValue(
   key: string,

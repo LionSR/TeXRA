@@ -274,8 +274,8 @@ function conversationMessagesForEntry(entry: StreamLogEntry): unknown[] {
       return webFetchEntryToMessages(entry);
     // ── Deliberately skipped: not conversation content ──────────────────
     // scratchpad is a derived view carved from the modelResponse raw text
-    // (already mapped above); the rest are run diagnostics/status rows that
-    // the legacy conversation.json projection never contained either.
+    // (already mapped above); the rest are run diagnostics/status rows, not
+    // conversation content.
     case MESSAGE_TYPES.SCRATCHPAD:
     case MESSAGE_TYPES.FILE_LIST:
     case MESSAGE_TYPES.MISSING_OUTPUTS:

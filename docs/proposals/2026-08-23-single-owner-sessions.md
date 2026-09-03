@@ -477,10 +477,13 @@ composerVisible = kind === 'live' || kind === 'resumable'
 **Migration verdict: none needed.** Everything that changes is derived
 tier under the #9434 rule (`StreamLogStore.ts:97-105` states discard and
 rebuild for the summary). Lease v2 → v3 reuses the existing v1 tombstone
-arm. Rolling-upgrade shim, delete after v0.41 ships: a v3 owner also keeps
-a v2-shaped record at the old single-file path naming its pid and a socket
-path that does not exist, so a 0.40.4 process sees an active owner and
-backs off (`legacyShadowRecord` in `executionLease.ts`). `meta.json` and `flow_*.json` are authored and do not change shape;
+arm. Rolling-upgrade shim, retire after 2026-11-24 (three months past
+0.40.3, the last release that writes and reads v2; the "after v0.41" trigger
+recorded here was derived from the wrong last-v2 release): a v3 owner also
+keeps a v2-shaped record at the old single-file path naming its pid and a
+socket path that does not exist, so a 0.40.3 process sees an active owner and
+backs off (`legacyShadowRecord` in `executionLease.ts`, whose comment carries
+the date and the reader half that retires with it). `meta.json` and `flow_*.json` are authored and do not change shape;
 D8 changes who writes `outcome` and when the flow record is deleted, not
 the format.
 

@@ -60,6 +60,13 @@ type ExecutionLeaseRecord = z.infer<typeof ExecutionLeaseSchema>;
  * alone (no start identity was ever recorded). A heartbeat record (v1)
  * predates 0.40.3 and names no process: it is a tombstone, retired on
  * contact, exactly as 0.40.3 treated it.
+ *
+ * COMPATIBILITY SHIM: introduced with the v3 protocol in 0.40.4, retiring
+ * after 2026-11-24 with the v2 writer it mirrors (see `legacyShadowRecord`
+ * for the date and its reasoning). This reader half — this schema,
+ * `legacyLeasePath`, `StoredClaim.files`, `readLegacyRecord`, the shadow
+ * merge in `readClaims` and the legacy unlink in `unlinkOwnClaim` — is
+ * deleted in that same pass.
  */
 const LegacyLeaseSchema = z.union([
   z
@@ -102,12 +109,15 @@ const LegacyLeaseSchema = z.union([
  * the record strictly, so every field it expects is present.
  *
  * Retire after 2026-11-24 (#6981 ledger, row on #9627), deleting this
- * function and its caller together. The original "delete after v0.41 ships"
- * trigger was derived from the wrong last-v2 release (0.40.4 rather than
- * 0.40.3); this date is three months past 0.40.3's release on 2026-08-20,
- * the upgrade window after which a process still writing v2 against a shared
- * ~/.texra is not worth carrying. It shares a date with the delivery-tag read
- * shim in `src/shared/deliveryTags.ts` so both retire in one pass.
+ * function, its caller, and the reader half together: `LegacyLeaseSchema`,
+ * `legacyLeasePath`, `StoredClaim.files`, `readLegacyRecord`, the shadow
+ * merge in `readClaims` and the legacy unlink in `unlinkOwnClaim`. The
+ * original "delete after v0.41 ships" trigger was derived from the wrong
+ * last-v2 release (0.40.4 rather than 0.40.3); this date is three months
+ * past 0.40.3's release on 2026-08-20, the upgrade window after which a
+ * process still writing v2 against a shared ~/.texra is not worth carrying.
+ * It shares a date with the delivery-tag read shim in
+ * `src/shared/deliveryTags.ts` so both retire in one pass.
  */
 function legacyShadowRecord(record: ExecutionLeaseRecord): string {
   const socketPath =
