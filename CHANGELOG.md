@@ -4,10 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.40.8] - 2026-09-03
+
 ### Shared (all surfaces)
 
 #### Features
 
+- **GPT-5.6 is now the default model** — new conversations start with GPT-5.6
+  instead of Sonnet 5, and it leads the model picker. Existing selections are
+  unchanged.
 - **Gemini 3.8 Flash is available** — the new Flash model replaces Gemini 3.7
   Flash in the default model list with improved reasoning and coding at the
   same introductory price. Existing selections of Gemini 3.7 Flash keep
@@ -16,11 +21,27 @@ All notable changes to this project will be documented in this file.
   default model list with a 1M-token context window, multimodal input, prompt
   caching, web search, and configurable reasoning. Existing selections of Muse
   Spark 1.1 keep working while Meta serves them.
+- **Claude Fable 5.1 is available** — Fable 5.1 replaces Fable 5 in the
+  default model list, and the Claude Code agent tool now selects Fable 5.1.
+  Existing Fable 5 selections keep working while Anthropic serves them.
+
+#### Improvements
+
+- **Font Awesome Free icons are properly attributed** — the shipped products
+  now carry the required CC BY 4.0 attribution in their NOTICE files.
 
 #### Bug Fixes
 
-- **Prevent crashes in long-running CLI sessions** — CLI sessions that run many
-  subagents no longer exhaust memory and crash.
+- **Prevent crashes in long-running sessions** — sessions that run many
+  subagents no longer exhaust memory and crash. Finished child agents now
+  release their records on the CLI as well as in the extension and desktop
+  app.
+- **Voice recordings transcribe reliably** — finishing a recording no longer
+  risks an empty or failed transcription when the audio file takes a moment to
+  finish writing.
+- **A failed start no longer blocks later runs** — when a run fails to launch,
+  its slot is released so later starts on the same conversation work instead
+  of being refused.
 - **Explain failed external-tool checks** — the Tools dashboard now distinguishes
   a broken availability check from a tool that is simply not installed.
 
@@ -31,10 +52,21 @@ All notable changes to this project will be documented in this file.
 - **Archive custom-agent output on Windows** — packing generated files into the
   History folder now works for custom agents.
 
+### Extension (VS Code) and Desktop
+
+#### Bug Fixes
+
+- **Resuming a run explains failures** — when TeXRA refuses to resume a run,
+  the extension and desktop app now show the reason instead of failing
+  silently.
+
 ### CLI
 
 #### Bug Fixes
 
+- **Exiting an idle run no longer cancels it** — `/exit` now follows the same
+  quit policy as Ctrl-C, so leaving an idle conversation keeps it resumable
+  instead of cancelling it and clearing pending approvals.
 - **Unavailable runs explain why they cannot accept input** — the composer now
   shows when another TeXRA process holds the run or its saved state is unreadable.
 
