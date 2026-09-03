@@ -20,9 +20,12 @@
 ## 0. Verdict
 
 **The standing verdict holds: the codebase is well-aligned with an Agent-SDK
-shape, and no structural refactor is warranted.** The pass-through wrappers,
-convenience barrels, and single-caller factories the standing question hunts for
-are not present. This is the **seventh consecutive** green pass (`-08-19`
+shape, and no structural refactor is warranted.** The pass-through wrappers and
+convenience barrels the standing question hunts for are not present; single-caller
+factories are down to one tracked, justified survivor (`createRunScope`, a
+one-line immutability-freeze — one production caller at
+`AgentLaunchContext.ts:470`, tracked as a retention decision, not a candidate for
+removal). This is the **seventh consecutive** green pass (`-08-19`
 through `-09-03`). The `646475d..d418d45` interval is 28 commits (§1) —
 dominated by refactor and fix; its only new core structure is one _justified_
 dedup extraction (`IncarnationMap`, evaluated in §1), its only public-surface
@@ -81,20 +84,22 @@ The two commits that landed **after** the `-09-02` doc's own commit `7aa9985`
 (all line counts from `git show --numstat`, i.e. true net deltas, not `--stat`
 histogram widths):
 
-| Commit             | Effect                                                                                                                                                                                                                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `d418d45` (#11792) | **Net −354** (122 ins / 476 del). Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (net −49), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                                            |
-| `974d459` (#11775) | **Consolidation, net +14** (82 ins / 68 del). Gave the staged-deletion rollback path and the `sr`-only recipe a single owner: `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 / 13), `SessionStores.ts` −7 (19 / 26). Net-positive because logic moved to one owner — indirection removal, not new abstraction. |
+| Commit             | Effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `d418d45` (#11792) | **Net −354** (122 ins / 476 del). Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (net −49), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                                                                                                                                                                                                                                                                                                                   |
+| `974d459` (#11775) | **Consolidation, net +14** (82 ins / 68 del). Introduced one new exported helper — `deleteTranscriptWithSnapshotRollback` in `StagedDeletionCoordinator.ts` — and routed both `SessionStores` (`:948`) and `adjacentStreamCleanup` (`:72`) through it: **2 production callers dedup'ing genuine rollback logic**, clearing the same factory/class bar as `IncarnationMap` above. Net per-file: `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 / 13), `SessionStores.ts` −7 (19 / 26). A justified extraction — evaluated, not waved past — the same treatment given `IncarnationMap`. |
 
 The section above is a **characterization**, not an exhaustive signature-diff:
 the interval carries other public-surface simplifications too (e.g. `03fa583`
 also removed `SessionHandle.onResult`'s `replayMissed` option and
 `AgentExecutionHandle.attachToolUseFlow`'s optional signal; `d418d45` removed
-the dependency argument from `createLatexExecutionDiscovery` before deleting
-the module). These are all removals or narrowings, consistent with the trend
-below. What the verdict rests on is the **cumulative end-state at `d418d45`**
-(§2–§4), not an exhaustive interval diff — the reason the tracked-fact table is
-built to be re-runnable against any snapshot.
+the injectable dependency seam from `createLatexExecutionDiscovery` and the
+matching test file — the factory itself remains exported at
+`src/agent/storage/executionListing.ts:291` and `src/agent/storage/index.ts:43`,
+with live desktop and extension callers). These are removals or narrowings,
+consistent with the trend below. What the verdict rests on is the **cumulative
+end-state at `d418d45`** (§2–§4), not an exhaustive interval diff — the reason
+the tracked-fact table is built to be re-runnable against any snapshot.
 
 Bounded claims about baseline motion in the interval:
 
