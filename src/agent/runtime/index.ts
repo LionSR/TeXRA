@@ -75,7 +75,12 @@ export {
 } from './terminalResultToast';
 
 // resumeRun
-export { lookupStreamExecutionId, resumeRun, resumeStream } from './resumeRun';
+export {
+  lookupStreamExecutionId,
+  resumeRun,
+  resumeStream,
+  resumeStreamWithRefusalNotice,
+} from './resumeRun';
 export type { ResumeRunOptions } from './resumeRun';
 // The refusal wording a host applies to a `ResumeRunResult` failure, and the
 // stream -> execution lookup the stream-keyed host resume ports need.

@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
-import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
+import {
+  resumeRun,
+  resumeStream,
+  resumeStreamWithRefusalNotice,
+} from '@agent/runtime/resumeRun';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -90,6 +94,29 @@ describe('resumeRun tool-use queue ownership', () => {
         options.onFollowUpConsumed?.();
         return completed;
       },
+    );
+  });
+
+  it('presents a refused stream resume with the shared wording', async () => {
+    const session = createSession();
+    const emit = vi.spyOn(session.interactions, 'emit').mockReturnValue(false);
+    readExecutionStreamIndexMock.mockResolvedValueOnce({
+      byStream: new Map(),
+      unreadable: new Map(),
+    });
+
+    await expect(
+      resumeStreamWithRefusalNotice(STREAM, { session, executeWorkflow }),
+    ).resolves.toBe(false);
+    expect(emit).toHaveBeenCalledWith(
+      'requestShowInstruction',
+      {
+        key: 'resumeRefused',
+        message:
+          'This run cannot accept messages right now. Resume it, or start a new agent task.',
+        showSuppress: false,
+      },
+      { replayWhenAttached: true },
     );
   });
 

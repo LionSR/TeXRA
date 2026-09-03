@@ -4,11 +4,12 @@ import '@test/support/defaultSessionTestSetup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  resumeStream: vi.fn(),
+  resumeStreamWithRefusalNotice: vi.fn(),
 }));
 
-vi.mock('@agent/runtime/resumeRun', () => ({
-  resumeStream: mocks.resumeStream,
+vi.mock('@agent/runtime', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/runtime')>()),
+  resumeStreamWithRefusalNotice: mocks.resumeStreamWithRefusalNotice,
 }));
 vi.mock('@commands/agent/executeCommand', () => ({
   runExecuteCommand: vi.fn(),
@@ -24,16 +25,14 @@ const EXECUTION = 'exec:ext-resume' as ExecutionId;
 
 async function captureOptions(): Promise<ResumeRunOptions> {
   await tryResumeFromResumeData(STREAM);
-  const options = mocks.resumeStream.mock.calls[0]?.[1];
+  const options = mocks.resumeStreamWithRefusalNotice.mock.calls[0]?.[1];
   expect(options).toBeDefined();
   return options as ResumeRunOptions;
 }
 
 describe('tryResumeFromResumeData', () => {
   beforeEach(() => {
-    mocks.resumeStream
-      .mockReset()
-      .mockResolvedValue({ started: true, delivered: true });
+    mocks.resumeStreamWithRefusalNotice.mockReset().mockResolvedValue(true);
   });
 
   it('reports cancellation once the stream transcript is gone', async () => {
@@ -49,27 +48,6 @@ describe('tryResumeFromResumeData', () => {
     const options = await captureOptions();
 
     expect(options.isCancellationRequested?.()).toBe(false);
-    has.mockRestore();
-  });
-
-  it('words a refusal with the shared follow-up failure vocabulary', async () => {
-    const session = defaultSession();
-    const has = vi.spyOn(session.transcripts, 'has').mockReturnValue(true);
-    const emit = vi.spyOn(session.interactions, 'emit').mockReturnValue(false);
-    mocks.resumeStream.mockResolvedValueOnce({ failed: 'finished' });
-
-    await expect(tryResumeFromResumeData(STREAM)).resolves.toBe(false);
-
-    expect(emit).toHaveBeenCalledWith(
-      'requestShowInstruction',
-      {
-        key: 'resumeRefused',
-        message: 'This run has finished. Start a new agent task to continue.',
-        showSuppress: false,
-      },
-      { replayWhenAttached: true },
-    );
-    emit.mockRestore();
     has.mockRestore();
   });
 });

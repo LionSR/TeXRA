@@ -13,6 +13,7 @@ import type {
   FollowUpQueueInput,
 } from '@agent/followUp/FollowUpQueue';
 import {
+  describeFollowUpFailure,
   lookupStreamExecutionId,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
@@ -145,6 +146,30 @@ export async function resumeStream(
     releaseUnstartedRecovery(session, recovery, options.recovery == null);
     throw error;
   }
+}
+
+/** Resume a host-owned stream and present an ordinary refusal consistently. */
+export async function resumeStreamWithRefusalNotice(
+  streamId: StreamTabId,
+  options: ResumeRunOptions,
+  onRefused?: (failure: FollowUpFailureReason) => void,
+): Promise<boolean> {
+  const result = await resumeStream(streamId, options);
+  if ('started' in result) return result.delivered;
+  if (options.isCancellationRequested?.() === true) return false;
+
+  onRefused?.(result.failed);
+  const session = options.session ?? defaultSession();
+  await session.interactions.emit(
+    'requestShowInstruction',
+    {
+      key: 'resumeRefused',
+      message: describeFollowUpFailure(result.failed),
+      showSuppress: false,
+    },
+    { replayWhenAttached: true },
+  );
+  return false;
 }
 
 export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
