@@ -30,28 +30,44 @@ holds against the prior pass. Consistent with the routine's default (no
 maintainer request accompanies a scheduled firing), the pass is **recorded, not
 acted on**.
 
-## 1. The `646475d..d418d45` interval — 28 commits, none surface-widening
+## 1. The `646475d..d418d45` interval — 28 commits, no baseline widened
 
 The prior pass inspected `646475d`; the interval to this pass's snapshot
-`d418d45` is **28 commits** (`git rev-list --count`): 26 code + 2 docs. By
-subject prefix it is **15 `refactor`, ~11 `fix`, 2 `feat(model)`, 2
-`chore(deps)`** — dominated by simplification, deletion, and single-ownership
-consolidation, the standing trend. The whole-interval diffstat is
-`145 files changed, 4422 insertions(+), 1834 deletions(-)`; the insertions are
-concentrated in the two `feat(model)` catalog additions (Muse Spark 1.3
-`bc5bdcc`/#11764, Gemini 3.8 Flash `a3f01c1`/#11761) and dep bumps, not new
-abstraction in the audited core.
+`d418d45` is **28 commits** (`git rev-list --count`). By subject prefix
+(`git log --format='%s'`, exact): **12 `refactor`, 9 `fix`, 2 `feat`, 2
+`chore`, 2 `docs`, 1 unprefixed** (`9f156ef` "Replace custom cache with
+LRUCache…") — dominated by refactor and fix, the standing trend. The
+whole-interval diffstat is
+`145 files changed, 4422 insertions(+), 1834 deletions(-)`. Additions by top
+path (`git diff --numstat`, aggregated): **`docs/` 2098** (the two survey/record
+docs), then `src/test-kernel` 537, `src/tools` 368, **`src/agent` 302**,
+`src/controllers` 253, `src/transcript` 244 — spread across the codebase from
+the refactor/fix churn, not concentrated in the two `feat` model-catalog
+commits (`src/model` took just 3 added lines; the model rows live in a
+dependency). So the agent core **was** touched (302 added lines across 8
+commits, below) — the evidence it added no abstraction is the cumulative
+structural end-state at `d418d45` (§2–§4), not any claim the core went
+untouched.
 
-**Audited-area touches in the interval** (files this routine tracks) are four
-commits, all `fix` or a library swap — none adds a wrapper or new surface:
+**Audited-area touches in the interval.** Eight commits touch `src/agent/**`
+(`git log … -- 'src/agent/**'`) — three `refactor`, five `fix` — all
+simplification or bug-fix, none introducing an abstraction layer:
 
-- `3422b5f` (#11785) `fix(agent)`: keep a live reservation when restart repair
-  holds a stream (`SessionHandle`/stream lifecycle).
-- `810abdc` (#11789) `fix`: stop dropping the extension's resume-failure notice.
-- `03fa583` (#11757) `fix`: release per-subagent/per-request state in long CLI
-  runs (`childRunLoop`/`HostInteractions` substrate).
-- `a251cd8` (#11777) `refactor`: use `date-fns` for log timestamp formatting
-  (`logUtils` — a dependency swap, hand-rolled code retired).
+- `refactor`: `d418d45` (#11792, five dead surfaces deleted — see table),
+  `974d459` (#11775, staged-deletion single-owner — see table), `b024fba`
+  (#11780, extract `IncarnationMap` for `SessionStores`' nested deletion maps).
+- `fix`: `e2118c5` (#11786, stop double-emitting the parent-edge clear on
+  detach), `3422b5f` (#11785, keep a live reservation when restart repair holds
+  a stream), `d4fd6a9` (#11787, read both child-policy toggles through the
+  settings catalog), `810abdc` (#11789, stop dropping the resume-failure
+  notice), `03fa583` (#11757, release per-subagent/per-request state in long CLI
+  runs).
+
+Plus one logger touch — `a251cd8` (#11777) `refactor`: use `date-fns` for log
+timestamp formatting (`logUtils`, a dependency swap retiring hand-rolled code).
+The model handler (`src/agent/modelHandlers/ModelHandler.ts`, counted within the
+`src/agent` 302) saw no net structural change — §2 confirms it holds at
+2,030 LoC.
 
 The two commits that landed **after** the `-09-02` doc's own commit `7aa9985`
 (all line counts from `git show --numstat`, i.e. true net deltas, not `--stat`
@@ -62,9 +78,15 @@ histogram widths):
 | `d418d45` (#11792) | **Net −354** (122 ins / 476 del). Deleted five dead surfaces across the runtime + CLI approval layers — `SessionEventHub.ts` (net −49), `executionListing.ts`, and the CLI `approvalAdapter`/`approvalPrompts` pair. Directly in the audited "surface" area: pure removal, no new export.                                            |
 | `974d459` (#11775) | **Consolidation, net +14** (82 ins / 68 del). Gave the staged-deletion rollback path and the `sr`-only recipe a single owner: `StagedDeletionCoordinator.ts` +30, `adjacentStreamCleanup.ts` −9 (4 / 13), `SessionStores.ts` −7 (19 / 26). Net-positive because logic moved to one owner — indirection removal, not new abstraction. |
 
-No commit in the interval touches the frozen host→`@agent` deep-import width or
-adds a public member; §3's baselines held and §2's structural measurements —
-taken at `d418d45`, so cumulative over all 28 commits — match the prior pass.
+No commit in the interval widens the frozen host→`@agent` deep-import width
+(§3's baselines held). The one public-surface change is a **tracked, sanctioned
+transition**, not a silent widening: `e599027` (#11762) adds
+`StreamSnapshotStore.requestEviction()` — recorded in
+`config/ratchets/store-public-surface-baseline.json` as "the one sanctioned
+addition" — and `1719dea` (#11788) removes the dead `deleteStream` wrapper, so
+the store's public-method count nets unchanged while the member set did change.
+Both are ratchet-governed. §2's structural measurements, taken at `d418d45`, are
+cumulative over all 28 commits and match the prior pass.
 
 ## 2. Every tracked structural fact re-verifies at `d418d45`
 
