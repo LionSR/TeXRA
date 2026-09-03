@@ -22,18 +22,22 @@ render the same state; cross-cutting minimized; the cleanest shape rather
 than the cheapest; the new program is written in Effect to Effect's best
 practice; users are theorists, so the unit of work is a paper.
 
-**Lineage.** This PRD consolidates four proposals written on 2026-09-03
+**Lineage.** This PRD consolidates three proposals written on 2026-09-03
 after two survey passes, five audits, three critique agents, and eight
-adversarial attacks, and two rounds of alignment with the persistence
-cutover owner: `docs/proposals/2026-09-03-conversation-shell-directions.md`
-(the shell design and its boards),
+adversarial attacks:
+`docs/proposals/2026-09-03-conversation-shell-directions.md` (the shell
+design and its boards),
 `docs/proposals/2026-09-03-one-view-state-three-renderers.md` (the state
-rule, version 2, with the Effect shape in its section 12),
+rule, version 2, with the Effect shape in its section 12), and
 `docs/proposals/2026-09-03-projection-adapter-ledger.md` (every layer
-classified), and the persistence decision
+classified). Where this PRD and those documents differ, this PRD governs.
+Its companion is the persistence decision
 `docs/proposals/2026-09-03-persistence-substrate-decision.md` (the event
-table as the only persisted truth). Where this PRD and those documents
-differ, this PRD governs. It follows the governing rules of
+table as the only persisted truth), written by the persistence cutover owner
+after two rounds of alignment with this program. That document is in flight
+in another branch and is not part of this pull request, so every "agreed
+with the substrate owner" claim below is checkable only once it lands. This
+PRD follows the governing rules of
 `docs/prds/2026-08-26-effect-4-runtime-migration.md` (R1 to R3, R5 to R10).
 
 ---
@@ -46,21 +50,21 @@ and pure shared folds under `src/shared/` (`projectTranscriptRow`,
 `taskGroupProjection`, `compactionActivityProjection`, `workflowRunModel`,
 `streamStatusDisplay`, `streamOrdering`). After that point they diverge.
 
-| Measure | Today |
-| --- | --- |
-| Hops for one fact ("stream description changed") to reach a component | 9 on the extension (fact, applier, renderer port, renderer, command, bridge, slice, signal, `willUpdate`, context, consume); 3 on the TUI |
-| Copies of the state on the view side | extension: `ProgressState` in 9 slices with `StreamState` re-merging backend fields (`store.ts:88`, `streamStateMerge.ts:29`); TUI: none |
-| Renderer-port implementations | 3: `LitSessionRenderer` (539 lines, 21 typed commands), `TuiSessionRenderer` (no-ops that bump revisions), `runProgressRenderer` |
-| Facts computed twice (TUI and extension) | 6: settled-versus-live boundary, child-to-parent topology, child status and elapsed, approval-to-row mapping, child list order, run-model retained-phase filter |
-| Owners of the active stream | 3, across 59 files (`ProgressPresentationState.ts`, `progressState.ts:119`, `cliState.ts:319`) |
-| Wire commands | 244 in 7 groups; 35 exist only to move a value a state patch would carry |
-| Lit contexts that only re-broadcast signals | 11 contexts, 2 providers, 10 consumers |
-| UI-state stores for one concern | 6 stores, 3 schema families |
-| Status-to-color mappings | 11 sites, contradictory (running is success, yellow, or cyan by file), 2 dead selectors |
-| Terminal-state vocabularies | 3 tables plus a fourth "Running", none importing another |
-| `HostInteractions` implementations | 3: the shared GUI controller, the TUI, headless |
-| Entry points into run or resume | extension 4, desktop 2, CLI 5; launch validation entered 9 ways, 3 by raw schema parse |
-| Files from click to OS, "open a file" | extension 11, desktop 12 (and the line number is dropped), CLI 0 |
+| Measure                                                               | Today                                                                                                                                                           |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hops for one fact ("stream description changed") to reach a component | 9 on the extension (fact, applier, renderer port, renderer, command, bridge, slice, signal, `willUpdate`, context, consume); 3 on the TUI                       |
+| Copies of the state on the view side                                  | extension: `ProgressState` in 9 slices with `StreamState` re-merging backend fields (`store.ts:88`, `streamStateMerge.ts:29`); TUI: none                        |
+| Renderer-port implementations                                         | 3: `LitSessionRenderer` (539 lines, 21 typed commands), `TuiSessionRenderer` (no-ops that bump revisions), `runProgressRenderer`                                |
+| Facts computed twice (TUI and extension)                              | 6: settled-versus-live boundary, child-to-parent topology, child status and elapsed, approval-to-row mapping, child list order, run-model retained-phase filter |
+| Owners of the active stream                                           | 3, across 59 files (`ProgressPresentationState.ts`, `progressState.ts:119`, `cliState.ts:319`)                                                                  |
+| Wire commands                                                         | 244 in 7 groups; 35 exist only to move a value a state patch would carry                                                                                        |
+| Lit contexts that only re-broadcast signals                           | 11 contexts, 2 providers, 10 consumers                                                                                                                          |
+| UI-state stores for one concern                                       | 6 stores, 3 schema families                                                                                                                                     |
+| Status-to-color mappings                                              | 11 sites, contradictory (running is success, yellow, or cyan by file), 2 dead selectors                                                                         |
+| Terminal-state vocabularies                                           | 3 tables plus a fourth "Running", none importing another                                                                                                        |
+| `HostInteractions` implementations                                    | 3: the shared GUI controller, the TUI, headless                                                                                                                 |
+| Entry points into run or resume                                       | extension 4, desktop 2, CLI 5; launch validation entered 9 ways, 3 by raw schema parse                                                                          |
+| Files from click to OS, "open a file"                                 | extension 11, desktop 12 (and the line number is dropped), CLI 0                                                                                                |
 
 The extension is the outlier: it copies the state across the bridge as
 commands and rebuilds it. The TUI is closer to the target: it keeps no
@@ -106,9 +110,11 @@ switch (`main/index.ts:577-596`).
 
 ## 4. Governing rules
 
-**G1. One fold, everywhere.** `fold(view, event): SessionView` is a pure
-function in `src/shared/session/`. Every process that shows a session runs
-it. No process holds a mirror of another process's fold output.
+**G1. One fold, everywhere.** `fold(view, input): SessionView` is a pure
+function in `src/shared/session/` over `FoldInput`, the union of durable
+events, live text chunks, and owner liveness (5.2). Every process that shows
+a session runs it. No process holds a mirror of another process's fold
+output.
 
 **G2. The transport carries input, never output.** Down: durable events and
 live text chunks, seq ordered. Up: `runtime.request` and `host.request`. A
@@ -152,7 +158,8 @@ SessionView = {
   approvals: ApprovalRequest[],
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
   inquiries: InquiryThread[],
-  goal: GoalState,
+  // owner ids whose process is alive; a fold input, never persisted
+  liveOwners: OwnerId[],
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
 
@@ -160,6 +167,9 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   // common
   id: StreamTabId
   identity: RunIdentity | null              // null only for legacy imports
+  // launch facts from the run.start payload, never derived (5.2)
+  isRemote: boolean
+  ownerId: OwnerId | null                    // owner of the latest durable event
   // agent name or fallback from id prefix
   label: string
   // the AI one-liner; title when present
@@ -181,8 +191,8 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   group: 'running' | 'waiting' | 'recent'
   usage: RunUsageMap
   transcript: TranscriptView
-  // toolUse arm
-  todos, plan, outputs, missingOutputs, compileFailures
+  // toolUse arm; goal is per stream (GoalStore.getForStream)
+  todos, plan, goal, outputs, missingOutputs, compileFailures
   // workflow arm
   files, missingOutputs, compileFailures
 
@@ -206,18 +216,41 @@ SessionView` and loses its metadata cache and its own topology.
 
 ### 5.2 Fold rules
 
-All derivable from durable events (section 6). Agreed with the substrate
-owner on 2026-09-03.
+The fold's input is `FoldInput = SessionEvent | TextChunk | OwnerLiveness`.
+Every fact below derives from the durable events of section 6 except owner
+liveness, which is process state and not an event: the runtime's lease
+reader (`executionLease.ts`, a pid probe on the lease owner) emits an
+`OwnerLiveness` snapshot, the set of owner ids whose process is alive, on
+every change and on every subscribe, and the fold keeps the latest snapshot
+in `liveOwners`. The snapshot is transient like a text chunk: never durable,
+never a seq. A replay with no snapshot folds with `liveOwners` empty, so
+every pending approval reads as interrupted until the runtime says
+otherwise, which is the safe direction. Agreed with the substrate owner on
+2026-09-03 (the companion proposal, in flight).
 
 - **Existence.** A stream exists iff its `run.start` event exists; it is
-  seq 1 for the stream. Every stream kind gets one: agent, process
-  (`bash@tool`), workflow script, through `RunIdentity.kind`.
-- **Category and remote-ness** derive from `identity` (today's
-  `streamTabInfo.ts:57-63` derivation, without the hint).
+  seq 1 for the stream. `seq` is per stream, the `(stream_id, seq)` key of
+  the event table; insert order across streams under the publish permit
+  (7.1) is the session order a replay uses. Every stream kind gets one:
+  agent, process (`bash@tool`), workflow script, through `RunIdentity.kind`.
+- **Category, remote-ness, and owner** are launch facts on the `run.start`
+  payload (section 6, item 6). `RunIdentity` deliberately does not encode
+  `AgentCategory` (its header comment in `runIdentity.ts` says so), and
+  remoteness is a registry lookup (`isRemoteAgent` at
+  `streamTabInfo.ts:57-63`) that a browser fold cannot make, so the fold
+  reads both from the payload and derives neither. `ownerId` is the lease
+  owner token of the process that appended the event (the
+  `event_sequence.owner_id` fence of the persistence proposal); it rides on
+  every durable event and `StreamView.ownerId` is the latest one, so a
+  resume in another process moves ownership without a new fact kind.
 - **`group === 'waiting'`** iff an `approval.requested` exists without its
-  `approval.resolved` AND the stream's sequence owner is a live process.
-  Without a live owner the same pair folds to "interrupted, resumable",
-  never "waiting", because nothing is listening for the answer.
+  `approval.resolved` AND `stream.ownerId` is in `liveOwners`. Without a
+  live owner the same pair folds to "interrupted, resumable", never
+  "waiting", because nothing is listening for the answer.
+- **`goal`** is per stream, on the toolUse arm. Today's
+  `GoalStore.getForStream` and the `goalStateChanged` fact are keyed by
+  stream id, and concurrent streams hold independent goals; one session
+  field would let one stream's goal event overwrite another's.
 - **`approval`** is `'own'` when the stream itself is waiting, `'descendant'`
   when any descendant is; hosts expand the path by default for
   `'descendant'` and add only their own override on top.
@@ -231,9 +264,13 @@ owner on 2026-09-03.
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
 - **`settledSeq`** is the last durable seq folded; text deltas do not
   advance it.
-- **Incremental.** The fold touches only the arm for `event.streamId`;
-  `transcript.run` is memoized on `(streamId, settledSeq)`. Recomputing
-  `workflowRunModel` over a whole transcript per event would be quadratic.
+- **Incremental.** An event recomputes the arm for `event.streamId`, then
+  walks `parentId` to the root updating each ancestor's `childIds`,
+  `rollup`, `approval`, and `group`, then `order` when a top-level stream
+  appeared or changed status: O(depth) work per event, never a whole-view
+  pass. `transcript.run` is memoized on `(streamId, settledSeq)`.
+  Recomputing `workflowRunModel` over a whole transcript per event would be
+  quadratic.
 - **Legacy.** Imported transcripts arrive as `legacy.entry` events whose
   payload is the old `StreamLogEntry`; the fold keeps an entry arm until
   retention removes them. Legacy streams have `identity: null` and a label
@@ -241,7 +278,7 @@ owner on 2026-09-03.
 - **Live text.** Text and thinking deltas are not durable. The fold accepts
   a transient chunk arm that updates the in-progress row at chunk boundaries
   (the existing `StreamingTextAccumulator` logic) without touching
-  `settledSeq`.
+  `settledSeq`. `OwnerLiveness` is the other transient arm.
 
 ### 5.3 The row
 
@@ -288,9 +325,16 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    imports carry null.
 5. **`setActiveStream` is deleted** as a fact and as a payload. It fused
    stream creation, a metadata hint, and a focus request
-   (`SessionFactApplier.ts:671-690`); creation is `run.start`, the hint
-   derives from `identity`, focus is `Surface.select`. `suppressViewSwitch`
-   travels with the surface, never as an event.
+   (`SessionFactApplier.ts:671-690`); creation is `run.start`, the hints
+   are payload fields (item 6), focus is `Surface.select`.
+   `suppressViewSwitch` travels with the surface, never as an event.
+6. **`agentCategory`** (agent runs), **`isRemote`**, and **`ownerId`** are
+   fields on the `run.start` payload; `ownerId` is on every durable event.
+   The launcher has the category from the run config and remoteness from
+   the registry at the reservation commit, and the fold consults neither.
+   Today `StreamIdentityFields` (`stream.ts:227-228`) carries the first two
+   beside the identity, sourced from the config, and the tab derivation
+   recomputes remoteness (`streamTabInfo.ts:57-63`).
 
 The importer emits `run.start` for every legacy stream with `identity`
 nullish where the descriptor has none.
@@ -305,35 +349,71 @@ older than the installed package; the installed package wins.
 
 ```ts
 // src/controllers/session/SessionEvents.ts
-class SessionEvents extends Context.Service<SessionEvents, {
-  readonly publish: (event: SessionEvent) => Effect.Effect<void>
-  readonly events: (streamId: StreamTabId, fromSeq: number) => Stream.Stream<SessionEvent>
-}>()('@texra/session/SessionEvents') {
-  static readonly layer = Layer.effect(SessionEvents, Effect.gen(function* () {
-    const hub = yield* PubSub.unbounded<SessionEvent>()
-    const gate = yield* Semaphore.make(1)
-    // provided by the persistence cutover
-    const durable = yield* DurableWrite
-    const publish = Effect.fn('SessionEvents.publish')(function* (event) {
-      yield* gate.withPermit(Effect.gen(function* () {
-        // assigns seq, INSERT under BEGIN IMMEDIATE
-        if (isDurable(event)) { event = yield* durable.append(event) }
-        yield* PubSub.publish(hub, event)
-      }))
-    })
-    const events = (streamId, fromSeq) => {
-    // open the live tail FIRST, then read the replay, then concat and dedupe on seq
+class SessionEvents extends Context.Service<
+  SessionEvents,
+  {
+    readonly publish: (event: SessionEvent) => Effect.Effect<void>;
+    readonly events: (
+      streamId: StreamTabId,
+      fromSeq: number,
+    ) => Stream.Stream<SessionEvent>;
+    // every stream: replay from the per-stream cursor, then the tail
+    readonly all: (cursor: SessionCursor) => Stream.Stream<SessionEvent>;
+  }
+>()('@texra/session/SessionEvents') {
+  static readonly layer = Layer.effect(
+    SessionEvents,
+    Effect.gen(function* () {
+      const hub = yield* PubSub.unbounded<SessionEvent>();
+      const gate = yield* Semaphore.make(1);
+      // provided by the persistence cutover
+      const durable = yield* DurableWrite;
+      const publish = Effect.fn('SessionEvents.publish')(function* (event) {
+        // uninterruptible: an append that fans out to nobody is a gap every
+        // live subscriber carries until it resubscribes
+        yield* gate.withPermit(
+          Effect.uninterruptible(
+            Effect.gen(function* () {
+              // assigns seq, INSERT under BEGIN IMMEDIATE
+              if (isDurable(event)) {
+                event = yield* durable.append(event);
+              }
+              yield* PubSub.publish(hub, event);
+            }),
+          ),
+        );
+      });
+      const events = (streamId, fromSeq) => {
+        // open the live tail FIRST, then read the replay, then concat and dedupe on seq
 
-      const live = Stream.fromPubSub(hub).pipe(Stream.filter((e) => e.streamId === streamId))
-      return Stream.unwrapScoped(Effect.gen(function* () {
-        // subscribed now
-        const tail = yield* Stream.toQueueScoped(live)
-        const replay = durable.read(streamId, fromSeq)
-        return Stream.concat(replay, Stream.fromQueue(tail)).pipe(dedupeBySeq)
-      }))
-    }
-    return { publish, events }
-  }))
+        const live = Stream.fromPubSub(hub).pipe(
+          Stream.filter((e) => e.streamId === streamId),
+        );
+        return Stream.unwrapScoped(
+          Effect.gen(function* () {
+            // subscribed now
+            const tail = yield* Stream.toQueueScoped(live);
+            const replay = durable.read(streamId, fromSeq);
+            return Stream.concat(replay, Stream.fromQueue(tail)).pipe(
+              dedupeBySeq,
+            );
+          }),
+        );
+      };
+      const all = (cursor) =>
+        Stream.unwrapScoped(
+          Effect.gen(function* () {
+            const tail = yield* Stream.toQueueScoped(Stream.fromPubSub(hub));
+            // insert order; rows at or below cursor[streamId] are skipped
+            const replay = durable.readAll(cursor);
+            return Stream.concat(replay, Stream.fromQueue(tail)).pipe(
+              dedupeBySeq,
+            );
+          }),
+        );
+      return { publish, events, all };
+    }),
+  );
 }
 ```
 
@@ -349,22 +429,44 @@ subscription opens before the replay read or `concat` has a gap.
 at lane start; the shape (subscribe, then read, then concat) is the
 requirement.
 
+The permit section is `Effect.uninterruptible`, so neither an interrupt nor
+a failure can land between the append and the fan-out: the append either
+fails before anything is visible or its event reaches the hub, and
+`PubSub.publish` on an unbounded hub does not suspend. A subscriber that
+still observes a seq gap (a publisher process that died, whose rows reach
+later readers from the table alone) treats it as overflow and resubscribes
+(7.4). `SessionCursor` is the per-stream `settledSeq` map the view already
+holds, so `all(cursorOf(view))` is the resubscribe call; a stream absent
+from the cursor replays from its `run.start`. `events(streamId, fromSeq)`
+stays for single-stream readers (the trace viewer, the NDJSON subscription).
+
 ### 7.2 `SessionView`
 
 ```ts
 // src/controllers/session/SessionView.ts
-class SessionViewService extends Context.Service<SessionViewService, {
-  readonly ref: SubscriptionRef.SubscriptionRef<SessionView>
-  readonly changes: Stream.Stream<SessionView>
-}>()('@texra/session/SessionView') {
-  static readonly layer = Layer.effect(SessionViewService, Effect.gen(function* () {
-    const events = yield* SessionEvents
-    const ref = yield* SubscriptionRef.make(emptySessionView)
-    yield* Effect.forkScoped(
-      allEvents(events).pipe(Stream.scan(emptySessionView, fold), Stream.runForEach((v) => SubscriptionRef.set(ref, v)))
-    )
-    return { ref, changes: SubscriptionRef.changes(ref) }
-  }))
+class SessionViewService extends Context.Service<
+  SessionViewService,
+  {
+    readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
+    readonly changes: Stream.Stream<SessionView>;
+  }
+>()('@texra/session/SessionView') {
+  static readonly layer = Layer.effect(
+    SessionViewService,
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      // lease reader in the runtime; the frames' owners field in a webview
+      const liveness = yield* OwnerLivenessSource;
+      const ref = yield* SubscriptionRef.make(emptySessionView);
+      yield* Effect.forkScoped(
+        Stream.merge(events.all(emptyCursor), liveness.changes).pipe(
+          Stream.scan(emptySessionView, fold),
+          Stream.runForEach((v) => SubscriptionRef.set(ref, v)),
+        ),
+      );
+      return { ref, changes: SubscriptionRef.changes(ref) };
+    }),
+  );
 }
 ```
 
@@ -373,20 +475,36 @@ fiber is owned by the layer's scope and ends on `runtime.dispose()`.
 `Layer.scoped` does not exist in v4 (the migration PRD's section 8.3 example
 needs the same correction). `SubscriptionRef` does not coalesce; the bridge
 does (7.5). Synchronous reads use `SubscriptionRef.getUnsafe`, never
-`runSync`.
+`runSync`. `OwnerLivenessSource` is a `Stream<OwnerLiveness>` in every
+process: the lease reader's `SubscriptionRef` in the runtime, the `owners`
+field of each frame (8.1) in a webview, so the fold fiber is the same code.
 
 ### 7.3 `WorkspaceRoots` and the per-session layer
 
 ```ts
-class WorkspaceRoots extends Context.Service<WorkspaceRoots, {
-  readonly workspace: string; readonly storage: string; readonly config: string; readonly workspaceState: string
-}>()('@texra/session/WorkspaceRoots') {}
+class WorkspaceRoots extends Context.Service<
+  WorkspaceRoots,
+  {
+    readonly workspace: string;
+    readonly storage: string;
+    readonly config: string;
+    readonly workspaceState: string;
+  }
+>()('@texra/session/WorkspaceRoots') {}
 
 const sessionLayer = (roots: WorkspaceRoots.Shape) =>
-  Layer.mergeAll(SessionEvents.layer, SessionViewService.layer, SessionRequests.layer)
-    .pipe(Layer.provide(Database.layer), Layer.provide(Layer.succeed(WorkspaceRoots, roots)))
+  Layer.mergeAll(
+    SessionEvents.layer,
+    SessionViewService.layer,
+    SessionRequests.layer,
+  ).pipe(
+    Layer.provide(Database.layer),
+    Layer.provide(Layer.succeed(WorkspaceRoots, roots)),
+  );
 
-const sessions = LayerMap.make((root: string) => sessionLayer(rootsFor(root)), { idleTimeToLive: '30 minutes' })
+const sessions = LayerMap.make((root: string) => sessionLayer(rootsFor(root)), {
+  idleTimeToLive: '30 minutes',
+});
 ```
 
 `LayerMap` keyed by workspace root is the keyed resource family the
@@ -402,24 +520,42 @@ in the Promise tier only.
 
 ### 7.4 Transport framing
 
-Down, per subscriber: `events(streamId, fromSeq)` then
-`Stream.groupedWithin(n, "16 millis")` then `Stream.buffer({ capacity,
-strategy })`. Text chunks may use the sliding strategy; durable events must
-not drop. On overflow the framer tears down and resubscribes through
-`events(streamId, fromSeq)` with the last seq it delivered. One explicit
-in-flight text frame rides with a resync because text deltas are not
-durable. Frame volume equals today's `LOG_DELTA` framing (`WebviewBridge.ts:11`,
-16 ms, text appends merged per entry); a row-per-update patch would have
-shipped every text twice, which is one reason patches are not built.
+Down, per subscriber: `all(cursor)` then `Stream.groupedWithin(n, "16
+millis")` then `Stream.buffer({ capacity, strategy: 'suspend' })` for
+durable events, which must not drop; suspension parks the framer, never the
+publisher, because the hub is unbounded. Text chunks are append deltas, not
+snapshots, so they are never buffered with the sliding strategy: a slid
+chunk is lost text that no replay recovers, because deltas are not durable.
+Text rides a dropping buffer per stream, each chunk carries a per-stream
+chunk index, and a drop seen by the framer or an index gap seen by the
+subscriber tears the subscription down and resubscribes through
+`all(cursorOf(view))` with a `Resync` carrying the complete in-flight text
+of every streaming row, so the row is replaced, never appended to. A seq gap
+in durable events is handled the same way (7.1). Frame volume equals
+today's `LOG_DELTA` framing (`WebviewBridge.ts:11`, 16 ms, text appends
+merged per entry); a row-per-update patch would have shipped every text
+twice, which is one reason patches are not built.
 
 ### 7.5 The signal bridge
 
 ```ts
 // src/shared/signals.ts
-export function toSignal<A>(runtime, changes: Stream.Stream<A>, initial: A): Signal<A> {
-  const s = signal(initial)
-  const fiber = runtime.runFork(Stream.runForEachArray(changes, (arr) => Effect.sync(() => { s.value = arr[arr.length - 1] })))
-  return Object.assign(s, { dispose: () => runtime.runFork(Fiber.interrupt(fiber)) })
+export function toSignal<A>(
+  runtime,
+  changes: Stream.Stream<A>,
+  initial: A,
+): Signal<A> {
+  const s = signal(initial);
+  const fiber = runtime.runFork(
+    Stream.runForEachArray(changes, (arr) =>
+      Effect.sync(() => {
+        s.value = arr[arr.length - 1];
+      }),
+    ),
+  );
+  return Object.assign(s, {
+    dispose: () => runtime.runFork(Fiber.interrupt(fiber)),
+  });
 }
 ```
 
@@ -431,15 +567,20 @@ is here, by draining arrays and assigning the last element.
 
 ```ts
 // src/shared/session/requestErrors.ts
-class NotOwner   extends Data.TaggedError('NotOwner')<{ streamId: StreamTabId }> {}
-class Unavailable extends Data.TaggedError('Unavailable')<{ streamId: StreamTabId; reason: string }> {}
-class Rejected   extends Data.TaggedError('Rejected')<{ reason: string }> {}
-class Invalid    extends Data.TaggedError('Invalid')<{ issues: string[] }> {}
-type RequestError = NotOwner | Unavailable | Rejected | Invalid
+class NotOwner extends Data.TaggedError('NotOwner')<{
+  streamId: StreamTabId;
+}> {}
+class Unavailable extends Data.TaggedError('Unavailable')<{
+  streamId: StreamTabId;
+  reason: string;
+}> {}
+class Rejected extends Data.TaggedError('Rejected')<{ reason: string }> {}
+class Invalid extends Data.TaggedError('Invalid')<{ issues: string[] }> {}
+type RequestError = NotOwner | Unavailable | Rejected | Invalid;
 
 // src/controllers/session/SessionRequests.ts
 // Effect.fn('SessionRequests.request')
-request: (req: RuntimeRequest) => Effect.Effect<Outcome, RequestError>
+request: (req: RuntimeRequest) => Effect.Effect<Outcome, RequestError>;
 ```
 
 The interaction scope (`executionInteractionOwnership.ts:36-56`, already
@@ -486,20 +627,27 @@ production build.
 
 ## 8. The protocol
 
-Three messages. The CLI calls the same functions in process.
+Four messages: events and responses down, two requests up. The CLI calls
+the same functions in process.
 
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { streamId, fromSeq, toSeq, events: SessionEvent[], chunks: TextChunk[] }
-Subscribe   = { streamId, fromSeq }          // per surface, per stream
-Resync      = { streamId, fromSeq, inflight: TextChunk | null }
+EventsFrame = { events: SessionEvent[], chunks: TextChunk[], owners: OwnerLiveness | null }
+Subscribe   = { cursor: SessionCursor }      // per surface, every stream
+Resync      = { cursor: SessionCursor, inflight: TextChunk[] }   // full text per streaming row
 ```
+
+Every event carries its `streamId` and `seq`, and every chunk its stream
+and chunk index, so a frame needs no per-stream range. `owners` is the
+latest liveness snapshot, sent on every change and on every subscribe; a
+surface that has never received one folds with `liveOwners` empty (5.2).
 
 ### 8.2 Up: `runtime.request`
 
-One Zod union, one handler. Arms, from the classification of today's 47
-progress and 49 main-view inbound commands:
+One Zod union, one handler. Every request carries a `requestId` minted by
+the surface and answered by 8.4. Arms, from the classification of today's
+46 progress and 49 main-view inbound commands:
 
 - stream: `stop`, `delete`, `deleteAll`, `compact`, `resume`, `runNew`,
   `restoreState`
@@ -530,7 +678,25 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 `openUrl`, and the launcher's file pickers. The own-API-key retry is a host
 credential flow whose completion issues a `runtime.request`.
 
-### 8.4 What does not cross the bridge
+### 8.4 Down: `response`
+
+```ts
+Response = {
+  requestId,
+  result: { ok: true, outcome: Outcome } | { ok: false, error: RequestError },
+};
+```
+
+`SessionRequests.request` returns `Effect<Outcome, RequestError>` (7.6);
+the bridge runs it and posts one `Response` per request, success or
+failure, under the request's id. The webview bridge is one-way today
+(`hostBridge.postMessage`), so this is the message that carries an outcome
+back at all: the follow-up admission latch clears on it, a rejected
+follow-up keeps its draft and restores focus from the error arm, a file
+picker returns its paths in the outcome. In process (TUI, headless) the
+Effect's own result is the response and no message exists.
+
+### 8.5 What does not cross the bridge
 
 Interaction state: `SWITCH_STREAM`'s round trip and persistence, the
 external-inquiry draft, `SETTLE_STREAM_SELECTION`, `SET_PLACEMENT`. The
@@ -560,6 +726,13 @@ the stream id (`onBeforeActivation` already hands it out,
 `AgentLaunchContext.ts:93`) and the launching surface selects it. "Reply to
 parent instead" moves the draft to the parent. Persisted per view through
 the existing `PersistedState` owner for that view, interaction state only.
+The signal record holds Maps; the persisted form is a Zod schema beside it
+in which each Map is an entry array (`[StreamTabId, V][]`), parsed and
+rebuilt into Maps at load, because webview state crosses `JSON.stringify`
+and a Map serializes to `{}`. Persisted: `selected`, `drafts` (text only;
+images and the polished and transcribed variants are not), `expanded`,
+`scroll`, `drawerOpen`, `workbench`. Not persisted: `recording`,
+`focusedRow`.
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
 `StreamState.ui` block (`streamState.ts:175-184`), the pending-approval
@@ -767,34 +940,34 @@ Surface state.
 Every surface the current New view, Sessions view, editor tab, and host
 commands render, and its home. "Same" means the component is unchanged.
 
-| Today | Home |
-| --- | --- |
-| New / Sessions tabs | Removed; New is the "+" action and the empty state; Sessions is the drawer or the docked list |
-| Open dashboard, Open sessions in editor, Back to sidebar | Gear in the header; the others in the overflow and the drawer footer |
-| Loading skeleton, onboarding cards | Empty-state body while the funnel is pending; same components |
-| API key, agent config, dependency, getting-started, login banners | Above the composer in the empty state; a thin strip above the follow-up in a session; same |
-| Interactive / Workflow, Agent / Team radios | Composer chips with menus |
-| Session hint callout | Under the composer; same |
-| Polish, dictation, image paste, file drop | Composer, both states; same controllers |
-| Working directory select | Composer chip, only with two or more roots |
-| Agent, team, model selects and their settings gears | Chips; gear becomes a "…settings" menu item |
-| Run agent (Cmd+Alt+E) | Send; accelerator stays |
-| Debug Pack output, Delete output files | Overflow, debug section |
-| Input, Context, Media groups and their menus | "Context and attachments" disclosure; wand and wrench items also in Tools; same `file-select-group` |
-| LaTeXDiffs section | Tools sheet, any state, real component |
-| Empty states, getting-started buttons | The one empty state |
-| Rail rows, tree, expand, delete | Drawer or docked list; same `stream-tabs` plus groups and rollups |
-| Stream header and its toolbar (stop, fresh run, resume, setup in main view, task storage, export, copy context, latexdiff, clean, pack; bypass toggles; compact) | Same; "Setup in main view" becomes "Edit as new task"; toggles become `setPolicy` |
-| Tasks, Plan, Background tasks, Command panels | Same; Background tasks becomes the dispatch card |
-| Transcript rows, inline copy, compaction, terminal output, chime | Same |
-| Request panels, approve split button | Same; the run board's rows link here |
-| Latexdiff results, generated files with per-file verbs | Same |
-| Follow-up composer, queued messages | Same, plus the "goes to" line |
-| Usage footer | Same |
-| view/title menus | Keyed on the re-derived context key; New Session is the "+" command |
-| Show Launcher, Show Progress, Toggle, Open in editor tab | New task; focus conversation; toggle drawer; unchanged |
-| Status bar item | Unchanged |
-| Desktop-only hero, disclosure, composer dock, Run mode select, always-open follow-up | The shared empty state and composer on both hosts |
+| Today                                                                                                                                                            | Home                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| New / Sessions tabs                                                                                                                                              | Removed; New is the "+" action and the empty state; Sessions is the drawer or the docked list       |
+| Open dashboard, Open sessions in editor, Back to sidebar                                                                                                         | Gear in the header; the others in the overflow and the drawer footer                                |
+| Loading skeleton, onboarding cards                                                                                                                               | Empty-state body while the funnel is pending; same components                                       |
+| API key, agent config, dependency, getting-started, login banners                                                                                                | Above the composer in the empty state; a thin strip above the follow-up in a session; same          |
+| Interactive / Workflow, Agent / Team radios                                                                                                                      | Composer chips with menus                                                                           |
+| Session hint callout                                                                                                                                             | Under the composer; same                                                                            |
+| Polish, dictation, image paste, file drop                                                                                                                        | Composer, both states; same controllers                                                             |
+| Working directory select                                                                                                                                         | Composer chip, only with two or more roots                                                          |
+| Agent, team, model selects and their settings gears                                                                                                              | Chips; gear becomes a "…settings" menu item                                                         |
+| Run agent (Cmd+Alt+E)                                                                                                                                            | Send; accelerator stays                                                                             |
+| Debug Pack output, Delete output files                                                                                                                           | Overflow, debug section                                                                             |
+| Input, Context, Media groups and their menus                                                                                                                     | "Context and attachments" disclosure; wand and wrench items also in Tools; same `file-select-group` |
+| LaTeXDiffs section                                                                                                                                               | Tools sheet, any state, real component                                                              |
+| Empty states, getting-started buttons                                                                                                                            | The one empty state                                                                                 |
+| Rail rows, tree, expand, delete                                                                                                                                  | Drawer or docked list; same `stream-tabs` plus groups and rollups                                   |
+| Stream header and its toolbar (stop, fresh run, resume, setup in main view, task storage, export, copy context, latexdiff, clean, pack; bypass toggles; compact) | Same; "Setup in main view" becomes "Edit as new task"; toggles become `setPolicy`                   |
+| Tasks, Plan, Background tasks, Command panels                                                                                                                    | Same; Background tasks becomes the dispatch card                                                    |
+| Transcript rows, inline copy, compaction, terminal output, chime                                                                                                 | Same                                                                                                |
+| Request panels, approve split button                                                                                                                             | Same; the run board's rows link here                                                                |
+| Latexdiff results, generated files with per-file verbs                                                                                                           | Same                                                                                                |
+| Follow-up composer, queued messages                                                                                                                              | Same, plus the "goes to" line                                                                       |
+| Usage footer                                                                                                                                                     | Same                                                                                                |
+| view/title menus                                                                                                                                                 | Keyed on the re-derived context key; New Session is the "+" command                                 |
+| Show Launcher, Show Progress, Toggle, Open in editor tab                                                                                                         | New task; focus conversation; toggle drawer; unchanged                                              |
+| Status bar item                                                                                                                                                  | Unchanged                                                                                           |
+| Desktop-only hero, disclosure, composer dock, Run mode select, always-open follow-up                                                                             | The shared empty state and composer on both hosts                                                   |
 
 ## 13. Ledger collapses outside the critical path
 
@@ -826,7 +999,7 @@ Independent pull requests, any time, files that lanes 3 and 4 do not touch:
 - Desktop execution residue with extension twins never extracted either:
   pack and clean result switch, latexdiff context, recording, spill
   artifact, restore run config (`desktopAgentExecution.ts:130-137, 570-642,
-  1070-1139, 509-524, 733-761, 1148-1166` and their extension
+1070-1139, 509-524, 733-761, 1148-1166` and their extension
   counterparts): into `src/controllers`.
 - Open-file on the desktop drops the line number and bypasses the Monaco
   pane (`desktopPreviewHost.ts:61`): fix with the dispatcher collapse.
@@ -842,16 +1015,16 @@ Critical path: lane 1, then lane 2, then lane 4, then lane 8. At most three
 worktree lanes open. Each host switches in one pull request. Deletions ship
 with their replacement.
 
-| Lane | Content | Depends on | Parallel with | Touches |
-| --- | --- | --- | --- | --- |
-| 1 Foundation | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; the five event changes of section 6; compensation and tombstone gates re-keyed | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7 | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
-| 2 Effect services | `SessionEvents`, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock` | 1 | 6, 7 | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries |
-| 3 TUI | section 10.1, one pull request | 2 | 4, 5 | `packages/cli` |
-| 4 Extension and desktop | section 10.2, one pull request; measure the bundle | 2 | 3, 5 | `packages/extension`, `packages/desktop`, `src/controllers/progressView` |
-| 5 Headless and SDK | section 10.3 | 2 | 3, 4 | `packages/cli/src/runtime`, `packages/agent` |
-| 6 Session roots | section 11 | none; coordinate with the cutover | 1, 2 | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main` |
-| 7 Ledger collapses | section 13, disjoint ones as filler | none | 1, 2, 6 | files lanes 3 and 4 do not touch |
-| 8 Shell | section 12 | 4, 6 | | `packages/extension` frontends, `packages/desktop/src/renderer` |
+| Lane                    | Content                                                                                                                                                                                                                                                                        | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
+| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; the six event changes of section 6; owner liveness as a fold input; compensation and tombstone gates re-keyed                                             | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
+| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock` | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
+| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                 | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
+| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                             | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
+| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                   | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
+| 6 Session roots         | section 11                                                                                                                                                                                                                                                                     | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
+| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                            | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
+| 8 Shell                 | section 12                                                                                                                                                                                                                                                                     | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
 
 ### Acceptance per lane
 
@@ -860,7 +1033,9 @@ with their replacement.
   fan-out session reproduces today's `stream-tabs` rows, `background-tasks`
   rows, and `workflowRunModel` output; the presentation-boundary test
   rejects draft and recording names in `sessionView.ts`; every stream kind
-  has a `run.start`; a launch that fails after reservation folds to failed.
+  has a `run.start`; a launch that fails after reservation folds to failed;
+  the same log with an empty `liveOwners` folds every pending approval to
+  interrupted, never waiting.
 - **2:** one runtime per process entry; no `runSync` outside entries and
   bridges; `SessionEvents.publish` under one permit; a `TestClock` test
   shows the 16 ms framing and the live-owner waiting rule; `LayerMap`
@@ -915,18 +1090,19 @@ As tests:
 
 ## 16. Risks
 
-| Risk | Mitigation |
-| --- | --- |
+| Risk                                                                                       | Mitigation                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Effect 4 is a release candidate; names move (`Schema.TaggedError` already renamed on main) | Pin the version the substrate pinned; use `Data.TaggedError`; Appendix A is the verified vocabulary; the guides are older than the package, the package wins |
-| Quadratic fold on fan-out sessions | Incremental per stream arm, run memoized on `settledSeq`; measured against a recorded 31-call run at lane 1 |
-| Webview bundle growth | 61 KB gzipped measured; Schema excluded; re-measure against a production build at lane 4 |
-| Reconnect loses in-flight text | One explicit in-flight frame on resync; text deltas are not durable by decision |
-| Replay-then-tail gap | Subscribe the live tail before the replay read; dedupe on seq |
-| Async-local session lookup inside Effect fibers | Forbidden in Effect code; roots from context; lint the import in `src/controllers/session` |
-| Two programs editing `SessionHandle` | Lane 6 before the cutover branch if ready; otherwise one-line swap after |
-| Convergence adds lines | Measured per lane; framed as one-state and deletion wins, not line counts |
-| `TranscriptIndex` deletion regresses render | Measure plain rebuild first; keep if it does not hold |
-| Three-column desktop needs width | Below about 1100 px the workbench collapses as it does today |
+| Quadratic fold on fan-out sessions                                                         | Incremental per stream arm, run memoized on `settledSeq`; measured against a recorded 31-call run at lane 1                                                  |
+| Webview bundle growth                                                                      | 61 KB gzipped measured; Schema excluded; re-measure against a production build at lane 4                                                                     |
+| Reconnect loses in-flight text                                                             | `Resync` carries the full in-flight text of every streaming row; text buffers drop and resync, never slide; text deltas are not durable by decision          |
+| Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                     |
+| Replay-then-tail gap                                                                       | Subscribe the live tail before the replay read; dedupe on seq                                                                                                |
+| Async-local session lookup inside Effect fibers                                            | Forbidden in Effect code; roots from context; lint the import in `src/controllers/session`                                                                   |
+| Two programs editing `SessionHandle`                                                       | Lane 6 before the cutover branch if ready; otherwise one-line swap after                                                                                     |
+| Convergence adds lines                                                                     | Measured per lane; framed as one-state and deletion wins, not line counts                                                                                    |
+| `TranscriptIndex` deletion regresses render                                                | Measure plain rebuild first; keep if it does not hold                                                                                                        |
+| Three-column desktop needs width                                                           | Below about 1100 px the workbench collapses as it does today                                                                                                 |
 
 ## 17. Decisions for ratification
 
@@ -941,8 +1117,9 @@ As tests:
    `SessionState` for the class that owns it. The shape is settled; the
    names are the owner's.
 
-Already agreed with the persistence owner and recorded in their document:
-the five event changes of section 6; Effect Schema nowhere; the publisher
+Already agreed with the persistence owner and recorded in the companion
+proposal (in flight in another branch, see Lineage): the six event changes
+of section 6; Effect Schema nowhere; the publisher
 invariants of 7.1; `WorkspaceRoots` as the `Database` layer's parameter;
 the two v4 traps.
 
@@ -965,28 +1142,30 @@ cost of the memoized run model at fan-out scale.
 
 ## Appendix A. Verified Effect 4 rc.112 vocabulary
 
-| Concept | rc.112 API | Import | Note |
-| --- | --- | --- | --- |
-| Service key | `class X extends Context.Service<X, Shape>()('@texra/…')` | `effect` | `Context.Tag`, `ServiceMap`, `Effect.Service` do not exist in rc.112 |
-| Layer from effect | `Layer.effect(X, effect)` | `effect` | strips `Scope`; `Layer.scoped` does not exist in v4 |
-| Layer helpers | `Layer.succeed`, `Layer.sync`, `Layer.mergeAll`, `Layer.provide`, `Layer.provideMerge` | `effect` | store parameterized layers in constants (memoized by reference) |
-| Keyed layers | `LayerMap.make((key) => layer, { idleTimeToLive })`, `.invalidate` | `effect` | RcMap-backed |
-| Partial fakes | `Layer.mock(X, partial)` | `effect` | real, @since 3.17; hand-written `testLayer` preferred |
-| Hub | `PubSub.unbounded<A>()`, `PubSub.publish(hub, a): Effect<boolean>`, `PubSub.subscribe` | `effect` | bounded parks publishers; sliding/dropping lose events |
-| Subscribe as stream | `Stream.fromPubSub(hub)` | `effect` | subscribes when run; open before replay |
-| Fold | `Stream.scan(initial, f)` | `effect` | emits initial first, then one state per element |
-| Ref | `SubscriptionRef.make(a)`, `SubscriptionRef.changes(ref)`, `.set`, `.update`, `.getUnsafe` | `effect` | no coalescing; no `Stream.fromSubscriptionRef` |
-| Framing | `Stream.groupedWithin(n, "16 millis")`, `Stream.buffer({ capacity, strategy })`, `Stream.concat` | `effect` | `Duration.Input` accepts `"16 millis"` |
-| Sink | `Stream.runForEachArray(stream, f)`, `Stream.runForEach` | `effect` | coalesce by taking the last element |
-| Fork under scope | `Effect.forkScoped(effect)` | `effect` | inside `Layer.effect` |
-| Resource | `Effect.acquireRelease(acquire, release)`, `Effect.scoped`, `Scope` | `effect` | interaction scope |
-| Serialize | `Semaphore.make(permits)`, `.withPermit`, `.withPermits(n)` | `effect` | own module; `Effect.makeSemaphore` does not exist |
-| Queue | `Queue.bounded/sliding/dropping/unbounded<A, E>`, `offer`, `take`, `takeAll` | `effect` | v4 queues carry an error channel |
-| Errors | `class E extends Data.TaggedError('E')<{…}> {}` | `effect` | yieldable; `catchTag`, `catchTags`, `orDie`, `tapErrorCause`; `Effect.catch` is exported as `catch` |
-| Tracing | `Effect.fn('X.method')(function* (…) {…})` | `effect` | every named service method |
-| Runtime | `ManagedRuntime.make(layer)`, `.runPromise(effect, { signal })`, `.runFork`, `.dispose()` | `effect` | one per process |
-| Test clock | `TestClock.adjust`, `TestClock.layer()`, `TestClock.withLive` | `effect/testing` | also `TestConsole`, `FastCheck` |
-| Test runner | `it.effect`, `it.layer` | `@effect/vitest` | not installed; decision 2 |
+| Concept             | rc.112 API                                                                                       | Import           | Note                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------- |
+| Service key         | `class X extends Context.Service<X, Shape>()('@texra/…')`                                        | `effect`         | `Context.Tag`, `ServiceMap`, `Effect.Service` do not exist in rc.112                                |
+| Layer from effect   | `Layer.effect(X, effect)`                                                                        | `effect`         | strips `Scope`; `Layer.scoped` does not exist in v4                                                 |
+| Layer helpers       | `Layer.succeed`, `Layer.sync`, `Layer.mergeAll`, `Layer.provide`, `Layer.provideMerge`           | `effect`         | store parameterized layers in constants (memoized by reference)                                     |
+| Keyed layers        | `LayerMap.make((key) => layer, { idleTimeToLive })`, `.invalidate`                               | `effect`         | RcMap-backed                                                                                        |
+| Partial fakes       | `Layer.mock(X, partial)`                                                                         | `effect`         | real, @since 3.17; hand-written `testLayer` preferred                                               |
+| Hub                 | `PubSub.unbounded<A>()`, `PubSub.publish(hub, a): Effect<boolean>`, `PubSub.subscribe`           | `effect`         | bounded parks publishers; sliding/dropping lose events                                              |
+| Subscribe as stream | `Stream.fromPubSub(hub)`                                                                         | `effect`         | subscribes when run; open before replay                                                             |
+| Fold                | `Stream.scan(initial, f)`                                                                        | `effect`         | emits initial first, then one state per element                                                     |
+| Merge inputs        | `Stream.merge(a, b)`                                                                             | `effect`         | events with liveness into one fold                                                                  |
+| Atomic section      | `Effect.uninterruptible(effect)`                                                                 | `effect`         | around append plus fan-out under the permit                                                         |
+| Ref                 | `SubscriptionRef.make(a)`, `SubscriptionRef.changes(ref)`, `.set`, `.update`, `.getUnsafe`       | `effect`         | no coalescing; no `Stream.fromSubscriptionRef`                                                      |
+| Framing             | `Stream.groupedWithin(n, "16 millis")`, `Stream.buffer({ capacity, strategy })`, `Stream.concat` | `effect`         | `Duration.Input` accepts `"16 millis"`                                                              |
+| Sink                | `Stream.runForEachArray(stream, f)`, `Stream.runForEach`                                         | `effect`         | coalesce by taking the last element                                                                 |
+| Fork under scope    | `Effect.forkScoped(effect)`                                                                      | `effect`         | inside `Layer.effect`                                                                               |
+| Resource            | `Effect.acquireRelease(acquire, release)`, `Effect.scoped`, `Scope`                              | `effect`         | interaction scope                                                                                   |
+| Serialize           | `Semaphore.make(permits)`, `.withPermit`, `.withPermits(n)`                                      | `effect`         | own module; `Effect.makeSemaphore` does not exist                                                   |
+| Queue               | `Queue.bounded/sliding/dropping/unbounded<A, E>`, `offer`, `take`, `takeAll`                     | `effect`         | v4 queues carry an error channel                                                                    |
+| Errors              | `class E extends Data.TaggedError('E')<{…}> {}`                                                  | `effect`         | yieldable; `catchTag`, `catchTags`, `orDie`, `tapErrorCause`; `Effect.catch` is exported as `catch` |
+| Tracing             | `Effect.fn('X.method')(function* (…) {…})`                                                       | `effect`         | every named service method                                                                          |
+| Runtime             | `ManagedRuntime.make(layer)`, `.runPromise(effect, { signal })`, `.runFork`, `.dispose()`        | `effect`         | one per process                                                                                     |
+| Test clock          | `TestClock.adjust`, `TestClock.layer()`, `TestClock.withLive`                                    | `effect/testing` | also `TestConsole`, `FastCheck`                                                                     |
+| Test runner         | `it.effect`, `it.layer`                                                                          | `@effect/vitest` | not installed; decision 2                                                                           |
 
 ## Appendix B. File layout
 
@@ -994,12 +1173,12 @@ No barrels; import the defining module through the existing aliases.
 
 ```
 src/shared/session/sessionView.ts        Zod SessionView, StreamView, TranscriptView; z.infer types
-src/shared/session/sessionFold.ts        fold(view, event): pure; no effect import; no platform()
+src/shared/session/sessionFold.ts        fold(view, input): pure; no effect import; no platform()
 src/shared/session/runtimeRequest.ts     Zod RuntimeRequest, HostRequest, Outcome
 src/shared/session/requestErrors.ts      Data.TaggedError NotOwner | Unavailable | Rejected | Invalid
 src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
-src/controllers/session/SessionEvents.ts     Context.Service; publish under one permit; events(streamId, fromSeq)
+src/controllers/session/SessionEvents.ts     Context.Service; publish under one permit; all(cursor), events(streamId, fromSeq)
 src/controllers/session/SessionView.ts       Context.Service; ref + changes; fold fiber forkScoped
 src/controllers/session/WorkspaceRoots.ts    Context.Service; Layer.succeed per session
 src/controllers/session/SessionRequests.ts   request(): Effect<Outcome, RequestError>; ownership scope

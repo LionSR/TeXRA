@@ -697,7 +697,9 @@ These rules were earned from a 2026-07 whole-repo simplification campaign, not d
 
 Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
 
-Never guess at Effect patterns - check the guide first.
+Never guess at Effect patterns - check the guide first. If `effect-solutions`
+is not installed (the repository does not provision it), consult the pinned
+package sources and types in `node_modules/effect` instead of guessing.
 
 ### Local Effect Source
 
