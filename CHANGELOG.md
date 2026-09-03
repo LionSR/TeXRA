@@ -21,6 +21,8 @@ All notable changes to this project will be documented in this file.
 
 - **Prevent crashes in long-running CLI sessions** — CLI sessions that run many
   subagents no longer exhaust memory and crash.
+- **Explain failed external-tool checks** — the Tools dashboard now distinguishes
+  a broken availability check from a tool that is simply not installed.
 
 ### Extension (VS Code)
 

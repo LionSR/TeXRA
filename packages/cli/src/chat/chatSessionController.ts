@@ -366,7 +366,7 @@ export function createChatSessionController(
   const liveOwnerships = new Set<{ readonly release: () => void }>();
   disposables.add(() => {
     const failures: unknown[] = [];
-    for (const ownership of [...liveOwnerships]) {
+    for (const ownership of liveOwnerships) {
       try {
         ownership.release();
       } catch (error) {

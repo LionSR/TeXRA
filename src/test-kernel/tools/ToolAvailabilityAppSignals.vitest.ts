@@ -67,4 +67,49 @@ describe('tool availability app signals', () => {
     // toggle, which is why the availability answer is derived on read.
     expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
   });
+
+  it('distinguishes failed probes from missing tools without hiding optional-status failures', async () => {
+    vi.doMock('@tools/externalToolDefs', () => ({
+      EXTERNAL_TOOL_DEFS: [
+        {
+          id: 'broken-probe',
+          tools: ['broken'],
+          name: 'Broken probe',
+          category: 'ai-agents',
+          probe: vi.fn(async () => {
+            throw new Error('invalid local configuration');
+          }),
+          check: vi.fn(async () => true),
+          statusLabel: vi.fn(async () => 'Needs setup'),
+        },
+        {
+          id: 'broken-detail',
+          tools: ['present'],
+          name: 'Broken detail',
+          category: 'ai-agents',
+          check: vi.fn(async () => true),
+          detailCheck: vi.fn(async () => {
+            throw new Error('status command crashed');
+          }),
+        },
+      ],
+    }));
+    const { runExternalToolChecks } = await import('@tools/toolAvailability');
+
+    await expect(runExternalToolChecks()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'broken-probe',
+        status: 'unknown',
+        detected: null,
+        statusLabel: undefined,
+        statusDetail: 'Availability check failed: invalid local configuration',
+      }),
+      expect.objectContaining({
+        id: 'broken-detail',
+        status: 'available',
+        detected: true,
+        statusDetail: undefined,
+      }),
+    ]);
+  });
 });

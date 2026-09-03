@@ -502,10 +502,7 @@ export class DesktopProgressBridge {
     return new ProgressFollowUpController({
       loadModelOptions: () => computeModelOptionsData(),
       state: this.snapshotPort,
-      workspace: {
-        locatePath: (candidate) => WorkspaceFS.locatePath(candidate),
-        exists: (relativePath) => WorkspaceFS.exists(relativePath),
-      },
+      workspace: WorkspaceFS,
     });
   }
 

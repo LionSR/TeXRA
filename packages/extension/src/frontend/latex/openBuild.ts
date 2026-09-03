@@ -1,5 +1,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import * as vscode from 'vscode';
 
@@ -231,25 +232,20 @@ async function prepareLatexBuild(
  * Resolves `true` when `latex-workshop.view` accepts the open request, and
  * `false` when it rejects, so the caller can report viewer non-delivery.
  */
-export function scheduleViewerDisplay(): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
-    setTimeout(async () => {
+export async function scheduleViewerDisplay(): Promise<boolean> {
+  await sleep(LATEX_VIEWER_OPEN_DELAY_MS);
+  try {
+    await vscode.commands.executeCommand('latex-workshop.view');
+    void sleep(LATEX_VIEWER_REFRESH_DELAY_MS).then(async () => {
       try {
-        await vscode.commands.executeCommand('latex-workshop.view');
-        setTimeout(async () => {
-          try {
-            await vscode.commands.executeCommand(
-              'latex-workshop.refresh-viewer',
-            );
-          } catch (err) {
-            log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
-          }
-        }, LATEX_VIEWER_REFRESH_DELAY_MS);
-        resolve(true);
+        await vscode.commands.executeCommand('latex-workshop.refresh-viewer');
       } catch (err) {
-        log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
-        resolve(false);
+        log.warn(`Viewer refresh failed: ${toErrorMessage(err)}`);
       }
-    }, LATEX_VIEWER_OPEN_DELAY_MS);
-  });
+    });
+    return true;
+  } catch (err) {
+    log.warn(`Viewer display failed: ${toErrorMessage(err)}`);
+    return false;
+  }
 }

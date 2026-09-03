@@ -1,11 +1,10 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
 import {
-  describeFollowUpFailure,
-  resumeStream,
   trackTerminalResultPresentation,
   type SessionHandle,
 } from '@agent/runtime';
+import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -75,7 +74,7 @@ async function resumeDesktopStream(
     (event) => event.streamId === streamId,
   );
   try {
-    const result = await resumeStream(streamId, {
+    return await resumeStreamWithRefusalNotice(streamId, {
       session,
       recovery,
       runtimeUnavailableTools: (
@@ -89,21 +88,6 @@ async function resumeDesktopStream(
           { modelHandlerCompatibilityKey, suppressErrorNotification: true },
         ),
     });
-    if ('started' in result) return result.delivered;
-    if (!isCancellationRequested()) {
-      // Same info-styled channel the sibling progress-view follow-up path
-      // uses for this wording; desktop renders it as an 'info' message box.
-      await session.interactions.emit(
-        'requestShowInstruction',
-        {
-          key: 'resumeRefused',
-          message: describeFollowUpFailure(result.failed),
-          showSuppress: false,
-        },
-        { replayWhenAttached: true },
-      );
-    }
-    return false;
   } catch (error) {
     if (isCancellationRequested()) return false;
     context.logger.error(`Failed to resume desktop stream ${streamId}`, {

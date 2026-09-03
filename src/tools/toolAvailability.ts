@@ -22,6 +22,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
 import { getDisabledToolIds } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('toolAvailability');
 
@@ -152,20 +153,33 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
         // callbacks independently can duplicate the same probe work.
         let probeResult: unknown;
         let probedStatus: 'available' | 'not-found' | 'unknown';
+        let probeFailed = false;
+        let probeFailure: unknown;
         try {
           probeResult = await probe?.();
           probedStatus = (await check(probeResult)) ? 'available' : 'not-found';
-        } catch {
+        } catch (error) {
+          probeFailed = true;
+          probeFailure = error;
           probedStatus = 'unknown';
+          log.warn(`Availability probe failed for ${name}`, { data: error });
         }
-        const statusDetail = await resolveOptionalStatus(
-          detailCheck,
-          probeResult,
-        );
-        const statusLabel = await resolveOptionalStatus(
-          getStatusLabel,
-          probeResult,
-        );
+        const statusDetail = !probeFailed
+          ? await resolveOptionalStatus(
+              detailCheck,
+              probeResult,
+              name,
+              'status detail',
+            )
+          : `Availability check failed: ${toErrorMessage(probeFailure)}`;
+        const statusLabel = !probeFailed
+          ? await resolveOptionalStatus(
+              getStatusLabel,
+              probeResult,
+              name,
+              'status label',
+            )
+          : undefined;
         return {
           id,
           tools,
@@ -185,9 +199,16 @@ async function resolveOptionalStatus(
   getStatus:
     ((probeResult?: unknown) => Promise<string | undefined>) | undefined,
   probeResult: unknown,
+  toolName: string,
+  field: string,
 ): Promise<string | undefined> {
   if (!getStatus) return undefined;
-  return getStatus(probeResult).catch(() => undefined);
+  try {
+    return await getStatus(probeResult);
+  } catch (error) {
+    log.warn(`Failed to resolve ${field} for ${toolName}`, { data: error });
+    return undefined;
+  }
 }
 
 /** Build the set of unavailable tool names from external check results only. */

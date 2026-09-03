@@ -10,6 +10,11 @@ import {
   LATEX_VIEWER_REFRESH_DELAY_MS,
 } from '@shared/constants/latexTiming';
 
+vi.mock('node:timers/promises', () => ({
+  setTimeout: (delay: number) =>
+    new Promise<void>((resolve) => globalThis.setTimeout(resolve, delay)),
+}));
+
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
   isLatexFile: vi.fn((_path: string) => true),

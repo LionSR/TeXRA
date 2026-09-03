@@ -3,10 +3,9 @@ import * as vscode from 'vscode';
 
 import {
   defaultSession,
-  describeFollowUpFailure,
-  resumeStream,
   trackTerminalResultPresentation,
 } from '@agent/runtime';
+import { resumeStreamWithRefusalNotice } from '@controllers/session/resumeStreamPresentation';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { StreamTabId } from '@shared/schemas';
@@ -36,38 +35,22 @@ export async function tryResumeFromResumeData(
     return cancellationRequested;
   };
   try {
-    const result = await resumeStream(streamId, {
-      recovery,
-      isCancellationRequested,
-      executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
-        runExecuteCommand({
-          config,
-          executionId: id,
-          modelHandlerCompatibilityKey,
-        }),
-    });
-    if ('started' in result) return result.delivered;
-    if (!isCancellationRequested()) {
-      logger.warn(`Stream ${streamId} was not resumed: ${result.failed}`);
-      // A refused resume is actionable guidance ("start a new agent task",
-      // "send the message there"), not a failure: the shared progress-view
-      // path presents these same `describeFollowUpFailure` strings through
-      // `showInfo` on both GUI hosts (progressFollowUpSubmit.ts), so this
-      // rides the info-styled `requestShowInstruction` event -- the one
-      // presentation channel every host's compile-checked handler map must
-      // implement, so an unserved surface reads as not-delivered instead of
-      // vanishing.
-      await session.interactions.emit(
-        'requestShowInstruction',
-        {
-          key: 'resumeRefused',
-          message: describeFollowUpFailure(result.failed),
-          showSuppress: false,
-        },
-        { replayWhenAttached: true },
-      );
-    }
-    return false;
+    return await resumeStreamWithRefusalNotice(
+      streamId,
+      {
+        recovery,
+        isCancellationRequested,
+        executeWorkflow: (config, id, modelHandlerCompatibilityKey) =>
+          runExecuteCommand({
+            config,
+            executionId: id,
+            modelHandlerCompatibilityKey,
+          }),
+      },
+      (failure) => {
+        logger.warn(`Stream ${streamId} was not resumed: ${failure}`);
+      },
+    );
   } catch (error) {
     if (isCancellationRequested()) return false;
     logger.error(`Failed to resume stream: ${streamId}`, { data: error });
