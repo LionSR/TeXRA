@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { EndGroupStatusSchema } from './log';
 import { TaskGroupStatusSchema } from './stream';
 
-const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
+export const StageKindSchema = z.enum(['run', 'round', 'phase', 'session']);
 
 /** Shared by `TaskGroupSchema` and `GroupLogPayloadSchema` below. */
 const taskGroupIndexField = z.int().nonnegative();

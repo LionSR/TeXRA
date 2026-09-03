@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { TraceEmitter } from '@agent/trace';
 import {
   SessionEventHub,
-  type SessionEvent,
+  type HubEvent,
   type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import { emitRunFact } from '@agent/runtime/runFactEvents';
@@ -17,7 +17,7 @@ const otherStreamId = 'stream:other' as StreamTabId;
 describe('SessionEventHub', () => {
   it('filters high-volume stream chunks away from typed subscribers', () => {
     const hub = new SessionEventHub();
-    const seen: SessionEvent[] = [];
+    const seen: HubEvent[] = [];
 
     hub.subscribe((event) => seen.push(event), {
       scope: 'run',

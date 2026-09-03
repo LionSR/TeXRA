@@ -13,7 +13,7 @@ import {
   type ResultEvent,
 } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
+import type { HubEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
@@ -4030,7 +4030,7 @@ describe('DesktopProgressBridge', () => {
         lineage: null,
         diff: null,
       };
-      const events: SessionEvent[] = [];
+      const events: HubEvent[] = [];
       const detachEvents = owner.processSession.events.subscribe((event) => {
         events.push(event);
       });

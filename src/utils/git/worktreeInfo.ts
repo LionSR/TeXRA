@@ -44,6 +44,19 @@ export function peekWorktreeInfo(
 }
 
 /**
+ * The worktree a run's `run.start` carries (PRD one-fold-three-renderers,
+ * section 6, item 4): the cached resolution when one exists, else the bare
+ * path chip until async resolution lands. The fold never shells out.
+ */
+export function launchWorktreeInfo(
+  workingDirectory: string | null | undefined,
+): WorktreeInfo | undefined {
+  const cwd = workingDirectory?.trim();
+  if (!cwd) return undefined;
+  return peekWorktreeInfo(cwd) ?? { workingDirectory: cwd };
+}
+
+/**
  * Resolve branch + dirty status for `workingDirectory`. Results are cached
  * for a short TTL; concurrent callers share one in-flight probe.
  */

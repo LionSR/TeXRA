@@ -21,7 +21,7 @@ import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import {
   SessionEventHub,
-  type SessionEvent,
+  type HubEvent,
   type SessionEventSubscriptionFilter,
   type SessionFact,
 } from '@agent/runtime/SessionEventHub';
@@ -64,16 +64,16 @@ export function recordSessionEvents(
   hub: SessionEventHub,
   filter: SessionEventSubscriptionFilter = {},
 ): {
-  readonly events: SessionEvent[];
+  readonly events: HubEvent[];
   readonly detach: () => void;
 } {
-  const events: SessionEvent[] = [];
+  const events: HubEvent[] = [];
   const detach = hub.subscribe((event) => events.push(event), filter);
   return { events, detach };
 }
 
 export function sessionFactsOfType<T extends SessionFact['type']>(
-  events: readonly SessionEvent[],
+  events: readonly HubEvent[],
   type: T,
 ): Array<Extract<SessionFact, { type: T }>> {
   const facts: Array<Extract<SessionFact, { type: T }>> = [];
@@ -87,7 +87,7 @@ export function sessionFactsOfType<T extends SessionFact['type']>(
 export type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
 
 export function sessionFactPayloads<T extends PayloadSessionFact['type']>(
-  events: readonly SessionEvent[],
+  events: readonly HubEvent[],
   type: T,
 ): unknown[] {
   const payloads: unknown[] = [];
@@ -137,7 +137,7 @@ export function reflectionFlowShared(
 }
 
 export function runEventsOfType<T extends AgentEvent['type']>(
-  events: readonly SessionEvent[],
+  events: readonly HubEvent[],
   type: T,
 ): Extract<AgentEvent, { type: T }>[] {
   return events.flatMap((entry) => {

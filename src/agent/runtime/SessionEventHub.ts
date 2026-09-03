@@ -66,21 +66,21 @@ export type SessionFact =
       readonly payload: StreamHoldChangedPayload;
     };
 
-export type SessionEvent =
+export type HubEvent =
   | { scope: 'run'; streamId: StreamTabId; event: AgentEvent }
   | { scope: 'session'; event: SessionFact };
 
 export interface SessionEventSubscriptionFilter {
-  readonly scope?: SessionEvent['scope'];
+  readonly scope?: HubEvent['scope'];
   readonly streamId?: StreamTabId;
   readonly types?: readonly AgentEvent['type'][];
 }
 
-type SessionEventSubscriber = (event: SessionEvent) => void;
+type SessionEventSubscriber = (event: HubEvent) => void;
 
 interface SubscriberRegistration {
   readonly subscriber: SessionEventSubscriber;
-  readonly scope?: SessionEvent['scope'];
+  readonly scope?: HubEvent['scope'];
   readonly streamId?: StreamTabId;
   readonly types?: ReadonlySet<AgentEvent['type']>;
 }
@@ -93,7 +93,7 @@ interface SubscriberRegistration {
 export class SessionEventHub {
   private readonly subscribers = new Set<SubscriberRegistration>();
 
-  emit(event: SessionEvent): void {
+  emit(event: HubEvent): void {
     for (const registration of this.subscribers) {
       if (registration.scope && registration.scope !== event.scope) continue;
       if (

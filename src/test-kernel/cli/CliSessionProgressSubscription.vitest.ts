@@ -8,7 +8,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   SessionEventHub,
-  type SessionEvent,
+  type HubEvent,
   type SessionFact,
 } from '@agent/runtime/SessionEventHub';
 import type {
@@ -70,14 +70,14 @@ function workflowConfig(
 function sessionFact<K extends PayloadSessionFact['type']>(
   type: K,
   payload: Extract<PayloadSessionFact, { type: K }>['payload'],
-): SessionEvent {
+): HubEvent {
   return {
     scope: 'session',
     event: { type, payload } as Extract<SessionFact, { type: K }>,
   };
 }
 
-function statusFact(payload: RunStatusProjectionPayload): SessionEvent {
+function statusFact(payload: RunStatusProjectionPayload): HubEvent {
   return {
     scope: 'session',
     event: {
@@ -93,13 +93,13 @@ function statusFact(payload: RunStatusProjectionPayload): SessionEvent {
   };
 }
 
-function runEvent(event: AgentEvent): SessionEvent {
+function runEvent(event: AgentEvent): HubEvent {
   return { scope: 'run', streamId, event };
 }
 
 type ProgressProjectionCases = {
   [K in CliNdjsonProgressEvent]: {
-    readonly source: SessionEvent;
+    readonly source: HubEvent;
     readonly payload: CliNdjsonProgressEventPayloads[K];
   };
 };
@@ -552,7 +552,7 @@ describe('attachCliSessionProgressProjection', () => {
   it('refuses an event outside the run-fact vocabulary instead of dropping it', () => {
     const events = new SessionEventHub();
     const writeRecord = recordWriter();
-    let runSubscriber: ((event: SessionEvent) => void) | undefined;
+    let runSubscriber: ((event: HubEvent) => void) | undefined;
     vi.spyOn(events, 'subscribe').mockImplementation(
       (subscriber, filter = {}) => {
         if (filter.scope === 'run') runSubscriber = subscriber;

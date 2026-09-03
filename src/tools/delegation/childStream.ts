@@ -1,5 +1,6 @@
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import { isRemoteAgent } from '@agent/index';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   finalizeRunTerminal,
@@ -22,6 +23,7 @@ import type {
 } from '@shared/schemas';
 import { createRunTrace } from '@transcript';
 import type { TranscriptWriter } from '@transcript/StreamLogStore';
+import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -126,6 +128,12 @@ export function createChildStream(
       executionId,
       identity: options.run,
       userFollowUpSupport: options.userFollowUpSupport,
+      // Launch facts the fold reads verbatim (PRD one-fold-three-renderers,
+      // section 6, item 6).
+      agentCategory: options.config.agentCategory,
+      isRemote: isRemoteAgent(options.config.agent),
+      worktree: launchWorktreeInfo(options.config.workingDirectory),
+      parentStreamId,
     });
     runTrace.trace.emit({
       type: 'run.config',

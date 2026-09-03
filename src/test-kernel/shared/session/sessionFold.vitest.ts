@@ -1,8 +1,8 @@
 // The pure fold over a recorded fan-out session: a workflow-script root, one
-// child agent run, a background process stream. The scenario is the seq
-// numbered event log a publisher would replay; every assertion compares the
-// fold's output to the existing shared folds it must reproduce, so the two
-// can never drift.
+// child agent run with a grandchild of its own, a background process stream.
+// The scenario is the seq numbered event log a publisher would replay; every
+// assertion compares the fold's output to the existing shared folds it must
+// reproduce, so the two can never drift.
 
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +12,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   runIdentityDisplayName,
+  withEnvelope,
   type FoldInput,
   type RunIdentity,
   type SessionEvent,
@@ -38,6 +39,7 @@ import {
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const ROOT = 'review#aaaaaaaaaaaa' as StreamTabId;
 const CHILD = 'search#bbbbbbbbbbbb' as StreamTabId;
+const GRANDCHILD = 'lint#dddddddddddd' as StreamTabId;
 const PROCESS = 'bash@tool#cccccccccccc' as StreamTabId;
 
 const ROOT_IDENTITY: RunIdentity = {
@@ -45,6 +47,17 @@ const ROOT_IDENTITY: RunIdentity = {
   workflowName: 'review',
 };
 const CHILD_IDENTITY: RunIdentity = { kind: 'agent', agent: 'custom:search' };
+const GRANDCHILD_IDENTITY: RunIdentity = {
+  kind: 'agent',
+  agent: 'custom:lint',
+};
+
+/** `Omit` over each member of a union, so a fixture keeps its arm. */
+type EntryFixture = StreamLogEntry extends infer E
+  ? E extends unknown
+    ? Omit<E, 'seqNo' | 'timestamp' | 'level'>
+    : never
+  : never;
 
 /** Seq numbered per stream, the way the event table keys them. */
 class Log {
@@ -55,35 +68,31 @@ class Log {
   emit(streamId: StreamTabId, timestamp: number, body: SessionEventBody): void {
     const seq = (this.seq.get(streamId) ?? 0) + 1;
     this.seq.set(streamId, seq);
-    this.events.push({
-      ...body,
-      streamId,
-      seq,
-      ownerId: OWNER,
-      timestamp,
-    } as SessionEvent);
+    this.events.push(
+      withEnvelope(body, { streamId, seq, ownerId: OWNER, timestamp }),
+    );
   }
 
   entry(
     streamId: StreamTabId,
     timestamp: number,
-    entry: Omit<StreamLogEntry, 'seqNo' | 'timestamp' | 'level'>,
+    entry: EntryFixture,
   ): StreamLogEntry {
     const seqNo = (this.entrySeq.get(streamId) ?? 0) + 1;
     this.entrySeq.set(streamId, seqNo);
-    const full = {
+    const full: StreamLogEntry = {
       ...entry,
       seqNo,
       timestamp,
       level: 'info',
-    } as StreamLogEntry;
+    };
     this.emit(streamId, timestamp, { type: 'legacy.entry', entry: full });
     return full;
   }
 }
 
 function call(
-  status: WorkflowCallProgress['status'],
+  status: 'planned' | 'running' | 'completed',
   childStreamId?: StreamTabId,
 ): WorkflowCallProgress {
   return {
@@ -93,7 +102,7 @@ function call(
     attemptId: 'attempt-1',
     ...(childStreamId ? { childStreamId } : {}),
     status,
-  } as WorkflowCallProgress;
+  };
 }
 
 function foldAll(inputs: readonly FoldInput[], from = createSessionView()) {
@@ -239,6 +248,34 @@ function buildScenario() {
     },
   });
 
+  // The child's own delegate: a grandchild that starts and finishes while the
+  // child waits, and one empty-round file fact the tab must not show.
+  log.emit(GRANDCHILD, 1750, {
+    type: 'run.start',
+    executionId: 'dddddddddddd',
+    identity: GRANDCHILD_IDENTITY,
+    agentCategory: AgentCategory.ToolUse,
+    isRemote: false,
+    parentStreamId: CHILD,
+  });
+  log.emit(GRANDCHILD, 1750, {
+    type: 'status',
+    phase: STREAM_PHASE.RUNNING,
+    cause: 'lifecycle',
+    runStartedAt: 1750,
+  });
+  log.emit(GRANDCHILD, 1760, {
+    type: 'addOutputFiles',
+    filesByRound: { 1: [] },
+  });
+  log.emit(GRANDCHILD, 1780, {
+    type: 'result',
+    outcome: 'completed',
+    executionId: 'dddddddddddd',
+    category: AgentCategory.ToolUse,
+    isSubagent: true,
+  });
+
   // A background process stream, newer than the root: leads the order.
   log.emit(PROCESS, 2000, {
     type: 'run.start',
@@ -329,6 +366,12 @@ describe('sessionFold', () => {
     expect(root.creationTimestamp).toBe(1000);
     expect(child.parentId).toBe(ROOT);
     expect(child.ancestors).toStrictEqual([{ id: ROOT, label: 'review' }]);
+    expect(child.childIds).toStrictEqual([GRANDCHILD]);
+    expect(stream(view, GRANDCHILD).ancestors).toStrictEqual([
+      { id: ROOT, label: 'review' },
+      { id: CHILD, label: child.label },
+    ]);
+    expect(stream(view, GRANDCHILD).outputs).toStrictEqual({});
     expect(child.label).toBe(runIdentityDisplayName(CHILD_IDENTITY));
     expect(child.model).toBe('claude-sonnet-4-5');
     expect(child.followUpSupport).toBe('nativeInteractive');
@@ -374,6 +417,11 @@ describe('sessionFold', () => {
     );
     expect(root.transcript.run?.childStreamOf.get('call-1')).toBe(CHILD);
     expect(child.transcript.run).toBeNull();
+    // A frame derives each board once at its end and lands the same model.
+    const batched = fold(createSessionView(), scenario.events);
+    expect(stream(batched, ROOT).transcript.run).toStrictEqual(
+      root.transcript.run,
+    );
   });
 
   it('settles status copy, rollups, and groups from status and result', () => {
@@ -389,9 +437,14 @@ describe('sessionFold', () => {
       total: 1,
     });
     expect(rootPending.rollup).toStrictEqual({
-      total: 1,
+      total: 2,
       running: 1,
-      finished: 0,
+      finished: 1,
+    });
+    expect(stream(pending, CHILD).rollup).toStrictEqual({
+      total: 1,
+      running: 0,
+      finished: 1,
     });
 
     const settled = foldAll(scenario.events);
@@ -400,7 +453,7 @@ describe('sessionFold', () => {
     expect(root.statusLabel).toBe('Completed');
     expect(root.tone).toBe('success');
     expect(root.group).toBe('recent');
-    expect(root.rollup).toStrictEqual({ total: 1, running: 0, finished: 1 });
+    expect(root.rollup).toStrictEqual({ total: 2, running: 0, finished: 2 });
     expect(stream(settled, CHILD).runStartedAt).toBeNull();
     expect(settled.approvals).toStrictEqual([]);
   });
@@ -410,22 +463,32 @@ describe('sessionFold', () => {
     expect(withOwner.liveOwners).toStrictEqual([OWNER]);
     expect(stream(withOwner, CHILD).group).toBe('waiting');
     expect(stream(withOwner, CHILD).approval).toBe('own');
+    expect(stream(withOwner, CHILD).statusLabel).toBe('Running');
+    expect(stream(withOwner, CHILD).statusDetail).toBeNull();
     expect(stream(withOwner, ROOT).approval).toBe('descendant');
     expect(stream(withOwner, ROOT).group).toBe('running');
     expect(withOwner.approvals.map((a) => a.requestId)).toStrictEqual([
       'req-1',
     ]);
 
-    // The same log with nobody alive: interrupted, never waiting.
+    // The same log with nobody alive: interrupted, never waiting. The phase
+    // stays running and the request stays listed, so a resume can re-ask;
+    // the copy is what says interrupted.
     const interrupted = foldAll([...scenario.pending, nobody]);
-    expect(stream(interrupted, CHILD).group).toBe('recent');
-    expect(stream(interrupted, CHILD).approval).toBe('none');
+    const child = stream(interrupted, CHILD);
+    expect(child.group).toBe('recent');
+    expect(child.approval).toBe('none');
+    expect(child.status).toBe(STREAM_PHASE.RUNNING);
+    expect(child.statusLabel).toBe('Interrupted');
+    expect(child.tone).toBe('warning');
+    expect(child.statusDetail).toMatch(/resume/i);
     expect(stream(interrupted, ROOT).approval).toBe('none');
     expect(interrupted.approvals).toHaveLength(1);
 
     // A replay that never received a snapshot folds the same way.
     const unknown = foldAll(scenario.pending);
     expect(stream(unknown, CHILD).group).toBe('recent');
+    expect(stream(unknown, CHILD).statusLabel).toBe('Interrupted');
   });
 
   it('applies text chunks to the streaming row without advancing settledSeq', () => {
@@ -484,6 +547,30 @@ describe('sessionFold', () => {
     expect(view.order).toStrictEqual([PROCESS, CHILD]);
     expect(stream(view, CHILD).ancestors).toStrictEqual([
       { id: ROOT, label: 'review' },
+    ]);
+  });
+
+  it('mints a stream from run.start alone', () => {
+    const ghost = 'ghost#eeeeeeeeeeee' as StreamTabId;
+    const settled = foldAll(scenario.events);
+    const facts: SessionEvent[] = [
+      withEnvelope(
+        { type: 'updateStreamDescription', description: 'boo' },
+        { streamId: ghost, seq: 1, ownerId: OWNER, timestamp: 4000 },
+      ),
+      withEnvelope(
+        { type: 'setParentStream', parentStreamId: ghost },
+        { streamId: PROCESS, seq: 3, ownerId: OWNER, timestamp: 4000 },
+      ),
+    ];
+    // A fact for a stream with no run.start changes nothing; a parent edge
+    // to one leaves the child top-level with the edge kept by its prefix.
+    expect(fold(settled, facts[0])).toBe(settled);
+    const reparented = fold(settled, facts[1]);
+    expect(reparented.streams.has(ghost)).toBe(false);
+    expect(reparented.order).toStrictEqual([PROCESS, ROOT]);
+    expect(stream(reparented, PROCESS).ancestors).toStrictEqual([
+      { id: ghost, label: 'ghost' },
     ]);
   });
 });

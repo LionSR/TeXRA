@@ -34,7 +34,6 @@ import type {
   AgentTraceSubscriber,
   StatusEvent,
 } from '@agent/trace';
-import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import { isDebugModeEnabled } from '@logger/logUtils';
 import { redactSecrets } from '@logger/redaction';
 import {
@@ -51,6 +50,7 @@ import {
   type WorkflowPlanMarker,
   type WorkflowCallProgress,
 } from '@shared/schemas';
+import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   createFlushableDebounce,

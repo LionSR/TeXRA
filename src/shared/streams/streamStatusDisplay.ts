@@ -17,6 +17,17 @@ export type StreamStatusDisplayKey =
   | 'ready';
 
 /**
+ * The fold's interrupted reading (PRD one-fold-three-renderers, 5.2): a
+ * pending approval whose owner process is not alive. A copy key over the
+ * durable phase, never a lifecycle status or a host display key, so the
+ * durable event set and the hosts' per-status tables stay what they are and
+ * only the label and tone change.
+ */
+const STREAM_DISPLAY_INTERRUPTED = 'interrupted';
+type StreamStatusCopyKey =
+  StreamStatusDisplayKey | typeof STREAM_DISPLAY_INTERRUPTED;
+
+/**
  * Display key for a `StreamLifecycleStatus` (a `StreamPhase`, or the `ready`
  * idle sentinel every host defaults an unstarted stream to).
  */
@@ -49,7 +60,7 @@ export function streamStatusIndicatorClass(
 
 // cli and cliCompact share every label except the STARTING ellipsis, so
 // cliCompact is derived from cli rather than hand-synced.
-const cliStreamStatusLabels: Record<StreamStatusDisplayKey, string> = {
+const cliStreamStatusLabels: Record<StreamStatusCopyKey, string> = {
   [STREAM_SUBSTATE.STARTING]: 'starting\u2026',
   [STREAM_PHASE.RUNNING]: 'running',
   [STREAM_PHASE.FAILED]: 'error',
@@ -59,6 +70,7 @@ const cliStreamStatusLabels: Record<StreamStatusDisplayKey, string> = {
   [STREAM_PHASE.WAITING]: 'idle',
   [STREAM_SUBSTATE.RESUMING]: 'resuming',
   [STREAM_LIFECYCLE_UNAVAILABLE]: 'unavailable',
+  [STREAM_DISPLAY_INTERRUPTED]: 'interrupted',
 } as const;
 
 const STREAM_STATUS_LABELS = {
@@ -77,6 +89,7 @@ const STREAM_STATUS_LABELS = {
     [STREAM_PHASE.WAITING]: 'Idle',
     [STREAM_SUBSTATE.RESUMING]: 'Resuming',
     [STREAM_LIFECYCLE_UNAVAILABLE]: 'Unavailable',
+    [STREAM_DISPLAY_INTERRUPTED]: 'Interrupted',
   },
 } as const;
 
@@ -93,10 +106,10 @@ export const STREAM_STATUS_TONE = {
   NEUTRAL: 'neutral',
   WARNING: 'warning',
 } as const;
-export type StreamStatusTone =
+type StreamStatusTone =
   (typeof STREAM_STATUS_TONE)[keyof typeof STREAM_STATUS_TONE];
 
-const STREAM_STATUS_TONES: Record<StreamStatusDisplayKey, StreamStatusTone> = {
+const STREAM_STATUS_TONES: Record<StreamStatusCopyKey, StreamStatusTone> = {
   [STREAM_SUBSTATE.STARTING]: STREAM_STATUS_TONE.RUNNING,
   [STREAM_PHASE.RUNNING]: STREAM_STATUS_TONE.RUNNING,
   [STREAM_PHASE.FAILED]: STREAM_STATUS_TONE.DANGER,
@@ -106,14 +119,34 @@ const STREAM_STATUS_TONES: Record<StreamStatusDisplayKey, StreamStatusTone> = {
   [STREAM_PHASE.WAITING]: STREAM_STATUS_TONE.NEUTRAL,
   [STREAM_SUBSTATE.RESUMING]: STREAM_STATUS_TONE.RUNNING,
   [STREAM_LIFECYCLE_UNAVAILABLE]: STREAM_STATUS_TONE.WARNING,
+  [STREAM_DISPLAY_INTERRUPTED]: STREAM_STATUS_TONE.WARNING,
 };
 
-/** Tone word for a status, through the same display key as its label. */
-export function streamStatusTone(
+/**
+ * The label and tone pair a `StreamView` carries (G4), read from the one
+ * table through one display key: the status and substate, or the fold's
+ * interrupted reading when a pending approval has no live owner.
+ */
+export function streamStatusCopy(
   status: StreamLifecycleStatus,
-  substate?: StreamSubstate,
-): StreamStatusTone {
-  return STREAM_STATUS_TONES[streamStatusDisplayKey(status, substate)];
+  options: {
+    readonly substate?: StreamSubstate;
+    readonly interrupted?: boolean;
+  } = {},
+): { readonly statusLabel: string; readonly tone: StreamStatusTone } {
+  const key = options.interrupted
+    ? STREAM_DISPLAY_INTERRUPTED
+    : streamStatusDisplayKey(status, options.substate);
+  return {
+    statusLabel: STREAM_STATUS_LABELS.progressHeader[key],
+    tone: STREAM_STATUS_TONES[key],
+  };
+}
+
+/** Banner copy for the fold's interrupted reading: the approval is still
+ *  listed, so a resume re-asks it. */
+export function streamInterruptedMessage(): string {
+  return 'This run was waiting for an approval when its process stopped. Resume it to answer.';
 }
 
 /**

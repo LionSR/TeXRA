@@ -6,6 +6,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { createChannelTrace } from '@agent/trace';
+import { isRemoteAgent } from '@agent/index';
 import {
   finalizeRun,
   retainFlowRecordUnlessCompleted,
@@ -46,6 +47,7 @@ import {
   setFirstRunDone,
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 import { AgentExecutionHandle, type AgentRunHandle } from './ExecutionHandle';
 import {
   buildTerminalFlowResult,
@@ -691,6 +693,14 @@ export async function runFlowWithLifecycle(
       executionId,
       identity: handle.identity,
       userFollowUpSupport,
+      // Launch facts the fold reads verbatim (PRD one-fold-three-renderers,
+      // section 6, item 6): the launcher knows them, the fold derives none.
+      agentCategory: handle.category,
+      isRemote: isRemoteAgent(agentIdentifier),
+      worktree: launchWorktreeInfo(ctx.config.workingDirectory),
+      ...(options?.parentStreamId && options.parentStreamId !== streamId
+        ? { parentStreamId: options.parentStreamId }
+        : {}),
     });
     ctx.logger.emit({
       type: 'run.config',

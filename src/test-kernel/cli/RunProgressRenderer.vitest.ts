@@ -5,7 +5,7 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
-import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { HubEvent } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
@@ -124,7 +124,7 @@ const RUNTIME_PRESENTATION_NDJSON_CASES = {
 // returns undefined inside these helpers. Facts reach the renderer the way
 // they do in production — through the session hub the applier subscribes to.
 type TestRunProgressRenderer = RunProgressRenderer & {
-  emit(event: SessionEvent): void;
+  emit(event: HubEvent): void;
   detach(): void;
   readonly session: SessionHandle;
 };
@@ -133,7 +133,7 @@ function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const session = createTestSession();
   const detach = renderer.attach(session);
   return Object.assign(renderer, {
-    emit: (event: SessionEvent) => session.events.emit(event),
+    emit: (event: HubEvent) => session.events.emit(event),
     detach,
     session,
   });
@@ -146,7 +146,7 @@ type RunConfigOverrides = {
   inputFiles?: string[];
 };
 
-function runConfigEvent(overrides: RunConfigOverrides = {}): SessionEvent {
+function runConfigEvent(overrides: RunConfigOverrides = {}): HubEvent {
   const streamId = (overrides.streamId ?? 'stream-1') as StreamTabId;
   return {
     scope: 'run',

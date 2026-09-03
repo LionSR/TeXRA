@@ -28,6 +28,7 @@ import {
   type ContextStateData,
   type ConversationProgress,
   type SessionEventBody,
+  withEnvelope,
   type StreamStage,
   type ExecutionId,
   type RunOutcome,
@@ -51,6 +52,9 @@ import {
 } from '@shared/streams/streamStatusDisplay';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/** Seq counter key for session-scoped view events (no stream). */
+const SESSION_SEQ_KEY = 'session';
 
 /**
  * Config-derived display fields: undefined until the stream's `RunConfig`
@@ -242,7 +246,8 @@ export class SessionState {
    * leaves with it.
    */
   view: SessionView = createSessionView();
-  private readonly viewSeq = new Map<StreamTabId, number>();
+  private readonly viewSeq = new Map<string, number>();
+  private readonly viewDropped = new Set<StreamTabId>();
 
   private readonly logger: ReturnType<typeof createLog>;
   private readonly session: SessionHandle;
@@ -279,21 +284,48 @@ export class SessionState {
   }
 
   /**
-   * Fold one admitted fact into {@link view}. The owner token is unknown in
-   * process until the publisher stamps it, so a pending approval folds as
-   * interrupted here; the live-owner rule is exercised by the fold's test and
-   * armed by lane 2.
+   * Fold one admitted fact into {@link view}. The existence rule (5.2) is
+   * enforced here as well as in the fold: a fact for a stream the view has
+   * no `run.start` for is dropped and logged once per stream, so a publisher
+   * that skips the existence fact is loud, not a ghost tab. In lane 1 the
+   * hydrated streams of an earlier session have no `run.start` until lane 2
+   * replays them, so their facts are expected to land here.
+   *
+   * The owner token is unknown in process until the publisher stamps it, so
+   * a pending approval folds as interrupted here; the live-owner rule is
+   * exercised by the fold's test and armed by lane 2. `run.start` carries
+   * the roster's creation timestamp so the view orders streams the way the
+   * roster does; every other fact carries none of its own and is stamped at
+   * fold time, which lane 2's publisher replaces with the append time.
    */
-  applySessionEvent(streamId: StreamTabId, body: SessionEventBody): void {
-    const seq = (this.viewSeq.get(streamId) ?? 0) + 1;
-    this.viewSeq.set(streamId, seq);
-    this.view = fold(this.view, {
-      ...body,
-      streamId,
-      seq,
-      ownerId: null,
-      timestamp: Date.now(),
-    });
+  applySessionEvent(
+    streamId: StreamTabId | null,
+    body: SessionEventBody,
+  ): void {
+    if (
+      streamId !== null &&
+      body.type !== 'run.start' &&
+      !this.view.streams.has(streamId)
+    ) {
+      if (!this.viewDropped.has(streamId)) {
+        this.viewDropped.add(streamId);
+        this.logger.warn('Dropping view facts for a stream with no run.start', {
+          data: { streamId, type: body.type },
+        });
+      }
+      return;
+    }
+    const seqKey = streamId ?? SESSION_SEQ_KEY;
+    const seq = (this.viewSeq.get(seqKey) ?? 0) + 1;
+    this.viewSeq.set(seqKey, seq);
+    const timestamp =
+      body.type === 'run.start' && streamId !== null
+        ? this.getStreamMetadata(streamId).creationTimestamp
+        : Date.now();
+    this.view = fold(
+      this.view,
+      withEnvelope(body, { streamId, seq, ownerId: null, timestamp }),
+    );
   }
 
   // -- Ephemeral session state ------------------------------------------------

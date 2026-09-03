@@ -10,10 +10,7 @@ import type {
 } from '@agent/runtime/ExecutionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { ExecutionRegistry } from '@agent/runtime/executionRegistry';
-import {
-  SessionEventHub,
-  type SessionEvent,
-} from '@agent/runtime/SessionEventHub';
+import { SessionEventHub, type HubEvent } from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
@@ -1428,7 +1425,7 @@ describe('executionRegistry', () => {
 
   it('publishes parent links through the attached session event hub', () => {
     const { events, registry } = createRegistry();
-    const seen: SessionEvent[] = [];
+    const seen: HubEvent[] = [];
     const detach = events.subscribe((event) => seen.push(event));
     const executionId = 'exec-session-parent-link-test';
     const parentStreamId = 'parent-session-parent-link-test' as StreamTabId;
@@ -1665,7 +1662,7 @@ describe('executionRegistry', () => {
 
   it('publishes detach parent links through the attached session event hub', () => {
     const { events, registry } = createRegistry();
-    const seen: SessionEvent[] = [];
+    const seen: HubEvent[] = [];
     const detach = events.subscribe((event) => seen.push(event));
     const executionId = 'exec-detach-session-parent-link-test';
     const parentStreamId =

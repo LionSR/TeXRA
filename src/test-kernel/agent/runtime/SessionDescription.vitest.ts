@@ -6,7 +6,7 @@ import {
   generateSessionDescription,
   getDisplayedInstruction,
 } from '@agent/runtime/sessionDescription';
-import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { HubEvent } from '@agent/runtime/SessionEventHub';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
@@ -92,7 +92,7 @@ describe('session description helpers', () => {
 
   it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
-    const events: SessionEvent[] = [];
+    const events: HubEvent[] = [];
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
     });
@@ -161,7 +161,7 @@ describe('session description helpers', () => {
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
     const session = createTestSession();
-    const events: SessionEvent[] = [];
+    const events: HubEvent[] = [];
     const detach = session.events.subscribe((event) => events.push(event), {
       scope: 'session',
     });

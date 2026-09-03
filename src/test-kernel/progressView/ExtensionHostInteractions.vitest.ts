@@ -3,7 +3,7 @@ import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { SessionEvent } from '@agent/runtime/SessionEventHub';
+import type { HubEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
@@ -102,8 +102,8 @@ function createInteractions(
   };
 }
 
-function recordSessionEvents(session: SessionHandle): SessionEvent[] {
-  const events: SessionEvent[] = [];
+function recordSessionEvents(session: SessionHandle): HubEvent[] {
+  const events: HubEvent[] = [];
   session.events.subscribe((event) => events.push(event), {
     scope: 'session',
   });

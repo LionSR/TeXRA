@@ -19,12 +19,15 @@
  */
 import { z } from 'zod';
 
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
 import { ContextStateDataSchema } from './contextManagement';
 import { GoalStateSchema } from './goal';
-import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
+import {
+  ExecutionIdSchema,
+  StreamTabIdSchema,
+  type StreamTabId,
+} from './identifiers';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PlanSchema } from './plan';
 import { PermissionPayloadSchema } from './progressView/outbound';
@@ -38,9 +41,11 @@ import {
 } from './stream';
 import { StreamLogEntrySchema } from './streamLogEntry';
 import {
+  ApprovalBypassesSchema,
   ConversationProgressSchema,
   RoundKeyedOutputSidecarValueSchemas,
 } from './streamState';
+import { StageKindSchema } from './taskGroup';
 import { TodoItemSchema } from './todo';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 import {
@@ -58,12 +63,14 @@ const OwnerIdSchema = z.uuid();
  */
 export const ApprovalPolicySnapshotSchema = z.object({
   policy: TexraApprovalPolicySchema,
-  bypasses: z.record(z.enum(APPROVAL_BYPASS_KINDS), z.boolean()),
+  bypasses: ApprovalBypassesSchema,
 });
 
 /**
  * The envelope every durable arm rides. The stream id lives here, so arms
- * never repeat it; session-scoped facts name the stream they are about.
+ * never repeat it. A session-scoped arm (an inquiry thread with no parent
+ * stream) rides the same envelope with `streamId: null`; its `seq` is then
+ * the session's, not a stream's.
  */
 const envelope = {
   streamId: StreamTabIdSchema,
@@ -77,6 +84,18 @@ type Envelope = { [K in keyof typeof envelope]: z.infer<(typeof envelope)[K]> };
 
 function durable<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
   return z.object({ ...envelope, type: z.literal(type), ...shape });
+}
+
+function sessionScoped<T extends string, S extends z.ZodRawShape>(
+  type: T,
+  shape: S,
+) {
+  return z.object({
+    ...envelope,
+    streamId: envelope.streamId.nullable(),
+    type: z.literal(type),
+    ...shape,
+  });
 }
 
 /**
@@ -109,7 +128,6 @@ const SessionEventSchema = z.discriminatedUnion('type', [
     config: z.looseObject({
       model: z.string().nullish(),
       instruction: z.string().nullish(),
-      workingDirectory: z.string().nullish(),
     }),
   }),
   /** Terminal outcome; the PRD's `run.end` is this arm. */
@@ -136,7 +154,7 @@ const SessionEventSchema = z.discriminatedUnion('type', [
     id: z.string(),
     label: z.string(),
     parentId: z.string().nullish(),
-    kind: z.enum(['run', 'round', 'phase', 'session']).nullish(),
+    kind: StageKindSchema.nullish(),
     index: z.int().nonnegative().nullish(),
     total: z.int().nonnegative().nullish(),
   }),
@@ -175,7 +193,8 @@ const SessionEventSchema = z.discriminatedUnion('type', [
   /** Goal is per stream; the fact carries the state so the fold never reads
    *  `GoalStore`. */
   durable('goalStateChanged', { state: GoalStateSchema }),
-  durable('inquiryThreadUpdated', InquiryThreadUpdatedEventSchema.shape),
+  /** Session-level: `streamId` is the thread's parent stream, or null. */
+  sessionScoped('inquiryThreadUpdated', InquiryThreadUpdatedEventSchema.shape),
   durable('updateQueuedFollowUps', { messages: z.array(z.string()) }),
   durable('approval.requested', {
     requestId: z.string(),
@@ -202,6 +221,23 @@ export type RunStartEventBody = Extract<
   SessionEventBody,
   { type: 'run.start' }
 >;
+
+/**
+ * Stamp the envelope on a body. The one place the two halves meet: a body is
+ * a distributive omit over the union, so the spread cannot be typed back
+ * into the union without this assertion. A session-scoped body is the only
+ * one that may ride a null `streamId`; the fold's existence rule drops every
+ * other fact that names a stream it has no `run.start` for.
+ */
+export function withEnvelope(
+  body: SessionEventBody,
+  stamp: Omit<Envelope, 'streamId'> & { streamId: StreamTabId | null },
+): SessionEvent {
+  if (stamp.streamId === null && body.type !== 'inquiryThreadUpdated') {
+    throw new Error(`${body.type} is stream-scoped and needs a streamId`);
+  }
+  return { ...stamp, ...body } as SessionEvent;
+}
 
 /** A live text delta for one streaming row; never durable, never a seq. */
 const TextChunkSchema = z.object({

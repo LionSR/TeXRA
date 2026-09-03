@@ -35,9 +35,7 @@ import {
   TodoItemSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
-  type StreamLogEntry,
   type TaskGroup,
-  type WorkflowDeclaredPlan,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript';
 import type { CompactionActivityProjection } from '@shared/streams/compactionActivityProjection';
@@ -45,28 +43,13 @@ import { STREAM_STATUS_TONE } from '@shared/streams/streamStatusDisplay';
 import type { WorkflowRunModel } from '@shared/streams/workflowRunModel';
 
 /**
- * One streaming row's live text: provider chunks collected as they arrive and
- * joined lazily, so a hot append costs the chunk, not the whole text.
- * `joined` is the memoized join so far; `length` counts the unjoined tail.
- */
-export interface StreamingText {
-  /** The last durable entry for the row; each chunk re-projects it. */
-  readonly entry: StreamLogEntry;
-  joined: string;
-  readonly chunks: string[];
-  length: number;
-  /** Index of the last chunk applied, so a resync's inflight replay is
-   *  idempotent. */
-  lastChunkIndex: number;
-}
-
-/**
- * A stream's transcript slice. `rows`, `taskGroups`, and `compaction` are
- * what hosts paint; the rest are the fold's incremental indexes, so an entry
- * costs O(1) and never a whole-transcript pass. The arrays and maps are
- * appended in place by the fold (a copy per entry would make a replay
- * quadratic) and the slice value is replaced on every change; hosts read,
- * never write.
+ * A stream's transcript slice: what hosts paint, and nothing else. The fold
+ * keeps its incremental indexes (row and group positions, the compaction
+ * projection's working state, live-text cursors, the newest plan marker)
+ * beside the value in a module-private map, so a host can neither depend on
+ * nor mutate them. `rows`, `taskGroups`, and `compaction` are appended in
+ * place by the fold (a copy per entry would make a replay quadratic) and the
+ * slice value is replaced on every change; hosts read, never write.
  */
 export interface TranscriptView {
   /** `projectTranscriptRow` over every entry plus the compaction rows, in
@@ -80,18 +63,6 @@ export interface TranscriptView {
   readonly settledSeq: number;
   /** `workflowRunModel`, for a workflow-script run; null for every other. */
   readonly run: WorkflowRunModel | null;
-  /** Fold-owned: row position by row id. */
-  readonly rowIndex: Map<string, number>;
-  /** Fold-owned: task-group position by group id. */
-  readonly taskGroupIndex: Map<string, number>;
-  /** Fold-owned: the compaction projection's working state. */
-  readonly compactionState: CompactionActivityProjection;
-  /** Fold-owned: live text per streaming entry id. */
-  readonly streaming: Map<string, StreamingText>;
-  /** Fold-owned: the newest workflow plan marker, for the run model. */
-  readonly plan: WorkflowDeclaredPlan | undefined;
-  /** Fold-owned: the newest attempt boundary, even when its plan was malformed. */
-  readonly workflowAttemptId: string | undefined;
 }
 
 const StreamGroupSchema = z.enum(['running', 'waiting', 'recent']);
@@ -114,15 +85,20 @@ const StreamViewCommonSchema = z.object({
   /** Full, untruncated command that spawned a process stream. */
   command: z.string().nullable(),
   worktree: WorktreeInfoSchema.nullable(),
+  /** The durable phase. An interrupted stream (a pending approval with no
+   *  live owner, 5.2) keeps it and reads as interrupted through the copy. */
   status: StreamLifecycleStatusSchema,
   substate: StreamSubstateSchema.nullable(),
+  /** Banner copy beside the label: the interrupted reading's resume notice;
+   *  null otherwise. */
   statusDetail: z.string().nullable(),
-  // G4: one table (`streamStatusDisplay`) spells both.
+  // G4: one table (`streamStatusDisplay`) spells both, through the status
+  // and substate or the interrupted reading.
   statusLabel: z.string(),
   tone: z.enum(STREAM_STATUS_TONE),
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
-  /** The `run.start` timestamp: the ordering key. */
+  /** The first `run.start` timestamp: the ordering key. A resume keeps it. */
   creationTimestamp: z.number(),
   conversationProgress: ConversationProgressSchema,
   stage: StreamStageSchema.nullable(),

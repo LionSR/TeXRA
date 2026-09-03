@@ -1,6 +1,5 @@
 import type { DeleteStreamResult } from '@agent/storage';
 import { RUN_FACT_EVENT_TYPES, type AgentEvent } from '@agent/trace';
-import { roundedUtilizationPercent } from '@agent/modelHandlers/support/contextUtilization';
 import type { SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamPhaseState } from '@agent/runtime/StreamStatusService';
 import type { SessionRendererPort } from '@controllers/session/SessionRendererPort';
@@ -23,6 +22,7 @@ import {
   type UpdateStreamDescriptionPayload,
   AgentCategory,
 } from '@shared/schemas';
+import { roundedUtilizationPercent } from '@shared/streams/contextUtilization';
 import { streamStageFromStageStart } from '@shared/streams/stage';
 import {
   isActivePhase,
@@ -337,7 +337,6 @@ export class SessionFactApplier {
       'SessionFacts',
       `failed to handle ${fact.type} fact`,
       () => {
-        this.foldSessionFact(fact);
         switch (fact.type) {
           case 'goalStateChanged':
             return this.handleGoalStateChanged(fact.payload.streamId);
@@ -438,6 +437,14 @@ export class SessionFactApplier {
         assertNever(fact, 'Unhandled session fact');
       },
     );
+    // Its own scope, after the handler: a fold failure is logged and can
+    // never drop an admitted fact from canonical state, and the fold reads
+    // the stores the handler has just updated.
+    withEventErrorHandling(
+      'SessionView',
+      `failed to fold ${fact.type} fact`,
+      () => this.foldSessionFact(fact),
+    );
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
@@ -469,10 +476,12 @@ export class SessionFactApplier {
     withEventErrorHandling(
       'SessionFacts',
       `failed to handle ${event.type} fact`,
-      () => {
-        this.foldRunFact(streamId, event);
-        return handle(streamId, event);
-      },
+      () => handle(streamId, event),
+    );
+    withEventErrorHandling(
+      'SessionView',
+      `failed to fold ${event.type} fact`,
+      () => this.foldRunFact(streamId, event),
     );
   }
 
@@ -497,19 +506,14 @@ export class SessionFactApplier {
         });
         return;
       }
-      case 'inquiryThreadUpdated': {
-        const { parentStreamId } = fact.payload;
-        // A thread with no parent stream has no envelope key in the durable
-        // vocabulary yet (PRD 6 lists inquiries at session level); lane 2's
-        // publisher decides its key, so it stays on the renderer port alone.
-        if (parentStreamId) {
-          this.fold(parentStreamId, {
-            type: 'inquiryThreadUpdated',
-            ...fact.payload,
-          });
-        }
+      case 'inquiryThreadUpdated':
+        // Session-level (PRD 5.1): the arm rides a null stream when the
+        // thread has no parent.
+        this.fold(fact.payload.parentStreamId, {
+          type: 'inquiryThreadUpdated',
+          ...fact.payload,
+        });
         return;
-      }
       case 'updateQueuedFollowUps':
       case 'followUpSent': {
         const { streamId } = fact.payload;
@@ -630,7 +634,7 @@ export class SessionFactApplier {
     }
   }
 
-  private fold(streamId: StreamTabId, body: SessionEventBody): void {
+  private fold(streamId: StreamTabId | null, body: SessionEventBody): void {
     this.state.applySessionEvent(streamId, body);
   }
 
