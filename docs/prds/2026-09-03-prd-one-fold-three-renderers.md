@@ -380,9 +380,16 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
 - **`settledSeq`** is the last durable seq folded; text deltas do not
   advance it.
-- **Incremental.** One rule, keyed on what a change _names_. A durable event
-  names `event.streamId`, and a **lifecycle** event (`run.start`,
-  `removeStream`) additionally names that stream's subtree: a child's
+- **Incremental.** One rule, keyed on what a change _names_. A durable event names the
+  streams its _type_ declares - not `event.streamId`, which session-lane
+  facts do not have: `setParentStream` names its `childStreamId` and both
+  parents, an unparented `inquiryThreadUpdated` names none. That mapping is
+  exhaustive and already written: `sessionFactStreamIds`
+  (`SessionFactApplier.ts:118-135`) is the function, and the fold takes it
+  over rather than reinventing it. A fact naming no stream still folds - it
+  updates session-level state such as `inquiries` - it simply names no arm.
+  A **lifecycle** event (`run.start`, `removeStream`) additionally names its
+  stream's subtree: a child's
   placement is derived from whether its parent exists, so deleting a parent
   re-roots its children and shortens every descendant's `ancestors` (see
   `ancestors` above). That walk is O(subtree) and happens only when a parent
@@ -443,6 +450,17 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   and thinking streams do not. Lane 1 makes it mandatory: `stream.end`
   carries the joined text it already computed, and the `phaseOnly` guard
   stays as-is because a phase-only stream has no text to carry.
+- **Text is checkpointed, though not per delta.** Deltas are transient, but
+  the owning process appends a durable `stream.text` checkpoint carrying a
+  row's text so far at coarse intervals, and the finalizing event carries
+  the whole of it. Without checkpoints a crash after the chunks and before
+  `stream.end` loses the entire partial response, since chunks never left
+  the dead process - and that is a **regression** against today, where
+  `StreamLogStore` recovers and settles unterminated streaming entries from
+  persisted chunk text. A checkpoint folds exactly like a `from: 0` chunk
+  for its row, except that it is durable and so advances `settledSeq`. The
+  cost is bounded by the interval, which is why it is coarse; the recovery
+  window is one interval of text, not all of it.
 - **In-flight text is its own map, so order does not matter.** Chunks
   accumulate in `inflight: Map<RowId, string>` keyed by row, independent of
   whether that row's durable event has folded yet; a row renders by joining
@@ -1074,14 +1092,20 @@ Arm tags are `group.action` throughout, so two groups cannot claim one tag -
 in the same discriminated union, which Zod would have rejected and a reader
 would have misread first.
 
-- stream: `stream.stop`, `stream.delete { streamId, executionId }`,
-  `stream.deleteAll { targets: { streamId, executionId }[] }`,
-  `stream.compact`, `stream.resume`, `stream.runNew`, `stream.restoreState`.
-  Both delete arms name the incarnations the surface saw, never ones
-  resolved at dispatch: a delete that waits in the bridge while a
-  deterministic stream relaunches would otherwise tombstone the new
-  incarnation and defeat the fence in 5.2. `deleteAll` enumerating at
-  dispatch time is the same race with a wider blast radius.
+Every **stream-scoped** arm takes a `target: { streamId, executionId }`
+rather than a bare stream id, and the handler rejects a target whose
+`executionId` is not the stream's current incarnation with `Unavailable`.
+One rule, not a field per arm: while a `StreamTabId` can be reused (5.2,
+decision 9), _any_ request that waits in the bridge while a deterministic
+stream is deleted and relaunched applies to the wrong run - a stop, a
+compact, a follow-up, or a policy change just as much as a delete. The
+surface names the incarnation it was looking at; the runtime decides whether
+that is still the one.
+
+- stream: `stream.stop`, `stream.delete`, `stream.compact`,
+  `stream.resume`, `stream.runNew`, `stream.restoreState`, each with a
+  `target`; `stream.deleteAll { targets: Target[] }`, which enumerates on
+  the surface rather than at dispatch for the same reason
 - follow-up: `followUp.send { streamId, text, images }`, `followUp.retry`,
   `followUp.cancelRetry`, `followUp.polish`
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
@@ -1170,6 +1194,8 @@ TUI screen); `Surface` is one per view instance **and open session**:
 Shell = {
   active: SessionKey                   // which paper the view is showing
   open: SessionKey[]                   // rail order, user-arranged
+  // the recorder is one per process, so its state and destination are too
+  recording: { session: SessionKey, target: StreamTabId | 'launch' } | null
 }
 ```
 
@@ -1180,6 +1206,13 @@ is a resource cache, not a selection. Without it the renderer would grow the
 second undeclared state owner G3 forbids. On the extension and the TUI it is
 degenerate - one root, `open` of length one - and it persists with the rest
 of the view's interaction state.
+
+`recording` sits here rather than on a `Surface` because the recorder is one
+per process: modelled per session, starting dictation on paper A leaves
+paper B offering Start and getting "Recording already in progress", with
+Stop reachable only by switching back. It carries its destination for the
+same reason - the transcription lands on the composer that started it, not
+on whatever is selected when the result arrives.
 
 ```
 Surface = {
@@ -1192,9 +1225,10 @@ Surface = {
   // answers in progress; keyed by inquiry, not by stream (8.5).
   // The whole InquiryDraft (answer AND sessionLinks), not just the answer.
   inquiryDrafts: Map<InquiryId, InquiryDraft>
-  recording: boolean
-  // override on top of approval === 'descendant'
+  // override on top of approval === 'descendant'; the stream tree
   expanded: Map<StreamTabId, 'expanded' | 'collapsed'>
+  // task groups and workflow row groups inside a transcript, per stream
+  groups: Map<StreamTabId, Map<GroupKey, boolean>>
   focusedRow: RowId | null
   // run-board tab strip; fact-only transcript.run cannot hold a selection
   phase: Map<StreamTabId, PhaseId>
@@ -1246,8 +1280,9 @@ in which each Map is an entry array (`[StreamTabId, V][]`), parsed and
 rebuilt into Maps at load, because webview state crosses `JSON.stringify`
 and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
 today), `drafts` (text only; images and the polished and transcribed
-variants are not), `expanded`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
-`session` (it is the key), `recording`, `focusedRow`.
+variants are not), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
+`session` (it is the key) and `focusedRow`; `Shell.recording` is not
+persisted either.
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
 `StreamState.ui` block (`streamState.ts:175-184`), the pending-approval
@@ -1732,10 +1767,12 @@ As tests:
    (`claimStreamIdentity`, `SessionState.ts:487-501`), so a stream id names
    a name and not a run, and every reference to one is ambiguous until it is
    paired with an `executionId`. This document now carries that fence in
-   four places: the tombstone (5.2), `stream.delete` and `stream.deleteAll`
-   (8.2), and the `parent` link (5.1). Each is individually correct and each
-   arrived as a separate review finding, which is the usual sign that the
-   patch is being applied where the defect is not.
+   the tombstone (5.2), the `parent` link (5.1), and - after a further
+   review round found the same race behind `stop`, `compact`, `resume`, and
+   the follow-up and policy arms - **every stream-scoped request** (8.2).
+   Each fence is individually correct, and each arrived as its own review
+   finding rather than falling out of the design, which is the usual sign
+   that the patch is being applied where the defect is not.
 
    The alternative is to mint a fresh `StreamTabId` per launch and let the
    deterministic name be a label. Then all four fences disappear, along with
