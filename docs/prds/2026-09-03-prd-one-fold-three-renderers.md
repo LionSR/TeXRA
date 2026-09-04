@@ -211,6 +211,8 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   childIds: StreamTabId[]                    // streamOrdering rule
   rollup: { total: number, running: number, finished: number }
   approval: 'none' | 'own' | 'descendant'
+  // this process cannot act on it: another live owner, or unreadable (5.2)
+  readOnly: boolean
   // true when this stream or any descendant needs the user; hosts read it
   // instead of re-deriving, and it outranks a collapsed override (5.2)
   forceExpanded: boolean
@@ -383,7 +385,13 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **Unavailable.** Two conditions read as unavailable today and they are
   not the same kind of fact. A stream whose lease is held by another live
   process is now _derivable_: `ownerId` is not this process and is in
-  `local.liveOwners`. A stream whose run state this process could not read at
+  `local.liveOwners`. Either way the stream is **read-only here**, and the
+  fold says so in one field: `readOnly` is true when `ownerId` is not
+  `local.self`, or when the stream is in `local.unreadable`. Without it a
+  second process renders the ordinary approval panel for a decision only
+  the owning process can deliver, and every action comes back `NotOwner`
+  (7.6) - an invitation to act that cannot work. A stream whose run state
+  this process could not read at
   startup (`markUnavailable` with `streamUnreadableMessage`,
   `restartRepair.ts:232-240`) is genuinely local - another process may read
   the same run fine - so it belongs to the same transient arm as liveness,
@@ -476,13 +484,18 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   delta cannot say whether it appends or replaces. `TextChunk` is therefore
   `{ streamId, rowId, from, to, text }` - an append that carries its own
   offsets into the row's in-flight text, the transient analogue of `seq`.
-  One rule covers every case: **truncate the row at `from`, then append
-  `text`**, for any `from <= length`. A re-delivered chunk is idempotent, a
-  chunk with `from: 0` replaces the row, and two adjacent chunks merge into
-  one exactly - `from` of the first, `to` and concatenated text of the
-  second - which is what lets the framer coalesce instead of drop (7.4). So
-  `from > length` is a defect, not a repair path, and replacement needs no
-  second arm. `settledSeq` never moves.
+  One rule covers every case, and it reads `to` before `from`: **ignore a
+  chunk whose `to <= length`** (already applied), otherwise **truncate at
+  `from` and append `text`**, with `from > length` a defect rather than a
+  repair path. Reading only `from` is not idempotent - after
+  `{from: 0, to: 3}` and `{from: 3, to: 6}`, redelivering the first would
+  truncate `abcdef` back to `abc` and put the next chunk at
+  `from: 6 > length`, stopping live output on a duplicate. With `to` a
+  redelivery in any order is a no-op, a `from: 0` chunk covering the row
+  replaces it, and two adjacent chunks merge into one exactly - `from` of
+  the first, `to` and concatenated text of the second - which is what lets
+  the framer coalesce instead of drop (7.4). Replacement needs no second
+  arm. `settledSeq` never moves.
 - **Settled text is in the event.** A chunk is transient, so the finalizing
   event must carry the row's complete text or a replay - and any non-owning
   process - loses it. Today it usually does not: `TraceEmitter.finalize()`
@@ -1266,7 +1279,14 @@ fixing the id retired it.
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
   carrying the `approvalId` of the request it answers (the runtime's id from
   `approval.requested`, which `ApprovalRequest` already holds), plus
-  `externalInquiry { draft | submit | drop }`. The envelope's `requestId` is
+  `externalInquiry { submit | drop }`, each naming the inquiry's **turn**
+  and not only its thread: `recordOpenQuestion` reopens a thread and
+  `recordAnswerForOpenTurn` writes whichever turn is open
+  (`externalInquiryStorage.ts:251-321, 331-360`), so a stale panel in a
+  second surface could answer or drop a turn the agent opened after it last
+  rendered. There is no `draft` arm - §8.5 removes that round trip and §9
+  makes `Surface.inquiryDrafts` the per-view owner, so two surfaces would
+  otherwise overwrite each other's unsent text through the backend. The envelope's `requestId` is
   correlation for the response (8.4) and is minted per message; the
   `approvalId` is domain identity and names which pending decision is being
   resolved. One cannot serve as the other: two surfaces answering the same
@@ -1337,7 +1357,14 @@ removes selection synchronization, and is what populates
 selections: `fileDropHandler.ts:181-194` sends `ATTACH_DROPPED_FILES` today
 and `FileManager.ts:240-266` resolves, validates, and categorizes the paths
 host-side - a picker is no substitute for a drop), `refreshFiles` and
-`refreshCommits` (the retained `latexdiffs-section` and launcher controls
+`listFiles { path }`, `readFile { path }`, and
+`writeFile { path, content }` (the desktop Monaco editor's tree, open, and
+save - `renderer/fileRequests.ts` sends `LIST_FILES`, `READ_FILE`,
+`WRITE_FILE` today and `messageRoutes.ts:153-178` resolves them; they are
+distinct from `openFile`, which is the user-facing navigation action, and
+they must be session-keyed like every request now that lane 6 removes the
+process-global root), `refreshCommits` (the retained `latexdiffs-section`
+and launcher controls
 post `REFRESH_COMMITS` and `REFRESH_ALL_FILES` today, `MainApp.ts:621-625`;
 each re-derives its part of the `host` snapshot, which is otherwise pushed
 only when the host notices a change), `openSettings`,
@@ -1602,9 +1629,11 @@ popup renders `transcript.run` verbatim.
   `desktopAgentExecution.ts` (the `DesktopProgressBridge` portion,
   `:166-1265`), `eventHandlers.ts` (420), the desktop's unsupported-command
   list, `FOLLOW_UP_RESULT`, `SETTLE_STREAM_SELECTION`, `UPDATE_BYPASS`,
-  `renderer/messageRoutes.ts` (201) and `desktopIpcTypes.createCommandHandler`
-  in favor of one dispatcher over one schema family, `desktopProgressIpc`'s
-  outer parse (`:97`).
+  the **session routes** of `renderer/messageRoutes.ts` (201) and
+  `desktopIpcTypes.createCommandHandler` in favor of one dispatcher over one
+  schema family, `desktopProgressIpc`'s outer parse (`:97`). Its terminal,
+  PDF, and browser routes stay: those are byte streams, not session events
+  or request outcomes (12.2).
 - The desktop main process runs the same fold for control and headless
   needs; renderer and main each hold one runtime. One program in two
   processes, not a dual.
@@ -1840,6 +1869,13 @@ a component.
   task header, the same conversation and composer as the extension, and a
   dock with the diff count, Compile PDF, and latexdiff-vs-last-commit
   shortcuts into the Tools sheet.
+  The desktop keeps its auxiliary IPC alongside this protocol. A PTY streams
+  `desktop:terminal:data`, `:exit`, and `:error` into xterm through
+  `renderer/messageRoutes.ts:180-190`, which is a continuous byte stream, not
+  a session event and not a request outcome - §8.1 and §8.4 carry neither.
+  What lane 4 replaces is the **session** dispatcher; the terminal, PDF, and
+  browser transports stay as they are, and the PRD does not claim otherwise.
+
 - **Workbench** (right pane, existing): PDF as a new tab kind (the PDF is a
   dialog overlay today, `pdfOverlay.ts`), editor, terminal (defaults to the
   bottom placement), browser, logs, and a Subagents tab that hosts the
