@@ -36,8 +36,8 @@
  * cursor, a malformed record, or one written by a newer TeXRA is not a
  * checkpoint to promise anyone), but parsing 200 flow records to fill a status
  * column is exactly the cost this surface must not pay. A malformed checkpoint
- * consequently reads as interrupted here; the single-run paths that would act
- * on one (resume, restart repair) parse it and refuse loudly.
+ * consequently reads as interrupted here; the single-run resume path that
+ * would act on one parses it and refuses loudly.
  */
 
 import { flowKey } from '@agent/node/persistedFlow';

@@ -16,7 +16,6 @@ import {
   type DeleteExecutionOptions,
   type DeleteExecutionResult,
   type ExecutionStreamReferenceListing,
-  readExecutionStreamIndex,
 } from './executionListing';
 
 const log = createLog('SessionStores');
@@ -160,8 +159,12 @@ export class SessionStores {
     this.snapshots = options.snapshots;
     this.executions = options.executions;
     this.deleteExecution = options.deleteExecution ?? deleteStoredExecution;
+    // The default reads the module binding at call time, so a walker swapped
+    // in after construction (a test spy on the module) is the one every read
+    // below goes through.
     this.listExecutionStreamReferences =
-      options.listExecutionStreamReferences ?? listExecutionStreamReferences;
+      options.listExecutionStreamReferences ??
+      (() => listExecutionStreamReferences());
     this.goalEntries = options.goalEntries;
     this.onCanonicalStreamDeleted = options.onCanonicalStreamDeleted;
     this.onChildrenDetached = options.onChildrenDetached;
@@ -541,7 +544,7 @@ export class SessionStores {
       quiet: true,
     }).executionId;
     if (resident) return resident;
-    const { byStream, unreadable } = await readExecutionStreamIndex();
+    const { byStream, unreadable } = await this.readStreamIndex();
     const indexed = byStream.get(stream);
     if (indexed) return indexed;
     if (unreadable.size > 0) {
@@ -550,6 +553,31 @@ export class SessionStores {
       );
     }
     return undefined;
+  }
+
+  /**
+   * The stream→execution index: the injected walk of the executions
+   * directory, reshaped by stream. `unreadable` lists the executions whose
+   * metadata could not be read (each also logged where the read failed).
+   * Their `meta.streamId` is unknown and may name any stream, so absence from
+   * `byStream` proves a stream unowned only while `unreadable` is empty: a
+   * caller that would delete or settle an unowned stream must retain it.
+   */
+  private async readStreamIndex(): Promise<
+    ExecutionStreamReferenceListing & {
+      readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
+    }
+  > {
+    const listing = await this.listExecutionStreamReferences();
+    return {
+      ...listing,
+      byStream: new Map(
+        listing.references.map(({ streamId, executionId }) => [
+          streamId,
+          executionId,
+        ]),
+      ),
+    };
   }
 
   /**
@@ -606,7 +634,7 @@ export class SessionStores {
     const canonicalStreams = new Set(this.streamLogs.keys());
     const streamIds = unique([...snapshotStreams, ...canonicalStreams]);
     const executionIdsByStream = new Map(this.snapshots.getExecutionIdMap());
-    const { byStream, unreadable } = await readExecutionStreamIndex();
+    const { byStream, unreadable } = await this.readStreamIndex();
     for (const stream of snapshotStreams) {
       if (executionIdsByStream.has(stream)) continue;
       const executionId = byStream.get(stream);
@@ -920,9 +948,9 @@ export class SessionStores {
     // resolves each orphan's owning execution from it, and the execution half
     // takes the same references. Reading it twice cost a second full scan of
     // every execution's metadata for exactly the same answer.
-    let listing: ExecutionStreamReferenceListing;
+    let index: Awaited<ReturnType<SessionStores['readStreamIndex']>>;
     try {
-      listing = await this.listExecutionStreamReferences();
+      index = await this.readStreamIndex();
     } catch (error) {
       // Ownership is unknown for every row, and unknown state is never swept.
       log.warn(
@@ -931,10 +959,7 @@ export class SessionStores {
       );
       return { streams: [], executionIds: [] };
     }
-    const { references, unreadable } = listing;
-    const byStream = new Map(
-      references.map(({ streamId, executionId }) => [streamId, executionId]),
-    );
+    const { references, unreadable, byStream } = index;
     await Promise.all(
       orphanedStreams.map(async (stream) => {
         // `liveStreams` is a snapshot the caller took before this sweep's

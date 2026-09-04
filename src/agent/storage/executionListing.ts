@@ -8,7 +8,6 @@
 import pMap from 'p-map';
 
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
-import { flowKey } from '@agent/node/persistedFlow';
 import {
   isAgentRunRecord,
   type RunRecord,
@@ -166,21 +165,20 @@ export interface ExecutionStreamReferenceListing {
 }
 
 /**
- * List execution→stream references recorded in readable execution metadata.
+ * The one walk of the executions directory that reads the authored
+ * execution→stream edge (`ExecutionMeta.streamId`, stamped at registration).
+ * Callers resolve a stream's execution from the resident snapshot record
+ * first (a live run updates it synchronously) and fall back to this scan for
+ * non-resident streams; the retired sidecar-FK and summary-mirror read
+ * ladders are gone.
  *
  * This deliberately does not infer ownership for metadata without `streamId`,
  * or for malformed metadata. Those rows are retained: the sweep's only safe
- * deletion authority is the registered execution→stream edge itself.
- *
- * With `checkpointedOnly`, only executions that still hold a resume
- * checkpoint (flow record) are listed; the existence check runs before the
- * metadata read, so settled history costs one `stat` each and no file read.
- * An execution whose storage cannot be read is reported in `unreadable` with
+ * deletion authority is the registered execution→stream edge itself. An
+ * execution whose storage cannot be read is reported in `unreadable` with
  * the cause instead of being dropped.
  */
-export async function listExecutionStreamReferences(
-  options: { readonly checkpointedOnly?: boolean } = {},
-): Promise<ExecutionStreamReferenceListing> {
+export async function listExecutionStreamReferences(): Promise<ExecutionStreamReferenceListing> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
   const unreadable = new Map<ExecutionId, string>();
@@ -189,12 +187,6 @@ export async function listExecutionStreamReferences(
     async (executionId): Promise<ExecutionStreamReference | null> => {
       const store = getExecutionStore(executionId);
       try {
-        if (
-          options.checkpointedOnly &&
-          !(await store.exists(flowKey(executionId)))
-        ) {
-          return null;
-        }
         const meta = await store.readMetaStrict();
         if (!meta?.streamId) return null;
         return { executionId, streamId: meta.streamId };
@@ -211,34 +203,6 @@ export async function listExecutionStreamReferences(
     { concurrency: EXECUTION_STORAGE_CONCURRENCY },
   );
   return { references: results.filter(filterNotNull), unreadable };
-}
-
-/**
- * The one stream -> execution index, built on demand from the authored
- * `ExecutionMeta.streamId` edge stamped at registration. Callers resolve a
- * stream's execution from the resident snapshot record first (a live run
- * updates it synchronously) and fall back to this scan for non-resident
- * streams; the retired sidecar-FK and summary-mirror read ladders are gone.
- */
-export async function readExecutionStreamIndex(): Promise<{
-  /** Streams named by a readable `ExecutionMeta.streamId`. */
-  readonly byStream: ReadonlyMap<StreamTabId, ExecutionId>;
-  /**
-   * Executions whose metadata could not be read, with the cause (each is also
-   * logged where the read failed). Their `meta.streamId` is unknown and may
-   * name any stream, so absence from `byStream` proves a stream unowned only
-   * while this is empty: a caller that would delete or settle an unowned
-   * stream must retain it instead.
-   */
-  readonly unreadable: ReadonlyMap<ExecutionId, string>;
-}> {
-  const { references, unreadable } = await listExecutionStreamReferences();
-  return {
-    byStream: new Map(
-      references.map(({ streamId, executionId }) => [streamId, executionId]),
-    ),
-    unreadable,
-  };
 }
 
 /**
