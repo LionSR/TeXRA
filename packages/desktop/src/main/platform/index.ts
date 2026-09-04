@@ -29,6 +29,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
+import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -120,6 +121,7 @@ export async function initializeElectronPlatform(
     workspaceState: workspaceStateStore,
   });
   initProcessWorkspaceRoots(processRoots);
+  initProcessSettingHost('desktop');
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this
   // the model layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes();
@@ -162,7 +164,7 @@ export async function initializeElectronPlatform(
   // desktop cannot wire one prompt and forget another the way it once did.
   initializeBundledPrompts(resourcesPath);
   // Project skills follow each paper's session; only the bundle is fixed.
-  initializeNodeRuntimeSkills({ host: 'desktop', resourcesPath });
+  initializeNodeRuntimeSkills({ resourcesPath });
 
   await bootstrapNodeAgentDirectories({
     channel: 'desktop',

@@ -28,10 +28,10 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup/platform';
+import { initProcessSettingHost } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import {
@@ -300,6 +300,7 @@ export async function initCliPlatform(
       workspaceState: stateStores.workspaceState,
     });
     initProcessWorkspaceRoots(roots);
+    initProcessSettingHost('cli');
     // TeXRA's account plane (ChatGPT / Grok sign-in). Without
     // this the model layer is bring-your-own-key. See installTexraAccountProbes.
     installTexraAccountProbes();
@@ -353,10 +354,6 @@ export async function initCliPlatform(
       afterExecutionSettlement: [() => teardownDefaultSession()],
     });
 
-    // Attribute agent-authored commits to the TeXRA identity by default;
-    // configurable via `.texra/config.json` `texra.git.markCommits`.
-    applyCliGitAuthorConfig(roots.config);
-
     // Route CLI model traffic to the same Supabase usage log the extension
     // writes to, tagged with editorType 'cli' and the CLI version.
     // dispose() flushes any queued entries; it
@@ -388,7 +385,6 @@ export async function initCliPlatform(
   });
 
   initializeNodeRuntimeSkills({
-    host: 'cli',
     resourcesPath: context.resourcesPath,
     skillSourceOptions: context.skillSourceOptions,
   });

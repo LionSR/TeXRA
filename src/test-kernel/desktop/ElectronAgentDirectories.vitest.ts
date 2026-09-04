@@ -366,7 +366,6 @@ describe('desktop agent directory bootstrap', () => {
     const { loadRuntimeSkillDisplay } = await import('@skills/runtimeSkills');
 
     initializeNodeRuntimeSkills({
-      host: 'desktop',
       resourcesPath,
       skillSourceOptions: {
         includeInterop: true,

@@ -16,8 +16,6 @@ import {
   CLI_STATE_SETTINGS,
   DEFAULT_GIT_AUTHOR_EMAIL,
   DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_GIT_MARK_COMMITS,
-  DEFAULT_GIT_WORKTREE_SUPPORT,
   DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   STATE_SETTINGS,
   settingByKey,
@@ -105,10 +103,10 @@ const PROVIDER_STREAMING_DEFAULTS = Object.fromEntries(
 
 /** Expected default-when-absent for each catalog key, from the real getters. */
 const EXPECTED_DEFAULTS: Record<string, unknown> = {
-  [WorkspaceStateKey.GIT_MARK_COMMITS]: DEFAULT_GIT_MARK_COMMITS,
+  [WorkspaceStateKey.GIT_MARK_COMMITS]: true,
   [WorkspaceStateKey.GIT_AUTHOR_NAME]: DEFAULT_GIT_AUTHOR_NAME,
   [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: DEFAULT_GIT_AUTHOR_EMAIL,
-  [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: DEFAULT_GIT_WORKTREE_SUPPORT,
+  [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
   [GlobalStateKey.ALLOW_ORCHESTRATOR_KILL]: true,
   [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: false,
   [GlobalStateKey.MEMORY_ENABLED]: true,
@@ -677,10 +675,7 @@ describe('settingsAccess', () => {
   it('reads the default when the key is absent', () => {
     const { stores } = makeFakeSettingsStores();
     const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    assert.equal(
-      readSetting(entry, stores, 'vscode'),
-      DEFAULT_GIT_MARK_COMMITS,
-    );
+    assert.equal(readSetting(entry, stores, 'vscode'), true);
   });
 
   it('routes extension writes to the canonical store', async () => {
@@ -753,7 +748,7 @@ describe('settingsAccess', () => {
       key: WorkspaceStateKey.GIT_MARK_COMMITS,
       host: 'cli',
       storeName: 'config',
-      expectedDefault: DEFAULT_GIT_MARK_COMMITS,
+      expectedDefault: true,
     });
   });
 

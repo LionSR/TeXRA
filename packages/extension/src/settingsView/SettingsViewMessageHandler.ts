@@ -37,7 +37,6 @@ import {
 } from '@frontend/latex/inlineCriticism';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
-import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -588,12 +587,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const posters: SettingsSnapshotPosters = {
       approval: () => this.rebroadcastSnapshot('approval'),
-      'git-author': () => {
-        // Git identity is also process env, so the write must reach `git`
-        // before the webview is told the new value stuck.
-        applyGitAuthorConfig();
-        return this.rebroadcastSnapshot('git-author');
-      },
+      'git-author': () => this.rebroadcastSnapshot('git-author'),
       latex: () => this.rebroadcastSnapshot('latex'),
       memory: () => this.rebroadcastSnapshot('memory'),
       models: () =>

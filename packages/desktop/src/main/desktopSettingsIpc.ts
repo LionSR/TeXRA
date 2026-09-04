@@ -43,10 +43,6 @@ import {
 } from '@tools/github/githubAuth';
 import { StorageFS } from '@utils/files/storageFS';
 import {
-  applyGitAuthorSettings,
-  readGitAuthorSettingsFromState,
-} from '@utils/system/gitAuthorSettings';
-import {
   createDesktopErrorReporter,
   type DesktopCommandMessage,
   type DesktopMessageHandler,
@@ -144,12 +140,6 @@ export function createDesktopSettingsIpc(
     },
   });
 
-  function applyCurrentGitAuthorSettings() {
-    return applyGitAuthorSettings(
-      readGitAuthorSettingsFromState(workspaceState),
-    );
-  }
-
   const settingsStores: SettingsStores = {
     config: options.config,
     workspaceState,
@@ -243,12 +233,7 @@ export function createDesktopSettingsIpc(
 
   const stateSettingSnapshotPosters: SettingsSnapshotPosters = {
     approval: () => postSettingsSnapshot('approval'),
-    'git-author': () => {
-      // Git identity is also process env, so the write must reach `git` before
-      // the renderer is told the new value stuck.
-      applyCurrentGitAuthorSettings();
-      postSettingsSnapshot('git-author');
-    },
+    'git-author': () => postSettingsSnapshot('git-author'),
     latex: () => options.toolingSettingsController.postLatexConfigValues(),
     memory: () => postSettingsSnapshot('memory'),
     models: () => settingsHost.sendModelSelectionData(),
@@ -314,8 +299,6 @@ export function createDesktopSettingsIpc(
   function runAsyncInPaper(work: () => Promise<void>): void {
     runAsync(Promise.resolve(runInSession(options.session, work)));
   }
-
-  applyCurrentGitAuthorSettings();
 
   // Agent runs execute in this same main process and the settings panel shares
   // the app window with run progress, so a Goals tab left open during a run

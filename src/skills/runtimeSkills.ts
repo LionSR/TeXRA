@@ -2,7 +2,6 @@ import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   type ActiveSkillSourceScope,
   type RawAcceptedSkill,
-  type SettingHost,
   type SkillDisplayItem,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -29,7 +28,6 @@ import {
 type RuntimeSkillSourceResolver = (cwd: string) => readonly SkillSource[];
 
 let resolveRuntimeSkillSources: RuntimeSkillSourceResolver = () => [];
-let runtimeSkillHost: SettingHost = 'vscode';
 
 export interface RuntimeSkillCatalogResult {
   catalog: string;
@@ -48,11 +46,9 @@ interface DisabledSkills {
  */
 export function setRuntimeSkillSources(
   sources: readonly SkillSource[] | RuntimeSkillSourceResolver,
-  host: SettingHost = 'vscode',
 ): void {
   resolveRuntimeSkillSources =
     typeof sources === 'function' ? sources : () => sources;
-  runtimeSkillHost = host;
 }
 
 /** The sources for the calling session's workspace, or the home folder without one. */
@@ -77,13 +73,9 @@ function isSkillDisabled(
 
 function readDisabledSkills(): DisabledSkills {
   return {
-    names: readPlatformSetting<string[]>(
-      WorkspaceStateKey.DISABLED_SKILLS,
-      runtimeSkillHost,
-    ),
+    names: readPlatformSetting<string[]>(WorkspaceStateKey.DISABLED_SKILLS),
     scopes: readPlatformSetting<ActiveSkillSourceScope[]>(
       WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-      runtimeSkillHost,
     ),
   };
 }

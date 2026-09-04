@@ -17,7 +17,6 @@
 
 // Local imports
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import type { SettingHost } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   defaultSkillSources,
@@ -117,7 +116,6 @@ export interface NodeAgentDirectoryBootstrapOptions {
 }
 
 export interface NodeRuntimeSkillOptions {
-  readonly host: SettingHost;
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
@@ -169,13 +167,11 @@ export function initializeNodeRuntimeSkills(
 ): void {
   // The workspace folder is not fixed here: project and interop sources are
   // resolved from the calling session's workspace at discovery time.
-  setRuntimeSkillSources(
-    (cwd) =>
-      defaultSkillSources(
-        { cwd, resourcesPath: options.resourcesPath },
-        options.skillSourceOptions,
-      ),
-    options.host,
+  setRuntimeSkillSources((cwd) =>
+    defaultSkillSources(
+      { cwd, resourcesPath: options.resourcesPath },
+      options.skillSourceOptions,
+    ),
   );
 }
 

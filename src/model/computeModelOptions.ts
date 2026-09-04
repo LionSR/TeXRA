@@ -7,6 +7,7 @@ import { isPreferXaiSubscription } from '@model/xai/xaiPreference';
 import { isXaiSignedIn } from '@model/xai/xaiSignedIn';
 import type { StateStore } from '@platform/interfaces';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 import { CHATGPT_AUTH, GROK_AUTH } from '@shared/copy/accountAuth';
 import {
@@ -591,7 +592,10 @@ export function invalidateModelOptionsCache(): void {
  * When `models` is provided, the caller's view of the visible-models list is
  * honored verbatim. Explicit lists are cached by their exact ordered contents,
  * so alternate global-state views stay isolated while repeated settings/CLI
- * refreshes do not redo secret and server-side key checks.
+ * refreshes do not redo secret and server-side key checks. The key also names
+ * the calling session's workspace: the subscription preferences the
+ * availability context reads are workspace config, so one paper's verdict
+ * must not be served to another.
  *
  * Callers that own access-state freshness invalidate the shared caches
  * ({@link invalidateModelOptionsCache}, `invalidateApiKeyCache`) instead of
@@ -600,10 +604,11 @@ export function invalidateModelOptionsCache(): void {
 export async function computeModelOptionsData(
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
-  const cacheKey =
+  const cacheKey = `${workspaceRoots().workspace ?? ''}|${
     models == null
       ? VISIBLE_MODELS_CACHE_KEY
-      : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
+      : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`
+  }`;
   return coalesceAsync<string, ModelOptionData[]>(
     resolvedModelOptions,
     pendingModelOptions,

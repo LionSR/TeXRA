@@ -12,6 +12,19 @@ function requireEntry(key: string) {
 }
 
 /**
+ * The host this process is, for the catalog rows whose storage slot differs
+ * by host (the git identity and skill availability rows live in workspace
+ * state on the extension and desktop and in `.texra/config.json` on the
+ * CLI). One process is one host, so the composition root installs it once,
+ * beside `initProcessWorkspaceRoots()`.
+ */
+let processSettingHost: SettingHost = 'vscode';
+
+export function initProcessSettingHost(host: SettingHost): void {
+  processSettingHost = host;
+}
+
+/**
  * The three setting slots for the calling context: the session's workspace
  * config and state, and the process global state.
  */
@@ -33,18 +46,16 @@ function settingsStores() {
  * the schema, and a stale/invalid stored value snaps back to that default (via
  * `readSetting`'s `safeParse`) rather than propagating. The store slot
  * (`workspaceState` / `globalState` / `config`) is the one the catalog entry
- * declares, so the right backing store is picked without the caller naming it.
- *
- * Reads default to the `'vscode'` slot, which most rows share with `desktop`.
- * A host-neutral runtime whose row deliberately diverges by host may pass the
- * active host explicitly; host-specific convenience readers remain preferable
- * when they also own normalization or side effects.
+ * declares for this process's host, so the right backing store is picked
+ * without the caller naming it. Host-specific convenience readers remain
+ * preferable when they also own normalization or side effects.
  */
-export function readPlatformSetting<T>(
-  key: string,
-  host: SettingHost = 'vscode',
-): T {
-  return readSetting(requireEntry(key), settingsStores(), host) as T;
+export function readPlatformSetting<T>(key: string): T {
+  return readSetting(
+    requireEntry(key),
+    settingsStores(),
+    processSettingHost,
+  ) as T;
 }
 
 /**
@@ -56,5 +67,10 @@ export function writePlatformSetting(
   key: string,
   value: unknown,
 ): Promise<void> {
-  return writeSetting(requireEntry(key), value, settingsStores());
+  return writeSetting(
+    requireEntry(key),
+    value,
+    settingsStores(),
+    processSettingHost,
+  );
 }

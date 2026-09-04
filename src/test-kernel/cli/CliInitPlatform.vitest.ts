@@ -185,8 +185,6 @@ vi.mock('@cli/runtime/cliSecrets', () => ({
   getCliSecrets: mocks.getCliSecrets,
 }));
 
-vi.mock('@cli/runtime/gitAuthor', () => ({ applyCliGitAuthorConfig: vi.fn() }));
-
 vi.mock('@tools/lean/direct/directLspAdapter', () => ({
   registerDirectLeanLanguageServices: vi.fn(),
 }));
@@ -520,7 +518,6 @@ describe('CLI platform init', () => {
     );
 
     expect(mocks.initializeNodeRuntimeSkills).toHaveBeenCalledWith({
-      host: 'cli',
       resourcesPath: '/tmp/resources',
       skillSourceOptions: {
         includeInterop: true,
