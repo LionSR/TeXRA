@@ -37,21 +37,26 @@ Inside repair (`src/agent/runtime/SessionHandle.ts` `runRestartRepair`,
 
 Raw read plus `JSON.parse` of all 3,125 checkpoints is 7 s; the Zod envelope
 is shallow (`shared: z.unknown()`). The cost is per-run overhead multiplied
-by duplication, not parsing per se. Per launch the executions directory is
-scanned three or four times (repair scan, `readExecutionStreamIndex` in the
-orphan sweep, `listExecutionStreamReferences` again in
-`sweepOrphanedExecutions`, `listExecutions` in the launcher) and every
-checkpoint is parsed up to three times (launcher history row `classifyRun`,
-repair phase 1, repair phase 2).
+by duplication, not parsing per se. On the measured path (`texra chat` with
+both overrides, which never lists history) the executions directory is
+scanned three times per launch (repair scan, `readExecutionStreamIndex` in
+the orphan sweep, `listExecutionStreamReferences` again in
+`sweepOrphanedExecutions`) and every checkpoint is parsed twice (repair
+phase 1, repair phase 2). The bare `texra` launcher adds a fourth scan
+(`listExecutions`) and a third parse per visible history row (`classifyRun`
+in the Resume picker) before the pickers appear.
 
 The extension and desktop hosts run the same pass (`extension.ts:499`,
 `desktop/src/main/index.ts:1341`).
 
 ## 2. Why it is O(history) and will stay that way
 
-Completed tool-use chat runs keep their checkpoint so Resume can continue
-them (D8 in `2026-08-23-single-owner-sessions.md`). Repair treats "has a
-checkpoint" as "needs classification", so the candidate set is the whole
+Cancelled, failed, and crashed tool-use runs keep their checkpoint so Resume
+can continue them (D8 as shipped in #11304: only a genuinely completed run
+deletes its record, and no inferred outcome may), and a chat session that is
+closed idle ends as CANCELLED, so nearly every chat run keeps one. Repair
+treats "has a checkpoint" as "needs classification", so the candidate set is
+the whole
 history and only grows. In the measured workspace 1,985 checkpointed runs
 already carry a persisted outcome; repair re-proves them every launch.
 
@@ -107,7 +112,8 @@ Ordered by leverage. Each step is independently shippable and leaves no
 compatibility shim.
 
 **S1. No history work on the interactive path.** Delete the startup
-repair and the orphan sweep from `waitUntilReady`. Startup opens the
+repair from `waitUntilReady` and the orphan sweep from each host's startup
+sequence (it is a separate host-level step today). Startup opens the
 transcript summary index (already lazy per #9947) and nothing else. A
 stream's phase is a pure function evaluated when it is displayed or acted
 on, defined over the execution's summary tuple (id, stream edge, outcome,
@@ -128,9 +134,9 @@ lease inspection moves to row-open time under S3, so a run another process
 holds is discovered when the user opens it, not while scrolling. This is a
 deletion, not an index; it creates no file layout for Stage 2 to migrate.
 
-**S2. Terminal facts are written where the run ends.** The one write
-repair performs today (record CANCELLED for a crashed run) moves to the
-run's own exit paths (SIGINT/SIGTERM teardown already exists in the CLI;
+**S2. Terminal facts are written where the run ends.** The two writes
+repair performs today (record CANCELLED for a crashed run, and close its
+open transcript groups) move to the run's own exit paths (SIGINT/SIGTERM teardown already exists in the CLI;
 the extension and desktop have deactivate hooks) and, for a hard crash, to
 the moment the user resumes that run, the way Codex appends `TurnAborted`
 only on resume. An unrepaired row is tolerated by readers, as in OpenCode.
@@ -173,8 +179,10 @@ toward it rather than away from it.
 
 - 1,133 checkpointed runs in the measured workspace have no `meta.outcome`
   and no `meta.streamId`. They predate stream-id stamping and are never
-  repair candidates today; under S1 they read as "interrupted, resumable
-  if a checkpoint exists" with a NULL outcome. Neither document proposes a
+  repair candidates today; under S1 the rail reads them as "interrupted"
+  with a NULL outcome, and the listing's stream-id gate keeps them out of
+  Resume (a run with no stream edge cannot be continued). Neither document
+  proposes a
   backfill, and no importer may synthesize an outcome for them; S6
   retention is the only thing that ever removes them.
 - Envelope extraction for existing checkpoints is the companion's Stage 5
