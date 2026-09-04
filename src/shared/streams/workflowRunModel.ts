@@ -29,12 +29,11 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import { compareBySeqNo, usableSequence } from '@shared/streams/streamOrdering';
-import {
-  isTerminalOutcomePhase,
-  workflowRunSettled,
-} from '@shared/streams/streamStatus';
+import { workflowRunSettled } from '@shared/streams/streamStatus';
 import {
   TOKENS_GENERATED,
+  formatWorkflowCallLine,
+  formatWorkflowCallMetadataParts,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
   type WorkflowTally,
@@ -169,16 +168,19 @@ interface WorkflowRunModelInput {
   readonly workflowAttemptId?: string;
   /** The newest attempt's declared plan, if the transcript recorded a valid one. */
   readonly plan: WorkflowDeclaredPlan | WorkflowPlanMarker | undefined;
-  /** The stream's resolved lifecycle phase — the run's own settlement fact,
-   *  read once here instead of pre-digested by each host. Two readings come
-   *  off it: `workflowRunSettled` (the run has ended, so plan-only phases it
-   *  never reached are nothing to show — the projection's settle sweep has
-   *  housed every declared card under a stage, making an empty plan-only
-   *  phase its own skipped-empty-phase suppression), and, for the status
-   *  cells, whether the run reached a terminal OUTCOME. Only the stricter
-   *  reading may repaint a live-looking card: a stream held by another
-   *  process has ended here without ending at all. */
+  /** The stream's resolved lifecycle phase. The run has ended once it is
+   *  neither running nor waiting (`workflowRunSettled`), and plan-only phases
+   *  it never reached are then nothing to show — the projection's settle
+   *  sweep has housed every declared card under a stage, so an empty
+   *  plan-only phase is its own skipped-empty-phase suppression. */
   readonly streamPhase: StreamLifecycleStatus | undefined;
+  /** Whether the run is durably final: a terminal outcome with no producer
+   *  left anywhere (`SessionState.resolveStreamPhase` origin `derived`) — the
+   *  same fact `taskGroupDisplayStatus` reads for an unclosed task group. A
+   *  terminal phase alone will not do: a user stop publishes CANCELLED while
+   *  the run is still unwinding in this process and its cards are still being
+   *  settled, and a foreign-owned run has ended here without ending at all. */
+  readonly runDurablyFinal: boolean;
   /** Live progress by child stream, for the cards that opened those streams. */
   readonly childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
 }
@@ -308,6 +310,27 @@ function latestWorkflowAttemptId(
   if (!fallback) return sequenced?.attemptId;
   if (!sequenced) return fallback.attemptId;
   return laterAttemptBoundaryByTime(sequenced, fallback).attemptId;
+}
+
+/**
+ * One `running` card as a run nothing can still settle leaves it. The status
+ * and every piece of copy derived from it are re-read through the shared
+ * formatters, so a repainted card cannot drift from one its producer settled
+ * itself, and the card, its status word, the phase strip and the tally are
+ * one reading rather than four.
+ */
+function interruptedTaskRow(row: WorkflowTaskRow): WorkflowTaskRow {
+  const call: WorkflowCallProgress = {
+    ...row.call,
+    status: WORKFLOW_CALL_STATUS.CANCELLED,
+  };
+  return {
+    ...row,
+    call,
+    line: formatWorkflowCallLine(call),
+    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+    metadataParts: formatWorkflowCallMetadataParts(call),
+  };
 }
 
 function phaseLogicalIdentity(phase: MutablePhase): string {
@@ -455,12 +478,19 @@ export function workflowRunModel(
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
   let unphased: MutablePhase | undefined;
-  for (const row of cards) {
-    const phase = row.groupId ? byGroupId.get(row.groupId) : undefined;
-    const attemptId = row.call.attemptId;
+  for (const card of cards) {
+    const phase = card.groupId ? byGroupId.get(card.groupId) : undefined;
+    const attemptId = card.call.attemptId;
     if (latestAttemptId !== undefined && attemptId !== latestAttemptId) {
       continue;
     }
+    // The one repaint, made here so both collections hold the same row: a
+    // call the run left `running` with nothing alive to settle it paints as
+    // cancelled rather than as a call that never stops.
+    const row =
+      input.runDurablyFinal && card.call.status === WORKFLOW_CALL_STATUS.RUNNING
+        ? interruptedTaskRow(card)
+        : card;
     tasks.push(row);
     if (phase) {
       phase.tasks.push(row);
@@ -526,20 +556,8 @@ export function workflowRunModel(
     (sum, phase) => sum + phase.declaredTasks.length,
     0,
   );
-  // A call left `running` on a run that reached a terminal outcome has no
-  // producer left to settle it — the same fact `taskGroupDisplayStatus` reads
-  // for an unclosed task group — so it paints as cancelled rather than as a
-  // call that never stops. Derived once here and fed to both the cells and
-  // the tallies, which are two views of the same statuses.
-  const runInterrupted = isTerminalOutcomePhase(input.streamPhase);
-  const displayStatusOf = (
-    row: WorkflowTaskRow,
-  ): WorkflowCallProgress['status'] =>
-    runInterrupted && row.call.status === WORKFLOW_CALL_STATUS.RUNNING
-      ? WORKFLOW_CALL_STATUS.CANCELLED
-      : row.call.status;
   const phaseModels = ordered.map((phase) => {
-    const cells = phase.tasks.map(displayStatusOf);
+    const cells = phase.tasks.map((row) => row.call.status);
     return {
       ...phase,
       tally: tallyOf(cells, phase.declaredTasks.length),
@@ -553,7 +571,10 @@ export function workflowRunModel(
       unphased === undefined
         ? undefined
         : phaseModels[ordered.indexOf(unphased)],
-    tally: tallyOf(tasks.map(displayStatusOf), declaredTotal),
+    tally: tallyOf(
+      tasks.map((row) => row.call.status),
+      declaredTotal,
+    ),
     childStreamOf,
     liveOf,
   };

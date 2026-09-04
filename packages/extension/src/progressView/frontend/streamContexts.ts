@@ -82,6 +82,10 @@ export interface StreamLogContextValue {
   streamName: string | null;
   /** Current active stream status for pre-output empty states. */
   streamStatus: StreamLifecycleStatus | undefined;
+  /** Whether that status is durably final — terminal with no producer left
+   *  anywhere (`StreamMetadata.statusDurablyFinal`). The one fact that lets a
+   *  group the run never closed paint as interrupted. */
+  streamDurablyFinal: boolean;
   /** Render log output in terminal style (monospace, no timestamps, etc). */
   terminalMode: boolean;
 }
@@ -99,6 +103,7 @@ export const EMPTY_LOG_CONTEXT: StreamLogContextValue = {
   hasStreams: false,
   streamName: null,
   streamStatus: undefined,
+  streamDurablyFinal: false,
   terminalMode: false,
 };
 

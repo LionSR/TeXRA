@@ -80,6 +80,7 @@ function modelOf(
   options: {
     plan?: WorkflowPlanMarker;
     streamPhase?: StreamLifecycleStatus;
+    runDurablyFinal?: boolean;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): WorkflowRunModel {
@@ -96,6 +97,7 @@ function modelOf(
     ),
     plan: options.plan,
     streamPhase: options.streamPhase,
+    runDurablyFinal: options.runDurablyFinal === true,
     childProgress: options.childProgress ?? new Map(),
   });
 }
@@ -182,6 +184,7 @@ describe('workflow run model', () => {
       rows: [resumedUngrouped, resumedPhase, old],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
       streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -223,6 +226,7 @@ describe('workflow run model', () => {
       rows: [staleUntaggedCard],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
       streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -249,6 +253,7 @@ describe('workflow run model', () => {
       rows: [],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
       streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -282,6 +287,7 @@ describe('workflow run model', () => {
       rows: [oldCard],
       plan: undefined,
       streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -309,6 +315,7 @@ describe('workflow run model', () => {
       rows: [resumedRoot, oldChild],
       plan: undefined,
       streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -340,6 +347,7 @@ describe('workflow run model', () => {
       rows: [currentLegacyRoot, currentChild, oldChild],
       plan: undefined,
       streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -536,6 +544,7 @@ describe('workflow run model', () => {
         rows: [taskRow({ id: 'v', phase: 'Verify' })],
         plan: undefined,
         streamPhase: STREAM_PHASE.COMPLETED,
+        runDurablyFinal: false,
         childProgress: new Map(),
       }).phases[0]?.heading,
     ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });

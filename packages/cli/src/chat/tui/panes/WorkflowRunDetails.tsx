@@ -32,7 +32,6 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
-  type StreamLifecycleStatus,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
@@ -55,10 +54,11 @@ interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
-  /** The stream's resolved lifecycle phase, so a group the run never closed
-   *  paints as interrupted instead of running forever. Absent means unknown,
-   *  which paints each group exactly as the transcript recorded it. */
-  readonly streamPhase?: StreamLifecycleStatus;
+  /** Whether the run is durably final — terminal with no producer left
+   *  anywhere — so a group it never closed paints as interrupted instead of
+   *  running forever. `false` paints each group as the transcript recorded
+   *  it. */
+  readonly runDurablyFinal?: boolean;
   readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
@@ -134,7 +134,7 @@ function workflowRunDetailGroups(
   // One reading of every group's status, so the marker, the label and the
   // ordering priority cannot disagree about an unclosed group.
   const displayStatus = (group: TaskGroup): TaskGroupStatus =>
-    taskGroupDisplayStatus(group, facts.streamPhase);
+    taskGroupDisplayStatus(group, facts.runDurablyFinal === true);
   const roundGroups = new Map<number, TaskGroup>();
   const rounds = new Set<number>();
   for (const group of facts.taskGroups) {

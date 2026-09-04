@@ -365,6 +365,13 @@ const activeRunPhase$ = new Signal.Computed(
   () => activeStreamState$.get()?.status,
 );
 
+/** Whether the active run is durably final — terminal with no producer left
+ *  anywhere. A terminal phase alone is not that fact, so this is what the run
+ *  model and the group rows read before repainting anything still live. */
+const activeRunDurablyFinal$ = new Signal.Computed(
+  () => activeStreamState$.get()?.statusDurablyFinal === true,
+);
+
 /**
  * The active stream's workflow run model, or null when nothing declares a
  * workflow. Computed once here so every board that renders this stream — in
@@ -386,6 +393,7 @@ const activeRunModel$ = new Signal.Computed((): WorkflowRunModel | null => {
     workflowAttemptId: streamLogs.workflowAttemptId,
     plan: streamLogs.workflowPlan,
     streamPhase: activeRunPhase$.get(),
+    runDurablyFinal: activeRunDurablyFinal$.get(),
     childProgress: activeChildProgress$.get(),
   });
 });
@@ -514,6 +522,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     hasStreams,
     streamName: activeStreamInfo.name,
     streamStatus: activeStreamState$.get()?.status,
+    streamDurablyFinal: activeRunDurablyFinal$.get(),
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
     terminalMode: activeStreamInfo.identity?.kind === 'process',

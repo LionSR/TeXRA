@@ -72,6 +72,8 @@ interface CachedStream {
   toggleStates: ToggleStateStore;
   ref: Ref<TaskGroupList>;
   status: StreamLifecycleStatus | undefined;
+  /** Whether that status is durably final (see `StreamLogContextValue`). */
+  durablyFinal: boolean;
   /** Whether this cached stream is tool-use. */
   isToolUse: boolean;
   /** Whether to render this stream's logs in terminal style. */
@@ -138,6 +140,7 @@ export class LogList extends LitElement {
         this.streamContext.updatedRowBaseGeneration;
       entry.rowGeneration = this.streamContext.rowGeneration;
       entry.status = this.streamContext.streamStatus;
+      entry.durablyFinal = this.streamContext.streamDurablyFinal;
       entry.isToolUse = this.streamContext.isToolUse;
       entry.terminalMode = this.streamContext.terminalMode;
     }
@@ -151,6 +154,7 @@ export class LogList extends LitElement {
         aria-relevant=${this.streamContext.terminalMode ? nothing : 'additions'}
         .hasStreams=${this.streamContext.hasStreams}
         .streamStatus=${this.streamContext.streamStatus}
+        .streamDurablyFinal=${this.streamContext.streamDurablyFinal}
         .isToolUse=${this.streamContext.isToolUse}
       ></task-group-list>`;
     }
@@ -180,6 +184,7 @@ export class LogList extends LitElement {
           .rowGeneration=${data.rowGeneration}
           .hasStreams=${this.streamContext.hasStreams}
           .streamStatus=${data.status}
+          .streamDurablyFinal=${data.durablyFinal}
           .isToolUse=${data.isToolUse}
           .toggleStates=${data.toggleStates}
           ?terminal=${data.terminalMode}
@@ -251,6 +256,7 @@ export class LogList extends LitElement {
       toggleStates,
       ref: createRef<TaskGroupList>(),
       status: undefined,
+      durablyFinal: false,
       isToolUse: false,
       terminalMode: false,
     };

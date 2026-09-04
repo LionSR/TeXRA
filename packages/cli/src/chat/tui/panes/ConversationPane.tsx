@@ -14,6 +14,7 @@ import {
 } from '../state/cliState';
 import {
   sessionStateRevision,
+  sessionStreamDurablyFinal,
   streamMetadataFor,
 } from '../state/childExecutions';
 import {
@@ -141,11 +142,10 @@ export function ConversationPane(
   const artifacts =
     activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const streamPhase = streamPhaseFor(activeStreamId)?.phase;
   const displayEntries = pendingTranscriptEntries(
     entries,
     slice?.finalizedFrontier ?? 0,
-    slice && streamPhase,
+    slice && streamPhaseFor(activeStreamId)?.phase,
   );
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
@@ -168,9 +168,12 @@ export function ConversationPane(
   const workflowFacts = slice
     ? {
         taskGroups: slice.taskGroups,
-        // The one resolved phase this pane already reads: a group the run
-        // never closed paints as interrupted once the run is terminal.
-        streamPhase,
+        // A group the run never closed paints as interrupted once nothing is
+        // left to close it — not merely once the phase turns terminal, which
+        // a stop does while the run is still unwinding here.
+        runDurablyFinal: activeStreamId
+          ? sessionStreamDurablyFinal(activeStreamId)
+          : false,
         outputFilesByRound: artifacts?.outputFilesByRound ?? {},
         missingOutputsByRound: artifacts?.missingOutputsByRound ?? {},
         compileFailuresByRound: artifacts?.compileFailuresByRound ?? {},

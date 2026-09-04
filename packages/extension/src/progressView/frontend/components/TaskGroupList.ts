@@ -169,6 +169,11 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) streamStatus:
     StreamLifecycleStatus | undefined = undefined;
 
+  /** Whether that status is durably final — terminal with no producer left
+   *  anywhere. A group the run never closed paints as interrupted only on
+   *  this bit; a terminal phase alone still has a run unwinding behind it. */
+  @property({ attribute: false }) streamDurablyFinal = false;
+
   /** The run's workflow display structure, computed by the state selector;
    *  null when this stream declares no workflow. */
   @property({ attribute: false }) runModel: WorkflowRunModel | null = null;
@@ -304,7 +309,7 @@ export class TaskGroupList extends LitElement {
       // closed reads as cancelled once the stream reaches a terminal outcome,
       // and the chime's memory has to agree with the pixels or the next paint
       // sees a transition that never happened.
-      const status = taskGroupDisplayStatus(group, this.streamStatus);
+      const status = taskGroupDisplayStatus(group, this.streamDurablyFinal);
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = !this.isToolUse && group.kind === 'round';
       const wasRunning = prev === STREAM_PHASE.RUNNING;
@@ -607,7 +612,7 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
-    const status = taskGroupDisplayStatus(group, this.streamStatus);
+    const status = taskGroupDisplayStatus(group, this.streamDurablyFinal);
     const statusIcon = terminalStatusIcon(status);
     const phase = this.phaseModels.get(group.id);
     const title =
@@ -715,7 +720,7 @@ export class TaskGroupList extends LitElement {
           id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
-            [`is-${taskGroupDisplayStatus(group, this.streamStatus)}`]: true,
+            [`is-${taskGroupDisplayStatus(group, this.streamDurablyFinal)}`]: true,
           })}
         >
           ${this.renderGroupHeader(node)}

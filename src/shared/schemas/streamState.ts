@@ -126,6 +126,15 @@ export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
 
 export const BackendOwnedFieldsSchema = z.object({
   status: StreamLifecycleStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
+  /**
+   * Whether `status` is a terminal outcome that no producer can still move:
+   * `SessionState.resolveStreamPhase` answered it with origin `derived`, so
+   * nothing is running this stream anywhere. The phase alone does not carry
+   * that — a user stop publishes CANCELLED while the run is still unwinding
+   * in the host process — so this is the bit a renderer needs before painting
+   * an unclosed task group or an unsettled workflow card as interrupted.
+   */
+  statusDurablyFinal: z.boolean().prefault(false),
   substate: StreamSubstateSchema.optional(),
   /** Present only with the `unavailable` sentinel: the banner and tooltip copy. */
   statusDetail: z.string().optional(),
