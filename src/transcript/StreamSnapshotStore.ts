@@ -1229,10 +1229,10 @@ export class StreamSnapshotStore {
    * own liveness rule is what keeps a freshly active record resident.
    *
    * Public on purpose, and the one row added to the store-surface baseline:
-   * the session's lifecycle owner requests it for a finished child stream
-   * nobody is presenting, and a host's focus-leave path requests it for the
-   * stream it just stopped presenting. Without it, the record set grows with
-   * every stream a long session touches.
+   * the session's lifecycle owner requests it for a child stream nobody is
+   * presenting and no live run in this process owns, and a host's focus-leave
+   * path requests it for the stream it just stopped presenting. Without it,
+   * the record set grows with every stream a long session touches.
    */
   async requestEviction(
     stream: StreamTabId,
@@ -1481,11 +1481,14 @@ export class StreamSnapshotStore {
     executionId?: ExecutionId,
   ): void {
     const record = this.getOrCreateRecord(stream);
-    if (
-      executionId &&
-      record.runExecutionId &&
-      record.runExecutionId !== executionId
-    ) {
+    // The same evidence `setRunStart` uses: a record minted after a bounded-
+    // residency release knows the execution it succeeds only through the
+    // mirror it started from, and reading the record field alone would let
+    // the departed run's identity, description, and run facts — which outlive
+    // the record by design — be read as this run's.
+    const previous =
+      record.runExecutionId ?? record.summaryMetaHydrationFallback?.executionId;
+    if (executionId && previous && previous !== executionId) {
       // A config for a new execution the store never saw `run.start` for:
       // the previous run's identity and description are not this run's.
       // Identity stays absent (renders pending) until `run.start` or a seed

@@ -940,11 +940,14 @@ export class ProgressBackend {
       this.renderer.updateStreamMetadata(stream);
       // Bounded residency (#9947): the phase this push carried came from the
       // store's run-fact map, which outlives the record, so a record this
-      // chunk warmed for a finished child nobody presents goes straight back
-      // through the session's one retirement rule. Without it the pass would
-      // end with every finished child's whole sidecar resident — the exact
-      // cost the policy exists to avoid. Root streams stay, as they did
-      // before this pass existed: their resident execution id is what
+      // chunk warmed for a child nobody presents goes straight back through
+      // the session's one retirement rule, which asks whether any run owns
+      // the stream rather than whether one finished it: a stream held
+      // elsewhere, an unreadable one, and one with nothing durable left are
+      // as unowned as a completed one. Without that the pass would end with
+      // every hydrated child's whole sidecar resident — the exact cost the
+      // policy exists to avoid. Root streams stay, as they did before this
+      // pass existed: their resident execution id is what
       // `lookupStreamExecutionId` resumes from.
       this.factApplier.retireSidecarIfFinishedChild(stream);
     }
