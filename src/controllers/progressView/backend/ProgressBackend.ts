@@ -37,6 +37,13 @@ import { aggregateError } from '@utils/core';
 
 const log = createLog('ProgressBackend');
 
+/**
+ * How many stream sidecars the post-load hydration pass warms per turn. Small
+ * enough that one chunk's reads and its metadata pushes never hold the event
+ * loop, and matched to the snapshot store's own seed concurrency.
+ */
+const BACKGROUND_HYDRATION_CHUNK = 8;
+
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
   'renderer'
@@ -100,6 +107,8 @@ export class ProgressBackend {
   private activationGeneration = 0;
   private latestActivationTarget: PresentedStreamId = '';
   private readonly inFlightActivationGenerations = new Set<number>();
+  /** Cancels the post-load sidecar hydration pass; see `load`. */
+  private backgroundHydration: AbortController | undefined;
   private transcriptPresentationLease?: TranscriptPresentationLease;
   private disposed = false;
 
@@ -847,7 +856,55 @@ export class ProgressBackend {
     return this.enqueueStorageOperation(async () => {
       await this.session.waitUntilReady();
       await this.state.load();
+      this.startBackgroundStreamHydration();
     });
+  }
+
+  /**
+   * Warm the rail's sidecars behind the first paint, so each restored tab's
+   * phase converges from "not hydrated yet" to what actually happened to that
+   * run. Deliberately un-awaited: no host may wait for it, and disposal
+   * cancels it.
+   *
+   * Interim. It exists because the run tuple the phase rule needs (outcome,
+   * checkpoint, lease) currently lives one file read per stream away. Once
+   * the persistence substrate's `executions` rows carry outcome and
+   * resumability, the rail answers from the listing and this pass goes.
+   */
+  private startBackgroundStreamHydration(): void {
+    if (this.backgroundHydration || this.disposed) return;
+    const controller = new AbortController();
+    this.backgroundHydration = controller;
+    void this.hydrateStreamsInBackground(controller.signal);
+  }
+
+  private async hydrateStreamsInBackground(signal: AbortSignal): Promise<void> {
+    // Newest first: the tabs a user looks at after a restart are the ones
+    // whose run just ended.
+    const streams = this.state.selectableStreamNames();
+    for (
+      let start = 0;
+      start < streams.length;
+      start += BACKGROUND_HYDRATION_CHUNK
+    ) {
+      if (signal.aborted || this.disposed) return;
+      const chunk = streams.slice(start, start + BACKGROUND_HYDRATION_CHUNK);
+      try {
+        await this.state.snapshots.preload(chunk);
+      } catch (error) {
+        // One unreadable stream must not end the pass: the rule renders it
+        // from whatever the hydration did establish, and says why.
+        log.warn('Background sidecar hydration failed for a chunk', {
+          data: { streams: chunk, error },
+        });
+      }
+      if (signal.aborted || this.disposed) return;
+      for (const stream of chunk) {
+        this.renderer.updateStreamMetadata(stream);
+      }
+      // Yield between chunks so a long history never starves the UI.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
 
   /**
@@ -901,6 +958,7 @@ export class ProgressBackend {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.backgroundHydration?.abort();
     for (const detach of this.detachEventListeners.splice(0)) detach();
     // Disposal is this host's last "stops presenting", and the session
     // outlives the window, so nothing else would revisit a finished child

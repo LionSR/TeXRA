@@ -21,6 +21,11 @@ import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
+import { flowKey } from '@agent/node/persistedFlow';
+import {
+  inspectExecutionLease,
+  type ExecutionLeasePresence,
+} from '@agent/storage/executionLease';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
@@ -45,6 +50,7 @@ import {
   type ExtendedTokenUsageStats,
   type OutputFileInfo,
   type RunIdentity,
+  type RunOutcome,
   type Plan,
   type ReadonlyRoundIndexed,
   type RoundIndexed,
@@ -60,6 +66,7 @@ import {
 
 import { mapToRecord, throwAggregated } from '@utils/core';
 import { getOrCreatePQueue } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { StorageFS } from '@utils/files/storageFS';
 import { isDirectory } from '@utils/files/fsEntryType';
 
@@ -158,11 +165,35 @@ const SNAPSHOT_RUN_FACT_TYPES = Object.freeze([
 
 type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 interface HydratedRunState {
-  authorityReadComplete: boolean;
+  /**
+   * Why the execution authority could not be read, or `undefined` when it
+   * was read completely. One field rather than a boolean plus a cause: a
+   * reader that shows the failure needs the words, and a second field could
+   * disagree with the first.
+   */
+  authorityFailure?: string;
   config?: AgentConfig;
   identity?: RunIdentity;
   userFollowUpSupport?: UserFollowUpSupport;
   description?: string;
+  /** Persisted run outcome from `ExecutionMeta.outcome`; absent while a run
+   *  is live and forever for a run that crashed before finalizing. */
+  outcome?: RunOutcome;
+}
+
+/**
+ * The display-only half of a run's read-time tuple. Deliberately NOT part of
+ * {@link HydratedRunState}: the metadata restore in `applyStreamData` runs
+ * with a record's accumulators holding raw disk state until its overlays are
+ * replayed, so nothing that merely feeds a status pill may lengthen that
+ * window. This probe is started beside the metadata read and awaited once the
+ * record is whole again.
+ */
+interface RunPhaseProbe {
+  checkpointPresent?: boolean;
+  lease?: ExecutionLeasePresence;
+  /** Why the probe could not answer, if it could not. */
+  failure?: string;
 }
 
 function withoutSummaryMetaFields(
@@ -193,8 +224,15 @@ const EXECUTION_SCOPED_SUMMARY_META_FIELDS = [
 ] as const satisfies readonly (keyof StreamSummaryMeta)[];
 
 /**
- * The five execution-scoped facts owned by one run record and replaced or
- * hydrated together when a stream changes execution.
+ * The execution-scoped facts owned by one run record and replaced or hydrated
+ * together when a stream changes execution.
+ *
+ * The last four are the read-time run-phase tuple: they answer "what happened
+ * to this run" for a stream with no live flow context in this process, and
+ * they are display-only. Each was true at the instant this record hydrated, so
+ * a caller about to WRITE (open, resume, delete) re-reads the authority under
+ * the lease instead of trusting them — a process-local mirror cannot observe
+ * another host's finalize (see `listExecutions`' own note on that rule).
  */
 export interface RunMetadata {
   readonly executionId?: ExecutionId;
@@ -202,6 +240,14 @@ export interface RunMetadata {
   readonly userFollowUpSupport?: UserFollowUpSupport;
   readonly config?: AgentConfig;
   readonly description?: string;
+  /** Why this stream's execution authority could not be read, if it could not. */
+  readonly authorityFailure?: string;
+  /** `ExecutionMeta.outcome`: absent for a run that never finalized. */
+  readonly outcome?: RunOutcome;
+  /** Whether a resumable flow checkpoint file exists (existence, not validity). */
+  readonly checkpointPresent?: boolean;
+  /** Who held the execution lease when this record hydrated. */
+  readonly lease?: ExecutionLeasePresence;
 }
 
 /**
@@ -433,6 +479,15 @@ interface StreamRecord {
    * retired early with the run-classification consolidation).
    */
   description: string | undefined;
+  /**
+   * The read-time run-phase tuple for the same execution, captured by the
+   * hydration that read `meta` (see {@link RunMetadata}). In memory only —
+   * nothing here is written back to a sidecar or a summary file.
+   */
+  runOutcome: RunOutcome | undefined;
+  runCheckpointPresent: boolean | undefined;
+  runLease: ExecutionLeasePresence | undefined;
+  runAuthorityFailure: string | undefined;
   /** Same-execution mirror fields retained across a transient authority read. */
   summaryMetaHydrationFallback: StreamSummaryMeta | undefined;
 
@@ -457,6 +512,19 @@ interface StreamRecord {
   overlays: Partial<OverlayPatches>;
 }
 
+/**
+ * Drop the run-phase tuple a record holds for the execution it is leaving.
+ * Called from every site that replaces the record's execution-scoped fields
+ * together, so a new run can never inherit the previous run's outcome,
+ * checkpoint, lease, or authority-read failure.
+ */
+function clearRunPhaseFacts(record: StreamRecord): void {
+  record.runOutcome = undefined;
+  record.runCheckpointPresent = undefined;
+  record.runLease = undefined;
+  record.runAuthorityFailure = undefined;
+}
+
 export class StreamSnapshotStore {
   private readonly records = new ResidentStreamRegistry<
     StreamTabId,
@@ -475,6 +543,10 @@ export class StreamSnapshotStore {
     userFollowUpSupport: undefined,
     runConfig: undefined,
     description: undefined,
+    runOutcome: undefined,
+    runCheckpointPresent: undefined,
+    runLease: undefined,
+    runAuthorityFailure: undefined,
     summaryMetaHydrationFallback: undefined,
     diskState: 'unknown',
     seedChain: undefined,
@@ -1409,6 +1481,7 @@ export class StreamSnapshotStore {
       record.runIdentity = undefined;
       record.userFollowUpSupport = undefined;
       record.description = undefined;
+      clearRunPhaseFacts(record);
       record.summaryMetaHydrationFallback = undefined;
     }
     record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
@@ -1444,6 +1517,7 @@ export class StreamSnapshotStore {
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
+      clearRunPhaseFacts(record);
       // Only what the departing execution owned: the stream's parent edge and
       // its summed usage outlive any single run, and on a record minted after
       // a release the fallback is their only source until seeding lands.
@@ -1488,9 +1562,9 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Canonical immutable run record projected from live facts or hydrated from
-   * the execution record named by the stream sidecar. All five fields share
-   * that execution owner and replacement lifecycle.
+   * Canonical run record projected from live facts or hydrated from the
+   * execution record named by the stream sidecar. Every field shares that
+   * execution owner and replacement lifecycle.
    */
   getRunMetadata(
     stream: StreamTabId,
@@ -1506,6 +1580,10 @@ export class StreamSnapshotStore {
       userFollowUpSupport: record?.userFollowUpSupport,
       config: record?.runConfig,
       description: record?.description,
+      authorityFailure: record?.runAuthorityFailure,
+      outcome: record?.runOutcome,
+      checkpointPresent: record?.runCheckpointPresent,
+      lease: record?.runLease,
     });
   }
 
@@ -1883,7 +1961,8 @@ export class StreamSnapshotStore {
     let identity: RunIdentity | undefined;
     let userFollowUpSupport: UserFollowUpSupport | undefined;
     let description: string | undefined;
-    let authorityReadComplete = true;
+    let authorityFailure: string | undefined;
+    let outcome: RunOutcome | undefined;
 
     if (executionId) {
       let config: AgentConfig | null = null;
@@ -1899,30 +1978,62 @@ export class StreamSnapshotStore {
         identity = execMeta?.identity;
         userFollowUpSupport = execMeta?.userFollowUpSupport;
         description = execMeta?.description;
+        // The run's terminal outcome rides the same parsed row, at no cost.
+        outcome = execMeta?.outcome;
         config = execConfig;
       } catch (error) {
-        authorityReadComplete = false;
+        authorityFailure = toErrorMessage(error);
         log.warn(`Could not read execution record for stream ${stream}.`, {
           data: { stream, executionId, error },
         });
       }
       if (config) {
         return {
-          authorityReadComplete,
+          authorityFailure,
           config,
           identity,
           userFollowUpSupport,
           description,
+          outcome,
         };
       }
     }
 
+    // Same facts on the no-config path: a stream whose `config.json` is
+    // missing still has a readable identity and outcome.
     return {
-      authorityReadComplete,
+      authorityFailure,
       identity,
       userFollowUpSupport,
       description,
+      outcome,
     };
+  }
+
+  /**
+   * Whether a resumable checkpoint file exists, and who holds the execution
+   * lease. Both are one read: the checkpoint is a single `exists` stat, never
+   * a parse of the (often ~600 KB) flow record, and the lease inspection reads
+   * only — a dead claim reports as absent and is unlinked by the next claim,
+   * never by this call. Never throws: an unreadable probe reports its cause,
+   * which the phase rule renders as unavailable rather than as a run that
+   * never happened.
+   */
+  private async probeRunPhase(
+    executionId: ExecutionId,
+  ): Promise<RunPhaseProbe> {
+    try {
+      const [checkpointPresent, lease] = await Promise.all([
+        getExecutionStore(executionId).exists(flowKey(executionId)),
+        inspectExecutionLease(executionId),
+      ]);
+      return { checkpointPresent, lease };
+    } catch (error) {
+      log.warn(`Could not read run phase facts for execution ${executionId}.`, {
+        data: { executionId, error },
+      });
+      return { failure: toErrorMessage(error) };
+    }
   }
 
   /** Seed the in-memory accumulators for one stream. */
@@ -1979,8 +2090,14 @@ export class StreamSnapshotStore {
       // from (#9590 Stage 6); when identity changes hands, drop it with the
       // pair and invalidate any authority read already in flight.
       record.description = undefined;
+      clearRunPhaseFacts(record);
       record.summaryMetaHydrationFallback = undefined;
     }
+    // Started before the metadata await so both reads overlap, and awaited at
+    // the very end so a display-only fact never delays the record's restore.
+    const phaseProbe = executionId
+      ? this.probeRunPhase(executionId)
+      : undefined;
     if (meta) {
       const pendingLiveWrite = metaOverlay !== undefined;
       const configBeforeHydration = record.runConfig;
@@ -1989,7 +2106,7 @@ export class StreamSnapshotStore {
       const mirroredExecutionId =
         mirroredMeta?.executionId ?? previousExecutionId;
       if (
-        !hydrated.authorityReadComplete &&
+        hydrated.authorityFailure !== undefined &&
         mirroredExecutionId === executionId
       ) {
         record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
@@ -2019,6 +2136,11 @@ export class StreamSnapshotStore {
         if (!liveRunConfig) {
           record.runConfig = hydrated.config ?? record.runConfig;
         }
+        // Whole-value: this read is the only producer of the run's outcome,
+        // so it replaces rather than fills, and a failed read says so with
+        // the cause attached instead of leaving a quiet absence.
+        record.runOutcome = hydrated.outcome;
+        record.runAuthorityFailure = hydrated.authorityFailure;
       }
     }
 
@@ -2063,6 +2185,20 @@ export class StreamSnapshotStore {
     // a handoff, only facts belonging to the new execution are published.
     if (this.records.get(stream) === record) {
       this.publishSummaryMeta(stream);
+    }
+
+    if (phaseProbe) {
+      const probe = await phaseProbe;
+      // Same two guards the metadata half uses: an evicted record and a
+      // handoff to another execution both make this probe's answer stale.
+      if (
+        this.records.get(stream) === record &&
+        record.runExecutionId === executionId
+      ) {
+        record.runCheckpointPresent = probe.checkpointPresent;
+        record.runLease = probe.lease;
+        record.runAuthorityFailure ??= probe.failure;
+      }
     }
   }
 

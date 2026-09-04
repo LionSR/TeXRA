@@ -507,9 +507,19 @@ export class StreamLogStore {
 
   /** Return known streams whose summary records unfinished output. */
   getUnfinishedStreamIds(): StreamTabId[] {
-    return [...this.summaries]
-      .filter(([, summary]) => hasSomethingRunning(summary))
-      .map(([streamId]) => streamId);
+    return [...this.summaries.keys()].filter((streamId) =>
+      this.hasUnfinishedOutput(streamId),
+    );
+  }
+
+  /**
+   * Whether this stream's transcript was left with something running — a task
+   * group, a streaming text block, or a nonterminal workflow call. Answered
+   * from the always-resident summary, so a read-time phase derivation can ask
+   * it per stream without loading the log.
+   */
+  hasUnfinishedOutput(streamId: StreamTabId): boolean {
+    return hasSomethingRunning(this.summaries.get(streamId));
   }
 
   /**

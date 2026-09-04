@@ -269,7 +269,7 @@ export class SessionFactApplier {
   private pushStreamMetadata(
     streamId: StreamTabId,
     options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
+      phaseOverride?: StreamPhaseState;
     },
   ): void {
     this.registeredWithRenderer.add(streamId);
@@ -685,7 +685,7 @@ export class SessionFactApplier {
     // the stream already exists by then so getStreamCategory() finds it.
     const agentCategory =
       payload.agentCategory ?? this.getStreamCategory(streamId);
-    // Ensure stream state exists so it's included in getAllStreamStates()
+    // Mint the ephemeral execution record so the tab renders its category.
     if (agentCategory) {
       this.state.getOrCreateStreamState(streamId, agentCategory);
     }
@@ -695,9 +695,7 @@ export class SessionFactApplier {
     // focus policy belong to the host presentation, not the session fact.
     const firstHostDelivery = !this.registeredWithRenderer.has(streamId);
     if (firstHostDelivery) {
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-      });
+      this.pushStreamMetadata(streamId);
     }
   }
 
@@ -717,9 +715,7 @@ export class SessionFactApplier {
       // A run start or config change may update agent name, model, or label,
       // which the frontend tabs display even for background subagents. Patch
       // only the affected stream instead of rebuilding all historical tabs.
-      this.pushStreamMetadata(streamId, {
-        streamStates: this.state.streamStatus.getAllStreamStates(),
-      });
+      this.pushStreamMetadata(streamId);
     }
   }
 
@@ -943,13 +939,15 @@ export class SessionFactApplier {
     }
 
     if (isNewStream || isNewRunningTransition) {
+      // The status being applied has not necessarily reached the status
+      // machine yet (hosts and tests also call this method directly), so it
+      // travels with the push instead of being re-read.
       this.pushStreamMetadata(streamId, {
-        streamStates: this.buildStreamStatesForRefresh(
-          streamId,
-          status,
-          substate,
-          runStartedAt,
-        ),
+        phaseOverride: {
+          phase: status,
+          ...(substate ? { substate } : {}),
+          ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+        },
       });
     } else {
       const lastTimestamp =
@@ -966,26 +964,5 @@ export class SessionFactApplier {
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
     return this.state.getStreamMetadata(streamId).agentCategory;
-  }
-
-  /**
-   * Snapshot the status machine and splice in `streamId`'s about-to-be-applied
-   * status/substate, which hasn't been written to the machine yet when this
-   * is called during `setStreamStatus`. Combined into one map so the phase
-   * and substate views can't diverge on which streams they cover.
-   */
-  private buildStreamStatesForRefresh(
-    streamId: StreamTabId,
-    status: StreamPhase,
-    substate?: StreamSubstate,
-    runStartedAt?: number,
-  ): Map<StreamTabId, StreamPhaseState> {
-    const statesForRefresh = this.state.streamStatus.getAllStreamStates();
-    statesForRefresh.set(streamId, {
-      phase: status,
-      ...(substate ? { substate } : {}),
-      ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-    });
-    return statesForRefresh;
   }
 }

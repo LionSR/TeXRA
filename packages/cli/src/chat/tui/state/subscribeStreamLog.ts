@@ -550,8 +550,10 @@ export function releaseInactiveStreamTranscript(
   }
   const slice = streams.get().get(streamId);
   if (!slice) return;
-  const phase = streamPhaseFor(streamId)?.phase;
-  if (phase === undefined || isActivePhase(phase)) return;
+  // Only a live active phase keeps a transcript resident. A stream with no
+  // phase at all has no producer in this process, so its log is exactly what
+  // eviction is for.
+  if (isActivePhase(streamPhaseFor(streamId)?.phase)) return;
   // Transcript residency only. The sidecar record answers to a different
   // rule (terminal children nothing presents) and to a different set of
   // readers, so `sessionSignalsAdapter` owns its release from one

@@ -849,10 +849,14 @@ export function statusBarStreamTarget({
     values: streams,
     canUseValue: (_stream, streamId) => isActivePhase(phaseOf(streamId)),
   });
+  // An absent phase means no live flow context: a stream still between launch
+  // and its reservation reports RUNNING/STARTING from the machine's
+  // reservation arm, so it does not need an undefined-is-live default here,
+  // and a restored stream that now answers from durable facts must not flip
+  // Ctrl-C from exit to stop.
   let hasPendingOrLiveStream = false;
   for (const streamId of streams.keys()) {
-    const phase = phaseOf(streamId);
-    if (phase === undefined || isActivePhase(phase)) {
+    if (isActivePhase(phaseOf(streamId))) {
       hasPendingOrLiveStream = true;
       break;
     }

@@ -1206,10 +1206,28 @@ describe('CLI StatusBar display model', () => {
         isChildStream: false,
       },
       {
-        name: 'focused root whose stream has not reported a phase yet',
+        // No phase means no live producer for that stream: a run already
+        // admitted reports RUNNING/STARTING from the machine's reservation
+        // arm, so nothing here is stoppable.
+        name: 'focused root whose stream has no phase',
         input: {
           activeStreamId: 'root',
           canStopActiveRun: true,
+          parentStream: parentOfChild,
+          streams: streamMap([['root', rootPending]]),
+        },
+        ctrlCAction: 'exit',
+        displaySlice: rootPending,
+        isChildStream: false,
+      },
+      {
+        // The launch window is covered by the pending-run capability, not by
+        // reading an absent phase as live.
+        name: 'focused phaseless root while a pending run is stoppable',
+        input: {
+          activeStreamId: 'root',
+          canStopActiveRun: true,
+          canStopPendingRunWithoutStream: true,
           parentStream: parentOfChild,
           streams: streamMap([['root', rootPending]]),
         },

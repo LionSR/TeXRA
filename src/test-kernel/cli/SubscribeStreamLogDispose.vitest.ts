@@ -194,7 +194,7 @@ describe('subscribeStreamLog batching and dispose', () => {
     dispose();
   });
 
-  it('does not release a background transcript before its status is known', () => {
+  it('releases a background transcript with no live phase', () => {
     const store = defaultSession().transcripts;
     appendUserMessage(store, streamB, 'b-1', 'starting');
     activeStreamId.set(streamA);
@@ -207,8 +207,12 @@ describe('subscribeStreamLog batching and dispose', () => {
       latestLine: 'starting',
       entries: [],
     });
+    // No phase means no producer in this process — a run still between launch
+    // and its reservation reports RUNNING from the machine's reservation arm.
+    // So an absent phase is exactly what eviction is for, and holding the log
+    // resident for it kept every restored stream in memory.
     expect(streamPhaseFor(streamB)).toBeUndefined();
-    expect(requestEviction).not.toHaveBeenCalledWith(streamB);
+    expect(requestEviction).toHaveBeenCalledWith(streamB);
   });
 
   it('requests bounded residency for a hidden WAITING transcript', () => {

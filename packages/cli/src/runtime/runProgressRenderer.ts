@@ -426,10 +426,7 @@ class HeadlessPort implements SessionRendererPort {
   ): void {
     // A new stream and a new RUNNING transition report their phase here
     // instead of through `onStreamStatusChanged`.
-    this.renderer.applyStatus(
-      streamId,
-      options?.streamStates?.get(streamId)?.phase,
-    );
+    this.renderer.applyStatus(streamId, options?.phaseOverride?.phase);
   }
 
   onStreamStatusChanged(streamId: StreamTabId, status: StreamPhase): void {
