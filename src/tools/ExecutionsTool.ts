@@ -336,8 +336,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       limit,
     );
     // One page, not one directory: each line asks the durable facts about its
-    // run (a checkpoint stat, and a lease read only for a run that still has a
-    // checkpoint), so the fan-out is bounded rather than 200 wide.
+    // run (a lease read only for a row that recorded no outcome, and a
+    // checkpoint stat only when that lease turns out to be free), so the
+    // fan-out is bounded rather than 200 wide.
     const lines = await pMap(page, (entry) => formatListingLine(entry), {
       concurrency: 16,
     });
@@ -496,9 +497,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   /**
    * Fetch metas and format each child as a summary line. Bounded like the
-   * listing page: every child reads its own metadata and, when that leaves the
-   * run unsettled, stats its checkpoint, so a wide fan-out is a wide burst of
-   * file I/O.
+   * listing page: every child reads its own metadata and, when that row
+   * recorded no outcome, its execution lease — statting the checkpoint only
+   * when that lease is free — so a wide fan-out is a wide burst of file I/O.
    */
   private formatChildren(children: ChildRecord[]): Promise<string[]> {
     return pMap(

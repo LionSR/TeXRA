@@ -25,6 +25,7 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
 
 // Local imports
 import { getExecutionStatusInfo } from '@tools/executionFormatters';
+import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
 /** No handle in this process, whatever the durable facts then say. */
 function noLiveHandle(): void {
@@ -116,7 +117,11 @@ describe('getExecutionStatusInfo', () => {
     const info = await getExecutionStatusInfo('exec-1');
 
     assert.strictEqual(info.status, 'cancelled');
-    assert.match(info.detail ?? '', /interrupted/);
+    // Presence, not validity: a stat cannot promise the record can be resumed.
+    assert.match(
+      info.detail ?? '',
+      /interrupted; a flow record remains \(not validated here\)/,
+    );
   });
 
   it('does not call a run cancelled while another process holds it', async () => {
@@ -163,5 +168,34 @@ describe('getExecutionStatusInfo', () => {
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
+  });
+});
+
+describe('turnAttributionNote', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not call an accepted turn running once its stream is terminal', async () => {
+    // The handle outlives the stream's terminal phase, so handle presence
+    // alone must not word the note as "still running".
+    mocks.currentSession.mockReturnValue({
+      executions: {
+        getHandle: () => ({}),
+        getStatus: () => ({ status: 'completed', elapsed: null }),
+      },
+    });
+    const store = {
+      getExecutionId: () => 'exec-1',
+      readTurnState: async () => ({
+        activeTurn: { token: 'turn-2' },
+        lastCompletedTurn: { token: 'turn-1' },
+      }),
+    } as unknown as Parameters<typeof turnAttributionNote>[0];
+
+    const note = await turnAttributionNote(store);
+
+    assert.match(note ?? '', /turn turn-2 ended with its run \(completed\)/);
+    assert.doesNotMatch(note ?? '', /still running/);
   });
 });

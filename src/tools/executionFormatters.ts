@@ -169,7 +169,10 @@ export function statusInfoFromLiveness(
       return {
         status: RUN_OUTCOME.CANCELLED,
         elapsed: null,
-        detail: 'interrupted; a resume checkpoint remains',
+        // Presence-only: the listing decided this from a stat, which cannot
+        // tell a resumable checkpoint from a spent or malformed flow record.
+        // Only the single-run paths that parse it may promise a resume.
+        detail: 'interrupted; a flow record remains (not validated here)',
       };
     case 'settled':
       return { status: liveness.outcome ?? 'unknown', elapsed: null };
