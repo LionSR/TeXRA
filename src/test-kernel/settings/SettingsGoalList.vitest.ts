@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
@@ -78,8 +79,8 @@ describe('settings goal list', () => {
   it('reports a malformed goal without posting a fallback list', async () => {
     const { platform } = await import('@platform/platform');
     const malformed = { goalId: 'not-valid' };
-    await platform().workspaceState.update('goals:index', [STREAM_ID]);
-    await platform().workspaceState.update(GOAL_KEY, malformed);
+    await workspaceRoots().workspaceState.update('goals:index', [STREAM_ID]);
+    await workspaceRoots().workspaceState.update(GOAL_KEY, malformed);
     const webview = createWebview();
 
     await expectSendGoalListFailure(
@@ -90,7 +91,7 @@ describe('settings goal list', () => {
     );
 
     expect(webview.postMessage).not.toHaveBeenCalled();
-    expect(platform().workspaceState.get(GOAL_KEY)).toEqual(malformed);
+    expect(workspaceRoots().workspaceState.get(GOAL_KEY)).toEqual(malformed);
   });
 
   it.each([

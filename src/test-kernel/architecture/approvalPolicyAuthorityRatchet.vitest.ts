@@ -41,7 +41,7 @@ const SEED_CALL_ALLOWLIST = new Set([
   'packages/cli/scripts/tui-harness.tsx',
   'packages/extension/src/extension.ts',
   'packages/extension/src/settingsView/SettingsViewMessageHandler.ts',
-  'packages/desktop/src/main/index.ts',
+  'packages/desktop/src/main/desktopPapers.ts',
   'packages/desktop/src/main/desktopSettingsIpc.ts',
 ]);
 

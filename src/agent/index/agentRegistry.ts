@@ -4,6 +4,7 @@ import { DEFAULT_WORKFLOW_AGENT } from '@agent/core/definition/AgentConfig';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentCategory as AgentCategoryType,
   AgentDelegationScope,
@@ -400,7 +401,8 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * writes the same selection through identical resolution rules.
  */
 export function createWorkspaceAgentRosterController(): AgentRosterController<AgentEntry> {
-  const { workspaceState, globalState } = platform();
+  const { workspaceState } = workspaceRoots();
+  const { globalState } = platform();
   return new AgentRosterController({
     workspaceState,
     globalState,

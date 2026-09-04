@@ -8,8 +8,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
@@ -266,7 +265,7 @@ describe('CLI history runtime', () => {
       'texra-history-storage-',
       tempDirs,
     );
-    return createFakePlatform(
+    return createFakeHost(
       {
         storagePath: historyStoragePath,
         globalStoragePath: historyStoragePath,

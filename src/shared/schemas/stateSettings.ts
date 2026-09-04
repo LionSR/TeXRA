@@ -66,21 +66,11 @@ import { SkillNameSchema } from './skillName';
 export const DEFAULT_GIT_AUTHOR_NAME = 'texra-ai';
 export const DEFAULT_GIT_AUTHOR_EMAIL = 'texra-ai@users.noreply.github.com';
 
-/**
- * Default for `texra.git.markCommits` when the workspace has never
- * toggled the setting. Shared by the backend reader
- * (`readGitAuthorSettings`) and the frontend signal initializer
- * (`SettingsApp.gitMarkCommits`) so the Git tab doesn't flash the
- * wrong state on first paint before settings arrive.
- */
-export const DEFAULT_GIT_MARK_COMMITS = true;
+/** Default for `texra.git.markCommits` when the workspace has never toggled it. */
+const DEFAULT_GIT_MARK_COMMITS = true;
 
-/**
- * Default for `texra.git.worktreeSupport` when the workspace has never toggled
- * it. Shared by the backend reader (`readGitAuthorSettingsFromState`) and the
- * state-settings catalog so the default lives in one place.
- */
-export const DEFAULT_GIT_WORKTREE_SUPPORT = false;
+/** Default for `texra.git.worktreeSupport` when the workspace has never toggled it. */
+const DEFAULT_GIT_WORKTREE_SUPPORT = false;
 
 /**
  * Keep file-oriented tools inside the active working directory unless the
@@ -100,7 +90,7 @@ export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  *
  * - **`slots`** — where each host stores the value (`config` /
  *   `workspaceState` / `globalState`). Replaces the old `store` + `cliStore`
- *   pair and the caller-chosen slot in `readGitAuthorSettingsFromState`.
+ *   pair and the caller-chosen slot the git identity reader once took.
  * - **`honoredBy`** — whose *runtime* actually reads the key, with the reading
  *   file as evidence. Replaces `CLI_CORE_SETTING_PATHS`,
  *   `EXTENSION_ONLY_CORE_SETTING_PATHS`, and the reader-file registry that
@@ -851,7 +841,8 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
 // State-backed rows
 // ============================================================================
 
-const GIT_AUTHOR_READER = 'packages/cli/src/runtime/gitAuthor.ts';
+const GIT_AUTHOR_READER = 'src/utils/system/gitAuthorEnv.ts';
+const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
 const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
 const WORKFLOW_COMPILE_READER =
@@ -864,13 +855,13 @@ const GIT_AUTHOR_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "create a git commit"',
   through:
-    'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/utils/system/execUtils.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/utils/system/execUtils.ts -> src/utils/system/gitAuthorEnv.ts',
 } satisfies CliRuntimeReachability;
 const GIT_WORKTREE_RUNTIME_REACHABILITY = {
   command:
     'texra agents run <tool-use-agent> --instruction "delegate a task to a subagent"',
   through:
-    'packages/cli/src/runtime/initPlatform.ts -> packages/cli/src/runtime/gitAuthor.ts -> src/tools/delegation/DelegationTools.ts',
+    'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/tools/delegation/DelegationTools.ts -> src/tools/delegation/inputFields.ts -> src/utils/config/worktreeConfig.ts',
 } satisfies CliRuntimeReachability;
 const DETACH_SUBAGENTS_RUNTIME_REACHABILITY = {
   command: 'texra chat',
@@ -970,14 +961,10 @@ const SKILL_AVAILABILITY_REACHABILITY = {
     'packages/cli/src/commands/agentsRun.ts -> packages/cli/src/runtime/runExecution.ts -> src/agent/runtime/runAgent.ts -> src/agent/runtime/executeAgent.ts -> src/agent/runtime/AgentLaunchContext.ts -> src/agent/prompt/userVars.ts -> src/skills/runtimeSkills.ts',
 } satisfies CliRuntimeReachability;
 
-const GIT_AUTHOR_HONORED_BY: SettingHonoredBy = {
-  vscode: { reader: 'packages/extension/src/frontend/git/gitAuthorSetup.ts' },
-  desktop: { reader: 'packages/desktop/src/main/desktopSettingsIpc.ts' },
-  cli: {
-    reader: GIT_AUTHOR_READER,
-    reachability: GIT_AUTHOR_RUNTIME_REACHABILITY,
-  },
-};
+const GIT_AUTHOR_HONORED_BY = everyHost(
+  GIT_AUTHOR_READER,
+  GIT_AUTHOR_RUNTIME_REACHABILITY,
+);
 
 const CODEX_AGENT_HONORED_BY = everyHost(
   CODEX_CONFIG_READER,
@@ -1130,8 +1117,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
     // `.min(1)` so a blank value is rejected at the write boundary and a
-    // legacy blank read falls back (loudly) to the default identity, which is
-    // what `readGitAuthorSettingsFromState`'s `||` has always done for git.
+    // legacy blank read falls back (loudly) to the default identity.
     schema: z.string().min(1).prefault(DEFAULT_GIT_AUTHOR_NAME),
     title: 'Agent commit author',
     description:
@@ -1160,13 +1146,10 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
     slots: WORKSPACE_STATE_CLI_CONFIG_SLOTS,
-    honoredBy: {
-      ...GIT_AUTHOR_HONORED_BY,
-      cli: {
-        reader: GIT_AUTHOR_READER,
-        reachability: GIT_WORKTREE_RUNTIME_REACHABILITY,
-      },
-    },
+    honoredBy: everyHost(
+      GIT_WORKTREE_READER,
+      GIT_WORKTREE_RUNTIME_REACHABILITY,
+    ),
     surfaces: { settingsView: 'git-author', cliConfig: true },
   }),
 

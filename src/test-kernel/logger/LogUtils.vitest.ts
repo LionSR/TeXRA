@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as logger from '@logger/logUtils';
-import type { Platform } from '@platform/platform';
-import * as platformAccess from '@platform/platform';
+import * as rootsAccess from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
 
 function enableDebugLogging(): void {
-  vi.spyOn(platformAccess, 'tryPlatform').mockReturnValue({
+  vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue({
     config: { get: () => true },
-  } as unknown as Readonly<Platform>);
+  } as unknown as WorkspaceRoots);
 }
 
 function captureLines(options?: { trusted: boolean }): string[] {
@@ -32,7 +32,7 @@ describe('logUtils', () => {
   });
 
   it('keeps pre-platform error logging on the non-debug path', () => {
-    vi.spyOn(platformAccess, 'tryPlatform').mockReturnValue(null);
+    vi.spyOn(rootsAccess, 'tryWorkspaceRoots').mockReturnValue(undefined);
     const lines = captureLines();
 
     expect(() =>

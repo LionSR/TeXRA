@@ -2,7 +2,8 @@
 import * as path from 'node:path';
 
 // Local imports
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { normalizeFilePath } from '@utils/core';
 
 // Local file imports
@@ -14,12 +15,13 @@ import {
 } from './workspaceRoot';
 
 /**
- * Static filesystem rooted at the workspace folder.
- * File I/O from {@link RelativeFS}; path resolution via WorkspaceProvider + {@link locatePathInRoot}.
+ * Static filesystem rooted at the current session's workspace folder.
+ * File I/O from {@link RelativeFS}; path resolution via the session's
+ * `WorkspaceRoots` + {@link locatePathInRoot}.
  */
 export class WorkspaceFS extends RelativeFS {
   protected static override getBasePath(): string {
-    const wsPath = platform().workspace.getWorkspacePath();
+    const wsPath = workspaceRoots().workspace;
     if (!wsPath) {
       throw new Error('Workspace path is not available.');
     }
@@ -27,15 +29,19 @@ export class WorkspaceFS extends RelativeFS {
   }
 
   public static getPath(): string | undefined {
-    return platform().workspace.getWorkspacePath();
+    return workspaceRoots().workspace;
   }
 
-  /** Workspace-relative path via the platform's symlink-aware asRelativePath. */
+  /**
+   * Workspace-relative path, symlink-aware. A path outside the workspace (or
+   * with no workspace open) comes back as the caller's own path, normalized.
+   */
   public static relativePath(filePath: string): string {
-    if (!this.getPath()) {
+    const root = this.getPath();
+    if (!root) {
       return filePath;
     }
-    return normalizeFilePath(platform().workspace.asRelativePath(filePath));
+    return normalizeFilePath(relativeToRoot(root, filePath) ?? filePath);
   }
 
   /** Absolute path from relative. Already-absolute paths pass through. */

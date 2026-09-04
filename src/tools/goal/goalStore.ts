@@ -8,7 +8,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import { platform, tryWorkspaceState } from '@platform/platform';
+import { tryWorkspaceRoots, workspaceRoots } from '@platform/workspaceRoots';
 import {
   GoalSchema,
   isGoalInFlight,
@@ -60,11 +60,11 @@ function emitGoalStateChanged(
 }
 
 function readRaw(streamId: StreamTabId): Goal | null {
-  // tryWorkspaceState — bootstrap-tolerant: read-only paths called before
-  // initPlatform() (e.g. early-stream syncs in some tests) return null
-  // rather than throwing. Write paths still use platform().workspaceState which
+  // tryWorkspaceRoots is bootstrap-tolerant: read-only paths called before
+  // the roots are installed (e.g. early-stream syncs in some tests) return
+  // null rather than throwing. Write paths still use workspaceRoots() which
   // does throw, surfacing the misuse.
-  const state = tryWorkspaceState();
+  const state = tryWorkspaceRoots()?.workspaceState;
   if (!state) return null;
   const key = streamKey(streamId);
   const raw = state.get<unknown>(key);
@@ -80,11 +80,11 @@ function readRaw(streamId: StreamTabId): Goal | null {
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
-  await platform().workspaceState.update(streamKey(goal.streamId), goal);
+  await workspaceRoots().workspaceState.update(streamKey(goal.streamId), goal);
 }
 
 function readIndex(): StreamTabId[] {
-  const state = tryWorkspaceState();
+  const state = tryWorkspaceRoots()?.workspaceState;
   if (!state) return [];
   const raw = state.get<unknown>(INDEX_KEY);
   const entries = Array.isArray(raw)
@@ -112,7 +112,7 @@ async function mutateIndex(
   mutate: (index: StreamTabId[]) => StreamTabId[],
 ): Promise<void> {
   await indexMutex.runExclusive(async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     const index = readIndex();
     const next = mutate(index);
     if (next !== index) {
@@ -279,7 +279,7 @@ export const GoalStore = Object.freeze({
     streamIds: readonly StreamTabId[],
     session?: SessionHandle,
   ): Promise<void> {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     // Gate on raw key presence, not parse success, so explicit cleanup can
     // still remove an invalid record without first reading it.
     const toRemove = streamIds.filter(

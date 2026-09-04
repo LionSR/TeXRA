@@ -57,7 +57,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
 import { roundModelHandler } from '@test/agent/toolUseRoundTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
@@ -161,10 +161,14 @@ async function resumePersistedStream(
   return 'started' in resumed && resumed.delivered;
 }
 
-async function integrationPlatform(): Promise<Platform> {
+async function integrationPlatform(): Promise<FakeHost> {
+  const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
   return {
-    ...(await createTempDirPlatform('texra-9531-production-', tempDirs)),
-    agentResume: { tryResumeStream: resumePersistedStream },
+    ...host,
+    platform: {
+      ...host.platform,
+      agentResume: { tryResumeStream: resumePersistedStream },
+    },
   };
 }
 

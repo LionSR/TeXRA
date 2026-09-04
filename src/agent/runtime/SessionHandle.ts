@@ -44,6 +44,10 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
 import {
+  processWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
+import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
@@ -56,7 +60,11 @@ import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
-import { getRunContextSession, tryUseRunContext } from './RunContext';
+import {
+  getRunContextSession,
+  runInSession,
+  tryUseRunContext,
+} from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
 import { SessionHostInteractions } from './HostInteractions';
@@ -83,7 +91,11 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
   Partial<
     Pick<
       SessionHandle,
-      'events' | 'snapshots' | 'interactions' | 'responseTextProcessing'
+      | 'events'
+      | 'snapshots'
+      | 'interactions'
+      | 'responseTextProcessing'
+      | 'roots'
     >
   >;
 
@@ -100,6 +112,13 @@ export class SessionHandle {
   readonly status: StreamStatusMachine;
   /** Session-owned transcript store for run traces launched in this session. */
   readonly transcripts: StreamLogStore;
+  /**
+   * The workspace this session works on: the four per-workspace host roots.
+   * Runs and `runInSession` scopes resolve `StorageFS`/`WorkspaceFS` and the
+   * workspace config/state through these, so several sessions in one process
+   * each write under their own folder.
+   */
+  readonly roots: WorkspaceRoots;
   /** Session-owned follow-up queue owner. */
   readonly followUps: ToolUseFollowUpQueue;
   /** Session-owned per-stream sidecar store for runs launched in this session. */
@@ -155,6 +174,10 @@ export class SessionHandle {
     this.events = events;
     this.status = status;
     this.transcripts = transcripts;
+    // Process roots unless the host names a folder: the extension, the CLI,
+    // and the SDK build exactly one session over the process roots; the
+    // desktop opens one session per paper and passes that paper's roots.
+    this.roots = init.roots ?? processWorkspaceRoots();
     this.followUps = followUps;
     // The sidecar store is a session artifact exactly like `transcripts`: the
     // session projects its own run events into it and flushes it below, so no
@@ -473,62 +496,69 @@ export async function settleLiveSessionExecutions(
       );
       continue;
     }
-    // Skips both a run whose driver already settled it and one this process
-    // never owned (a run another TeXRA process holds).
-    if (!ownsExecutionLease(executionId)) continue;
-    try {
-      await session.releaseExecutionLease(executionId, async () => {
-        const finalization = await finalizeRun({
-          executionId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
-          // A driver that reached its own terminal write between the
-          // registry read above and this one owns the result: this drain
-          // records what the exit interrupted, never what already finished.
-          keepExistingOutcome: true,
+    // A host quit handler runs outside any run scope, and the lease key and
+    // the terminal write both resolve through the owning session's storage
+    // root, so the drain enters each session before asking who owns what: a
+    // desktop with several papers open would otherwise look every paper's
+    // lease up under the no-workspace root and skip them all.
+    await runInSession(session, async () => {
+      // Skips both a run whose driver already settled it and one this process
+      // never owned (a run another TeXRA process holds).
+      if (!ownsExecutionLease(executionId)) return;
+      try {
+        await session.releaseExecutionLease(executionId, async () => {
+          const finalization = await finalizeRun({
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            // A driver that reached its own terminal write between the
+            // registry read above and this one owns the result: this drain
+            // records what the exit interrupted, never what already finished.
+            keepExistingOutcome: true,
+          });
+          if (!finalization.ok) {
+            throw new Error(
+              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+              { cause: finalization.error },
+            );
+          }
+          // Same claim, second write: close the run's transcript. Outside
+          // this callback the claim is already unlinked, so another process
+          // could have taken the run over and be appending to its log;
+          // settling its groups from this process's stale resident copy would
+          // then write that owner's entries back out from under it.
+          if (signal.aborted) {
+            logger.warn(
+              `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open and render as interrupted from that outcome`,
+            );
+            return;
+          }
+          const streamId =
+            session.executions.getHandle(executionId)?.childStreamId;
+          if (streamId === undefined) {
+            logger.warn(
+              `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+            );
+            return;
+          }
+          // The outcome that actually stands on disk, which is the driver's
+          // own when it won the race above: closing this run's groups as
+          // CANCELLED there would contradict the COMPLETED (or FAILED) result
+          // the header reports.
+          const closed = await session.transcripts.endRunningGroupsForStreams(
+            [streamId],
+            Date.now(),
+            finalization.outcome,
+          );
+          if (closed.length > 0) await session.transcripts.flush();
         });
-        if (!finalization.ok) {
-          throw new Error(
-            `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-            { cause: finalization.error },
-          );
-        }
-        // Same claim, second write: close the run's transcript. Outside this
-        // callback the claim is already unlinked, so another process could
-        // have taken the run over and be appending to its log — settling its
-        // groups from this process's stale resident copy would then write
-        // that owner's entries back out from under it.
-        if (signal.aborted) {
-          logger.warn(
-            `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open and render as interrupted from that outcome`,
-          );
-          return;
-        }
-        const streamId =
-          session.executions.getHandle(executionId)?.childStreamId;
-        if (streamId === undefined) {
-          logger.warn(
-            `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
-          );
-          return;
-        }
-        // The outcome that actually stands on disk, which is the driver's own
-        // when it won the race above: closing this run's groups as CANCELLED
-        // there would contradict the COMPLETED (or FAILED) result the header
-        // reports.
-        const closed = await session.transcripts.endRunningGroupsForStreams(
-          [streamId],
-          Date.now(),
-          finalization.outcome,
+      } catch (error) {
+        logger.warn(
+          `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
+          { data: error },
         );
-        if (closed.length > 0) await session.transcripts.flush();
-      });
-    } catch (error) {
-      logger.warn(
-        `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
-        { data: error },
-      );
-    }
+      }
+    });
   }
 }
 

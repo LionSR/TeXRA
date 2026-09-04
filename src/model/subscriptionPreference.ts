@@ -4,7 +4,7 @@
  * Off by default (experimental, opt-in). Provider modules supply only the
  * config key; read/write semantics stay identical.
  */
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 
 import type { ConfigTarget } from '@platform/interfaces';
 
@@ -23,18 +23,18 @@ export function createSubscriptionPreference(
   configKey: string,
 ): SubscriptionPreference {
   function isPrefer(): boolean {
-    return platform().config.get<boolean>(configKey, false);
+    return workspaceRoots().config.get<boolean>(configKey, false);
   }
 
   async function setPrefer(
     enabled: boolean,
   ): Promise<SubscriptionPreferenceUpdate> {
-    const host = platform();
+    const { config } = workspaceRoots();
 
-    const inspection = host.config.inspect<boolean>(configKey);
+    const inspection = config.inspect<boolean>(configKey);
     const target: ConfigTarget =
       inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
-    await host.config.update(configKey, enabled, target);
+    await config.update(configKey, enabled, target);
     return { effective: isPrefer(), target };
   }
 

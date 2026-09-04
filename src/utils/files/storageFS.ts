@@ -1,5 +1,6 @@
 // Platform imports
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 
 // Local imports - fs
 import { RelativeFS } from './relativeFS';
@@ -8,15 +9,16 @@ import { RelativeFS } from './relativeFS';
  * StorageFS provides a unified interface for extension storage operations.
  * Supports both workspace storage (per-workspace) and global storage (shared across workspaces).
  *
- * Storage paths are provided by the platform's StorageProvider, which is set
- * via initPlatform() at startup. Default: ~/.texra/ paths.
+ * The workspace storage path is the current session's (`WorkspaceRoots`),
+ * resolved per call so a run writes under its own paper's root; the global
+ * path is the process platform's. Default: ~/.texra/ paths.
  */
 export class StorageFS extends RelativeFS {
   /**
    * Return the workspace storage base path (per-workspace)
    */
   protected static override getBasePath(): string {
-    return platform().storage.getStoragePath();
+    return workspaceRoots().storage;
   }
 }
 

@@ -22,6 +22,7 @@ import {
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { AgentExecutionHandle } from './ExecutionHandle';
+import { runInSession } from './RunContext';
 import { getStreamTabId } from './streamTab';
 import { defaultSession } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
@@ -141,9 +142,13 @@ export async function runAgent(
     // The launch handle above is tracked synchronously so a stop can reach the
     // launch; the generation itself starts on the execution's lane, after any
     // previous generation of this id has disposed.
-    return await runSession.executions.launchExecution(
-      executionId,
-      async () => {
+    // The whole generation runs in the run session's scope, not the caller's:
+    // the execution record, the lease, and the terminal writes below all
+    // resolve their storage root through the session, and the caller's
+    // ambient session may legitimately differ from `options.session` (see the
+    // note at the `executeAgent` call).
+    return await runSession.executions.launchExecution(executionId, async () =>
+      runInSession(runSession, async () => {
         // Resolved before registerExecution so the stored record and the run agree
         // on the model.
         const config = preferHelperModel
@@ -260,7 +265,7 @@ export async function runAgent(
           );
         }
         return runResult;
-      },
+      }),
     );
   } finally {
     detachLaunchAbortLink?.();

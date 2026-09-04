@@ -4,8 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
@@ -14,7 +13,7 @@ describe('CLI TUI input history', () => {
   // GlobalStorageFS resolves paths through the platform but writes with the
   // real node fs, so the fake platform needs a real temp directory.
   setupPlatform(async () =>
-    createFakePlatform(
+    createFakeHost(
       {
         globalStoragePath: await makeTempDir('texra-input-history-', tempDirs),
       },

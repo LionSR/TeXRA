@@ -1,8 +1,18 @@
-// Third-party imports
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+// Node imports
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-// Local imports - types
-import type { Platform } from '@platform/platform';
+// Third-party imports
+import {
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 interface RunEventEnvelope {
   readonly scope: string;
@@ -26,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   eventListener: undefined as ((event: RunEventEnvelope) => void) | undefined,
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
+  initProcessWorkspaceRoots: vi.fn(),
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
   subscribe: vi.fn((listener: (event: RunEventEnvelope) => void) => {
@@ -97,6 +108,10 @@ vi.mock('@platform/platform', () => ({
   tryPlatform: () => mocks.activePlatform,
 }));
 
+vi.mock('@platform/workspaceRoots', () => ({
+  initProcessWorkspaceRoots: mocks.initProcessWorkspaceRoots,
+}));
+
 vi.mock('@transcript/StreamLogStore', () => ({
   StreamLogStore: { ephemeral: () => ({}) },
 }));
@@ -104,12 +119,13 @@ vi.mock('@transcript/StreamLogStore', () => ({
 // Local imports - package API under test
 import {
   runAgent,
+  type AgentPlatform,
   type HostInteractionCancelSelector,
   type PendingInteractionKind,
 } from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
-const PLATFORM = { lifecycle: {} } as unknown as Platform;
+const PLATFORM = { lifecycle: {}, roots: {} } as unknown as AgentPlatform;
 const RESULT = { outcome: 'COMPLETED' } as never;
 const EVENT = { type: 'run.start' } as never;
 const INPUT = {
@@ -314,11 +330,15 @@ describe('agent package run lifecycle', () => {
 
 describe('agent package Node configuration', () => {
   it('treats bare and prefixed configuration keys as equivalent', async () => {
-    const config = nodePlatform({
+    // The roots pin the workspace storage path at construction, so the
+    // storage root must be a real directory.
+    const storageDir = await mkdtemp(join(tmpdir(), 'texra-agent-package-'));
+    onTestFinished(() => rm(storageDir, { recursive: true, force: true }));
+    const { config } = nodePlatform({
       agentsDir: '/agents',
-      storageDir: '/storage',
+      storageDir,
       workspaceDir: '/workspace',
-    }).config;
+    }).roots;
 
     await config.update('texra.goal.enabled', true, 'global');
     expect(config.get('goal.enabled')).toBe(true);

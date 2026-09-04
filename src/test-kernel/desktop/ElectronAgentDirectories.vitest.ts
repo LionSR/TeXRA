@@ -15,7 +15,6 @@ import type { bootstrapNodeAgentDirectories } from '@platform/defaults/nodeHost'
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFileLocks } from '@platform/defaults/fileLocks';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -64,11 +63,13 @@ describe('desktop agent directory bootstrap', () => {
       { JsonStore },
       { bootstrapNodeAgentDirectories },
       { initPlatform, platform },
+      { initProcessWorkspaceRoots },
       { createPlatformAgentDirectories },
     ] = await Promise.all([
       loadSourceModule('@platform/defaults/jsonStore'),
       loadSourceModule('@platform/defaults/nodeHost'),
       import('@platform/platform'),
+      import('@platform/workspaceRoots'),
       import('@agent/index/platformAgentDirectories'),
     ]);
     const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
@@ -80,11 +81,8 @@ describe('desktop agent directory bootstrap', () => {
     );
 
     initPlatform({
-      config: new FakeConfigProvider(),
       globalState: globalStateStore,
-      workspaceState: workspaceStateStore,
       fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspacePath),
       storage,
       fileLocks: nodeFileLocks,
       processes: nodeProcesses,
@@ -101,6 +99,12 @@ describe('desktop agent directory bootstrap', () => {
       languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
       toolAvailability: NO_TOOL_AVAILABILITY_HOST,
       toolMissingHandler: () => {},
+    });
+    initProcessWorkspaceRoots({
+      workspace: workspacePath,
+      storage: storage.getStoragePath(),
+      config: new FakeConfigProvider(),
+      workspaceState: workspaceStateStore,
     });
 
     return {
@@ -336,7 +340,8 @@ describe('desktop agent directory bootstrap', () => {
 
   it('registers runtime skills through the shared Node host defaults', async () => {
     const { resourcesPath } = await createHarness();
-    const projectPath = join(dirname(resourcesPath), 'project');
+    // Project sources resolve from the process workspace the harness installed.
+    const projectPath = join(dirname(resourcesPath), 'workspace');
     await Promise.all([
       writeSkill(join(resourcesPath, 'skills'), 'bundled-skill', {
         name: 'bundled-skill',
@@ -361,8 +366,6 @@ describe('desktop agent directory bootstrap', () => {
     const { loadRuntimeSkillDisplay } = await import('@skills/runtimeSkills');
 
     initializeNodeRuntimeSkills({
-      host: 'desktop',
-      cwd: projectPath,
       resourcesPath,
       skillSourceOptions: {
         includeInterop: true,

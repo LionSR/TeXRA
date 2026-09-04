@@ -4,7 +4,6 @@ import * as path from 'node:path';
 
 // Local imports - platform
 import { WorkspaceStorageProvider } from './workspaceStorage';
-import type { StorageProvider } from '../interfaces';
 
 /** Directory name for TeXRA data, both global (`~/.texra`) and per-project (`<workspace>/.texra`). */
 export const TEXRA_STORAGE_DIR_NAME = '.texra';
@@ -37,6 +36,6 @@ interface NodeStorageProviderOptions {
 export function createNodeStorageProvider({
   storageRoot = DEFAULT_NODE_STORAGE_ROOT,
   workspacePath,
-}: NodeStorageProviderOptions = {}): StorageProvider {
+}: NodeStorageProviderOptions = {}): WorkspaceStorageProvider {
   return new WorkspaceStorageProvider(storageRoot, workspacePath);
 }

@@ -6,7 +6,7 @@ import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
 } from '@model/codex/codexPreference';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 
@@ -23,7 +23,7 @@ describe('Codex subscription preference', () => {
     expect(update).toEqual({ effective: true, target: 'workspace' });
     expect(isPreferCodexSubscription()).toBe(true);
     expect(
-      platform().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
+      workspaceRoots().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
     ).toMatchObject({
       workspaceValue: true,
     });

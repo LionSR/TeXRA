@@ -44,6 +44,10 @@ beforeEach(() => {
 
 /** Fresh module instances per test (beforeEach resets the module registry). */
 async function importSessionRuntime() {
+  // The reset also emptied the fresh roots module a session reads at
+  // construction; reinstall the suite default into it.
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform();
   const sessionModule = await import('@agent/runtime/SessionHandle');
   const { StreamLogStore } = await import('@transcript');
   return { ...sessionModule, StreamLogStore };

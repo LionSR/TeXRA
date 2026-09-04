@@ -13,7 +13,7 @@ import {
   type TeamPreset,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { RESEARCHER_ACCESS } from '@shared/copy/onboarding';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -53,7 +53,7 @@ const MULTI_AGENT_LAUNCHER_LOGIN_HINT = `${RESEARCHER_ACCESS.label} sign-in may 
 const MULTI_AGENT_LAUNCHER_NO_TEAM_ROOT_REASON = 'no team root';
 
 export function readCliMultiAgentPresets(): TeamPreset[] {
-  const customRaw = platform().workspaceState.get<unknown>(
+  const customRaw = workspaceRoots().workspaceState.get<unknown>(
     WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
   );
   return teamPresets(customRaw);

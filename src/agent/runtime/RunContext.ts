@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { runWithWorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { RunScope } from './RunScope';
 
@@ -147,12 +148,30 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
  * The context is populated by `withExecutionRunContext` (in
  * `AgentLaunchContext.ts`), which projects an {@link AgentLaunchContext} into
  * the ALS scope. Tools and utilities call `tryUseRunContext()` to read it.
+ * A context with a session also enters that session's workspace roots, so
+ * session-rooted services (`StorageFS`, `WorkspaceFS`) follow the run.
  */
 export function withRunContext<T>(
   context: RunContext,
   fn: () => T | Promise<T>,
 ): T | Promise<T> {
-  return runContextScope.run(context, fn);
+  const session = getRunContextSession(context);
+  return runContextScope.run(context, () =>
+    session ? runWithWorkspaceRoots(session.roots, fn) : fn(),
+  );
+}
+
+/**
+ * Run host code in the scope of one session, so session-rooted services
+ * (`StorageFS`, `WorkspaceFS`, `currentSession()`) resolve to that session
+ * outside any agent run. A host holding several sessions in one process (the
+ * desktop, one per open paper) wraps every touch of a session's storage.
+ */
+export function runInSession<T>(
+  session: SessionHandle,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
+  return withRunContext(createRunContext({ session }), fn);
 }
 
 /** Return the active run context when called from a run, otherwise undefined. */

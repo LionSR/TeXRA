@@ -11,6 +11,7 @@ import {
 } from '@agent/core/state/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import { platform, type Platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Plan, StreamTabId } from '@shared/schemas';
 import { withToolEnvironment } from '@test/support/toolEnvironment';
@@ -345,7 +346,10 @@ describe('PlanTool — update (plan approval)', () => {
         true,
       );
 
-      (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
+      (workspaceRoots().config as FakeConfigProvider).set(
+        GOAL_FEATURE_FLAG_KEY,
+        false,
+      );
       expect(
         submitPlanDecision(decisions, approval, {
           action: 'approve_and_goal',

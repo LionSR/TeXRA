@@ -8,14 +8,12 @@ import { afterEach } from 'vitest';
 // Platform defaults
 
 // Local imports
-import type { Platform } from '@platform/platform';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local file imports
-import { createFakePlatform } from './FakePlatform';
+import { createFakeHost, type FakeHost } from './setupPlatform';
 
 /**
  * Creates a fresh temp directory and records it on `tempDirs` for later
@@ -37,23 +35,23 @@ export async function makeTempDir(
 }
 
 /**
- * Creates a node-backed `FakePlatform` rooted in a fresh temp directory
+ * Creates a node-backed fake host rooted in a fresh temp directory
  * (`<tempDir>/workspace` and `<tempDir>/storage`), and records the temp
  * directory on `tempDirs` for later cleanup via `cleanupTempDirs`.
  */
 export async function createTempDirPlatform(
   prefix: string,
   tempDirs: string[],
-): Promise<Platform> {
+): Promise<FakeHost> {
   const tempDir = await makeTempDir(prefix, tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  return createFakePlatform(
-    { workspacePath: workspaceDir },
+  const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
+  return createFakeHost(
+    { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
     {
       fs: nodeFilesystem,
-      workspace: createNodeWorkspace(() => workspaceDir),
-      storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
+      storage,
       globalState: new MemoryStateStore(),
       workspaceState: new MemoryStateStore(),
     },

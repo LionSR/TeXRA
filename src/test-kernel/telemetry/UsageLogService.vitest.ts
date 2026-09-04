@@ -10,7 +10,7 @@ import {
 
 import { SupabaseClient } from '@auth/SupabaseClient';
 import * as logger from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import {
   USAGE_LOG_FLUSH_OUTCOME,
@@ -327,9 +327,7 @@ describe('UsageLogService', () => {
     // mutation outlives the test — the file-scoped fake from setupFakePlatform
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
-    setupPlatform(() =>
-      createFakePlatform({}, { config: new FakeScopedConfigProvider() }),
-    );
+    setupPlatform({}, { config: new FakeScopedConfigProvider() });
 
     // Shared tail of every opt-out case: an optional entry must vanish without
     // a single fetch, and the flush still reports ACCEPTED — the entry is
@@ -348,22 +346,38 @@ describe('UsageLogService', () => {
 
     it('sends nothing while the setting is off', async () => {
       stubAccessToken();
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'global',
+      );
 
       await expectOptedOutFlush();
     });
 
     it('honours a workspace-scoped telemetry opt-out', async () => {
       stubAccessToken();
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'workspace');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'workspace',
+      );
 
       await expectOptedOutFlush();
     });
 
     it('does not let a project opt in over a user-wide opt-out', async () => {
       stubAccessToken();
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
-      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'workspace');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'global',
+      );
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        true,
+        'workspace',
+      );
 
       await expectOptedOutFlush();
     });
@@ -376,7 +390,11 @@ describe('UsageLogService', () => {
       const { batches, fetchMock } = stubBatchFetch();
 
       UsageLogService.log(usageEntry('before-opt-out'));
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'global',
+      );
 
       // ACCEPTED, not PENDING: the entry is gone, and PENDING means "kept for a
       // later retry" everywhere else in this service.
@@ -390,7 +408,11 @@ describe('UsageLogService', () => {
 
     it('resumes sending once the setting is turned back on', async () => {
       stubAccessToken();
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'global',
+      );
 
       const { batches, fetchMock } = stubBatchFetch();
 
@@ -398,7 +420,11 @@ describe('UsageLogService', () => {
       await UsageLogService.flush();
       expect(fetchMock).not.toHaveBeenCalled();
 
-      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        true,
+        'global',
+      );
       UsageLogService.log(usageEntry('sent'));
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
@@ -420,7 +446,11 @@ describe('UsageLogService', () => {
       'still sends %s usage while the setting is off',
       async (usageRoute) => {
         stubAccessToken();
-        await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+        await workspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          false,
+          'global',
+        );
 
         const { batches, fetchMock } = stubBatchFetch();
 
@@ -444,7 +474,11 @@ describe('UsageLogService', () => {
         ...usageEntry('hosted'),
         usageRoute: 'chatgpt-subscription',
       });
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'global',
+      );
 
       await expect(UsageLogService.flush()).resolves.toBe(
         USAGE_LOG_FLUSH_OUTCOME.ACCEPTED,
@@ -471,7 +505,11 @@ describe('UsageLogService', () => {
       UsageLogService.log(usageEntry('optional'));
       const flush = UsageLogService.flush();
 
-      await platform().config.update(TELEMETRY_ENABLED_KEY, false, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        false,
+        'global',
+      );
       releaseToken();
 
       await expect(flush).resolves.toBe(USAGE_LOG_FLUSH_OUTCOME.ACCEPTED);
@@ -488,7 +526,11 @@ describe('UsageLogService', () => {
       ['DO_NOT_TRACK', '1'],
     ])('sends nothing while %s=%s is set', async (name, value) => {
       stubAccessToken();
-      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        true,
+        'global',
+      );
       vi.stubEnv(name, value);
 
       await expectOptedOutFlush();
@@ -498,7 +540,11 @@ describe('UsageLogService', () => {
       'ignores TEXRA_NO_TELEMETRY=%p',
       async (value) => {
         stubAccessToken();
-        await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
+        await workspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'global',
+        );
         vi.stubEnv('TEXRA_NO_TELEMETRY', value);
 
         const { batches, fetchMock } = stubBatchFetch();
@@ -539,7 +585,11 @@ describe('UsageLogService', () => {
       'treats the non-boolean value %p as opted out',
       async (value) => {
         stubAccessToken();
-        await platform().config.update(TELEMETRY_ENABLED_KEY, value, 'global');
+        await workspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          value,
+          'global',
+        );
 
         const { batches, fetchMock } = stubBatchFetch();
 
@@ -553,8 +603,12 @@ describe('UsageLogService', () => {
 
     it('fails closed for a malformed workspace value despite a valid global opt-in', async () => {
       stubAccessToken();
-      await platform().config.update(TELEMETRY_ENABLED_KEY, true, 'global');
-      await platform().config.update(
+      await workspaceRoots().config.update(
+        TELEMETRY_ENABLED_KEY,
+        true,
+        'global',
+      );
+      await workspaceRoots().config.update(
         TELEMETRY_ENABLED_KEY,
         'false',
         'workspace',

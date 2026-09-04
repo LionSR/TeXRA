@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - platform
 import {
   canonicalizeWorkspacePath,
-  createNodeWorkspace,
+  relativeToRoot,
 } from '@platform/defaults/nodeWorkspace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -26,10 +26,8 @@ describe('Node workspace identity', () => {
 
     const canonical = await realpath(link);
     expect(canonicalizeWorkspacePath(link)).toBe(canonical);
-    const workspace = createNodeWorkspace(() => link);
-    expect(workspace.getWorkspacePath()).toBe(canonical);
-    expect(workspace.asRelativePath(join(link, 'paper.tex'))).toBe('paper.tex');
-    expect(workspace.asRelativePath(join(link, 'new', 'draft.tex'))).toBe(
+    expect(relativeToRoot(link, join(link, 'paper.tex'))).toBe('paper.tex');
+    expect(relativeToRoot(link, join(link, 'new', 'draft.tex'))).toBe(
       'new/draft.tex',
     );
   });
@@ -49,9 +47,7 @@ describe('Node workspace identity', () => {
     const link = join(root, 'linked');
     await symlink(outside, link, 'dir');
 
-    const workspace = createNodeWorkspace(() => root);
-    expect(workspace.asRelativePath(join(link, 'new.tex'))).toBe(
-      'linked/new.tex',
-    );
+    expect(relativeToRoot(root, join(link, 'new.tex'))).toBe('linked/new.tex');
+    expect(relativeToRoot(root, join(outside, 'other.tex'))).toBeUndefined();
   });
 });

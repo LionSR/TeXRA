@@ -137,35 +137,14 @@ export interface FileSystemProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Workspace
-// ---------------------------------------------------------------------------
-
-/**
- * Platform workspace provider interface.
- */
-export interface WorkspaceProvider {
-  /** The canonical physical workspace root, or undefined if none is open. */
-  getWorkspacePath(): string | undefined;
-
-  /**
-   * Convert an absolute path to a workspace-relative path.
-   * Should be symlink-aware where possible.
-   * Returns the original path if it is outside the workspace.
-   */
-  asRelativePath(filePath: string): string;
-}
-
-// ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
 
 /**
- * Platform storage path provider interface.
+ * Process-wide storage path provider. The per-workspace storage root is not
+ * here: it is `WorkspaceRoots.storage`, carried by each session.
  */
 export interface StorageProvider {
-  /** Per-workspace storage root path. */
-  getStoragePath(): string;
-
   /** Cross-workspace global storage root path. */
   getGlobalStoragePath(): string;
 }

@@ -31,7 +31,7 @@ import {
 } from '@agent/runtime/RunContext';
 import { createLog } from '@logger/logUtils';
 import type { FileStat } from '@platform/interfaces';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   ExecutionIdSchema,
   ToolError,
@@ -537,7 +537,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     warnAbandonedSlotValue(
       GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
       'workspaceState',
-      platform().workspaceState,
+      workspaceRoots().workspaceState,
     );
     if (!readPlatformSetting<boolean>(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL)) {
       throw new ToolError(

@@ -56,8 +56,8 @@ interface PtySessionHandle {
 }
 
 export interface DesktopPtyHostOptions {
-  /** Default working directory for new sessions (the workspace root). */
-  cwd?: string;
+  /** Default working directory for new sessions: the active paper's root. */
+  cwd?: () => string | undefined;
   /** Streams pty output to the renderer. */
   onData(sessionId: string, data: string): void;
   /** Reports process exit so the UI can mark the session finished. */
@@ -212,7 +212,7 @@ export function createDesktopPtyHost(
         // so clamp to a sane minimum until the renderer reports real bounds.
         cols: Math.max(cols, 20),
         rows: Math.max(rows, 5),
-        cwd: cwd ?? options.cwd ?? process.cwd(),
+        cwd: cwd ?? options.cwd?.() ?? process.cwd(),
         env: ptyEnvironment(),
       });
 

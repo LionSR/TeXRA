@@ -9,7 +9,6 @@ import { getStreamTabId } from '@agent/runtime/streamTab';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import {
   LOG_LEVELS,
@@ -19,7 +18,7 @@ import {
   DEFAULT_TOOL_CONFIG,
 } from '@shared/schemas';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { appendTranscriptEntry } from '@test/support/storeTestDrivers';
 import { StreamLogStore } from '@transcript';
@@ -36,18 +35,15 @@ async function installStoragePlatform(): Promise<void> {
   const tempDir = await makeTempDir('texra-html-export-', tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: new MemoryStateStore(),
-        workspaceState: new MemoryStateStore(),
-      },
-    ),
+  const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
+  await installPlatform(
+    { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
+    {
+      fs: nodeFilesystem,
+      storage,
+      globalState: new MemoryStateStore(),
+      workspaceState: new MemoryStateStore(),
+    },
   );
 }
 

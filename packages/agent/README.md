@@ -85,21 +85,22 @@ files.
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/agent`         | `runAgent`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                      |
-| `@texra-ai/agent/node`    | `nodePlatform(options)` — a ready-made Node `Platform`                                                            |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                    |
 
 ## The platform
 
-Every run needs a `Platform`: the host port bundle (config, state, filesystem,
-workspace, storage, secrets, logging). `nodePlatform()` supplies a Node
-implementation — process-local config and state, TeXRA's ordinary storage
-layout, and environment-variable secrets (so provider API keys are read from
-`process.env`; nothing is persisted).
+Every run needs a `Platform`: the process-wide host port bundle (global state,
+filesystem, storage, secrets, logging) plus the `WorkspaceRoots` of the folder
+the runs work in (workspace path, its storage path, config, and workspace
+state). `nodePlatform()` supplies both: process-local config and state,
+TeXRA's ordinary storage layout, and environment-variable secrets (so provider
+API keys are read from `process.env`; nothing is persisted).
 
 The platform is **process-wide**. Create one and reuse it for every run; passing
 a second, different platform in the same process throws.
 
-Implement the `Platform` ports yourself when embedding in a host that already
-owns those services.
+Implement the `Platform` ports and the `roots` yourself when embedding in a
+host that already owns those services.
 
 ## Custom tools
 

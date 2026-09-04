@@ -39,7 +39,7 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
@@ -86,7 +86,7 @@ type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
 async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
-  const configuredMode = platform().workspaceState.get<string>(
+  const configuredMode = workspaceRoots().workspaceState.get<string>(
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
@@ -404,10 +404,11 @@ async function handleRunLatexdiff(
 
       log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
 
-      const generateBetweenRoundDiffs = platform().workspaceState.get<boolean>(
-        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-        LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-      );
+      const generateBetweenRoundDiffs =
+        workspaceRoots().workspaceState.get<boolean>(
+          WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+          LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
+        );
       log.debug(`Between-round diffs enabled: ${generateBetweenRoundDiffs}`);
 
       const outputsByRound = normalizeRunLatexdiffOutputsByRound(

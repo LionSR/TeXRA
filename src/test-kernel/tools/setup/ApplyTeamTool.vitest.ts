@@ -16,11 +16,12 @@ import {
 import { refresh } from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
-import { createFakePlatform } from '@test/support/FakePlatform';
+import { installPlatform } from '@test/support/setupPlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
   __resetSetupPlatformForTests,
@@ -32,7 +33,7 @@ import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 import { createFakeSetupPlatform } from './fixtures';
 
 function workspaceRoster(): AgentRosterSelection | undefined {
-  return platform().workspaceState.get<AgentRosterSelection>(
+  return workspaceRoots().workspaceState.get<AgentRosterSelection>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
 }
@@ -58,7 +59,7 @@ function mockCatalogAccess(canAccessCatalog: boolean): void {
 async function clearOnboardingState(): Promise<void> {
   __resetSetupPlatformForTests();
   setSetupPlatform(createFakeSetupPlatform());
-  await platform().workspaceState.update(
+  await workspaceRoots().workspaceState.update(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     undefined,
   );
@@ -72,21 +73,18 @@ beforeAll(async () => {
   // Real bundled agent YAMLs on disk and no remote agents (signed out), so
   // the tests exercise the actual name → key resolution including the
   // unresolved account-served orchestrator.
-  const { initPlatform } = await import('@platform/platform');
-  initPlatform(
-    createFakePlatform(
-      {},
-      {
-        fs: nodeFilesystem,
-        agentDirectories: {
-          custom: async () => '',
-          builtIn: async () =>
-            resolve(REPO_ROOT, 'packages/extension/resources/agents'),
-          builtInToolUse: async () =>
-            resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
-        },
+  await installPlatform(
+    {},
+    {
+      fs: nodeFilesystem,
+      agentDirectories: {
+        custom: async () => '',
+        builtIn: async () =>
+          resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+        builtInToolUse: async () =>
+          resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
       },
-    ),
+    },
   );
   await refresh({ includeRemote: false });
 });

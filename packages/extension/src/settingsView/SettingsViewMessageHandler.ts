@@ -37,7 +37,6 @@ import {
 } from '@frontend/latex/inlineCriticism';
 import { VscodePromptHost } from '@frontend/hosts/VscodePromptHost';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
-import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -58,6 +57,7 @@ import {
   LanguageModelPortError,
 } from '@platform/languageModel';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { revealProgressStream } from '@progressView/progressNavigation';
 import { MAIN_VIEW_COMMANDS, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -132,7 +132,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // load would throw before that happens.
     this.settingsHost = new SettingsViewHost({
       state: {
-        workspaceState: platform().workspaceState,
+        workspaceState: workspaceRoots().workspaceState,
         globalState: platform().globalState,
       },
       memoryPrompt: new VscodePromptHost(),
@@ -502,8 +502,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private settingsStores(): SettingsStores {
     return {
-      config: platform().config,
-      workspaceState: platform().workspaceState,
+      config: workspaceRoots().config,
+      workspaceState: workspaceRoots().workspaceState,
       globalState: platform().globalState,
     };
   }
@@ -587,12 +587,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const posters: SettingsSnapshotPosters = {
       approval: () => this.rebroadcastSnapshot('approval'),
-      'git-author': () => {
-        // Git identity is also process env, so the write must reach `git`
-        // before the webview is told the new value stuck.
-        applyGitAuthorConfig();
-        return this.rebroadcastSnapshot('git-author');
-      },
+      'git-author': () => this.rebroadcastSnapshot('git-author'),
       latex: () => this.rebroadcastSnapshot('latex'),
       memory: () => this.rebroadcastSnapshot('memory'),
       models: () =>

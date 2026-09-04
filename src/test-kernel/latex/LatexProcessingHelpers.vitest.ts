@@ -10,7 +10,6 @@ import {
   type MediaWorkspaceState,
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import type { FileLocation, ToolConfig } from '@shared/schemas';
@@ -186,13 +185,10 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
     );
     await writeFile(figurePath, 'fake-png-bytes');
 
+    const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     await installPlatform(
-      { workspacePath: workspaceDir },
-      {
-        fs: nodeFilesystem,
-        workspace: createNodeWorkspace(() => workspaceDir),
-        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-      },
+      { workspacePath: workspaceDir, storagePath: storage.getStoragePath() },
+      { fs: nodeFilesystem, storage },
     );
     return { texPath, figurePath };
   }

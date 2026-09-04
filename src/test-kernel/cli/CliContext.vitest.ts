@@ -175,7 +175,7 @@ describe('CLI context config defaults', () => {
     ).resolves.toMatchObject({ approvalPolicy: 'never' });
 
     // ...and the user file decides when it does not, as it already does for
-    // the extension and desktop hosts through `platform().config`.
+    // the extension and desktop hosts through `workspaceRoots().config`.
     await expect(
       cliContext({
         ambient,

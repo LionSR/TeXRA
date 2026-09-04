@@ -54,7 +54,6 @@ import {
   clearVscodeLeanServerEntries,
   vscodeLeanLanguageServices,
 } from '@frontend/lean/VscodeIntegration';
-import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
 import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
@@ -71,15 +70,17 @@ import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import { initPlatform } from '@platform/platform';
+import { initProcessWorkspaceRoots } from '@platform/workspaceRoots';
 import {
   bootstrapNodeAgentDirectories,
   createNodePlatform,
+  createNodeWorkspaceRoots,
   initializeNodeRuntimeSkills,
 } from '@platform/defaults/nodeHost';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import {
   formatTexraApprovalPolicy,
@@ -102,7 +103,10 @@ import { killActiveRecording } from '@tools/media/audio';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { setInlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
-import { readPlatformSetting } from '@utils/config/platformSettings';
+import {
+  initProcessSettingHost,
+  readPlatformSetting,
+} from '@utils/config/platformSettings';
 import { StorageFS } from '@utils/files/storageFS';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -323,6 +327,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function activateExtension(context: vscode.ExtensionContext) {
   installUnhandledRejectionSurface(context.subscriptions);
+  // Which catalog slot the host-divergent setting rows resolve to; the same
+  // for both platform shapes below.
+  initProcessSettingHost('vscode');
   const workspaceFolders = vscode.workspace.workspaceFolders;
   const hasSingleWorkspace = workspaceFolders?.length === 1;
 
@@ -340,10 +347,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     const config = await createExtensionTexraConfig(storage, undefined);
     initPlatform(
       createNodePlatform({
-        config,
         globalState: context.globalState,
-        workspaceState: context.workspaceState,
-        getWorkspacePath: () => undefined,
         storage,
         secrets: new VscodeSecrets(context),
         lifecycle,
@@ -351,6 +355,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
         agentResume: {
           tryResumeStream: tryResumeFromResumeData,
         },
+      }),
+    );
+    initProcessWorkspaceRoots(
+      createNodeWorkspaceRoots({
+        workspacePath: undefined,
+        storage: storage.getStoragePath(),
+        config,
+        workspaceState: context.workspaceState,
       }),
     );
     registerSupabaseAuth(context);
@@ -383,11 +395,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
     registerWalkthroughWorkspaceAction(context, false);
     return;
   }
-  const rawWorkspacePath = () =>
-    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const workspace = createNodeWorkspace(rawWorkspacePath);
-  const workspaceRoot = workspace.getWorkspacePath();
-  if (!workspaceRoot) return;
+  const rawWorkspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!rawWorkspacePath) return;
+  const workspaceRoot = canonicalizeWorkspacePath(rawWorkspacePath);
 
   try {
     process.loadEnvFile(path.join(workspaceRoot, '.env'));
@@ -415,23 +425,15 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const languageModel = createLanguageModelPort(context);
   // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
   // #8622).
-  const storage = createNodeStorageProvider({
-    workspacePath: workspace.getWorkspacePath(),
-  });
-  const config = await createExtensionTexraConfig(
-    storage,
-    workspace.getWorkspacePath(),
-  );
+  const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  const config = await createExtensionTexraConfig(storage, workspaceRoot);
   // Shared by the `Platform` tool-availability port and the setup platform's
   // extensions port, which both answer the same question.
   const isVscodeExtensionInstalled = (id: string) =>
     vscode.extensions.getExtension(id) !== undefined;
   initPlatform(
     createNodePlatform({
-      config,
       globalState: context.globalState,
-      workspaceState,
-      getWorkspacePath: rawWorkspacePath,
       storage,
       secrets: new VscodeSecrets(context),
       lifecycle,
@@ -453,6 +455,14 @@ async function activateExtension(context: vscode.ExtensionContext) {
           void vscode.commands.executeCommand(command, ...args);
         }
       },
+    }),
+  );
+  initProcessWorkspaceRoots(
+    createNodeWorkspaceRoots({
+      workspacePath: workspaceRoot,
+      storage: storage.getStoragePath(),
+      config,
+      workspaceState,
     }),
   );
   // TeXRA's account probes (Codex/xAI subscription eligibility). Without this
@@ -507,8 +517,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // (`initNodeAgentRuntime`, which registers the direct Lean adapter, stays
   // out: VS Code drives Lean through its own integration.)
   initializeNodeRuntimeSkills({
-    host: 'vscode',
-    cwd: workspaceRoot,
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);
@@ -714,7 +722,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   registerInlineCriticism(context);
   registerInlineComments(context);
   setInlineCommentProvider(getInlineCommentProvider());
-  applyGitAuthorConfig();
 
   statusBarItem = vscode.window.createStatusBarItem(
     'texra.taskStatus',

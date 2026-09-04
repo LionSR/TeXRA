@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   MESSAGE_TYPES,
@@ -37,11 +37,11 @@ setupPlatform({ workspacePath: '/workspace' });
 
 afterEach(async () => {
   setRuntimeSkillSources([]);
-  await platform().workspaceState.update(
+  await workspaceRoots().workspaceState.update(
     WorkspaceStateKey.DISABLED_SKILLS,
     undefined,
   );
-  await platform().workspaceState.update(
+  await workspaceRoots().workspaceState.update(
     WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     undefined,
   );
@@ -159,7 +159,7 @@ describe('runtime skills', () => {
         { scope: 'project', path: projectRoot },
         { scope: 'user', path: userRoot },
       ]);
-      await platform().workspaceState.update(key, value);
+      await workspaceRoots().workspaceState.update(key, value);
 
       const result = await loadRuntimeSkillCatalog();
 

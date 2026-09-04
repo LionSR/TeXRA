@@ -3,8 +3,7 @@ import { promisify } from 'node:util';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { createFakePlatform } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
@@ -48,7 +47,7 @@ describe('isGitRepository', () => {
 
     // Builder form: re-reads `dir` at beforeEach time, after the block above
     // (registered first in this describe) has already set it.
-    setupPlatform(() => createFakePlatform({ workspacePath: dir }));
+    setupPlatform(() => createFakeHost({ workspacePath: dir }));
 
     it('returns true when no rootPath is given', async () => {
       await expect(isGitRepository()).resolves.toBe(true);

@@ -107,6 +107,10 @@ import {
   type WorkbenchTab,
 } from '../shared/desktopTaskShell';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
+import {
+  DESKTOP_PAPER_COMMANDS,
+  type DesktopPaperSummary,
+} from '../shared/desktopPaperMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createPdfOverlay } from './pdfOverlay';
 import { createReviewPane } from './reviewPane';
@@ -159,7 +163,13 @@ const startupTeamPanel = createStartupTeamPanel({
 // The conversation is the permanent task canvas. Project navigation stays in
 // the left sidebar, while files and tools share one optional right workbench.
 
-const hasWorkspace = window.texraDesktop?.hasWorkspace ?? true;
+// The open papers and the one this window shows, as the main process last
+// reported them. Until the first report the launcher is assumed usable so the
+// empty state does not flash before the papers arrive.
+let openPapers: readonly DesktopPaperSummary[] = [];
+let activePaperRoot: string | undefined;
+let papersKnown = false;
+const hasWorkspace = () => !papersKnown || activePaperRoot !== undefined;
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
@@ -248,7 +258,7 @@ function toggleSummaryBarVisibility(): void {
 const mainView: HTMLElement = document.createElement('main-app');
 mainView.setAttribute('data-desktop-view', 'main');
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
-if (!hasWorkspace) {
+{
   // Empty-state placeholder when no workspace is open. The launcher cannot
   // run anything without a workspace; show a minimal prompt instead.
   noWorkspacePlaceholder.className = 'desktop-empty-workspace';
@@ -363,6 +373,7 @@ const workbench = createWorkbenchController({
   settingsView,
   logsPane,
   getState: () => shellState,
+  getWorkspacePath: () => activePaperRoot,
   updateShell,
   postMessage,
 });
@@ -406,7 +417,7 @@ function taskConversationTemplate(): TemplateResult {
   if (sidebarCollapsedWithPendingApproval) {
     sidebarToggleLabel = 'Show sidebar - approval pending';
   }
-  const workspacePath = window.texraDesktop?.workspacePath;
+  const workspacePath = activePaperRoot;
   // Names the button even when the ≤560px container query collapses it to the
   // icon: the shadow button then has no visible text, so only `title` reaches
   // its accessible name.
@@ -518,7 +529,7 @@ function taskConversationTemplate(): TemplateResult {
           ?hidden=${showConversation}
         >
           ${
-            hasWorkspace
+            hasWorkspace()
               ? html`
                   <section
                     class="task-launcher-surface"
@@ -629,7 +640,7 @@ function taskMainTemplate(
 }
 
 function shellTemplate(): TemplateResult {
-  const workspacePath = window.texraDesktop?.workspacePath;
+  const workspacePath = activePaperRoot;
   const rightTab = activeWorkbenchTab(shellState, 'right');
   const bottomTab = activeWorkbenchTab(shellState, 'bottom');
   const main = taskMainTemplate(rightTab, bottomTab);
@@ -667,14 +678,14 @@ function shellTemplate(): TemplateResult {
           {
             files: editorPane.treeElement,
             filesExpanded: shellState.filesExpanded,
-            hasWorkspace,
+            papers: openPapers,
+            activeRoot: activePaperRoot,
             initials: workspaceInitials(workspacePath),
             projectSectionPosition: shellState.projectSectionPosition,
             sessions: railTabs,
             streamCount: topLevelStreams$.get().length,
             workspaceName: workspaceName(workspacePath),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
-            workspacePath,
           },
           {
             onNewTask: returnToLauncher,
@@ -686,6 +697,10 @@ function shellTemplate(): TemplateResult {
             },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+            onSelectPaper: (root) =>
+              postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { root }),
+            onClosePaper: (root) =>
+              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, { root }),
             onOpenTerminal: () => workbench.openKind('terminal'),
             onOpenBrowser: () => workbench.openKind('browser'),
             onOpenSettings: () => workbench.openKind('settings'),
@@ -1022,6 +1037,16 @@ const MESSAGE_ROUTES = createMessageRoutes({
   openTerminalCommand: workbench.openTerminalCommand,
   renameBrowserTab: (tabId, title) =>
     updateShell(renameWorkbenchTab(shellState, tabId, title)),
+  papers: (message) => {
+    const previousRoot = activePaperRoot;
+    openPapers = message.papers;
+    activePaperRoot = message.activeRoot ?? undefined;
+    papersKnown = true;
+    rerenderShell();
+    if (activePaperRoot !== undefined && activePaperRoot !== previousRoot) {
+      void editorPane.refresh();
+    }
+  },
   environment: (summary) => {
     environmentPopover.set(summary);
     rerenderShell();
@@ -1107,8 +1132,9 @@ function completeBootstrap(): void {
   // bootstrap failure re-installs shortcuts too; every step is idempotent.
   shortcutBootstrap.ensure();
   postMessage(DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE);
+  // The papers list arrives in reply to the main view's ready signal; the
+  // file tree refreshes when it names the paper this window shows.
   postWebviewReady();
-  if (hasWorkspace) void editorPane.refresh();
   document.body.dataset.desktopReady = 'true';
   bootstrapComplete = true;
 }

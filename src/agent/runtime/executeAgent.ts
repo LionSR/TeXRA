@@ -64,6 +64,7 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
+import { runInSession } from './RunContext';
 import { defaultSession, type SessionHandle } from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
@@ -684,8 +685,12 @@ export function resumeToolUseFromResumeData(
   options: ResumeToolUseFromResumeDataOptions = {},
 ): Promise<AgentRuntimeFlowResult> {
   const session = options.session ?? defaultSession();
-  return session.executions.launchExecution(resume.executionId, () =>
-    resumeToolUseTurn(resume, options),
+  // The turn runs in the resumed session's scope from its first store touch
+  // (the lease claim, the terminal-state clear, the snapshot reload), so a
+  // host resuming a paper's run from outside that paper's scope still keys
+  // every record under the paper's own storage root.
+  return session.executions.launchExecution(resume.executionId, async () =>
+    runInSession(session, () => resumeToolUseTurn(resume, options)),
   );
 }
 

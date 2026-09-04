@@ -32,6 +32,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { planTeamRuns, teamPresets } from '@common/teams/TeamPlan';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   formatTexraApprovalPolicy,
@@ -423,10 +424,7 @@ if (RESET_WORKFLOW_SCRIPT_DISABLED) {
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
 if (HARNESS_MEMORY_FILES.length > 0) {
-  const memoryRoot = path.join(
-    platform().storage.getStoragePath(),
-    MEMORY_STORAGE_DIR,
-  );
+  const memoryRoot = path.join(workspaceRoots().storage, MEMORY_STORAGE_DIR);
   const newestEpochSeconds = Date.now() / 1000;
   HARNESS_MEMORY_FILES.forEach((name, index) => {
     const filePath = path.join(memoryRoot, name);
@@ -456,7 +454,7 @@ if (
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined ||
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
-  await platform().workspaceState.update(
+  await workspaceRoots().workspaceState.update(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     {
       kind: 'custom',

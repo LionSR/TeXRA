@@ -15,6 +15,7 @@ import { createDesktopMainViewStartup } from './desktopMainViewStartup.js';
 import {
   createCommandHandler,
   isDesktopCommandMessage,
+  type DesktopCommandMessage,
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 import {
@@ -24,15 +25,17 @@ import {
 import { createDesktopViewStateIpc } from './desktopViewStateIpc.js';
 import type { BrowserWindow } from 'electron';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
-import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';
-import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopMainViewIpcOptions {
-  fileSelection: DesktopFileSelection;
+  /** The paper-scoped file lists and pickers, reached through the window's current one. */
+  fileSelection: DesktopMessageHandler;
   prompt: DesktopPromptIpc;
-  settings: DesktopSettingsIpc;
+  /** The paper-scoped settings surface, reached through the window's current one. */
+  settings: DesktopMessageHandler;
   progress: DesktopMessageHandler;
   onboarding: DesktopMessageHandler;
+  /** Open-paper selection and the papers list the main view needs once ready. */
+  papers?: DesktopMessageHandler;
   /**
    * Editor file I/O, terminal pty sessions, and embedded browser control.
    * Owned by the caller because the pty host and browser views outlive a single
@@ -51,6 +54,11 @@ interface DesktopMainViewIpcOptions {
   /** Main-process global store, threaded in by the caller (windows outlive a
    *  single platform init in some hosts). */
   globalState: StateStore;
+  /**
+   * Runs every renderer message dispatch inside the active paper's session
+   * scope, so session-rooted services resolve to the paper the window shows.
+   */
+  inActiveSession?: (dispatch: () => void) => void;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -65,11 +73,17 @@ export function installDesktopMainViewIpc(
 ): DesktopMainViewIpc {
   let disposed = false;
 
-  function handleRendererMessage(message: unknown): void {
-    if (!isDesktopCommandMessage(message)) return;
+  function dispatchRendererMessage(message: DesktopCommandMessage): void {
     for (const handler of messageHandlers) {
       if (handler.handleMessage(message)) return;
     }
+  }
+
+  function handleRendererMessage(message: unknown): void {
+    if (!isDesktopCommandMessage(message)) return;
+    const dispatch = () => dispatchRendererMessage(message);
+    if (options.inActiveSession) options.inActiveSession(dispatch);
+    else dispatch();
   }
 
   const bridge = installDesktopHostBridge(window, {
@@ -105,8 +119,9 @@ export function installDesktopMainViewIpc(
     options.settings,
     options.progress,
     options.onboarding,
-    // Filtered because `workspace` is optional; an undefined entry in the chain
+    // Filtered because these are optional; an undefined entry in the chain
     // would throw on the first message dispatched.
+    ...(options.papers ? [options.papers] : []),
     ...(options.workspace ? [options.workspace] : []),
     viewState,
     logs,

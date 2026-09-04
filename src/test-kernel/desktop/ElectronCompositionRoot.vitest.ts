@@ -66,17 +66,20 @@ describe('desktop composition root and launch environment', () => {
     ]);
   }
 
-  it('owns one process session and flushes it before shutdown disposal', async () => {
-    const source = await readDesktopMainIndex();
+  it('owns one session per paper and flushes them before shutdown disposal', async () => {
+    const [source, papersSource] = await Promise.all([
+      readDesktopMainIndex(),
+      readFile(desktopSourcePath('main', 'desktopPapers.ts'), 'utf8'),
+    ]);
 
-    expect(source.match(/new SessionHandle\(/gu)).toHaveLength(1);
-    expect(source.match(/StreamLogStore\.openOrEphemeral\(\)/gu)).toHaveLength(
-      1,
-    );
-    expect(source).toMatch(
-      /createWindow\(\{[\s\S]*?\bprocessSession,[\s\S]*?\}\)/u,
-    );
-    expect(source).toContain('presentationSignal: presentationAbort.signal');
+    // Sessions are constructed in the paper registry only, one per root.
+    expect(source).not.toMatch(/new SessionHandle\(/u);
+    expect(papersSource.match(/new SessionHandle\(/gu)).toHaveLength(1);
+    expect(
+      papersSource.match(/StreamLogStore\.openOrEphemeral\(\)/gu),
+    ).toHaveLength(1);
+    expect(source).toMatch(/createWindow\(\{[\s\S]*?\bpapers,[\s\S]*?\}\)/u);
+    expect(source).toContain('presentationSignal: abort.signal');
 
     expectOrderedAfter(source, 'installDesktopWindowTitle(', [
       'window.loadURL(',
@@ -96,7 +99,7 @@ describe('desktop composition root and launch environment', () => {
       'afterAgentShutdown:',
       'killActiveRecording()',
       'flushArtifacts:',
-      'processSession.flushArtifacts()',
+      'papers.flushArtifacts()',
       'afterFlushArtifacts:',
       'diffHostDisposeQueue.onIdle()',
       'afterExecutionSettlement:',
@@ -119,7 +122,10 @@ describe('desktop composition root and launch environment', () => {
   });
 
   it('imports process-store initialization directly from its owner', async () => {
-    const source = await readDesktopMainIndex();
+    const source = await readFile(
+      desktopSourcePath('main', 'desktopPapers.ts'),
+      'utf8',
+    );
     expect(
       namedImportSources(source, 'initializeDesktopProcessStores'),
     ).toContain('./desktopProcessStores.js');
@@ -193,13 +199,6 @@ describe('desktop composition root and launch environment', () => {
     expectOrderedAfter(source, 'const resourcesPath = resolveResourcesPath', [
       'initializeBundledPrompts(resourcesPath)',
     ]);
-  });
-
-  it('uses the home directory as the no-workspace skill discovery fallback', async () => {
-    const source = await readDesktopPlatformIndex();
-
-    expect(source).toContain("cwd: workspacePath ?? app.getPath('home'),");
-    expect(source).not.toContain('cwd: workspacePath ?? userDataPath,');
   });
 
   it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {

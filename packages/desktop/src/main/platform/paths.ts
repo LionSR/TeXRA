@@ -4,12 +4,7 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index';
-import {
-  getWorkspacePathInput,
-  type WorkspacePathOptions,
-} from '@desktop/shared/workspacePath.js';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 
 interface DataRootOptions {
   env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_DESKTOP_E2E_USER_DATA_PATH'>>;
@@ -18,15 +13,6 @@ interface DataRootOptions {
 interface ResourcesPathOptions {
   appPath?: string;
   resourcesPath?: string;
-}
-
-export function resolveWorkspacePath(
-  options: WorkspacePathOptions = {},
-): string | undefined {
-  const workspacePath = getWorkspacePathInput(options);
-  return workspacePath == null
-    ? undefined
-    : canonicalizeWorkspacePath(workspacePath);
 }
 
 /**

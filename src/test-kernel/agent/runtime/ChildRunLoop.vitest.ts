@@ -69,7 +69,7 @@ import {
 import type { AgentExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import {
   RUN_OUTCOME,
   STREAM_PHASE,
@@ -1094,7 +1094,7 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('sizes the child-run budget to the machine when the setting is auto', () => {
-    const config = platform().config as FakeConfigProvider;
+    const config = workspaceRoots().config as FakeConfigProvider;
     try {
       config.set(
         CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
@@ -1117,7 +1117,7 @@ describe('childRunLoop E2E fixtures', () => {
   });
 
   it('gates budgeted child turns through the session child-run budget', async () => {
-    const config = platform().config as FakeConfigProvider;
+    const config = workspaceRoots().config as FakeConfigProvider;
     config.set(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, 1);
     try {
       const first = loopIds('budget-first');

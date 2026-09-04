@@ -199,20 +199,11 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     };
   });
 
-  const [{ initPlatform }, { createFakePlatform }, { nodeFilesystem }] =
-    await Promise.all([
-      import('@platform/platform'),
-      import('@test/support/FakePlatform'),
-      import('@platform/defaults/nodeFilesystem'),
-    ]);
-  initPlatform(
-    createFakePlatform(
-      { workspacePath },
-      {
-        fs: nodeFilesystem,
-      },
-    ),
-  );
+  const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
+    import('@test/support/setupPlatform'),
+    import('@platform/defaults/nodeFilesystem'),
+  ]);
+  await installPlatform({ workspacePath }, { fs: nodeFilesystem });
 
   const [
     { requestToolEditApproval },

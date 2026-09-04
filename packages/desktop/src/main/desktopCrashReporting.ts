@@ -1,7 +1,8 @@
 import { createDesktopCrashEventScrubber } from './desktopCrashEventScrubber.js';
 
 interface DesktopCrashReportingInitOptions {
-  sensitivePaths: readonly (string | undefined)[];
+  /** Read per event: folders opened after startup are scrubbed too. */
+  sensitivePaths: () => readonly (string | undefined)[];
   log?: Pick<Console, 'debug' | 'error'>;
 }
 
@@ -19,15 +20,14 @@ export async function initializeDesktopCrashReporting({
     return;
   }
 
-  const scrubCrashEvent = createDesktopCrashEventScrubber(sensitivePaths);
-
   try {
     const sentry = await import('@sentry/electron/main');
     sentry.init({
       dsn,
       tracesSampleRate: 0,
       attachScreenshot: false,
-      beforeSend: scrubCrashEvent,
+      beforeSend: (event) =>
+        createDesktopCrashEventScrubber(sensitivePaths())(event),
     });
   } catch (error) {
     log.error('Failed to initialize desktop crash reporting', error);

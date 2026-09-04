@@ -20,7 +20,6 @@ import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { appSignals } from '@eventBus/AppSignals';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { createFakePlatform } from '@test/support/FakePlatform';
 
 let fixtureRoot = '';
 let workspacePath = '';
@@ -61,6 +60,7 @@ function createIpc(
     ptyHost: createPtyHost(),
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
+    getWorkspacePath: () => workspacePath,
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
@@ -96,18 +96,11 @@ describe('desktop workspace IPC', () => {
       missingExternalPath,
       join(workspacePath, 'dangling-linked.tex'),
     );
-    const [{ initPlatform }, { nodeFilesystem }] = await Promise.all([
-      import('@platform/platform'),
+    const [{ installPlatform }, { nodeFilesystem }] = await Promise.all([
+      import('@test/support/setupPlatform'),
       import('@platform/defaults/nodeFilesystem'),
     ]);
-    initPlatform(
-      createFakePlatform(
-        { workspacePath },
-        {
-          fs: nodeFilesystem,
-        },
-      ),
-    );
+    await installPlatform({ workspacePath }, { fs: nodeFilesystem });
   });
 
   afterEach(() => {

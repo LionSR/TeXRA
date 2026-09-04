@@ -66,7 +66,6 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
-import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 const invalidateModelOptionsCache = vi.hoisted(() => vi.fn());
 const providerApiKeyRuntime = vi.hoisted(() => ({
@@ -763,19 +762,7 @@ describe('/config slash command wiring', () => {
     expect(events).toEqual(['echo', 'error', 'error']);
   });
 
-  it('re-applies git author config so a toggle takes effect this session', async () => {
-    const { stores } = makeFakeSettingsStores();
-    const props = openConfigFormProps(stores);
-    const markCommits = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-
-    await props.writeValue?.(markCommits, true);
-    expect(getGitAuthorEnv().GIT_AUTHOR_NAME).toBe(DEFAULT_GIT_AUTHOR_NAME);
-
-    await props.writeValue?.(markCommits, false);
-    expect(getGitAuthorEnv()).toEqual({});
-  });
-
-  it('resets a git setting (delete) and re-applies the identity', async () => {
+  it('resets a git setting by deleting the stored key', async () => {
     const { stores, config } = makeFakeSettingsStores();
     const props = openConfigFormProps(stores);
     const authorName = entryByKey(WorkspaceStateKey.GIT_AUTHOR_NAME);

@@ -1,20 +1,14 @@
 /**
- * Injectable worktree support flag.
- *
- * When disabled (default), delegate_agent ignores the working_directory
- * parameter and subagents operate in the workspace root only.
- *
- * The extension host calls {@link setWorktreeSupportEnabled} at activation
- * (and on settings change) with the value from workspace state. This module
- * stays VS Code-free.
+ * Whether delegated subagents may run in a git worktree of their own
+ * (`working_directory`); off by default, in which case subagents operate in
+ * the workspace root only. Read from the calling session's workspace each
+ * time it is checked, so a process holding several papers honors each paper's
+ * own opt-in.
  */
 
-let worktreeSupport = false;
-
-export function setWorktreeSupportEnabled(enabled: boolean): void {
-  worktreeSupport = enabled;
-}
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readPlatformSetting } from '@utils/config/platformSettings';
 
 export function isWorktreeSupportEnabled(): boolean {
-  return worktreeSupport;
+  return readPlatformSetting<boolean>(WorkspaceStateKey.GIT_WORKTREE_SUPPORT);
 }

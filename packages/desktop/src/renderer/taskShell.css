@@ -325,11 +325,36 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   line-height: 1;
 }
 
+.task-project-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+}
+
 .task-project-row {
   display: block;
   width: 100%;
   margin-top: 4px;
   color: var(--wa-color-text-normal);
+}
+
+.task-project-item .task-project-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+/* Shown while the row is hovered or the control itself has focus. */
+.task-project-close {
+  flex: 0 0 auto;
+  opacity: 0;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-project-item:hover .task-project-close,
+.task-project-item:focus-within .task-project-close {
+  opacity: 1;
 }
 
 .task-project-row::part(base) {
@@ -383,6 +408,32 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   flex: 0 0 auto;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-xs);
+}
+
+/* The paper this window shows: the rail's active-stream styling. */
+.task-project-row.is-active::part(base) {
+  background: var(--wa-color-list-active-bg);
+  color: var(--wa-color-list-active-fg);
+}
+
+.task-project-row.is-active,
+.task-project-row.is-active .task-project-mark,
+.task-project-row.is-active .task-project-copy small,
+.task-project-row.is-active .task-project-chevron {
+  color: var(--wa-color-list-active-fg);
+}
+
+.task-project-add {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-project-add::part(base) {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 4px 8px;
 }
 
 .task-project-files {

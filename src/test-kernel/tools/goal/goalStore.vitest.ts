@@ -8,7 +8,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import type { StateStore } from '@platform/interfaces';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
@@ -142,7 +142,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('treats only absent goal records as no goal', async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     const key = `goals:byStream:${STREAM_A}`;
 
     expect(GoalStore.getForStream(STREAM_A)).toBeNull();
@@ -182,7 +182,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('surfaces an unparseable blob but still lets explicit cleanup remove it', async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
     expect(() => GoalStore.getForStream(STREAM_A)).toThrow(
       `Failed to parse persisted goal for stream "${STREAM_A}"`,
@@ -195,7 +195,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('does not overwrite an unparseable record when starting a goal', async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     const malformed = { goalId: 'not-valid' };
     const key = `goals:byStream:${STREAM_A}`;
     await state.update(key, malformed);
@@ -205,7 +205,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('identifies the malformed stream when listing goals', async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     await state.update('goals:index', [STREAM_A]);
     await state.update(`goals:byStream:${STREAM_A}`, { goalId: 'not-valid' });
 
@@ -215,7 +215,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('forgetMany clears records and unparseable blobs', async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     await GoalStore.start(STREAM_A, 'objective a');
     await state.update(`goals:byStream:${STREAM_B}`, { goalId: 'garbage' });
 
@@ -227,7 +227,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('forgets indexed streams owned by deleted execution ids, including unparseable blobs', async () => {
-    const state = platform().workspaceState;
+    const state = workspaceRoots().workspaceState;
     const deleted = 'abc123' as ExecutionId;
     const kept = 'def456' as ExecutionId;
     const deletedStream = `chat@deepseek#${deleted}` as StreamTabId;

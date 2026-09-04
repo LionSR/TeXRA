@@ -4,12 +4,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { defaultSession } from '@agent/runtime/SessionHandle';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
 import type { StateStore } from '@platform/interfaces';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
-  DEFAULT_GIT_MARK_COMMITS,
 } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
@@ -20,11 +19,6 @@ import {
 } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
-import {
-  isWorktreeSupportEnabled,
-  setWorktreeSupportEnabled,
-} from '@utils/config/worktreeConfig';
-import { getGitAuthorEnv, setGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 
 import {
   commandOf,
@@ -173,11 +167,9 @@ describe('desktop settings IPC', () => {
   afterEach(() => {
     for (const settings of liveSettingsIpcs.splice(0)) settings.dispose();
     vi.clearAllMocks();
-    setGitAuthorEnv({});
-    setWorktreeSupportEnabled(false);
   });
 
-  it('applies Git author settings on creation and posts only for settings readiness', async () => {
+  it('posts only for settings readiness', async () => {
     const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
       [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
@@ -188,12 +180,6 @@ describe('desktop settings IPC', () => {
     });
 
     expect(posted).toEqual([]);
-    expect(getGitAuthorEnv()).toEqual({
-      GIT_AUTHOR_NAME: 'TeXRA Bot',
-      GIT_AUTHOR_EMAIL: 'bot@example.com',
-      GIT_COMMITTER_NAME: 'TeXRA Bot',
-      GIT_COMMITTER_EMAIL: 'bot@example.com',
-    });
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
@@ -222,7 +208,7 @@ describe('desktop settings IPC', () => {
     ).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS,
       values: {
-        [WorkspaceStateKey.GIT_MARK_COMMITS]: DEFAULT_GIT_MARK_COMMITS,
+        [WorkspaceStateKey.GIT_MARK_COMMITS]: true,
         [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
         [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
         [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
@@ -331,7 +317,6 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
     expect(workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
-    expect(getGitAuthorEnv()).toEqual({});
 
     expect(
       settings.handleMessage({
@@ -344,7 +329,6 @@ describe('desktop settings IPC', () => {
     expect(workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT)).toBe(
       true,
     );
-    expect(isWorktreeSupportEnabled()).toBe(true);
   });
 
   it('round-trips tool path protection through workspace state', async () => {
@@ -431,8 +415,8 @@ describe('desktop settings IPC', () => {
     const malformed = { goalId: 'not-valid' };
 
     async function seedMalformedGoal(): Promise<void> {
-      await platform().workspaceState.update('goals:index', [streamId]);
-      await platform().workspaceState.update(goalKey, malformed);
+      await workspaceRoots().workspaceState.update('goals:index', [streamId]);
+      await workspaceRoots().workspaceState.update(goalKey, malformed);
     }
 
     it('reports a malformed goal without throwing or posting a fallback list', async () => {
@@ -461,7 +445,7 @@ describe('desktop settings IPC', () => {
           command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
         }),
       );
-      expect(platform().workspaceState.get(goalKey)).toEqual(malformed);
+      expect(workspaceRoots().workspaceState.get(goalKey)).toEqual(malformed);
     });
 
     it('continues initial settings delivery after a malformed goal', async () => {

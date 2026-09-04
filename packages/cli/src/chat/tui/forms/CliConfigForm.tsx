@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { cliSettingsStores } from '@cli/runtime/settingsStores';
-import { applyCliGitAuthorConfig } from '@cli/runtime/gitAuthor';
 import {
   loadGitHubTokenStatus,
   removeGitHubToken,
@@ -188,7 +187,6 @@ export function createCliConfigFormProps(
           `Setting "${label}" is not writable from /config (${result.kind}).`,
         );
     }
-    if (entry.category === 'git') applyCliGitAuthorConfig(stores.config);
     if (entry.onWrite?.invalidatesModelOptions) {
       refreshSubscriptionPreferenceViews();
     }

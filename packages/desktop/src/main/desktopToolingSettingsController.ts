@@ -1,7 +1,7 @@
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import type { ToolTerminalAction } from '@controllers/settingsView/ToolDashboardData';
 import { appSignals } from '@eventBus/AppSignals';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SettingsViewInboundHandlerRegistry,
@@ -119,7 +119,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       buildSettingsSnapshotMessage(
         'latex',
         {
-          config: platform().config,
+          config: workspaceRoots().config,
           workspaceState: this.options.workspaceState,
           globalState: this.options.globalState,
         },

@@ -4,9 +4,10 @@ import type { StateStore, StorageProvider } from '@platform/interfaces';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { openNodeWorkspaceStateStore } from '@platform/defaults/nodeStores';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import type { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 interface CliStateStores {
-  readonly storage: StorageProvider;
+  readonly storage: WorkspaceStorageProvider;
   readonly globalState: StateStore;
   readonly workspaceState: StateStore;
 }
@@ -37,7 +38,7 @@ export async function createCliStateStores(
   });
   const [globalStore, workspaceStore] = await Promise.all([
     openCliGlobalStateStore(storage),
-    openNodeWorkspaceStateStore(storage),
+    openNodeWorkspaceStateStore(storage.getStoragePath()),
   ]);
 
   return {

@@ -17,7 +17,6 @@
 
 // Local imports
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
-import type { SettingHost } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
 import {
   defaultSkillSources,
@@ -30,9 +29,10 @@ import { nodeFileLocks } from './fileLocks';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { nodeFilesystem } from './nodeFilesystem';
 import { nodeProcesses } from './nodeProcesses';
-import { createNodeWorkspace } from './nodeWorkspace';
+import { canonicalizeWorkspacePath } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
+import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
@@ -50,26 +50,18 @@ import type { PlatformSecrets } from '../secrets';
 
 /**
  * Host-specific services a Node host supplies to {@link createNodePlatform}. The
- * shared Node defaults (filesystem, workspace provider, config provider, and
- * the no-op tool-availability host) are filled in by the helper.
+ * shared Node defaults (filesystem, file locks, process identity, and the
+ * no-op tool-availability host) are filled in by the helper. The
+ * per-workspace services are not here: hosts build them with
+ * {@link createNodeWorkspaceRoots}.
  */
 export interface NodePlatformServices {
-  /**
-   * Config source: the workspace + global stores to build the file-backed
-   * provider from, or an already-constructed provider for hosts that resolve
-   * configuration some other way (the SDK's process-local
-   * `MemoryConfigProvider`).
-   */
-  readonly config: JsonConfigProviderOptions | ConfigProvider;
   readonly globalState: StateStore;
-  readonly workspaceState: StateStore;
   readonly storage: StorageProvider;
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Current workspace root, read lazily so the host can update it later. */
-  readonly getWorkspacePath: () => string | undefined;
   /** Host-specific availability overrides merged over the no-op defaults. */
   readonly toolAvailability?: Partial<ToolAvailabilityHost>;
   /** Editor-host subscription models; defaults to the unavailable port. */
@@ -78,10 +70,42 @@ export interface NodePlatformServices {
   readonly toolMissingHandler?: ToolMissingHandler;
 }
 
-function toConfigProvider(
-  config: JsonConfigProviderOptions | ConfigProvider,
-): ConfigProvider {
-  return 'workspace' in config ? new JsonConfigProvider(config) : config;
+/** The per-workspace services a Node host opens for one workspace folder. */
+export interface NodeWorkspaceRootsInit {
+  readonly workspacePath: string | undefined;
+  /** The storage root opened for this workspace (`WorkspaceStorageProvider.getStoragePath()`). */
+  readonly storage: string;
+  /**
+   * Config source: the workspace + global stores to build the file-backed
+   * provider from, or an already-constructed provider for hosts that resolve
+   * configuration some other way (the SDK's process-local
+   * `MemoryConfigProvider`).
+   */
+  readonly config: JsonConfigProviderOptions | ConfigProvider;
+  readonly workspaceState: StateStore;
+}
+
+/**
+ * Build the `WorkspaceRoots` for one workspace folder: the canonical physical
+ * root, the pinned storage path, and the config/state stores opened for it.
+ * Every host (and the desktop, once per open paper) builds its roots here so
+ * canonicalization and the config-provider choice cannot drift.
+ */
+export function createNodeWorkspaceRoots(
+  init: NodeWorkspaceRootsInit,
+): WorkspaceRoots {
+  return {
+    workspace:
+      init.workspacePath == null
+        ? undefined
+        : canonicalizeWorkspacePath(init.workspacePath),
+    storage: init.storage,
+    config:
+      'workspace' in init.config
+        ? new JsonConfigProvider(init.config)
+        : init.config,
+    workspaceState: init.workspaceState,
+  };
 }
 
 export interface NodeAgentDirectoryBootstrapOptions {
@@ -92,8 +116,6 @@ export interface NodeAgentDirectoryBootstrapOptions {
 }
 
 export interface NodeRuntimeSkillOptions {
-  readonly host: SettingHost;
-  readonly cwd: string;
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
@@ -106,18 +128,14 @@ const agentDirectoryBootstrapMutex = new KeyedMutex<string>();
  * extension) or an SDK embedder.
  *
  * Centralizes the default building blocks every host would otherwise restate
- * in its own `initPlatform` literal (`nodeFilesystem`, `createNodeWorkspace`,
- * `nodeFileLocks`, the config provider, the no-op tool-availability host)
- * while preserving the rule that only composition roots call
- * `initPlatform(...)`.
+ * in its own `initPlatform` literal (`nodeFilesystem`, `nodeFileLocks`, the
+ * no-op tool-availability host) while preserving the rule that only
+ * composition roots call `initPlatform(...)`.
  */
 export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
-    config: toConfigProvider(services.config),
     globalState: services.globalState,
-    workspaceState: services.workspaceState,
     fs: nodeFilesystem,
-    workspace: createNodeWorkspace(services.getWorkspacePath),
     storage: services.storage,
     fileLocks: nodeFileLocks,
     processes: nodeProcesses,
@@ -147,15 +165,13 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
 export function initializeNodeRuntimeSkills(
   options: NodeRuntimeSkillOptions,
 ): void {
-  setRuntimeSkillSources(
+  // The workspace folder is not fixed here: project and interop sources are
+  // resolved from the calling session's workspace at discovery time.
+  setRuntimeSkillSources((cwd) =>
     defaultSkillSources(
-      {
-        cwd: options.cwd,
-        resourcesPath: options.resourcesPath,
-      },
+      { cwd, resourcesPath: options.resourcesPath },
       options.skillSourceOptions,
     ),
-    options.host,
   );
 }
 

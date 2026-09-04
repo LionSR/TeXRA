@@ -216,7 +216,7 @@ describe('desktop protocol callback lifecycle', () => {
     {
       name: 'allows the first desktop process to become primary',
       lockAvailable: true,
-      argv: ['--texra-workspace-path=/Users/ray/paper'],
+      argv: ['/Users/ray/paper'],
       requestCount: 1,
       quitCount: 0,
       protocolRegistrations: ['texra'],
@@ -246,16 +246,12 @@ describe('desktop protocol callback lifecycle', () => {
   it('focuses the primary window for every second-instance launch', () => {
     const { app, focusMainWindow } = installLifecycle();
 
-    app.listeners.secondInstance?.(
-      {},
-      ['--texra-workspace-path=/Users/ray/paper'],
-      process.cwd(),
-    );
+    app.listeners.secondInstance?.({}, ['/Users/ray/paper'], process.cwd());
     expect(focusMainWindow).toHaveBeenCalledTimes(1);
 
     app.listeners.secondInstance?.(
       {},
-      ['--texra-workspace-path=/Users/ray/other-paper'],
+      ['/Users/ray/other-paper'],
       process.cwd(),
     );
     expect(focusMainWindow).toHaveBeenCalledTimes(2);
