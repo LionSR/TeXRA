@@ -72,6 +72,7 @@ import { formatToolResultTextWithAttachments } from '../utils/toolAttachmentUtil
 import { OpenAICompatibleModelHandler } from './OpenAICompatibleModelHandler';
 import { ReasoningStreamAggregator } from './ReasoningStreamAggregator';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
+import type { AssistantTextAppendOptions } from '../ModelHandler';
 import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 // Third-party imports
@@ -883,7 +884,7 @@ export class ModelHandlerOpenAI<
   protected appendTextToLastAssistantMessage(
     messages: ChatCompletionMessageParam[],
     text: string,
-    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+    options: AssistantTextAppendOptions = {},
   ): boolean {
     let targetIndex = messages.length - 1;
     const trailingMessage = messages.at(-1);

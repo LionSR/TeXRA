@@ -64,7 +64,7 @@ import {
   OpenRouterStreamAggregator,
   toOpenRouterReasoningEffort,
 } from './openRouterStreaming';
-import { ModelHandler } from '../ModelHandler';
+import { ModelHandler, type AssistantTextAppendOptions } from '../ModelHandler';
 import { CLIENT_COMPACTION_SUMMARY_MAX_TOKENS } from '../contextManagementConstants';
 
 // Third-party type imports
@@ -707,7 +707,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   protected appendTextToLastAssistantMessage(
     messages: ChatMessages[],
     text: string,
-    options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+    options: AssistantTextAppendOptions = {},
   ): boolean {
     let targetIndex = messages.length - 1;
     const trailingMessage = messages.at(-1);

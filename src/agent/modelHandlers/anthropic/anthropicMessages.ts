@@ -1,6 +1,7 @@
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import type { FileLocation, MediaAttachmentKind } from '@shared/schemas';
+import type { AssistantTextAppendOptions } from '../ModelHandler';
 
 // Third-party imports
 import type {
@@ -95,7 +96,7 @@ export async function addMediaToUserMessage(
 export function appendTextToLastAssistantMessage(
   messages: MessageParam[],
   text: string,
-  options: { afterContinuationPrompt?: boolean; fallbackText?: string } = {},
+  options: AssistantTextAppendOptions = {},
   deps: AnthropicAssistantMessageDeps,
 ): boolean {
   let targetIndex = messages.length - 1;
