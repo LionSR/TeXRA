@@ -61,6 +61,7 @@ export const ELEMENT_IDS = {
   COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
+  FOLLOW_UP_HINT: 'followUpHint',
   QUEUED_FOLLOW_UPS_COLLAPSIBLE: 'queuedFollowUpsCollapsible',
   QUEUED_FOLLOW_UPS_LIST: 'queuedFollowUpsList',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
