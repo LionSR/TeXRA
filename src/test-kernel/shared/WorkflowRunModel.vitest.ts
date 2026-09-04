@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
+  type StreamLifecycleStatus,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -77,7 +79,8 @@ function modelOf(
   tasks: readonly TaskSpec[],
   options: {
     plan?: WorkflowPlanMarker;
-    runSettled?: boolean;
+    streamPhase?: StreamLifecycleStatus;
+    runDurablyFinal?: boolean;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): WorkflowRunModel {
@@ -93,7 +96,8 @@ function modelOf(
       ),
     ),
     plan: options.plan,
-    runSettled: options.runSettled ?? false,
+    streamPhase: options.streamPhase,
+    runDurablyFinal: options.runDurablyFinal === true,
     childProgress: options.childProgress ?? new Map(),
   });
 }
@@ -179,7 +183,8 @@ describe('workflow run model', () => {
       // the transcript authority regardless of that input arrangement.
       rows: [resumedUngrouped, resumedPhase, old],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -201,6 +206,47 @@ describe('workflow run model', () => {
     });
   });
 
+  it("settles an interrupted run's cards in the producer's vocabulary", () => {
+    // The write side (`StreamLogStore.endRunningGroupsForStreams`) rewrites a
+    // launched call as `failed` and an unlaunched one as `skipped`/
+    // `not-reached`. The read-side repaint must say the same thing, or the
+    // same run reads differently before and after its transcript is settled.
+    const model = modelOf(
+      ['Map'],
+      [
+        { id: 'launched', phase: 'Map', status: 'running' },
+        { id: 'never-reached', phase: 'Map', status: 'queued' },
+        { id: 'done', phase: 'Map', status: 'completed' },
+      ],
+      { runDurablyFinal: true },
+    );
+
+    expect(model.tasks.map((row) => row.call)).toMatchObject([
+      {
+        id: 'launched',
+        status: 'failed',
+        error: 'The previous host stopped before this call completed.',
+      },
+      { id: 'never-reached', status: 'skipped', reason: 'not-reached' },
+      { id: 'done', status: 'completed' },
+    ]);
+    // The card's explanatory line is repainted too: the progress view reads it
+    // off the row, not off the call, so dropping it would leave the repainted
+    // card silent where the settled one explains itself.
+    expect(model.tasks.map((row) => row.detail)).toStrictEqual([
+      {
+        kind: 'error',
+        text: 'The previous host stopped before this call completed.',
+      },
+      {
+        kind: 'note',
+        text: 'The workflow ended before this call was reached.',
+      },
+      undefined,
+    ]);
+    expect(model.tally).toMatchObject({ done: 3, total: 3, running: 0 });
+  });
+
   it('uses a new plan boundary before its calls or tagged phases arrive', () => {
     const stale = {
       ...phaseGroup('Old', 0, 2),
@@ -220,7 +266,8 @@ describe('workflow run model', () => {
       taskGroups: [stale, current],
       rows: [staleUntaggedCard],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -246,7 +293,8 @@ describe('workflow run model', () => {
       taskGroups: [oldMap, currentMap],
       rows: [],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -279,7 +327,8 @@ describe('workflow run model', () => {
       taskGroups: [oldMap, currentReview],
       rows: [oldCard],
       plan: undefined,
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -306,7 +355,8 @@ describe('workflow run model', () => {
       // child. Mixed-generation rows fall back to timestamps, not input order.
       rows: [resumedRoot, oldChild],
       plan: undefined,
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -337,7 +387,8 @@ describe('workflow run model', () => {
       // seqNo/timestamp sorting. Attempt selection must not depend on that sort.
       rows: [currentLegacyRoot, currentChild, oldChild],
       plan: undefined,
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
@@ -459,7 +510,9 @@ describe('workflow run model', () => {
     // Once the run has settled, a plan-only phase it never reached and that
     // holds no declared task is gone; one still holding declared tasks stays.
     expect(
-      summarize(modelOf(['Map'], tasks, { plan, runSettled: true })),
+      summarize(
+        modelOf(['Map'], tasks, { plan, streamPhase: STREAM_PHASE.COMPLETED }),
+      ),
     ).toEqual([
       ['Map', true, 1, ['extract']],
       ['Reduce', false, 0, ['merge']],
@@ -531,7 +584,8 @@ describe('workflow run model', () => {
         taskGroups: [closed],
         rows: [taskRow({ id: 'v', phase: 'Verify' })],
         plan: undefined,
-        runSettled: true,
+        streamPhase: STREAM_PHASE.COMPLETED,
+        runDurablyFinal: false,
         childProgress: new Map(),
       }).phases[0]?.heading,
     ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });

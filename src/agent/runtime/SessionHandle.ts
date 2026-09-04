@@ -721,15 +721,26 @@ export function forEachLiveSession(
  * desktop app or VS Code mid-run) or a tool-use flow parked at its WAIT node.
  *
  * Each such execution gets the same durable settlement the CLI has always
- * given its own: the CANCELLED outcome, its flow record preserved so
+ * given its own: the CANCELLED outcome, its transcript's running groups closed
+ * as whatever outcome that write left standing (the driver's own when it
+ * reached its terminal write first, so the transcript never closes on an
+ * outcome the header contradicts), its flow record preserved so
  * `deriveResumability` can still offer the checkpoint, and its lease record
- * deleted rather than left for a later launch to prove dead.
+ * deleted rather than left for a later launch to prove dead. The outcome and
+ * the group close are both written inside the lease-fenced post-drain window,
+ * so the run's durable state and its transcript settle under one claim. That
+ * pairing assumes the outcome write is the one that resolves the race: if this
+ * drain writes CANCELLED first and an in-flight driver's `finalizeRunTerminal`
+ * then overwrites the header with COMPLETED or FAILED, the groups below are
+ * already closed as CANCELLED and stay that way — the documented case is the
+ * driver reaching the meta-lock first, which `keepExistingOutcome` handles.
  *
  * Bounded by the caller's phase deadline — a host that cannot exit because a
- * release is slow would be worse than the unsettled record. Once `signal`
- * fires, every remaining execution is named in the log instead of being
- * silently skipped: what is left behind is recoverable (the next launch
- * proves this process dead from its pid) but not free.
+ * release is slow would be worse than the unsettled record. The budget is
+ * sized for what each execution costs here: one outcome write plus one
+ * transcript flush. Once `signal` fires, every remaining execution is named
+ * in the log instead of being silently skipped, and the signal is re-checked
+ * between the two writes so a deadline reached mid-settlement is logged too.
  */
 export async function settleLiveSessionExecutions(
   signal: AbortSignal,
@@ -743,7 +754,7 @@ export async function settleLiveSessionExecutions(
   for (const { session, executionId } of pending) {
     if (signal.aborted) {
       logger.warn(
-        `Host exit deadline passed before execution ${executionId} was settled; its lease record survives until a later launch proves this process gone`,
+        `Host exit deadline passed before this drain reached execution ${executionId}; settling one execution costs an outcome write and a transcript flush, which the exit deadline budgets for, so a run left here means the budget ran out. If it was still unsettled it keeps its open transcript groups, which a later launch renders as interrupted from the derived outcome until a later settlement persists the close`,
       );
       continue;
     }
@@ -767,6 +778,35 @@ export async function settleLiveSessionExecutions(
             { cause: finalization.error },
           );
         }
+        // Same claim, second write: close the run's transcript. Outside this
+        // callback the claim is already unlinked, so another process could
+        // have taken the run over and be appending to its log — settling its
+        // groups from this process's stale resident copy would then write
+        // that owner's entries back out from under it.
+        if (signal.aborted) {
+          logger.warn(
+            `Host exit deadline passed after execution ${executionId}'s outcome was written; its transcript groups stay open and render as interrupted from that outcome`,
+          );
+          return;
+        }
+        const streamId =
+          session.executions.getHandle(executionId)?.childStreamId;
+        if (streamId === undefined) {
+          logger.warn(
+            `Execution ${executionId} was untracked while the host exit settled it; any transcript groups it left open stay open`,
+          );
+          return;
+        }
+        // The outcome that actually stands on disk, which is the driver's own
+        // when it won the race above: closing this run's groups as CANCELLED
+        // there would contradict the COMPLETED (or FAILED) result the header
+        // reports.
+        const closed = await session.transcripts.endRunningGroupsForStreams(
+          [streamId],
+          Date.now(),
+          finalization.outcome,
+        );
+        if (closed.length > 0) await session.transcripts.flush();
       });
     } catch (error) {
       logger.warn(

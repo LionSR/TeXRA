@@ -14,6 +14,7 @@ import {
 } from '../state/cliState';
 import {
   sessionStateRevision,
+  sessionStreamDurableOutcome,
   streamMetadataFor,
 } from '../state/childExecutions';
 import {
@@ -167,6 +168,13 @@ export function ConversationPane(
   const workflowFacts = slice
     ? {
         taskGroups: slice.taskGroups,
+        // A group the run never closed paints as interrupted once nothing is
+        // left to close it — not merely once the phase turns terminal, which
+        // a stop does while the run is still unwinding here — and it paints
+        // as the outcome the exit drain would have closed it with.
+        runDurableOutcome: activeStreamId
+          ? sessionStreamDurableOutcome(activeStreamId)
+          : undefined,
         outputFilesByRound: artifacts?.outputFilesByRound ?? {},
         missingOutputsByRound: artifacts?.missingOutputsByRound ?? {},
         compileFailuresByRound: artifacts?.compileFailuresByRound ?? {},

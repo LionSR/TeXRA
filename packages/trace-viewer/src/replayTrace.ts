@@ -16,6 +16,7 @@ import {
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import type { TraceDocument } from '@transcript';
 
 type UpdateStreamsMessage = Extract<
@@ -204,13 +205,18 @@ export function replayTrace(trace: TraceDocument): void {
     identity.kind === 'process'
       ? { ...streamTabBase, identity, command: trace.config.instruction }
       : { ...streamTabBase, identity, model: trace.config.model };
+  const traceStatus = toStreamLifecycleStatus(trace);
   const updateStreams: UpdateStreamsMessage = {
     command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
     streams: [streamTabInfo],
     activeStream: trace.streamId,
     streamStates: {
       [trace.streamId]: buildStreamMetadata({
-        status: toStreamLifecycleStatus(trace),
+        status: traceStatus,
+        // An exported trace file has no producer anywhere, so a terminal
+        // outcome here is durably final: a task group the run never closed
+        // renders as interrupted rather than as forever running.
+        statusDurablyFinal: isTerminalOutcomePhase(traceStatus),
         category: agentConfig?.agentCategory,
         conversationProgress: snapshot.conversationProgress,
         // Liveness is never restored as live (matches the existing

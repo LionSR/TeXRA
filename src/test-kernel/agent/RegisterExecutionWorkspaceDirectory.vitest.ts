@@ -228,7 +228,7 @@ describe('execution lifecycle', () => {
       flowRecord: 'preserve',
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, outcome: RUN_OUTCOME.CANCELLED });
     expect(mocks.delete).not.toHaveBeenCalled();
   });
 
@@ -242,7 +242,7 @@ describe('execution lifecycle', () => {
       flowRecord: 'delete',
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, outcome: RUN_OUTCOME.COMPLETED });
     expect(mocks.delete).toHaveBeenCalledWith(flowKey(executionId));
   });
 

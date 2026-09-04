@@ -251,7 +251,16 @@ export interface FinalizeExecutionInput {
 }
 
 export type FinalizeExecutionResult =
-  | { readonly ok: true }
+  | {
+      readonly ok: true;
+      /**
+       * The outcome that now stands on disk: the requested one, or the one
+       * `keepExistingOutcome` retained from the run's own driver. A backstop
+       * finalizer settles the rest of the run (its transcript groups) to this
+       * value rather than to the one it asked for.
+       */
+      readonly outcome: RunOutcome;
+    }
   | {
       readonly ok: false;
       readonly error: unknown;
@@ -284,13 +293,19 @@ export async function finalizeRun(
     );
     return { ok: false, error, outcomePersisted };
   };
+  // What the meta carries once the write below returns. Assigned inside the
+  // updater, which runs under the per-execution meta lock, so a retained
+  // outcome is read in the same locked cycle that decided to keep it.
+  let persistedOutcome = outcome;
   try {
     // Persist the canonical terminal outcome — the one terminal write.
-    await enqueueMetaUpdate(executionId, (existing) =>
-      keepExistingOutcome === true && existing.outcome != null
-        ? {}
-        : { outcome },
-    );
+    await enqueueMetaUpdate(executionId, (existing) => {
+      if (keepExistingOutcome === true && existing.outcome != null) {
+        persistedOutcome = existing.outcome;
+        return {};
+      }
+      return { outcome };
+    });
   } catch (error) {
     // The caller's disposition stands even when the outcome write failed: a
     // checkpoint is deleted only on request, never to fail closed.
@@ -317,7 +332,7 @@ export async function finalizeRun(
       return failed(error, true);
     }
   }
-  return { ok: true };
+  return { ok: true, outcome: persistedOutcome };
 }
 
 /** Persist an AI-generated session description on an existing execution's metadata. */

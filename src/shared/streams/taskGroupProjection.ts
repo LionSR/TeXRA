@@ -10,6 +10,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type EndGroupStatus,
+  type RunOutcome,
   type StreamLogEntry,
   type TaskGroup,
   type TaskGroupStatus,
@@ -41,6 +42,41 @@ function taskGroupEndStatus(
     return STREAM_PHASE.COMPLETED;
   }
   return value;
+}
+
+/**
+ * The status a task group RENDERS as, given the outcome its run durably
+ * settled on (`undefined` while anything can still move the run).
+ *
+ * A group is closed by the `GROUP_END` row its producer writes, and the host
+ * exit drain closes whatever is still open in the same lease-fenced window
+ * that writes the run's outcome (`settleLiveSessionExecutions`). A group left
+ * `running` is a lie only once nothing can still close it, and a terminal
+ * phase alone does not say that: a user stop publishes CANCELLED while the
+ * flow is still unwinding in this process, with its stages' `GROUP_END` rows
+ * yet to write. `SessionState.streamDurableOutcome` is the fact that does say
+ * it, and it says it with a value rather than a bit — the run's own outcome,
+ * whether that came from the durable facts alone or from a terminal phase
+ * this process has nothing left to write behind (`finalizeRunTerminal`
+ * untracks the execution before storing the phase, so a run that left a group
+ * open answers `live` forever).
+ *
+ * That value, not a constant: the drain closes an open group with the outcome
+ * the run's finalize left standing, so a run that COMPLETED with a group open
+ * reads `completed` after settlement. Painting `cancelled` here would make
+ * the same group read one way before the host exits and another way after.
+ *
+ * Display only: nothing here is written back to the log. `StreamLogStore`
+ * owns the persisted normalization (`normalizeGroupStatusEntry`).
+ */
+export function taskGroupDisplayStatus(
+  group: Pick<TaskGroup, 'status'>,
+  runDurableOutcome: RunOutcome | undefined,
+): TaskGroupStatus {
+  return runDurableOutcome !== undefined &&
+    group.status === STREAM_PHASE.RUNNING
+    ? runDurableOutcome
+    : group.status;
 }
 
 /**
