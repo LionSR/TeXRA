@@ -1,8 +1,7 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - shared schemas
-import { AgentCategory } from '@shared/schemas';
+// Local imports
 import { delay } from '@utils/core';
 
 // Local imports - test DOM utilities
@@ -21,9 +20,7 @@ interface DesktopCommandPaletteModule {
       showLauncher(): void;
       openWorkbench(kind: 'settings' | 'logs'): void;
       showSettings(tab?: string): void;
-      showStream?(streamId: string): void;
     };
-    getStreams?: () => DesktopPaletteStream[];
     platform?: NodeJS.Platform;
     canOpen?: () => boolean;
   }): DesktopCommandPaletteController;
@@ -40,16 +37,6 @@ interface DesktopCommandPaletteModule {
     entry: { id: string; label: string } | undefined,
     onExecute: (id: string) => boolean | Promise<boolean>,
   ): boolean;
-}
-
-interface DesktopPaletteStream {
-  name: string;
-  label: string;
-  agentCategory: string;
-  creationTimestamp: number;
-  description?: string;
-  agent?: string;
-  modelLabel?: string;
 }
 
 async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule> {
@@ -199,43 +186,6 @@ describe('desktop command palette', () => {
     await flushDialogTicks();
 
     expect(actions.showSettings).toHaveBeenCalledWith('models');
-    expect(controller.element.open).toBe(false);
-  });
-
-  it('adds current streams as switch commands when opened', async () => {
-    const actions = {
-      ...createActionsStub(),
-      showStream: vi.fn(),
-    };
-    let streams: DesktopPaletteStream[] = [];
-    const controller = await mountPalette({
-      actions,
-      getStreams: () => streams,
-    });
-
-    streams = [
-      {
-        name: 'stream-proof',
-        label: 'Spectral proof run',
-        agentCategory: AgentCategory.Workflow,
-        creationTimestamp: 1,
-        description: 'Checking the main lemma',
-      },
-    ];
-    controller.open();
-    await flushDialogTicks();
-
-    setWaInputValue(controller.element, 'spectral lemma');
-    await flushDialogTicks();
-
-    expect(paletteCommandIds(controller.element)).toEqual([
-      'texra.desktop.switchStream:stream-proof',
-    ]);
-
-    pressKey(paletteInput(controller.element), { key: 'Enter' });
-    await flushDialogTicks();
-
-    expect(actions.showStream).toHaveBeenCalledWith('stream-proof');
     expect(controller.element.open).toBe(false);
   });
 
