@@ -265,14 +265,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   lower number. Deletion is a durable tombstone rather than a physical row
   removal - the `delete` and `deleteAll` requests (8.2) append
   `removeStream`, which replays and reaches every process through the one
-  ordered read of 7.1 - and a relaunch on the same id supersedes it by
-  appending the next `run.start`. That case is not hypothetical: a deleted
-  multi-agent workflow relaunches under its deterministic `StreamTabId` as a
-  new stream, and **a tombstone is final** because the id is never reused
-  (decision 9): a relaunch mints a fresh `StreamTabId` and carries the
-  deterministic workflow name as a label, so no later event can target a
-  stream a tombstone closed and nothing has to tell one incarnation of an id
-  from another. That is exactly what `_streamIncarnations` and its
+  ordered read of 7.1 - and **a tombstone is final**. Nothing supersedes it:
+  a relaunch after a deletion mints a fresh `StreamTabId` and carries the
+  deterministic workflow name as a label (decision 9), so it is a different
+  stream, no later event can target the closed one, and nothing has to tell
+  one incarnation of an id from another. A stream therefore has exactly one
+  `run.start`, at seq 1, and exactly one lifecycle. That is exactly what `_streamIncarnations` and its
   compare-on-remove exist for today (`SessionState.ts:133-148`), and both go
   with it - as does every `{ streamId, executionId }` pairing successive
   review rounds added to this document before the id itself was fixed.
@@ -370,7 +368,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   startup (`markUnavailable` with `streamUnreadableMessage`,
   `restartRepair.ts:232-240`) is genuinely local - another process may read
   the same run fine - so it belongs to the same transient arm as liveness,
-  as an entry in `local.unreadable`, and it supplies `statusDetail`. The
+  as an entry in `local.unreadable`. It is an **overlay**, not a write:
+  `statusDetail` keeps the latest durable detail and the row displays
+  `local.unreadable[stream] ?? statusDetail`. Overwriting the field would
+  lose the durable detail with no event to replay when the hold clears, so
+  the stream would keep a stale unreadable message or lose its real one. The
   entry names the incarnation it observed, like every other stream
   reference (decision 9): otherwise a hold recorded against a retired run
   would render its relaunched successor read-only with Delete as its only
@@ -392,11 +394,16 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   advance it.
 - **Incremental.** One rule, keyed on what a change _names_. A durable event names the
   streams its _type_ declares - not `event.streamId`, which session-lane
-  facts do not have: `setParentStream` names its `childStreamId` and both
-  parents, an unparented `inquiryThreadUpdated` names none. That mapping is
+  facts do not have: `setParentStream` names its `childStreamId` and its new
+  parent, an unparented `inquiryThreadUpdated` names none. That mapping is
   exhaustive and already written: `sessionFactStreamIds`
-  (`SessionFactApplier.ts:118-135`) is the function, and the fold takes it
-  over rather than reinventing it. A fact naming no stream still folds - it
+  (`SessionFactApplier.ts:116-125`) is the function, and the fold takes it
+  over rather than reinventing it - with one addition it cannot make, since
+  the payload does not carry it: on a `setParentStream` the fold also names
+  the child's **prior** parent, read from the view before the event applies.
+  Without it the walk starts at the new relationship and the old parent
+  keeps the child in its `childIds` and `rollup` forever, which is the
+  two-chain requirement below. A fact naming no stream still folds - it
   updates session-level state such as `inquiries` - it simply names no arm.
   A **lifecycle** event (`run.start`, `removeStream`) additionally names its
   stream's subtree: a child's
@@ -510,7 +517,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   keying the text by row needs neither.
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
-  already folded is discarded rather than reopening its `inflight` entry. That makes the merge order of the three arms (7.2)
+  already folded is discarded rather than reopening its `inflight` entry, and
+  `removeStream` clears every `inflight` entry for its stream. A chunk that
+  arrives afterwards - the two arms are asynchronous, so one can - names a
+  stream the view does not have and is dropped, which is unambiguous now
+  that an id is never reused; without the clear, an entry for a stream that
+  can never render or finalize would sit in the session map forever. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
   an early one is overwritten when its event lands. Without the rule the
   same two inputs give two different rows in two processes.
@@ -1151,8 +1163,11 @@ everything the shell renders but does not own: the launcher's option lists
 file-select group and the LaTeXDiff controls need (file lists, the current
 and open files, whether the root is a Git repository, recent commits -
 `fileOptions$` and `isGitRepo$` today), the five banners, the onboarding funnel
-state, and the debug-mode flag (`GET_DEBUG_MODE` today), which gates the
-Pack and Delete-output controls §12 retains. None of it is the user's choice (`Surface`, 9) or a
+state, the debug-mode flag (`GET_DEBUG_MODE` today, which gates the Pack and
+Delete-output controls §12 retains), and the open papers'
+display records - `{ key, name, initials, subtitle }` per paper, so the
+desktop rail reads a named field instead of deriving a name from a path or
+joining a catalog in the component (§12). None of it is the user's choice (`Surface`, 9) or a
 fact about a run (`SessionView`), and all of it changes while a webview is
 open - a new agent file, an added workspace root, a credential that starts
 failing. That rules out both alternatives: a one-shot request at startup
@@ -1235,7 +1250,14 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
 `record { start | stop }`, `popOut`, `popBack`, `pickFiles`, `openSettings`,
 `openDashboard` (the retained "Open dashboard" action, `texra.showDashboard`
-today), `openUrl`, and the launcher's file pickers. The banners and the
+today), `openUrl`, `openPaper` (the desktop rail's "Add paper…": the native
+directory picker, the session graph, and the new key returned as the
+outcome for `Shell.open` - without it that action is inert once
+`desktopWorkspaceRelaunch` is deleted), `setActiveView { mode }` (a
+notification, not a round trip: the extension host needs `texra.activeView`
+for six `view/title` menu conditions and §8.5 removes the selection round
+trip, so the surface tells the host what it is showing without selection
+becoming a session fact), and the launcher's file pickers. The banners and the
 onboarding cards are interactive, so their actions are arms too:
 `recheckDependencies`, `dismissBanner { id }`, `signIn`,
 `onboarding { advance | dismiss }`, and `openInstallGuide { tool }`
@@ -1280,6 +1302,7 @@ TUI screen); `Surface` is one per view instance **and open session**:
 Shell = {
   active: SessionKey                   // which paper the view is showing
   open: SessionKey[]                   // rail order, user-arranged
+  collapsed: SessionKey[]              // rail rows the user folded shut
 }
 ```
 
@@ -1396,8 +1419,7 @@ rebuilt into Maps at load, because webview state crosses `JSON.stringify`
 and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
 today), `drafts` (text only; images and the polished and transcribed
 variants are not), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
-`session` (it is the key) and `focusedRow`; `Shell.recording` is not
-persisted either.
+`session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`.
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
 `StreamState.ui` block (`streamState.ts:175-184`), the pending-approval
@@ -1659,8 +1681,9 @@ a component.
 
 - **Rail** (288 px, the existing `taskShell.css` classes): brand, New task,
   Search, then a Papers section with one collapsible row per open paper
-  (initials mark, name, one-line subtitle, a badge from the paper-level
-  `SessionView.rollup`) and its own
+  (initials, name, and subtitle from that paper's `host` display record, a
+  badge from the paper-level `SessionView.rollup`, collapsed per
+  `Shell.collapsed`) and its own
   `stream-tabs` nested beneath, then "Add paper…", then the existing footer
   (Terminal, Browser, Logs, Settings). Each paper is one `SessionView` from
   the `LayerMap`.
