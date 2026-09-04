@@ -10,6 +10,7 @@ import { createExtensionHostInteractions } from '@progressView/extensionHostInte
 import type { StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
+import { prepareBashApprovalPrompt } from '@tools/approval/bashApproval';
 
 // Local file imports
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
@@ -684,6 +685,49 @@ describe('createExtensionHostInteractions', () => {
     interactions.cancel(selector);
 
     expect(toolEditApprovals.cancel).toHaveBeenCalledWith(selector);
+  });
+
+  it('publishes approval facts for the prepared permission the host shows', async () => {
+    const session = createTestSession();
+    const { handlers, interactions } = createInteractions({ session });
+    const runEvents: HubEvent[] = [];
+    session.events.subscribe((event) => runEvents.push(event), {
+      scope: 'run',
+      streamId: STREAM_A,
+    });
+    session.interactions.use(interactions);
+    const permission = prepareBashApprovalPrompt(
+      { command: 'lake build', streamId: STREAM_A },
+      session,
+    );
+
+    const resultPromise = session.interactions.requestBashApproval({
+      command: 'lake build',
+      streamId: STREAM_A,
+      permission,
+    });
+
+    // One requestId per request: the durable fact and the surface agree.
+    expect(runEvents.map((entry) => entry.event)).toEqual([
+      {
+        type: 'approval.requested',
+        requestId: permission.requestId,
+        payload: { kind: 'bash', data: permission },
+      },
+    ]);
+    expect(firstShowRequestId(handlers.transport.bash.show)).toBe(
+      permission.requestId,
+    );
+
+    session.interactions.cancel({ streamId: STREAM_A, cause: 'Run ended.' });
+    await expect(resultPromise).resolves.toEqual({
+      action: 'reject',
+      cause: 'Run ended.',
+    });
+    expect(runEvents.at(-1)?.event).toEqual({
+      type: 'approval.resolved',
+      requestId: permission.requestId,
+    });
   });
 
   it('forwards a bash cancellation cause without user provenance', async () => {

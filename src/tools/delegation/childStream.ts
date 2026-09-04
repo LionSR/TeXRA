@@ -1,6 +1,5 @@
 // Local imports
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { isRemoteAgent } from '@agent/index';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   finalizeRunTerminal,
@@ -135,11 +134,18 @@ export function createChildStream(
       identity: options.run,
       userFollowUpSupport: options.userFollowUpSupport,
       // Launch facts the fold reads verbatim (PRD one-fold-three-renderers,
-      // section 6, item 6).
+      // section 6, item 6). Remoteness is an agent-registry fact (a
+      // `source: 'remote'` entry); a process, agent-CLI, or workflow-script
+      // child is never one, and the frozen NDJSON `setActiveStream` line for
+      // a child never carried it.
       agentCategory: options.config.agentCategory,
-      isRemote: isRemoteAgent(options.config.agent),
       worktree: launchWorktreeInfo(options.config.workingDirectory),
       parentStreamId,
+      background: true,
+      // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
+      // the child is registered after this event by the delegation site; the
+      // queue publishes `approval.policy` for every value the edge changes.
+      approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
       ownerId: session.ownerId,
     });
     started = true;

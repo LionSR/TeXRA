@@ -140,6 +140,10 @@ function expectStartedThenFailed(
     identity: { kind: 'agent', agent: 'chat' },
     agentCategory: AgentCategory.ToolUse,
     isRemote: false,
+    background: isSubagent,
+    approvalPolicy: launch.session.approvalPolicySnapshotFor(
+      launch.start.streamId,
+    ),
     ownerId: launch.session.ownerId,
   });
   expect(launch.result).toMatchObject({

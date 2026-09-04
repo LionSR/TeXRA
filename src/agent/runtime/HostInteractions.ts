@@ -1,6 +1,7 @@
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import type { ModelCredentialSelection } from '@agent/types/ModelHandlerContracts';
 import { createLog } from '@logger/logUtils';
+import { redactSecrets } from '@logger/redaction';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -422,6 +423,40 @@ type PermissionPayloadFor<K extends SettledInteractionKind> =
   Extract<PermissionPayload, { kind: K }> | undefined;
 
 /**
+ * The durable copy of a request payload. A retry carries the provider error,
+ * whose body can echo the request URL or an `Authorization` header: the
+ * transcript rail scrubs those fields at record time
+ * (`TexraTranscriptRecorder`), and the fact rail scrubs them here, at its one
+ * emission point, dropping the raw body outright. Bash commands and question
+ * text are what the user typed and stay as they are.
+ */
+function redactedForFact(payload: PermissionPayload): PermissionPayload {
+  if (payload.kind !== 'retry') return payload;
+  const { errorMessage, errorDetails, ...data } = payload.data;
+  const redactedDetails = (() => {
+    if (!errorDetails) return errorDetails;
+    const { rawErrorBody: _dropped, ...details } = errorDetails;
+    for (const key of ['message', 'statusText', 'partialText'] as const) {
+      const value = details[key];
+      if (typeof value === 'string') details[key] = redactSecrets(value);
+    }
+    return details;
+  })();
+  return {
+    kind: 'retry',
+    data: {
+      ...data,
+      ...(errorMessage === undefined
+        ? {}
+        : { errorMessage: redactSecrets(errorMessage) }),
+      ...(redactedDetails === undefined
+        ? {}
+        : { errorDetails: redactedDetails }),
+    },
+  };
+}
+
+/**
  * Stable per-session interaction owner. The `SessionHandle` exposes this
  * object once, while hosts may attach and detach presentation adapters without
  * cancelling requests owned by a still-running session.
@@ -750,7 +785,7 @@ export class SessionHostInteractions implements HostInteractions {
     session.publishRunEvent(streamId, {
       type: 'approval.requested',
       requestId,
-      payload,
+      payload: redactedForFact(payload),
     });
     return { streamId, requestId };
   }

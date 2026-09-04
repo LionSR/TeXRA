@@ -65,7 +65,11 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import { runInSession } from './RunContext';
-import { defaultSession, type SessionHandle } from './SessionHandle';
+import {
+  currentSession,
+  defaultSession,
+  type SessionHandle,
+} from './SessionHandle';
 import type { AgentExecutionHandle, AgentRunHandle } from './ExecutionHandle';
 import type { ModelHandlerCompatibilityKey } from './modelHandlerCompatibilityKey';
 
@@ -544,11 +548,24 @@ async function resumeToolUseWithOwnedLease(
     // This execution is running again, so the terminal facts its previous
     // run left behind stop describing it here, before any turn of the
     // resumed run can write a result envelope for readers to project onto.
+    // Lane 2 follow-up (PRD 5.2): once approval facts replay from durable
+    // history, this same step appends `approval.resolved` (cause:
+    // interrupted) for every request still pending on the stream, so a
+    // replayed resume never folds back to waiting on a request no runtime
+    // listens for. In process the run lifecycle's end-of-run cancel already
+    // resolves them, so nothing is pending here today.
     await clearTerminalExecutionState(resume.executionId);
     [isSubagent, userFollowUpSupport] = await Promise.all([
       hasPersistedParent(resume.executionId),
       getPersistedUserFollowUpSupport(resume.executionId),
     ]);
+    // Load the transcript before the launch reserves its writer, the order
+    // `createRehydratedChildStream` uses. Nothing between the launch's
+    // `run.start` and the run lifecycle may reject: the lifecycle's failure
+    // path is what ends a started stream with its terminal result.
+    await (options.session ?? currentSession()).transcripts.ensureLoaded(
+      resume.streamId,
+    );
     ctx = await buildAgentLaunchContext({
       config: resume.agentConfig,
       executionId: resume.executionId,
@@ -575,7 +592,7 @@ async function resumeToolUseWithOwnedLease(
     );
   }
   const { setting } = ctx;
-  const { streamId: runStreamId, session: runSession } = ctx.runScope;
+  const { session: runSession } = ctx.runScope;
 
   // Only the run itself is guarded here. The release below is deliberately
   // outside: a release that fails must not be retried by the catch arm.
@@ -584,20 +601,19 @@ async function resumeToolUseWithOwnedLease(
     result = await withExecutionRunContext(
       ctx,
       { onApprovalPolicyDenial: options.onApprovalPolicyDenial },
-      async () => {
-        if (setting.agentCategory !== AgentCategory.ToolUse) {
-          // Keep this historical diagnostic byte-for-byte for external monitors.
-          throw new AgentError(
-            'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-          );
-        }
-
-        await runSession.transcripts.ensureLoaded(runStreamId);
-
-        return await runFlowWithLifecycle(
+      async () =>
+        runFlowWithLifecycle(
           ctx,
-          async (handle, lifecycle) =>
-            launchToolUseRun(
+          async (handle, lifecycle) => {
+            // Inside the lifecycle so the rejection ends the started stream
+            // with its FAILED result like any other run failure.
+            if (setting.agentCategory !== AgentCategory.ToolUse) {
+              // Keep this historical diagnostic byte-for-byte for external monitors.
+              throw new AgentError(
+                'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
+              );
+            }
+            return launchToolUseRun(
               ctx,
               handle,
               lifecycle,
@@ -611,10 +627,10 @@ async function resumeToolUseWithOwnedLease(
                 onCancellationAtFlowAttachment:
                   options.onCancellationAtFlowAttachment,
               },
-            ),
+            );
+          },
           buildLifecycleOptions(options, isSubagent),
-        );
-      },
+        ),
     );
   } catch (error) {
     // The run's own failure is the one the caller must see; a release failure

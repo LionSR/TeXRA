@@ -904,13 +904,27 @@ function stubWorkflowResumeData(
 }
 
 /** Creates a bridge with the given runAgent mock and starts one workflow
- * execution through the host file actions. */
+ * execution through the host file actions. Resolves once the launch has
+ * reached `runAgent`, so callers' `vi.waitFor` budgets cover only the
+ * failure presentation that follows it. */
 async function startMergeExecution(
   runAgent: RunExecutionRequest,
 ): Promise<{ showErrorMessage: ReturnType<typeof vi.fn> }> {
   const showErrorMessage = vi.fn(async () => undefined);
-  const bridge = await createBridge([], { runAgent, showErrorMessage });
+  // The launch path dynamically imports the runtime barrel; after
+  // `vi.resetModules()` that cold import alone approaches the default
+  // `vi.waitFor` timeout, so it is absorbed here rather than in the callers'
+  // assertions.
+  const launched = createDeferred<void>();
+  const bridge = await createBridge([], {
+    runAgent: (request, options) => {
+      launched.resolve();
+      return runAgent(request, options);
+    },
+    showErrorMessage,
+  });
   bridge.fileActions.host.startExecution({ config: workflowConfig() });
+  await launched.promise;
   return { showErrorMessage };
 }
 

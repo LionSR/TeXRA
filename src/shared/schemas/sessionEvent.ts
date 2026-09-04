@@ -106,6 +106,10 @@ function sessionScoped<T extends string, S extends z.ZodRawShape>(
  * `run.start` exists. `identity` is nullish only on the legacy importer's
  * events; live emitters always know it. Category, remoteness, and worktree
  * are launch facts the fold reads verbatim and never derives (PRD 6, item 6).
+ * The initial approval-policy snapshot rides here rather than as its own
+ * event (PRD 6, item 2): under the latest-of-type rule a run never edited
+ * would otherwise have no policy entry, and on the payload it is atomic with
+ * the stream's existence. Nullish only on legacy imports and fixtures.
  */
 const RunStartEventSchema = durable('run.start', {
   executionId: ExecutionIdSchema,
@@ -113,9 +117,19 @@ const RunStartEventSchema = durable('run.start', {
   userFollowUpSupport: UserFollowUpSupportSchema.nullish(),
   /** Agent runs only; a process stream has no category. */
   agentCategory: AgentCategorySchema.nullish(),
+  /** Agent-registry remoteness; a process, agent-CLI, or workflow-script child has none. */
   isRemote: z.boolean().nullish(),
   worktree: WorktreeInfoSchema.nullish(),
   parentStreamId: StreamTabIdSchema.nullish(),
+  /**
+   * Launched in the background whoever is watching (a delegated child); the
+   * launch fact half of the old `suppressViewSwitch`, which the frozen NDJSON
+   * `setActiveStream` line still carries (PRD 6, item 5). Focus is never a
+   * fact.
+   */
+  background: z.boolean().nullish(),
+  /** The run's approval policy at launch, from the session's single authority. */
+  approvalPolicy: ApprovalPolicySnapshotSchema.nullish(),
 });
 
 /**

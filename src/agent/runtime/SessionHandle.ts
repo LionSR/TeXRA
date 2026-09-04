@@ -55,6 +55,7 @@ import {
 } from '@shared/approvalPolicy';
 import {
   RUN_OUTCOME,
+  type ApprovalPolicySnapshot,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -145,6 +146,17 @@ export class SessionHandle {
   /** Session-owned approval queues, pending registries, and bypass state. */
   readonly approvals: SessionApprovals;
   private texraApprovalPolicy = TEXRA_APPROVAL_POLICY_DEFAULT;
+  /**
+   * Streams whose `run.start` this session has published: the ones that
+   * exist for the fold, which is the set a policy change must reach. A
+   * reservation that has not committed yet is not in it (its launcher stamps
+   * the current value on `run.start` instead), and neither is a stream
+   * hydrated from an earlier session, which has no `run.start` until lane 2
+   * replays it. Membership is keyed by the launch, not the deletion: a
+   * deleted stream leaves the status machine, which is what
+   * {@link setApprovalPolicy} iterates.
+   */
+  private readonly startedStreams = new Set<StreamTabId>();
   /** Coordinates recovery probes for model routes shared by parallel runs. */
   readonly modelRetries: ModelRetryGate;
   /** Host policy for provider-output cleanup and continuation joining. */
@@ -248,25 +260,39 @@ export class SessionHandle {
     if (policy === this.texraApprovalPolicy) return;
     this.texraApprovalPolicy = policy;
     // The policy is session-wide; the snapshot is per run, so every stream
-    // the status machine knows gets its own `approval.policy`.
+    // the status machine knows and the fold has a `run.start` for gets its
+    // own `approval.policy`. A reservation still short of its `run.start`
+    // is skipped: its launcher stamps the initial snapshot, read from this
+    // new value, on that event instead. The gate is the published
+    // `run.start`, not the STARTING substate, because the substate outlives
+    // the commit point (variable building runs between the two).
     for (const streamId of this.status.getAllStreamStates().keys()) {
+      if (!this.startedStreams.has(streamId)) continue;
       this.publishApprovalPolicy(streamId);
     }
   }
 
   /**
+   * One run's full approval-policy snapshot: the policy this session holds
+   * plus the bypass values its approval queues own. The launcher stamps it on
+   * `run.start` as the initial snapshot; every later change is published
+   * through {@link publishApprovalPolicy}. Never a toggle delta.
+   */
+  approvalPolicySnapshotFor(streamId: StreamTabId): ApprovalPolicySnapshot {
+    return {
+      policy: this.texraApprovalPolicy,
+      bypasses: this.approvals.bypassesFor(streamId),
+    };
+  }
+
+  /**
    * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
-   * section 6, item 2): the full snapshot for one run, from the policy this
-   * session holds and the bypass values its approval queues own. Never a
-   * toggle delta.
+   * section 6, item 2), for a change after the run's `run.start`.
    */
   private publishApprovalPolicy(streamId: StreamTabId): void {
     this.publishRunEvent(streamId, {
       type: 'approval.policy',
-      snapshot: {
-        policy: this.texraApprovalPolicy,
-        bypasses: this.approvals.bypassesFor(streamId),
-      },
+      snapshot: this.approvalPolicySnapshotFor(streamId),
     });
   }
 
@@ -453,6 +479,7 @@ export class SessionHandle {
    * session's `onResult` subscribers.
    */
   publishRunEvent(streamId: StreamTabId, event: AgentEvent): void {
+    if (event.type === 'run.start') this.startedStreams.add(streamId);
     this.events.emit({ scope: 'run', streamId, event });
   }
 

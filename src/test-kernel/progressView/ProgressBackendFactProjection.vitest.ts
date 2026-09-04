@@ -1107,7 +1107,7 @@ describe('ProgressBackend', () => {
 
     backend.state.streamLogs.ensureStream(stream);
     // Provisional patches only ever carry agentCategory/isRemote in
-    // production (see SessionFactApplier.handleSetActiveStream). Identity
+    // production (see SessionFactApplier.handleRunStart). Identity
     // comes from the immutable descriptor; input/model details come from
     // RunConfig, mirrored into the stream summary and overlaid at read time
     // by getStreamMetadata (#9947) — no refresh step exists anymore.

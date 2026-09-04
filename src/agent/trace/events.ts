@@ -91,17 +91,27 @@ export interface StageStartEvent extends StageStamp {
 }
 
 /**
- * Immutable run identity emitted once at the reservation commit point, before
- * the run itself begins: the fold's existence fact (a stream exists iff its
+ * Immutable run identity emitted at the reservation commit point, before the
+ * run itself begins: the fold's existence fact (a stream exists iff its
  * `run.start` exists), typed from its `run.start` arm so the trace stays
  * assignable to the session-event vocabulary. Live emitters always know the
  * identity; the nullish arm belongs to the legacy importer alone. `ownerId`
  * is the owner token of the session that launched the run
  * (`SessionHandle.ownerId`): the applier stamps it on the fold envelope, and
  * the tombstone-reopen gate reads it as the live-owner evidence a re-claimed
- * workflow stream must carry. A launch that fails after this event emits its
- * terminal `result` on the same failure path, so a started-but-never-run
- * stream folds to failed, never to a ghost.
+ * workflow stream must carry. `approvalPolicy` is the run's initial policy
+ * snapshot from the session's single authority (PRD 6, item 2); later
+ * changes arrive as `approval.policy`. A launch that fails after this event
+ * emits its terminal `result` on the same failure path, so a
+ * started-but-never-run stream folds to failed, never to a ghost.
+ *
+ * Not at-most-once in lane 1: a resumed turn of a WAITING session re-emits
+ * `run.start` for the same stream id (`buildAgentLaunchContext` emits on
+ * every launch, resumes included), and the fold treats a `run.start` for a
+ * known stream as an update of its launch facts. PRD 6, item 9 splits the
+ * two into one `run.start` per incarnation plus `run.activate` per
+ * activation; until that lands, no applier or host may read this event as
+ * a guarantee that the stream is new.
  */
 interface RunStartEvent
   extends

@@ -958,9 +958,10 @@ export class SessionState {
    * A legitimate workflow attachment claims a deterministic stream identity:
    * bump its incarnation and drop any removal barrier, so the new run's facts
    * flow and any queued deletion captured against the previous incarnation is
-   * stale. Called only when the applier has live-execution evidence for the
-   * claim — never from a bare `run.start`, which a delayed stale event could
-   * replay after the deletion committed.
+   * stale. Called by the applier for a fresh workflow `run.start` whose
+   * `ownerId` is in `view.liveOwners` (live-owner evidence), never for a
+   * `run.start` whose owner cannot be proven alive: a delayed stale event
+   * replayed after the deletion committed carries an owner that is not.
    */
   claimStreamIdentity(stream: StreamTabId): {
     incarnation: number;

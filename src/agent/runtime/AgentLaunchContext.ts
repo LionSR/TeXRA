@@ -441,6 +441,13 @@ async function assembleAgentLaunchContext(
     ...(input.parentStreamId && input.parentStreamId !== streamId
       ? { parentStreamId: input.parentStreamId }
       : {}),
+    // A delegated child runs in the background whoever is watching.
+    background: input.isSubagent ?? false,
+    // The initial policy snapshot (PRD 6, item 2). A delegated child's
+    // ancestry is registered from `onStreamResolved` below, after this
+    // event; the queue publishes a fresh `approval.policy` for every value
+    // the edge changes, so the fold's latest-of-type entry ends correct.
+    approvalPolicy: session.approvalPolicySnapshotFor(streamId),
     ownerId: session.ownerId,
   });
   onStarted(runTrace, setting.agentCategory);
@@ -649,7 +656,12 @@ function compensateStartedFailure(args: {
  *
  * Treats the `run.start` emission as a transactional commit point: resolution
  * failures before that point release the lock silently; failures after end
- * the started stream via {@link compensateStartedFailure}.
+ * the started stream via {@link compensateStartedFailure}. A resume passes
+ * `streamTabIdOverride` and reserves nothing, but still emits `run.start`
+ * for its existing stream: in lane 1 a hydrated stream has no `run.start`
+ * until this re-emission mints it in the view, and the fold reads a
+ * `run.start` for a known stream as an update. PRD 6, item 9 replaces the
+ * resume's emission with `run.activate`.
  */
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,

@@ -101,10 +101,12 @@ function projectCliSessionFact(
 /**
  * Project run facts onto the frozen NDJSON progress-event vocabulary.
  * `run.start` projects to the public `setActiveStream` record it replaced
- * internally; `context.state`, the approval facts, and the terminal result
- * are intentionally unprojected (the result has its own NDJSON record, and
- * the public wire carries neither a context-occupancy nor an approval
- * record).
+ * internally, byte for byte: `background` (a delegated child) is the record's
+ * `suppressViewSwitch: true`, and `isRemote` appears only where the fact
+ * carries one (agent launches; a child stream never did). `context.state`,
+ * the approval facts, and the terminal result are intentionally unprojected
+ * (the result has its own NDJSON record, and the public wire carries neither
+ * a context-occupancy nor an approval record).
  */
 function projectCliRunFact(
   streamId: StreamTabId,
@@ -120,6 +122,7 @@ function projectCliRunFact(
             ? { agentCategory: event.agentCategory }
             : {}),
           ...(event.isRemote != null ? { isRemote: event.isRemote } : {}),
+          ...(event.background ? { suppressViewSwitch: true } : {}),
         },
       };
     case 'approval.requested':

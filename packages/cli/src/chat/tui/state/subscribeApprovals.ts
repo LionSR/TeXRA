@@ -157,13 +157,18 @@ export function createTuiHostInteractions(
   return {
     emit: (event, payload) => host.emit(event, payload),
     async requestToolEditApproval(request) {
+      // The prompt the tool boundary prepared is the `approval.requested`
+      // payload: showing it keeps one requestId per request. Prepared here
+      // only for a fixture that carries none.
       const decision = await enqueueDecision({
         kind: 'toolEdit',
-        data: prepareToolEditApprovalPrompt(currentSession(), {
-          requestId: `approval-${generateShortId()}`,
-          request,
-          relativePath: WorkspaceFS.relativePath(request.path),
-        }),
+        data:
+          request.permission ??
+          prepareToolEditApprovalPrompt(currentSession(), {
+            requestId: `approval-${generateShortId()}`,
+            request,
+            relativePath: WorkspaceFS.relativePath(request.path),
+          }),
         tui: {
           originalContent: request.originalContent,
           proposedContent: request.proposedContent,
@@ -301,7 +306,7 @@ async function requestBashInteraction(
 ): Promise<BashSettlement> {
   const decision = await enqueueDecision({
     kind: 'bash',
-    data: prepareBashApprovalPrompt(request),
+    data: request.permission ?? prepareBashApprovalPrompt(request),
   });
   if (decision.accepted && decision.bypass === 'bash' && request.streamId) {
     setBashApprovalSessionBypass(request.streamId, true);

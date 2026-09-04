@@ -131,8 +131,14 @@ export class ToolEditApprovalController {
       throw new Error('Tool edit approval controller is disposed.');
     }
 
-    const requestId = `approval-${generateShortId()}`;
-    const relativePath = WorkspaceFS.relativePath(request.path);
+    // The request id the tool boundary minted for the `approval.requested`
+    // fact is the one every surface shows and answers; a fixture without a
+    // prepared permission mints its own.
+    const requestId =
+      request.permission?.requestId ?? `approval-${generateShortId()}`;
+    const relativePath =
+      request.permission?.relativePath ??
+      WorkspaceFS.relativePath(request.path);
     const initialization: InitializingToolEditApproval = {
       phase: 'initializing',
       request,
@@ -365,11 +371,12 @@ export class ToolEditApprovalController {
     // it for every interaction kind before the request is dispatched here.
     withEventErrorHandling(CHANNEL, 'failed to show approval prompt', () => {
       this.options.showToolEditPermission(
-        prepareToolEditApprovalPrompt(this.options.session, {
-          requestId: entry.requestId,
-          request: entry.request,
-          relativePath: entry.relativePath,
-        }),
+        entry.request.permission ??
+          prepareToolEditApprovalPrompt(this.options.session, {
+            requestId: entry.requestId,
+            request: entry.request,
+            relativePath: entry.relativePath,
+          }),
       );
     });
   }

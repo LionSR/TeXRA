@@ -360,8 +360,12 @@ export function createProgressHostInteractions(
       request: HostBashApprovalRequest,
     ): Promise<BashSettlement> {
       revealStream();
+      // The prompt the tool boundary prepared is the `approval.requested`
+      // payload: showing it keeps one requestId per request. Prepared here
+      // only for a fixture that carries none.
       return handlers().bash.request(
-        prepareBashApprovalPrompt(request, options.session),
+        request.permission ??
+          prepareBashApprovalPrompt(request, options.session),
         { cancellationResult: (cause) => cancellationResultFor('bash', cause) },
       );
     },

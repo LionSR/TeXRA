@@ -59,6 +59,8 @@ interface CliNdjsonSetActiveStreamPayload {
   readonly streamId: StreamTabId;
   readonly agentCategory?: AgentCategory;
   readonly isRemote?: boolean;
+  /** Present, and true, only on a background (delegated child) launch. */
+  readonly suppressViewSwitch?: true;
 }
 
 /**

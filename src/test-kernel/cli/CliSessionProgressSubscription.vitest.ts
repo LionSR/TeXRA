@@ -387,6 +387,30 @@ const resumingStatusPayload: RunStatusProjectionPayload = {
 };
 
 describe('attachCliSessionProgressProjection', () => {
+  it('keeps the setActiveStream line of a background child byte-identical', () => {
+    withProjection(({ events, writeRecord }) => {
+      events.emit(
+        runEvent({
+          type: 'run.start',
+          streamId,
+          executionId,
+          identity: { kind: 'process', tool: 'bash' },
+          agentCategory: AgentCategory.ToolUse,
+          background: true,
+          ownerId: null,
+        }),
+      );
+
+      expect(writeRecord).toHaveBeenCalledWith(
+        progressRecord('setActiveStream', {
+          streamId,
+          agentCategory: AgentCategory.ToolUse,
+          suppressViewSwitch: true,
+        }),
+      );
+    });
+  });
+
   it('projects every public NDJSON progress event with its typed payload', () => {
     const cases = Object.entries(PROGRESS_PROJECTION_CASES);
 

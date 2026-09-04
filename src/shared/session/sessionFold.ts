@@ -941,6 +941,13 @@ function applyOwnArm(stream: StreamView, event: DurableEvent): StreamView {
  *  aggregates see them. */
 function applySessionSlices(view: SessionView, event: DurableEvent): void {
   switch (event.type) {
+    case 'run.start':
+      // The initial snapshot rides the existence fact (PRD 6, item 2); a
+      // legacy import carries none and leaves the entry to `approval.policy`.
+      if (event.approvalPolicy) {
+        view.policy.set(event.streamId, event.approvalPolicy);
+      }
+      return;
     case 'approval.requested':
       view.approvals = [
         ...view.approvals,

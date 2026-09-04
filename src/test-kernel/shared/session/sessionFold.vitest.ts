@@ -13,6 +13,7 @@ import {
   STREAM_PHASE,
   runIdentityDisplayName,
   withEnvelope,
+  type ApprovalPolicySnapshot,
   type FoldInput,
   type RunIdentity,
   type SessionEvent,
@@ -50,6 +51,10 @@ const CHILD_IDENTITY: RunIdentity = { kind: 'agent', agent: 'custom:search' };
 const GRANDCHILD_IDENTITY: RunIdentity = {
   kind: 'agent',
   agent: 'custom:lint',
+};
+const ROOT_POLICY: ApprovalPolicySnapshot = {
+  policy: 'ask',
+  bypasses: { bash: false, toolEdit: true, superYolo: false },
 };
 
 /** `Omit` over each member of a union, so a fixture keeps its arm. */
@@ -150,6 +155,7 @@ function buildScenario() {
     isRemote: false,
     worktree: { workingDirectory: '/paper', branch: 'main' },
     userFollowUpSupport: 'unsupported',
+    approvalPolicy: ROOT_POLICY,
   });
   log.emit(ROOT, 1000, {
     type: 'run.config',
@@ -364,6 +370,9 @@ describe('sessionFold', () => {
     });
     expect(root.childIds).toStrictEqual([CHILD]);
     expect(root.creationTimestamp).toBe(1000);
+    // The initial snapshot rides run.start; a child without one has no entry.
+    expect(view.policy.get(ROOT)).toStrictEqual(ROOT_POLICY);
+    expect(view.policy.has(CHILD)).toBe(false);
     expect(child.parentId).toBe(ROOT);
     expect(child.ancestors).toStrictEqual([{ id: ROOT, label: 'review' }]);
     expect(child.childIds).toStrictEqual([GRANDCHILD]);
