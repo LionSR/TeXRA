@@ -152,6 +152,9 @@ describe('runResumeExecution', () => {
       session: {
         interactions: {},
         executions: { isActiveOrResuming: () => false },
+        // `resumeRun` drops any stale read-only hold when it opens the run
+        // for write, and records one when the lease refuses it.
+        status: { clearHold: () => undefined, markUnavailable: () => true },
         snapshots: {
           getRunMetadata: () => ({ executionId: EXECUTION_ID }),
           getParentStreamId: () => undefined,
