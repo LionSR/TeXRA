@@ -42,33 +42,51 @@ export interface CliRunResumabilityFacts {
  * Ownership is deliberately not inspected. A run another process is executing
  * right now has a checkpoint and no outcome, so it is offered here and refused
  * when the user opens it: one lease read on the run they picked instead of one
- * per row. Loadability is not inspected either — a checkpoint that exists but
- * cannot be parsed is refused at open time as `unusable_checkpoint`, which is
- * what that cohort actually is.
+ * per row. Loadability is not inspected for its own sake either — a checkpoint
+ * that exists but cannot be parsed is refused at open time as
+ * `unusable_checkpoint`, which is what that cohort actually is — so where the
+ * exception below does read a record, a parse failure defers to open rather
+ * than deciding anything here.
  *
  * The one exception buys back a refusal the user would otherwise be walked
  * into: a workflow that stopped at its round cap on an unresolved compile
  * rejection has a checkpoint that only replays the same rejection. Reading it
- * is a full Zod parse, so it runs only where such a rejection can have been
- * recorded — `resolveOutcome` feeds `deriveRunOutcome` with `failed` ahead of
- * `cancelled`, so a terminal rejection always finalizes the run FAILED. A
- * cancelled or still-outcome-less workflow row, which is what people resume,
- * costs one stat like every other row.
+ * is a full Zod parse, so it runs only where such a rejection can still be
+ * recorded. `OutputNode` writes the marker during the final round, before the
+ * run lifecycle records `meta.outcome`, so the terminal outcomes that prove
+ * `resolveOutcome` already ran — CANCELLED and COMPLETED, neither of which
+ * `deriveRunOutcome` can produce over a terminal rejection — skip the parse,
+ * while FAILED and a missing outcome are read.
+ *
+ * The cost of covering the missing outcome is one parse per outcome-less
+ * workflow row that already passed both free gates: a workflow that crashed
+ * between the marker write and its finalization. Legacy rows predating the
+ * outcome field are outcome-less too but carry no stamped stream id, so they
+ * are refused by the gate above without a read.
  */
 export async function isCliRunResumable(
   facts: CliRunResumabilityFacts,
 ): Promise<boolean> {
   if (!facts.checkpointPresent || !facts.streamId) return false;
   if (facts.agentCategory !== AgentCategory.Workflow) return true;
-  if (facts.outcome !== RUN_OUTCOME.FAILED) return true;
+  if (
+    facts.outcome === RUN_OUTCOME.CANCELLED ||
+    facts.outcome === RUN_OUTCOME.COMPLETED
+  ) {
+    return true;
+  }
   try {
     return !(await hasTerminalPersistedCompileRejection(facts.id));
   } catch (error) {
+    // A record that cannot be read is not evidence of a terminal rejection,
+    // and hiding the row would be the one silent refusal on this surface:
+    // every other unreadable checkpoint is advertised and refused at open as
+    // `unusable_checkpoint`. Advertise, and let the open path word it.
     logger.warn(
-      `Not advertising workflow ${facts.id} as resumable: its persisted state is unreadable: ${toErrorMessage(error)}`,
+      `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${toErrorMessage(error)}`,
       { data: error },
     );
-    return false;
+    return true;
   }
 }
 

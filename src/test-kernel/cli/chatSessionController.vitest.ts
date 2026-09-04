@@ -1388,6 +1388,46 @@ describe('createChatSessionController', () => {
     expect(session.interruptedStreamId).toBe('stream-resume');
   });
 
+  it('marks the resumed stream, not the previous one, for a Ctrl-C issued before adoption', async () => {
+    // The synchronous slot claim drops the pre-resume stream, so a stop in the
+    // window before `onResumeResolved` has no stream to mark: without the
+    // re-read at adoption the user's Ctrl-C would leave no recoverable
+    // conversation, and any stale stream it did find would be the wrong one.
+    const resumeReached = pDefer<void>();
+    const session = makeSession({
+      streamId: 'stream-previous' as StreamTabId,
+      runCompleted: true,
+    });
+    mocks.resumeRun.mockImplementationOnce(
+      async (_id: ExecutionId, options: ResumeRunOptions) => {
+        await resumeReached.promise;
+        await options.onResumeResolved?.();
+        return options.isCancellationRequested?.()
+          ? { failed: 'not_resumable' as const }
+          : STARTED;
+      },
+    );
+    const ctrl = createChatSessionController(
+      makeInit({ session, snapshotStore: makeResumeSnapshotStore({}) }),
+    );
+
+    const resumed = ctrl.resume('aaaaaa' as ExecutionId);
+    await vi.waitFor(() => expect(mocks.resumeRun).toHaveBeenCalledOnce());
+    ctrl.stop();
+    expect(session.interruptedStreamId).toBeUndefined();
+
+    resumeReached.resolve();
+    await resumed;
+    await session.runPromise;
+
+    expect(session.interruptedStreamId).toBe('stream-resume');
+    expect(mocks.stopAgentStream).not.toHaveBeenCalledWith(
+      'stream-previous',
+      expect.anything(),
+    );
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
+  });
+
   it('reports resume rehydration failures without rejecting the TUI submit path', async () => {
     const session = makeSession({
       interruptedStreamId: 'stream-interrupted' as StreamTabId,

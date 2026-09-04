@@ -581,6 +581,17 @@ export function createChatSessionController(
         session.streamId = streamId;
         session.executionId = id;
         rootStreamId.set(streamId);
+        // The session held no stream until the line above: `markRunPending`,
+        // inside the synchronous slot claim at the top of `resume`, dropped
+        // the pre-resume one, so a Ctrl-C in the window before adoption could
+        // not fabricate an interrupted marker on a stream this resume is
+        // leaving behind. It also found nothing to interrupt, so re-read the
+        // request here — the way `startRootRun`'s `onStreamResolved` does —
+        // and let it land on the run the user asked to continue. `resumeRun`
+        // re-reads `isCancellationRequested` once this hook returns, so the
+        // stop still refuses the launch; this only decides which stream it
+        // marks recoverable.
+        if (session.stopRequested) interruptActiveRun();
 
         await runtimeSession.transcripts.ensureLoaded(streamId);
         // `load` evicts every other record synchronously before its async
