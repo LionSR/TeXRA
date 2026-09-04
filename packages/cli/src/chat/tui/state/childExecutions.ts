@@ -104,6 +104,8 @@ export async function hydrateFocusedStreamRunFacts(
   if (!bound) return;
   await bound.state.hydrateRunFacts(streamId);
   invalidateChildStreams();
+}
+
 /**
  * The outcome a stream's run durably settled on, through the session's one
  * rule ({@link SessionState.streamDurableOutcome}); `undefined` while
