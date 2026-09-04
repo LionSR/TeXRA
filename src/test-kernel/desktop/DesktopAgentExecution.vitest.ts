@@ -2897,11 +2897,17 @@ describe('DesktopProgressBridge', () => {
             expect.objectContaining({ name: streamId }),
           ]),
         });
-        expect(
-          owner.progressSnapshotStore
-            .getRunUsage(childStreamId)
-            .get(childExecutionId),
-        ).toMatchObject({ inputTokens: 5, outputTokens: 2, cost: 0.01 });
+        // A record seeded while this reads is momentarily back at its disk
+        // state, and replays the eager in-memory facts when the seed lands.
+        // Nothing awaits a hydration for the reader now that no boot pass
+        // does, so converge on the replayed value rather than one tick of it.
+        await vi.waitFor(() => {
+          expect(
+            owner.progressSnapshotStore
+              .getRunUsage(childStreamId)
+              .get(childExecutionId),
+          ).toMatchObject({ inputTokens: 5, outputTokens: 2, cost: 0.01 });
+        });
         expect(
           bridgeB.streamLogs
             .get(streamId)
