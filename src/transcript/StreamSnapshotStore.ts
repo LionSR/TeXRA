@@ -21,11 +21,6 @@ import { z } from 'zod';
 
 import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
-import { flowKey } from '@agent/node/persistedFlow';
-import {
-  inspectExecutionLease,
-  type ExecutionLeasePresence,
-} from '@agent/storage/executionLease';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { isFileNotFoundError } from '@common/errors';
@@ -52,7 +47,6 @@ import {
   type ExtendedTokenUsageStats,
   type OutputFileInfo,
   type RunIdentity,
-  type RunOutcome,
   type Plan,
   type ReadonlyRoundIndexed,
   type RoundIndexed,
@@ -169,9 +163,9 @@ type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
 interface HydratedRunState {
   /**
    * Why the execution authority could not be read, or `undefined` when it
-   * was read completely. One field rather than a boolean plus a cause: a
-   * reader that shows the failure needs the words, and a second field could
-   * disagree with the first.
+   * was read completely. Carries the cause rather than a bare boolean so the
+   * `summaryMetaHydrationFallback` decision below and the warning that
+   * accompanies it cannot disagree about what went wrong.
    */
   authorityFailure?: string;
   config?: AgentConfig;
@@ -181,57 +175,11 @@ interface HydratedRunState {
 }
 
 /**
- * The display-only half of a run's read-time tuple. Deliberately NOT part of
- * {@link HydratedRunState}: the metadata restore in `applyStreamData` runs
- * with a record's accumulators holding raw disk state until its overlays are
- * replayed, so nothing that merely feeds a status pill may lengthen that
- * window. This probe is started beside the metadata read and awaited once the
- * record is whole again.
- */
-interface RunPhaseProbe {
-  checkpointPresent?: boolean;
-  lease?: ExecutionLeasePresence;
-  /** Persisted run outcome from `ExecutionMeta.outcome`; absent while a run
-   *  is live and forever for a run that crashed before finalizing. */
-  outcome?: RunOutcome;
-  /** Why the probe could not answer, if it could not. */
-  failure?: string;
-}
-
-/**
- * What a hydration learned about the run a stream last carried: enough for a
- * reader to say what happened to a stream with no live flow context in this
- * process, and nothing more.
- *
- * Held OUTSIDE the stream record, in a small always-resident map, for the
- * reason bounded residency exists (#9947): a rail that wants every tab's
- * phase would otherwise have to keep every tab's whole sidecar record
- * resident. Four small fields per stream survive the record; the accumulators
- * behind them do not. In memory only — nothing here is written to a sidecar
- * or a summary file, and a fresh process learns it all again by hydrating.
- *
- * Display-only. Each field was true at the instant the stream hydrated, so a
- * caller about to WRITE (open, resume, delete) re-reads the authority under
- * the lease instead of trusting them — a process-local mirror cannot observe
- * another host's finalize (see `listExecutions`' own note on that rule).
- */
-export interface RunPhaseFacts {
-  /** `ExecutionMeta.outcome`: absent for a run that never finalized. */
-  readonly outcome?: RunOutcome;
-  /** Whether a resumable flow checkpoint file exists (existence, not validity). */
-  readonly checkpointPresent?: boolean;
-  /** Who held the execution lease when this stream hydrated. */
-  readonly lease?: ExecutionLeasePresence;
-  /** Why this stream's execution authority could not be read, if it could not. */
-  readonly authorityFailure?: string;
-}
-
-/**
  * The execution row's CORE fields, parsed strictly, without the optional
- * `workflow` projection. Every read-time phase fact this store needs —
- * identity, description, outcome — lives in the core schema, so a malformed
- * projection must not cost a valid outcome: `readMetaStrict` throws on one
- * (which would strand a completed historical run on "unavailable"), and
+ * `workflow` projection. Every fact this store hydrates from the row —
+ * identity, follow-up support, description — lives in the core schema, so a
+ * malformed projection must not cost them: `readMetaStrict` throws on one
+ * (which would strand a valid historical run on "unavailable"), and
  * `readMeta` swallows a malformed CORE row as absence (which would render a
  * corrupt execution as a healthy, sendable stream). Same raw read, same
  * schema, same "malformed core is unreadable" rule as `deriveResumability`.
@@ -562,15 +510,6 @@ export class StreamSnapshotStore {
     overlays: {},
   }));
   /**
-   * What each hydrated stream's last run turned out to be — see
-   * {@link RunPhaseFacts}. Kept beside the records rather than in them so it
-   * outlives the record: a rail that shows every tab's phase must not pin
-   * every tab's accumulators (#9947). An entry is written when a stream
-   * hydrates, dropped when its execution changes hands, and dropped with the
-   * stream itself; a record released for residency keeps its entry.
-   */
-  private readonly runFacts = new Map<StreamTabId, RunPhaseFacts>();
-  /**
    * The crash-safe staged-deletion + rollback-recovery machine. It owns which
    * namespace holds a staged stream's data and the sidecar writes buffered
    * behind that rename; this store keeps the records and stream generations
@@ -584,7 +523,7 @@ export class StreamSnapshotStore {
       this.writes.cancelPendingWritesForStream(stream),
     invalidateStreamGeneration: (stream) => this.rotateGeneration(stream),
     seedChain: (stream) => this.records.get(stream)?.seedChain,
-    evict: (stream) => this.forget(stream),
+    evict: (stream) => this.evict(stream),
   } satisfies StagedDeletionHost);
 
   /**
@@ -1295,28 +1234,12 @@ export class StreamSnapshotStore {
     }
   }
 
-  /**
-   * Release a stream's resident record. The stream itself lives on, so its
-   * {@link RunPhaseFacts} stay: releasing the accumulators is what bounded
-   * residency buys, and dropping the four fields with them would make every
-   * released tab's phase read as unknown again. Disk cleanup is the caller's
-   * job.
-   */
+  /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   private evict(stream: StreamTabId): void {
     this.records.delete(stream);
     this.seedQueues.delete(stream);
     this.writes.dropStreamWrites(stream);
     this.unseededReadWarned.delete(stream);
-  }
-
-  /**
-   * Drop everything this store holds for a stream that is gone — a committed
-   * deletion, or a stream the authoritative roster no longer lists. The one
-   * eviction that also forgets the run facts.
-   */
-  private forget(stream: StreamTabId): void {
-    this.evict(stream);
-    this.runFacts.delete(stream);
   }
 
   /**
@@ -1515,7 +1438,6 @@ export class StreamSnapshotStore {
       record.runIdentity = undefined;
       record.userFollowUpSupport = undefined;
       record.description = undefined;
-      this.runFacts.delete(stream);
       record.summaryMetaHydrationFallback = undefined;
     }
     record.summaryMetaHydrationFallback = withoutSummaryMetaFields(
@@ -1551,7 +1473,6 @@ export class StreamSnapshotStore {
     if (previous && previous !== executionId) {
       record.runConfig = undefined;
       record.description = undefined;
-      this.runFacts.delete(stream);
       // Only what the departing execution owned: the stream's parent edge and
       // its summed usage outlive any single run, and on a record minted after
       // a release the fallback is their only source until seeding lands.
@@ -1615,20 +1536,6 @@ export class StreamSnapshotStore {
       config: record?.runConfig,
       description: record?.description,
     });
-  }
-
-  /**
-   * What this stream's last run turned out to be, or `undefined` for a stream
-   * that has never hydrated — see {@link RunPhaseFacts}.
-   *
-   * Deliberately not part of {@link getRunMetadata}: those five fields are the
-   * record's, and go with it. These four are the store's, and survive a
-   * record released for residency, which is the only reason a caller can ask
-   * every tab's phase without making every tab resident. Never warns about an
-   * unseeded read — "not hydrated yet" is one of the answers.
-   */
-  getRunPhaseFacts(stream: StreamTabId): RunPhaseFacts | undefined {
-    return this.runFacts.get(stream);
   }
 
   /**
@@ -1919,13 +1826,8 @@ export class StreamSnapshotStore {
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
-    // `load` is authoritative about the stream set, so a stream missing from
-    // it is gone rather than merely released: forget its run facts too.
-    for (const stream of new Set([
-      ...this.records.keys(),
-      ...this.runFacts.keys(),
-    ])) {
-      if (!keep.has(stream)) this.forget(stream);
+    for (const stream of [...this.records.keys()]) {
+      if (!keep.has(stream)) this.evict(stream);
     }
   }
 
@@ -2019,7 +1921,7 @@ export class StreamSnapshotStore {
         // Core-only, and strict on the core (see {@link readMetaCore}): a
         // malformed row is an unreadable authority, but a malformed OPTIONAL
         // `workflow` projection is not — the identity and description below
-        // parsed, and so did the outcome the probe reads.
+        // parsed either way.
         const [execMeta, execConfig] = await Promise.all([
           readMetaCore(store),
           store.readConfig(),
@@ -2056,49 +1958,6 @@ export class StreamSnapshotStore {
       userFollowUpSupport,
       description,
     };
-  }
-
-  /**
-   * Who holds the execution lease, whether a resumable checkpoint file
-   * exists, and how the run ended. Each is one small read: the checkpoint is
-   * a single `exists` stat, never a parse of the (often ~600 KB) flow record;
-   * the lease inspection reads only — a dead claim reports as absent and is
-   * unlinked by the next claim, never by this call; and the outcome is a
-   * core-schema parse of the execution row (see {@link readMetaCore}). Never
-   * throws: an unreadable probe reports its cause, which the phase rule
-   * renders as unavailable rather than as a run that never happened.
-   *
-   * ORDERING INVARIANT — lease, then checkpoint, then outcome, sequentially.
-   * A foreign finalize writes the outcome, deletes the checkpoint, then
-   * releases the lease. Reading in that same order means a free lease is
-   * always followed by the outcome read that a finalize which released it has
-   * already written. Any other order (a parallel batch included) can splice
-   * "lease free, no checkpoint" observed after the finalize onto "no outcome"
-   * observed before it, cache that phantom `none` in `runFacts`, and leave the
-   * tab reading Ready until the next explicit preload. The cost is one more
-   * small row read per seed — deliberately NOT folded into the metadata read
-   * that runs beside this probe, because that read is unordered against the
-   * lease.
-   */
-  private async probeRunPhase(
-    executionId: ExecutionId,
-  ): Promise<RunPhaseProbe> {
-    try {
-      const store = getExecutionStore(executionId);
-      const lease = await inspectExecutionLease(executionId);
-      const checkpointPresent = await store.exists(flowKey(executionId));
-      const meta = await readMetaCore(store);
-      return {
-        checkpointPresent,
-        lease,
-        ...(meta?.outcome !== undefined && { outcome: meta.outcome }),
-      };
-    } catch (error) {
-      log.warn(`Could not read run phase facts for execution ${executionId}.`, {
-        data: { executionId, error },
-      });
-      return { failure: toErrorMessage(error) };
-    }
   }
 
   /** Seed the in-memory accumulators for one stream. */
@@ -2155,18 +2014,8 @@ export class StreamSnapshotStore {
       // from (#9590 Stage 6); when identity changes hands, drop it with the
       // pair and invalidate any authority read already in flight.
       record.description = undefined;
-      this.runFacts.delete(stream);
       record.summaryMetaHydrationFallback = undefined;
     }
-    // Started before the metadata await so both reads overlap, and awaited at
-    // the very end so a display-only fact never delays the record's restore.
-    const phaseProbe = executionId
-      ? this.probeRunPhase(executionId)
-      : undefined;
-    // Accumulated locally and published once at the end: the map is what
-    // readers see, and half a tuple would render a stopped run as a healthy
-    // one for the length of the probe.
-    let runFacts: RunPhaseFacts = {};
     if (meta) {
       const pendingLiveWrite = metaOverlay !== undefined;
       const configBeforeHydration = record.runConfig;
@@ -2205,16 +2054,6 @@ export class StreamSnapshotStore {
         if (!liveRunConfig) {
           record.runConfig = hydrated.config ?? record.runConfig;
         }
-        // Whole-value: this read is the only producer of the authority
-        // failure, so it replaces rather than fills, and a failed read says
-        // so with the cause attached instead of leaving a quiet absence. The
-        // outcome is NOT read here — it belongs to the probe's ordered
-        // lease→checkpoint→outcome sequence.
-        runFacts = {
-          ...(hydrated.authorityFailure !== undefined && {
-            authorityFailure: hydrated.authorityFailure,
-          }),
-        };
       }
     }
 
@@ -2259,31 +2098,6 @@ export class StreamSnapshotStore {
     // a handoff, only facts belonging to the new execution are published.
     if (this.records.get(stream) === record) {
       this.publishSummaryMeta(stream);
-    }
-
-    if (phaseProbe) {
-      const probe = await phaseProbe;
-      runFacts = {
-        ...runFacts,
-        ...(probe.outcome !== undefined && { outcome: probe.outcome }),
-        ...(probe.checkpointPresent !== undefined && {
-          checkpointPresent: probe.checkpointPresent,
-        }),
-        ...(probe.lease !== undefined && { lease: probe.lease }),
-        ...(runFacts.authorityFailure === undefined &&
-          probe.failure !== undefined && { authorityFailure: probe.failure }),
-      };
-    }
-    // Published even when it is empty: the entry's existence is what says this
-    // stream hydrated, and it is the only such marker that outlives the
-    // record. A deletion (which rotates the generation) or a handoff to
-    // another execution during the awaits above makes this tuple somebody
-    // else's, so neither publishes.
-    if (
-      this.isCurrentGeneration(stream, generation) &&
-      record.runExecutionId === executionId
-    ) {
-      this.runFacts.set(stream, Object.freeze(runFacts));
     }
   }
 

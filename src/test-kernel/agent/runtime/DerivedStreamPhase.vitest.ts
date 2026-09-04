@@ -121,6 +121,7 @@ describe('SessionState.resolveStreamPhase', () => {
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
 
     // The persisted outcome is the display fact, and CANCELLED is what every
     // downstream table already renders with Resume enabled.
@@ -167,6 +168,7 @@ describe('SessionState.resolveStreamPhase', () => {
     try {
       const state = openUnrepairedSession(transcripts);
       await state.snapshots.preload([stream]);
+      await state.hydrateRunFacts(stream);
 
       // A checkpoint plus no outcome is also what a crash looks like; the
       // live lease is what keeps this out of the terminal arm.
@@ -198,6 +200,7 @@ describe('SessionState.resolveStreamPhase', () => {
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
 
     // A failed authority read is not "nothing ran": it renders read-only with
     // the cause, so the failure cannot degrade into a quiet `ready`.
@@ -224,6 +227,7 @@ describe('SessionState.resolveStreamPhase', () => {
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
 
     expect(state.resolveStreamPhase(stream)).toEqual({
       state: { phase: STREAM_PHASE.COMPLETED },
