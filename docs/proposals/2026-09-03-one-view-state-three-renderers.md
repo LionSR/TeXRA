@@ -290,8 +290,8 @@ and 6; the PRD's section 6 is the one count of event changes (eight):
 
 Legacy transcripts are normalized into the canonical events of PRD section
 6 at the import boundary (PRD decision 5): no `legacy.entry` event kind
-exists and the fold has no entry arm. `settledSeq` is the last durable seq
-folded.
+exists and the fold has no entry arm. `settledSeq` is the last session commit
+ordinal folded, never an aggregate seq (PRD 5.2).
 
 ## 9. What version 2 changed, and why
 
@@ -323,17 +323,17 @@ first code written under them (R4 is PocketFlow and is not needed here).
 **Critical path:** lane 1, then lane 2, then lane 4, then lane 8. Everything
 else runs beside it.
 
-| Lane                           | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Depends on                                                                                                             | Parallel with   | Touches                                                                                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------- |
-| 1. Foundation                  | `sessionView.ts` (Zod), `sessionFold.ts` (pure, incremental per stream arm, run memoized on settledSeq), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold vitest. The event changes of PRD section 6 (eight; that section is the one count): approval requested and resolved, policy snapshot, `run.start` moved to the reservation point with worktree, category, remoteness, and owner on its payload, `setActiveStream` deleted, snapshots for the invalidation hints, `run.activate`; compensation and tombstone gates re-keyed.                                                                                      | nothing; in-memory work that stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow`                | lane 6, lane 7a | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts`      |
-| 2. Effect services             | `SessionEvents` (PubSub.unbounded; publish under one semaphore with a durable-write step the cutover fills in), `SessionView` (ref plus changes, fold forked under the layer scope), `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, the `SessionRequests` methods with `Data.TaggedError`s and the ownership scope. The process runtime at each entry. `loopbackLogin` off the default runtime. `it.effect` suites with `TestClock`.                                                                                                                                                                          | lane 1                                                                                                                 | lane 6, lane 7a | `src/controllers/session`, `src/agent/runtime/SessionEventHub.ts`, `src/shared/signals.ts`, host entries |
-| 3. TUI                         | Reads the fold and issues requests in process. Deletes `transcriptFold` driving, `streamViews`, `childExecutions` topology, `approvalQueue` row mapping, the retained-phase filter, `chatSubmitDriver`, the CLI approval mappers. `Surface` for selection, drafts, focus. One pull request.                                                                                                                                                                                                                                                                                                                                     | lane 2                                                                                                                 | lane 4, lane 5  | `packages/cli` only                                                                                      |
-| 4. Extension and desktop       | Events over the bridge (framer with `groupedWithin` and `buffer`, resync on overflow), the fold in the webview under a module-owned runtime with page-hide and hot-reload dispose, `Surface` in the webview, the two request messages up. Deletes `LitSessionRenderer`, the 21 commands, the 9 slices, `streamStateMerge`, `progressState` re-derivations, `streamTree`, `TranscriptIndex`, the 11 contexts, `ProgressPresentationState`, `StreamState.ui`, `ProgressViewCommandHandlers`, both GUI registries, `eventHandlers.ts`. Both hosts in one pull request because they load one bundle. Measure the bundle delta here. | lane 2                                                                                                                 | lane 3, lane 5  | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                                 |
-| 5. Headless and SDK            | `runProgressRenderer` and the NDJSON subscription read the fold; `workflowPlainOutput` renders the run model; `packages/agent` exports the fold and the request union.                                                                                                                                                                                                                                                                                                                                                                                                                                                          | lane 2                                                                                                                 | lanes 3, 4      | `packages/cli/src/runtime`, `packages/agent`                                                             |
-| 6. Session roots               | `WorkspaceRoots` on `SessionHandle`; `StorageFS` and `WorkspaceFS` base paths from context; `additionalDirectories` inference removed; desktop relaunch, argv plumbing, and state key deleted; N sessions per desktop process.                                                                                                                                                                                                                                                                                                                                                                                                  | nothing in this program; coordinate with the cutover: land before its branch is cut if ready, else swap one line after | lanes 1, 2      | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                        |
-| 7a. Ledger collapses, disjoint | Desktop tour; catalog refresh quadruple and `loadOptions` twice; CLI team plan and default agent and model duals; desktop settings handlers; resume wrappers; file-list enumeration; status tone column and one terminal-state vocabulary and the copy moves; validated-launch tagged type. Small independent pull requests, simplifier-style, any time.                                                                                                                                                                                                                                                                        | nothing                                                                                                                | lanes 1, 2, 6   | files lanes 3 and 4 do not touch                                                                         |
-| 7b. Ledger collapses, in-lane  | Bypass mirrors, decision mappers, inquiry dismiss, merge config, launch parses, `UserMessage` summary, tool-row predicates, `childRowMetadataText`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | ride inside lanes 3 and 4                                                                                              |                 |                                                                                                          |
-| 8. Shell                       | Direction A with E1 and E2, W0 as a restyle of the proposal panel, W1 with skip and retry through the ownership scope, the Tools sheet, the paper sections and the PDF workbench tab. Renders fields, issues requests. The design harness stays for iteration.                                                                                                                                                                                                                                                                                                                                                                  | lanes 4 and 6                                                                                                          |                 | `packages/extension` frontends, `packages/desktop/src/renderer`                                          |
+| Lane                           | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Depends on                                                                                                             | Parallel with   | Touches                                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------- |
+| 1. Foundation                  | `sessionView.ts` (Zod), `sessionFold.ts` (pure, incremental per stream arm, run memoized as PRD 5.2 says), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold vitest. The event changes of PRD section 6 (eight; that section is the one count): approval requested and resolved, policy snapshot, `run.start` moved to the reservation point, `worktree` on its payload, category and remoteness on its payload (`ownerId` is on every event envelope, stamped by the substrate, never a payload field), `setActiveStream` deleted, snapshots for the invalidation hints, `run.activate`; compensation and tombstone gates re-keyed. | nothing; in-memory work that stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow`                | lane 6, lane 7a | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts`      |
+| 2. Effect services             | `SessionEvents` (the three reads and payload-free wakes of PRD 7.1; publish under one permit with a durable-write step the cutover fills in), `SessionView` (ref plus changes, fold forked under the layer scope), `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, the `SessionRequests` methods with `Data.TaggedError`s and the ownership scope. The process runtime at each entry. `loopbackLogin` off the default runtime. `it.effect` suites with `TestClock`.                                                                                                                                                      | lane 1                                                                                                                 | lane 6, lane 7a | `src/controllers/session`, `src/agent/runtime/SessionEventHub.ts`, `src/shared/signals.ts`, host entries |
+| 3. TUI                         | Reads the fold and issues requests in process. Deletes `transcriptFold` driving, `streamViews`, `childExecutions` topology, `approvalQueue` row mapping, the retained-phase filter, `chatSubmitDriver`, the CLI approval mappers. `Surface` for selection, drafts, focus. One pull request.                                                                                                                                                                                                                                                                                                                                               | lane 2                                                                                                                 | lane 4, lane 5  | `packages/cli` only                                                                                      |
+| 4. Extension and desktop       | Events over the bridge (framer with `groupedWithin` and a suspending `buffer`, PRD 7.4), the fold in the webview under a module-owned runtime with page-hide and hot-reload dispose, `Surface` in the webview, the two request messages up. Deletes `LitSessionRenderer`, the 21 commands, the 9 slices, `streamStateMerge`, `progressState` re-derivations, `streamTree`, `TranscriptIndex`, the 11 contexts, `ProgressPresentationState`, `StreamState.ui`, `ProgressViewCommandHandlers`, both GUI registries, `eventHandlers.ts`. Both hosts in one pull request because they load one bundle. Measure the bundle delta here.         | lane 2                                                                                                                 | lane 3, lane 5  | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                                 |
+| 5. Headless and SDK            | `runProgressRenderer` reads the fold; the NDJSON subscription stays a per-event projection of `SessionEvents.all(now)` and never reads `SessionView` (PRD 10.3); `workflowPlainOutput` renders the run model; `packages/agent` exports the fold and the request union.                                                                                                                                                                                                                                                                                                                                                                    | lane 2                                                                                                                 | lanes 3, 4      | `packages/cli/src/runtime`, `packages/agent`                                                             |
+| 6. Session roots               | `WorkspaceRoots` on `SessionHandle`; `StorageFS` and `WorkspaceFS` base paths from context; `additionalDirectories` inference removed; desktop relaunch, argv plumbing, and state key deleted; N sessions per desktop process.                                                                                                                                                                                                                                                                                                                                                                                                            | nothing in this program; coordinate with the cutover: land before its branch is cut if ready, else swap one line after | lanes 1, 2      | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                        |
+| 7a. Ledger collapses, disjoint | Desktop tour; catalog refresh quadruple and `loadOptions` twice; CLI team plan and default agent and model duals; desktop settings handlers; resume wrappers; file-list enumeration; status tone column and one terminal-state vocabulary and the copy moves; validated-launch tagged type. Small independent pull requests, simplifier-style, any time.                                                                                                                                                                                                                                                                                  | nothing                                                                                                                | lanes 1, 2, 6   | files lanes 3 and 4 do not touch                                                                         |
+| 7b. Ledger collapses, in-lane  | Bypass mirrors, decision mappers, inquiry dismiss, merge config, launch parses, `UserMessage` summary, tool-row predicates, `childRowMetadataText`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ride inside lanes 3 and 4                                                                                              |                 |                                                                                                          |
+| 8. Shell                       | Direction A with E1 and E2, W0 as a restyle of the proposal panel, W1 with skip and retry through the ownership scope, the Tools sheet, the paper sections and the PDF workbench tab. Renders fields, issues requests. The design harness stays for iteration.                                                                                                                                                                                                                                                                                                                                                                            | lanes 4 and 6                                                                                                          |                 | `packages/extension` frontends, `packages/desktop/src/renderer`                                          |
 
 **Ordering rules.** Deletions ship in the same pull request as the
 replacement (R10), so a lane is not done until its "deletes" column is
@@ -354,183 +354,12 @@ and the resync path's in-flight text frame under a dropped `postMessage`.
 
 ## 12. Effect shape
 
-Owner instruction, 2026-09-03: the new program is written in Effect, to
-Effect's own best practice. This section was verified against the installed
-`effect@4.0.0-rc.112` (`node_modules/effect/dist/*.d.ts`), the
-`effect-solutions` guides, the v4 source clone, and one adversarial review,
-after the setup guide was run on the repo. It follows the governing rules of
-`docs/prds/2026-08-26-effect-4-runtime-migration.md` (R1 Effect inside and
-Promises at the boundary, R2 services follow semantic boundaries, R3 layers
-follow lifetimes, R5 interruption, R6 scope owns resources, R7 typed errors,
-R8 one clock, R9 product traces stay product traces, R10 replacement must
-delete) and the substrate's section 7, with two amendments recorded below.
-
-Version notes that matter: the guides and the source clone are a beta older
-than the installed release candidate; where they disagree, the installed
-package wins (AGENTS.md rule). `Context.Service` is the service key
-(`Context.Tag`, `ServiceMap`, and `Effect.Service` do not exist in rc.112).
-`Layer.scoped` does not exist in v4; `Layer.effect` already strips `Scope`,
-so a layer that acquires inside `Layer.effect` is the scoped form, and the
-migration PRD's section 8.3 example needs the same correction. `Semaphore`
-is its own module. `TestClock` lives in `effect/testing`. `Layer.mock` is
-real. `Schema.TaggedError` exists in rc.112 but is already renamed on main;
-this program does not use it (below).
-
-**Services and layers.**
-
-- Two services, both `class X extends Context.Service<X, Shape>()('@texra/session/X') {}`
-  with `static readonly layer` and `static readonly testLayer` on the class,
-  methods with `R = never`, every named method wrapped in
-  `Effect.fn('X.method')`:
-  - `SessionEvents`: `publish(event)` and `events(streamId, fromSeq): Stream`.
-    Publish is one critical section under `Semaphore.make(1)`: assign seq,
-    durable INSERT under an immediate transaction when the event is durable,
-    then fan out. Seq order and insert order cannot diverge under concurrent
-    publishers, and a persisting subscriber never exists.
-  - `SessionView`: `ref: SubscriptionRef<SessionView>` and `changes: Stream`.
-    Its layer forks the fold fiber with `Effect.forkScoped`, so the layer's
-    scope owns the fiber's lifetime and `runtime.dispose()` ends it.
-- `fold(view, event)` is a plain function in `src/shared/session/`. A service
-  earns a key only when it is independently implemented, scoped, or
-  substituted in tests (PRD R2); the fold is none of those.
-- Per-session graphs under one process runtime use `LayerMap.make((root) =>
-sessionLayer(root))`, keyed by workspace root, with `idleTimeToLive` and
-  `invalidate`. This is the keyed resource family the desktop's N papers
-  need, and it closes the memoization trap: layers memoize by reference, so
-  a parameterized layer built at two call sites would build twice.
-- `WorkspaceRoots` is a `Context.Service` provided by `Layer.succeed` per
-  session inside that map. Effect code reads it from context and never calls
-  `currentSession()`: that lookup is backed by async-local storage
-  (`RunContext.ts:78, 159-161`), and Effect's scheduler drains many fibers'
-  continuations in one turn, so async-local state bleeds across fibers. The
-  async-local path stays in the Promise tier only.
-
-**The event core.**
-
-- The hub is `PubSub.unbounded`. Bounded is backpressure: a full ring parks
-  the publisher until the slowest subscriber drains, which with the durable
-  INSERT in the publish path means a stalled webview stalls the runtime's
-  write path. Sliding and dropping lose durable events silently, which is
-  this program's own definition of a defect. Unbounded is safe because the
-  invariant is that no subscriber fiber ever awaits a remote: subscribers
-  pull in arrays (`Stream.fromPubSub` takes all available), and backpressure
-  lives at each transport framer.
-- Framing: `Stream.groupedWithin(n, "16 millis")` then `Stream.buffer` per
-  subscriber. Text chunks may use the sliding strategy; durable events must
-  not drop. On overflow the framer tears down and resubscribes through
-  `events(streamId, fromSeq)`.
-- Replay then tail has a race unless the live subscription is opened before
-  the database read. `Stream.fromPubSub` subscribes when run, so the tail is
-  subscribed first, the replay is read, and `Stream.concat(replay, live)` is
-  de-duplicated on seq.
-
-**The fold and the signal bridge.**
-
-- `Stream.scan(initial, fold)` emits the initial state then one state per
-  event; the fold runs per event. It must touch only the arm for
-  `event.streamId` and memoize `transcript.run` on `(streamId, settledSeq)`,
-  or recomputing `workflowRunModel` over a whole transcript per event is
-  quadratic. That is the reducer's contract, not Effect's.
-- `SubscriptionRef` does not coalesce: every intermediate view is enqueued.
-  Coalescing belongs at the sink: `toSignal` drains `changes` with
-  `Stream.runForEachArray` and assigns the last element; synchronous reads
-  use `SubscriptionRef.getUnsafe`, never `runSync`. The ref stays because
-  `SessionHandle.request` and headless output need a current-value read.
-
-**Requests and errors.**
-
-- `RuntimeRequest` and `HostRequest` are Zod unions. `SessionHandle.request`
-  is `Effect.fn('SessionHandle.request')`, returns
-  `Effect<Outcome, RequestError>`, and resolves the interaction scope as a
-  resource acquired with `Effect.acquireRelease`; skip, retry, and kill are
-  methods on that scope.
-- Errors are `Data.TaggedError` classes: `NotOwner`, `Unavailable`,
-  `Rejected`, `Invalid`, a `Schema`-free union matched with `catchTag` and
-  `catchTags`; everything unexpected is `Effect.orDie` with one
-  `tapCause` log at the boundary (rc.112 has no `tapErrorCause`). A request naming a stream that the
-  seq proves must exist is a defect, not a failure. Error payloads crossing
-  the bridge are plain tagged objects under the Zod union.
-- **Amendment to the substrate's section 7:** Effect Schema is used nowhere,
-  not even for errors. `Data.TaggedError` gives the tag, yieldability, and
-  `catchTag` without it; the rc.112 name is already renamed on main; and
-  Schema alone is 188 KB minified, 56 KB gzipped, in every webview.
-
-**Runtime boundary and the browser.**
-
-- One `ManagedRuntime.make(processLayer)` per process, module-owned at the
-  existing entry, disposed on the existing shutdown path (PRD 8.2, R6):
-  `packages/extension/src/extension.ts`, the desktop main entry, the CLI
-  entry, and each webview entry (`progressView/frontend/index.ts` for the
-  extension sidebar, tab, and the Electron renderer, which load the same
-  bundle). `runPromise`, `runFork`, and `runSync` appear only there and at
-  the outermost Promise-facing method (`runtime.runPromise(effect,
-{ signal })`); inside, cancellation is fiber interruption (R5).
-- `src/auth/oauth/loopbackLogin.ts:250` runs on the default runtime today;
-  it migrates onto the host runtime so there is one.
-- Webview fibers: the fold is forked under the runtime's scope; components
-  subscribe in `connectedCallback` through `runtime.runFork` and interrupt in
-  `disconnectedCallback`; `pagehide` and `import.meta.hot?.dispose` call
-  `dispose()` so a reloaded module cannot run two fold fibers against one
-  signal. Remount in the same JS context is real today
-  (`progressState.ts:261` resets singleton signals for it); with a
-  module-owned runtime the fold fiber survives and the bridge resubscribes.
-- Measured with the repo's esbuild, browser platform, minified: the set this
-  section needs is 188 KB minified, 61 KB gzipped, with `Data.TaggedError`;
-  376 KB and 117 KB with Effect Schema. The current progress bundle is
-  2.57 MB raw, 730 KB gzipped, as a development build, so the delta is at
-  least 8 percent gzipped and proportionally more against a production
-  build. Recorded, accepted, and the reason Schema stays out.
-
-**What is not Effect.** Lit and Ink components never import `effect`;
-`toSignal` in `src/shared/signals.ts` is the only meeting point, with the
-CLI's `useSignal` on the other side. The Surface is renderer state. Data
-schemas are Zod (CLAUDE.md, substrate section 7). The pure fold and the row
-projections are functions. Product logs go through the repo logger; spans
-are tracing only (R9). Config is the Zod settings catalog, never
-`Config.*`; a configured value reaches a service as `Layer.succeed`.
-
-**Concurrency and tests.** `Semaphore`, `Queue`, and fiber supervision in
-Effect code; `p-queue` stays for the Promise tier; CLAUDE.md's rule is
-amended to say so, and the owner ratifies that with this document. Tests use
-`@effect/vitest@4.0.0-rc.112` (`it.effect`, `it.layer`; peers match the
-repo's vitest 4.1), `TestClock.adjust` from `effect/testing` for the 16 ms
-framing and the live-owner rule, hand-written `testLayer`s with
-`Layer.succeed` fakes, `Layer.mock` for partials, suites under
-`src/test-kernel/`, zero-new-tests default. Adding `@effect/vitest` is a
-decision for the owner; it is the only package this program adds.
-
-**Toolchain note from the setup guide.** The language-service tsconfig
-plugin is in place and editor diagnostics work through the TypeScript 6
-tsserver. The guide's `patch` and `prepare` steps cannot run here because
-the build toolchain is TypeScript 7's native compiler with the JS package
-aliased to a shim; build-time Effect diagnostics would be a separate CI step
-(`effect-language-service diagnostics -p tsconfig.json`) if wanted.
-
-**Layout.** No barrels; import the defining module.
-
-```
-src/shared/session/sessionView.ts       Zod SessionView, StreamView; z.infer types
-src/shared/session/sessionFold.ts       fold(view, event): pure; no effect import
-src/shared/session/runtimeRequest.ts    Zod RuntimeRequest, HostRequest, Outcome
-src/shared/session/requestErrors.ts     Data.TaggedError NotOwner | Unavailable | Rejected | Invalid
-src/shared/signals.ts                   + toSignal(SubscriptionRef)
-src/controllers/session/SessionEvents.ts  Context.Service; publish under one semaphore; events(streamId, fromSeq)
-src/controllers/session/SessionView.ts    Context.Service; ref + changes; fold fiber forkScoped
-src/controllers/session/WorkspaceRoots.ts Context.Service; Layer.succeed per session
-src/controllers/session/SessionRequests.ts request(): Effect<Outcome, RequestError>; scope via acquireRelease
-src/controllers/session/sessionLayer.ts   per-session graph; LayerMap keyed by root
-<host entry per process>                  ManagedRuntime.make(processLayer); the only run* sites
-src/test-kernel/controllers/session/*.vitest.ts   it.effect + TestClock
-src/test-kernel/shared/session/sessionFold.vitest.ts  plain vitest, pure
-```
-
-The event schema the fold consumes is Zod under `src/shared/schemas`, so
-the fold can live in `src/shared` without a new `@agent/*` import there
-(`dependencyDirection.vitest.ts:57-67`); it never lives in `src/utils`
-(browser-safe gate).
-
-**Sequence amendment.** Step 1 of section 10 lands `SessionEvents`,
-`SessionView`, the pure fold, and the two Zod unions. Steps 3 and 4 add
-`toSignal`, the request methods, and the webview runtime with its dispose
-hooks. Step 6 provides `WorkspaceRoots` through the `LayerMap`, and the
-substrate's `Database` layer is parameterized by it.
+Superseded. The Effect shape of this program is PRD sections 7 and 8
+(`docs/prds/2026-09-03-prd-one-fold-three-renderers.md`): `SessionEvents`
+exposes three reads, `listing()`, `all(fromCommit)`, and
+`aggregate(id, fromSeq)`; its wakes carry no payload; and every subscriber
+holds one commit cursor for the tail plus one `folded` seq per subscribed
+aggregate. The single-stream `events(streamId, fromSeq)` read, the
+payload-carrying `PubSub`, and the resubscribe-on-overflow repair that an
+earlier version of this section defined are deleted, not amended; nothing
+here overrides the PRD.

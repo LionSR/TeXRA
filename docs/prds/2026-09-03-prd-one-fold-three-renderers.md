@@ -176,7 +176,12 @@ SessionView = {
   // rule reads it (5.2) and a Subscribe copies it into fromSeq (8.1). Never
   // a commit ordinal, never touched by a row the residency rule dropped
   folded: Map<AggregateId, Seq>,
-  // live text at SESSION scope, so it can arrive before its stream (5.2)
+  // one entry per (aggregate, listing type): the commit of the latest
+  // listing fact folded for it, so a replayed older one is ignored (5.2).
+  // The approval pair shares one entry. Never evicted with the transcript
+  latest: Map<`${AggregateId}/${ListingType}`, CommitOrdinal>,
+  // live text keyed by stream and row; a chunk for a stream the view does
+  // not hold is dropped (5.2)
   inflight: Map<`${StreamTabId}/${RowId}`, string>,
   // paper-level aggregate; the desktop rail badge reads it and derives nothing
   rollup: { running: number, waiting: number, interrupted: number },
@@ -299,19 +304,29 @@ TranscriptSubscriptionSet | ReplayComplete`, where `Event` is
 `{ read: 'listing' | 'aggregate' | 'all', event: SessionEvent }`: the row
 carries the read that delivered it (7.1; a frame tags its rows the same
 way, 7.4) because one rule below depends on it. `ReplayComplete` is the one
-marker of 7.2: transient, never durable, and the only input the fold does
-not fold; it exists so the publish gate can see where the sequenced cold
-reads end. Three rules govern the event arm before any fact below applies.
+marker of 7.2: transient, never durable, carrying no fact; the fold uses it
+only to close the listing ahead of it (7.2), and it exists so the publish
+gate can see where the sequenced cold reads end. Three rules govern the event arm before any fact below applies.
 
 **Duplicates.** The three reads of 7.1 overlap by construction - `run.start` is a
 listing fact and row seq 1 of its aggregate, so `aggregate(id, 0)` replays
 the `run.start` that `listing()` or `all()` already delivered, and the `all()`
 tail carries every subscribed aggregate's rows a second time - and the two
-tiers absorb the second copy differently. A listing fact needs no seq
-dedupe, because latest-of-type is idempotent: folding the same status twice
-is the same status, and a second `run.start` for a stream the view already
-holds is a no-op under the existence rule below, which reads `run.start` as
-"this aggregate exists", a fact that cannot become more true. A transcript
+tiers absorb the second copy differently. Listing facts are ordered by
+commit ordinal within the fold: the view keeps, per (aggregate, listing
+type), the commit of the latest listing fact it folded (`latest`, 5.1,
+beside `folded`), and a listing fact whose commit is not above that entry
+is ignored, whichever read delivered it. Folding the same status twice
+would be harmless, but a later `aggregate(id, fromSeq)` replays an older
+status or approval row after the tail has folded the current one, and
+latest-of-type is idempotent only in commit order. Outstanding approvals
+are a set keyed by `requestId` (the residency rule below), and
+`approval.requested` and `approval.resolved` share one `latest` entry
+because they fold to one set, so a replayed `approval.requested` whose
+`approval.resolved` has folded is below that commit and ignored. A second
+`run.start` for a stream the view already holds is a no-op under the
+existence rule below either way, which reads `run.start` as "this
+aggregate exists", a fact that cannot become more true. A transcript
 row is dropped when its `seq` is not above `view.folded` for its aggregate
 and advances that entry otherwise; `folded` holds one entry per subscribed
 aggregate, created at the `fromSeq` the subscription named when the
@@ -336,8 +351,10 @@ become a resume point - while its listing facts fold regardless. The set is
 the fourth arm, a `SubscriptionRef` (`TranscriptSubscriptions`, 7.2) whose
 every change is a fold input: when an aggregate enters the set the fold
 creates its `folded` entry, and when it leaves the fold drops that stream's
-`rows`, `taskGroups`, `compaction`, and `run`, and the entry, keeping every
-listing fact.
+`rows`, `taskGroups`, `compaction`, and `run`, the entry, and the stream's
+`inflight` entries - the finalizing event that would have cleared them
+belongs to the evicted aggregate and is dropped by this rule - keeping
+every listing fact.
 
 **Cursor.** `view.cursor` is the tail position, and it advances to the
 position the tail has drained: in the runtime, the commit of each row
@@ -617,8 +634,8 @@ it hands the fold.
   this rule every listing is a fold of all history and the residency
   problem of #9952 returns. The subscription set is a fold input, not a
   property of the reads: when an aggregate leaves the set the fold evicts
-  that stream's `rows`, `taskGroups`, `compaction`, and `run`, so opening
-  and closing transcripts leaves no history behind, and the listing facts
+  that stream's `rows`, `taskGroups`, `compaction`, `run`, and `inflight`
+  entries, so opening and closing transcripts leaves no history behind, and the listing facts
   of that stream stay exactly as they were. The rule binds the runtime's
   subscription set (7.2) exactly as it binds a webview's (8.1, 9): the fold
   fiber in the runtime holds the listing tier for every stream and the
@@ -738,27 +755,25 @@ it hands the fold.
   the resumed run's repair path appends a durable finalization for every
   row it finds open, so replay never reconstructs a never-terminated row. A
   non-owning process renders the settled prefix (7.2).
-- **In-flight text is its own map, so order does not matter.** Chunks
-  accumulate in `SessionView.inflight`, keyed by stream and row at **session
-  scope** - not inside `StreamView`, which would give a chunk nowhere to
-  live while its stream is still unfolded, and dropping it would put the
-  next delta at a nonzero `from` against empty text. Session scope is what
-  makes the claim true rather than nearly true: text accumulates whether or
-  not the stream exists yet, which it routinely does not during a webview's
-  replay; a row renders by joining
-  its durable fields with its in-flight entry, and the entry is dropped when
-  the row's finalizing event lands. A chunk arriving before its creating
-  event is therefore not a problem to order around - it simply has nowhere
-  to render until the row appears, and then it is already there. Ordering the
-  two arms is not available anyway: the producer can append before it
-  streams, but the fold's two inputs are separate streams and the table drain
-  is asynchronous, so emission order is not delivery order. A consumer-side buffer
-  ordered against the event stream would need an eviction policy of its own;
-  keying the text by row ties it to the stream lifecycle instead. An entry
-  goes when its row's finalizing event folds, when its stream's terminal
-  status folds (a run can end with a row unfinalized - a crash, an abandoned
-  interrupt), or when `stream.removed` closes the stream. Those three cover
-  every way a row stops being live, so nothing needs a timeout and nothing
+- **In-flight text is its own map, so row order does not matter.** Chunks
+  accumulate in `SessionView.inflight`, keyed by stream and row, beside the
+  rows rather than inside them: the producer can append before it streams,
+  but the fold's two inputs are separate streams and the table drain is
+  asynchronous, so emission order is not delivery order, and a chunk can
+  reach the fold before the trace row it belongs to. A row renders by
+  joining its durable fields with its in-flight entry, and the entry is
+  dropped when the row's finalizing event lands. A consumer-side buffer
+  ordered against the event stream would need an eviction policy of its
+  own; keying the text by row ties it to the stream lifecycle instead. A
+  chunk for a **stream** the view does not hold is dropped: `run.start` is
+  committed at the reservation point before any model call (section 6,
+  item 3), so no text can precede its stream, and the only stream a chunk
+  can miss is one `stream.removed` has closed. An entry goes when its row's
+  finalizing event folds, when its stream's terminal status folds (a run
+  can end with a row unfinalized - a crash, an abandoned interrupt), when
+  `stream.removed` closes the stream, or when the stream's aggregate leaves
+  the subscription set (the residency rule above). Those four cover every
+  way a row stops being live, so nothing needs a timeout and nothing
   accumulates in a long-lived process.
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
@@ -769,27 +784,16 @@ it hands the fold.
   `approval.requested` with no `approval.resolved` would otherwise fold back
   into `approvals` on every replay as an actionable decision for a stream
   that can never exist again. A chunk that arrives
-  afterwards - the two arms are asynchronous, so one can - is **dropped at
-  the source**, in every process: `TextChunkSource` suppresses queued and
-  later chunks for a stream once that stream's `stream.removed` has been
-  published, and the transport framer applies the same rule to what it
-  frames. It has to be both: §7.2 feeds the runtime, TUI, and headless folds
-  from `TextChunkSource` directly, so a rule living only in the framer would
-  leave an in-process late chunk recreating an `inflight` entry that nothing
-  can ever finalize - and the in-process view would diverge from the webview
-  one. That is the one place where
-  "already tombstoned" and "not started yet" are both observable, and it
-  keeps the fold's single rule intact - text accumulates whether or not its
-  stream exists - with no tombstone set and no exception. An earlier draft
-  put a `closed` list in the fold instead, which needed a drain boundary the
-  fold has no input to see: dropping on absence alone would discard valid
-  opening text and put the next delta at `from > length`. Without the clear,
-  an entry for a stream that can never render or finalize would sit in the
-  session map forever. That makes the merge order of the three arms (7.2)
-  irrelevant by construction: a late chunk cannot mutate settled text, and
-  an early one is overwritten when its event lands. Without the rule the
-  same two inputs give two different rows in two processes.
-  `LocalRuntimeState` is the other transient arm.
+  afterwards - the two arms are asynchronous, so one can, and a chunk
+  already pulled into the merge before the tombstone was published cannot
+  be retracted at its source - meets a view without the stream and is
+  dropped by the absence rule above, in every process, with no tombstone
+  set and no source-side suppression. That makes the merge order of the
+  three arms (7.2) irrelevant by construction: a late chunk cannot mutate
+  settled text or recreate an entry for a closed stream, and an early one
+  is overwritten when its event lands. Without the rule the same two inputs
+  give two different rows in two processes. `LocalRuntimeState` is the
+  other transient arm.
 
 ### 5.3 The row
 
@@ -1357,17 +1361,20 @@ class SessionViewService extends Context.Service<
           event,
         }));
       // One shape for every value of the subscription set, the first one
-      // included, and it is SEQUENCED, never merged: the set itself first
-      // (a fold input, so `folded` entries exist before their rows), then
-      // the history of each aggregate in the set from the seq the view has
-      // retained (its `fromSeq` when the view has none), then the one
-      // replay-complete marker, then the tail from the view's cursor.
-      // Stream.concat is what makes the seq threshold order-safe (5.2): no
-      // tail row can fold before the history beneath it. `switchMap` closes
-      // the previous set's reads; every read is cursor-driven (7.1), so a
-      // reopen costs the rows since the view's position and loses nothing.
-      // The marker after a later set change is a transient no-op: the gate
-      // below has already released
+      // included, and it is SEQUENCED, never merged: the listing first (the
+      // hydrate every Subscribe starts with, 7.4; a row the view already
+      // holds is a no-op under the commit rule of 5.2), the set itself (a
+      // fold input, so `folded` entries exist before their rows), then the
+      // history of each aggregate in the set from the seq the view has
+      // retained (its `fromSeq` when the view has none), then the current
+      // local snapshot, then the one replay-complete marker, then the tail
+      // from the view's cursor. Stream.concat is what makes the seq
+      // threshold order-safe (5.2): no tail row can fold before the history
+      // beneath it. `switchMap` closes the previous set's reads; every read
+      // is cursor-driven (7.1), so a reopen costs the rows since the view's
+      // position and loses nothing. The marker closes the listing ahead of
+      // it: a stream the listing did not name goes (below). After the first
+      // set the gate below has already released
       const reads = SubscriptionRef.changes(subscriptions).pipe(
         Stream.switchMap((set) =>
           Stream.unwrap(
@@ -1382,11 +1389,24 @@ class SessionViewService extends Context.Service<
                           .aggregate(s.id, view.folded.get(s.id) ?? s.fromSeq)
                           .pipe(from('aggregate')),
                       ),
-                    Stream.make<[FoldInput]>({ _tag: 'subscriptions', set }),
+                    Stream.concat(
+                      events.listing().pipe(from('listing')),
+                      Stream.make<[FoldInput]>({ _tag: 'subscriptions', set }),
+                    ),
                   ),
                   Stream.concat(
-                    Stream.make<[FoldInput]>({ _tag: 'replay.complete' }),
-                    events.all(view.cursor).pipe(from('all')),
+                    // the local snapshot is a level (below): read once here,
+                    // ahead of the marker, so the first published view has it
+                    Stream.fromEffect(SubscriptionRef.get(liveness.ref)).pipe(
+                      Stream.map((local): FoldInput => ({
+                        _tag: 'local',
+                        local,
+                      })),
+                    ),
+                    Stream.concat(
+                      Stream.make<[FoldInput]>({ _tag: 'replay.complete' }),
+                      events.all(view.cursor).pipe(from('all')),
+                    ),
                   ),
                 ),
               ),
@@ -1395,15 +1415,9 @@ class SessionViewService extends Context.Service<
         ),
       );
       yield* Effect.forkScoped(
-        Stream.mergeAll(
-          [
-            // the cold listing hydrate (C8) once, then the sequence above
-            Stream.concat(events.listing().pipe(from('listing')), reads),
-            liveness.changes,
-            chunks.changes,
-          ],
-          { concurrency: 3 },
-        ).pipe(
+        Stream.mergeAll([reads, liveness.changes, chunks.changes], {
+          concurrency: 3,
+        }).pipe(
           // each state paired with the input that produced it, so the gate
           // can see the marker without the view carrying a flag for it
           Stream.mapAccum(
@@ -1440,15 +1454,22 @@ non-terminal runs briefly `interrupted` because no `local` snapshot has
 arrived yet, a transcript filling in row by row - for the length of the
 replay. The replay says when it is finished rather than being inferred from
 an ordinal, and it says so **once**: the cold reads are sequenced,
-`listing()` then each initially subscribed aggregate's history in turn, and
-one `replay.complete` marker follows the last of them (a `FoldInput` arm,
-transient, never durable, 5.2); the tail starts after it. There is nothing
-to coordinate because nothing runs concurrently: when the marker arrives,
-the listing and every initial history have completed by construction. A
-frame carries the same marker (8.1). An aggregate that joins the set later
-is sequenced the same way, its history ahead of the reopened tail, but the
-marker after it gates nothing: the view is already published and the rows
-arrive incrementally like any tail. Comparing the view's cursor against a
+`listing()` then each initially subscribed aggregate's history in turn, then
+the current `local` snapshot, and one `replay.complete` marker follows the
+last of them (a `FoldInput` arm, transient, never durable, 5.2); the tail
+starts after it. There is nothing to coordinate because nothing runs
+concurrently: when the marker arrives, the listing, every initial history,
+and the local snapshot have completed by construction. The snapshot is in
+the sequence because `LocalRuntimeSource` is a `SubscriptionRef`, a level:
+`liveness.changes` in the merge replays its current value too, but
+`mergeAll` orders it against nothing, so without the sequenced read the
+marker could arrive first and the first published view would fold a run
+with a live owner as `interrupted` and actionable, the intermediate state
+the gate exists to suppress. A frame carries the same marker (8.1). An
+aggregate that joins the set later is sequenced the same way, the listing
+and its history ahead of the reopened tail, but the marker after it gates
+nothing: the view is already published and the rows arrive incrementally
+like any tail. Comparing the view's cursor against a
 captured ordinal would not work instead, because retention can prune a
 deleted stream's rows and its tombstone while the ordinal keeps counting -
 if the surviving history ends at 10 and the pruned rows held 11-20, nothing
@@ -1467,15 +1488,26 @@ and the marker) and the two transient sources, each of which has a source
 service with a process-specific layer, so the fold fiber is the same code
 everywhere - it reads no durable ordinal, and in a webview the transport
 layer's reads are the frame queues (7.1).
-`LocalRuntimeSource` is the lease reader and restart repair's shared `SubscriptionRef` in the
-runtime and the `local` field of each frame (8.1) in a webview.
+`LocalRuntimeSource` is one `SubscriptionRef` (`ref`, with `changes` over
+it): the lease reader and restart repair's shared ref in the runtime, and
+the `local` field of each frame (8.1) written into a ref in a webview.
 `TextChunkSource` is the model handler's existing delta path in the runtime
 (the stream `StreamingTextAccumulator` consumes today) and the `chunks`
 field of each frame in a webview.
 
-`events.listing()` is the cold listing hydrate: the latest-of-type row per
+`events.listing()` is the listing hydrate: the latest-of-type row per
 aggregate for the listing fact types plus the outstanding-approval set, in
-commit order, never a transcript row, read once. `events.all(cursor)` is the tail: every
+commit order, never a transcript row. It opens every sequence: the cold
+mount, every resync (a `Subscribe` whose cursor is not the framer's
+current position, 7.4, 8.1), and every change of the subscription set, whose
+listing rows the view already holds and the commit rule of 5.2 ignores.
+**Listing hydration is authoritative**: when the marker that ends the
+sequence folds, every stream the view holds that no listing row of that
+sequence named is removed, with everything `stream.removed` clears (5.2).
+Retention can delete a closed aggregate together with its tombstone while a
+surface is away, after which neither `all(cursor)` nor any aggregate read
+can deliver the deletion; the listing is the one read that says what exists
+now, and there is no separate repair path. `events.all(cursor)` is the tail: every
 row committed after the view's cursor, in commit order, transcript rows of
 every aggregate included, of which the fold keeps only the subscribed
 aggregates' (the residency rule of 5.2); the cursor starts at the layer's
@@ -1489,8 +1521,8 @@ aggregate's history, the marker, the tail - so a late subscription is not a
 special case and no history read is ever merged with the tail it overlaps.
 The set is itself a fold input: `switchMap` closes the previous reads, and
 the eviction is the fold's, on the set change - that stream's `rows`,
-`taskGroups`, `compaction`, `run`, and `folded` entry go, its listing facts
-stay - so opening and closing transcripts accumulates nothing. The set
+`taskGroups`, `compaction`, `run`, `folded` entry, and `inflight` entries
+go, its listing facts stay - so opening and closing transcripts accumulates nothing. The set
 names aggregates, not streams - a stream's transcript is its stream
 aggregate plus its execution aggregate, each from its own seq (5.1) - and
 the subscribe handler writes each entry's `fromSeq` from the subscriber's
@@ -1582,7 +1614,8 @@ in the Promise tier only.
 rows on the stream aggregate, error payloads, and approval payloads are
 secret-scrubbed at publish time before the row is written. The flow rows on
 the execution aggregate (`2026-09-04-agent-runtime-on-effect.md` section
-2.1: `model.message`, `model.compaction`, `tool.intent`, `tool.result`,
+2.1 owns the list; the six names of 5.1: `model.message`,
+`model.compaction`, `tool.intent`, `tool.result`, `flow.step`,
 `flow.snapshot`) are
 byte-exact and never scrubbed, because Anthropic signature verification and
 a resumed context need the original bytes. Therefore every framer that
@@ -1594,12 +1627,17 @@ durable twice (the redacted trace row and the flow row); that collapse
 deletes the trace copy and moves redaction to fold time.
 
 Down, per subscriber: the reads its `Subscribe` names, run in the fold
-fiber's order (7.2) so the webview's fold consumes them in sequence. A cold
-mount (cursor 0) is `listing()`, then `aggregate(id, 0)` per named
-aggregate in turn, then a frame carrying `replayComplete`, then `all` from
-the runtime's own `view.cursor` captured before those reads; a resubscribe
-is the same without the listing, its histories from each named `fromSeq`
-and its tail from the cursor the `Subscribe` carried. The framer reads no
+fiber's order (7.2) so the webview's fold consumes them in sequence. Every
+`Subscribe` is answered the same way: `listing()`, then `aggregate(id,
+fromSeq)` per named aggregate in turn, then a frame carrying
+`replayComplete` and the current `local` snapshot, then `all`. A cold mount
+(cursor 0) reads each history from 0 and takes its tail from the runtime's
+own `view.cursor` captured before those reads; a resubscribe - any
+`Subscribe` whose cursor is not the framer's current position - reads its
+histories from each named `fromSeq` and its tail from the cursor the
+`Subscribe` carried, and its listing is authoritative (7.2), which is what
+removes a stream whose tombstone retention pruned while the surface was
+away. The framer reads no
 durable ordinal: the runtime fold's cursor is the tail position, and a row
 committed after it is delivered by the tail and deduplicated by the fold
 (5.2). Each row is tagged with its read, and transcript rows of aggregates
@@ -1801,8 +1839,12 @@ which is how the cursor moves past tail rows the framer left out for
 aggregates the subscriber did not name (5.2).
 
 Two shapes on this channel, not three: a resync is a `Subscribe` whose
-frames answer with `from: 0` chunks for the streaming rows (5.2, 7.4), so
-there is no `Resync` shape and no replacement fold arm. Every event carries
+cursor is not the framer's current position; its frames start with
+`listing()`, whose hydration is authoritative - a stream the view holds
+that the listing does not name is removed at the marker (7.2) - and answer
+with `from: 0` chunks for the streaming rows (5.2, 7.4), so there is no
+`Resync` shape, no replacement fold arm, and no repair path for a tombstone
+retention removed while the surface was away. Every event carries
 its aggregate id, its `seq`, and its session `commit` ordinal (the aggregate
 being a stream id, an execution id, or the session aggregate, 5.1), and
 every chunk carries its stream and
@@ -2984,7 +3026,7 @@ scale.
 | Partial fakes     | `Layer.mock(X, partial)`                                                                         | `effect`         | real, @since 3.17; hand-written `testLayer` preferred                                                                  |
 | Commit level      | `SubscriptionRef.make(0)`, `.update`, `SubscriptionRef.changes`                                  | `effect`         | replays its current value on subscribe, so no wake is missed (7.1); `PubSub` is an edge, not a level                   |
 | Fold              | `Stream.mapAccum(() => initial, f)`                                                              | `effect`         | lazy initial; `f` returns `[state, outputs]`; pairs each view with its input so the publish gate sees the marker (7.2) |
-| Cold hydrate      | `Stream.concat(a, b)`, `Stream.make(x)`, `Stream.empty`                                          | `effect`         | listing, then each history, then the marker, then the tail, in sequence (7.2)                                          |
+| Cold hydrate      | `Stream.concat(a, b)`, `Stream.make(x)`, `Stream.fromEffect(e)`, `Stream.empty`                  | `effect`         | listing, then each history, then the local snapshot, then the marker, then the tail, in sequence (7.2)                 |
 | Publish gate      | `Stream.dropWhile(p)`                                                                            | `effect`         | drops states until the marker's (7.2)                                                                                  |
 | Merge inputs      | `Stream.merge(a, b)`, `Stream.mergeAll(streams, { concurrency })`                                | `effect`         | events, liveness, and text chunks into one fold; `concurrency` is required                                             |
 | Cursor read loop  | `Stream.unwrap(effect)`, `Stream.flatMap(f, { concurrency })`, `Ref.make`/`Ref.get`              | `effect`         | one ordered read per wake (7.1); the v3 `toQueueScoped` / `unwrapScoped` do not exist                                  |
