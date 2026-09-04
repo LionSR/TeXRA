@@ -14,6 +14,7 @@ import type {
 } from '@agent/followUp/FollowUpQueue';
 import {
   lookupStreamExecutionId,
+  recordRunRefusal,
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -39,6 +40,7 @@ import {
   resumeToolUseFromResumeData,
   type SubagentRunOptions,
 } from './executeAgent';
+import { classifyRun } from './runClassification';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -256,21 +258,31 @@ async function resumeRunWithRecoveryProvenance(
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     return REFUSED;
   }
-  // The run has just been re-read for write. A hold recorded by an earlier
-  // refusal describes facts this attempt has now re-read, so it goes here,
-  // before the refusals below and not after them: a tab whose foreign owner
-  // has since exited and whose checkpoint is gone must render its terminal
-  // state rather than stay read-only on the reason it was refused last time.
-  // The phase such a hold retained goes with it — a failed tool-use resume
-  // rolls the stream back to WAITING before the hold is written, and this
-  // read has just disproved that WAITING. An attempt that is refused again
-  // writes the current reason below; one that acquires leaves the phase it
-  // lands on.
-  session.status.clearHold(streamId, { discardRetainedPhase: true });
   if (!resume) {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
-    return { failed: 'finished' };
+    // Nothing came back, which is two facts in one `null`: the checkpoint is
+    // gone, or the record could not be read — a torn read of the rewrite the
+    // process that owns this run is making right now parses as absent. Only
+    // the lease separates them, so this refusal is decided by `classifyRun`
+    // and recorded through the same mapping the follow-up path uses: a run
+    // held elsewhere refreshes the hold instead of dropping it and being
+    // reported finished, and an unreadable one moves nothing.
+    return {
+      failed: recordRunRefusal(
+        streamId,
+        session,
+        await classifyRun(executionId),
+      ),
+    };
   }
+  // The run is about to be opened for write, its checkpoint just re-read. A
+  // hold recorded by an earlier refusal describes facts this
+  // attempt has now re-read, so it goes, and the phase it retained goes with
+  // it — a failed tool-use resume rolls the stream back to WAITING before the
+  // hold is written, and this read has disproved that WAITING. An attempt
+  // refused below writes the current reason; one that acquires leaves the
+  // phase it lands on.
+  session.status.clearHold(streamId, { discardRetainedPhase: true });
   if (resume.type === 'toolUse' && queueLease) {
     return resumeQueuedToolUse(session, resume, queueLease, options);
   }

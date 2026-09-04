@@ -1,5 +1,8 @@
 /** Tool-use follow-up routing and continuation ownership. */
-import { classifyRun } from '@agent/runtime/runClassification';
+import {
+  classifyRun,
+  type RunClassification,
+} from '@agent/runtime/runClassification';
 import { readExecutionStreamIndex } from '@agent/storage/executionListing';
 import {
   currentSession,
@@ -193,11 +196,12 @@ export async function lookupStreamExecutionId(
 }
 
 /**
- * Word the refusal of a stream with no live flow here from the persisted
- * facts: who holds the run, and whether a checkpoint is left. Read only on
- * the failure path; an unreadable fact is `not_resumable`.
+ * The one mapping from a run classification to what the user's stream shows
+ * and what the refusal is called. Both refusal paths use it — a follow-up
+ * with no live flow here, and a resume whose checkpoint read came back empty
+ * — so the two cannot word or settle the same fact differently.
  *
- * A refusal the user can see again is also recorded on the stream: the two
+ * A refusal the user can see again is recorded on the stream: the two
  * classifications that mean "no flow here can execute this run" — another
  * process holds it, or this process holds a lease with no live run behind it
  * — become the stream's read-only detail, so the tab keeps saying why after
@@ -210,29 +214,18 @@ export async function lookupStreamExecutionId(
  * An `unclassified` run deliberately records nothing: `classifyRun` reports it
  * for any failed read, including a transient one (EMFILE, a partial read
  * racing another process's atomic rewrite), and a hold is sticky, so a blip
- * would leave the tab permanently read-only. The unreadable display fact has
- * its own producer in the run tuple's `authorityFailure`, which every later
- * hydration re-reads.
+ * would leave the tab permanently read-only — and dropping the hold on one
+ * would report a run another process is executing as finished. The unreadable
+ * display fact has its own producer in the run tuple's `authorityFailure`,
+ * which every later hydration re-reads.
  *
- * Only the one run the user acted on is inspected, and nothing is written to
- * disk.
+ * Nothing is written to disk.
  */
-async function classifyRefusal(
+export function recordRunRefusal(
   streamId: StreamTabId,
   session: SessionHandle,
-): Promise<FollowUpFailureReason> {
-  let executionId: ExecutionId | undefined;
-  try {
-    executionId = await lookupStreamExecutionId(streamId, session);
-  } catch (error) {
-    logger.warn(
-      `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
-      { data: { streamId, error } },
-    );
-    return 'not_resumable';
-  }
-  if (!executionId) return 'not_resumable';
-  const classification = await classifyRun(executionId);
+  classification: RunClassification,
+): FollowUpFailureReason {
   switch (classification.kind) {
     case 'held_elsewhere':
       session.status.markUnavailableOrLog(
@@ -260,6 +253,30 @@ async function classifyRefusal(
     case 'unclassified':
       return 'not_resumable';
   }
+}
+
+/**
+ * Word the refusal of a stream with no live flow here from the persisted
+ * facts: who holds the run, and whether a checkpoint is left. Read only on
+ * the failure path; an unreadable fact is `not_resumable`. Only the one run
+ * the user acted on is inspected.
+ */
+async function classifyRefusal(
+  streamId: StreamTabId,
+  session: SessionHandle,
+): Promise<FollowUpFailureReason> {
+  let executionId: ExecutionId | undefined;
+  try {
+    executionId = await lookupStreamExecutionId(streamId, session);
+  } catch (error) {
+    logger.warn(
+      `Cannot classify the refusal for ${streamId}: persisted execution identity is unreadable.`,
+      { data: { streamId, error } },
+    );
+    return 'not_resumable';
+  }
+  if (!executionId) return 'not_resumable';
+  return recordRunRefusal(streamId, session, await classifyRun(executionId));
 }
 
 export async function submitFollowUp(

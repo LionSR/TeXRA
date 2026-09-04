@@ -419,14 +419,17 @@ describe('runResumeExecution', () => {
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
-  it('reports empty workflow retrieval as finished', async () => {
+  // The checkpoint this seeds is readable, so the empty retrieval is the two
+  // readers disagreeing, not a finished run: the refusal is worded from the
+  // lease-aware classification, which still sees a checkpoint.
+  it('reports empty workflow retrieval against a live checkpoint as not resumable', async () => {
     await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
+      'This run cannot accept messages right now. Resume it, or start a new agent task.',
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
