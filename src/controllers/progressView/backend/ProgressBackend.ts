@@ -662,6 +662,9 @@ export class ProgressBackend {
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
+    // The renderer owns this: it sends both the full roster and the
+    // incremental per-stream metadata a tab can first appear through.
+    const wasRendered = this.renderer.hasRenderedStream(stream);
     // An undefined expectedIncarnation falls back to the current incarnation
     // inside `clearStream`, matching the no-options call this replaces.
     const deletion = await this.state.clearStream(stream, {
@@ -671,12 +674,17 @@ export class ProgressBackend {
       return deletion;
     }
     // `clearStream` deleted and tombstoned the stream, so report `deleted`
-    // even when it had no durable data (ephemeral-only): the caller must not
-    // retire the tombstone a stale fact could then resurrect through.
-    if (!hadDeletableData) return 'deleted';
+    // even when this call removed nothing of its own: the caller must not
+    // retire the tombstone a stale fact could then resurrect through. The
+    // removal chrome below is owed to whatever the rail is showing, not to
+    // whatever this call deleted — a swept background shell has no durable
+    // data left by the time its `removeStream` fact arrives, and skipping the
+    // chrome for it left its row on screen with nothing behind it.
+    if (!hadDeletableData && !wasRendered) return 'deleted';
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
+    this.renderer.forgetRenderedStream(stream);
     const selectionWasDeleted = this.presentation.activeStream === stream;
     if (selectionWasDeleted) {
       this.presentation.select('');

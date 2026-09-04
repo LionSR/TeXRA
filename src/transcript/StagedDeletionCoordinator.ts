@@ -28,6 +28,7 @@
 // Third-party imports
 import pDefer from 'p-defer';
 import pMap from 'p-map';
+import PQueue from 'p-queue';
 
 // Local imports - shared infrastructure
 import { isFileNotFoundError } from '@common/errors';
@@ -165,6 +166,16 @@ export class StagedDeletionCoordinator {
    * after the live namespace has been restored.
    */
   private readonly deletionStates = new Map<StreamTabId, DeletionState>();
+  /**
+   * One reconcile at a time. Reconciles arrive from every `SessionStores`
+   * built over this session — the leftover sweep builds its own instance —
+   * and those instances share nothing but the snapshot store this coordinator
+   * belongs to, so their per-instance deletion queues cannot order them
+   * against each other. Two passes over the same `streamDataDeletion/{id}`
+   * both rename it and the loser rejects, which is why the serialization has
+   * to live here, on the shared owner.
+   */
+  private readonly reconcileQueue = new PQueue({ concurrency: 1 });
 
   constructor(private readonly host: StagedDeletionHost) {}
 
@@ -255,7 +266,20 @@ export class StagedDeletionCoordinator {
    * restores the directory only into the orphan-cleanup namespace so the
    * execution directory and goal can be removed with the snapshot.
    */
-  async reconcile(
+  reconcile(
+    liveStreams: ReadonlySet<StreamTabId>,
+    selectedStreams?: ReadonlySet<StreamTabId>,
+  ): Promise<{
+    restored: StreamTabId[];
+    pendingCleanup: StreamTabId[];
+    discarded: StreamTabId[];
+  }> {
+    return this.reconcileQueue.add(() =>
+      this.reconcileOnce(liveStreams, selectedStreams),
+    );
+  }
+
+  private async reconcileOnce(
     liveStreams: ReadonlySet<StreamTabId>,
     selectedStreams?: ReadonlySet<StreamTabId>,
   ): Promise<{

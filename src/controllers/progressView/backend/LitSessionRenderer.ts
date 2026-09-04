@@ -64,6 +64,18 @@ export class LitSessionRenderer implements SessionRendererPort {
     StreamTabId,
     ConversationProgress
   >();
+  /**
+   * The streams this renderer has actually put on screen — the roster of the
+   * last `UPDATE_STREAMS`, plus every stream an incremental
+   * `UPDATE_STREAM_METADATA` introduced since. Nothing else remembers it:
+   * both messages are built from live state and keep no copy, and live state
+   * stops listing a stream the moment it is deleted, including when some
+   * other owner deleted it. That is exactly when a row is stranded (the
+   * leftover sweep republishes each swept shell as a `removeStream` fact for
+   * that reason), so this is what answers "is the view still showing this
+   * stream?" once its durable state is already gone.
+   */
+  private readonly renderedStreams = new Set<StreamTabId>();
 
   constructor(
     private readonly state: SessionState,
@@ -98,7 +110,18 @@ export class LitSessionRenderer implements SessionRendererPort {
   dispose(): void {
     this.progressDebounce.cancel();
     this.pendingProgressUpdates.clear();
+    this.renderedStreams.clear();
     this.webviewBridge.clearAll();
+  }
+
+  /** Whether this renderer's last projection put `stream` on screen. */
+  hasRenderedStream(stream: StreamTabId): boolean {
+    return this.renderedStreams.has(stream);
+  }
+
+  /** Forget a stream whose removal this renderer has just projected. */
+  forgetRenderedStream(stream: StreamTabId): void {
+    this.renderedStreams.delete(stream);
   }
 
   clearPendingConversationProgress(streamId: StreamTabId): void {
@@ -373,6 +396,7 @@ export class LitSessionRenderer implements SessionRendererPort {
       streamId,
       this.getActiveStream(),
     );
+    this.renderedStreams.add(streamId);
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
       streamInfo,
@@ -402,6 +426,11 @@ export class LitSessionRenderer implements SessionRendererPort {
     for (const streamInfo of streams) {
       streamStates[streamInfo.name] = this.metadataFor(streamInfo, states);
     }
+
+    // A full refresh replaces the roster wholesale, incremental additions
+    // included: what is not in this message is not on screen any more.
+    this.renderedStreams.clear();
+    for (const streamInfo of streams) this.renderedStreams.add(streamInfo.name);
 
     // Full stream-tabs refresh, carrying the per-stream metadata patch.
     const unsupportedCommands = this.getUnsupportedCommands?.();

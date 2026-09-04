@@ -29,7 +29,7 @@ import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import { createSessionStores } from '@controllers/session/createSessionStores';
+import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { appSignals } from '@eventBus/AppSignals';
 import { SecretManager } from '@frontend/secretManager';
 import {
@@ -497,11 +497,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     ],
   });
   await runtimeSession.waitUntilReady();
-  // The extension's presentation is its own process owner, so it runs the
-  // shared startup sweep here at activation, mirroring the CLI
-  // (`initializeCliTranscriptSession`) and desktop (`initializeDesktopProcessStores`)
-  // hosts rather than deferring it to a later, lazily-constructed presentation.
-  await createSessionStores(runtimeSession).sweepLeftoverStreams();
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );
@@ -633,6 +628,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // fully wrapped in try/catch.)
   setTimeout(() => void initializeLatexSupport(), 0);
   const mainViewProvider = registerCommands(context);
+  // The leftover-stream sweep reads the whole storage root, so it runs after
+  // the commands and views are wired rather than in front of them; nothing
+  // here awaits it, and deactivation cancels it if it has not started.
+  const cancelLeftoverStreamSweep = scheduleLeftoverStreamSweep(runtimeSession);
+  context.subscriptions.push({ dispose: cancelLeftoverStreamSweep });
   registerWalkthroughWorkspaceAction(context, true);
   // Wire the two sidebar surfaces to each other before anything can invoke a
   // placement command: `texra.showProgressView` is registered above and is

@@ -35,6 +35,7 @@ import {
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { prepareMainViewExecutionRequest } from '@controllers/mainView/MainViewExecutionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
+import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
@@ -1388,6 +1389,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             resourcesPath: platformInit.resourcesPath,
           });
         reopenMainWindow();
+        // Off the ready path: the leftover-stream sweep reads the whole
+        // storage root, so it starts after the first window is up and nothing
+        // awaits it. Process shutdown cancels it if it has not started.
+        processResources.add(scheduleLeftoverStreamSweep(processSession));
         if (transcripts.mode.kind === 'ephemeral') {
           void showDesktopWarningDialog(
             ephemeralTranscriptWarning(transcripts.mode.reason),
