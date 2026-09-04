@@ -469,7 +469,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // A broken transcript directory must not abort activation: degrade to an
   // in-memory store and say so, exactly as the CLI TUI does. The degraded
   // session also cannot resume — nothing is persisted for a later run to pick
-  // up, and `SessionHandle` skips restart repair on a non-persistent store.
+  // up, and nothing a later launch could pick up is persisted.
   const transcripts = await StreamLogStore.openOrEphemeral();
   if (transcripts.mode.kind === 'ephemeral') {
     void vscode.window.showWarningMessage(
@@ -496,7 +496,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => disposeDiffRefresh(),
     ],
   });
-  await runtimeSession.waitUntilReady();
   runtimeSession.setApprovalPolicy(
     readPlatformSetting<TexraApprovalPolicy>(TEXRA_APPROVAL_POLICY_CONFIG_KEY),
   );

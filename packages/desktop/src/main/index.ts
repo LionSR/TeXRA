@@ -1287,12 +1287,10 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // A broken transcript directory must not reject whenReady: degrade to
       // an in-memory store and warn once the window exists, exactly as the
       // CLI TUI does. The degraded session also cannot resume — nothing is
-      // persisted for a later launch to pick up, and `SessionHandle` skips
-      // restart repair on a non-persistent store.
+      // persisted for a later launch to pick up.
       const transcripts = await StreamLogStore.openOrEphemeral();
       const processSession = new SessionHandle({
         transcripts,
-        restartRepair: 'deferred',
         responseTextProcessing: createTexraResponseTextProcessing(
           agentResponseTextConnector,
         ),
@@ -1339,7 +1337,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         const processStores =
           await initializeDesktopProcessStores(processSession);
         processResources.add(() => processStores.dispose());
-        await processSession.waitUntilReady();
         processSession.setApprovalPolicy(
           readPlatformSetting<TexraApprovalPolicy>(
             TEXRA_APPROVAL_POLICY_CONFIG_KEY,

@@ -55,14 +55,6 @@ export function track<T extends { dispose(): void }>(disposable: T): T {
   return disposable;
 }
 
-/** A live-store session with restart repair deferred, as the hosts open it. */
-export async function createLiveStoreSession(): Promise<SessionHandle> {
-  return new SessionHandle({
-    transcripts: await StreamLogStore.open(),
-    restartRepair: 'deferred',
-  });
-}
-
 /** Stream controls with every bypass off and no goal — the pre-run default. */
 export const stubStreamControls: GetProgressStreamControls = () => ({
   bypasses: { bash: false, toolEdit: false, superYolo: false },

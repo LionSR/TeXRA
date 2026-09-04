@@ -58,7 +58,7 @@ describe('StreamStatusMachine', () => {
     });
     const streamId = 'stream-status-listener-test' as StreamTabId;
 
-    second.transition(streamId, STREAM_PHASE.CANCELLED, 'restart-repair');
+    second.transition(streamId, STREAM_PHASE.CANCELLED, 'user-stop');
 
     expect(sessionFactsOfType(firstPublished.events, 'status')).toEqual([]);
     expect(sessionFactsOfType(secondPublished.events, 'status')).toHaveLength(
@@ -161,10 +161,8 @@ describe('StreamStatusMachine', () => {
     }
   });
 
-  it.each([
-    STREAM_TRANSITION_CAUSE.LIFECYCLE,
-    STREAM_TRANSITION_CAUSE.RESTART_REPAIR,
-  ])('terminalizes waiting streams through resume then %s', (cause) => {
+  it('terminalizes waiting streams through resume then lifecycle', () => {
+    const cause = STREAM_TRANSITION_CAUSE.LIFECYCLE;
     const { machine, statusEvents, streamId } = setupMachine(
       `stream-status-waiting-terminal-${cause}`,
     );

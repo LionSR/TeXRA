@@ -701,7 +701,11 @@ describe('cliState stream, focus, and child-edge fields', () => {
 
       expect(subagentExecutionLabels.get().get('agent-1')).toBe('codex');
 
-      transitionStatus(session, child1, STREAM_PHASE.FAILED, 'restart-repair');
+      session.status.transitionToTerminal(
+        child1,
+        STREAM_PHASE.FAILED,
+        'lifecycle',
+      );
 
       expect(activeRows(root)).toEqual([]);
       expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.FAILED);
@@ -1778,12 +1782,7 @@ describe('CLI TUI row allocation', () => {
       markToolUseAgent(hub, child1);
       emitParentEdge(hub, child1, root);
 
-      transitionStatus(
-        session,
-        child1,
-        STREAM_PHASE.CANCELLED,
-        'restart-repair',
-      );
+      transitionStatus(session, child1, STREAM_PHASE.CANCELLED, 'user-stop');
 
       activeStreamId.set(child1);
       expect(streamPhaseFor(child1)?.phase).toBe(STREAM_PHASE.CANCELLED);
@@ -1830,7 +1829,7 @@ describe('CLI TUI row allocation', () => {
     });
   });
 
-  it('does not auto-return for WAITING, repair, unrelated, or detached status events', async () => {
+  it('does not auto-return for WAITING, unrelated, or detached status events', async () => {
     await withRunFacts((hub, session) => {
       const detachedChild = 'detached-child' as StreamTabId;
 
@@ -1842,9 +1841,6 @@ describe('CLI TUI row allocation', () => {
 
       transitionStatus(session, child2, STREAM_PHASE.RUNNING, 'lifecycle');
       transitionStatus(session, child2, STREAM_PHASE.FAILED, 'lifecycle');
-      expect(activeStreamId.get()).toBe(child1);
-
-      transitionStatus(session, child1, STREAM_PHASE.FAILED, 'restart-repair');
       expect(activeStreamId.get()).toBe(child1);
 
       transitionStatus(

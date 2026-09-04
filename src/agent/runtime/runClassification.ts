@@ -52,17 +52,13 @@ export type RunClassification =
     };
 
 /** What the durable facts alone decide, ownership already settled. */
-export type RunFactsClassification = Exclude<
+type RunFactsClassification = Exclude<
   RunClassification,
   { kind: 'held_elsewhere' | 'owned_here' }
 >;
 
-/**
- * The one mapping from durable resumability facts to this vocabulary. Callers
- * that have already settled ownership (a settlement lease held) use this
- * directly instead of re-deriving the same three branches.
- */
-export async function classifyRunFacts(
+/** The one mapping from durable resumability facts to this vocabulary. */
+async function classifyRunFacts(
   executionId: ExecutionId,
 ): Promise<RunFactsClassification> {
   const facts = await deriveResumability(executionId);

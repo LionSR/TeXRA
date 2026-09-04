@@ -3,11 +3,12 @@
  *
  * It is a **composition record**, not a facade: it re-exposes no per-concern
  * methods, so callers address each owner directly
- * (`session.interactions.x(...)`, `session.executions.y(...)`). Its sole
- * lifecycle gate, {@link SessionHandle.waitUntilReady}, ensures persistent
- * restart repair has settled before a host exposes the session. It composes
- * {@link ExecutionRegistry}, {@link SessionHostInteractions}, and the other
- * session-scoped owners.
+ * (`session.interactions.x(...)`, `session.executions.y(...)`). It has no
+ * readiness gate: a restored session is usable the moment it is constructed,
+ * and what a stream with no live flow context in this process is gets decided
+ * at read time by `SessionState.resolveStreamPhase`, never by a boot pass. It
+ * composes {@link ExecutionRegistry}, {@link SessionHostInteractions}, and the
+ * other session-scoped owners.
  *
  * A session is one per host context: extension activation (per VS Code window),
  * CLI process, or desktop Electron process. The default instance is installed
@@ -39,10 +40,6 @@ import {
   validateOwnedExecutionLease,
 } from '@agent/storage/executionLease';
 import { finalizeRun } from '@agent/storage/executionLifecycle';
-import {
-  listExecutionStreamReferences,
-  readExecutionStreamIndex,
-} from '@agent/storage/executionListing';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
@@ -55,13 +52,10 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { isInFlightPhase } from '@shared/streams/streamStatus';
-import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import type { RunTraceFlushEntry } from '@transcript/runTrace';
 import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunContextSession, tryUseRunContext } from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
@@ -73,7 +67,6 @@ import {
   type SessionApprovals,
 } from './streamApprovalQueue';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
-import { repairRestartedStreams } from './restartRepair';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 
 const logger = createLog('sessionHandle');
@@ -86,13 +79,8 @@ const logger = createLog('sessionHandle');
  * could be bound to a different hub than `events` and silently drop every
  * status fact. The session always co-constructs the pair instead.
  */
-export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> & {
-  /**
-   * Delay store repair until {@link SessionHandle.waitUntilReady} is called.
-   * Desktop uses this so repair runs only after its process stores are wired.
-   */
-  restartRepair?: 'deferred';
-} & Partial<
+export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
+  Partial<
     Pick<
       SessionHandle,
       'events' | 'snapshots' | 'interactions' | 'responseTextProcessing'
@@ -138,8 +126,6 @@ export class SessionHandle {
    * to skip/retry a focused grandchild `agent()` call.
    */
   readonly workflowControls: WorkflowControlRegistry;
-  private restartRepairPromise: Promise<unknown> | undefined;
-  private readonly restartRepairAbort = new AbortController();
   /** LIFO owner for the session's constructor-registered teardown. */
   private readonly teardown = new DisposableStore();
   constructor(init: SessionHandleInit) {
@@ -194,9 +180,8 @@ export class SessionHandle {
     this.flushers = new Map<string, RunTraceFlushEntry>();
     liveSessions.add(this);
     // Register teardown in reverse LIFO order so `teardown.dispose()` runs the
-    // session's shutdown sequence top-to-bottom: drain traces, abort and
-    // dispose restart repair, then unwind each owner in dependency order,
-    // finally leaving `liveSessions`.
+    // session's shutdown sequence top-to-bottom: drain traces, then unwind
+    // each owner in dependency order, finally leaving `liveSessions`.
     this.teardown.add(() => {
       liveSessions.delete(this);
     });
@@ -211,18 +196,7 @@ export class SessionHandle {
     this.teardown.add(() => this.approvals.clearAll());
     this.teardown.add(() => this.executions.dispose());
     this.teardown.add(() => this.followUps.dispose());
-    this.teardown.add(() => this.restartRepairAbort.abort());
     this.teardown.add(() => this.flushPendingTraces());
-    if (
-      this.transcripts.mode.kind === 'persistent' &&
-      init.restartRepair !== 'deferred'
-    ) {
-      this.restartRepairPromise = this.ensureRestartRepair();
-      // Construction cannot be awaited. Hosts observe the same promise
-      // through waitUntilReady(); this branch only prevents a rejection from
-      // becoming unhandled before the host reaches that boundary.
-      void this.restartRepairPromise.catch(() => undefined);
-    }
   }
 
   /** Live host-neutral approval policy for executable requests. */
@@ -232,265 +206,6 @@ export class SessionHandle {
 
   setApprovalPolicy(policy: TexraApprovalPolicy): void {
     this.texraApprovalPolicy = policy;
-  }
-
-  /**
-   * Wait for canonical stores and restart repair before exposing restored
-   * session state to a host.
-   */
-  waitUntilReady(): Promise<void> {
-    if (
-      this.transcripts.mode.kind !== 'persistent' ||
-      this.restartRepairAbort.signal.aborted
-    ) {
-      return Promise.resolve();
-    }
-    return this.ensureRestartRepair().then(() => undefined);
-  }
-
-  /**
-   * Start the single restart-repair pass, or reuse the in-flight one. Shared
-   * by the constructor and {@link waitUntilReady}; the memoized promise is
-   * the single-flight guard.
-   */
-  private ensureRestartRepair(): Promise<unknown> {
-    if (!this.restartRepairPromise) {
-      this.restartRepairPromise = this.repairStoresAfterRestart();
-    }
-    return this.restartRepairPromise;
-  }
-
-  /**
-   * Whether the repair pass may no longer mutate: session teardown aborted
-   * repair. The read is pure, so every checkpoint below re-reads it.
-   */
-  private isRepairSuperseded(): boolean {
-    return this.restartRepairAbort.signal.aborted;
-  }
-
-  private async repairStoresAfterRestart(): Promise<boolean> {
-    try {
-      if (this.isRepairSuperseded()) return false;
-      await this.snapshots.preload([...this.computeStartupSeedSet()]);
-      if (this.isRepairSuperseded()) return false;
-      await this.runRestartRepair();
-      return true;
-    } catch (error) {
-      logger.warn('Failed to repair session stores after restart', {
-        data: error,
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Streams whose transcript summary still records unfinished output, read
-   * one stream at a time from the always-resident summaries. The store answers
-   * the per-stream question (`hasUnfinishedOutput`) and this owns the scan,
-   * which is the only shape its two callers ever needed.
-   */
-  private unfinishedStreamIds(): Set<StreamTabId> {
-    return new Set(
-      this.transcripts
-        .keys()
-        .filter((streamId) => this.transcripts.hasUnfinishedOutput(streamId)),
-    );
-  }
-
-  /**
-   * The bounded set of streams seeded from their sidecars at startup: every
-   * transcript-unfinished stream plus the transitive parent chain behind each
-   * one, so active runs and their provenance are resident while settled
-   * history stays lazy (#9947). Parent edges come from the always-resident
-   * summary mirror, not the sidecars being seeded.
-   */
-  private computeStartupSeedSet(): ReadonlySet<StreamTabId> {
-    const seed = new Set<StreamTabId>();
-    const pending = [...this.unfinishedStreamIds()];
-    for (let streamId = pending.pop(); streamId; streamId = pending.pop()) {
-      if (seed.has(streamId)) continue;
-      seed.add(streamId);
-      const parent = this.transcripts.getSummaryMeta(streamId)?.parentStreamId;
-      if (parent && !seed.has(parent)) pending.push(parent);
-    }
-    return seed;
-  }
-
-  /**
-   * Classify every stream that can carry a run this process does not run,
-   * and record what the classification proves. Candidates are the bounded
-   * startup seed (transcript-unfinished streams plus their parent chain)
-   * and every stream whose execution still holds a resume checkpoint: a
-   * stopped or failed run closes its transcript group and keeps its
-   * checkpoint, so it is not transcript-unfinished yet must still offer
-   * Resume after a restart. The checkpoint set comes from one scan of the
-   * execution directory (flow-record `stat` + metadata), never from reading
-   * transcripts, so hydration stays bounded (#9947). A stream live in this
-   * process (RUNNING/WAITING with a flow context) is never a candidate:
-   * in-memory phases are facts about this registry, and startup never
-   * remembers one for a run it does not own.
-   */
-  private async runRestartRepair(): Promise<void> {
-    if (this.isRepairSuperseded()) return;
-    const unfinished = this.unfinishedStreamIds();
-    const candidateSet = new Set(this.computeStartupSeedSet());
-    // The scan reads the authoritative `meta.streamId` edge, so it also
-    // resolves ownership for a stream whose sidecar and summary mirror never
-    // persisted an execution id (a crash before either projection flushed).
-    // Resident sidecar identity, merged below, still wins over this seed.
-    const scannedExecutionIds = new Map<StreamTabId, ExecutionId>();
-    try {
-      const { references, unreadable } = await listExecutionStreamReferences({
-        checkpointedOnly: true,
-      });
-      for (const { streamId, executionId } of references) {
-        candidateSet.add(streamId);
-        scannedExecutionIds.set(streamId, executionId);
-      }
-      // A checkpointed execution whose storage could not be read has no
-      // `meta.streamId` to offer. Its stream is still a candidate: attribute
-      // it through the resident execution-id channels so classification
-      // reports it unclassified with the cause instead of letting the row
-      // vanish from discovery into the ready default.
-      if (unreadable.size > 0) {
-        const residentExecutionIds = this.snapshots.getExecutionIdMap();
-        for (const streamId of this.transcripts.keys()) {
-          const executionId = residentExecutionIds.get(streamId);
-          if (executionId && unreadable.has(executionId)) {
-            candidateSet.add(streamId);
-          }
-        }
-      }
-    } catch (error) {
-      // The scan proves nothing when it fails; the seed still gets classified.
-      logger.warn(
-        'Could not list checkpointed executions during restart repair; stopped runs outside the startup seed are not classified',
-        { data: error },
-      );
-    }
-    if (this.isRepairSuperseded()) return;
-    const candidates = [...candidateSet].filter(
-      (streamId) =>
-        this.transcripts.has(streamId) &&
-        !isInFlightPhase(this.status.get(streamId)),
-    );
-    const statusGenerationsAtScan = new Map<StreamTabId, object | undefined>();
-    for (const streamId of candidates) {
-      statusGenerationsAtScan.set(
-        streamId,
-        this.status.getGeneration(streamId),
-      );
-    }
-    // Resident snapshot records already resolved their execution id from the
-    // sidecar when they were seeded (#9947). A candidate outside both the
-    // checkpointed scan and the resident set resolves through the authored
-    // `meta.streamId` index — one full-directory read, only when needed. A
-    // stream absent from all three stays unmapped and is closed as
-    // interrupted with nothing recorded.
-    const executionIds = new Map([
-      ...scannedExecutionIds,
-      ...this.snapshots.getExecutionIdMap(),
-    ]);
-    const unmapped = candidates.filter(
-      (streamId) => !executionIds.has(streamId),
-    );
-    // Streams the index could not prove unowned. Their state is unknown, so
-    // they are shown as unavailable (Delete clears them, Resume re-reads)
-    // instead of being settled as interrupted on a guess.
-    const unreadableStreams = new Map<StreamTabId, string>();
-    if (unmapped.length > 0) {
-      try {
-        const { byStream, unreadable } = await readExecutionStreamIndex();
-        for (const streamId of unmapped) {
-          const executionId = byStream.get(streamId);
-          if (executionId) executionIds.set(streamId, executionId);
-        }
-        // An execution whose storage could not be read has no `meta.streamId`
-        // to attribute, and it may be the owner of any stream still unmapped
-        // here. Attribute the unreadable rows to those streams rather than
-        // letting them fall through to the ready default.
-        if (unreadable.size > 0) {
-          const cause = `${unreadable.size} execution record(s) could not be read`;
-          for (const streamId of unmapped) {
-            if (!executionIds.has(streamId)) {
-              unreadableStreams.set(streamId, cause);
-            }
-          }
-        }
-      } catch (error) {
-        // The index proves nothing when it fails, so neither does the absence
-        // of these streams from it.
-        const cause = `execution identity unreadable (${toErrorMessage(error)})`;
-        for (const streamId of unmapped) unreadableStreams.set(streamId, cause);
-        logger.warn(
-          'Could not read the stream index during restart repair; unmapped streams are left unavailable',
-          { data: error },
-        );
-      }
-    }
-    if (this.isRepairSuperseded()) return;
-    for (const [streamId, cause] of unreadableStreams) {
-      if (
-        this.status.getGeneration(streamId) ===
-        statusGenerationsAtScan.get(streamId)
-      ) {
-        this.status.markUnavailable(streamId, streamUnreadableMessage(cause));
-      }
-    }
-
-    // The ownership scan is async. Refresh resident ownership once here so
-    // the map is current, then let `repairRestartedStreams` revalidate each
-    // candidate immediately before mutation.
-    for (const streamId of candidates) {
-      const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
-        quiet: true,
-      }).executionId;
-      if (residentExecutionId) {
-        executionIds.set(streamId, residentExecutionId);
-      }
-    }
-
-    await repairRestartedStreams({
-      streamStatus: this.status,
-      executionIds,
-      // A candidate with no execution is settled only when its transcript is
-      // still open (closing it as interrupted is the one honest fact); a
-      // closed stream with nothing to classify keeps no phase.
-      repairStreams: candidates.filter(
-        (streamId) =>
-          !unreadableStreams.has(streamId) &&
-          (executionIds.has(streamId) || unfinished.has(streamId)),
-      ),
-      isRepairCandidateCurrent: (streamId, expectedExecutionId) => {
-        if (
-          this.status.getGeneration(streamId) !==
-          statusGenerationsAtScan.get(streamId)
-        ) {
-          return false;
-        }
-        const residentExecutionId = this.snapshots.getRunMetadata(streamId, {
-          quiet: true,
-        }).executionId;
-        return (
-          residentExecutionId === undefined ||
-          residentExecutionId === expectedExecutionId
-        );
-      },
-      closeRunningGroups: async (streamIds, status, now) => {
-        // StreamLogStore commits each settlement through its onChange channel;
-        // attached progress bridges therefore receive dirty-entry deltas
-        // without a host-specific full-view refresh.
-        const closed = await this.transcripts.endRunningGroupsForStreams(
-          streamIds,
-          now,
-          status,
-        );
-        if (closed.length > 0) await this.transcripts.flush();
-        return closed;
-      },
-      logger,
-      signal: this.restartRepairAbort.signal,
-    });
   }
 
   /** Drain one execution's pending trace, or every trace during shutdown. */

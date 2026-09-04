@@ -22,10 +22,7 @@ interface StreamStatusEmitOptions {
 
 type WaitingTransitionCause = Extract<StreamTransitionCause, 'wait'>;
 
-type TerminalTransitionCause = Extract<
-  StreamTransitionCause,
-  'lifecycle' | 'restart-repair'
->;
+type TerminalTransitionCause = Extract<StreamTransitionCause, 'lifecycle'>;
 
 export interface StreamPhaseState {
   readonly phase: StreamPhase;
@@ -112,11 +109,6 @@ export class StreamStatusMachine {
   getStreamState(stream: StreamTabId): StreamPhaseState | undefined {
     const entry = this.streams.get(stream);
     return entry ? effectiveState(entry) : undefined;
-  }
-
-  /** Opaque identity replaced whenever this stream's status entry changes. */
-  getGeneration(stream: StreamTabId): object | undefined {
-    return this.streams.get(stream);
   }
 
   getSubstate(stream: StreamTabId): StreamSubstate | undefined {
@@ -269,9 +261,9 @@ export class StreamStatusMachine {
 
   /**
    * Drive a stream to a terminal phase, escalating through the RUNNING
-   * choreography the table requires. `cause` is the caller's own reason —
-   * restart repair and the run lifecycle share this single ladder rather than
-   * each carrying a copy of it.
+   * choreography the table requires. `cause` is the caller's own reason, so
+   * every terminal writer shares this single ladder rather than carrying a
+   * copy of it.
    */
   transitionToTerminal(
     stream: StreamTabId,
@@ -300,7 +292,7 @@ export class StreamStatusMachine {
   }
 
   /**
-   * Record why restart classification could not settle this stream. Returns
+   * Record why this stream cannot be settled. Returns
    * `false` without writing when a live reservation owns the stream: a hold
    * describes a run some earlier process left behind, which a reservation has
    * by definition superseded, and overwriting one strands the tab — a hold is
@@ -346,9 +338,10 @@ export class StreamStatusMachine {
   }
 
   /**
-   * Drop a hold, restoring the phase it retained. Restart repair calls this
-   * when a classification resolves without writing a phase; a `transition`
-   * that does write replaces the hold with the phase it lands on.
+   * Drop a hold, restoring the phase it retained. The callers that open a run
+   * for write call this when they finish without writing a phase — a resume
+   * that reattaches, and a follow-up the session refuses; a `transition` that
+   * does write replaces the hold with the phase it lands on.
    *
    * `discardRetainedPhase` drops that retained phase with the hold. A hold
    * written after a failed tool-use resume carries the WAITING its rollback

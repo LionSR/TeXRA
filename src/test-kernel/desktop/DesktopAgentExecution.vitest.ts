@@ -15,10 +15,6 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionEvent, SessionFact } from '@agent/runtime/SessionEventHub';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import type {
-  repairRestartedStreams as RepairRestartedStreams,
-  RestartRepairOptions,
-} from '@agent/runtime/restartRepair';
 import type { PlanApprovalResult } from '@agent/runtime/HostInteractions';
 import {
   AgentConfigSchema,
@@ -49,7 +45,6 @@ import {
   MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
 } from '@shared/ipc';
-import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
@@ -139,7 +134,6 @@ type TestableBridge = {
     requestEviction(streamId: StreamTabId): void;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
     keys(): StreamTabId[];
-    hasUnfinishedOutput(streamId: StreamTabId): boolean;
     get(streamId: StreamTabId):
       | {
           getRange(fromSeq: number): Array<{
@@ -239,13 +233,6 @@ function bridgeStatus(bridge: TestableBridge): StreamStatusMachine {
   return bridgeSession(bridge).status;
 }
 
-/** Streams whose transcript summary still records unfinished output. */
-function unfinishedStreamIds(
-  streamLogs: TestableBridge['streamLogs'],
-): StreamTabId[] {
-  return streamLogs.keys().filter((id) => streamLogs.hasUnfinishedOutput(id));
-}
-
 /** Drive stream deletion through the same inbound command path the
  * renderer uses, so these tests cover the production wiring. */
 async function deleteStreamViaInbound(
@@ -299,8 +286,11 @@ type CreateBridgeOptions = {
   ) => Promise<void> | void;
   configureSession?: (session: SessionHandle) => Promise<void> | void;
   deferReady?: boolean;
-  /** Intercept the restart-repair pass; `original` runs the real one. */
-  repairRestartedStreams?: RepairRestartedStreamsMock;
+  /**
+   * Held open around the presentation load's first awaited step (the shared
+   * deletion drain), so a test can observe the bridge mid-initialization.
+   */
+  gateCanonicalLoad?: () => Promise<void>;
   showErrorMessage?: (message: string) => Promise<void> | void;
   showInfoMessage?: (message: string) => Promise<void> | void;
   showInstructionDialog?: (
@@ -315,15 +305,6 @@ type CreateBridgeOptions = {
   /** Captures `this.logger.error(...)` calls made by the bridge under test. */
   loggerErrorSpy?: ReturnType<typeof vi.fn<AgentTrace['error']>>;
 };
-
-type RepairRestartedStreamsMock = ReturnType<
-  typeof vi.fn<
-    (
-      options: RestartRepairOptions,
-      original: typeof RepairRestartedStreams,
-    ) => Promise<void>
-  >
->;
 
 type ProgressMessage = {
   command?: string;
@@ -406,18 +387,6 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(),
   }));
-  mocks.doMock('@agent/runtime/restartRepair', async (importOriginal) => {
-    const original =
-      await importOriginal<typeof import('@agent/runtime/restartRepair')>();
-    const injected = options.repairRestartedStreams;
-    return {
-      ...original,
-      repairRestartedStreams: injected
-        ? (repairOptions: RestartRepairOptions) =>
-            injected(repairOptions, original.repairRestartedStreams)
-        : original.repairRestartedStreams,
-    };
-  });
   mocks.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
       constructor(private readonly dir: string) {}
@@ -488,16 +457,11 @@ async function loadBridgeModule(options: CreateBridgeOptions = {}): Promise<{
     await import('@agent/runtime/SessionHandle');
   initializeDefaultSession({
     transcripts: StreamLogStore.ephemeral('desktop module test default'),
-    restartRepair: 'deferred',
   });
   return {
     bridgeModule,
     createSession: (transcripts, snapshots) =>
-      new SessionHandle({
-        transcripts,
-        snapshots,
-        restartRepair: 'deferred',
-      }),
+      new SessionHandle({ transcripts, snapshots }),
     createProgressSnapshotStore,
     openTranscripts: () => StreamLogStore.open(),
     processResumeOwner,
@@ -550,9 +514,22 @@ async function createBridge(
     },
   });
   const disposeResumeHandler = processResumeOwner.attach({ session });
+  if (options.gateCanonicalLoad) {
+    const gate = options.gateCanonicalLoad;
+    const drain =
+      sessionStores.waitForPendingStreamDeletions.bind(sessionStores);
+    let gated = false;
+    vi.spyOn(sessionStores, 'waitForPendingStreamDeletions').mockImplementation(
+      async () => {
+        if (!gated) {
+          gated = true;
+          await gate();
+        }
+        return drain();
+      },
+    );
+  }
   await options.configureSession?.(session);
-  const sessionReady = session.waitUntilReady();
-  if (!options.deferReady) await sessionReady;
   const bridgeOptions: DesktopProgressBridgeOptions = {
     session,
     sessionStores,
@@ -585,11 +562,6 @@ async function createBridge(
     bridgeOptions,
     { session, snapshots: progressSnapshotStore },
   );
-  const waitForPresentation = bridge.waitUntilReady.bind(bridge);
-  bridge.waitUntilReady = async () => {
-    await sessionReady;
-    await waitForPresentation();
-  };
   disposeAfterTest({
     dispose: () => {
       bridge.dispose();
@@ -701,19 +673,6 @@ describe('desktop follow-up submission', () => {
     );
   });
 });
-
-function appendRunningGroup(
-  store: StreamLogStore,
-  streamId: StreamTabId,
-): void {
-  appendTranscriptEntry(store, streamId, {
-    id: `${streamId}-running-group`,
-    type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-    level: LOG_LEVELS.INFO,
-    timestamp: 1_000,
-    data: { status: STREAM_PHASE.RUNNING },
-  });
-}
 
 function workflowConfig(): AgentConfig {
   return WorkflowAgentConfigSchema.parse({
@@ -858,30 +817,22 @@ function expectPermissionResolved(
   ).toContainEqual(expect.objectContaining({ action: 'resolve', kind, id }));
 }
 
-function expectLastLogGroupEnd(
-  streamLogs: TestableBridge['streamLogs'],
-  streamId: StreamTabId,
-  status: string,
-): void {
-  expect(streamLogs.get(streamId)?.getRange(0).at(-1)).toMatchObject({
-    type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-    data: { status },
-  });
-}
-
-/** Restart-repair mock that blocks restart initialization on a gate. */
-function gatedRestartRepair(): {
+/** Holds the presentation load open so a test can observe mid-initialization. */
+function gatedCanonicalLoad(): {
   initializationStarted: ReturnType<typeof createDeferred<void>>;
   initializationGate: ReturnType<typeof createDeferred<void>>;
-  repairRestartedStreams: RepairRestartedStreamsMock;
+  gateCanonicalLoad: () => Promise<void>;
 } {
   const initializationStarted = createDeferred();
   const initializationGate = createDeferred();
-  const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(async () => {
-    initializationStarted.resolve();
-    await initializationGate.promise;
-  });
-  return { initializationStarted, initializationGate, repairRestartedStreams };
+  return {
+    initializationStarted,
+    initializationGate,
+    gateCanonicalLoad: async () => {
+      initializationStarted.resolve();
+      await initializationGate.promise;
+    },
+  };
 }
 
 function searchToolUseResumeData(): ReturnType<typeof createToolUseResumeData> {
@@ -1064,15 +1015,12 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('reports a completed root result while canonical initialization is gated exactly once', async () => {
-    const {
-      initializationStarted,
-      initializationGate,
-      repairRestartedStreams,
-    } = gatedRestartRepair();
+    const { initializationStarted, initializationGate, gateCanonicalLoad } =
+      gatedCanonicalLoad();
     const onRunCompleted = vi.fn();
     const bridge = await createBridge([], {
       deferReady: true,
-      repairRestartedStreams,
+      gateCanonicalLoad,
       onRunCompleted,
     });
     await initializationStarted.promise;
@@ -1090,15 +1038,12 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('detaches the completed-result listener when disposed during initialization', async () => {
-    const {
-      initializationStarted,
-      initializationGate,
-      repairRestartedStreams,
-    } = gatedRestartRepair();
+    const { initializationStarted, initializationGate, gateCanonicalLoad } =
+      gatedCanonicalLoad();
     const onRunCompleted = vi.fn();
     const bridge = await createBridge([], {
       deferReady: true,
-      repairRestartedStreams,
+      gateCanonicalLoad,
       onRunCompleted,
     });
     await initializationStarted.promise;
@@ -1582,180 +1527,6 @@ describe('DesktopProgressBridge', () => {
     ).toMatchObject({ status: STREAM_STATUS.RUNNING });
   });
 
-  it('classifies unfinished streams from canonical execution mappings', async () => {
-    const waitingStream = 'waiting-stream' as StreamTabId;
-    const crashedStream = 'crashed-stream' as StreamTabId;
-    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
-      async (options, original) => {
-        expect([...options.executionIds.entries()].toSorted()).toEqual([
-          [crashedStream, 'def456'],
-          [waitingStream, 'abc123'],
-        ]);
-        return original({
-          ...options,
-          classifyRun: async (executionId) =>
-            executionId === 'abc123'
-              ? { kind: 'resumable' }
-              : { kind: 'finished' },
-        });
-      },
-    );
-    const bridge = await createBridge([], {
-      canonicalStreamIds: [waitingStream, crashedStream],
-      configureTranscripts: (store) => {
-        appendRunningGroup(store, waitingStream);
-        appendRunningGroup(store, crashedStream);
-      },
-      configureProgressSnapshotStore: (store) => {
-        const config = workflowConfig();
-        snapshotFacts(store).setRunConfig(waitingStream, config, 'abc123');
-        snapshotFacts(store).setRunConfig(crashedStream, config, 'def456');
-      },
-      repairRestartedStreams,
-    });
-
-    // A checkpointed stream is settled as interrupted, never adopted as
-    // WAITING: Resume is the only way to continue it.
-    expect(repairRestartedStreams).toHaveBeenCalledOnce();
-    expect(bridgeStatus(bridge).get(waitingStream)).toBe(
-      STREAM_PHASE.CANCELLED,
-    );
-    expect(bridgeStatus(bridge).get(crashedStream)).toBe(
-      STREAM_PHASE.CANCELLED,
-    );
-    expectLastLogGroupEnd(
-      bridge.streamLogs,
-      waitingStream,
-      RUN_OUTCOME.CANCELLED,
-    );
-    expectLastLogGroupEnd(
-      bridge.streamLogs,
-      crashedStream,
-      RUN_OUTCOME.CANCELLED,
-    );
-  });
-
-  it('starts a fresh process session on restart and repairs waiting and orphaned streams', async () => {
-    const waitingStream = 'restart-waiting' as StreamTabId;
-    const orphanedStream = 'restart-orphaned' as StreamTabId;
-    const executionId = 'ec0e57a7' as ExecutionId;
-    const kvStoreBacking = new Map<string, unknown>();
-    const first = await createBridge([], { kvStoreBacking });
-    const firstSession = bridgeSession(first);
-    const firstSnapshots = bridgeSnapshots(first);
-    const runConfig = workflowConfig();
-
-    appendRunningGroup(
-      first.streamLogs as unknown as StreamLogStore,
-      waitingStream,
-    );
-    appendRunningGroup(
-      first.streamLogs as unknown as StreamLogStore,
-      orphanedStream,
-    );
-    snapshotFacts(firstSnapshots).setRunConfig(
-      waitingStream,
-      runConfig,
-      executionId,
-    );
-    const { getExecutionStore } = await import('@agent/storage');
-    await getExecutionStore(executionId).writeRunRecord(runConfig);
-    await firstSnapshots.flush();
-    await firstSession.flushArtifacts();
-    first.dispose();
-    firstSession.dispose();
-
-    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
-      async (options, original) =>
-        original({
-          ...options,
-          classifyRun: async () => ({ kind: 'resumable' }),
-        }),
-    );
-    const second = await createBridge([], {
-      kvStoreBacking,
-      repairRestartedStreams,
-    });
-    const secondSession = bridgeSession(second);
-
-    expect(secondSession).not.toBe(firstSession);
-    expect(secondSession.executions).not.toBe(firstSession.executions);
-    expect(repairRestartedStreams.mock.calls[0]?.[0].executionIds).toEqual(
-      new Map([[waitingStream, executionId]]),
-    );
-    expect(bridgeStatus(second).get(waitingStream)).toBe(
-      STREAM_PHASE.CANCELLED,
-    );
-    expect(second.streamLogs.get(waitingStream)).toBeUndefined();
-    expect(second.streamLogs.get(orphanedStream)).toBeUndefined();
-
-    await Promise.all([
-      second.streamLogs.ensureLoaded(waitingStream),
-      second.streamLogs.ensureLoaded(orphanedStream),
-    ]);
-    expectLastLogGroupEnd(
-      second.streamLogs,
-      waitingStream,
-      RUN_OUTCOME.CANCELLED,
-    );
-    expectLastLogGroupEnd(
-      second.streamLogs,
-      orphanedStream,
-      RUN_OUTCOME.CANCELLED,
-    );
-    await getExecutionStore(executionId).clear();
-  });
-
-  it('repairs a crashed unfinished canonical log without legacy metadata', async () => {
-    const streamId = 'unfinished-stream' as StreamTabId;
-    const bridge = await createBridge([], {
-      canonicalStreamIds: [streamId],
-      configureTranscripts: (store) => appendRunningGroup(store, streamId),
-    });
-
-    expect(unfinishedStreamIds(bridge.streamLogs)).toEqual([]);
-    expectLastLogGroupEnd(bridge.streamLogs, streamId, RUN_OUTCOME.CANCELLED);
-    expect(bridgeStatus(bridge).get(streamId)).toBe(STREAM_PHASE.CANCELLED);
-  });
-
-  it('keeps the bridge initializing when an unfinished run cannot be classified', async () => {
-    const mappedStream = 'mapped-stream' as StreamTabId;
-    const executionId = 'ca110ad' as ExecutionId;
-    const classificationError = new Error('flow records unavailable');
-    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
-      async (options, original) =>
-        original({
-          ...options,
-          classifyRun: async () => {
-            throw classificationError;
-          },
-        }),
-    );
-
-    const bridge = await createBridge([], {
-      canonicalStreamIds: [mappedStream],
-      configureTranscripts: (store) => appendRunningGroup(store, mappedStream),
-      configureProgressSnapshotStore: (store) => {
-        snapshotFacts(store).setRunConfig(
-          mappedStream,
-          workflowConfig(),
-          executionId,
-        );
-      },
-      repairRestartedStreams,
-    });
-
-    // One unreadable run never takes the host down: the stream is shown as
-    // unavailable with its cause, nothing is mutated, and its transcript
-    // stays open.
-    expect(repairRestartedStreams).toHaveBeenCalledOnce();
-    expect(bridgeStatus(bridge).get(mappedStream)).toBeUndefined();
-    expect(bridgeStatus(bridge).holdState(mappedStream)).toBe(
-      streamUnreadableMessage('flow records unavailable'),
-    );
-    expect(unfinishedStreamIds(bridge.streamLogs)).toEqual([mappedStream]);
-  });
-
   it('presents a merge failure that occurs before lifecycle startup', async () => {
     const runAgent = vi.fn(
       async (
@@ -1852,47 +1623,11 @@ describe('DesktopProgressBridge', () => {
   });
 
   it('fails desktop bridge initialization when transcript opening fails', async () => {
-    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn();
     const failure = new Error('stream log store unavailable');
 
     await expect(
-      createBridge([], {
-        repairRestartedStreams,
-        transcriptOpenError: failure,
-      }),
+      createBridge([], { transcriptOpenError: failure }),
     ).rejects.toBe(failure);
-    expect(repairRestartedStreams).not.toHaveBeenCalled();
-  });
-
-  it('loads canonical sidecars before restart repair', async () => {
-    const streamId = 'canonical-stream' as StreamTabId;
-    const executionId = 'ca110ad' as ExecutionId;
-    let snapshots: ProgressSnapshotStore | undefined;
-    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
-      async () => {
-        expect(snapshots?.getRunMetadata(streamId).executionId).toBe(
-          executionId,
-        );
-      },
-    );
-
-    await createBridge([], {
-      canonicalStreamIds: [streamId],
-      configureTranscripts: (store) => appendRunningGroup(store, streamId),
-      configureProgressSnapshotStore: (store) => {
-        snapshots = store;
-        snapshotFacts(store).setRunConfig(
-          streamId,
-          workflowConfig(),
-          executionId,
-        );
-      },
-      repairRestartedStreams,
-    });
-
-    expect(repairRestartedStreams.mock.calls[0]?.[0].executionIds).toEqual(
-      new Map([[streamId, executionId]]),
-    );
   });
 
   it('subscribes before attaching and projecting process-owned live children', async () => {
@@ -1901,9 +1636,6 @@ describe('DesktopProgressBridge', () => {
 
     const bridge = await createBridge([], {
       canonicalStreamIds: [streamId],
-      repairRestartedStreams: vi.fn(async () => {
-        order.push('load');
-      }),
       configureSession: async (session) => {
         const { AgentExecutionHandle } =
           await import('@agent/runtime/ExecutionHandle');
@@ -1943,19 +1675,16 @@ describe('DesktopProgressBridge', () => {
     });
     await bridge.completeWebviewReady();
 
-    expect(order.indexOf('load')).toBeLessThan(order.indexOf('subscribe'));
     expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('attach'));
     expect(order.indexOf('subscribe')).toBeLessThan(order.indexOf('render'));
   });
 
   it('preserves queued notices when approval replay closes the attaching presentation', async () => {
-    let finishRepair!: () => void;
-    const repairGate = new Promise<void>((resolve) => {
-      finishRepair = resolve;
+    let finishLoad!: () => void;
+    const loadGate = new Promise<void>((resolve) => {
+      finishLoad = resolve;
     });
-    const repairRestartedStreams: RepairRestartedStreamsMock = vi.fn(
-      async () => repairGate,
-    );
+    const loadStarted = createDeferred();
     const firstInstruction = vi.fn(async () => undefined);
     const bridgeRef: { current?: TestableBridge } = {};
 
@@ -1974,7 +1703,10 @@ describe('DesktopProgressBridge', () => {
         });
       },
       deferReady: true,
-      repairRestartedStreams,
+      gateCanonicalLoad: async () => {
+        loadStarted.resolve();
+        await loadGate;
+      },
       showInstructionDialog: firstInstruction,
       observeRendererMessage: (message) => {
         const progress = message as ProgressMessage;
@@ -1987,8 +1719,8 @@ describe('DesktopProgressBridge', () => {
       },
     });
     bridgeRef.current = bridge;
-    await vi.waitFor(() => expect(repairRestartedStreams).toHaveBeenCalled());
-    finishRepair();
+    await loadStarted.promise;
+    finishLoad();
     await bridge.waitUntilReady();
 
     const interactions = bridgeInteractions(bridge) as unknown as {
@@ -2887,14 +2619,12 @@ describe('DesktopProgressBridge', () => {
       agentName = 'proofreader',
       category = AgentCategory.Workflow,
       messages = [],
-      repairRestartedStreams,
     }: {
       streamId: StreamTabId;
       executionId: ExecutionId;
       agentName?: string;
       category?: AgentCategory;
       messages?: unknown[];
-      repairRestartedStreams?: RepairRestartedStreamsMock;
     }) {
       const {
         bridgeModule,
@@ -2902,7 +2632,7 @@ describe('DesktopProgressBridge', () => {
         createSession,
         openTranscripts,
         processResumeOwner,
-      } = await loadBridgeModule({ repairRestartedStreams });
+      } = await loadBridgeModule({});
       const { AgentExecutionHandle } =
         await import('@agent/runtime/ExecutionHandle');
       const { getExecutionStore } = await import('@agent/storage');
@@ -2922,7 +2652,6 @@ describe('DesktopProgressBridge', () => {
         await import('@desktop/main/desktopProcessStores');
       const processStores =
         await initializeDesktopProcessStores(processSession);
-      await processSession.waitUntilReady();
       const { stores: sessionStores } = processStores;
       const disposeResumeHandler = processResumeOwner.attach({
         session: processSession,
@@ -3168,11 +2897,17 @@ describe('DesktopProgressBridge', () => {
             expect.objectContaining({ name: streamId }),
           ]),
         });
-        expect(
-          owner.progressSnapshotStore
-            .getRunUsage(childStreamId)
-            .get(childExecutionId),
-        ).toMatchObject({ inputTokens: 5, outputTokens: 2, cost: 0.01 });
+        // A record seeded while this reads is momentarily back at its disk
+        // state, and replays the eager in-memory facts when the seed lands.
+        // Nothing awaits a hydration for the reader now that no boot pass
+        // does, so converge on the replayed value rather than one tick of it.
+        await vi.waitFor(() => {
+          expect(
+            owner.progressSnapshotStore
+              .getRunUsage(childStreamId)
+              .get(childExecutionId),
+          ).toMatchObject({ inputTokens: 5, outputTokens: 2, cost: 0.01 });
+        });
         expect(
           bridgeB.streamLogs
             .get(streamId)

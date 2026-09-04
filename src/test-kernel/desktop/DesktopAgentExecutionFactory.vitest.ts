@@ -80,7 +80,14 @@ async function createExecution(options: {
   transcriptOpenError?: Error;
   presentationSignal?: AbortSignal;
   inspectSession?: (session: SessionHandle) => void;
-  repairRestartedStreams?: ReturnType<typeof vi.fn>;
+  /**
+   * Called with the process stores after they are wired and before the
+   * presentation is created, so a test can gate an awaited step of the
+   * presentation load.
+   */
+  inspectStores?: (stores: {
+    waitForPendingStreamDeletions(): Promise<void>;
+  }) => void;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   const { initPlatform } = await import('@platform/platform');
@@ -94,15 +101,6 @@ async function createExecution(options: {
   mocks.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(async () => {}),
   }));
-  mocks.doMock('@agent/runtime/restartRepair', async (importOriginal) => {
-    const original =
-      await importOriginal<typeof import('@agent/runtime/restartRepair')>();
-    return {
-      ...original,
-      repairRestartedStreams:
-        options.repairRestartedStreams ?? original.repairRestartedStreams,
-    };
-  });
   if (options.resolveTeamLaunch) {
     mocks.doMock('@common/teams/TeamPlan', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@common/teams/TeamPlan')>()),
@@ -147,11 +145,10 @@ async function createExecution(options: {
   const session = new SessionHandle({
     transcripts,
     snapshots: progressSnapshotStore,
-    restartRepair: 'deferred',
   });
   options.inspectSession?.(session);
   const processStores = await initializeDesktopProcessStores(session);
-  await session.waitUntilReady();
+  options.inspectStores?.(processStores.stores);
   let execution: DesktopExecution;
   try {
     execution = await createDesktopAgentExecution({
@@ -195,20 +192,30 @@ describe('createDesktopAgentExecution', () => {
     vi.restoreAllMocks();
   });
 
-  it('never attaches a presentation when its window closes during repair', async () => {
+  it('never attaches a presentation when its window closes during the load', async () => {
     const controller = new AbortController();
     const loadGate = createDeferred();
-    const detectionStarted = createDeferred();
+    const loadStarted = createDeferred();
     const attached = vi.fn();
     const detached = vi.fn();
-    const repairRestartedStreams = vi.fn(async () => {
-      detectionStarted.resolve();
-      await loadGate.promise;
-    });
     const creation = createExecution({
       presentationSignal: controller.signal,
       prepareMainViewExecutionRequest: vi.fn(),
-      repairRestartedStreams,
+      // The presentation load's first awaited step. Gating it holds the
+      // creation open before any window-owned adapter can attach.
+      inspectStores: (stores) => {
+        const drain = stores.waitForPendingStreamDeletions.bind(stores);
+        let gated = false;
+        vi.spyOn(stores, 'waitForPendingStreamDeletions').mockImplementation(
+          async () => {
+            if (gated) return drain();
+            gated = true;
+            loadStarted.resolve();
+            await loadGate.promise;
+            return drain();
+          },
+        );
+      },
       inspectSession: (session) => {
         const useInteractions = session.interactions.use.bind(
           session.interactions,
@@ -226,8 +233,7 @@ describe('createDesktopAgentExecution', () => {
       },
     });
 
-    await detectionStarted.promise;
-    expect(repairRestartedStreams).toHaveBeenCalledOnce();
+    await loadStarted.promise;
     controller.abort();
     expect(attached).not.toHaveBeenCalled();
     expect(detached).not.toHaveBeenCalled();

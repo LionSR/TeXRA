@@ -247,7 +247,7 @@ describe('WebviewBridge', () => {
     );
   });
 
-  it('pushes restart-repair group settlements through log deltas', async () => {
+  it('pushes group settlements through log deltas', async () => {
     const repairStream = 'active-repair' as StreamTabId;
     const { store, sendMessage, bridge } = setupBridge({
       activeStream: () => repairStream,

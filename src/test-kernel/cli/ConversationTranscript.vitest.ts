@@ -365,10 +365,18 @@ describe('CLI conversation transcript', () => {
         ...slice,
         entries: [entry('a1', 'assistant', 'A final answer.', false)],
       }));
+      // The transition table only reaches a terminal phase from RUNNING, so
+      // open the run window before the pipeline attaches: the pipeline still
+      // observes exactly the one terminal fact this case is about.
+      defaultSession().status.transition(
+        streamId,
+        STREAM_PHASE.RUNNING,
+        'lifecycle',
+      );
       const dispose = attachStatusPipeline();
 
       try {
-        defaultSession().status.transition(streamId, outcome, 'restart-repair');
+        defaultSession().status.transition(streamId, outcome, 'lifecycle');
 
         const slice = streams.get().get(streamId);
         expect(slice?.entries.map((item) => item.id)).toEqual(['a1']);

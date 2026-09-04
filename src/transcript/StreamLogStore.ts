@@ -436,8 +436,7 @@ export class StreamLogStore {
    * degradation is loud: the cause is logged here and recorded in
    * `mode.reason`, which callers render through
    * {@link ephemeralTranscriptWarning}. A non-persistent store also disables
-   * resume — `SessionHandle` skips restart repair and nothing was persisted
-   * to resume from.
+   * resume — nothing was persisted to resume from.
    */
   static async openOrEphemeral(
     open: () => Promise<StreamLogStore> = () => StreamLogStore.open(),
@@ -509,10 +508,9 @@ export class StreamLogStore {
   /**
    * Whether this stream's transcript was left with something running — a task
    * group, a streaming text block, or a nonterminal workflow call. Answered
-   * from the always-resident summary, so a read-time phase derivation can ask
-   * it per stream without loading the log, and the two startup scans that
-   * wanted the whole unfinished set filter {@link keys} through it instead of
-   * asking for a second list.
+   * from the always-resident summary, so the read-time phase rule and the
+   * row-open settle beside it each ask for one stream, without loading the
+   * log and without a scan of the whole set.
    */
   hasUnfinishedOutput(streamId: StreamTabId): boolean {
     return hasSomethingRunning(this.summaries.get(streamId));

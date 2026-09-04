@@ -742,7 +742,6 @@ describe('ProgressBackend cleanup', () => {
 
     const second = await createPersistentRecordingBackend();
     try {
-      await second.session.waitUntilReady();
       await second.backend.state.load();
       await second.backend.state.stores.sweepLeftoverStreams();
 
@@ -806,7 +805,6 @@ describe('ProgressBackend cleanup', () => {
 
     const second = await createPersistentRecordingBackend();
     try {
-      await second.session.waitUntilReady();
       await second.backend.state.load();
       second.backend.setupEventListeners();
       // The rail paints the persisted shell before the deferred sweep runs:

@@ -1,4 +1,5 @@
 import {
+  finalizeRun,
   getExecutionStore,
   readExecutionMetaCore,
   SessionStores,
@@ -7,6 +8,7 @@ import {
 } from '@agent/storage';
 import {
   inspectExecutionLease,
+  runWithInactiveExecutionLease,
   type ExecutionLeasePresence,
 } from '@agent/storage/executionLease';
 import { flowKey } from '@agent/node/persistedFlow';
@@ -32,6 +34,7 @@ import {
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
+  RUN_OUTCOME,
   STREAM_PHASE,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
@@ -404,6 +407,13 @@ export class SessionState {
    * rule renders read-only with the cause rather than as a run that never
    * happened.
    *
+   * The one write it can make is {@link settleInterruptedRun}, for the row
+   * the tuple proves nobody is producing and nobody ever finished. It happens
+   * here rather than on a timer because a settle is a write over shared
+   * execution and transcript state: bounding it to the row a user just opened
+   * is what keeps it one stream per user action instead of a background pass
+   * racing every other host over the whole history.
+   *
    * ORDERING INVARIANT — lease, then checkpoint, then outcome, sequentially.
    * A foreign finalize writes the outcome, deletes the checkpoint, then
    * releases the lease. Reading in that same order means a free lease is
@@ -422,16 +432,114 @@ export class SessionState {
     // a `claimStreamIdentity` that drops a tombstone without touching the
     // mirror; the execution-id comparison alone would miss both.
     const incarnation = this.incarnationOf(stream);
-    const facts = await this.readRunFacts(executionId);
-    // Re-checked after the reads: a deletion, a re-claim, or a fresh
-    // execution during them makes this tuple somebody else's.
-    if (this.isStreamRemoved(stream)) return;
-    if (this.incarnationOf(stream) !== incarnation) return;
-    if (this.getStreamMetadata(stream).executionId !== executionId) return;
+    // Re-checked after every read below: a deletion, a re-claim, or a fresh
+    // execution during one makes this tuple somebody else's.
+    const stillThisRun = (): boolean =>
+      !this.isStreamRemoved(stream) &&
+      this.incarnationOf(stream) === incarnation &&
+      this.getStreamMetadata(stream).executionId === executionId;
+
+    let facts = await this.readRunFacts(executionId);
+    if (!stillThisRun()) return;
+    // Nobody is producing this stream, nobody ever recorded what happened to
+    // it, and its transcript is still open: the run was interrupted, and this
+    // row's open is the one user action in a position to say so durably. A
+    // failed authority read leaves no lease behind, so requiring `free` also
+    // excludes an authority this process could not read.
+    if (
+      executionId !== undefined &&
+      facts.lease?.status === 'free' &&
+      facts.outcome === undefined &&
+      this.streamLogs.hasUnfinishedOutput(stream) &&
+      (await this.settleInterruptedRun(stream, executionId))
+    ) {
+      // The row must render what the settle wrote, not the tuple that asked
+      // for it: this re-read is where the CANCELLED outcome enters the facts.
+      facts = await this.readRunFacts(executionId);
+      if (!stillThisRun()) return;
+    }
     // Published even when it is empty: the entry's existence is what says
     // this row has been read, and an empty tuple is the honest answer for a
     // stream that never had an execution.
     this._runFacts.set(stream, Object.freeze(facts));
+  }
+
+  /**
+   * Record the interruption of the one run this row's open found abandoned,
+   * so a host that died mid-flight stops leaving a transcript that renders as
+   * in-progress forever (#7276) and a run with no durable outcome at all.
+   *
+   * `runWithInactiveExecutionLease` is both the lock and the liveness proof:
+   * it grants its claim only when no live process owns the execution, so a
+   * refusal is a live owner and means no write whatsoever. Inside the claim
+   * the outcome is read again — the one fact that can have changed since the
+   * unsynchronized tuple read — and `keepExistingOutcome` keeps the decision
+   * and the write in a single locked cycle even if a finalize lands between
+   * the two.
+   *
+   * The checkpoint is preserved whatever its state: this records an
+   * interruption, it never cleans up after one, and a cancelled run's
+   * checkpoint is exactly what the user resumes from.
+   *
+   * One stream per call, from the row-open path only. Nothing here walks a
+   * roster: a run nobody opens is settled the day somebody opens it.
+   *
+   * @returns Whether the CANCELLED outcome was written. `false` leaves the
+   *   read-time derivation in place, which already renders the row as
+   *   interrupted — the settle makes it durable, it does not make it visible.
+   */
+  private async settleInterruptedRun(
+    stream: StreamTabId,
+    executionId: ExecutionId,
+  ): Promise<boolean> {
+    try {
+      const maintenance = await runWithInactiveExecutionLease(
+        executionId,
+        async () => {
+          const meta = await readExecutionMetaCore(
+            getExecutionStore(executionId),
+          );
+          if (meta?.outcome != null) return false;
+          const finalized = await finalizeRun({
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            keepExistingOutcome: true,
+            report: (error) =>
+              this.logger.warn(error.message, {
+                data: { stream, executionId, error },
+              }),
+          });
+          if (!finalized.ok) return false;
+          await this.streamLogs.endRunningGroupsForStreams(
+            [stream],
+            Date.now(),
+            RUN_OUTCOME.CANCELLED,
+          );
+          await this.streamLogs.flush();
+          return true;
+        },
+      );
+      if (maintenance.status === 'active') {
+        this.logger.debug(
+          `Left stream ${stream} unsettled: execution ${executionId} is held by a live process.`,
+        );
+        return false;
+      }
+      if (maintenance.value) {
+        this.logger.info(
+          `Settled interrupted run ${executionId} for stream ${stream} as ${RUN_OUTCOME.CANCELLED}.`,
+          { data: { stream, executionId } },
+        );
+      }
+      return maintenance.value;
+    } catch (error) {
+      this.logger.warn(
+        `Could not settle interrupted run ${executionId} for stream ${stream}: ${toErrorMessage(error)}`,
+        { data: { stream, executionId, error } },
+      );
+      return false;
+    }
   }
 
   private async readRunFacts(
@@ -979,8 +1087,7 @@ export class SessionState {
   async load(): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
-    // ProgressBackend waits for SessionHandle readiness before entering this
-    // method. The session owns transcript opening and sidecar hydration; a
+    // The session owns transcript opening and sidecar hydration; a
     // presentation must never reload those live stores. The leftover-stream
     // sweep (dropping leftover background shells, then orphaned persisted
     // state) is the host process's own, scheduled off this path once its UI is
