@@ -20,8 +20,8 @@ shape, and no structural refactor is warranted.** The pass-through wrappers and
 convenience barrels the standing question hunts for are not present; single-caller
 factories are down to the same one tracked, justified survivor (`createRunScope`,
 a one-line immutability-freeze — one production caller at
-`AgentLaunchContext.ts:470`, the other 20 call sites all under
-`src/test-kernel/`). This is the **eighth consecutive** green pass (`-08-19`
+`AgentLaunchContext.ts:470`, the other 12 `createRunScope(` call sites all
+under `src/test-kernel/`). This is the **eighth consecutive** green pass (`-08-19`
 through `-09-04`). The `d418d45..4579625` interval is 23 commits (§1) —
 dominated by refactor (9) and docs (6), **net −141 lines** (3,272 ins /
 3,413 del), and it added **no** new abstraction to the core: the interval's one
@@ -86,15 +86,15 @@ above.
 
 ## 2. Every tracked structural fact re-verifies at `4579625`
 
-| Item                               | Expected (`-09-03` @ `d418d45`)           | `4579625` state                                                                                                                                                                              |
-| ---------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Node flow engine**               | 158 LoC, `BaseNode` + `Flow` only         | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md.                                       |
-| **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                 | **2,026 LoC** (`wc -l`), **−4** via `8d16c08`'s two removed indirections (§1). Genuinely shared behavior, no per-provider copy-paste; the delta is a simplification, not growth.             |
-| **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                                                                         |
-| **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.                                                           |
-| **L-3** (dead redaction branch)    | `redactSecrets` single-arg                | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                                                   |
-| **SDK version**                    | 0.40.8                                    | **0.40.9** (`packages/agent/package.json`, bumped by `4579625`/#11820). Version bump only; no surface change. No pending v0.41 runFact gate (retired per the prior pass's TD-2c correction). |
-| **createRunScope** survivor        | 1 production caller @ `:470`              | **1 production caller** (`src/agent/runtime/AgentLaunchContext.ts:470`); the other 20 `createRunScope` call sites are all under `src/test-kernel/`. Tracked retention decision, unchanged.   |
+| Item                               | Expected (`-09-03` @ `d418d45`)           | `4579625` state                                                                                                                                                                                                               |
+| ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Node flow engine**               | 158 LoC, `BaseNode` + `Flow` only         | **158 LoC** (`src/agent/node/index.ts`); only `class BaseNode` (`:30`) + `class Flow` (`:134`). No `BatchNode`/`ParallelBatchNode`. Matches CLAUDE.md.                                                                        |
+| **M-3** `ModelHandler.ts` god-base | 2,030 LoC                                 | **2,026 LoC** (`wc -l`), **−4** via `8d16c08`'s two removed indirections (§1). Genuinely shared behavior, no per-provider copy-paste; the delta is a simplification, not growth.                                              |
+| **§8b / PT-2** (`SessionHandle`)   | `useHostInteractions` gone                | **still gone.** `grep -rn useHostInteractions src/ packages/` returns **zero** hits.                                                                                                                                          |
+| **§8a** (dead logger `export`)     | `OutputChannelFactoryOptions` de-exported | **still gone.** `src/logger/logUtils.ts:49` is `interface OutputChannelFactoryOptions` (no `export`); only internal use at `:191`.                                                                                            |
+| **L-3** (dead redaction branch)    | `redactSecrets` single-arg                | **still closed.** `export function redactSecrets(text: string): string` (`src/logger/redaction.ts:81`); no options branch.                                                                                                    |
+| **SDK version**                    | 0.40.8                                    | **0.40.9** (`packages/agent/package.json`, bumped by `4579625`/#11820). Version bump only; no surface change. No pending v0.41 runFact gate (retired per the prior pass's TD-2c correction).                                  |
+| **createRunScope** survivor        | 1 production caller @ `:470`              | **1 production caller** (`src/agent/runtime/AgentLaunchContext.ts:470`); the other 12 `createRunScope(` call sites are all under `src/test-kernel/` (plus 9 test-kernel import lines). Tracked retention decision, unchanged. |
 
 ## 3. Frozen host deep-import width — held on every package
 
