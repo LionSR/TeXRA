@@ -244,7 +244,7 @@ same rule governs the persisted `Surface` (9).
 
 Two aggregates, one key shape. The event key is `(aggregate_id, seq)`.
 Run-scoped facts use the stream as their aggregate; session-scoped facts -
-`queuedFollowUps`, `inquiries`, `removeStream`, and any fact without a
+`queuedFollowUps`, `inquiries`, `stream.removed` (today's `stream.removed` fact, C9), and any fact without a
 stream id - use **one session aggregate** per paper. `SessionView` reads
 its session-scoped fields from that aggregate, never from a stream, and
 the fold's `sessionScoped` arm takes a nullable stream id for exactly this
@@ -312,14 +312,14 @@ the cutover, the runtime stamps the same process identity on the envelope
 it hands the fold.
 
 - **Existence** is decided by the **latest** lifecycle event for the stream,
-  not by the presence of one: `run.start` and `removeStream` are two arms of
+  not by the presence of one: `run.start` and `stream.removed` are two arms of
   one lifecycle, and the stream exists iff the later of them **by commit
   ordinal** is a `run.start`. By ordinal and not by `seq`: `run.start` is
-  run-lane and `removeStream` is a session-lane fact, so their per-lane
+  run-lane and `stream.removed` is a session-lane fact, so their per-lane
   sequence numbers are not comparable and a later tombstone could carry the
   lower number. Deletion is a durable tombstone rather than a physical row
   removal - the `delete` and `deleteAll` requests (8.2) append
-  `removeStream`, which replays and reaches every process through the one
+  `stream.removed`, which replays and reaches every process through the one
   ordered read of 7.1 - and **a tombstone is final**. Nothing supersedes it:
   a relaunch after a deletion mints a fresh `StreamTabId` and carries the
   deterministic workflow name as a label (decision 9), so it is a different
@@ -498,8 +498,7 @@ it hands the fold.
   `transcript.run` needs the ordinal (below): a terminal status on the
   session lane can carry a lower number than the run-lane event before it,
   so the key moves backward or collides. It is a memoization key, **not** a
-  print boundary: a durable
-  `stream.text` checkpoint, a status change, or a usage event advances it
+  print boundary: a status change or a usage event advances it
   while the row above is still open. `settledRows` is the separate frontier:
   the **contiguous leading prefix** of rows whose finalizing event has
   folded, not a count of them, which is what `advanceSettledPrefixIndex`
@@ -517,14 +516,14 @@ it hands the fold.
   over rather than reinventing it - with one addition it cannot make, since
   the payload does not carry it: on a `setParentStream` the fold also names
   the child's **prior** parent, read from the view before the event applies.
-  A `removeStream` names its prior parent for the same reason: the fold
+  A `stream.removed` names its prior parent for the same reason: the fold
   recomputes the deleted stream's arm first, after which the edge is gone,
   so the old parent would keep the deleted child in its `childIds`,
   `rollup`, and memoized run model forever. Without both, the walk starts
   at the new relationship - or at none - which is the two-chain requirement
   below. A fact naming no stream still folds - it
   updates session-level state such as `inquiries` - it simply names no arm.
-  A **lifecycle** event (`run.start`, `removeStream`) additionally names its
+  A **lifecycle** event (`run.start`, `stream.removed`) additionally names its
   stream's subtree: a child's
   placement is derived from whether its parent exists, so deleting a parent
   re-roots its children and shortens every descendant's `ancestors` (see
@@ -598,34 +597,12 @@ it hands the fold.
   and thinking streams do not. Lane 1 makes it mandatory: `stream.end`
   carries the joined text it already computed, and the `phaseOnly` guard
   stays as-is because a phase-only stream has no text to carry.
-- **Text is checkpointed, though not per delta.** Deltas are transient, but
-  the owning process appends a durable `stream.text` checkpoint carrying a
-  row's text so far at coarse intervals, and the finalizing event carries
-  the whole of it. Bytes are not enough on their own: a crash between a
-  checkpoint and finalization leaves a row that replay reconstructs as
-  never-terminated, and since resume keeps the incarnation nothing later
-  closes it. So the same repair path that retires orphaned approvals
-  (`group === 'interrupted'` above) appends a durable finalization for every
-  open row before the resumed run starts - which is what `StreamLogStore`
-  does today when it settles unterminated streaming entries. Without
-  checkpoints a crash after the chunks and before `stream.end` loses the
-  entire partial response, since chunks never left
-  the dead process - and that is a **regression** against today, where
-  `StreamLogStore` recovers and settles unterminated streaming entries from
-  persisted chunk text. The cost is bounded by the interval, which is why it
-  is coarse; the recovery window is one interval of text, not all of it.
-
-  A checkpoint has a chunk's shape and a different destination. It splices
-  into a separate durable prefix (`settledText` per row) by the same rule,
-  while `inflight` holds what the live path has beyond that; a row renders
-  the longer of the two. Both halves matter. Durable events arrive in commit
-  order, so `settledText` only ever grows; and because the checkpoint never
-  touches `inflight`, one captured at offset 80 arriving after the live path
-  reached 100 - the table drain is asynchronous - cannot truncate the row or
-  make the next delta land at `from > length`. Neither side can shorten the
-  other, so the rendered text is monotone whatever order the two arms arrive
-  in.
-
+- **Text is never checkpointed** (contract C4). Deltas are transient in the
+  owning process; the finalizing event carries the whole text and is the
+  only durable writer. A crash before it loses the in-flight message, and
+  the resumed run's repair path appends a durable finalization for every
+  row it finds open, so replay never reconstructs a never-terminated row. A
+  non-owning process renders the settled prefix (7.2).
 - **In-flight text is its own map, so order does not matter.** Chunks
   accumulate in `SessionView.inflight`, keyed by stream and row at **session
   scope** - not inside `StreamView`, which would give a chunk nowhere to
@@ -645,13 +622,13 @@ it hands the fold.
   keying the text by row ties it to the stream lifecycle instead. An entry
   goes when its row's finalizing event folds, when its stream's terminal
   status folds (a run can end with a row unfinalized - a crash, an abandoned
-  interrupt), or when `removeStream` closes the stream. Those three cover
+  interrupt), or when `stream.removed` closes the stream. Those three cover
   every way a row stops being live, so nothing needs a timeout and nothing
   accumulates in a long-lived process.
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
   already folded is discarded rather than reopening its `inflight` entry, and
-  `removeStream` clears every session-level entry keyed by its stream -
+  `stream.removed` clears every session-level entry keyed by its stream -
   `inflight`, the stream's pending `approvals`, its `queuedFollowUps`, its
   `policy` entry, and its `inquiries`. Not only the text: a pending
   `approval.requested` with no `approval.resolved` would otherwise fold back
@@ -659,7 +636,7 @@ it hands the fold.
   that can never exist again. A chunk that arrives
   afterwards - the two arms are asynchronous, so one can - is **dropped at
   the source**, in every process: `TextChunkSource` suppresses queued and
-  later chunks for a stream once that stream's `removeStream` has been
+  later chunks for a stream once that stream's `stream.removed` has been
   published, and the transport framer applies the same rule to what it
   frames. It has to be both: §7.2 feeds the runtime, TUI, and headless folds
   from `TextChunkSource` directly, so a rule living only in the framer would
@@ -694,8 +671,11 @@ in `src/shared/copy/`.
 
 ## 6. Events
 
-The only contract between this PRD and the persistence cutover is the
-durable event set. Emission for everything is `SessionHandle.events` and
+The only contract between this PRD and the persistence cutover is section
+6.1 of `docs/proposals/2026-09-03-persistence-substrate-decision.md`
+(clauses C1 to C10, jointly owned, changes land there first); this document
+references its clauses and does not restate them. The durable event set below
+is C3's view from the fold's side. Emission for everything is `SessionHandle.events` and
 `SessionEventHub`; no new bus emit (CLAUDE.md event-channel rule).
 
 Agreed additions and changes (substrate owner, 2026-09-03):
@@ -784,18 +764,7 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    open turn's snapshot, normalized at the storage boundary, or a reload
    leaves an open inquiry no surface can render or answer.
 
-8. **`stream.text`**, a durable checkpoint carrying `{ rowId, from, to,
-text }` - the same offset-addressed shape as a transient chunk, appended
-   at a coarse interval - plus the full text on the finalizing event (5.2,
-   "Text is checkpointed"). Offset-addressed and not text-so-far: appending
-   the whole prefix every interval writes k, 2k, 3k, … and makes stored
-   bytes quadratic in the response length, where deltas are linear. Live
-   deltas stay transient; without the checkpoint an owner crash between the
-   chunks and `stream.end` loses the whole partial response, which
-   `StreamLogStore` recovers today. The interval is a tuning parameter, not
-   a contract.
-
-9. **`run.activate`**, emitted at every activation - the first launch and
+8. **`run.activate`**, emitted at every activation - the first launch and
    each resume - carrying the activation metadata (`category`, `isRemote`,
    `background`, `ownerId`). `run.start` stays the creation fact and is
    emitted once per incarnation; activation happens many times on one
@@ -823,6 +792,12 @@ cutover they are live-only: the recorder maps them to no persisted entry,
 and lane 1 ships them that way. A pending approval not surviving a restart
 is today's behavior, so this is no regression; the first process that
 persists them is the cutover's `SessionEvents.publish`.
+
+There is no `stream.text` checkpoint (contract C4). An earlier revision
+added one so an owner crash mid-response would keep the partial text that
+`StreamLogStore` recovers today; the substrate owner ruled it a second
+writer for one datum. The completed message event is the only writer of
+text, and kill -9 loses the in-flight message, as every peer accepts.
 
 The importer emits `run.start` for every legacy stream with `identity`
 nullish where the descriptor has none, and normalizes every other old
@@ -956,8 +931,11 @@ drain rather than one indexed empty read per queued wake - which is the
 behaviour a `PubSub` could not have given, since every edge would have had
 to be delivered.
 
-The store's half is decision 6, still unagreed, and it is now the weakest
-form yet: a **monotone commit counter** for the session, readable at any
+The store's half is decision 6, **resolved 2026-09-04 by contract C7**: the
+cross-process level is `PRAGMA data_version`, polled, followed by
+`all(cursor)`; `commit` is `AUTOINCREMENT` (C1), so it never decreases or
+reuses a value. The argument that led there is kept because it is what
+rules out the alternatives: a **monotone commit counter** for the session, readable at any
 time. It carries no events, and a wake that finds no new rows costs one
 indexed read - but it may **not** over-report: reporting 100 while the table
 is at 50 advances the shared `n > seen` filter past ordinals 51-100, and no
@@ -996,7 +974,7 @@ it is a field of the view (`cursor`). Both properties matter. A single
 ordinal is what makes `readAll` a globally ordered scan rather than a
 per-lane merge, and being a field rather than a projection of `view.streams`
 is what keeps it monotone: derived from the visible streams it would drop a
-tombstoned stream's position the moment `removeStream` folded, and the next
+tombstoned stream's position the moment `stream.removed` folded, and the next
 wake would re-read from the start, resurrecting the stream and its approvals
 in the intermediate states `Stream.scan` publishes, forever. An ordinal
 never regresses because it is not a function of what is visible.
@@ -1006,12 +984,12 @@ commit ordinal is now N", and the reader asks for everything above its own.
 One coordinate answers both questions. `all(view.cursor)` is the initial
 subscribe and the resubscribe alike.
 **Read path, corrected 2026-09-04.** An earlier revision of this section
-had no `events(streamId, fromSeq)` method and read everything through
+had no per-stream read method and read everything through
 `all(cursor)`. That cannot hold beside the two-tier residency rule (5.2): a
 listing that folds every stream's transcript is #9952 again. The read path
 is therefore two methods: `all(cursor)` is the listing tier, the
 latest-of-type index for every stream plus the session aggregate in commit
-order; `events(streamId, fromSeq)` is the transcript tier, one stream's rows
+order; `stream(streamId, fromSeq)` is the transcript tier, one stream's rows
 from a seq, opened when a surface subscribes to that stream and closed when
 its last subscriber leaves. The session-lane facts a per-stream read would
 drop (status, parent, removal, inquiry) are exactly the listing tier, so a
@@ -1300,7 +1278,7 @@ forever - the same failure this section rejects for a stale stream. `orDie`
 decides what is _logged as a defect_, not whether the caller hears back. A request naming a stream that is gone is
 `Unavailable`, not a defect: with two surfaces on one session, one can send
 `stop` or `resume` from a view that has not yet folded the other's
-`removeStream`, and calling that a defect would bypass the response path
+`stream.removed`, and calling that a defect would bypass the response path
 (8.4) and leave the sender's latch and draft pending forever. The envelope is parsed first, and an
 arm the Zod union rejects is `Invalid` under that request's own id - a stale
 surface sending `followUp.send` with no text still gets an answer, where
@@ -2250,16 +2228,16 @@ Critical path: lane 1, then lane 2, then lane 4, then lane 8. At most three
 worktree lanes open. Each host switches in one pull request. Deletions ship
 with their replacement.
 
-| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
-| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all nine event changes of section 6, each landing with every consumer of that event in the same PR (see the note below); local runtime state as a fold input; compensation and tombstone gates re-keyed; **decision 9's identity change, which this lane depends on** - fresh stream and execution ids per launch, `checkpointId` as the resume anchor on `run.start`, and the workflow launch lease moved to the checkpoint | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
-| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                                                                                                                                                                                    | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
-| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
-| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
-| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
-| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
-| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
-| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
+| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
+| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all eight event changes of section 6, each landing with every consumer of that event in the same PR (see the note below); local runtime state as a fold input; compensation and tombstone gates re-keyed; **decision 9's identity change, which this lane depends on** - fresh stream and execution ids per launch, `checkpointId` as the resume anchor on `run.start`, and the workflow launch lease moved to the checkpoint | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
+| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                                                                                                                                                                                     | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
+| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
+| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
+| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
+| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
+| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
+| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
 
 **On decision 9 in lane 1.** Final tombstones and reclaimed deterministic
 ids cannot both be true: today a deleted workflow stream's id is reclaimed
@@ -2397,7 +2375,10 @@ As tests:
    the canonical set cannot express is dropped by the importer with a
    `warn`. The exported-trace reader (`TraceStreamLogEntrySchema`) is a
    permanent boundary and is unchanged.
-6. **With the persistence owner, not yet agreed:** the durable store
+6. **Resolved by contract C7 (2026-09-04):** the cross-process wake is a
+   poll of `PRAGMA data_version` followed by `all(cursor)`, and the ordinal
+   is the `AUTOINCREMENT` `commit` column. The earlier text, kept for the
+   record: the durable store
    exposes `commits`, **the session's actual commit ordinal**, readable at
    any time (7.1). Not an independent generation: 7.1 merges it with this
    process's own level and compares once, so a source reporting 100 while
@@ -2476,7 +2457,7 @@ As tests:
    thirteen fences and call the question open.
 
 Already agreed with the persistence owner and recorded in the companion
-proposal (in flight in another branch, see Lineage): the nine event changes
+proposal (in flight in another branch, see Lineage): the eight event changes
 of section 6; Effect Schema nowhere; the publisher
 invariants of 7.1; `WorkspaceRoots` as the `Database` layer's parameter;
 the two v4 traps.
