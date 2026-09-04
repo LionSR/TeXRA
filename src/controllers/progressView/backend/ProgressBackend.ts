@@ -97,17 +97,6 @@ export class ProgressBackend {
   private readonly hasPendingPermissions: (streamId: string) => boolean;
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private readonly detachEventListeners: Array<() => void> = [];
-  /**
-   * The roster the last projection put on screen. Nothing else remembers it:
-   * `sendStreamMetadata` builds each `UPDATE_STREAMS` from live state and
-   * keeps no copy, and live state stops listing a stream the moment it is
-   * deleted — including when some other owner deleted it, which is exactly
-   * when a row is left stranded in the rail (the leftover sweep republishes
-   * every shell it swept as a `removeStream` fact for that reason). So this
-   * is what answers "is the presentation still showing this stream?" after
-   * its durable state is already gone.
-   */
-  private readonly renderedStreams = new Set<StreamTabId>();
   private activationGeneration = 0;
   private latestActivationTarget: PresentedStreamId = '';
   private readonly inFlightActivationGenerations = new Set<number>();
@@ -200,9 +189,6 @@ export class ProgressBackend {
       projectedStream = this.latestActivationTarget;
     }
     this.renderer.sendStreamMetadata(projectedStream, rosterActiveStream);
-    // The projection above is the rail the user sees; record it as sent.
-    this.renderedStreams.clear();
-    for (const stream of selectableStreams) this.renderedStreams.add(stream);
     if (!options.syncActiveStream) return;
     if (pendingSelectableActivation) {
       // A structural refresh must not supersede a newer user selection that
@@ -676,7 +662,9 @@ export class ProgressBackend {
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
-    const wasRendered = this.renderedStreams.has(stream);
+    // The renderer owns this: it sends both the full roster and the
+    // incremental per-stream metadata a tab can first appear through.
+    const wasRendered = this.renderer.hasRenderedStream(stream);
     // An undefined expectedIncarnation falls back to the current incarnation
     // inside `clearStream`, matching the no-options call this replaces.
     const deletion = await this.state.clearStream(stream, {
@@ -696,7 +684,7 @@ export class ProgressBackend {
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
-    this.renderedStreams.delete(stream);
+    this.renderer.forgetRenderedStream(stream);
     const selectionWasDeleted = this.presentation.activeStream === stream;
     if (selectionWasDeleted) {
       this.presentation.select('');

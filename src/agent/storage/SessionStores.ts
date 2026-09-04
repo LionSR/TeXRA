@@ -250,9 +250,12 @@ export class SessionStores {
             // until it is reconciled, and the sweep that used to reconcile
             // everything at bring-up now runs after the UI is up — a user (or
             // the sweep itself) can reach this stream first. Recover just this
-            // stream's residue here, on the deletion queue, so this scoped
-            // reconcile is serialized against the unscoped one the orphan
-            // sweep runs instead of racing it. The reconciliation stays logged.
+            // stream's residue here, on the deletion queue, so it is ordered
+            // against THIS instance's other deletions. Mutual exclusion with
+            // the sweep's unscoped pass is not this queue's to give — the
+            // sweep builds its own `SessionStores` — and belongs to the
+            // coordinator both reconciles share (`StagedDeletionCoordinator`,
+            // which serializes them). The reconciliation stays logged.
             await this.reconcileStagedDeletions(
               new Set(this.streamLogs.keys()),
               new Set([stream]),
@@ -884,10 +887,11 @@ export class SessionStores {
       );
       return { streams: [], executionIds: [] };
     }
-    // On the deletion queue for the same reason `deleteStream`'s scoped
-    // reconcile is: the two reconcile the same staged directories, and only
-    // the queue keeps this unscoped pass from running against a stream a
-    // deletion is staging right now.
+    // On the deletion queue so this pass is ordered against this instance's
+    // own deletions. It cannot order it against another instance's — the
+    // queue is per-instance and this sweep runs on a `SessionStores` of its
+    // own — so exclusion with a concurrent scoped reconcile comes from the
+    // coordinator underneath both (`StagedDeletionCoordinator.reconcile`).
     await this.enqueueDeletion(() =>
       this.reconcileStagedDeletions(liveStreams),
     );
@@ -932,6 +936,16 @@ export class SessionStores {
         // through `shouldDelete`, the way `sweepOrphanedExecutions` does.
         if (this.streamLogs.has(stream)) return;
         const shouldDelete = (): boolean => !this.streamLogs.has(stream);
+        // `shouldDelete` re-reads the cached index, which is all a
+        // synchronous guard can do. This is the same question put to the
+        // shared store, and the sidecar deletion asks it once more in its
+        // post-staging window, immediately before the transcript delete and
+        // the irreversible sidecar commit. What remains is the window between
+        // that answer and the commit: a host registering this id inside it
+        // has its registration erased by our delete. Closing that would take
+        // a cross-host lock, which no deletion path here holds.
+        const stillOrphaned = async (): Promise<boolean> =>
+          !(await this.streamLogs.hasAuthoritativeStream(stream));
         try {
           // This instance's summary index only knows the streams it opened
           // with. Another host can register one after that, and its transcript
@@ -940,12 +954,13 @@ export class SessionStores {
           // durable index may admit the irreversible delete, exactly as
           // `sweepOrphanedExecutions` does; the cached index above stays the
           // prefilter, and this costs one authoritative read per candidate.
-          if (await this.streamLogs.hasAuthoritativeStream(stream)) return;
+          if (!(await stillOrphaned())) return;
           const executionId = byStream.get(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
-              () => this.deleteStreamSidecars(stream, shouldDelete),
+              () =>
+                this.deleteStreamSidecars(stream, shouldDelete, stillOrphaned),
               shouldDelete,
             );
             if (outcome.kind === 'streams-deleted') {
@@ -979,7 +994,11 @@ export class SessionStores {
               );
               return;
             }
-            await this.deleteStreamSidecars(stream, shouldDelete);
+            await this.deleteStreamSidecars(
+              stream,
+              shouldDelete,
+              stillOrphaned,
+            );
           }
           sweptStreams.push(stream);
         } catch (error) {
@@ -993,8 +1012,16 @@ export class SessionStores {
         }
       }),
     );
+    // The stream half already deleted these execution directories; offering
+    // them again only costs a lease read and a delete of nothing.
+    const deletedExecutionIds = new Set(sweptExecutionIds);
     sweptExecutionIds.push(
-      ...(await this.sweepOrphanedExecutions(liveStreams, references)),
+      ...(await this.sweepOrphanedExecutions(
+        liveStreams,
+        references.filter(
+          ({ executionId }) => !deletedExecutionIds.has(executionId),
+        ),
+      )),
     );
     return { streams: sweptStreams, executionIds: sweptExecutionIds };
   }
@@ -1040,6 +1067,13 @@ export class SessionStores {
   private async deleteStreamSidecars(
     stream: StreamTabId,
     shouldDelete?: () => boolean,
+    /**
+     * An asynchronous second opinion, checked in the same post-staging
+     * window as `shouldDelete`. The sweep passes the shared transcript store
+     * here because `shouldDelete` is synchronous and can only read this
+     * process's cached index (see `sweepOrphanedStreams`).
+     */
+    confirmDeletable?: () => Promise<boolean>,
   ): Promise<void> {
     const snapshotDeletion = await this.snapshots.stageDeleteStream(
       stream,
@@ -1050,7 +1084,7 @@ export class SessionStores {
     // await. Only an unchanged generation may cross the transcript commit
     // point below; a superseded deletion rolls its staging back and leaves
     // the fresh incarnation untouched.
-    if (shouldDelete?.() === false) {
+    if (shouldDelete?.() === false || (await confirmDeletable?.()) === false) {
       try {
         await snapshotDeletion.rollback();
       } catch (rollbackError) {

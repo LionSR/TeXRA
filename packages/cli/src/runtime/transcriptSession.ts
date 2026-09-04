@@ -45,6 +45,7 @@ async function persistentSession(
 
 async function initializePersistentSession(
   transcripts: StreamLogStore,
+  sweep: { readonly delayMs?: number } = {},
 ): Promise<CliTranscriptSession> {
   const result = await persistentSession(
     initializeDefaultSession({
@@ -53,10 +54,13 @@ async function initializePersistentSession(
     }),
   );
   // Off the ready path: the sweep reads the whole storage root, and no prompt
-  // waits for it. Both CLI shapes schedule it here so headless `texra run`
-  // keeps an owner for the shells it leaves behind; a short headless run
-  // exits before the unref'd timer fires and the next launch sweeps them.
-  scheduleLeftoverStreamSweep(result.session);
+  // waits for it. The TUI takes the default delay, which keeps the read off
+  // its first paint. A headless `texra run` has no paint to protect and can
+  // finish inside that delay — the unref'd timer would never fire, leaving
+  // its shells for a launch that may not come — so it schedules with none.
+  // Overlapping the run is safe: the sweep excludes the streams this process
+  // is running, and it is idempotent if the process exits first.
+  scheduleLeftoverStreamSweep(result.session, sweep);
   return result;
 }
 
@@ -96,7 +100,10 @@ export async function initializeCliTranscriptSession(
   }
 
   if (policy.onPersistentOpenFailure === 'fail') {
-    return initializePersistentSession(await openPersistentStore());
+    // The headless shape: no interactive paint to defer the sweep behind.
+    return initializePersistentSession(await openPersistentStore(), {
+      delayMs: 0,
+    });
   }
 
   const transcripts = await StreamLogStore.openOrEphemeral(openPersistentStore);

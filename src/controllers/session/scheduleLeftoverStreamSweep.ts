@@ -14,9 +14,6 @@ const log = createLog('LeftoverStreamSweep');
  */
 const DEFAULT_SWEEP_DELAY_MS = 1500;
 
-/** Sessions that already own a scheduled sweep, cancelled or not. */
-const scheduledSessions = new WeakSet<SessionHandle>();
-
 /** Streams this process is running right now, by handle or by in-flight phase. */
 function runningStreams(session: SessionHandle): Set<StreamTabId> {
   const running = new Set<StreamTabId>();
@@ -44,8 +41,9 @@ function runningStreams(session: SessionHandle): Set<StreamTabId> {
  * excluded from it (see `SessionStores.sweepLeftoverStreams`), so no deletion
  * ever queues behind a live execution lane.
  *
- * At most one sweep per session: the second caller gets a cancel that does
- * nothing rather than a second pass over the executions directory.
+ * One caller per session schedules it, once, at that host's bring-up; there
+ * is no memo here that would swallow a second call, so a cancelled schedule
+ * can simply be scheduled again.
  *
  * A leftover shell is a stream a presentation may already be showing (a
  * persisted shell hydrates with no status, so no rail filter hides it), and
@@ -62,8 +60,6 @@ export function scheduleLeftoverStreamSweep(
   session: SessionHandle,
   options?: { readonly delayMs?: number },
 ): () => void {
-  if (scheduledSessions.has(session)) return () => {};
-  scheduledSessions.add(session);
   const timer = setTimeout(() => {
     void createSessionStores(session)
       .sweepLeftoverStreams({ runningStreams: runningStreams(session) })
