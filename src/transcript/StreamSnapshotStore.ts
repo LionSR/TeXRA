@@ -19,7 +19,7 @@
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { getExecutionStore } from '@agent/storage';
+import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
 import { flowKey } from '@agent/node/persistedFlow';
 import {
@@ -36,6 +36,7 @@ import {
   cloneRoundIndexed,
   EMPTY_ROUND_INDEXED,
   emptyUsageStats,
+  ExecutionMetaCoreSchema,
   isEmptyUsage,
   OutputFileInfoListSchema,
   PersistedWorkPlanSchema,
@@ -47,6 +48,7 @@ import {
   TokenUsageStatsParsingBaseSchema,
   type CompileFailure,
   type ExecutionId,
+  type ExecutionMeta,
   type ExtendedTokenUsageStats,
   type OutputFileInfo,
   type RunIdentity,
@@ -176,9 +178,6 @@ interface HydratedRunState {
   identity?: RunIdentity;
   userFollowUpSupport?: UserFollowUpSupport;
   description?: string;
-  /** Persisted run outcome from `ExecutionMeta.outcome`; absent while a run
-   *  is live and forever for a run that crashed before finalizing. */
-  outcome?: RunOutcome;
 }
 
 /**
@@ -192,6 +191,9 @@ interface HydratedRunState {
 interface RunPhaseProbe {
   checkpointPresent?: boolean;
   lease?: ExecutionLeasePresence;
+  /** Persisted run outcome from `ExecutionMeta.outcome`; absent while a run
+   *  is live and forever for a run that crashed before finalizing. */
+  outcome?: RunOutcome;
   /** Why the probe could not answer, if it could not. */
   failure?: string;
 }
@@ -222,6 +224,23 @@ export interface RunPhaseFacts {
   readonly lease?: ExecutionLeasePresence;
   /** Why this stream's execution authority could not be read, if it could not. */
   readonly authorityFailure?: string;
+}
+
+/**
+ * The execution row's CORE fields, parsed strictly, without the optional
+ * `workflow` projection. Every read-time phase fact this store needs —
+ * identity, description, outcome — lives in the core schema, so a malformed
+ * projection must not cost a valid outcome: `readMetaStrict` throws on one
+ * (which would strand a completed historical run on "unavailable"), and
+ * `readMeta` swallows a malformed CORE row as absence (which would render a
+ * corrupt execution as a healthy, sendable stream). Same raw read, same
+ * schema, same "malformed core is unreadable" rule as `deriveResumability`.
+ */
+async function readMetaCore(
+  store: ExecutionKVStore,
+): Promise<ExecutionMeta | null> {
+  const raw = await store.read('meta');
+  return raw === undefined ? null : ExecutionMetaCoreSchema.parse(raw);
 }
 
 function withoutSummaryMetaFields(
@@ -1992,19 +2011,17 @@ export class StreamSnapshotStore {
     let userFollowUpSupport: UserFollowUpSupport | undefined;
     let description: string | undefined;
     let authorityFailure: string | undefined;
-    let outcome: RunOutcome | undefined;
 
     if (executionId) {
       let config: AgentConfig | null = null;
       try {
         const store = getExecutionStore(executionId);
-        // Strict: a malformed row is an unreadable authority, not a run that
-        // never finished. The tolerant reader resolves to null, which would
-        // derive as "no outcome" and render a corrupt execution as a healthy,
-        // sendable stream — the same distinction `listExecutionStreamReferences`
-        // draws for restart repair today.
+        // Core-only, and strict on the core (see {@link readMetaCore}): a
+        // malformed row is an unreadable authority, but a malformed OPTIONAL
+        // `workflow` projection is not — the identity and description below
+        // parsed, and so did the outcome the probe reads.
         const [execMeta, execConfig] = await Promise.all([
-          store.readMetaStrict(),
+          readMetaCore(store),
           store.readConfig(),
         ]);
         // Identity comes only from the stamped execution row; a row without
@@ -2013,8 +2030,6 @@ export class StreamSnapshotStore {
         identity = execMeta?.identity;
         userFollowUpSupport = execMeta?.userFollowUpSupport;
         description = execMeta?.description;
-        // The run's terminal outcome rides the same parsed row, at no cost.
-        outcome = execMeta?.outcome;
         config = execConfig;
       } catch (error) {
         authorityFailure = toErrorMessage(error);
@@ -2029,40 +2044,55 @@ export class StreamSnapshotStore {
           identity,
           userFollowUpSupport,
           description,
-          outcome,
         };
       }
     }
 
     // Same facts on the no-config path: a stream whose `config.json` is
-    // missing still has a readable identity and outcome.
+    // missing still has a readable identity and description.
     return {
       authorityFailure,
       identity,
       userFollowUpSupport,
       description,
-      outcome,
     };
   }
 
   /**
-   * Whether a resumable checkpoint file exists, and who holds the execution
-   * lease. Both are one read: the checkpoint is a single `exists` stat, never
-   * a parse of the (often ~600 KB) flow record, and the lease inspection reads
-   * only — a dead claim reports as absent and is unlinked by the next claim,
-   * never by this call. Never throws: an unreadable probe reports its cause,
-   * which the phase rule renders as unavailable rather than as a run that
-   * never happened.
+   * Who holds the execution lease, whether a resumable checkpoint file
+   * exists, and how the run ended. Each is one small read: the checkpoint is
+   * a single `exists` stat, never a parse of the (often ~600 KB) flow record;
+   * the lease inspection reads only — a dead claim reports as absent and is
+   * unlinked by the next claim, never by this call; and the outcome is a
+   * core-schema parse of the execution row (see {@link readMetaCore}). Never
+   * throws: an unreadable probe reports its cause, which the phase rule
+   * renders as unavailable rather than as a run that never happened.
+   *
+   * ORDERING INVARIANT — lease, then checkpoint, then outcome, sequentially.
+   * A foreign finalize writes the outcome, deletes the checkpoint, then
+   * releases the lease. Reading in that same order means a free lease is
+   * always followed by the outcome read that a finalize which released it has
+   * already written. Any other order (a parallel batch included) can splice
+   * "lease free, no checkpoint" observed after the finalize onto "no outcome"
+   * observed before it, cache that phantom `none` in `runFacts`, and leave the
+   * tab reading Ready until the next explicit preload. The cost is one more
+   * small row read per seed — deliberately NOT folded into the metadata read
+   * that runs beside this probe, because that read is unordered against the
+   * lease.
    */
   private async probeRunPhase(
     executionId: ExecutionId,
   ): Promise<RunPhaseProbe> {
     try {
-      const [checkpointPresent, lease] = await Promise.all([
-        getExecutionStore(executionId).exists(flowKey(executionId)),
-        inspectExecutionLease(executionId),
-      ]);
-      return { checkpointPresent, lease };
+      const store = getExecutionStore(executionId);
+      const lease = await inspectExecutionLease(executionId);
+      const checkpointPresent = await store.exists(flowKey(executionId));
+      const meta = await readMetaCore(store);
+      return {
+        checkpointPresent,
+        lease,
+        ...(meta?.outcome !== undefined && { outcome: meta.outcome }),
+      };
     } catch (error) {
       log.warn(`Could not read run phase facts for execution ${executionId}.`, {
         data: { executionId, error },
@@ -2175,11 +2205,12 @@ export class StreamSnapshotStore {
         if (!liveRunConfig) {
           record.runConfig = hydrated.config ?? record.runConfig;
         }
-        // Whole-value: this read is the only producer of the run's outcome,
-        // so it replaces rather than fills, and a failed read says so with
-        // the cause attached instead of leaving a quiet absence.
+        // Whole-value: this read is the only producer of the authority
+        // failure, so it replaces rather than fills, and a failed read says
+        // so with the cause attached instead of leaving a quiet absence. The
+        // outcome is NOT read here — it belongs to the probe's ordered
+        // lease→checkpoint→outcome sequence.
         runFacts = {
-          ...(hydrated.outcome !== undefined && { outcome: hydrated.outcome }),
           ...(hydrated.authorityFailure !== undefined && {
             authorityFailure: hydrated.authorityFailure,
           }),
@@ -2234,6 +2265,7 @@ export class StreamSnapshotStore {
       const probe = await phaseProbe;
       runFacts = {
         ...runFacts,
+        ...(probe.outcome !== undefined && { outcome: probe.outcome }),
         ...(probe.checkpointPresent !== undefined && {
           checkpointPresent: probe.checkpointPresent,
         }),

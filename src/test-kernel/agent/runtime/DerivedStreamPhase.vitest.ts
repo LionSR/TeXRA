@@ -182,9 +182,14 @@ describe('SessionState.resolveStreamPhase', () => {
     await seedSidecarFk(stream, executionId);
     const executionStore = getExecutionStore(executionId);
     await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
-    vi.spyOn(executionStore, 'readMetaStrict').mockRejectedValue(
-      new Error('meta.json is unreadable'),
-    );
+    // The raw row read the hydration and the phase probe share: the store
+    // parses it itself (core schema only), so there is no typed accessor left
+    // to stub.
+    const read = executionStore.read.bind(executionStore);
+    vi.spyOn(executionStore, 'read').mockImplementation(async (key: string) => {
+      if (key !== 'meta') return read(key);
+      throw new Error('meta.json is unreadable');
+    });
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
@@ -194,6 +199,30 @@ describe('SessionState.resolveStreamPhase', () => {
     expect(state.resolveStreamPhase(stream)).toEqual({
       origin: 'derived',
       detail: streamUnreadableMessage('meta.json is unreadable'),
+    });
+  });
+
+  it('keeps a completed outcome when only the optional workflow projection is malformed', async () => {
+    const executionId = 'eeee5555' as ExecutionId;
+    const stream = `projection#${executionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    await seedSidecarFk(stream, executionId);
+    // Raw row: a valid core plus a `workflow` projection that does not parse.
+    // The projection is optional and is not phase evidence, so the outcome
+    // beside it still decides the phase.
+    await getExecutionStore(executionId).write('meta', {
+      schemaVersion: 1,
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.COMPLETED,
+      workflow: 'not a workflow snapshot',
+    });
+
+    const state = openUnrepairedSession(transcripts);
+    await state.snapshots.preload([stream]);
+
+    expect(state.resolveStreamPhase(stream)).toEqual({
+      state: { phase: STREAM_PHASE.COMPLETED },
+      origin: 'derived',
     });
   });
 });
