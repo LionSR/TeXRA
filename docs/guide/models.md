@@ -42,11 +42,18 @@ Claude Opus 5 uses adaptive thinking only (extended thinking with a manual `budg
 
 | Model ID    | Use Case                       | Cost | Speed  |
 | :---------- | :----------------------------- | :--- | :----- |
+| `gpt6`      | Most capable, 1M context       | $$$$ | Fast   |
 | `gpt56pro`  | Pro reasoning mode, 1M context | $$$$ | Slow   |
 | `gpt56`     | Flagship reasoning, 1M context | $$$$ | Medium |
 | `gpt56fast` | Flagship, fast variant         | $$$$ | Fast   |
 | `gpt56-`    | Lower-cost reasoning           | $$$  | Fast   |
 | `gpt56--`   | Budget reasoning               | $    | Fast   |
+
+GPT-6 Astra (`gpt6`) is OpenAI's most capable model for the hardest end-to-end work; it is
+available in the API and in Codex for Pro, Enterprise, and Business Premium subscribers, and
+supports reasoning effort up to Max.
+Note its long-context pricing: prompts above 272K input tokens bill at 2x input/cache and 1.5x
+output for the full request.
 
 GPT-5.6 Sol (`gpt56`) is OpenAI's current flagship reasoning model; TeXRA pins the
 [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`. GPT-5.6 Pro (`gpt56pro`)
