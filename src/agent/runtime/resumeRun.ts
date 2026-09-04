@@ -101,6 +101,20 @@ export interface ResumeRunOptions extends Pick<
    */
   readonly onFollowUpQueueReady?: (recovery: FollowUpRecoveryLease) => void;
   /**
+   * Fires once this run's persisted state has been retrieved and its launch
+   * is the next step. It is the last point at which a refusal costs the
+   * caller nothing, so a host that must rearrange itself onto the resumed run
+   * (clearing a transcript, switching the focused stream) does it here rather
+   * than reading the same checkpoint first to decide whether it may: a
+   * history listing advertises a row from its checkpoint file alone (one
+   * `stat`, never a parse), so an unusable checkpoint refuses above this hook
+   * with the user's window untouched. A rejection propagates to the caller; a
+   * stop requested while it runs is honored, because
+   * {@link isCancellationRequested} is re-read once it returns.
+   */
+  readonly onResumeResolved?: () => Promise<void> | void;
+
+  /**
    * Workflow launch owns stream acquisition and status transitions through
    * `runAgent`; each host supplies its own launcher.
    */
@@ -192,31 +206,6 @@ async function unusableCheckpointReason(
     }`,
   );
   return 'unusable_checkpoint';
-}
-
-/**
- * Why this run cannot be continued, answered before a host mutates anything to
- * open it, or `undefined` when its persisted state loads. A history listing
- * advertises a row from its checkpoint file alone, so the CLI chat asks here
- * first and keeps the user's transcript and focused stream where they are when
- * the answer is a refusal. A failure with no checkpoint left on disk is not a
- * refusal at all and still throws.
- */
-export async function probeResumeRefusal(
-  executionId: ExecutionId,
-  config: AgentConfig,
-  streamId: StreamTabId,
-): Promise<FollowUpFailureReason | undefined> {
-  try {
-    if (await retrieveSessionResumeData(streamId, executionId, config)) {
-      return undefined;
-    }
-  } catch (error) {
-    const reason = await unusableCheckpointReason(executionId, error);
-    if (!reason) throw error;
-    return reason;
-  }
-  return (await unusableCheckpointReason(executionId)) ?? 'finished';
 }
 
 export async function resumeRun(
@@ -355,6 +344,24 @@ async function resumeRunWithRecoveryProvenance(
   // refused below writes the current reason; one that acquires leaves the
   // phase it lands on.
   session.status.clearHold(streamId, { discardRetainedPhase: true });
+  // Both branches below launch only when the checkpoint's category and the
+  // queue lease agree; a disagreement refuses, so no host rearranges for it.
+  const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
+  if (willLaunch && options.onResumeResolved) {
+    try {
+      await options.onResumeResolved();
+    } catch (error) {
+      if (queueLease) session.followUps.release(queueLease, 'recoverable');
+      throw error;
+    }
+    if (
+      isCancellationRequested() ||
+      session.executions.isActiveOrResuming(streamId)
+    ) {
+      if (queueLease) session.followUps.release(queueLease, 'recoverable');
+      return REFUSED;
+    }
+  }
   if (resume.type === 'toolUse' && queueLease) {
     return resumeQueuedToolUse(session, resume, queueLease, options);
   }

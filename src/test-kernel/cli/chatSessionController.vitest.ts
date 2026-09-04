@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   attachSessionSignalsAdapter: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
-  probeResumeRefusal: vi.fn(),
   lookupStreamExecutionId: vi.fn(),
   syncStreamLog: vi.fn(),
   notify: vi.fn(),
@@ -49,7 +48,6 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/runtime/resumeRun', () => ({
   resumeRun: mocks.resumeRun,
-  probeResumeRefusal: mocks.probeResumeRefusal,
   lookupStreamExecutionId: mocks.lookupStreamExecutionId,
 }));
 
@@ -397,6 +395,10 @@ const defaultResumeRun = async (
   _executionId: ExecutionId,
   options: ResumeRunOptions,
 ): Promise<typeof STARTED> => {
+  // The real `resumeRun` rearranges the host onto the resumed stream only
+  // after its own retrieval succeeded, so every stand-in that reaches a launch
+  // must run the hook or the caller never adopts the stream.
+  if (options.onResumeResolved) await options.onResumeResolved();
   options.onFollowUpQueueReady?.({
     streamId: 'stream:test' as StreamTabId,
     kind: 'recovery',
@@ -437,6 +439,7 @@ async function retainInterruptedFollowUp(
 ): Promise<void> {
   mocks.resumeRun
     .mockReset()
+    .mockImplementation(defaultResumeRun)
     .mockResolvedValueOnce({ failed: 'not_resumable' });
   const admission = ctrl.admitInterruptedFollowUp({ text });
   expect(admission.kind).toBe('accepted');
@@ -560,7 +563,6 @@ describe('createChatSessionController', () => {
     mocks.createTuiHostInteractions.mockReturnValue({});
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
-    mocks.probeResumeRefusal.mockResolvedValue(undefined);
     mocks.lookupStreamExecutionId.mockResolvedValue('exec-1');
     installResumeExecutionStore();
     rootStreamId.set(undefined);
@@ -1183,10 +1185,13 @@ describe('createChatSessionController', () => {
   // that no longer holds their conversation.
   it('refuses an unloadable checkpoint without clearing the chat or switching streams', async () => {
     const session = makeSession();
-    mocks.probeResumeRefusal.mockResolvedValueOnce('unusable_checkpoint');
+    // A refusal `resumeRun` reaches before its own retrieval yields resume
+    // state: the adoption hook is never called, so nothing here rearranged.
+    mocks.resumeRun.mockResolvedValueOnce({ failed: 'unusable_checkpoint' });
     const ctrl = createChatSessionController(makeInit({ session }));
 
     await ctrl.resume('exec-resume' as ExecutionId);
+    await session.runPromise;
 
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
       describeFollowUpFailure('unusable_checkpoint'),
@@ -1195,16 +1200,17 @@ describe('createChatSessionController', () => {
     expect(session.streamId).toBeUndefined();
     expect(session.executionId).toBeUndefined();
     expect(rootStreamId.get()).toBeUndefined();
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
     expect(session.runCompleted).toBe(true);
   });
 
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {
     const session = makeSession({ runCompleted: true });
-    mocks.resumeRun.mockImplementationOnce(async () => ({
-      ...STARTED,
-      outcome: STREAM_PHASE.WAITING,
-    }));
+    mocks.resumeRun.mockImplementationOnce(
+      async (_id: ExecutionId, options: ResumeRunOptions) => {
+        await options.onResumeResolved?.();
+        return { ...STARTED, outcome: STREAM_PHASE.WAITING };
+      },
+    );
     // A fake store, like every other resume test: the real store against
     // this harness's storage-less platform now fails loudly (KVStore no
     // longer converts I/O errors into misses), which resume() treats as a
@@ -1326,6 +1332,14 @@ describe('createChatSessionController', () => {
       runCompleted: true,
     });
     const snapshotStore = makeResumeSnapshotStore({});
+    mocks.resumeRun.mockImplementationOnce(
+      async (_id: ExecutionId, options: ResumeRunOptions) => {
+        await options.onResumeResolved?.();
+        return options.isCancellationRequested?.()
+          ? { failed: 'not_resumable' as const }
+          : STARTED;
+      },
+    );
     const ctrl = createChatSessionController(
       makeInit({ session, snapshotStore }),
     );
@@ -1367,8 +1381,9 @@ describe('createChatSessionController', () => {
 
     ensureLoaded.resolve();
     await resumed;
+    await session.runPromise;
 
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
+    expect(session.runExitCode).toBe(CliExitCode.Interrupted);
     expect(session.runCompleted).toBe(true);
     expect(session.interruptedStreamId).toBe('stream-resume');
   });
@@ -1388,11 +1403,11 @@ describe('createChatSessionController', () => {
     );
 
     await expect(ctrl.resume('aaaaaa' as ExecutionId)).resolves.toBeUndefined();
+    await session.runPromise;
 
     expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
       'snapshot load failed',
     );
-    expect(mocks.resumeRun).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.AgentError);
     expect(session.runCompleted).toBe(true);
     expect(session.interruptedStreamId).toBe('stream-interrupted');
@@ -1789,13 +1804,16 @@ describe('createChatSessionController', () => {
         .fn<() => Promise<void>>()
         .mockRejectedValueOnce(new Error('load failed')),
     });
-    const { ctrl } = makeInterruptedController(
+    const { ctrl, session } = makeInterruptedController(
       Promise.resolve(),
       true,
       snapshotStore,
     );
     await retainInterruptedFollowUp(ctrl, 'First attempt.');
     await ctrl.resume('aaaaaa' as ExecutionId);
+    // The rollback rides the run chain now that the rehydration runs inside
+    // `resumeRun`'s adoption hook, so the retry follows the settled resume.
+    await session.runPromise;
     await expectInterruptedRetry(ctrl, ['First attempt.', 'Retry.']);
   });
 
