@@ -60,10 +60,11 @@ re-deriving the many prior full-repo rounds' conclusions from scratch.
   `debounce`/`throttle` definitions, `arr[arr.length - 1]` in place of
   `.at(-1)`, and manual promise-chain accumulation (`chain = chain.then(...)`)
   that `p-queue` already covers.
-- `git diff d418d45..HEAD` scoped to `-- src packages/*/src`, filtered to
-  non-test files (337 files, +2389/-3313 net), for newly added
-  `Object.assign(`, attempt-counter `for` loops, and spread-copy-then-iterate
-  patterns the tells above could miss.
+- `git diff d418d45..HEAD` scoped to `-- src packages/*/src` (337 files,
+  +2389/-3313 net, tests included; 279 files, +2014/-2867 net when filtered
+  to non-test files), for newly added `Object.assign(`, attempt-counter
+  `for` loops, and spread-copy-then-iterate patterns the tells above could
+  miss.
 - Direct read of the three new hand-rolled-sleep-shaped hits the sweep
   surfaced, following the 2026-09-03 entry's finding that its own regex had
   missed real cases by requiring a literal executor-body `setTimeout` call.
