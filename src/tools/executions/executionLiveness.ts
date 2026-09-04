@@ -11,8 +11,8 @@
  *
  * 1. a handle in this process — the registry's phase is the live truth;
  * 2. `classifyRun` names a live foreign owner, names this process's own lease
- *    with no run behind it, or cannot read the run's facts at all — nothing
- *    terminal may be claimed, and the reason is shown;
+ *    with no run behind it and no outcome written, or cannot read the run's
+ *    facts at all — nothing terminal may be claimed, and the reason is shown;
  * 3. `classifyRun` finds a resumable checkpoint and read no outcome — the run
  *    was interrupted (a crash, or a host that quit);
  * 4. otherwise the outcome `classifyRun` read, or "unknown" when there is none.
@@ -31,7 +31,10 @@
 
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
-import { classifyRun } from '@agent/runtime/runClassification';
+import {
+  classifyRun,
+  classifyRunFacts,
+} from '@agent/runtime/runClassification';
 import {
   inspectExecutionLease,
   type ExecutionLeasePresence,
@@ -68,8 +71,9 @@ function heldElsewhereReason(owner: LeaseOwnerRecord): string {
 }
 
 /**
- * This process holds the lease but tracks no run for it: the registry and the
- * lease disagree, which is a leak to report, never a run to call settled.
+ * This process holds the lease, tracks no run for it, and no outcome was ever
+ * written: the registry and the lease disagree with nothing durable to fall
+ * back on, which is a leak to report, never a run to call settled.
  */
 const OWNED_HERE_REASON = "held by this process's lease with no live run";
 
@@ -128,11 +132,24 @@ export async function resolveExecutionLiveness(
         kind: 'unsettled',
         reason: heldElsewhereReason(classification.owner),
       };
-    case 'owned_here':
+    case 'owned_here': {
+      // The lease outlives the run it guarded: `finalizeRunTerminal` writes
+      // the outcome and untracks the handle, while the child loop releases
+      // the lease only after the wake it hands the parent returns — a window
+      // that can span the resumed parent's whole turn (#8093), i.e. exactly
+      // the turn in which the parent is told the run finished and reads its
+      // output. An outcome already on disk is the run's own fact, not the
+      // lease's, so it still settles; only a lease with nothing durable
+      // behind it is the registry/lease leak this arm reports.
+      const facts = await classifyRunFacts(executionId);
+      if (facts.kind !== 'unclassified' && facts.outcome !== undefined) {
+        return { kind: 'settled', outcome: facts.outcome };
+      }
       log.warn(
-        `Execution ${executionId} holds this process's lease with no tracked run; reporting it as unsettled rather than finished`,
+        `Execution ${executionId} holds this process's lease with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
       );
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
+    }
     case 'unclassified':
       return {
         kind: 'unsettled',
