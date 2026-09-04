@@ -979,14 +979,14 @@ export class SessionState {
   async load(): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
-    // ProgressBackend waits for SessionHandle readiness before entering this
-    // method. The session owns transcript opening and sidecar hydration; a
-    // presentation must never reload those live stores. The leftover-stream
-    // sweep (dropping leftover background shells, then orphaned persisted
-    // state) is the host process's own, scheduled off this path once its UI is
-    // up — see `scheduleLeftoverStreamSweep`. A presentation may therefore
-    // attach before it has run, and never waits for it; this only drains
-    // deletions that have already started.
+    // The session owns transcript opening and sidecar hydration; a
+    // presentation must never reload those live stores. The deferred cleanup
+    // (dropping leftover background shells and orphaned persisted state, then
+    // settling transcript output an earlier process left open) is the host
+    // process's own, scheduled off this path once its UI is up — see
+    // `scheduleDeferredSessionCleanup`. A presentation may therefore attach
+    // before it has run, and never waits for it; this only drains deletions
+    // that have already started.
     await this.stores.waitForPendingStreamDeletions();
 
     this.logger.info(
