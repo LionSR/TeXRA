@@ -17,7 +17,6 @@ import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import '@progressView/frontend';
 import './TexraDiffView';
-import type { StreamTabs } from '@progressView/frontend/components/StreamTabs';
 import {
   handleFileAction,
   handleFollowUpChange,
@@ -34,17 +33,12 @@ import {
 } from '@progressView/frontend/eventHandlers';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
-  activeStreamId$,
   appState,
   childStreamsByParent$,
   displayedActiveStreamId$,
-  hasAnyStreams$,
   pendingApprovalIds$,
-  streamById$,
-  streamStates$,
   topLevelStreams$,
 } from '@progressView/frontend/progressState';
-import { streamDisplayLabel } from '@progressView/frontend/utils';
 import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
@@ -52,6 +46,9 @@ import { hostBridge, postMessage } from '@shared/hostBridge';
 
 import { Signal, subscribeToSignalChanges } from '@shared/signals';
 import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
+import { emptySessionView } from '@shared/session/sessionView';
+import { applyShellAction, type Shell } from '@shared/session/shell';
+import { emptySurface } from '@shared/session/surface';
 
 import { formatDesktopAccelerator } from '@shared/commands/accelerators';
 
@@ -85,21 +82,26 @@ import { createEditorPane } from './editorPane';
 import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import { createTerminalPane } from './terminalPane';
 import './taskShell.css';
-import { taskSidebarTemplate } from './taskShell';
+import {
+  conversationDockTemplate,
+  paperChipTemplate,
+  taskSidebarTemplate,
+  type RailPaper,
+} from './taskShell';
+import { subagentsPaneTemplate } from './subagentsPane';
 import {
   activeWorkbenchTab,
   initialDesktopTaskShellState,
   openWorkbenchTab,
   renameWorkbenchTab,
   setBottomPanelHeight,
-  setProjectSectionPosition,
   setSidebarWidth,
   setWorkbenchTabDirty,
   setWorkbenchWidth,
   toggleFiles,
+  togglePapersLayout,
   toggleSidebar,
   toggleSummaryBar,
-  workspaceInitials,
   workspaceName,
   type DesktopTaskShellState,
   type WorkbenchTab,
@@ -107,6 +109,7 @@ import {
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import {
   DESKTOP_PAPER_COMMANDS,
+  paperDisplay,
   type DesktopPaperSummary,
 } from '../shared/desktopPaperMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
@@ -169,6 +172,20 @@ let openPapers: readonly DesktopPaperSummary[] = [];
 let activePaperRoot: string | undefined;
 let papersKnown = false;
 const hasWorkspace = () => !papersKnown || activePaperRoot !== undefined;
+// Which papers are open and which one this window shows, as the rail reads
+// it; the collapsed set is the rail's own fold state.
+let shell: Shell = { active: '', open: [], collapsed: [], search: '' };
+// One SessionView and Surface per open paper. Until the session fold reaches
+// this renderer (lane 4) and one view per paper exists (lane 6), every paper
+// carries the empty view: the rail's shape is final, its data is not yet.
+const railPapers = (): RailPaper[] =>
+  openPapers.map((paper) => ({
+    display: paperDisplay(paper),
+    view: emptySessionView(paper.root),
+    surface: emptySurface(paper.root),
+  }));
+const activeRailPaper = (papers: readonly RailPaper[]) =>
+  papers.find((paper) => paper.display.key === shell.active);
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
@@ -251,11 +268,9 @@ function toggleSummaryBarVisibility(): void {
   updateShell(toggleSummaryBar(shellState));
 }
 
-// `<settings-app>`, `<main-app>`, and `<stream-conversation>` are instantiated
-// once and slotted into the shell template via Lit's DOM-node interpolation, so
-// Lit preserves their internal state across re-renders and tab switches.
-const mainView: HTMLElement = document.createElement('main-app');
-mainView.setAttribute('data-desktop-view', 'main');
+// `<settings-app>` and `<progress-app>` are instantiated once and slotted into
+// the shell template via Lit's DOM-node interpolation, so Lit preserves their
+// internal state across re-renders and tab switches.
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 {
   // Empty-state placeholder when no workspace is open. The launcher cannot
@@ -294,14 +309,10 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
   );
 }
 
-const conversationView: HTMLElement = document.createElement(
-  'stream-conversation',
-);
+// The one conversation shell both hosts render: its empty state is the
+// launcher, its conversation branch the selected stream.
+const conversationView: HTMLElement = document.createElement('progress-app');
 conversationView.setAttribute('data-desktop-view', 'progress');
-
-// Left rail: a <stream-tabs> mount wired directly to module-level
-// progressState rather than nested inside <progress-app>.
-const railTabs = document.createElement('stream-tabs') as StreamTabs;
 
 const settingsView: HTMLElement = document.createElement('settings-app');
 settingsView.setAttribute('data-desktop-view', 'settings');
@@ -370,6 +381,17 @@ const workbench = createWorkbenchController({
   terminalPane,
   reviewPane,
   pdfPane,
+  subagentsTemplate: () => {
+    const papers = railPapers();
+    const active = activeRailPaper(papers);
+    return active
+      ? subagentsPaneTemplate({
+          view: active.view,
+          surface: active.surface,
+          selected: active.surface.selected,
+        })
+      : nothing;
+  },
   settingsView,
   logsPane,
   getState: () => shellState,
@@ -388,21 +410,10 @@ const environmentPopover = createEnvironmentPopover({
   postMessage,
 });
 
-function currentTaskTitle(): string {
-  // The confirmed stream id, not `displayedActiveStreamId$`: the header names
-  // the content that is actually active while the rail highlights the pending
-  // switch (see `progressState.ts`). `streamDisplayLabel` reads the label
-  // `buildStreamTabInfo` already cleaned, so a source-prefixed agent id never
-  // reaches the header.
-  const activeId = activeStreamId$.get();
-  const stream = activeId ? streamById$.get().get(activeId) : undefined;
-  return streamDisplayLabel(stream) || 'New task';
-}
-
 function taskConversationTemplate(): TemplateResult {
-  const activeId = activeStreamId$.get();
-  const showConversation = activeId != null && hasAnyStreams$.get();
   const startupPanelVisible = startupTeamPanel.isVisible();
+  const papers = railPapers();
+  const activePaper = activeRailPaper(papers);
   // The sidebar is the only home for the rail's per-stream pending-approval
   // badge (StreamTabs.ts). Collapsing it removes that cue entirely, so a
   // call held at the approval gate — often on a workflow's child stream, not
@@ -448,7 +459,12 @@ function taskConversationTemplate(): TemplateResult {
               : nothing
           }
         </span>
-        <span class="task-header-title">${currentTaskTitle()}</span>
+        ${
+          // In the focus layout the rail's switcher is the paper's one home.
+          shellState.papersLayout === 'sections' && papers.length > 0
+            ? paperChipTemplate(papers, activePaper, selectPaper)
+            : nothing
+        }
         <span class="task-header-spacer"></span>
         ${
           shellState.summaryBarVisible
@@ -523,11 +539,7 @@ function taskConversationTemplate(): TemplateResult {
         }
       </header>
       <div class="task-conversation-body" id="desktop-center">
-        <section
-          class="task-conversation-pane"
-          data-pane="launcher"
-          ?hidden=${showConversation}
-        >
+        <section class="task-conversation-pane" data-pane="conversation">
           ${
             hasWorkspace()
               ? html`
@@ -535,19 +547,12 @@ function taskConversationTemplate(): TemplateResult {
                     class="task-launcher-surface"
                     ?hidden=${startupPanelVisible}
                   >
-                    ${mainView}
+                    ${conversationView} ${conversationDockTemplate()}
                   </section>
                 `
               : noWorkspacePlaceholder
           }
           ${startupTeamPanel.template()}
-        </section>
-        <section
-          class="task-conversation-pane"
-          data-pane="conversation"
-          ?hidden=${!showConversation}
-        >
-          ${conversationView}
         </section>
       </div>
     </main>
@@ -572,11 +577,6 @@ function recordLayoutMeasurement(next: DesktopTaskShellState): void {
 function rememberSidebarWidth(event: Event): void {
   const width = (event.currentTarget as SplitPanelElement).positionInPixels;
   recordLayoutMeasurement(setSidebarWidth(shellState, width));
-}
-
-function rememberProjectSectionPosition(event: Event): void {
-  const position = (event.currentTarget as SplitPanelElement).position;
-  recordLayoutMeasurement(setProjectSectionPosition(shellState, position));
 }
 
 function rememberBottomPanelHeight(event: Event): void {
@@ -639,8 +639,11 @@ function taskMainTemplate(
   `;
 }
 
+function selectPaper(root: string): void {
+  postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { root });
+}
+
 function shellTemplate(): TemplateResult {
-  const workspacePath = activePaperRoot;
   const rightTab = activeWorkbenchTab(shellState, 'right');
   const bottomTab = activeWorkbenchTab(shellState, 'bottom');
   const main = taskMainTemplate(rightTab, bottomTab);
@@ -678,13 +681,12 @@ function shellTemplate(): TemplateResult {
           {
             files: editorPane.treeElement,
             filesExpanded: shellState.filesExpanded,
-            papers: openPapers,
-            activeRoot: activePaperRoot,
-            initials: workspaceInitials(workspacePath),
-            projectSectionPosition: shellState.projectSectionPosition,
-            sessions: railTabs,
-            streamCount: topLevelStreams$.get().length,
-            workspaceName: workspaceName(workspacePath),
+            papers: railPapers(),
+            shell,
+            papersLayout: shellState.papersLayout,
+            subagentsOpen: shellState.workbenchTabs.some(
+              (tab) => tab.kind === 'subagents',
+            ),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
           },
           {
@@ -697,15 +699,23 @@ function shellTemplate(): TemplateResult {
             },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
-            onSelectPaper: (root) =>
-              postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { root }),
+            onSelectPaper: selectPaper,
             onClosePaper: (root) =>
               postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, { root }),
+            onTogglePaperCollapsed: (key) => {
+              shell = applyShellAction(shell, {
+                kind: 'collapse',
+                session: key,
+                collapsed: !shell.collapsed.includes(key),
+              });
+              rerenderShell();
+            },
+            onTogglePapersLayout: () =>
+              updateShell(togglePapersLayout(shellState)),
             onOpenTerminal: () => workbench.openKind('terminal'),
             onOpenBrowser: () => workbench.openKind('browser'),
             onOpenSettings: () => workbench.openKind('settings'),
             onOpenLogs: () => workbench.openKind('logs'),
-            onResizeProjectSection: rememberProjectSectionPosition,
           },
         )}
       </div>
@@ -773,11 +783,6 @@ function rerenderShell(): void {
     activeWorkbenchTab(shellState, 'right')?.kind === 'logs' ||
       activeWorkbenchTab(shellState, 'bottom')?.kind === 'logs',
   );
-  railTabs.streams = topLevelStreams$.get();
-  railTabs.activeStreamId = displayedActiveStreamId$.get();
-  railTabs.streamStates = streamStates$.get();
-  railTabs.pendingApprovalStreamIds = pendingApprovalIds$.get();
-  railTabs.childStreamsByParent = childStreamsByParent$.get();
   observeSurfaceResizes();
 }
 
@@ -848,17 +853,16 @@ let shellWatcherInstalled = false;
 function installShellSignalWatcher(): void {
   if (shellWatcherInstalled) return;
   shellWatcherInstalled = true;
-  // Subscribe to module-level progress signals so the center-pane swap
-  // (launcher ↔ conversation) and the rail tab properties stay live.
-  // `subscribeToSignalChanges` wraps the same `Signal.subtle.Watcher` that
-  // `SignalWatcher(LitElement)` uses internally, coalescing synchronous
-  // signal writes into one microtask-scheduled re-render.
+  // Subscribe to the module-level progress signals the chrome still reads
+  // (the pending-approval cue, the environment popover's counts, the
+  // palette's stream list) so they stay live until the session fold feeds
+  // the shell. `subscribeToSignalChanges` wraps the same
+  // `Signal.subtle.Watcher` that `SignalWatcher(LitElement)` uses
+  // internally, coalescing synchronous signal writes into one
+  // microtask-scheduled re-render.
   const shellDeps = new Signal.Computed(() => {
-    activeStreamId$.get();
     displayedActiveStreamId$.get();
-    hasAnyStreams$.get();
     topLevelStreams$.get();
-    streamStates$.get();
     pendingApprovalIds$.get();
     childStreamsByParent$.get();
     return Date.now();
@@ -975,7 +979,7 @@ function openCommandPalette(): void {
   shortcutBootstrap.open();
 }
 
-// Clear the active stream so the center pane swaps back to <main-app>.
+// Clear the active stream so the conversation shell shows its empty state.
 function returnToLauncher(): void {
   requestStreamDeselection();
 }
@@ -1054,6 +1058,11 @@ const MESSAGE_ROUTES = createMessageRoutes({
     openPapers = message.papers;
     activePaperRoot = message.activeRoot ?? undefined;
     papersKnown = true;
+    shell = {
+      ...shell,
+      active: message.activeRoot ?? '',
+      open: message.papers.map((paper) => paper.root),
+    };
     rerenderShell();
     if (activePaperRoot !== undefined && activePaperRoot !== previousRoot) {
       void editorPane.refresh();
@@ -1087,26 +1096,11 @@ window.addEventListener('resize', () => {
 // Wire <stream-tabs> + <stream-conversation> events to shared handlers
 // =============================================================================
 
-// Each guard below protects its wiring function against double-registration:
-// a bootstrap recovery attempt that itself fails re-renders the same
-// fallback UI, whose button re-invokes recoverFromBootstrapFallback()
-// against these same module-level railTabs/conversationView elements, which
-// never get recreated or torn down for the life of the renderer.
-let railTabsWired = false;
-
-function wireRailTabs(): void {
-  if (railTabsWired) return;
-  railTabsWired = true;
-  railTabs.addEventListener(
-    'stream-switch',
-    handleStreamSwitch as EventListener,
-  );
-  railTabs.addEventListener(
-    'stream-delete',
-    handleStreamDelete as EventListener,
-  );
-}
-
+// The guard below protects the wiring against double-registration: a
+// bootstrap recovery attempt that itself fails re-renders the same fallback
+// UI, whose button re-invokes recoverFromBootstrapFallback() against this
+// same module-level conversationView element, which never gets recreated or
+// torn down for the life of the renderer.
 let conversationWired = false;
 
 const CONVERSATION_EVENTS: ReadonlyArray<[string, EventListener]> = [
@@ -1138,7 +1132,6 @@ function wireConversation(): void {
  * installed shortcuts at all). Every step is idempotent.
  */
 function completeBootstrap(): void {
-  wireRailTabs();
   wireConversation();
   // Runs here rather than at module scope so a shell recovering from a
   // bootstrap failure re-installs shortcuts too; every step is idempotent.

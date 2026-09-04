@@ -1,4 +1,4 @@
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 
 import { renderEmptyState } from '@shared/wa/emptyState';
 
@@ -33,6 +33,8 @@ interface WorkbenchControllerDeps {
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
   pdfPane: ReturnType<typeof createPdfPane>;
+  /** The Subagents tab's content, read from the active paper's view. */
+  subagentsTemplate(): TemplateResult | typeof nothing;
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopTaskShellState;
@@ -61,6 +63,7 @@ export function createWorkbenchController({
   terminalPane,
   reviewPane,
   pdfPane,
+  subagentsTemplate,
   settingsView,
   logsPane,
   getState,
@@ -253,6 +256,8 @@ export function createWorkbenchController({
         return workbenchSurfaceTemplate(logsPane);
       case 'pdf':
         return workbenchSurfaceTemplate(pdfPane.frameFor(tab));
+      case 'subagents':
+        return workbenchSurfaceTemplate(subagentsTemplate());
     }
   }
 

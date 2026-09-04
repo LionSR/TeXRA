@@ -4,6 +4,8 @@
 
 import { z } from 'zod';
 
+import { workspaceInitials } from './desktopTaskShell';
+
 export const DESKTOP_PAPER_COMMANDS = {
   PAPERS: 'desktop:papers',
   SELECT_PAPER: 'desktop:papers:select',
@@ -17,6 +19,28 @@ const DesktopPaperSummarySchema = z.object({
   name: z.string(),
 });
 export type DesktopPaperSummary = z.infer<typeof DesktopPaperSummarySchema>;
+
+/**
+ * What a rail row, switcher entry, or paper chip prints for one paper: fact
+ * strings only (G4), keyed by the paper's root. The renderer derives it from
+ * the summary until the host snapshot carries it (PRD 8.1).
+ */
+export const DesktopPaperDisplaySchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  initials: z.string(),
+  subtitle: z.string(),
+});
+export type DesktopPaperDisplay = z.infer<typeof DesktopPaperDisplaySchema>;
+
+export function paperDisplay(paper: DesktopPaperSummary): DesktopPaperDisplay {
+  return {
+    key: paper.root,
+    name: paper.name,
+    initials: workspaceInitials(paper.root),
+    subtitle: paper.root,
+  };
+}
 
 export const DesktopPapersMessageSchema = z.object({
   command: z.literal(DESKTOP_PAPER_COMMANDS.PAPERS),

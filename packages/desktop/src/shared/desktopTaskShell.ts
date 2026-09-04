@@ -70,6 +70,14 @@ export const WORKBENCH_KIND_META = {
     label: 'PDF',
     singleton: false,
   },
+  /** The selected stream's root subtree. While it is open the rail lists
+   *  top-level streams only: the tree has one home at a time. */
+  subagents: {
+    defaultPlacement: 'right',
+    icon: 'diagram-project',
+    label: 'Subagents',
+    singleton: true,
+  },
 } as const satisfies Record<string, WorkbenchKindMeta>;
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
@@ -83,6 +91,14 @@ export interface WorkbenchTab {
   readonly dirty?: boolean;
 }
 
+/**
+ * How the rail lists the open papers: every paper as its own section with
+ * its streams nested beneath it, or the active paper in focus with a
+ * switcher on top and the other papers' live streams in one card.
+ */
+export const PAPERS_LAYOUTS = ['sections', 'focus'] as const;
+export type PapersLayout = (typeof PAPERS_LAYOUTS)[number];
+
 export interface DesktopTaskShellState {
   readonly activeWorkbenchTabIds: Readonly<
     Partial<Record<WorkbenchPlacement, string>>
@@ -91,7 +107,7 @@ export interface DesktopTaskShellState {
   readonly sidebarCollapsed: boolean;
   readonly sidebarWidth: number;
   readonly filesExpanded: boolean;
-  readonly projectSectionPosition: number;
+  readonly papersLayout: PapersLayout;
   readonly summaryBarVisible: boolean;
   readonly workbenchWidth: number;
   readonly workbenchTabs: readonly WorkbenchTab[];
@@ -100,8 +116,6 @@ export interface DesktopTaskShellState {
 
 const BOTTOM_PANEL_MIN_HEIGHT = 180;
 const BOTTOM_PANEL_MAX_HEIGHT = 560;
-const PROJECT_SECTION_MIN_POSITION = 20;
-const PROJECT_SECTION_MAX_POSITION = 80;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 480;
 const WORKBENCH_MIN_WIDTH = 380;
@@ -114,7 +128,7 @@ export function initialDesktopTaskShellState(): DesktopTaskShellState {
     sidebarCollapsed: false,
     sidebarWidth: 288,
     filesExpanded: true,
-    projectSectionPosition: 52,
+    papersLayout: 'sections',
     summaryBarVisible: true,
     workbenchWidth: 640,
     workbenchTabs: [],
@@ -394,6 +408,15 @@ export function toggleSidebar(
   return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
 }
 
+export function togglePapersLayout(
+  state: DesktopTaskShellState,
+): DesktopTaskShellState {
+  return {
+    ...state,
+    papersLayout: state.papersLayout === 'sections' ? 'focus' : 'sections',
+  };
+}
+
 export function toggleFiles(
   state: DesktopTaskShellState,
 ): DesktopTaskShellState {
@@ -433,20 +456,6 @@ export function setSidebarWidth(
   return {
     ...state,
     sidebarWidth: clampedDimension(width, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH),
-  };
-}
-
-export function setProjectSectionPosition(
-  state: DesktopTaskShellState,
-  position: number,
-): DesktopTaskShellState {
-  return {
-    ...state,
-    projectSectionPosition: clampedDimension(
-      position,
-      PROJECT_SECTION_MIN_POSITION,
-      PROJECT_SECTION_MAX_POSITION,
-    ),
   };
 }
 
