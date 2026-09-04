@@ -97,6 +97,17 @@ export class ProgressBackend {
   private readonly hasPendingPermissions: (streamId: string) => boolean;
   private readonly storageOperationQueue = new PQueue({ concurrency: 1 });
   private readonly detachEventListeners: Array<() => void> = [];
+  /**
+   * The roster the last projection put on screen. Nothing else remembers it:
+   * `sendStreamMetadata` builds each `UPDATE_STREAMS` from live state and
+   * keeps no copy, and live state stops listing a stream the moment it is
+   * deleted — including when some other owner deleted it, which is exactly
+   * when a row is left stranded in the rail (the leftover sweep republishes
+   * every shell it swept as a `removeStream` fact for that reason). So this
+   * is what answers "is the presentation still showing this stream?" after
+   * its durable state is already gone.
+   */
+  private readonly renderedStreams = new Set<StreamTabId>();
   private activationGeneration = 0;
   private latestActivationTarget: PresentedStreamId = '';
   private readonly inFlightActivationGenerations = new Set<number>();
@@ -189,6 +200,9 @@ export class ProgressBackend {
       projectedStream = this.latestActivationTarget;
     }
     this.renderer.sendStreamMetadata(projectedStream, rosterActiveStream);
+    // The projection above is the rail the user sees; record it as sent.
+    this.renderedStreams.clear();
+    for (const stream of selectableStreams) this.renderedStreams.add(stream);
     if (!options.syncActiveStream) return;
     if (pendingSelectableActivation) {
       // A structural refresh must not supersede a newer user selection that
@@ -662,6 +676,7 @@ export class ProgressBackend {
     if (!canUseStreamDataDir(stream)) return undefined;
 
     const hadDeletableData = this.hasDeletableStreamData(stream);
+    const wasRendered = this.renderedStreams.has(stream);
     // An undefined expectedIncarnation falls back to the current incarnation
     // inside `clearStream`, matching the no-options call this replaces.
     const deletion = await this.state.clearStream(stream, {
@@ -671,12 +686,17 @@ export class ProgressBackend {
       return deletion;
     }
     // `clearStream` deleted and tombstoned the stream, so report `deleted`
-    // even when it had no durable data (ephemeral-only): the caller must not
-    // retire the tombstone a stale fact could then resurrect through.
-    if (!hadDeletableData) return 'deleted';
+    // even when this call removed nothing of its own: the caller must not
+    // retire the tombstone a stale fact could then resurrect through. The
+    // removal chrome below is owed to whatever the rail is showing, not to
+    // whatever this call deleted — a swept background shell has no durable
+    // data left by the time its `removeStream` fact arrives, and skipping the
+    // chrome for it left its row on screen with nothing behind it.
+    if (!hadDeletableData && !wasRendered) return 'deleted';
 
     this.lifecycle.cleanupDeletedStream(stream);
     this.webviewBridge.clearStream(stream);
+    this.renderedStreams.delete(stream);
     const selectionWasDeleted = this.presentation.activeStream === stream;
     if (selectionWasDeleted) {
       this.presentation.select('');
