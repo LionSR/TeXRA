@@ -260,7 +260,14 @@ reader (`executionLease.ts`, a pid probe on the lease owner) emits an
 `LocalRuntimeState` snapshot - the owner ids whose lease this process may
 not touch, and the streams it could not read (see "Unavailable" below) - on
 every change and on every subscribe, and the fold keeps the latest snapshot
-in `local`. `self` is a **set**: `claimLease` mints a fresh UUID per claim
+in `local`. A foreign process dying produces no event and no lease-file
+change - its claim stays on disk, and `proveOwnerLiveness` runs only when
+something inspects or claims (`executionLease.ts:369-373`) - so the runtime's
+lease reader **re-probes held foreign owners on an interval** and emits a
+new snapshot when a verdict changes. Without that wake, `heldBy` never
+moves in an already-open process and the dead owner's run stays read-only
+and running forever, which is the state Resume exists to leave. `self` is a
+**set**: `claimLease` mints a fresh UUID per claim
 (`executionLease.ts:519-525`), so a process running two executions holds two
 owner tokens, and a single-token `self` would classify its own second stream
 as foreign and disable its controls. `heldBy` is the lease's own
@@ -488,7 +495,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   holds it in the view until the event applies. Cost is O(depth) per named
   stream and the named set is bounded by what actually changed, never a
   whole-view pass. `transcript.run` is memoized on
-  `(streamId, settledSeq, childRevision)`, where `childRevision` is bumped
+  `(streamId, commitOrdinal, childRevision)` - the **session** ordinal, not
+  `settledSeq`: `seq` is per lane (above) and `workflowRunModel` consumes
+  `runSettled`, which a session-lane terminal status changes, so a per-lane
+  key can stay unchanged or repeat across lanes and return a stale board.
+  `childRevision` is bumped
   on the ancestor walk only when a field `childProgress` consumes changes -
   status, call count, usage - never on a text chunk. Bumping it on any arm
   change would rebuild every ancestor's run model per token in a workflow
@@ -602,13 +613,17 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   §5.2 requires keeping it (its stream's `run.start` has not folded yet).
   Dropping on absence alone would lose valid opening text and put the next
   delta at `from > length`. `closed` is what tells the two apart, and it is
-  bounded by the only window in which it matters: an id stays only while its
-  owner is still in `local.heldBy`, because a chunk can only be in flight
-  from a process that still holds the lease. Once the owner lets go, no
-  chunk for that stream can arrive and the id drops. (Retention cannot prune
-  it - the fold consumes events, chunks, and local snapshots, and deleting
-  rows produces none of those - which is why the bound has to come from an
-  input the fold actually sees.) Without the
+  bounded by a **drain boundary**, not by a clock or a lease: an id leaves
+  `closed` once the frame carrying its `removeStream` has been applied _and_
+  the transport reports no queued chunks for that stream, which the framer
+  already tracks per row (7.4). Releasing the lease is not enough - a chunk
+  emitted before the tombstone can still be sitting in the framer behind it,
+  and dropping the id first would make that chunk look early again: a
+  nonzero `from` hits the defect assertion, a `from: 0` leaves an orphan in
+  `inflight`. (Retention cannot prune `closed` either - the fold consumes
+  events, chunks, and local snapshots, and deleting rows produces none of
+  those - which is why the bound has to come from something the fold's own
+  transport can report.) Without the
   clear, an entry for a stream that can never render or finalize would sit
   in the session map forever. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
@@ -1417,7 +1432,10 @@ deletes `FOLLOW_UP_RESULT`.
 ### 8.3 Up: `host.request`
 
 Same envelope: a `session` and a `requestId`, answered by 8.4.
-Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
+Capabilities mapped onto `platform()` and `@hosts/*` ports:
+`openFile { path, line? }` (the line is what `LogList.ts:310-314` parses
+from a compiler link and `OpenFileMessageSchema` already carries; a bare
+capability would recreate the desktop line-dropping defect §1 counts),
 `openSpillArtifact`, `openTaskStorage`, `compare`, `accept`, `merge`,
 `latexdiff`, `openLabel`, `pack`, `clean`, `restoreIntoLauncher`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
@@ -1460,12 +1478,17 @@ outcome for `Shell.open` - without it that action is inert once
 `desktopWorkspaceRelaunch` is deleted), `savePastedImage { base64, mediaType, fileName }` (returning the stored
 filename, which `InstructionManager.handleClipboardImage` does today through
 `savePastedImageBase64`; §12.4 retains image paste and lane 4 deletes the
-message registry it rides), `storeApiKey { provider }` (the quota
+message registry it rides), `storeApiKey { provider? }` (the quota
 panel's recovery: the host prompts **and persists to the secret store**,
 returning only success and the provider - never the key itself. A raw
 credential must not cross into the webview bundle or its message path, and
 today it does not: `ProgressApiKeyRetryController` keeps it host-side
-through `readKey`/`promptForApiKey` (`:56-65, 186-211`). The routing switch
+through `readKey`/`promptForApiKey` (`:56-65, 186-211`). The provider is
+optional because onboarding's `needs-credential` card sends
+`OPEN_SET_API_KEY` without one (`MainApp.ts:354-360`) and the host asks
+which to configure; its outcome also refreshes the `host` snapshot, because
+the secret store emits no key-change event
+(`onboardingSlice.ts:23-28`). The routing switch
 and the retry belong together in the runtime, because
 `ProgressApiKeyRetryController.commitOwnApiKeyRouting` rechecks the pending
 id, changes routing, triggers the retry, and compensates a failure inside
@@ -1697,7 +1720,17 @@ variants are not), `phase`, `inquiryDrafts` (whole, and cleared when the
 inquiry
 resolves - §8.6 removes the round trip that persists them today, so nothing
 else would), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
-`session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`; its `search` is not
+`session` (it is the key) and `focusedRow`; Every per-stream map in `Surface` - `drafts`, `phase`, `expanded`, `groups`,
+`scroll` - drops its entry when that stream leaves the view, in every
+subscribed surface and in the persisted form. An id is never reused
+(decision 9), so an entry for a removed stream can never become valid again;
+without the prune, repeated runs and deletions grow the live Maps and the
+persisted webview state without bound and keep a deleted conversation's
+draft. `streamLifecycleSlice.ts:275-289` already clears stream-scoped
+frontend storage on deletion; this is that rule, restated for the records
+that replace it.
+
+`Shell` persists `active`, `open`, and `collapsed`; its `search` is not
 persisted, and neither is `Surface.search`. The two are separate because
 they scope differently: the drawer filters one session's streams and so
 belongs to that session's `Surface`, while the desktop rail searches across
@@ -2295,7 +2328,16 @@ As tests:
 
    So both ids mint per launch and `checkpointId` becomes the resume anchor:
    it rides the `run.start` payload, a relaunch finds its checkpoint by it,
-   and replay is unchanged. Reusing the execution id instead - what an
+   and replay is unchanged. **The lease moves with it.** The deterministic
+   execution id is not only a resume anchor today, it is a mutual-exclusion
+   key: a relaunch while the prior run is in flight shares that id, so the
+   fresh-lease acquisition fails closed rather than starting a second run
+   over one journal (`WorkflowScriptTool.ts:465-477`). Fresh ids would
+   remove that guard, so a workflow launch takes a lease on its
+   `checkpointId` as well as its execution - the journal is the shared
+   resource, so the exclusion belongs on the journal's identity, not on a
+   run id that happened to be derived from it. Same correction as the resume
+   anchor, applied to exclusion. Reusing the execution id instead - what an
    earlier draft of this decision proposed - is not merely redundant but
    unsafe: two live rows would share one execution id, and deletion resolves
    a stream to its execution and deletes that execution's state
