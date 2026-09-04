@@ -290,12 +290,19 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `event_sequence.owner_id` fence of the persistence proposal); it rides on
   every durable event and `StreamView.ownerId` is the latest one, so a
   resume in another process moves ownership without a new fact kind.
+- **`group === 'interrupted'`** iff the stream is non-terminal and
+  `stream.ownerId` is not in `local.liveOwners` - whether or not an approval
+  is pending. Owner loss is the whole condition: a process that crashes
+  mid-generation commits no terminal status, so conditioning this on a
+  pending approval (as an earlier draft did) would leave every ownerless run
+  reading `running` forever, with no Resume offered and no repair until some
+  later restart. A pending approval is then simply the case where the loss is
+  most visible, not a separate rule.
 - **`group === 'waiting'`** iff an `approval.requested` exists without its
   `approval.resolved` AND `stream.ownerId` is in `local.liveOwners`. Without a
-  live owner the same pair folds to `group === 'interrupted'`, never
-  `'waiting'`, because nothing is listening for the answer; `'interrupted'`
-  is the fourth arm of the union (5.1) and the group a host offers `resume`
-  on. Resume appends `approval.resolved` (cause: interrupted) for every
+  live owner it is `'interrupted'` by the rule above, never `'waiting'`,
+  because nothing is listening for the answer; `'interrupted'` is the fourth
+  arm of the union (5.1) and the group a host offers `resume` on. Resume appends `approval.resolved` (cause: interrupted) for every
   unresolved request on the stream **before** it starts, on the same path
   that clears the previous run's terminal state
   (`clearTerminalExecutionState`, `executeAgent.ts:541`). Without that, the
@@ -304,9 +311,7 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   for - and, because resume keeps the stream and the execution id, nothing
   later retires it. Compensating at the boundary is the same shape as the
   failed reservation's terminal status in section 6; scoping approvals to a
-  generation the fold retires would add a concept to carry the same fact. A stream with no unresolved approval keeps its status-derived group
-  whether or not its owner is alive, so only an abandoned decision reads as
-  interrupted.
+  generation the fold retires would add a concept to carry the same fact.
 - **`goal`** is per stream, on the toolUse arm. Today's
   `GoalStore.getForStream` and the `goalStateChanged` fact are keyed by
   stream id, and concurrent streams hold independent goals; one session
@@ -358,7 +363,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **`settledSeq`** is the last durable seq folded; text deltas do not
   advance it.
 - **Incremental.** One rule, keyed on what a change _names_. A durable event
-  names `event.streamId`. A `LocalRuntimeState` snapshot names the symmetric
+  names `event.streamId`, and a **lifecycle** event (`run.start`,
+  `removeStream`) additionally names that stream's subtree: a child's
+  placement is derived from whether its parent exists, so deleting a parent
+  re-roots its children and shortens every descendant's `ancestors` (see
+  `ancestors` above). That walk is O(subtree) and happens only when a parent
+  appears or is tombstoned. A `LocalRuntimeState` snapshot names the symmetric
   difference against the previous one: the streams whose `ownerId` entered or
   left `liveOwners`, and those entering or leaving `unreadable` - so an owner
   exiting recomputes exactly the streams it owned, not the view. A
@@ -671,9 +681,11 @@ stream and its approvals in the intermediate states `Stream.scan` publishes,
 and rescanning its whole history each time. A lane's frontier outlives the
 visibility of what it carried. `all(view.cursor)` is both the initial
 subscribe and the resubscribe.
-`events(streamId, fromSeq)` stays for single-stream readers (the trace
-viewer, the NDJSON subscription) and is a per-stream durable read, never
-`readAll` behind a filter: a filter would make every single-stream reader
+`events(streamId, fromSeq)` stays for single-stream readers - the trace
+viewer, and nothing else: the NDJSON projection reads `all(cursor)` (10.3),
+because the frozen wire carries session-lane facts (status, parent, removal,
+inquiry) that a single-stream reader would drop. It is a per-stream durable
+read, never `readAll` behind a filter: a filter would make every single-stream reader
 scan every other stream's history on every wake. The rc.112 names used above -
 `Stream.unwrap`, `Stream.flatMap`, `Ref.make`/`Ref.get` - are verified
 against `node_modules/effect/dist`; the v3 `toQueueScoped` and
@@ -723,15 +735,17 @@ class SessionViewService extends Context.Service<
       const liveness = yield* LocalRuntimeSource;
       // the delta path in the runtime; the frames' chunks field in a webview
       const chunks = yield* TextChunkSource;
-      // the key is the layer's, not an input: no fold arm carries one
+      // the key is the layer's, not an input: no fold arm carries one.
+      // SessionKey IS the workspace root that keys the LayerMap (7.3).
       const roots = yield* WorkspaceRoots;
-      const ref = yield* SubscriptionRef.make(emptySessionView(roots.key));
+      const empty = emptySessionView(roots.workspace);
+      const ref = yield* SubscriptionRef.make(empty);
       yield* Effect.forkScoped(
         Stream.mergeAll(
           [events.all(emptyCursor), liveness.changes, chunks.changes],
           { concurrency: 3 },
         ).pipe(
-          Stream.scan(emptySessionView, fold),
+          Stream.scan(empty, fold),
           Stream.runForEach((v) => SubscriptionRef.set(ref, v)),
         ),
       );
@@ -741,10 +755,12 @@ class SessionViewService extends Context.Service<
 }
 ```
 
-The empty value is built from `WorkspaceRoots`, not shared: `SessionView.key`
-identifies which paper a view is of, and no `FoldInput` arm carries a
-`SessionKey`, so a process-wide `emptySessionView` constant would give every
-paper's view the same key or none. The layer already has it.
+The empty value is built once from `WorkspaceRoots` and passed to _both_
+`SubscriptionRef.make` and `Stream.scan`: `SessionView.key` identifies which
+paper a view is of, no `FoldInput` arm carries a `SessionKey`, and seeding
+the scan with anything else would have its first emission overwrite the
+correctly keyed ref. `SessionKey` needs no field of its own - it is
+`roots.workspace`, the same value that keys the `LayerMap` (7.3, 8.1).
 
 `Layer.effect` strips `Scope` from the requirements, so the forked fold
 fiber is owned by the layer's scope and ends on `runtime.dispose()`.
@@ -759,6 +775,15 @@ runtime and the `local` field of each frame (8.1) in a webview.
 `TextChunkSource` is the model handler's existing delta path in the runtime
 (the stream `StreamingTextAccumulator` consumes today) and the `chunks`
 field of each frame in a webview.
+
+One rule governs all three non-durable inputs: **snapshot on subscribe,
+delta on change.** `local` and `host` already work that way; text does too,
+so `TextChunkSource` exposes a current snapshot - the complete in-flight
+text of every streaming row - beside its stream of deltas, and a subscribe
+answers with that snapshot as `from: 0` chunks. Without it a webview
+reloading mid-response would start with an empty `inflight` map and meet the
+next delta at `from > length`, which is the defect assertion, or show
+nothing at all until finalization.
 
 Chunks are process-local by decision, and that bounds G1 precisely: a run's
 incremental text exists only in the process that owns the run and in the
@@ -960,8 +985,13 @@ Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface 
 Two shapes on this channel, not three: a resync is a `Subscribe` whose
 frames answer with `from: 0` chunks for the streaming rows (5.2, 7.4), so
 there is no `Resync` shape and no replacement fold arm. Every event carries
-its `streamId` and `seq`, and every chunk its stream and its `from`/`to`,
-so a frame needs no per-stream range.
+its `lane` and `seq` - the lane being a stream id or the session lane (5.2)
+
+- and every chunk its stream and its `from`/`to`, so a frame needs no
+  per-stream range. `streamId` stays a payload field on the facts that have
+  one, and cursor advancement keys on `lane`, which is what lets an unparented
+  `inquiryThreadUpdated` replay without the sentinel stream id this PRD
+  rejects.
 
 The two nullable fields are host-owned transient snapshots, sent on every
 change and on every subscribe, and they are the only two. `local` is this
@@ -993,10 +1023,15 @@ One Zod union, one handler. Every request carries a `session` and a
 `requestId` minted by the surface, and is answered by 8.4. Arms, from the classification of today's
 46 progress and 49 main-view inbound commands:
 
-- stream: `stop`, `delete`, `deleteAll`, `compact`, `resume`, `runNew`,
-  `restoreState`
-- follow-up: `send { streamId, text, images }`, `retry`, `cancelRetry`,
-  `polish`
+Arm tags are `group.action` throughout, so two groups cannot claim one tag -
+`retry` was about to mean both a follow-up retry and a workflow-call retry
+in the same discriminated union, which Zod would have rejected and a reader
+would have misread first.
+
+- stream: `stream.stop`, `stream.delete`, `stream.deleteAll`,
+  `stream.compact`, `stream.resume`, `stream.runNew`, `stream.restoreState`
+- follow-up: `followUp.send { streamId, text, images }`, `followUp.retry`,
+  `followUp.cancelRetry`, `followUp.polish`
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
   carrying the `approvalId` of the request it answers (the runtime's id from
   `approval.requested`, which `ApprovalRequest` already holds), plus
@@ -1015,7 +1050,11 @@ One Zod union, one handler. Every request carries a `session` and a
   change and emits the resulting full snapshot as `approval.policy` (section
   6, item 2), which keeps "never a toggle delta" true of the _event_ while
   the _request_ stays a mutation.
-- workflow: `skip { executionId, callIndex }`, `retry`, `kill { detachActiveChildren }`
+- workflow: `workflow.skip { executionId, callIndex }`,
+  `workflow.retry { executionId, callIndex }`,
+  `workflow.kill { executionId, detachActiveChildren }` - each names its
+  execution, because the handler has to select that execution's interaction
+  scope (7.6) and one session can have several workflows running
 - misc: `runCompileFixer`, `exportTranscript`
 - launch: `execute { validatedRequest }`, `polishInstruction`
 
@@ -1063,12 +1102,28 @@ transport handshake (`WEBVIEW_READY`) becomes the subscribe message.
 
 ## 9. The Surface
 
-One per view instance (sidebar webview, editor-tab webview, Electron
-renderer, TUI screen) and open session, owned by the renderer, in signals:
+Two scopes, both owned by the renderer, both in signals. `Shell` is one per
+**view instance** (sidebar webview, editor-tab webview, Electron renderer,
+TUI screen); `Surface` is one per view instance **and open session**:
+
+```
+Shell = {
+  active: SessionKey                   // which paper the view is showing
+  open: SessionKey[]                   // rail order, user-arranged
+}
+```
+
+The desktop needs `Shell` because clicking a rail row has to choose a paper
+and nothing else can own that: a `Surface` is per session and so cannot say
+which session, `SessionView` is a fact about one session, and the `LayerMap`
+is a resource cache, not a selection. Without it the renderer would grow the
+second undeclared state owner G3 forbids. On the extension and the TUI it is
+degenerate - one root, `open` of length one - and it persists with the rest
+of the view's interaction state.
 
 ```
 Surface = {
-  // which paper this surface is showing; the LayerMap key (7.3)
+  // which paper this surface is for; the LayerMap key (7.3)
   session: SessionKey
   selected: StreamTabId | null
   drafts: Map<StreamTabId, Draft>
@@ -1078,6 +1133,8 @@ Surface = {
   // override on top of approval === 'descendant'
   expanded: Map<StreamTabId, 'expanded' | 'collapsed'>
   focusedRow: RowId | null
+  // run-board tab strip; fact-only transcript.run cannot hold a selection
+  phase: Map<StreamTabId, PhaseId>
   scroll: Map<StreamTabId, number>
   drawerOpen: boolean
   workbench: WorkbenchLayout                               // desktop only
@@ -1466,16 +1523,16 @@ Critical path: lane 1, then lane 2, then lane 4, then lane 8. At most three
 worktree lanes open. Each host switches in one pull request. Deletions ship
 with their replacement.
 
-| Lane                    | Content                                                                                                                                                                                                                                                                        | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
-| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; the six event changes of section 6; owner liveness as a fold input; compensation and tombstone gates re-keyed                                             | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
-| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock` | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
-| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                 | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
-| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                             | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
-| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                   | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
-| 6 Session roots         | section 11                                                                                                                                                                                                                                                                     | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
-| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                            | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
-| 8 Shell                 | section 12                                                                                                                                                                                                                                                                     | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
+| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                              | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
+| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all seven event changes of section 6, item 7 included (goal and queued follow-ups carry snapshots, not invalidation hints - the browser fold cannot reconstruct them otherwise); local runtime state as a fold input; compensation and tombstone gates re-keyed | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
+| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                       | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
+| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                       | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
+| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                   | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
+| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                         | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
+| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                           | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
+| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                  | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
+| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                           | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
 
 ### Acceptance per lane
 
@@ -1600,7 +1657,7 @@ As tests:
    of `SessionView` (10.3). The fold renders; the event stream serializes.
 
 Already agreed with the persistence owner and recorded in the companion
-proposal (in flight in another branch, see Lineage): the six event changes
+proposal (in flight in another branch, see Lineage): the seven event changes
 of section 6; Effect Schema nowhere; the publisher
 invariants of 7.1; `WorkspaceRoots` as the `Database` layer's parameter;
 the two v4 traps.
