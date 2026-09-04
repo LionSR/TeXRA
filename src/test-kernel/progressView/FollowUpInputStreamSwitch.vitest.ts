@@ -123,26 +123,16 @@ function expectSend(
 
 describe('follow-up-input layout', () => {
   // The composer sizes from its own content rather than reserving a fixed
-  // block for an empty draft, and keeps the manual drag affordance. Not Web
-  // Awesome's "auto" mode: it holds an oversized row for an empty draft inside
-  // a constrained composer, which is the failure the two-line floor avoids.
-  it('rests at two rows and stays vertically resizable', async () => {
+  // block for an empty draft. The two-line floor lives in
+  // FollowUpInput.styles.ts (--textarea-min-height); the manual drag
+  // affordance (resize: vertical) is asserted by the real-browser smoke
+  // suite, which can evaluate computed CSS.
+  it('rests at two rows on a plain native textarea', async () => {
     const element = createFollowUpInput('stream-layout');
     await element.updateComplete;
 
-    const textarea = element.shadowRoot?.querySelector('wa-textarea') as
-      | (HTMLElement & {
-          rows: number;
-          resize: string;
-          input: HTMLTextAreaElement;
-          updateComplete: Promise<boolean>;
-        })
-      | null;
-    await textarea?.updateComplete;
-
+    const textarea = element.shadowRoot?.querySelector('textarea');
     expect(textarea?.rows).toBe(2);
-    expect(textarea?.resize).toBe('vertical');
-    expect(textarea?.input.rows).toBe(2);
   });
 });
 

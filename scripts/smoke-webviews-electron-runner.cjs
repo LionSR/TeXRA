@@ -371,7 +371,7 @@ async function assertProgressComposerLayout(window, view) {
         // Resting height of the composer, in lines. It sits at two and grows
         // with content up to --textarea-max-height; the six-line resting box
         // it replaced reserved that room for an empty draft. Keep in step
-        // with --textarea-min-height in FollowUpInput.ts.
+        // with --textarea-min-height in FollowUpInput.styles.ts.
         const COMPOSER_RESTING_ROWS = 2;
 
         function findDeep(selector, root = document) {
@@ -387,18 +387,14 @@ async function assertProgressComposerLayout(window, view) {
         const composer = findDeep('follow-up-input');
         const dock = findDeep('.conversation-composer-dock');
         const conversationLog = findDeep('.conversation-log');
-        const webAwesomeTextarea = composer?.shadowRoot?.querySelector('wa-textarea');
-        if (webAwesomeTextarea?.updateComplete) await webAwesomeTextarea.updateComplete;
-        const textarea = webAwesomeTextarea?.shadowRoot?.querySelector('textarea');
-        const wrapper = webAwesomeTextarea?.shadowRoot?.querySelector('.textarea');
+        if (composer?.updateComplete) await composer.updateComplete;
+        const textarea = composer?.shadowRoot?.querySelector('textarea');
 
         const missing = [
           ['follow-up-input', composer],
           ['composer dock', dock],
           ['conversation log', conversationLog],
-          ['wa-textarea', webAwesomeTextarea],
           ['native textarea', textarea],
-          ['textarea wrapper', wrapper],
         ]
           .filter(([, element]) => !element)
           .map(([label]) => label);
@@ -420,19 +416,15 @@ async function assertProgressComposerLayout(window, view) {
           Math.min(window.innerHeight * 0.32, 240),
         );
         const initialTextareaRect = textarea.getBoundingClientRect();
-        const initialWrapperRect = wrapper.getBoundingClientRect();
 
-        if (
-          webAwesomeTextarea.rows !== COMPOSER_RESTING_ROWS ||
-          textarea.rows !== COMPOSER_RESTING_ROWS
-        ) {
+        if (textarea.rows !== COMPOSER_RESTING_ROWS) {
           throw new Error(
-            \`${view.name} composer rows did not propagate: host=\${webAwesomeTextarea.rows} native=\${textarea.rows} expected=\${COMPOSER_RESTING_ROWS}\`,
+            \`${view.name} composer rows did not propagate: native=\${textarea.rows} expected=\${COMPOSER_RESTING_ROWS}\`,
           );
         }
-        if (webAwesomeTextarea.resize !== 'vertical' || style.resize !== 'vertical') {
+        if (style.resize !== 'vertical') {
           throw new Error(
-            \`${view.name} composer is not vertically resizable: host=\${webAwesomeTextarea.resize} native=\${style.resize}\`,
+            \`${view.name} composer is not vertically resizable: native computed resize=\${style.resize}\`,
           );
         }
         if (Math.abs(minHeight - expectedMinHeight) > 3) {
@@ -450,31 +442,11 @@ async function assertProgressComposerLayout(window, view) {
             \`${view.name} composer max-height cap is incorrect: max=\${maxHeight.toFixed(1)}px expected=\${expectedMaxHeight.toFixed(1)}px\`,
           );
         }
-        if (Math.abs(initialWrapperRect.height - initialTextareaRect.height) > 2) {
-          throw new Error(
-            \`${view.name} Web Awesome wrapper is not synchronized initially: wrapper=\${initialWrapperRect.height.toFixed(1)}px textarea=\${initialTextareaRect.height.toFixed(1)}px\`,
-          );
-        }
-
-        textarea.style.height = '1000px';
-        await new Promise((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
-        );
-        const cappedTextareaRect = textarea.getBoundingClientRect();
-        const cappedWrapperRect = wrapper.getBoundingClientRect();
-        if (cappedTextareaRect.height > maxHeight + 1) {
-          throw new Error(
-            \`${view.name} native textarea exceeded its cap: rendered=\${cappedTextareaRect.height.toFixed(1)}px max=\${maxHeight.toFixed(1)}px\`,
-          );
-        }
-        if (Math.abs(cappedWrapperRect.height - cappedTextareaRect.height) > 2) {
-          throw new Error(
-            \`${view.name} Web Awesome wrapper lost sync after resize: wrapper=\${cappedWrapperRect.height.toFixed(1)}px textarea=\${cappedTextareaRect.height.toFixed(1)}px\`,
-          );
-        }
 
         const viewportWidth = document.documentElement.clientWidth;
         const viewportHeight = document.documentElement.clientHeight;
+        // Measure the dock and log at the composer's resting height, before
+        // the forced-stretch cap check below perturbs the layout.
         const composerRect = composer.getBoundingClientRect();
         const dockRect = dock.getBoundingClientRect();
         const logRect = conversationLog.getBoundingClientRect();
@@ -498,6 +470,23 @@ async function assertProgressComposerLayout(window, view) {
           );
         }
 
+        textarea.style.height = '1000px';
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
+        );
+        const cappedTextareaRect = textarea.getBoundingClientRect();
+        if (cappedTextareaRect.height > maxHeight + 1) {
+          throw new Error(
+            \`${view.name} native textarea exceeded its cap: rendered=\${cappedTextareaRect.height.toFixed(1)}px max=\${maxHeight.toFixed(1)}px\`,
+          );
+        }
+        // Restore the resting layout so the screenshot shows what ships,
+        // and wait a frame so the capture below cannot catch the stretch.
+        textarea.style.height = '';
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0))),
+        );
+
         return {
           lineHeight,
           logHeight: logRect.height,
@@ -506,7 +495,6 @@ async function assertProgressComposerLayout(window, view) {
           renderedHeight: cappedTextareaRect.height,
           viewportHeight,
           viewportWidth,
-          wrapperHeight: cappedWrapperRect.height,
         };
       })();
     `,
