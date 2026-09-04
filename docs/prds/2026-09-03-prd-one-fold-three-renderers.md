@@ -161,8 +161,8 @@ SessionView = {
   streams: Map<StreamTabId, StreamView>,
   // top-level ids, streamOrdering rule
   order: StreamTabId[],
-  // consumed frontier per lane; survives a stream's tombstone (7.1)
-  cursor: SessionCursor,
+  // the last session commit ordinal folded (7.1)
+  cursor: CommitOrdinal,
   // each carries streamId and requestId
   approvals: ApprovalRequest[],
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
@@ -272,13 +272,17 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   resets the stream's arm to empty - a fresh incarnation inherits no rows,
   no usage, and no approvals - and `executionId` is immutable within an
   incarnation, not across them. Physical removal is retention's business and
-  takes a stream's rows only together with its tombstone. `seq` is per **lane**, the `(lane, seq)` key of
-  the event table. A lane is a stream id, or the one session lane for facts
-  that name no stream - `inquiryThreadUpdated` with a null `parentStreamId`
-  is the case that forces this, and a sentinel stream id would be the same
-  thing wearing a disguise. Insert order across lanes under the publish
-  permit (7.1) is the session order a replay uses, and `SessionCursor` maps
-  lane to seq. Every stream kind gets one:
+  takes a stream's rows only together with its tombstone. The event table has two coordinates and they do different
+  jobs. `seq` is per **lane** - a lane is a stream id, or the one session
+  lane for facts that name no stream, which an `inquiryThreadUpdated` with a
+  null `parentStreamId` forces (a sentinel stream id would be the same rail
+  wearing a disguise). `commit` is a single session-wide ordinal assigned
+  under the publish permit (7.1): it is the insert order a replay must
+  follow, and it is what `SessionCursor` is - one number, not a map. Reading
+  per lane would group events by lane and let a session-lane terminal status
+  replay before its run-lane `run.start`, which the reset rule above would
+  then erase. `seq` serves the per-stream reads and `settledSeq`; `commit`
+  serves every ordering and resumption question. Every stream kind gets one:
   agent, process (`bash@tool`), workflow script, through `RunIdentity.kind`.
 - **Category, remote-ness, and owner** are launch facts on the `run.start`
   payload (section 6, item 6). `RunIdentity` deliberately does not encode
@@ -494,7 +498,13 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    stream creation, a metadata hint, and a focus request
    (`SessionFactApplier.ts:671-690`); creation is `run.start`, the hints
    are payload fields (item 6), focus is `Surface.select`.
-   `suppressViewSwitch` travels with the surface, never as an event. The
+   `suppressViewSwitch` was two things fused: a launch fact and a focus
+   request. The launch fact survives as `background` on the `run.start`
+   payload - a delegated child is launched in the background whoever is
+   watching (`childStream.ts:174-178`), and the frozen NDJSON wire's
+   `setActiveStream` line carries it, so the projection needs it to stay
+   byte-identical (10.3). The focus request is `Surface.select` and travels
+   with the surface, never as an event. The
    frozen NDJSON wire keeps its `setActiveStream` line - the CLI projection
    emits it from `run.start`, which is what the line meant to an external
    reader (10.3). Deleting the internal fact does not touch the contract.
@@ -593,13 +603,12 @@ class SessionEvents extends Context.Service<
             return wake.pipe(Stream.flatMap(() => forward, { concurrency: 1 }));
           }),
         );
+      // globally ordered by commit ordinal, every lane interleaved
       const all = drain((c) => durable.readAll(c));
       const events = (streamId, fromSeq) =>
         // a per-stream read, never readAll filtered: one stream's reader
         // must not scan every other stream's history on every wake
-        drain((c) => durable.read(streamId, c[streamId] ?? fromSeq))(
-          cursorFor(streamId, fromSeq),
-        );
+        drain((c) => durable.read(streamId, fromSeq, c))(fromCommit(fromSeq));
       return { publish, events, all };
     }),
   );
@@ -614,7 +623,7 @@ class SessionEvents extends Context.Service<
         publish: () => Effect.die(new Error('webview cannot publish')),
         events: (streamId, fromSeq) =>
           frames
-            .events(cursorFor(streamId, fromSeq))
+            .events(streamId, fromSeq)
             .pipe(Stream.filter((e) => e.streamId === streamId)),
         all: (cursor) => frames.events(cursor),
       };
@@ -672,15 +681,20 @@ stall the durable write path; with a payload-free wake there is nothing to
 lose by coalescing anyway. Backpressure lives at each transport framer
 (7.4).
 
-`SessionCursor` is a field of the view (`cursor`): the frontier the fold has
-actually consumed per lane, not a projection of the visible streams. The
-distinction is load-bearing. Deriving it from `view.streams` would drop a
-tombstoned stream's frontier the moment its `removeStream` folded, and every
-later wake would re-read that lane from its first row - resurrecting the
-stream and its approvals in the intermediate states `Stream.scan` publishes,
-and rescanning its whole history each time. A lane's frontier outlives the
-visibility of what it carried. `all(view.cursor)` is both the initial
-subscribe and the resubscribe.
+`SessionCursor` is one number - the last session commit ordinal folded - and
+it is a field of the view (`cursor`). Both properties matter. A single
+ordinal is what makes `readAll` a globally ordered scan rather than a
+per-lane merge, and being a field rather than a projection of `view.streams`
+is what keeps it monotone: derived from the visible streams it would drop a
+tombstoned stream's position the moment `removeStream` folded, and the next
+wake would re-read from the start, resurrecting the stream and its approvals
+in the intermediate states `Stream.scan` publishes, forever. An ordinal
+never regresses because it is not a function of what is visible.
+
+That ordinal is also the level of decision 6: the wake says "the session's
+commit ordinal is now N", and the reader asks for everything above its own.
+One coordinate answers both questions. `all(view.cursor)` is the initial
+subscribe and the resubscribe alike.
 `events(streamId, fromSeq)` stays for single-stream readers - the trace
 viewer, and nothing else: the NDJSON projection reads `all(cursor)` (10.3),
 because the frozen wire carries session-lane facts (status, parent, removal,
@@ -776,14 +790,18 @@ runtime and the `local` field of each frame (8.1) in a webview.
 (the stream `StreamingTextAccumulator` consumes today) and the `chunks`
 field of each frame in a webview.
 
-One rule governs all three non-durable inputs: **snapshot on subscribe,
-delta on change.** `local` and `host` already work that way; text does too,
-so `TextChunkSource` exposes a current snapshot - the complete in-flight
-text of every streaming row - beside its stream of deltas, and a subscribe
-answers with that snapshot as `from: 0` chunks. Without it a webview
-reloading mid-response would start with an empty `inflight` map and meet the
-next delta at `from > length`, which is the defect assertion, or show
-nothing at all until finalization.
+All three non-durable inputs are **levels**, like the commit ordinal (7.1),
+and for the same reason: a snapshot read beside a separately armed delta
+stream loses whatever lands between the two. `TextChunkSource` is therefore
+a `SubscriptionRef` of the in-flight text per row rather than a snapshot
+plus a delta feed. Subscribing to a `SubscriptionRef` replays its current
+value, so there is no window in which a chunk can be lost, and the framer
+derives each subscriber's chunks from the difference between that ref and
+what it has already sent for each row - which is what the `from`/`to`
+offsets are for. A fresh subscriber has sent nothing, so its first chunk per
+row is `from: 0`. Without this a webview reloading mid-response starts with
+an empty `inflight` map and meets the next delta at `from > length`, the
+defect assertion.
 
 Chunks are process-local by decision, and that bounds G1 precisely: a run's
 incremental text exists only in the process that owns the run and in the
@@ -985,21 +1003,24 @@ Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface 
 Two shapes on this channel, not three: a resync is a `Subscribe` whose
 frames answer with `from: 0` chunks for the streaming rows (5.2, 7.4), so
 there is no `Resync` shape and no replacement fold arm. Every event carries
-its `lane` and `seq` - the lane being a stream id or the session lane (5.2)
-
-- and every chunk its stream and its `from`/`to`, so a frame needs no
-  per-stream range. `streamId` stays a payload field on the facts that have
-  one, and cursor advancement keys on `lane`, which is what lets an unparented
-  `inquiryThreadUpdated` replay without the sentinel stream id this PRD
-  rejects.
+its `lane`, its `seq`, and its session `commit` ordinal (the lane being a
+stream id or the session lane, 5.2), and every chunk carries its stream and
+its `from`/`to`, so a frame needs no per-stream range. Frames arrive in
+commit order and a subscriber advances one cursor. `streamId` stays a
+payload field on the facts that have one, which is what lets an unparented
+`inquiryThreadUpdated` ride the session lane without the sentinel stream id
+this PRD rejects.
 
 The two nullable fields are host-owned transient snapshots, sent on every
 change and on every subscribe, and they are the only two. `local` is this
 process's runtime snapshot - live owner ids and unreadable streams (5.2);
 a surface that has never received one folds with `local` empty. `host` is
 everything the shell renders but does not own: the launcher's option lists
-(models, agents, teams, workspace roots), the five banners, and the
-onboarding funnel state. None of it is the user's choice (`Surface`, 9) or a
+(models, agents, teams, workspace roots), the document and Git catalogs the
+file-select group and the LaTeXDiff controls need (file lists, the current
+and open files, whether the root is a Git repository, recent commits -
+`fileOptions$` and `isGitRepo$` today), the five banners, and the onboarding
+funnel state. None of it is the user's choice (`Surface`, 9) or a
 fact about a run (`SessionView`), and all of it changes while a webview is
 open - a new agent file, an added workspace root, a credential that starts
 failing. That rules out both alternatives: a one-shot request at startup
@@ -1028,8 +1049,12 @@ Arm tags are `group.action` throughout, so two groups cannot claim one tag -
 in the same discriminated union, which Zod would have rejected and a reader
 would have misread first.
 
-- stream: `stream.stop`, `stream.delete`, `stream.deleteAll`,
-  `stream.compact`, `stream.resume`, `stream.runNew`, `stream.restoreState`
+- stream: `stream.stop`, `stream.delete { streamId, executionId }`,
+  `stream.deleteAll`, `stream.compact`, `stream.resume`, `stream.runNew`,
+  `stream.restoreState`. `stream.delete` carries the `executionId` the
+  surface saw, not one resolved at dispatch: a delete that waits in the
+  bridge while a deterministic stream relaunches would otherwise tombstone
+  the new incarnation and defeat the fence in 5.2.
 - follow-up: `followUp.send { streamId, text, images }`, `followUp.retry`,
   `followUp.cancelRetry`, `followUp.polish`
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
@@ -1073,13 +1098,21 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
 `record { start | stop }`, `popOut`, `popBack`, `pickFiles`, `openSettings`,
 `openDashboard` (the retained "Open dashboard" action, `texra.showDashboard`
-today), `openUrl`, and the launcher's file pickers. The own-API-key retry is a host
+today), `openUrl`, and the launcher's file pickers. The banners and the
+onboarding cards are interactive, so their actions are arms too:
+`recheckDependencies`, `dismissBanner { id }`, `signIn`,
+`onboarding { advance | dismiss }`, and `openInstallGuide { tool }`
+(`mainView/inbound.ts:184-200`). `openSettings` and `openUrl` cannot perform
+a recheck, a dismissal, or a funnel transition, so without these the
+retained controls go inert the moment lane 4 deletes the command
+registries. The own-API-key retry is a host
 credential flow whose completion issues a `runtime.request`.
 
 ### 8.4 Down: `response`
 
 ```ts
 Response = {
+  session: SessionKey,
   requestId,
   result: { ok: true, outcome: Outcome } | { ok: false, error: RequestError },
 };
@@ -1129,6 +1162,8 @@ Surface = {
   drafts: Map<StreamTabId, Draft>
   // the new-task composer: the existing MainViewPersistedState, per session
   launch: LaunchSurface
+  // answers in progress; keyed by inquiry, not by stream (8.5)
+  inquiryDrafts: Map<InquiryId, string>
   recording: boolean
   // override on top of approval === 'descendant'
   expanded: Map<StreamTabId, 'expanded' | 'collapsed'>
