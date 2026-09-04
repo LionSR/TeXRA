@@ -43,12 +43,11 @@ const validFlowRecord = {
 const sessions: SessionHandle[] = [];
 
 /**
- * A session whose restart repair never runs: `deferred` holds it until
- * `waitUntilReady`, which these tests deliberately never call, so every phase
- * below is derived at read time and not something repair wrote.
+ * A session with no boot pass of any kind, which is the only shape there is:
+ * every phase below is derived at read time.
  */
 function openUnrepairedHandle(transcripts: StreamLogStore): SessionHandle {
-  const session = new SessionHandle({ transcripts, restartRepair: 'deferred' });
+  const session = new SessionHandle({ transcripts });
   sessions.push(session);
   return session;
 }
@@ -316,6 +315,66 @@ describe('holds written when a run is opened for write', () => {
       });
       expect((await executionStore.readMeta())?.outcome).toBeUndefined();
       expect(transcripts.get(stream)?.getRange(0)).toHaveLength(1);
+    } finally {
+      await foreign.shutdown();
+    }
+  });
+});
+
+describe('the settle a row open makes', () => {
+  it('records a crashed run as cancelled and keeps its checkpoint, never touching one a live process owns', async () => {
+    const foreign = await startForeignInstance();
+    const crashedExecutionId = 'ffff6666' as ExecutionId;
+    const heldExecutionId = 'aaaa7777' as ExecutionId;
+    const crashed = `crashed-settle#${crashedExecutionId}` as StreamTabId;
+    const held = `held-settle#${heldExecutionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    for (const [stream, executionId] of [
+      [crashed, crashedExecutionId],
+      [held, heldExecutionId],
+    ] as const) {
+      appendRunningGroup(transcripts, stream);
+      await seedSidecarFk(stream, executionId);
+      const store = getExecutionStore(executionId);
+      await store.writeMeta({ timestamp: META_TIMESTAMP });
+      await store.write(flowKey(executionId), validFlowRecord);
+    }
+    await writeForeignLease(heldExecutionId, undefined, foreign.owner);
+    await transcripts.flush();
+
+    try {
+      const state = openUnrepairedSession(transcripts);
+      await state.snapshots.preload([crashed, held]);
+
+      await state.hydrateRunFacts(crashed);
+      // The group a dead owner left running is closed, so it stops rendering
+      // as in-progress forever (#7276)...
+      expect(transcripts.hasUnfinishedOutput(crashed)).toBe(false);
+      // ...the interruption becomes durable, so the outcome readers stop
+      // calling the run unknown...
+      await expect(
+        getExecutionStore(crashedExecutionId).readMeta(),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
+      // ...and the checkpoint the user resumes from survives the settle.
+      await expect(
+        getExecutionStore(crashedExecutionId).read(flowKey(crashedExecutionId)),
+      ).resolves.toEqual(validFlowRecord);
+      expect(state.resolveStreamPhase(crashed)).toEqual({
+        state: { phase: STREAM_PHASE.CANCELLED },
+        origin: 'derived',
+      });
+
+      await state.hydrateRunFacts(held);
+      // A live foreign owner is not a finished run: nothing is written, and
+      // the transcript is left exactly as its owner is writing it.
+      expect(transcripts.hasUnfinishedOutput(held)).toBe(true);
+      expect(
+        (await getExecutionStore(heldExecutionId).readMeta())?.outcome,
+      ).toBeUndefined();
+      expect(state.resolveStreamPhase(held)).toEqual({
+        origin: 'derived',
+        detail: streamHeldMessage(foreign.owner),
+      });
     } finally {
       await foreign.shutdown();
     }

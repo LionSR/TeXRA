@@ -65,7 +65,6 @@ export const STREAM_TRANSITION_CAUSE = {
   WAIT: 'wait',
   RESUME: 'resume',
   USER_STOP: 'user-stop',
-  RESTART_REPAIR: 'restart-repair',
 } as const;
 
 export type StreamTransitionCause =
@@ -105,10 +104,12 @@ export function isInFlightPhase(
 
 /**
  * Whether a workflow-script run has ended, as the shared workflow run model
- * reads it (`runSettled`): a known status that is neither running nor
+ * reads it off `streamPhase`: a known status that is neither running nor
  * waiting. An unknown status is not "ended" — a plan-only phase must not
- * vanish before the stream's first status has arrived. Both hosts call this,
- * so neither can drift.
+ * vanish before the stream's first status has arrived. This is the looser of
+ * the model's two readings: `unavailable` (a run another process owns) counts
+ * as ended here, which is why the model repaints a running card only on the
+ * stricter `isTerminalOutcomePhase`.
  */
 export function workflowRunSettled(
   phase: StreamLifecycleStatus | undefined,
@@ -158,12 +159,5 @@ export function canTransitionStreamPhase(
           from === STREAM_PHASE.RUNNING) &&
         to === STREAM_PHASE.RUNNING
       );
-    case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
-      // Repair settles a stream on a persisted outcome or records an
-      // interruption as CANCELLED; it never restores a live phase it did not
-      // observe and never infers FAILED.
-      if (from === undefined) return isTerminalOutcomePhase(to);
-      if (from === to) return true;
-      return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.CANCELLED;
   }
 }

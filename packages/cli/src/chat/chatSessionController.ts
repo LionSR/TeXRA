@@ -561,52 +561,60 @@ export function createChatSessionController(
         return;
       }
 
-      clearLocalTranscript();
-      followUpQueue.clear();
-      session.streamId = streamId;
-      session.executionId = id;
-      rootStreamId.set(streamId);
-
       const sessionContext = beginRunContext(config, 'history');
-
-      await runtimeSession.transcripts.ensureLoaded(streamId);
-      // `load` evicts every other record synchronously before its async seed,
-      // and the store reports no provenance for an evicted record, so nothing
-      // projects an evicted/unseeded stream (or re-emits warnIfUnseeded)
-      // mid-seed without any marker bookkeeping here. A previously seeded
-      // retained root deliberately keeps its provenance during reseeding:
-      // this keeps its canonical pre-resume projection visible at the cost of
-      // bounded warnIfUnseeded notices until the seed completes.
-      await snapshotStore.load([streamId]);
-      // Drop the projection memo before the log sync below can render a stale
-      // pre-resume projection. The load also re-establishes this stream's
-      // work-plan provenance in the store, which is what an open `/plan`
-      // reader re-reads to clear its failure-time mask.
-      bumpStreamArtifactRevision();
-      // A resumed stream may be one the user /clear-ed; the empty patch mints
-      // the slice and drops the retired mark so `syncStreamLog` and
-      // `focusStream` accept it again.
-      patchStream(streamId, (slice) => ({ ...slice }));
-      syncStreamLog(runtimeSession, streamId);
-      focusStream(streamId);
-
       const { approvalsUnavailable, ownExecution, finalize } =
         setupRunHost(sessionContext);
       ownExecution(id);
 
-      // A Ctrl-C during the rehydration awaits above (resume resolution,
-      // `ensureLoaded`, `snapshotStore.load`) lands here as
-      // `session.stopRequested`. Honor it before starting the real run chain —
-      // matching `tryResumeStream()`'s stop-check after its own preparatory
-      // awaits — instead of starting an agent the user already cancelled.
-      if (session.stopRequested) {
-        runtimeSession.followUps.release(recovery, 'recoverable');
-        recovery = undefined;
-        restoreInterruptedRecovery(supersededRecovery);
-        finalize();
-        resolveRunPromise();
-        return;
-      }
+      // Adopting the resumed stream is the mutation a refusal must not cost.
+      // A history row is advertised from its checkpoint file alone (one
+      // `stat`, no parse), so a run whose saved state cannot be loaded is
+      // offered and refused; `resumeRun` calls this only once that state
+      // loaded, so the refusal reaches the chat the user is looking at
+      // instead of a cleared transcript switched onto a dead stream. A Ctrl-C
+      // during the awaits below lands as `session.stopRequested` and is
+      // honored by `isCancellationRequested`, which `resumeRun` re-reads once
+      // this returns, rather than starting an agent the user cancelled.
+      const adoptResumedStream = async (): Promise<void> => {
+        clearLocalTranscript();
+        followUpQueue.clear();
+        session.streamId = streamId;
+        session.executionId = id;
+        rootStreamId.set(streamId);
+        // The session held no stream until the line above: `markRunPending`,
+        // inside the synchronous slot claim at the top of `resume`, dropped
+        // the pre-resume one, so a Ctrl-C in the window before adoption could
+        // not fabricate an interrupted marker on a stream this resume is
+        // leaving behind. It also found nothing to interrupt, so re-read the
+        // request here — the way `startRootRun`'s `onStreamResolved` does —
+        // and let it land on the run the user asked to continue. `resumeRun`
+        // re-reads `isCancellationRequested` once this hook returns, so the
+        // stop still refuses the launch; this only decides which stream it
+        // marks recoverable.
+        if (session.stopRequested) interruptActiveRun();
+
+        await runtimeSession.transcripts.ensureLoaded(streamId);
+        // `load` evicts every other record synchronously before its async
+        // seed, and the store reports no provenance for an evicted record, so
+        // nothing projects an evicted/unseeded stream (or re-emits
+        // warnIfUnseeded) mid-seed without any marker bookkeeping here. A
+        // previously seeded retained root deliberately keeps its provenance
+        // during reseeding: this keeps its canonical pre-resume projection
+        // visible at the cost of bounded warnIfUnseeded notices until the seed
+        // completes.
+        await snapshotStore.load([streamId]);
+        // Drop the projection memo before the log sync below can render a
+        // stale pre-resume projection. The load also re-establishes this
+        // stream's work-plan provenance in the store, which is what an open
+        // `/plan` reader re-reads to clear its failure-time mask.
+        bumpStreamArtifactRevision();
+        // A resumed stream may be one the user /clear-ed; the empty patch
+        // mints the slice and drops the retired mark so `syncStreamLog` and
+        // `focusStream` accept it again.
+        patchStream(streamId, (slice) => ({ ...slice }));
+        syncStreamLog(runtimeSession, streamId);
+        focusStream(streamId);
+      };
 
       // The seeded batch stays this call's until the stream queue takes it
       // over. Every refusal before that point (the stream already active
@@ -622,6 +630,7 @@ export function createChatSessionController(
             ...toolUseResumeOptions(sessionContext, approvalsUnavailable),
             recovery,
             extraFollowUps: supersededRecovery?.followUps,
+            onResumeResolved: adoptResumedStream,
             onFollowUpQueueReady: () => {
               followUpQueueReady = true;
             },

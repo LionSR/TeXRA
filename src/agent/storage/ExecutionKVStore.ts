@@ -328,7 +328,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
    * projected onto it. `meta.outcome` is the only writer of "how did this run
    * end": the result record is an interim envelope rewritten by every turn,
    * and a run can end after its last turn wrote one (interrupted between
-   * turns, stopped while suspended, failed by restart repair). A durable
+   * turns, stopped while suspended, settled by the host's exit drain). An
+   * ABSENT outcome is not liveness: a run whose owner crashed never wrote
+   * one, so "is this still going" is answered by `resolveExecutionLiveness`
+   * (`@tools/executions/executionLiveness`), never by this record. A durable
    * `completed` is never projected: it only ever agrees with the envelope,
    * whose producer may already have downgraded a nominally completed flow that
    * reported an application-level error (`buildSubagentFailureResultMeta`).

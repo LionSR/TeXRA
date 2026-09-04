@@ -24,9 +24,12 @@ import { readPlatformSetting } from '@utils/config/platformSettings';
  *   exiting process, so honoring the toggle there would strand children
  *   without finalization (`packages/cli/src/runtime/runExecution.ts`).
  *
- * Host quit is a separate axis this toggle does not govern. The extension and
- * desktop abandon native children to the restart-repair path; the CLI kills or
- * interrupts them, because the process that owns them is the one going away.
+ * Host quit is a separate axis this toggle does not govern, and detaching does
+ * not opt a child out of it: `detachActiveChildren` detaches a child from its
+ * parent without untracking its handle, so the shared exit drain
+ * (`settleLiveSessionExecutions`, #11355) still settles every tracked child on
+ * the way out, on every host. The CLI additionally kills or interrupts them,
+ * because the process that owns them is the one going away.
  *
  * The platform must be initialized before a run can be stopped or killed.
  */

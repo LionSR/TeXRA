@@ -86,8 +86,15 @@ export async function runResumeExecution(
       writeTextStderr(`Execution ${id} is already running in this process.`);
       return CliExitCode.Usage;
     case 'unclassified':
+      // A history row is advertised from its checkpoint file alone, so a run
+      // whose checkpoint is corrupt lands here and gets the same words the
+      // chat's open path gives that cohort, with the fact that decided it.
+      // A lease or metadata read that failed says nothing about the
+      // checkpoint, so it stays the operational fact it is.
       writeTextStderr(
-        `Could not read the state of execution ${id}: ${classification.cause}`,
+        classification.fault === 'checkpoint-malformed'
+          ? `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`
+          : `Could not read the state of execution ${id}: ${classification.cause}`,
       );
       return CliExitCode.AgentError;
     case 'finished':
@@ -97,9 +104,14 @@ export async function runResumeExecution(
       break;
   }
   // FK-first: the stream id stamped at registration is the reproduction
-  // contract. A row without one has no persisted stream to continue.
+  // contract. A row without one predates stamping, so there is no persisted
+  // stream to reopen — a different fact from "this run finished", and worth
+  // saying plainly since only an explicitly named id reaches here (the
+  // history listing never advertises such a row).
   if (!meta?.streamId) {
-    writeTextStderr(describeFollowUpFailure('finished'));
+    writeTextStderr(
+      `Execution ${id} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
+    );
     return CliExitCode.Usage;
   }
 

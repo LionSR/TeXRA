@@ -209,6 +209,9 @@ describe('deriveResumability', () => {
 
     await expect(deriveResumability(executionId)).resolves.toEqual({
       kind: 'unreadable',
+      // The one fault that names the record itself: callers refuse this
+      // cohort as unusable saved state, and every other fault operationally.
+      fault: 'checkpoint-malformed',
       cause: 'checkpoint is malformed',
     });
   });

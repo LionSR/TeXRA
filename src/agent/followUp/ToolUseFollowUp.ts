@@ -24,13 +24,18 @@ import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
  * {@link presentFollowUpResult}.
  *
  * - `finished`: the run has no checkpoint left to continue from.
+ * - `unusable_checkpoint`: a checkpoint file is there but could not be turned
+ *   into resume state (malformed, a spent cursor, shared state the category
+ *   no longer accepts). A history listing advertises a run from the file
+ *   alone, so this is the refusal that cohort meets — never `finished`, which
+ *   would claim the run ended normally.
  * - `owned_elsewhere`: another TeXRA process holds the run.
  * - `not_resumable`: the stream has no live flow here and the submission was
  *   refused (a terminalized queue, a disposed session, a run this process
  *   cannot classify).
  */
 export type FollowUpFailureReason =
-  'finished' | 'owned_elsewhere' | 'not_resumable';
+  'finished' | 'unusable_checkpoint' | 'owned_elsewhere' | 'not_resumable';
 
 /**
  * Three outcomes: the input reached a live flow, it waits in the stream's
@@ -67,6 +72,8 @@ interface SubmitFollowUpOptions {
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   finished: 'This run has finished. Start a new agent task to continue.',
+  unusable_checkpoint:
+    "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
   owned_elsewhere:
     'This run is live in another TeXRA window. Send the message there.',
   not_resumable:

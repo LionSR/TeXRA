@@ -5,6 +5,9 @@
  * executions.
  */
 
+// Third-party imports
+import pMap from 'p-map';
+
 // Local imports
 import {
   deriveResumability,
@@ -38,6 +41,7 @@ import {
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
@@ -67,6 +71,7 @@ import {
   formatTodoHeader,
   formatTodoSection,
   getExecutionStatusInfo,
+  statusInfoFromLiveness,
   executionDisplayCategory,
   shouldSuppressAutoDeliveredSubagentReport,
   type ExecutionDisplayCategory,
@@ -80,6 +85,7 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
+import { resolveExecutionLiveness } from './executions/executionLiveness';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -329,7 +335,13 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       offset,
       limit,
     );
-    const lines = page.map(formatListingLine);
+    // One page, not one directory: each line asks the durable facts about its
+    // run (a lease read only for a row that recorded no outcome, and a
+    // checkpoint stat only when that lease turns out to be free), so the
+    // fan-out is bounded rather than 200 wide.
+    const lines = await pMap(page, (entry) => formatListingLine(entry), {
+      concurrency: 16,
+    });
 
     return executed(
       `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
@@ -420,7 +432,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
     const category = executionDisplayCategory(identity, record);
-    const info = getExecutionStatusInfo(executionId, meta?.outcome);
+    const info = await getExecutionStatusInfo(executionId, meta);
     const lines = buildCompletedSummaryLines(
       executionId,
       record,
@@ -483,12 +495,19 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
   }
 
-  /** Fetch metas and format each child as a summary line. */
-  private async formatChildren(children: ChildRecord[]): Promise<string[]> {
-    const metas = await Promise.all(
-      children.map((c) => getExecutionStore(c.id).readMeta()),
+  /**
+   * Fetch metas and format each child as a summary line. Bounded like the
+   * listing page: every child reads its own metadata and, when that row
+   * recorded no outcome, its execution lease — statting the checkpoint only
+   * when that lease is free — so a wide fan-out is a wide burst of file I/O.
+   */
+  private formatChildren(children: ChildRecord[]): Promise<string[]> {
+    return pMap(
+      children,
+      async (child) =>
+        formatChildLine(child, await getExecutionStore(child.id).readMeta()),
+      { concurrency: 16 },
     );
-    return children.map((child, i) => formatChildLine(child, metas[i]));
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
@@ -698,8 +717,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     executionId: ExecutionId,
     viewRange?: [number, number],
   ): Promise<ToolResult> {
-    // A tracked handle is also the liveness fact: the shared terminal
-    // finalizer untracks it, so its presence means the command is still up.
+    // The handle names the live child stream; liveness itself is resolved
+    // below, from facts that outlive this process.
     const handle = currentSession().executions.getHandle(executionId);
     const meta = await getExecutionStore(executionId).readMeta();
     if (!meta && !handle) {
@@ -724,10 +743,34 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await transcripts.readEntries(streamId);
 
     const { lines, chars } = projectProcessOutput(entries);
-    const info = getExecutionStatusInfo(executionId, meta?.outcome);
-    const footer = handle
-      ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
-      : `[finished: this is the retained log; /executions/${executionId}/report has the result summary]`;
+    // No snapshot: `meta` was read before the transcript, and a command that
+    // finished during that read must not be judged against the row as it
+    // looked beforehand. One read of one execution can afford a fresh one.
+    const liveness = await resolveExecutionLiveness(executionId);
+    const info = statusInfoFromLiveness(liveness);
+    // The footer states the same reading as the header: "no handle in this
+    // process" alone never justifies calling the command finished, and a
+    // handle this process still tracks past its stream's terminal phase never
+    // justifies calling it still running.
+    const retained = `this is the retained log; /executions/${executionId}/report has the result summary`;
+    const footer = ((): string => {
+      switch (liveness.kind) {
+        case 'live':
+          return isInFlightPhase(liveness.info.status)
+            ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
+            : `[${liveness.info.status}; ${retained}]`;
+        case 'unsettled':
+          return `[not running in this process (${liveness.reason}); ${retained}]`;
+        case 'interrupted':
+          return `[interrupted before finishing; ${retained}]`;
+        case 'settled':
+          // Nothing here can see a detached shell that outlived its owner, so
+          // this says only what the durable facts establish.
+          return liveness.outcome
+            ? `[finished: ${retained}]`
+            : `[no TeXRA process owns this execution and no result was recorded; ${retained}]`;
+      }
+    })();
     const out: string[] = [
       `Output for ${executionId} (process, ${formatStatusInfo(info)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
     ];

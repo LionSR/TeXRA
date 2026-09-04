@@ -10,6 +10,7 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
+  interruptedWorkflowCall,
   type RunOutcome,
   type StreamLogEntry,
   type StreamTabId,
@@ -435,8 +436,7 @@ export class StreamLogStore {
    * degradation is loud: the cause is logged here and recorded in
    * `mode.reason`, which callers render through
    * {@link ephemeralTranscriptWarning}. A non-persistent store also disables
-   * resume — `SessionHandle` skips restart repair and nothing was persisted
-   * to resume from.
+   * resume — nothing was persisted to resume from.
    */
   static async openOrEphemeral(
     open: () => Promise<StreamLogStore> = () => StreamLogStore.open(),
@@ -508,10 +508,9 @@ export class StreamLogStore {
   /**
    * Whether this stream's transcript was left with something running — a task
    * group, a streaming text block, or a nonterminal workflow call. Answered
-   * from the always-resident summary, so a read-time phase derivation can ask
-   * it per stream without loading the log, and the two startup scans that
-   * wanted the whole unfinished set filter {@link keys} through it instead of
-   * asking for a second list.
+   * from the always-resident summary, so the read-time phase rule and the
+   * row-open settle beside it each ask for one stream, without loading the
+   * log and without a scan of the whole set.
    */
   hasUnfinishedOutput(streamId: StreamTabId): boolean {
     return hasSomethingRunning(this.summaries.get(streamId));
@@ -1071,22 +1070,11 @@ export class StreamLogStore {
 
         const call = nonterminalWorkflowCall(entry);
         if (call) {
-          // Only a running call had model work in flight; a declared,
-          // planned, or queued call was never launched.
-          const launched = call.status === 'running';
-          const recoveredCall = launched
-            ? {
-                ...call,
-                status: 'failed' as const,
-                error: 'The previous host stopped before this call completed.',
-              }
-            : {
-                ...call,
-                status: 'skipped' as const,
-                reason: 'not-reached' as const,
-              };
+          // The shared vocabulary for an interrupted card, so this persisted
+          // settlement and the read-time repaint agree.
+          const recoveredCall = interruptedWorkflowCall(call);
           const updated = logInstance.settle(entry.id, {
-            level: launched ? 'error' : 'info',
+            level: recoveredCall.status === 'failed' ? 'error' : 'info',
             data: recoveredCall,
           });
           if (updated) updatedAny = true;

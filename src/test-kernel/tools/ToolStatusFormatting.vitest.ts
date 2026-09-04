@@ -60,7 +60,7 @@ describe('tool status formatting', () => {
     );
   });
 
-  it('renders bash execution history as a process without a model', () => {
+  it('renders bash execution history as a process without a model', async () => {
     const entry: ExecutionListingEntry = {
       kind: 'run',
       identity: { kind: 'process', tool: 'bash' },
@@ -74,9 +74,13 @@ describe('tool status formatting', () => {
         agentCategory: 'toolUse',
       }),
       outcome: 'completed',
+      checkpointPresent: false,
     };
 
-    expect(formatListingLine(entry)).toBe(
+    // The row's own `outcome` is a recorded durable fact, so the status column
+    // shows it without re-reading the metadata file it came from. The other
+    // columns under test are the `process` category and the suppressed model.
+    await expect(formatListingLine(entry)).resolves.toBe(
       '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
     );
   });

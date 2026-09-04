@@ -1709,7 +1709,7 @@ describe('executionRegistry', () => {
       streamStatus.transition(
         childStreamId,
         STREAM_PHASE.CANCELLED,
-        'restart-repair',
+        'user-stop',
       );
 
       // Only the status machine's own fact remains; the registry contributes

@@ -45,7 +45,11 @@ export {
   deleteAllExecutions,
   isUserVisibleExecution,
 } from './executionListing';
-export { deriveResumability, type ResumabilityDecision } from './resumability';
+export {
+  checkpointExists,
+  deriveResumability,
+  type ResumabilityDecision,
+} from './resumability';
 export { formatConversationMessage } from './conversationFormat';
 export {
   ExecutionLeaseActiveError,

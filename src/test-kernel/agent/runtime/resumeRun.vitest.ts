@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeStream } from '@agent/runtime/resumeRun';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
@@ -26,11 +28,17 @@ vi.mock('@agent/storage/ExecutionKVStore', async (importActual) => ({
 }));
 
 // The refusal path re-reads the durable facts, which the fixtures below do
-// not seed: the store double answers only `readConfig`/`readMeta`.
+// not seed: the store double answers only `readConfig`/`readMeta`/`exists`.
 const classifyRunMock = vi.hoisted(() => vi.fn());
 vi.mock('@agent/runtime/runClassification', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/runClassification')>()),
   classifyRun: classifyRunMock,
+}));
+
+const inspectExecutionLeaseMock = vi.hoisted(() => vi.fn());
+vi.mock('@agent/storage/executionLease', async (importActual) => ({
+  ...(await importActual<typeof import('@agent/storage/executionLease')>()),
+  inspectExecutionLease: inspectExecutionLeaseMock,
 }));
 
 const readExecutionStreamIndexMock = vi.hoisted(() => vi.fn());
@@ -86,9 +94,11 @@ describe('resumeRun tool-use queue ownership', () => {
     getExecutionStoreMock.mockReset().mockReturnValue({
       readConfig: async () => snapshot().agentConfig,
       readMeta: async () => ({ streamId: STREAM }),
+      exists: async () => false,
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
+    inspectExecutionLeaseMock.mockReset().mockResolvedValue({ status: 'free' });
     readExecutionStreamIndexMock.mockReset().mockResolvedValue({
       byStream: new Map([[STREAM, EXECUTION]]),
       unreadable: new Map(),
@@ -308,6 +318,7 @@ describe('resumeRun tool-use queue ownership', () => {
         agentCategory: AgentCategory.Workflow,
       }),
       readMeta: async () => ({ streamId: STREAM }),
+      exists: async () => false,
     });
     retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
@@ -347,5 +358,78 @@ describe('resumeRun tool-use queue ownership', () => {
       resumeRun(EXECUTION, { session, executeWorkflow }),
     ).resolves.toEqual({ failed: 'owned_elsewhere' });
     expect(session.status.holdState(STREAM)).toContain('4321');
+  });
+
+  // History listings advertise a row from the checkpoint file alone, so a file
+  // that yields no resume state is refused as unusable state — telling that
+  // user the run "has finished", or throwing retrieval's internal wording at
+  // them, are the two ways this used to go wrong.
+  it.each([
+    [
+      'retrieval answers empty',
+      (): void =>
+        void retrieveSessionResumeDataMock.mockResolvedValueOnce(null),
+    ],
+    [
+      'retrieval throws on a record it cannot resume',
+      (): void =>
+        void retrieveSessionResumeDataMock.mockRejectedValueOnce(
+          new Error('Failed to retrieve tool-use resume data', {
+            cause: new PersistedFlowStateError(EXECUTION, 'unsupported-record'),
+          }),
+        ),
+    ],
+  ])(
+    'refuses a checkpoint as unusable when %s',
+    async (_description, arrange) => {
+      const session = createSession();
+      getExecutionStoreMock.mockReturnValue({
+        readConfig: async () => snapshot().agentConfig,
+        readMeta: async () => ({ streamId: STREAM }),
+        exists: async () => true,
+      });
+      arrange();
+
+      await expect(
+        resumeRun(EXECUTION, { session, executeWorkflow }),
+      ).resolves.toEqual({ failed: 'unusable_checkpoint' });
+      expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
+    },
+  );
+
+  // Only a cause that names the checkpoint refuses as unusable state. A
+  // transient storage failure is the operational error it has always been, so
+  // the host words it with the cause instead of telling the user to delete a
+  // run whose saved state may be fine.
+  it('propagates a transient retrieval failure over a present checkpoint', async () => {
+    const session = createSession();
+    getExecutionStoreMock.mockReturnValue({
+      readConfig: async () => snapshot().agentConfig,
+      readMeta: async () => ({ streamId: STREAM }),
+      exists: async () => true,
+    });
+    retrieveSessionResumeDataMock.mockRejectedValueOnce(
+      new Error('KV timeout'),
+    );
+
+    await expect(
+      resumeRun(EXECUTION, { session, executeWorkflow }),
+    ).rejects.toThrow('KV timeout');
+  });
+
+  // The launch's own acquire would raise `ExecutionLeaseActiveError` only
+  // after the host cleared its window and switched onto the resumed stream.
+  it('refuses a run a live foreign owner holds before the host rearranges', async () => {
+    const session = createSession();
+    const owner = { pid: 4321, hostname: 'other-host' };
+    inspectExecutionLeaseMock.mockResolvedValue({ status: 'held', owner });
+    const onResumeResolved = vi.fn();
+
+    await expect(
+      resumeRun(EXECUTION, { session, executeWorkflow, onResumeResolved }),
+    ).resolves.toEqual({ failed: 'owned_elsewhere' });
+    expect(onResumeResolved).not.toHaveBeenCalled();
+    expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
+    expect(session.status.holdState(STREAM)).toBe(streamHeldMessage(owner));
   });
 });

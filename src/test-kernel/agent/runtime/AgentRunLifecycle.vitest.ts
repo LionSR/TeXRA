@@ -55,9 +55,16 @@ import {
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
-  finalizeRun: vi.fn(async (): Promise<FinalizeExecutionResult> => ({
-    ok: true,
-  })),
+  // Echoes the requested outcome, as the real finalizer does whenever there
+  // is no existing outcome to retain.
+  finalizeRun: vi.fn(
+    async (input: {
+      outcome: RunOutcome;
+    }): Promise<FinalizeExecutionResult> => ({
+      ok: true,
+      outcome: input.outcome,
+    }),
+  ),
 }));
 
 const channelTraceMocks = vi.hoisted(() => ({
@@ -181,9 +188,9 @@ function takeWaitingHandle(executionId: ExecutionId): AgentExecutionHandle {
 function parkNextFinalize(): { started: () => boolean; release: () => void } {
   let releasePersist: (() => void) | undefined;
   storageMocks.finalizeRun.mockImplementationOnce(
-    () =>
+    (input) =>
       new Promise((resolve) => {
-        releasePersist = () => resolve({ ok: true });
+        releasePersist = () => resolve({ ok: true, outcome: input.outcome });
       }),
   );
   return {

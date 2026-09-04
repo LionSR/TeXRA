@@ -178,6 +178,7 @@ function metadataPatchMessage(
     streamState: {
       category: AgentCategory.Workflow,
       status: STREAM_PHASE.RUNNING,
+      statusDurablyFinal: false,
       conversationProgress: {
         toolCallCount: 0,
       },
@@ -278,6 +279,7 @@ describe('stream meta frontend state', () => {
       streamState: {
         category: AgentCategory.ToolUse,
         status: STREAM_PHASE.WAITING,
+        statusDurablyFinal: false,
         lastTimestamp: 9,
         conversationProgress: {
           toolCallCount: 3,
@@ -321,6 +323,7 @@ describe('stream meta frontend state', () => {
       streamState: {
         category: AgentCategory.Workflow,
         status: STREAM_PHASE.WAITING,
+        statusDurablyFinal: false,
         lastTimestamp: 250,
         conversationProgress: { toolCallCount: 0 },
         subagents: [],
@@ -452,6 +455,7 @@ describe('stream meta frontend state', () => {
         [streamId]: {
           category: AgentCategory.Workflow,
           status: STREAM_PHASE.COMPLETED,
+          statusDurablyFinal: true,
           lastTimestamp: 2,
           conversationProgress: {
             toolCallCount: 0,

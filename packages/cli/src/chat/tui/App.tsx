@@ -20,10 +20,7 @@ import {
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
 import { type StreamTabId, type WorkflowControlAction } from '@shared/schemas';
-import {
-  isActivePhase,
-  workflowRunSettled,
-} from '@shared/streams/streamStatus';
+import { isActivePhase } from '@shared/streams/streamStatus';
 import { SESSION_LIST } from '@shared/copy/nestedRuns';
 
 // Local imports - TUI surfaces and state
@@ -98,6 +95,7 @@ import {
   childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
   sessionStateRevision,
+  sessionStreamDurableOutcome,
   streamMetadataFor,
   streamStateFor,
   streamUnavailableDetailFor,
@@ -373,7 +371,11 @@ export function App(props: AppProps): React.JSX.Element {
     workflowPopupStreamId === undefined
       ? undefined
       : streamPhaseFor(workflowPopupStreamId)?.phase;
-  const workflowPopupRunSettled = workflowRunSettled(workflowRootPhase);
+  // A card the run left running is repainted only once nothing can settle it;
+  // the phase turns terminal at a stop, while the run is still unwinding.
+  const workflowRootDurablyFinal =
+    workflowPopupStreamId !== undefined &&
+    sessionStreamDurableOutcome(workflowPopupStreamId) !== undefined;
   // Each child's live progress is read once here off the session's own
   // record of that child (status machine, execution state, usage) and joined
   // to its card by the model; the popup paints the join and reads no stream.
@@ -404,7 +406,8 @@ export function App(props: AppProps): React.JSX.Element {
         rows: retained.rows,
         workflowAttemptId: workflowPopupRoot.workflowAttemptId,
         plan: retained.plan,
-        runSettled: workflowPopupRunSettled,
+        streamPhase: workflowRootPhase,
+        runDurablyFinal: workflowRootDurablyFinal,
         childProgress,
       }),
       retained,
@@ -413,7 +416,8 @@ export function App(props: AppProps): React.JSX.Element {
     // moved; they carry no value of their own.
   }, [
     workflowPopupRoot,
-    workflowPopupRunSettled,
+    workflowRootPhase,
+    workflowRootDurablyFinal,
     workflowPopupStreamId,
     childRosters,
     sessionRevision,

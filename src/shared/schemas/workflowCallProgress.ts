@@ -149,6 +149,11 @@ export type WorkflowCallTerminalProgress = Exclude<
   WorkflowCallProgress,
   { readonly status: WorkflowCallLiveStatus }
 >;
+/** A call that has not reached a terminal status — the sweep's subject. */
+export type WorkflowCallLiveProgress = Extract<
+  WorkflowCallProgress,
+  { readonly status: WorkflowCallLiveStatus }
+>;
 
 /** One lifecycle predicate shared by persistence and transcript projections. */
 export function isTerminalWorkflowCallStatus(
@@ -173,6 +178,31 @@ export function isTerminalWorkflowCallProgress(
   call: WorkflowCallProgress,
 ): call is WorkflowCallTerminalProgress {
   return isTerminalWorkflowCallStatus(call.status);
+}
+
+/** What a call that was in flight when its host stopped says about itself. */
+const INTERRUPTED_WORKFLOW_CALL_ERROR =
+  'The previous host stopped before this call completed.';
+
+/**
+ * How a host that stopped mid-run leaves one unsettled call — the single
+ * vocabulary for an interrupted card.
+ *
+ * Both settlements go through here: the persisted one
+ * (`StreamLogStore.endRunningGroupsForStreams`, which rewrites the row on
+ * disk) and the read-time repaint of a durably final run
+ * (`workflowRunModel`), for the crash and deadline-skip cases the write side
+ * never reaches. A transcript settled on disk and one repainted at read time
+ * therefore say the same thing about the same call.
+ */
+export function interruptedWorkflowCall(
+  call: WorkflowCallLiveProgress,
+): WorkflowCallTerminalProgress {
+  // Only a running call had model work in flight; a declared, planned, or
+  // queued call was never launched.
+  return call.status === 'running'
+    ? { ...call, status: 'failed', error: INTERRUPTED_WORKFLOW_CALL_ERROR }
+    : { ...call, status: 'skipped', reason: 'not-reached' };
 }
 
 export const WORKFLOW_TASK_STATUS_LABEL = {

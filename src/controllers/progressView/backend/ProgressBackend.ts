@@ -865,7 +865,6 @@ export class ProgressBackend {
 
   load(): Promise<void> {
     return this.enqueueStorageOperation(async () => {
-      await this.session.waitUntilReady();
       await this.state.load();
     });
   }

@@ -23,7 +23,10 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { streamStageFromStageStart } from '@shared/streams/stage';
-import { isActivePhase } from '@shared/streams/streamStatus';
+import {
+  isActivePhase,
+  isTerminalOutcomePhase,
+} from '@shared/streams/streamStatus';
 import { GoalStore } from '@tools/goal';
 import { assertNever } from '@utils/core';
 
@@ -1013,6 +1016,17 @@ export class SessionFactApplier {
         lastTimestamp,
         substate,
       );
+      // `UPDATE_STREAM_STATUS` carries the phase but not `statusDurablyFinal`,
+      // and a terminal transition is exactly when that bit flips: an
+      // in-process run reaches this transition after `finalizeRunTerminal`
+      // untracked its execution, so nothing can move the outcome any more.
+      // Without a metadata push the view keeps the stale `false` and paints an
+      // unclosed group as running until an unrelated refresh. Pushed without a
+      // phase override — the status machine wrote this phase before publishing
+      // the fact, so the renderer resolves it (hold and detail included) and
+      // the durability bit travels with it, which an override would suppress.
+      // One push per terminal transition, not per status.
+      if (isTerminalOutcomePhase(status)) this.pushStreamMetadata(streamId);
     }
   }
 

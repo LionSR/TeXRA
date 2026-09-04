@@ -27,10 +27,7 @@ import {
   type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
-import {
-  isTerminalOutcomePhase,
-  workflowRunSettled,
-} from '@shared/streams/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   workflowRunModel,
   type ChildRunProgress,
@@ -361,10 +358,18 @@ const activeTaskGroups$ = new Signal.Computed(
   () => activeStreamState$.get()?.taskGroups ?? EMPTY_TASK_GROUPS,
 );
 
-/** Whether the active run has ended — the model's only status-derived input,
- *  split out so unrelated status transitions don't rebuild the model. */
-const activeRunSettled$ = new Signal.Computed(() =>
-  workflowRunSettled(activeStreamState$.get()?.status),
+/** The active run's lifecycle phase — the model's only status input, split
+ *  out so unrelated state transitions don't rebuild the model. The model
+ *  reads both the settled and the terminal-outcome fact off it. */
+const activeRunPhase$ = new Signal.Computed(
+  () => activeStreamState$.get()?.status,
+);
+
+/** Whether the active run is durably final — terminal with no producer left
+ *  anywhere. A terminal phase alone is not that fact, so this is what the run
+ *  model and the group rows read before repainting anything still live. */
+const activeRunDurablyFinal$ = new Signal.Computed(
+  () => activeStreamState$.get()?.statusDurablyFinal === true,
 );
 
 /**
@@ -387,7 +392,8 @@ const activeRunModel$ = new Signal.Computed((): WorkflowRunModel | null => {
     rows: streamLogs.rows,
     workflowAttemptId: streamLogs.workflowAttemptId,
     plan: streamLogs.workflowPlan,
-    runSettled: activeRunSettled$.get(),
+    streamPhase: activeRunPhase$.get(),
+    runDurablyFinal: activeRunDurablyFinal$.get(),
     childProgress: activeChildProgress$.get(),
   });
 });
@@ -516,6 +522,7 @@ export const logContext$ = new Signal.Computed((): StreamLogContextValue => {
     hasStreams,
     streamName: activeStreamInfo.name,
     streamStatus: activeStreamState$.get()?.status,
+    streamDurablyFinal: activeRunDurablyFinal$.get(),
     // Process agents emit raw stdout/stderr; render them terminal-style
     // (monospace, no timestamps, tight spacing) rather than logger entries.
     terminalMode: activeStreamInfo.identity?.kind === 'process',

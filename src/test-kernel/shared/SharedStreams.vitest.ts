@@ -69,6 +69,7 @@ describe('buildStreamMetadata', () => {
     ).toEqual({
       category: AgentCategory.ToolUse,
       status: STREAM_STATUS.RUNNING,
+      statusDurablyFinal: false,
       substate: STREAM_SUBSTATE.STARTING,
       lastTimestamp: 123,
       conversationProgress: { toolCallCount: 5 },

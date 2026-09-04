@@ -250,15 +250,13 @@ async function openPaperSession(
     // A broken transcript directory must not reject startup: degrade to an
     // in-memory store and warn once the window exists, exactly as the CLI
     // TUI does. The degraded session also cannot resume: nothing is
-    // persisted for a later launch to pick up, and `SessionHandle` skips
-    // restart repair on a non-persistent store.
+    // persisted for a later launch to pick up.
     const transcripts = await runWithWorkspaceRoots(roots, () =>
       StreamLogStore.openOrEphemeral(),
     );
     const session = new SessionHandle({
       transcripts,
       roots,
-      restartRepair: 'deferred',
       responseTextProcessing,
     });
     resources.add(() => session.dispose());
@@ -270,14 +268,13 @@ async function openPaperSession(
     return await runInSession(session, async () => {
       const processStores = await initializeDesktopProcessStores(session);
       resources.add(() => processStores.dispose());
-      await session.waitUntilReady();
       session.setApprovalPolicy(
         readPlatformSetting<TexraApprovalPolicy>(
           TEXRA_APPROVAL_POLICY_CONFIG_KEY,
         ),
       );
       resources.add(options.attachSession(session));
-      // Off the ready path: the leftover-stream sweep reads this paper's
+      // Off the open path: the leftover-stream sweep reads this paper's
       // whole storage root, so it starts on a timer nothing awaits. It is
       // scheduled inside the session scope, which the timer inherits, so the
       // sweep reads this paper's storage and not another's; closing the paper

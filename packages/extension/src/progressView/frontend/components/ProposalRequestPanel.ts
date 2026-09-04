@@ -229,7 +229,8 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
       taskGroups: [],
       rows: [],
       plan: workflow,
-      runSettled: false,
+      streamPhase: undefined,
+      runDurablyFinal: false,
       childProgress: new Map(),
     });
 
