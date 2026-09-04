@@ -30,6 +30,8 @@
  * session is justified only as the ownership container.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import pDefer, { type DeferredPromise } from 'p-defer';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
@@ -101,6 +103,15 @@ export type SessionHandleInit = Pick<SessionHandle, 'transcripts'> &
 
 export class SessionHandle {
   /**
+   * The owner token this session stamps on the durable facts it appends
+   * (`run.start`'s `ownerId`, the fold envelope): the fold's live-owner
+   * evidence, so a pending approval reads as waiting only while the process
+   * that will answer it is alive (PRD one-fold-three-renderers, 5.2). A UUID
+   * like the execution lease's owner token; lane 2's publisher and the lease
+   * reader's liveness snapshot carry this same value.
+   */
+  readonly ownerId: string = randomUUID();
+  /**
    * Per-run execution handles: registration, lookup, change listeners, and
    * subagent lineage. Owns the status subscription bound to the hub
    * {@link status} publishes on.
@@ -160,7 +171,12 @@ export class SessionHandle {
     const transcripts = init.transcripts;
     const followUps = new ToolUseFollowUpQueue();
     const interactions = init.interactions ?? new SessionHostInteractions();
-    const approvals = createSessionApprovals(interactions);
+    // The approval authority publishes a stream's full policy snapshot on
+    // every effective bypass change; `setApprovalPolicy` below publishes the
+    // same snapshot when the policy half moves.
+    const approvals = createSessionApprovals(interactions, (streamId) =>
+      this.publishApprovalPolicy(streamId),
+    );
     const executions = new ExecutionRegistry({
       streamStatus: status,
       events,
@@ -193,6 +209,7 @@ export class SessionHandle {
       summaryMetaSource: (stream) => transcripts.getSummaryMeta(stream),
     });
     this.interactions = interactions;
+    interactions.bindSession(this);
     this.approvals = approvals;
     this.modelRetries = new ModelRetryGate();
     this.responseTextProcessing =
@@ -228,7 +245,29 @@ export class SessionHandle {
   }
 
   setApprovalPolicy(policy: TexraApprovalPolicy): void {
+    if (policy === this.texraApprovalPolicy) return;
     this.texraApprovalPolicy = policy;
+    // The policy is session-wide; the snapshot is per run, so every stream
+    // the status machine knows gets its own `approval.policy`.
+    for (const streamId of this.status.getAllStreamStates().keys()) {
+      this.publishApprovalPolicy(streamId);
+    }
+  }
+
+  /**
+   * The one emitter of `approval.policy` (PRD one-fold-three-renderers,
+   * section 6, item 2): the full snapshot for one run, from the policy this
+   * session holds and the bypass values its approval queues own. Never a
+   * toggle delta.
+   */
+  private publishApprovalPolicy(streamId: StreamTabId): void {
+    this.publishRunEvent(streamId, {
+      type: 'approval.policy',
+      snapshot: {
+        policy: this.texraApprovalPolicy,
+        bypasses: this.approvals.bypassesFor(streamId),
+      },
+    });
   }
 
   /** Drain one execution's pending trace, or every trace during shutdown. */

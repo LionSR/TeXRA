@@ -356,6 +356,7 @@ function emitRunStart(
     streamId,
     event: {
       type: 'run.start',
+      ownerId: null,
       streamId,
       executionId,
       identity,
@@ -3353,9 +3354,9 @@ describe('sessionSignalsAdapter run facts', () => {
   });
 
   it('does not resurrect a stream retired while attachment awaited rehydrate', async () => {
-    // Inline setup instead of `withRunFacts`: the applier's
-    // `handleSetActiveStream` awaits `streamLogs.ensureLoaded`, so the body
-    // must stay attached across a microtask flush.
+    // Inline setup instead of `withRunFacts`: the applier's status path
+    // awaits `streamLogs.ensureLoaded`, so the body must stay attached
+    // across a microtask flush.
     const hub = new SessionEventHub();
     const snapshots = new StreamSnapshotStore();
     const session = new SessionHandle({
@@ -3365,18 +3366,11 @@ describe('sessionSignalsAdapter run facts', () => {
     });
     const detach = attachSessionSignalsAdapter(session);
     try {
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: root,
-            agentCategory: AgentCategory.ToolUse,
-          },
-        },
+      emitRunStart(hub, root, 'aaaa0009f10e' as ExecutionId, {
+        kind: 'agent',
+        agent: 'root',
       });
-      // The synchronous half of the attachment already minted the slice; the
-      // applier is now suspended in `streamLogs.ensureLoaded`.
+      // The synchronous half of the existence fact already minted the slice.
       expect(streams.get().has(root)).toBe(true);
 
       // `/clear` lands during that await and retires the stream identity.
@@ -3647,14 +3641,15 @@ describe('sessionSignalsAdapter run facts', () => {
     await withRunFacts((hub) => {
       activeStreamId.set(root);
       hub.emit({
-        scope: 'session',
+        scope: 'run',
+        streamId: child1,
         event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: child1,
-            suppressViewSwitch: true,
-            agentCategory: AgentCategory.ToolUse,
-          },
+          type: 'run.start',
+          ownerId: null,
+          streamId: child1,
+          executionId: 'aaaa0008f10e' as ExecutionId,
+          identity: { kind: 'agent', agent: 'child1' },
+          agentCategory: AgentCategory.ToolUse,
         },
       });
       hub.emit({
@@ -3889,19 +3884,13 @@ describe('sessionSignalsAdapter run facts', () => {
     });
   });
 
-  it('registers suppressed child streams without switching away from the parent page', async () => {
+  it('registers child streams without switching away from the parent page', async () => {
     await withRunFacts((hub) => {
       activeStreamId.set(root);
 
-      hub.emit({
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: child1,
-            suppressViewSwitch: true,
-          },
-        },
+      emitRunStart(hub, child1, 'aaaa0007f10e' as ExecutionId, {
+        kind: 'agent',
+        agent: 'child1',
       });
 
       expect(activeStreamId.get()).toBe(root);

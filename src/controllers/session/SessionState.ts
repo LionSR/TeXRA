@@ -38,6 +38,7 @@ import {
   AgentCategory,
   RUN_OUTCOME,
   STREAM_PHASE,
+  STREAM_SUBSTATE,
 } from '@shared/schemas';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -245,7 +246,7 @@ export class SessionState {
    * publisher owns seq, owner token, and timestamp, and the counter below
    * leaves with it.
    */
-  view: SessionView = createSessionView();
+  view: SessionView;
   private readonly viewSeq = new Map<string, number>();
   private readonly viewDropped = new Set<StreamTabId>();
 
@@ -263,6 +264,14 @@ export class SessionState {
     this.followUps = session.followUps;
     this.snapshots = session.snapshots;
     this.stores = stores ?? createSessionStores(session);
+    // This process is alive: its own owner token is the one live owner the
+    // in-process fold knows, so a request this session is waiting on folds
+    // as waiting. Lane 2's lease reader replaces the snapshot with every
+    // owner it can prove alive.
+    this.view = fold(createSessionView(), {
+      type: 'owner.liveness',
+      owners: [session.ownerId],
+    });
   }
 
   /**
@@ -291,23 +300,32 @@ export class SessionState {
    * hydrated streams of an earlier session have no `run.start` until lane 2
    * replays them, so their facts are expected to land here.
    *
-   * The owner token is unknown in process until the publisher stamps it, so
-   * a pending approval folds as interrupted here; the live-owner rule is
-   * exercised by the fold's test and armed by lane 2. `run.start` carries
-   * the roster's creation timestamp so the view orders streams the way the
-   * roster does; every other fact carries none of its own and is stamped at
-   * fold time, which lane 2's publisher replaces with the append time.
+   * The envelope's owner is this session's token for every fact it appends
+   * in process; `run.start` carries the launcher's own, which is the same
+   * token on a live path. `run.start` also carries the roster's creation
+   * timestamp so the view orders streams the way the roster does; every
+   * other fact carries none of its own and is stamped at fold time, which
+   * lane 2's publisher replaces with the append time.
+   *
+   * The reservation precedes existence by design: `tryAcquire` publishes
+   * the STARTING status before the launcher commits `run.start`, so that
+   * one status is expected here and dropped without a warning.
    */
   applySessionEvent(
     streamId: StreamTabId | null,
     body: SessionEventBody,
+    ownerId: string | null = this.session.ownerId,
   ): void {
     if (
       streamId !== null &&
       body.type !== 'run.start' &&
       !this.view.streams.has(streamId)
     ) {
-      if (!this.viewDropped.has(streamId)) {
+      const reservation =
+        body.type === 'status' &&
+        (body.substate === STREAM_SUBSTATE.STARTING ||
+          body.substate === STREAM_SUBSTATE.RESUMING);
+      if (!reservation && !this.viewDropped.has(streamId)) {
         this.viewDropped.add(streamId);
         this.logger.warn('Dropping view facts for a stream with no run.start', {
           data: { streamId, type: body.type },
@@ -324,7 +342,7 @@ export class SessionState {
         : Date.now();
     this.view = fold(
       this.view,
-      withEnvelope(body, { streamId, seq, ownerId: null, timestamp }),
+      withEnvelope(body, { streamId, seq, ownerId, timestamp }),
     );
   }
 
@@ -967,17 +985,6 @@ export class SessionState {
   /** Whether `stream` was removed this session and must not be resurrected. */
   isStreamRemoved(stream: StreamTabId): boolean {
     return this._removedStreams.has(stream);
-  }
-
-  /**
-   * Current live-execution evidence for a re-claim: the execution registry
-   * holds a handle for this exact stream. A fresh workflow relaunch tracks its
-   * handle before its attachment fact lands, while a replayed `run.start`
-   * does not, so this is the gate that lets a legitimate re-claim through and
-   * keeps a stale fact from reopening a committed tombstone.
-   */
-  hasLiveStreamExecution(stream: StreamTabId): boolean {
-    return this.session.executions.getAgentHandleByStream(stream) !== undefined;
   }
 
   /**

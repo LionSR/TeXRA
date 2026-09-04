@@ -784,11 +784,33 @@ const STREAM_RELEASED_REJECTION = {
   cause: 'Stream resources released.',
 } as const;
 
-function activateStream(bridge: TestableBridge, streamId: string): void {
-  emitSessionFact(bridge, 'setActiveStream', {
-    streamId,
+let activationSeq = 0;
+
+/** Publish a stream's existence fact the way a launch does. */
+function startStream(bridge: TestableBridge, streamId: string): void {
+  activationSeq += 1;
+  emitRunEvent(bridge, streamId as StreamTabId, {
+    type: 'run.start',
+    streamId: streamId as StreamTabId,
+    executionId: `a0000${activationSeq.toString(16)}` as ExecutionId,
+    identity: { kind: 'agent', agent: streamId },
     agentCategory: AgentCategory.Workflow,
+    isRemote: false,
+    ownerId: bridgeSession(bridge).ownerId,
   });
+}
+
+/**
+ * Start a stream (unless a test already published its own `run.start`, which
+ * the summary mirror's identity records), then select it as the window does
+ * from its launch callback.
+ */
+function activateStream(bridge: TestableBridge, streamId: string): void {
+  const known = bridgeSession(bridge).transcripts.getSummaryMeta(
+    streamId as StreamTabId,
+  )?.identity;
+  if (!known) startStream(bridge, streamId);
+  bridge.setActiveStream(streamId as StreamTabId);
 }
 
 function lastStreamSync(messages: unknown[]): ProgressMessage | undefined {
@@ -948,6 +970,7 @@ describe('DesktopProgressBridge', () => {
     const config = workflowConfig();
     emitRunEvent(bridge, streamId, {
       type: 'run.start',
+      ownerId: null,
       streamId,
       executionId,
       identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
@@ -2030,7 +2053,9 @@ describe('DesktopProgressBridge', () => {
     messages.length = 0;
 
     const deletePromise = deleteStreamViaInbound(bridge, 'second');
-    activateStream(bridge, 'second');
+    // A fresh existence fact for the identity under deletion is refused; no
+    // fact carries focus, so nothing selects it either.
+    startStream(bridge, 'second');
     await deletePromise;
 
     expect(
@@ -2189,6 +2214,7 @@ describe('DesktopProgressBridge', () => {
     // Rerun is gated on a resolved native agent identity.
     emitRunEvent(bridge, 'stream-new' as StreamTabId, {
       type: 'run.start',
+      ownerId: null,
       streamId: 'stream-new' as StreamTabId,
       executionId: 'e7ec0001' as ExecutionId,
       identity: { kind: 'agent', agent: runConfig.agent },
@@ -2485,6 +2511,7 @@ describe('DesktopProgressBridge', () => {
 
     emitRunEvent(bridge, 'stream-1' as StreamTabId, {
       type: 'run.start',
+      ownerId: null,
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1002' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
@@ -2544,6 +2571,7 @@ describe('DesktopProgressBridge', () => {
     // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
     emitRunEvent(bridge, 'stream-1' as StreamTabId, {
       type: 'run.start',
+      ownerId: null,
       streamId: 'stream-1' as StreamTabId,
       executionId: 'ec1003' as ExecutionId,
       identity: { kind: 'agent', agent: 'search' },
@@ -2823,6 +2851,7 @@ describe('DesktopProgressBridge', () => {
       owner.processSession.transcripts.ensureStream(childStreamId);
       owner.processSession.publishRunEvent(childStreamId, {
         type: 'run.start',
+        ownerId: null,
         streamId: childStreamId,
         executionId: childExecutionId,
         identity: { kind: 'agent', agent: 'search' },
@@ -3528,10 +3557,19 @@ describe('DesktopProgressBridge', () => {
 
         await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalled());
         owner.processSession.events.emit({
-          scope: 'session',
+          scope: 'run',
+          streamId: childStreamId,
           event: {
-            type: 'setActiveStream',
-            payload: { streamId: childStreamId },
+            type: 'run.start',
+            streamId: childStreamId,
+            executionId: 'aaaa0002f10e' as ExecutionId,
+            identity: {
+              kind: 'multiAgentWorkflow',
+              workflowName: 'reclaimed-workflow',
+            },
+            // No live owner: a replayed start, not a re-claim, so the
+            // pending deletion proceeds.
+            ownerId: null,
           },
         });
         const pendingDrain = vi.spyOn(
@@ -3614,7 +3652,17 @@ describe('DesktopProgressBridge', () => {
         owner.processSession.executions.trackAgentExecution(freshHandle, {
           status: STREAM_PHASE.COMPLETED,
         });
-        activateStream(owner.bridgeA, streamId);
+        // The fresh workflow start from this process re-claims the identity.
+        emitRunEvent(owner.bridgeA, streamId, {
+          type: 'run.start',
+          streamId,
+          executionId: freshExecutionId,
+          identity: {
+            kind: 'multiAgentWorkflow',
+            workflowName: 'reclaimed-workflow',
+          },
+          ownerId: owner.processSession.ownerId,
+        });
         firstRelease.resolve();
         await vi.waitFor(() =>
           expect(owner.sessionStores.hasStreamDeletionClaim(streamId)).toBe(
@@ -4050,6 +4098,7 @@ describe('DesktopProgressBridge', () => {
         });
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'run.start',
+          ownerId: null,
           streamId: childStreamId,
           executionId: childExecutionId,
           identity: { kind: 'agent', agent: 'searcher' },

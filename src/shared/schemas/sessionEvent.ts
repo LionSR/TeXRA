@@ -65,6 +65,9 @@ export const ApprovalPolicySnapshotSchema = z.object({
   policy: TexraApprovalPolicySchema,
   bypasses: ApprovalBypassesSchema,
 });
+export type ApprovalPolicySnapshot = z.infer<
+  typeof ApprovalPolicySnapshotSchema
+>;
 
 /**
  * The envelope every durable arm rides. The stream id lives here, so arms

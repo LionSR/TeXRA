@@ -125,8 +125,20 @@ const child = {
 };
 const PROGRESS_PROJECTION_CASES = {
   setActiveStream: {
-    source: sessionFact('setActiveStream', { streamId }),
-    payload: { streamId },
+    source: runEvent({
+      type: 'run.start',
+      streamId,
+      executionId,
+      identity: { kind: 'agent', agent: 'proofreader' },
+      agentCategory: AgentCategory.Workflow,
+      isRemote: false,
+      ownerId: null,
+    }),
+    payload: {
+      streamId,
+      agentCategory: AgentCategory.Workflow,
+      isRemote: false,
+    },
   },
   updateStreamStatus: {
     source: statusFact({
@@ -486,16 +498,25 @@ describe('attachCliSessionProgressProjection', () => {
 
   it('writes retained session facts as public NDJSON progress records', () => {
     withProjection(({ events, writeRecord, detach }) => {
-      events.emit(sessionFact('setActiveStream', { streamId }));
+      events.emit(
+        sessionFact('updateStreamDescription', {
+          streamId,
+          description: 'Proofread the introduction',
+        }),
+      );
 
       expect(writeRecord).toHaveBeenCalledWith(
-        progressRecord('setActiveStream', { streamId }),
+        progressRecord('updateStreamDescription', {
+          streamId,
+          description: 'Proofread the introduction',
+        }),
       );
 
       detach();
       events.emit(
-        sessionFact('setActiveStream', {
+        sessionFact('updateStreamDescription', {
           streamId: 'stream:after-detach' as StreamTabId,
+          description: 'after detach',
         }),
       );
 

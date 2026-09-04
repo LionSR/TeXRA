@@ -1087,7 +1087,7 @@ function createWindow(options: {
         // terminal result is eligible for replay. This await ends before the
         // process-owned run begins and therefore cannot retain the window for
         // the duration of the run.
-        await getAgentExecution();
+        const execution = await getAgentExecution();
         const { buildDesktopSetupExecuteMessage } =
           await import('@controllers/onboarding/setupLaunch');
         const message = await buildDesktopSetupExecuteMessage();
@@ -1111,6 +1111,10 @@ function createWindow(options: {
         return launchDesktopAgent(
           { kind: 'fresh', ...preparation.request },
           { session: paper.session },
+          {
+            onStreamResolved: (streamId) =>
+              execution.presentLaunchedStream(streamId),
+          },
         );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),

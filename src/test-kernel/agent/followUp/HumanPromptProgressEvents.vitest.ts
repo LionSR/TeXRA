@@ -111,13 +111,6 @@ describe('human prompt progress events', () => {
     expect(explicit.events).toEqual([
       { event: 'requestEnsureProgressView', payload: {} },
       {
-        event: 'setActiveStream',
-        payload: {
-          streamId,
-          suppressViewSwitch: true,
-        },
-      },
-      {
         event: 'showBashPermission',
         payload: {
           requestId: show.payload.requestId,
@@ -171,13 +164,6 @@ describe('human prompt progress events', () => {
 
     expect(explicit.events).toEqual([
       { event: 'requestEnsureProgressView', payload: {} },
-      {
-        event: 'setActiveStream',
-        payload: {
-          streamId,
-          suppressViewSwitch: true,
-        },
-      },
       {
         event: 'showUserQuestion',
         payload: {

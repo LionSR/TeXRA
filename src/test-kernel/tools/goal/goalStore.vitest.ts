@@ -268,8 +268,11 @@ describe('subscribeGoalStateChanges', () => {
       sessionA.events.emit({
         scope: 'session',
         event: {
-          type: 'setActiveStream',
-          payload: { streamId: 'same-session' as StreamTabId },
+          type: 'updateStreamDescription',
+          payload: {
+            streamId: 'same-session' as StreamTabId,
+            description: 'not a goal change',
+          },
         },
       });
       sessionA.events.emit({

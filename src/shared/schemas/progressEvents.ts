@@ -7,7 +7,6 @@ import type {
 } from './progressView/outbound';
 import type { z } from 'zod';
 
-import type { AgentCategory } from './agent';
 import type { ExecutionId, StreamTabId } from './identifiers';
 import type { FileLocation } from './output';
 import type { RoundStage } from './streamState';
@@ -21,19 +20,6 @@ import type { ExtendedTokenUsageStats } from './usage';
  * runtime-host progress projections. New facts get a named payload here —
  * never a new key on a host compatibility map.
  */
-
-export interface SetActiveStreamPayload {
-  streamId: StreamTabId | null;
-  agentCategory?: AgentCategory;
-  /** Hint whether this is a remote agent (for UI display before the run config arrives) */
-  isRemote?: boolean;
-  /**
-   * When true, register the stream (state, logs, hints) but do NOT switch the
-   * active tab to it. Used by background child streams (bash, codex) so the
-   * stream tab appears without yanking the user away from their current view.
-   */
-  suppressViewSwitch?: boolean;
-}
 
 export interface UpdateStreamDescriptionPayload {
   streamId: StreamTabId;

@@ -22,7 +22,7 @@ import {
 } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
-import { clamp } from '@utils/core';
+import { clamp, generateShortId } from '@utils/core';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import { getConfig } from '@utils/config/configUtils';
 import { applyPatchToText } from '@utils/text/diff';
@@ -42,6 +42,12 @@ export interface ToolEditApprovalRequest {
   readonly proposedContent: string;
   readonly sourceTool: string;
   readonly streamId?: StreamTabId | null;
+  /**
+   * What the UI shows for this request, prepared once at the tool boundary
+   * (`prepareToolEditApprovalPrompt`): the payload of the `approval.requested`
+   * fact the session publishes. Absent only on fixtures that never fold.
+   */
+  readonly permission?: ToolEditPermission;
 }
 
 /**
@@ -227,7 +233,14 @@ export async function requestToolEditApproval(
   return session.approvals.toolEdit.enqueue(streamId, {
     prompt: async () =>
       finalizeApprovalResult(
-        await session.interactions.requestToolEditApproval(preparedRequest),
+        await session.interactions.requestToolEditApproval({
+          ...preparedRequest,
+          permission: prepareToolEditApprovalPrompt(session, {
+            requestId: `approval-${generateShortId()}`,
+            request: preparedRequest,
+            relativePath: WorkspaceFS.relativePath(preparedRequest.path),
+          }),
+        }),
         preparedRequest,
       ),
     bypassed: acceptProposedAsIs,

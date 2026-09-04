@@ -5,7 +5,6 @@ import type {
   GoalStateChangedPayload,
   InquiryThreadUpdatedEvent,
   RemoveStreamPayload,
-  SetActiveStreamPayload,
   SetParentStreamPayload,
   StreamHoldChangedPayload,
   StreamTabId,
@@ -19,7 +18,9 @@ const logger = createLog('SessionEventHub');
  * Session-scoped fact vocabulary. Payload-bearing arms use fact-native named
  * types from `@shared/schemas`; status reuses the canonical trace event shape
  * directly. Retained runtime-host projections derive their payloads here,
- * never the reverse. Run-scoped facts live on `AgentEvent` (trace), not here.
+ * never the reverse. Run-scoped facts live on `AgentEvent` (trace), not here:
+ * a stream's existence is its `run.start` there, and which stream a surface
+ * shows is that surface's own selection, never a fact.
  */
 export type SessionFact =
   | {
@@ -37,10 +38,6 @@ export type SessionFact =
   | {
       readonly type: 'followUpSent';
       readonly payload: FollowUpSentPayload;
-    }
-  | {
-      readonly type: 'setActiveStream';
-      readonly payload: SetActiveStreamPayload;
     }
   | {
       readonly type: 'updateStreamDescription';

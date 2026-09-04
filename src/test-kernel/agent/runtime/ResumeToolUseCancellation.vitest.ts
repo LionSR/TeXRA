@@ -232,10 +232,12 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
     await resumeToolUseFromResumeData(snapshot);
     await resumeToolUseFromResumeData(snapshot);
 
-    expect(mocks.runFlowWithLifecycle).toHaveBeenCalledTimes(2);
+    // The persisted support rides the launch input: `run.start` stamps it at
+    // the reservation commit point, before the lifecycle runs.
+    expect(mocks.buildAgentLaunchContext).toHaveBeenCalledTimes(2);
     expect(
-      mocks.runFlowWithLifecycle.mock.calls.map(
-        (call) => call[2]?.userFollowUpSupport,
+      mocks.buildAgentLaunchContext.mock.calls.map(
+        (call) => call[0]?.userFollowUpSupport,
       ),
     ).toEqual([
       USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

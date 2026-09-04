@@ -110,6 +110,7 @@ export function createChildStream(
   });
   let detachSessionTrace: (() => void) | undefined;
   let detachStatus: (() => void) | undefined;
+  let started = false;
   try {
     detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
     // Status is a session fact, not an AgentEvent: bridge the hub's canonical
@@ -122,6 +123,11 @@ export function createChildStream(
       runTrace.dispose();
     };
 
+    // The existence fact. A background child never takes a host's focus:
+    // which stream a surface shows is that surface's own selection, so the
+    // fact carries no hint about it. `removeStream` permanently tombstones
+    // deterministic IDs in the CLI, so every fallible setup step above ran
+    // before this point; a failure here rolls back below without a fact.
     runTrace.trace.emit({
       type: 'run.start',
       streamId: childStreamId,
@@ -134,7 +140,9 @@ export function createChildStream(
       isRemote: isRemoteAgent(options.config.agent),
       worktree: launchWorktreeInfo(options.config.workingDirectory),
       parentStreamId,
+      ownerId: session.ownerId,
     });
+    started = true;
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,
@@ -172,22 +180,6 @@ export function createChildStream(
       status: STREAM_PHASE.RUNNING,
     });
 
-    // Make the child visible only after every fallible setup step succeeds.
-    // removeStream permanently tombstones deterministic IDs in the CLI, so a
-    // presentation rollback cannot safely clean up a partially created tab.
-    // Background child streams appear without switching the active tab.
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: childStreamId,
-          agentCategory: options.config.agentCategory,
-          suppressViewSwitch: true,
-        },
-      },
-    });
-
     return {
       childStreamId,
       logger: runTrace.trace,
@@ -223,9 +215,29 @@ export function createChildStream(
     };
   } catch (error) {
     // Roll back every fallible setup step in reverse-ish order; a cleanup
-    // failure must neither mask the original error nor skip later steps.
+    // failure must neither mask the original error nor skip later steps. A
+    // stream that already published its `run.start` exists for every fold,
+    // so it ends with its terminal `result` instead of lingering as a
+    // started-but-never-run ghost; the child's result stays out of the host
+    // result plane (`isSubagent`), as every child-stream result does.
     const failures: unknown[] = [error];
     const cleanups: (() => void)[] = [
+      () => {
+        if (!started) return;
+        runTrace.trace.emit({
+          type: 'result',
+          outcome: RUN_OUTCOME.FAILED,
+          executionId,
+          streamId: childStreamId,
+          agentName: options.config.agent,
+          category: options.config.agentCategory,
+          isSubagent: true,
+          error: {
+            kind: classifyAgentError(error),
+            message: `Child stream setup failed: ${toErrorMessage(error)}`,
+          },
+        });
+      },
       () => removeSpillFlusher(),
       () => detachStatus?.(),
       () => detachSessionTrace?.(),

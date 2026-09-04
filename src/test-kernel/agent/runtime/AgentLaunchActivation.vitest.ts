@@ -45,22 +45,23 @@ vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
 
-import { noopTrace } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
 import {
+  RUN_OUTCOME,
+  STREAM_PHASE,
   USER_FOLLOW_UP_SUPPORT,
   type ExecutionId,
-  type SetActiveStreamPayload,
   type StreamTabId,
   AgentCategory,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { recordSessionEvents, sessionFactPayloads } from '../progressTestUtils';
+import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
 
 const LAUNCH_FAILURE = new Error('stop after stream activation');
 const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse' as const;
@@ -71,13 +72,23 @@ const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
 });
 
-async function captureActivation(
+interface StartedLaunch {
+  readonly session: ReturnType<typeof createTestSession>;
+  readonly start: ReturnType<typeof runEventsOfType<'run.start'>>[number];
+  readonly result: ReturnType<typeof runEventsOfType<'result'>>[number];
+}
+
+/**
+ * Drive a launch that fails after its `run.start` (the reservation commit
+ * point): the durable boundary the fold reads. The real trace is attached to
+ * the session so the launch's facts reach the hub the way a run's do.
+ */
+async function captureStartedLaunch(
   run: (session: ReturnType<typeof createTestSession>) => Promise<unknown>,
-): Promise<SetActiveStreamPayload> {
+): Promise<StartedLaunch> {
   const session = createTestSession();
   const recordedSession = recordSessionEvents(session.events);
-  const trace = { ...noopTrace, subscribe: vi.fn(() => vi.fn()) };
-  trace.openStage = vi.fn(() => noopTrace.openStage('Run'));
+  const trace = new TraceEmitter();
   const handler = {
     capabilities: { supportsVision: false, supportsNativeAudio: false },
     config: { provider: 'openai' },
@@ -94,36 +105,52 @@ async function captureActivation(
     {},
   ]);
   mocks.createHandler.mockResolvedValueOnce(handler);
-  mocks.createTrace.mockReturnValueOnce({ trace, dispose: vi.fn() });
+  mocks.createTrace.mockReturnValueOnce({
+    trace,
+    handleStatus: vi.fn(),
+    flushSpills: vi.fn(async () => undefined),
+    dispose: vi.fn(),
+  });
   mocks.buildVars.mockRejectedValueOnce(LAUNCH_FAILURE);
 
   try {
     await expect(run(session)).rejects.toBe(LAUNCH_FAILURE);
-    const payloads = sessionFactPayloads(
-      recordedSession.events,
-      'setActiveStream',
-    );
-    expect(payloads).toHaveLength(1);
-    return payloads[0] as SetActiveStreamPayload;
+    const starts = runEventsOfType(recordedSession.events, 'run.start');
+    expect(starts).toHaveLength(1);
+    const results = runEventsOfType(recordedSession.events, 'result');
+    expect(results).toHaveLength(1);
+    return { session, start: starts[0], result: results[0] };
   } finally {
     recordedSession.detach();
     session.dispose();
   }
 }
 
-function expectActivation(
-  payload: SetActiveStreamPayload,
-  suppressViewSwitch: boolean,
+/**
+ * A launch that fails after `run.start` folds to failed, never to a ghost:
+ * the existence fact carries the launch facts and the session's owner
+ * token, and the same failure path ends the stream with its terminal
+ * `result` and the FAILED phase.
+ */
+function expectStartedThenFailed(
+  launch: StartedLaunch,
+  isSubagent: boolean,
 ): void {
-  expect(payload).toMatchObject({
+  expect(launch.start).toMatchObject({
+    identity: { kind: 'agent', agent: 'chat' },
     agentCategory: AgentCategory.ToolUse,
     isRemote: false,
+    ownerId: launch.session.ownerId,
   });
-  if (suppressViewSwitch) {
-    expect(payload).toHaveProperty('suppressViewSwitch', true);
-  } else {
-    expect(payload).not.toHaveProperty('suppressViewSwitch');
-  }
+  expect(launch.result).toMatchObject({
+    outcome: RUN_OUTCOME.FAILED,
+    streamId: launch.start.streamId,
+    executionId: launch.start.executionId,
+    isSubagent,
+  });
+  expect(launch.session.status.get(launch.start.streamId)).toBe(
+    STREAM_PHASE.FAILED,
+  );
 }
 
 describe('native agent launch activation', () => {
@@ -140,14 +167,14 @@ describe('native agent launch activation', () => {
   });
 
   it.each([
-    { label: 'child', isSubagent: true, suppressViewSwitch: true },
-    { label: 'root', isSubagent: undefined, suppressViewSwitch: false },
+    { label: 'child', isSubagent: true },
+    { label: 'root', isSubagent: undefined },
   ])(
-    'emits the expected activation payload for a fresh $label launch',
-    async ({ isSubagent, suppressViewSwitch }) => {
+    'starts a fresh $label launch at the commit point and fails it on the same path',
+    async ({ isSubagent }) => {
       // The subagent flag picks an `executeAgent` overload, so the literal
       // has to be visible at the call site rather than widened by `it.each`.
-      const payload = await captureActivation((session) =>
+      const launch = await captureStartedLaunch((session) =>
         isSubagent
           ? executeAgent(config, 'fresh-launch' as ExecutionId, {
               session,
@@ -160,16 +187,17 @@ describe('native agent launch activation', () => {
             }),
       );
 
-      expectActivation(payload, suppressViewSwitch);
+      expectStartedThenFailed(launch, isSubagent === true);
+      expect(launch.start).not.toHaveProperty('parentStreamId');
     },
   );
 
   it.each([
-    { label: 'child', isSubagent: true, suppressViewSwitch: true },
-    { label: 'root', isSubagent: false, suppressViewSwitch: false },
+    { label: 'child', isSubagent: true },
+    { label: 'root', isSubagent: false },
   ])(
-    'emits the expected activation payload for a resumed $label launch',
-    async ({ isSubagent, suppressViewSwitch }) => {
+    'starts a resumed $label launch at the commit point and fails it on the same path',
+    async ({ isSubagent }) => {
       const executionId = 'resumed-launch' as ExecutionId;
       const streamId = 'resumed-stream' as StreamTabId;
       mocks.hasPersistedParent.mockResolvedValueOnce(isSubagent);
@@ -181,12 +209,15 @@ describe('native agent launch activation', () => {
       });
       mocks.retrieveSessionResumeData.mockResolvedValueOnce(resume);
 
-      const payload = await captureActivation((session) =>
+      const launch = await captureStartedLaunch((session) =>
         resumeToolUseFromResumeData(resume, { session }),
       );
 
-      expectActivation(payload, suppressViewSwitch);
-      expect(payload.streamId).toBe(streamId);
+      expectStartedThenFailed(launch, isSubagent);
+      expect(launch.start.streamId).toBe(streamId);
+      expect(launch.start.userFollowUpSupport).toBe(
+        USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      );
     },
   );
 });

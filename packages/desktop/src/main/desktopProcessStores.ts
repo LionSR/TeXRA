@@ -13,21 +13,16 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
   const streamIncarnations = new Map<StreamTabId, number>();
   const pendingRemovals = new Map<StreamTabId, number>();
 
-  const detachStreamRemoval = session.events.subscribeSessionFacts((fact) => {
-    if (fact.type === 'setActiveStream') {
-      const { streamId } = fact.payload;
+  // A fresh workflow `run.start` from this process re-claims a deterministic
+  // identity whose removal is still pending: bump the incarnation so the
+  // queued delete reports `superseded` instead of erasing the fresh run. The
+  // fact names the identity and its owner, so no store or registry is read.
+  const detachStreamReclaim = session.events.subscribeRunFacts(
+    ({ streamId, event }) => {
       if (
-        !streamId ||
         !pendingRemovals.has(streamId) ||
-        // The summary mirror, not the sidecar record: a finished child's
-        // record is releasable, and reading a released one here would report
-        // no workflow identity, leave the incarnation unbumped, and let a
-        // pending removal delete the stream the relaunch just re-claimed.
-        (
-          session.transcripts.getSummaryMeta(streamId)?.identity ??
-          session.snapshots.getRunMetadata(streamId, { quiet: true }).identity
-        )?.kind !== 'multiAgentWorkflow' ||
-        !session.executions.getAgentHandleByStream(streamId)
+        event.identity.kind !== 'multiAgentWorkflow' ||
+        event.ownerId !== session.ownerId
       ) {
         return;
       }
@@ -35,8 +30,10 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
         streamId,
         (streamIncarnations.get(streamId) ?? 0) + 1,
       );
-      return;
-    }
+    },
+    { types: ['run.start'] },
+  );
+  const detachStreamRemoval = session.events.subscribeSessionFacts((fact) => {
     if (fact.type === 'removeStream') {
       const { streamId } = fact.payload;
       const expectedIncarnation = streamIncarnations.get(streamId) ?? 0;
@@ -84,6 +81,7 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
   return {
     stores,
     dispose() {
+      detachStreamReclaim();
       detachStreamRemoval();
       detachArtifactFlusher();
     },

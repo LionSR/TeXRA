@@ -25,7 +25,6 @@ import {
   type ExecutionId,
   type ProgressViewOutboundMessage,
   type RunIdentity,
-  type SetActiveStreamPayload,
   type StreamTabId,
   type UpdateStreamDescriptionPayload,
   USER_FOLLOW_UP_SUPPORT,
@@ -171,15 +170,25 @@ export function emitRunEvent(
   target.session.events.emit({ scope: 'run', streamId, event });
 }
 
-export function emitActiveStream(
+let runStartSeq = 0;
+
+/** The existence fact for a stream, as the launcher publishes it. */
+export function emitRunStart(
   target: { session: SessionHandle },
-  payload: SetActiveStreamPayload,
+  payload: { streamId: StreamTabId; agentCategory?: AgentCategory },
 ): void {
+  runStartSeq += 1;
   target.session.events.emit({
-    scope: 'session',
+    scope: 'run',
+    streamId: payload.streamId,
     event: {
-      type: 'setActiveStream',
-      payload,
+      type: 'run.start',
+      streamId: payload.streamId,
+      executionId: `e0000${runStartSeq.toString(16)}` as ExecutionId,
+      identity: { kind: 'agent', agent: payload.streamId },
+      agentCategory: payload.agentCategory,
+      isRemote: false,
+      ownerId: target.session.ownerId,
     },
   });
 }

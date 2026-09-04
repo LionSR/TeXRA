@@ -54,8 +54,8 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const command =
     identity?.kind === 'process' ? config?.instruction : undefined;
 
-  // Canonical host-known status takes precedence because setActiveStream can
-  // identify a remote run before its agent is present in the registry.
+  // Canonical host-known status takes precedence because `run.start` names
+  // a remote run before its agent is present in the registry.
   const isRemote =
     metadata.isRemote ??
     (identity?.kind === 'agent'

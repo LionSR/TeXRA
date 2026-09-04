@@ -69,11 +69,11 @@ class TuiSessionRenderer implements SessionRendererPort {
     // authority (#9947: config comes from the always-resident summary mirror).
     invalidateChildStreams();
     if (isChildStreamRemoved(streamId)) return;
-    // Attachment (`setActiveStream`) calls `streamLogs.ensureStream` before
-    // this notify; mint an empty slice so Tab-children focus works even when
-    // no category/config arrived yet. Parent-only edge refreshes do not touch
-    // streamLogs, so they stay slice-free here — an edge alone is not
-    // focusable until attachment creates the transcript.
+    // The existence fact (`run.start`) calls `streamLogs.ensureStream`
+    // before this notify; mint an empty slice so Tab-children focus works
+    // even when no category/config arrived yet. Parent-only edge refreshes
+    // do not touch streamLogs, so they stay slice-free here: an edge alone
+    // is not focusable until `run.start` creates the transcript.
     if (this.state.streamLogs.has(streamId) && !streams.get().has(streamId)) {
       patchStream(streamId, (slice) => ({ ...slice }));
     }
@@ -256,14 +256,6 @@ export function attachSessionSignalsAdapter(
     }
     // Roster phase-merge, tombstone gating, and eviction requests.
     applier.handleSessionFact(fact);
-    if (fact.type === 'setActiveStream') {
-      const streamId = fact.payload.streamId;
-      if (!streamId) {
-        renderer.onActiveStreamChanged('');
-      } else if (fact.payload.suppressViewSwitch !== true) {
-        renderer.onActiveStreamChanged(streamId);
-      }
-    }
   });
   const detachRunFacts = session.events.subscribeRunFacts(
     (runFact) => {

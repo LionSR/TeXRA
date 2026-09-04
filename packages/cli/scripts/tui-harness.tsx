@@ -1196,7 +1196,7 @@ function seedRunningWorkflow(): void {
   const secondAgentStreamId =
     'correct@harness-model#harness-workflow-agent-b' as StreamTabId;
 
-  emitSetActiveStream(childStreamId, AgentCategory.Workflow);
+  emitRunStart(childStreamId, AgentCategory.Workflow);
   emitChildRoster(STREAM_ID, [
     {
       executionId,
@@ -1225,6 +1225,7 @@ function seedRunningWorkflow(): void {
     streamId: childStreamId,
     event: {
       type: 'run.start',
+      ownerId: null,
       streamId: childStreamId,
       executionId,
       identity: {
@@ -1292,7 +1293,7 @@ function seedRunningWorkflow(): void {
     },
   ] as const satisfies readonly ActiveChildInfo[];
   for (const child of workflowChildren) {
-    emitSetActiveStream(child.childStreamId, AgentCategory.Workflow);
+    emitRunStart(child.childStreamId, AgentCategory.Workflow);
     emitParentStreamEdge(child.childStreamId, childStreamId);
     transitionStreamRunning(child.childStreamId);
   }
@@ -1307,7 +1308,7 @@ function seedRunningWorkflow(): void {
 
 function seedRunningProcessChild(): void {
   const childStreamId = 'bash#aaaa0003f10e' as StreamTabId;
-  emitSetActiveStream(childStreamId, AgentCategory.ToolUse);
+  emitRunStart(childStreamId, AgentCategory.ToolUse);
   patchStream(childStreamId, (slice) => ({
     ...slice,
     identity: { kind: 'process', tool: 'bash' },
@@ -1338,8 +1339,8 @@ function seedRunningProcessChild(): void {
 // docs/proposals/2026-07-10-cli-child-stream-state-consolidation.md.
 // No `startedAt` is set on the roster row, so `childElapsed` reports no
 // duration at all rather than a live-ticking one
-// (packages/cli/src/chat/tui/state/childControls.ts); `setActiveStream`
-// always sets `suppressViewSwitch: true` so the harness's own active/focused
+// (packages/cli/src/chat/tui/state/childControls.ts); a `run.start` fact
+// never carries focus, so the harness's own active/focused
 // stream (and its live wall-clock `runStartedAt` elapsed display) stays on
 // the root session throughout — required for the four order-equivalent
 // scenarios' settled frame to be byte-identical across separate process
@@ -1408,22 +1409,27 @@ function emitStreamRemoval(streamId: StreamTabId): void {
   });
 }
 
-// `setActiveStream` session fact — the child-order fixture's "attachment"
-// step and every seeded stream's registration with the substrate's log
-// store: `childRosters`/`parentStream` only surface streams the session
-// knows, so a roster or edge under an unregistered stream stays invisible.
-// Always background-registers (`suppressViewSwitch: true`) so the harness's
-// own active/focused stream never becomes the child (see the wall-clock
-// note above).
-function emitSetActiveStream(
+// `run.start` run fact, the existence fact: the child-order fixture's
+// "attachment" step and every seeded stream's registration with the
+// substrate's log store. `childRosters`/`parentStream` only surface streams
+// the session knows, so a roster or edge under an unregistered stream stays
+// invisible. A fact never carries focus, so the harness's own active/focused
+// stream never becomes the child (see the wall-clock note above).
+function emitRunStart(
   streamId: StreamTabId,
   agentCategory?: AgentCategory,
 ): void {
   defaultSession().events.emit({
-    scope: 'session',
+    scope: 'run',
+    streamId,
     event: {
-      type: 'setActiveStream',
-      payload: { streamId, agentCategory, suppressViewSwitch: true },
+      type: 'run.start',
+      streamId,
+      executionId: nanoid(12) as ExecutionId,
+      identity: { kind: 'agent', agent: streamId.split('#')[0] ?? streamId },
+      agentCategory,
+      isRemote: false,
+      ownerId: defaultSession().ownerId,
     },
   });
 }
@@ -1500,7 +1506,7 @@ function childEventOrderSteps(order: ChildEventOrder): readonly (() => void)[] {
   const child = CHILD_EVENT_ORDER_STREAM_ID;
   const root = STREAM_ID as StreamTabId;
   const other = CHILD_EVENT_ORDER_OTHER_PARENT_ID;
-  const A = () => emitSetActiveStream(child);
+  const A = () => emitRunStart(child);
   const Srun = () => transitionStreamRunning(child);
   const Sterm = () => transitionStreamTerminal(child);
   const RPlus = (parent: StreamTabId) =>
@@ -1618,7 +1624,7 @@ HARNESS_DISPOSERS.push(attachSessionSignalsAdapter(defaultSession()));
 // Register the harness root with the substrate (a real run's attachment
 // fact does this at run start): rosters and edges are only derivable for
 // streams the session's log store knows.
-emitSetActiveStream(STREAM_ID);
+emitRunStart(STREAM_ID);
 
 function emitStreamDescription(
   streamId: StreamTabId,
@@ -1702,7 +1708,7 @@ if (SHOW_CHILDREN) {
     const streamId = child.childStreamId;
     const addNestedChildren =
       SHOW_NESTED_CHILDREN && child.agentName === 'strategy';
-    emitSetActiveStream(streamId, AgentCategory.ToolUse);
+    emitRunStart(streamId, AgentCategory.ToolUse);
     emitParentStreamEdge(streamId, STREAM_ID);
     if (addNestedChildren) emitChildRoster(streamId, [nestedStrategyChild]);
     emitStreamDescription(streamId, `${child.agentName} sub-workflow`);
@@ -1736,10 +1742,7 @@ if (SHOW_CHILDREN) {
     }
   }
   if (SHOW_NESTED_CHILDREN) {
-    emitSetActiveStream(
-      'harness-nested-local-checker-stream',
-      AgentCategory.ToolUse,
-    );
+    emitRunStart('harness-nested-local-checker-stream', AgentCategory.ToolUse);
     emitParentStreamEdge(
       'harness-nested-local-checker-stream',
       'harness-child-strategy-stream',

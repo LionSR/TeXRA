@@ -293,20 +293,8 @@ describe('createExtensionHostInteractions', () => {
       'requestEnsureProgressView',
       {},
     );
-    expect(presentationSink.emit).not.toHaveBeenCalledWith(
-      'setActiveStream',
-      expect.anything(),
-    );
-    expect(sessionEvents).toContainEqual({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: {
-          streamId: 'stream-a',
-          suppressViewSwitch: true,
-        },
-      },
-    });
+    // Revealing never moves the active tab: focus is the surface's own.
+    expect(sessionEvents).toEqual([]);
     expect(handlers.transport.planApproval.show).toHaveBeenCalledWith({
       requestId: 'plan-a',
       streamId: 'stream-a',
@@ -367,24 +355,10 @@ describe('createExtensionHostInteractions', () => {
       operation: 'Model invocation',
     });
 
-    // The stream is registered so its row can carry the pending badge, but
-    // the active tab must not switch — the user may be inspecting another
-    // stream while a failing subagent re-raises retry requests.
-    const activations = sessionEvents.filter(
-      (e) => e.scope === 'session' && e.event.type === 'setActiveStream',
-    );
-    expect(activations).toEqual([
-      {
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: {
-            streamId: 'failing-subagent',
-            suppressViewSwitch: true,
-          },
-        },
-      },
-    ]);
+    // The row exists from the stream's `run.start`; the active tab must not
+    // switch, since the user may be inspecting another stream while a
+    // failing subagent re-raises retry requests, and no fact carries focus.
+    expect(sessionEvents).toEqual([]);
     expect(handlers.transport.retry.show).toHaveBeenCalledWith(
       expect.objectContaining({ streamId: 'failing-subagent' }),
     );
@@ -809,20 +783,13 @@ describe('createExtensionHostInteractions', () => {
       }),
     ).resolves.toBeUndefined();
 
-    // The owning stream is revealed before the inquiry shows: the progress
-    // view is ensured and the stream registered without yanking the active
-    // tab (#8246).
+    // The progress view is ensured before the inquiry shows, without
+    // yanking the active tab (#8246).
     expect(presentationSink.emit).toHaveBeenCalledWith(
       'requestEnsureProgressView',
       {},
     );
-    expect(sessionEvents).toContainEqual({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: { streamId: 'stream-a', suppressViewSwitch: true },
-      },
-    });
+    expect(sessionEvents).toEqual([]);
     expect(handlers.transport.externalInquiry.show).toHaveBeenCalledWith({
       requestId: 'thread-a',
       threadId: 'thread-a',

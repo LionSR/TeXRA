@@ -116,13 +116,16 @@ describe('child stream progress events', () => {
         autoClose: true,
       });
 
-      expect(
-        sessionFactPayloads(recorded.events, 'setActiveStream'),
-      ).toContainEqual({
-        streamId: childStreamId,
-        agentCategory: AgentCategory.ToolUse,
-        suppressViewSwitch: true,
-      });
+      expect(runEventsOfType(recorded.events, 'run.start')).toContainEqual(
+        expect.objectContaining({
+          streamId: childStreamId,
+          executionId,
+          identity: { kind: 'process', tool: 'bash' },
+          agentCategory: AgentCategory.ToolUse,
+          parentStreamId,
+          ownerId: defaultSession().ownerId,
+        }),
+      );
       expect(runEventsOfType(recorded.events, 'run.config')).toContainEqual(
         expect.objectContaining({ streamId: childStreamId, executionId }),
       );
@@ -266,10 +269,14 @@ describe('child stream progress events', () => {
       expect(
         sessionFactPayloads(recorded.events, 'removeStream'),
       ).not.toContainEqual({ streamId: setupRetryChildStreamId });
-      expect(
-        sessionFactPayloads(recorded.events, 'setActiveStream'),
-      ).not.toContainEqual(
-        expect.objectContaining({ streamId: setupRetryChildStreamId }),
+      // Setup failed after the existence fact, so the started stream ended
+      // with its terminal result instead of lingering as a ghost.
+      expect(runEventsOfType(recorded.events, 'result')).toContainEqual(
+        expect.objectContaining({
+          streamId: setupRetryChildStreamId,
+          outcome: RUN_OUTCOME.FAILED,
+          isSubagent: true,
+        }),
       );
 
       const retried = await createRehydratedChildStream(
@@ -279,10 +286,10 @@ describe('child stream progress events', () => {
       );
       expect(retried.childStreamId).toBe(setupRetryChildStreamId);
       expect(
-        sessionFactPayloads(recorded.events, 'setActiveStream'),
-      ).toContainEqual(
-        expect.objectContaining({ streamId: setupRetryChildStreamId }),
-      );
+        runEventsOfType(recorded.events, 'run.start').filter(
+          (event) => event.streamId === setupRetryChildStreamId,
+        ),
+      ).toHaveLength(2);
       await retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
       trackExecution.mockRestore();
@@ -336,31 +343,29 @@ describe('child stream progress events', () => {
     }
   });
 
-  it('publishes child stream activation through the session fact hub', async () => {
+  it('publishes child stream existence as a run fact without direct host emission', async () => {
     const active = createRecordingHost();
-    const { facts, detach } = collectSessionFacts('setActiveStream');
+    const recorded = recordSessionEvents(defaultSession().events, {
+      scope: 'run',
+      types: ['run.start'],
+    });
 
     try {
       const childStream = startBashChild(executionId);
 
       expect(active.events).toEqual([]);
-      expect(facts).toEqual([
-        {
-          scope: 'session',
-          event: {
-            type: 'setActiveStream',
-            payload: {
-              streamId: childStreamId,
-              agentCategory: AgentCategory.ToolUse,
-              suppressViewSwitch: true,
-            },
-          },
-        },
+      expect(runEventsOfType(recorded.events, 'run.start')).toEqual([
+        expect.objectContaining({
+          type: 'run.start',
+          streamId: childStreamId,
+          agentCategory: AgentCategory.ToolUse,
+          parentStreamId,
+        }),
       ]);
 
       await childStream.finalize({ outcome: RUN_OUTCOME.COMPLETED });
     } finally {
-      detach();
+      recorded.detach();
     }
   });
 

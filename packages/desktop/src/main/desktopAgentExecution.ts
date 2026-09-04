@@ -1165,6 +1165,14 @@ export class DesktopProgressBridge {
     return true;
   }
 
+  /**
+   * Select a stream this window launched, from the launch's own stream
+   * callback. The window's selection, never a fact.
+   */
+  presentLaunchedStream(streamId: StreamTabId): void {
+    this.backend.presentLaunchedStream(streamId);
+  }
+
   /** Internal launch path; every launch entry point funnels through it. */
   private runExecution(
     request: ValidatedExecutionRequest,
@@ -1175,7 +1183,10 @@ export class DesktopProgressBridge {
       {
         session: this.session,
       },
-      options,
+      {
+        onStreamResolved: (streamId) => this.presentLaunchedStream(streamId),
+        ...options,
+      },
     );
   }
 

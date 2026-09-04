@@ -222,7 +222,6 @@ function buildLifecycleOptions(
     isSubagent,
     parentStreamId: options.parentStreamId,
     workflowPhase: options.workflowPhase,
-    userFollowUpSupport: options.userFollowUpSupport,
     onError: options.onRunError,
     onRun: options.onRun,
     onRunEnd: (runId) => stopLeanServersForEndedRun(runId),
@@ -357,7 +356,11 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * agent's YAML-defined category.
    */
   enforceCategory?: boolean;
-  /** Fires with the real streamId before the stream is activated (before UI sync). */
+  /**
+   * Fires with the real streamId once its `run.start` is published, before
+   * the run begins: the stream exists for every fold, so a host may select
+   * it as its own surface state.
+   */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Root-run-only: fires at every cycle boundary — see `ToolUseServices.onIdle`. */
   onIdle?: () => void;
@@ -402,8 +405,10 @@ export async function executeAgent(
     config,
     executionId,
     streamTabIdOverride: options.streamTabIdOverride,
-    onBeforeActivation: options.onStreamResolved,
-    suppressViewSwitch: options.isSubagent,
+    onStreamResolved: options.onStreamResolved,
+    isSubagent: options.isSubagent,
+    parentStreamId: options.parentStreamId,
+    userFollowUpSupport: options.userFollowUpSupport,
     enforceCategory: options.enforceCategory,
     suppressErrorNotification:
       options.suppressErrorNotification ?? options.isSubagent,
@@ -551,7 +556,9 @@ async function resumeToolUseWithOwnedLease(
       // SessionResumeRetrieval already resolved the persisted ?? inferred key
       // for this exact record; do not re-infer here.
       modelHandlerCompatibilityKey: resume.shared.modelHandlerCompatibilityKey,
-      suppressViewSwitch: isSubagent,
+      isSubagent,
+      parentStreamId: options.parentStreamId,
+      userFollowUpSupport,
       // Host resume callers surface their own warning toast on failure;
       // skip the bus-level error to avoid double-notifying.
       suppressErrorNotification: true,
@@ -605,10 +612,7 @@ async function resumeToolUseWithOwnedLease(
                   options.onCancellationAtFlowAttachment,
               },
             ),
-          buildLifecycleOptions(
-            { ...options, userFollowUpSupport },
-            isSubagent,
-          ),
+          buildLifecycleOptions(options, isSubagent),
         );
       },
     );

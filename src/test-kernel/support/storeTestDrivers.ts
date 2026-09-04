@@ -123,7 +123,13 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
   };
   return {
     setRunStart: ({ streamId, executionId, identity }) => {
-      emitRun(streamId, { type: 'run.start', streamId, executionId, identity });
+      emitRun(streamId, {
+        type: 'run.start',
+        streamId,
+        executionId,
+        identity,
+        ownerId: null,
+      });
     },
     setRunConfig: (streamId, config, executionId) => {
       emitRun(streamId, { type: 'run.config', streamId, executionId, config });

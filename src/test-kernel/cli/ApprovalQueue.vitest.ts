@@ -22,6 +22,7 @@ import {
   ROOT_APPROVAL_STREAM_KEY,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
+import { activeStreamId } from '@cli/chat/tui/state/cliState';
 import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -74,6 +75,7 @@ function promoteStream(
 
 afterEach(() => {
   clearApprovals();
+  activeStreamId.set(undefined);
   notifyMock.mockClear();
 });
 
@@ -182,44 +184,28 @@ describe('CLI approval queue', () => {
   });
 
   it('notifies only when a TUI approval becomes the foreground modal', async () => {
-    const emit = vi.spyOn(defaultSession().events, 'emit');
     const first = bashPayload('child-1');
     const second = bashPayload('child-2');
 
-    try {
-      const firstResult = enqueueTuiApproval(first);
-      await waitForForeground(first);
-      expect(emit).toHaveBeenNthCalledWith(1, {
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: { streamId: 'child-1' },
-        },
-      });
-      expect(notifyMock).toHaveBeenNthCalledWith(1, 'approvalNeeded');
+    const firstResult = enqueueTuiApproval(first);
+    await waitForForeground(first);
+    // The asking stream is focused by this surface's own selection.
+    expect(activeStreamId.get()).toBe('child-1');
+    expect(notifyMock).toHaveBeenNthCalledWith(1, 'approvalNeeded');
 
-      const secondResult = enqueueTuiApproval(second);
-      await Promise.resolve();
-      expect(currentApproval.get()?.payload).toBe(first);
-      expect(notifyMock).toHaveBeenCalledTimes(1);
+    const secondResult = enqueueTuiApproval(second);
+    await Promise.resolve();
+    expect(currentApproval.get()?.payload).toBe(first);
+    expect(notifyMock).toHaveBeenCalledTimes(1);
 
-      decideForeground(true);
-      await expect(firstResult).resolves.toEqual({ accepted: true });
-      await waitForForeground(second);
-      expect(emit).toHaveBeenNthCalledWith(2, {
-        scope: 'session',
-        event: {
-          type: 'setActiveStream',
-          payload: { streamId: 'child-2' },
-        },
-      });
-      expect(notifyMock).toHaveBeenNthCalledWith(2, 'approvalNeeded');
+    decideForeground(true);
+    await expect(firstResult).resolves.toEqual({ accepted: true });
+    await waitForForeground(second);
+    expect(activeStreamId.get()).toBe('child-2');
+    expect(notifyMock).toHaveBeenNthCalledWith(2, 'approvalNeeded');
 
-      decideForeground(false);
-      await expect(secondResult).resolves.toEqual({ accepted: false });
-    } finally {
-      emit.mockRestore();
-    }
+    decideForeground(false);
+    await expect(secondResult).resolves.toEqual({ accepted: false });
   });
 
   it('extracts stream ids from every approval payload used by the TUI', () => {

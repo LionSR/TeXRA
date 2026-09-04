@@ -80,6 +80,12 @@ vi.mock('@utils/config/providerConfig', () => ({
   getUseOpenRouter: mocks.getUseOpenRouter,
 }));
 
+// The launch's stream selection is the progress view's own; this suite
+// checks routing, so the provider graph stays out of it.
+vi.mock('@progressView/progressNavigation', () => ({
+  presentLaunchedProgressStream: vi.fn(),
+}));
+
 vi.mock('@frontend/secretManager', () => ({
   SecretManager: {
     hasUsableApiKey: mocks.hasUsableApiKey,

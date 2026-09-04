@@ -13,6 +13,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
+import { presentLaunchedProgressStream } from '@progressView/progressNavigation';
 import { agentName } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
@@ -242,7 +243,11 @@ export async function launchSetupAssistant(): Promise<
     // fresh load.
     await loadAgents();
 
-    const launch = () => runAgent({ kind: 'fresh', config }, {});
+    const launch = () =>
+      runAgent(
+        { kind: 'fresh', config },
+        { onStreamResolved: presentLaunchedProgressStream },
+      );
 
     if (resolution.requiresOpenRouter) {
       await withOpenRouterFlagOn(launch);

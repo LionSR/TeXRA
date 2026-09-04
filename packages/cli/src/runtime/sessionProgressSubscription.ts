@@ -77,8 +77,6 @@ function projectCliSessionFact(
     // vocabulary carries no record for it.
     case 'streamHoldChanged':
       return undefined;
-    case 'setActiveStream':
-      return { event: 'setActiveStream', payload: fact.payload };
     case 'updateStreamDescription':
       return { event: 'updateStreamDescription', payload: fact.payload };
     case 'status':
@@ -102,8 +100,11 @@ function projectCliSessionFact(
 
 /**
  * Project run facts onto the frozen NDJSON progress-event vocabulary.
- * `run.start` and `context.state` are intentionally unprojected: the public
- * wire shape carries neither a run-start nor a context-occupancy record.
+ * `run.start` projects to the public `setActiveStream` record it replaced
+ * internally; `context.state`, the approval facts, and the terminal result
+ * are intentionally unprojected (the result has its own NDJSON record, and
+ * the public wire carries neither a context-occupancy nor an approval
+ * record).
  */
 function projectCliRunFact(
   streamId: StreamTabId,
@@ -111,6 +112,20 @@ function projectCliRunFact(
 ): CliProjectedNdjsonProgressEvent | undefined {
   switch (event.type) {
     case 'run.start':
+      return {
+        event: 'setActiveStream',
+        payload: {
+          streamId: event.streamId,
+          ...(event.agentCategory != null
+            ? { agentCategory: event.agentCategory }
+            : {}),
+          ...(event.isRemote != null ? { isRemote: event.isRemote } : {}),
+        },
+      };
+    case 'approval.requested':
+    case 'approval.resolved':
+    case 'approval.policy':
+    case 'result':
       return undefined;
     case 'usage':
       return { event: 'updateStreamUsage', payload: event.payload };

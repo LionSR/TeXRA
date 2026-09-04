@@ -513,8 +513,9 @@ export function syncStreamLog(
     };
   });
 
-  // Surface stream as active if we don't already have one — handles bare
-  // `texra chat` where setActiveStream is the first signal the runtime emits.
+  // Surface stream as active if we don't already have one: handles bare
+  // `texra chat`, where the first transcript sync is the first signal the
+  // runtime emits for a stream.
   focusStream(streamId, { onlyIfUnset: true });
 }
 

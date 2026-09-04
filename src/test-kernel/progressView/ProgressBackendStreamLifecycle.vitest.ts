@@ -42,7 +42,7 @@ import { GoalStore } from '@tools/goal';
 import {
   createIsolatedRecordingBackend,
   createRecordingBackend,
-  emitActiveStream,
+  emitRunStart,
   emitRunConfig,
   emitRunEvent,
   stubStreamControls,
@@ -164,10 +164,11 @@ describe('ProgressBackend', () => {
     backend.setupEventListeners();
     const streamId = 'desktop-local-stream' as StreamTabId;
 
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId,
       agentCategory: AgentCategory.Workflow,
     });
+    backend.presentLaunchedStream(streamId);
 
     await vi.waitFor(() =>
       expect(backend.presentation.activeStream).toBe(streamId),
@@ -196,13 +197,13 @@ describe('ProgressBackend', () => {
     expect(backend.state.getStreamMetadata(streamId).identity).toBeUndefined();
   });
 
-  it('clears an empty active-stream selection through the shared fact path', async () => {
+  it('clears an empty active-stream selection through the host selection', async () => {
     const target = createIsolatedRecordingBackend();
     const { backend, messages } = target;
     backend.setupEventListeners();
 
     backend.presentation.select('previous-stream');
-    emitActiveStream(target, { streamId: null });
+    void backend.activateStream('');
 
     await vi.waitFor(() => expect(backend.presentation.activeStream).toBe(''));
     expect(messages).toContainEqual({
@@ -357,7 +358,7 @@ describe('ProgressBackend', () => {
     ]);
   });
 
-  it('notifies a parent roster when a workflow attachment reclaims a child identity', () => {
+  it('notifies a parent roster when a fresh workflow run.start reclaims a child identity', () => {
     const target = createIsolatedRecordingBackend();
     const { backend, session } = target;
     const parent = 'workflow-reclaim-parent' as StreamTabId;
@@ -366,27 +367,21 @@ describe('ProgressBackend', () => {
     setChildRoster(backend, parent, [child]);
     backend.state.beginStreamRemoval(childStream);
     backend.setupEventListeners();
+    const invalidate = vi.spyOn(backend.renderer, 'invalidate');
 
+    // The fresh `run.start` carries this session's own owner token: the
+    // live-owner evidence that lets it reopen the committed tombstone.
     emitRunEvent(target, childStream, {
       type: 'run.start',
       streamId: childStream,
-      executionId: 'workflow-reclaim' as ExecutionId,
+      executionId: 'aaaa0001f10e' as ExecutionId,
       identity: {
         kind: 'multiAgentWorkflow',
         workflowName: 'workflow-reclaim',
       },
+      ownerId: session.ownerId,
     });
-    vi.spyOn(session.executions, 'getAgentHandleByStream').mockReturnValue(
-      {} as never,
-    );
-    const invalidate = vi.spyOn(backend.renderer, 'invalidate');
-
-    expect(
-      backend.applySessionFact({
-        type: 'setActiveStream',
-        payload: { streamId: childStream },
-      }),
-    ).toBe(true);
+    expect(backend.state.isStreamRemoved(childStream)).toBe(false);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([]);
     expect(invalidate).toHaveBeenCalledWith(parent, 'subagents');
   });
@@ -1432,7 +1427,7 @@ describe('ProgressBackend', () => {
     backend.dispose();
     messages.length = 0;
 
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId: stream,
       agentCategory: AgentCategory.Workflow,
     });
@@ -1450,7 +1445,7 @@ describe('ProgressBackend', () => {
     backend.dispose();
     backend.setupEventListeners();
 
-    emitActiveStream(target, {
+    emitRunStart(target, {
       streamId: stream,
       agentCategory: AgentCategory.Workflow,
     });

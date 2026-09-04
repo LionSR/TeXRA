@@ -371,7 +371,7 @@ describe('sessionFold', () => {
       { id: ROOT, label: 'review' },
       { id: CHILD, label: child.label },
     ]);
-    expect(stream(view, GRANDCHILD).outputs).toStrictEqual({});
+    expect(stream(view, GRANDCHILD)).toMatchObject({ outputs: {} });
     expect(child.label).toBe(runIdentityDisplayName(CHILD_IDENTITY));
     expect(child.model).toBe('claude-sonnet-4-5');
     expect(child.followUpSupport).toBe('nativeInteractive');

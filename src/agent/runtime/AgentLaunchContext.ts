@@ -32,7 +32,7 @@ import { inferPersistedFlowModelHandlerCompatibilityKey } from '@agent/runtime/m
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { AgentError } from '@common/errors';
+import { AgentError, classifyAgentError } from '@common/errors';
 import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
@@ -42,18 +42,25 @@ import { createLog } from '@logger/logUtils';
 import type { CopilotRouteOverride } from '@model/copilotRouting';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { DisposableStore } from '@platform/disposable';
-import type { AgentSource, ExecutionId, StreamTabId } from '@shared/schemas';
+import type {
+  AgentSource,
+  ExecutionId,
+  StreamTabId,
+  UserFollowUpSupport,
+} from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
   STREAM_PHASE,
   STREAM_SUBSTATE,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { linkAbortSignals } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { launchWorktreeInfo } from '@utils/git/worktreeInfo';
 
 import { createRunContext, withRunContext } from './RunContext';
 import { createRunScope } from './RunScope';
@@ -90,10 +97,19 @@ interface AgentLaunchInput {
   config: AgentConfig;
   executionId: ExecutionId;
   streamTabIdOverride?: StreamTabId;
-  /** Fires after streamId is assigned but before setActiveStream is emitted. */
-  onBeforeActivation?: (streamId: StreamTabId) => void;
-  /** Register the stream without switching the UI away from its current tab. */
-  suppressViewSwitch?: boolean;
+  /**
+   * Fires once the stream's `run.start` is published, before the run itself
+   * begins: the stream exists for every fold by then, so a host may select
+   * it (its own surface state, never a fact) and approval ancestry may be
+   * registered against it.
+   */
+  onStreamResolved?: (streamId: StreamTabId) => void;
+  /** Delegated child of another run; carried on the failure `result`. */
+  isSubagent?: boolean;
+  /** Stream this run was launched from, stamped on `run.start`. */
+  parentStreamId?: StreamTabId;
+  /** Runtime behavior declared by the launch source, stamped on `run.start`. */
+  userFollowUpSupport?: UserFollowUpSupport;
   /** When true, reject if an explicit category doesn't match the YAML-defined category. */
   enforceCategory?: boolean;
   /** Skip the `requestShowError` toast -- for callers that show their own UI. */
@@ -272,7 +288,7 @@ async function assembleAgentLaunchContext(
   executionId: ExecutionId,
   streamId: StreamTabId,
   resources: DisposableStore,
-  onActivated: (runTrace: RunTrace) => void,
+  onStarted: (runTrace: RunTrace, category: AgentCategory) => void,
 ): Promise<AgentLaunchContext> {
   input.signal?.throwIfAborted();
   const fullConfig = input.config;
@@ -406,21 +422,29 @@ async function assembleAgentLaunchContext(
   modelHandler.setLogger(agentLogger);
 
   input.signal?.throwIfAborted();
-  input.onBeforeActivation?.(streamId);
-
-  session.events.emit({
-    scope: 'session',
-    event: {
-      type: 'setActiveStream',
-      payload: {
-        streamId,
-        agentCategory: setting.agentCategory,
-        isRemote: isRemoteAgent(fullConfig.agent),
-        ...(input.suppressViewSwitch ? { suppressViewSwitch: true } : {}),
-      },
-    },
+  // The reservation commit point: the existence fact. From here the stream
+  // is real for every fold, and a failure below ends it with a terminal
+  // `result` instead of releasing the reservation (PRD
+  // one-fold-three-renderers, section 6, item 3). The launch facts the fold
+  // reads verbatim (item 6) are all known here; the run's own `run.config`
+  // follows once the lifecycle starts.
+  agentLogger.emit({
+    type: 'run.start',
+    streamId,
+    executionId,
+    identity: { kind: 'agent', agent: config.agent },
+    userFollowUpSupport:
+      input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    agentCategory: setting.agentCategory,
+    isRemote: isRemoteAgent(fullConfig.agent),
+    worktree: launchWorktreeInfo(config.workingDirectory),
+    ...(input.parentStreamId && input.parentStreamId !== streamId
+      ? { parentStreamId: input.parentStreamId }
+      : {}),
+    ownerId: session.ownerId,
   });
-  onActivated(runTrace);
+  onStarted(runTrace, setting.agentCategory);
+  input.onStreamResolved?.(streamId);
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
@@ -558,27 +582,51 @@ function acquireStreamOrThrow(
 }
 
 /**
- * Saga-style compensation for a stream activation that failed after the UI tab
- * was registered: the tab is visible, so surface the failure on it and
- * transition to FAILED rather than leaving it hanging in STARTING.
+ * Saga-style compensation for a launch that failed after its `run.start`
+ * was published: the stream exists for every fold, so end it there with its
+ * terminal `result` and transition to FAILED rather than leaving a stream
+ * that started and never ran. The `result` is the run's end for the fold and
+ * for `session.onResult` (the hosts' terminal toast), so it claims the
+ * error's presentation the way every other run failure does.
  *
- * A pre-activation failure has no visible tab and only releases the reserved
+ * A failure before `run.start` has no stream and only releases the reserved
  * lock; that one line is inlined at its call site.
  */
-function compensateActivatedFailure(args: {
+function compensateStartedFailure(args: {
   config: AgentConfig;
+  category: AgentCategory;
+  executionId: ExecutionId;
   streamId: StreamTabId;
+  isSubagent: boolean;
   runTrace: RunTrace;
   streamStatus: StreamStatusMachine;
   err: unknown;
 }): void {
-  const { config, streamId, runTrace, streamStatus, err } = args;
-  logSdkError(
-    runTrace.trace,
-    `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`,
+  const {
+    config,
+    category,
+    executionId,
+    streamId,
+    isSubagent,
+    runTrace,
+    streamStatus,
     err,
-    { operation: `start ${config.agent}` },
-  );
+  } = args;
+  const message = `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`;
+  logSdkError(runTrace.trace, message, err, {
+    operation: `start ${config.agent}`,
+  });
+  runTrace.trace.emit({
+    type: 'result',
+    outcome: RUN_OUTCOME.FAILED,
+    executionId,
+    streamId,
+    agentName: config.agent,
+    category,
+    isSubagent,
+    error: { kind: classifyAgentError(err), message },
+  });
+  attachErrorPresentationClaimed(err);
   if (
     !streamStatus.transitionToTerminal(
       streamId,
@@ -586,7 +634,7 @@ function compensateActivatedFailure(args: {
       STREAM_TRANSITION_CAUSE.LIFECYCLE,
     )
   ) {
-    runTrace.trace.warn('Failed to mark activation failure terminal', {
+    runTrace.trace.warn('Failed to mark the launch failure terminal', {
       data: {
         agentIdentifier: config.agent,
         streamId,
@@ -596,12 +644,12 @@ function compensateActivatedFailure(args: {
 }
 
 /**
- * Resolves agent context and reserves the final stream id before the UI is
- * activated.
+ * Resolves agent context and reserves the final stream id before the run
+ * starts.
  *
- * Treats the `setActiveStream` emission as a transactional commit point:
- * resolution failures before that point release the lock silently; failures
- * after surface on the visible tab via {@link compensateActivatedFailure}.
+ * Treats the `run.start` emission as a transactional commit point: resolution
+ * failures before that point release the lock silently; failures after end
+ * the started stream via {@link compensateStartedFailure}.
  */
 export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
@@ -624,23 +672,26 @@ export async function buildAgentLaunchContext(
 
   // LIFO ownership of everything assembled before the runtime accepts the
   // launch. Entries register in creation order, so a failed launch unwinds:
-  // parent stage end → activation compensation (before the trace it logs into
-  // is disposed) → run trace detach/dispose → model handler dispose.
+  // parent stage end → started-failure compensation (before the trace it
+  // logs into is disposed) → run trace detach/dispose → model handler dispose.
   const resources = new DisposableStore();
   const launchFailure: { error?: unknown } = {};
-  let activationRegistered = false;
+  let started = false;
   try {
     const ctx = await assembleAgentLaunchContext(
       { ...input, session: launchSession },
       executionId,
       streamId,
       resources,
-      (runTrace) => {
-        activationRegistered = true;
+      (runTrace, category) => {
+        started = true;
         resources.add(() =>
-          compensateActivatedFailure({
+          compensateStartedFailure({
             config,
+            category,
+            executionId,
             streamId,
+            isSubagent: input.isSubagent ?? false,
             runTrace,
             streamStatus,
             err: launchFailure.error,
@@ -661,9 +712,9 @@ export async function buildAgentLaunchContext(
         data: { error: cleanupError },
       });
     }
-    if (!activationRegistered && reservedStreamId) {
-      // Pre-activation failure: no visible tab to compensate on; release the
-      // reserved stream lock silently.
+    if (!started && reservedStreamId) {
+      // The stream never existed (no `run.start`): release the reserved
+      // stream lock silently.
       streamStatus.releaseIfReserved(reservedStreamId);
     }
     if (

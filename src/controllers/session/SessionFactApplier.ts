@@ -12,7 +12,6 @@ import {
   STREAM_PHASE,
   isGoalInFlight,
   type SessionEventBody,
-  type SetActiveStreamPayload,
   type SetParentStreamPayload,
   type StreamPhase,
   type StreamStage,
@@ -129,7 +128,6 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
     case 'goalStateChanged':
     case 'updateQueuedFollowUps':
     case 'followUpSent':
-    case 'setActiveStream':
     case 'updateStreamDescription':
     case 'streamHoldChanged':
       return fact.payload.streamId ? [fact.payload.streamId] : [];
@@ -200,8 +198,15 @@ export class SessionFactApplier {
       }));
       this.renderer.invalidate(streamId, 'contextState');
     },
-    'run.start': (_streamId, event) => this.handleRunConfig(event.streamId),
+    'run.start': (_streamId, event) => this.handleRunStart(event),
     'run.config': (_streamId, event) => this.handleRunConfig(event.streamId),
+    // Approval facts and the terminal result are the fold's; canonical
+    // state learns approvals from the host port and the outcome from the
+    // status fact the lifecycle publishes beside the result.
+    'approval.requested': () => undefined,
+    'approval.resolved': () => undefined,
+    'approval.policy': () => undefined,
+    result: () => undefined,
     updateTodos: (_streamId, event) =>
       this.renderer.onTodosChanged(event.streamId, event.todos),
     updatePlan: (_streamId, event) =>
@@ -285,28 +290,6 @@ export class SessionFactApplier {
    * activation, leases — must not react to a refused one.
    */
   handleSessionFact(fact: SessionFact): boolean {
-    // A committed tombstone is reopened only by a legitimate workflow
-    // attachment with live-execution evidence. The stream's current metadata
-    // still names the workflow identity (the snapshot projection of the fresh
-    // `run.start` landed before this applier), and the execution registry
-    // holds the freshly tracked handle. A delayed stale `run.start` cannot
-    // satisfy this gate because it carries no attachment and no live handle.
-    if (
-      fact.type === 'setActiveStream' &&
-      fact.payload.streamId !== null &&
-      this.state.isStreamRemoved(fact.payload.streamId) &&
-      this.state.getStreamMetadata(fact.payload.streamId).identity?.kind ===
-        'multiAgentWorkflow' &&
-      this.state.hasLiveStreamExecution(fact.payload.streamId)
-    ) {
-      // The fresh attachment is the first delivery for the new incarnation,
-      // even when a prior host delete left this applier's registry untouched.
-      this.registeredWithRenderer.delete(fact.payload.streamId);
-      const { changedRosterParents } = this.state.claimStreamIdentity(
-        fact.payload.streamId,
-      );
-      this.notifyRosterParents(changedRosterParents);
-    }
     if (
       fact.type !== 'removeStream' &&
       sessionFactStreamIds(fact).some((streamId) =>
@@ -351,8 +334,6 @@ export class SessionFactApplier {
               fact.payload.streamId,
               'queuedFollowUps',
             );
-          case 'setActiveStream':
-            return this.handleSetActiveStream(fact.payload);
           case 'updateStreamDescription':
             return this.handleUpdateStreamDescription(fact.payload);
           case 'status':
@@ -448,13 +429,30 @@ export class SessionFactApplier {
   }
 
   handleRunFact(streamId: StreamTabId, event: SessionRunFactEvent): void {
+    // A committed tombstone is reopened only by a fresh workflow `run.start`
+    // with live-owner evidence: the fact names the workflow identity, and its
+    // owner is one this process can prove alive (in process, its own
+    // session's token). A stale `run.start` replayed for an identity nobody
+    // live re-claimed carries an owner that is not, so it cannot satisfy
+    // this gate (PRD one-fold-three-renderers, section 6, item 3).
+    if (
+      event.type === 'run.start' &&
+      this.state.isStreamRemoved(streamId) &&
+      event.identity.kind === 'multiAgentWorkflow' &&
+      event.ownerId !== null &&
+      this.state.view.liveOwners.includes(event.ownerId)
+    ) {
+      // The fresh start is the first delivery for the new incarnation, even
+      // when a prior host delete left this applier's registry untouched.
+      this.registeredWithRenderer.delete(streamId);
+      const { changedRosterParents } = this.state.claimStreamIdentity(streamId);
+      this.notifyRosterParents(changedRosterParents);
+    }
     // A run fact for a removed stream is stale by definition. A
     // `child.activity` snapshot is authoritative for its parent even when some
     // listed children are tombstoned: canonical state accepts the whole fact,
     // while SessionState's shared read projection hides those child rows until
-    // settlement. A delayed `run.start` cannot reopen a committed tombstone;
-    // the re-claim lives in `handleSessionFact`, on the workflow attachment that
-    // carries live-execution evidence for the new incarnation.
+    // settlement.
     if (this.state.isStreamRemoved(streamId)) {
       this.deferRunFact(streamId, event);
       return;
@@ -489,9 +487,8 @@ export class SessionFactApplier {
    * Translate an admitted session fact into the fold's vocabulary and feed
    * `SessionState.view`. Field naming only: the two shapes mirror each other,
    * and the store reads (`GoalStore`, the follow-up queue) happen here, in
-   * the controller, so the fold never touches a store. `setActiveStream` has
-   * no arm: `run.start` is the existence fact. A `child.activity` roster has
-   * none either: topology is `parentId`.
+   * the controller, so the fold never touches a store. A `child.activity`
+   * roster has no arm: topology is `parentId`.
    */
   private foldSessionFact(fact: SessionFact): void {
     switch (fact.type) {
@@ -523,8 +520,6 @@ export class SessionFactApplier {
         });
         return;
       }
-      case 'setActiveStream':
-        return;
       case 'updateStreamDescription':
         this.fold(fact.payload.streamId, {
           type: 'updateStreamDescription',
@@ -572,10 +567,45 @@ export class SessionFactApplier {
         });
         return;
       case 'run.start': {
-        const { streamId: runStream, stageId: _stageId, ...body } = event;
-        this.fold(runStream, body);
+        // The launcher's owner token rides the envelope, not the body.
+        const {
+          streamId: runStream,
+          stageId: _stageId,
+          ownerId,
+          ...body
+        } = event;
+        this.state.applySessionEvent(runStream, body, ownerId);
         return;
       }
+      case 'approval.requested':
+        this.fold(streamId, {
+          type: 'approval.requested',
+          requestId: event.requestId,
+          payload: event.payload,
+        });
+        return;
+      case 'approval.resolved':
+        this.fold(streamId, {
+          type: 'approval.resolved',
+          requestId: event.requestId,
+        });
+        return;
+      case 'approval.policy':
+        this.fold(streamId, {
+          type: 'approval.policy',
+          snapshot: event.snapshot,
+        });
+        return;
+      case 'result':
+        this.fold(streamId, {
+          type: 'result',
+          outcome: event.outcome,
+          executionId: event.executionId,
+          category: event.category,
+          isSubagent: event.isSubagent,
+          error: event.error,
+        });
+        return;
       case 'run.config':
         this.fold(event.streamId, {
           type: 'run.config',
@@ -834,39 +864,31 @@ export class SessionFactApplier {
     this.renderer.invalidate(childStreamId, 'parentStreamId');
   }
 
-  private handleSetActiveStream(payload: SetActiveStreamPayload): void {
-    const { streamId, isRemote } = payload;
-    if (!streamId) return;
-
+  /**
+   * The existence fact: the stream's transcript and execution state exist
+   * from here, and the launch facts it carries (category, remoteness) land
+   * on canonical metadata. Focus is not part of it; a host selects the
+   * stream from its own launch callback.
+   */
+  private handleRunStart(
+    event: Extract<SessionRunFactEvent, { type: 'run.start' }>,
+  ): void {
+    const { streamId, agentCategory, isRemote } = event;
     this.state.streamLogs.ensureStream(streamId);
     // Only pass fields the event actually knows; omitted fields retain the
     // canonical metadata already owned by SessionState.
     const metadata = {
-      ...(payload.agentCategory !== undefined && {
-        agentCategory: payload.agentCategory,
-      }),
-      ...(isRemote !== undefined && { isRemote }),
+      ...(agentCategory != null && { agentCategory }),
+      ...(isRemote != null && { isRemote }),
     };
     if (Object.keys(metadata).length > 0) {
       this.state.updateStreamMetadata(streamId, metadata);
     }
-    // Resolve category: use payload hint, fall back to existing stream state.
-    // Approval flows (proposal, tool-edit, bash) emit without agentCategory;
-    // the stream already exists by then so getStreamCategory() finds it.
-    const agentCategory =
-      payload.agentCategory ?? this.getStreamCategory(streamId);
-    // Mint the ephemeral execution record so the tab renders its category.
-    if (agentCategory) {
-      this.state.getOrCreateStreamState(streamId, agentCategory);
-    }
-    if (!this.renderer.isAvailable()) return;
-
-    // Register the attachment with this renderer. Transcript hydration and
-    // focus policy belong to the host presentation, not the session fact.
-    const firstHostDelivery = !this.registeredWithRenderer.has(streamId);
-    if (firstHostDelivery) {
-      this.pushStreamMetadata(streamId);
-    }
+    // A process stream carries no category; its state waits for the first
+    // fact that resolves one, as before.
+    const category = agentCategory ?? this.getStreamCategory(streamId);
+    if (category) this.state.getOrCreateStreamState(streamId, category);
+    this.handleRunConfig(streamId);
   }
 
   private handleGoalStateChanged(streamId: StreamTabId): void {

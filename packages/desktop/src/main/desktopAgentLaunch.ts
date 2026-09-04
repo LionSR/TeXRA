@@ -20,6 +20,7 @@ export type DesktopAgentLaunchOptions = Pick<
   | 'modelHandlerCompatibilityKey'
   | 'preferHelperModel'
   | 'onRun'
+  | 'onStreamResolved'
   | 'suppressErrorNotification'
 >;
 
@@ -39,6 +40,7 @@ export async function launchDesktopAgent(
     modelHandlerCompatibilityKey: options.modelHandlerCompatibilityKey,
     ...(options.preferHelperModel && { preferHelperModel: true }),
     onRun: options.onRun,
+    onStreamResolved: options.onStreamResolved,
     suppressErrorNotification: options.suppressErrorNotification,
     openWorkflowOutput: async (result) => {
       const output = selectAutoOpenFinalOutput(result);

@@ -13,6 +13,14 @@ export async function revealProgressStream(
   return provider ? provider.revealStream(streamId) : 'unavailable';
 }
 
+/**
+ * Select a stream this window just launched (the launch's `onStreamResolved`
+ * callback). The provider's own selection; a fact never carries focus.
+ */
+export function presentLaunchedProgressStream(streamId: StreamTabId): void {
+  ProgressViewProvider.getInstance()?.backend.presentLaunchedStream(streamId);
+}
+
 export function getProgressStreamLabel(
   streamId: StreamTabId,
 ): string | undefined {

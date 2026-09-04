@@ -23,11 +23,7 @@ import {
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createLog } from '@logger/logUtils';
 import type { StateStore } from '@platform/interfaces';
-import type {
-  ProgressViewOutboundMessage,
-  SetActiveStreamPayload,
-  StreamTabId,
-} from '@shared/schemas';
+import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { RETRY_REQUEST_CLEARED_CAUSE } from '@shared/copy/interactionCancellation';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
@@ -406,16 +402,13 @@ export class ProgressBackend {
     transcriptLease?.close();
   }
 
-  /** Apply presentation policy carried beside a stream attachment fact. */
-  private handleStreamPresentationRequest(
-    payload: SetActiveStreamPayload,
-  ): void {
-    const stream = payload.streamId;
-    if (!stream) {
-      void this.hydrateAndCommitSelection('', { notifyActivation: true });
-      return;
-    }
-    if (payload.suppressViewSwitch === true) return;
+  /**
+   * Select a stream this host just launched, from the launch's own stream
+   * callback (`onStreamResolved`). Host-local selection, never a fact: a
+   * background child appears without taking focus because nothing calls
+   * this for it, and a pending prompt on the current stream keeps it.
+   */
+  presentLaunchedStream(stream: StreamTabId): void {
     const current = this.presentation.activeStream;
     if (current && this.hasPendingPermissions(current)) return;
     void this.activateStream(stream);
@@ -429,9 +422,7 @@ export class ProgressBackend {
   }
 
   /**
-   * Admit one session fact through the applier, then apply presentation
-   * policy for an accepted attachment. A refused attachment (removed stream)
-   * must not activate or lease.
+   * Admit one session fact through the applier.
    *
    * Public so tests and rare host seeds can inject a fact directly;
    * production reaches it through the hub subscription in
@@ -440,11 +431,7 @@ export class ProgressBackend {
   applySessionFact(
     fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
   ): boolean {
-    const admitted = this.factApplier.handleSessionFact(fact);
-    if (admitted && fact.type === 'setActiveStream') {
-      this.handleStreamPresentationRequest(fact.payload);
-    }
-    return admitted;
+    return this.factApplier.handleSessionFact(fact);
   }
 
   /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */

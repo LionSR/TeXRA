@@ -15,7 +15,6 @@ import PQueue from 'p-queue';
 
 import {
   currentSession,
-  defaultSession,
   matchesCancelSelector,
   type BashSettlement,
   type HostApprovalBypassStateUpdate,
@@ -83,7 +82,11 @@ import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 import { notify } from '../notifications/terminalNotifier';
 import { foregroundReader, patchStream } from './cliState';
-import { directChildStreamIds, isWorkflowScriptStream } from './childControls';
+import {
+  directChildStreamIds,
+  isWorkflowScriptStream,
+  presentStream,
+} from './childControls';
 import { childRosters, parentStream } from './childExecutions';
 import {
   refreshSubscriptionPreferenceViews,
@@ -539,15 +542,8 @@ function announceApproval(payload: ApprovalPayload): void {
       childRosters: childRosters.get(),
       parentStream: parentStream.get(),
     }).has(streamId);
-  if (streamId && !workflowOwnsApproval) {
-    defaultSession().events.emit({
-      scope: 'session',
-      event: {
-        type: 'setActiveStream',
-        payload: { streamId },
-      },
-    });
-  }
+  // Focus is this surface's own selection, never a fact.
+  if (streamId && !workflowOwnsApproval) presentStream(streamId);
   notify('approvalNeeded');
 }
 

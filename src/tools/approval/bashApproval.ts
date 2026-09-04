@@ -108,12 +108,16 @@ export async function requestBashApproval(
 
   requireInteractions('bash approval', context);
 
+  const hostRequest: HostBashApprovalRequest = {
+    command: request.command,
+    ...(request.cwd && { cwd: request.cwd }),
+    streamId,
+  };
   return session.approvals.bash.enqueue(streamId, {
     prompt: () =>
       session.interactions.requestBashApproval({
-        command: request.command,
-        ...(request.cwd && { cwd: request.cwd }),
-        streamId,
+        ...hostRequest,
+        permission: prepareBashApprovalPrompt(hostRequest, session),
       }),
     bypassed: () => ({ action: 'approve' }),
   });

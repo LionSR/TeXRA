@@ -16,9 +16,11 @@ import type {
   RawAcceptedSkill,
   AddOutputFilesPayload,
   AgentCategory,
+  ApprovalPolicySnapshot,
   ConversationProgress,
   GoalPausedPayload,
   ExecutionId,
+  PermissionPayload,
   RetryErrorInfo,
   RunIdentity,
   RunOutcome,
@@ -89,10 +91,17 @@ export interface StageStartEvent extends StageStamp {
 }
 
 /**
- * Immutable run identity emitted once when a stream enters RUNNING: the
- * fold's existence fact, typed from its `run.start` arm so the trace stays
+ * Immutable run identity emitted once at the reservation commit point, before
+ * the run itself begins: the fold's existence fact (a stream exists iff its
+ * `run.start` exists), typed from its `run.start` arm so the trace stays
  * assignable to the session-event vocabulary. Live emitters always know the
- * identity; the nullish arm belongs to the legacy importer alone.
+ * identity; the nullish arm belongs to the legacy importer alone. `ownerId`
+ * is the owner token of the session that launched the run
+ * (`SessionHandle.ownerId`): the applier stamps it on the fold envelope, and
+ * the tombstone-reopen gate reads it as the live-owner evidence a re-claimed
+ * workflow stream must carry. A launch that fails after this event emits its
+ * terminal `result` on the same failure path, so a started-but-never-run
+ * stream folds to failed, never to a ghost.
  */
 interface RunStartEvent
   extends
@@ -101,6 +110,37 @@ interface RunStartEvent
   readonly streamId: StreamTabId;
   readonly identity: RunIdentity;
   readonly userFollowUpSupport?: UserFollowUpSupport;
+  readonly ownerId: string | null;
+}
+
+/**
+ * A response-bearing host interaction (approval, plan, proposal, retry, user
+ * question) was requested for the run. Payload is what the UI shows, never a
+ * host handle, so a pending approval survives a restart as a fact. Emitted by
+ * `SessionHostInteractions` through the session hub; `approval.resolved`
+ * carries the same `requestId` however the request settled.
+ */
+interface ApprovalRequestedEvent extends StageStamp {
+  readonly type: 'approval.requested';
+  readonly requestId: string;
+  readonly payload: PermissionPayload;
+}
+
+/** The request settled, cancelled, or was rejected by the host. */
+interface ApprovalResolvedEvent extends StageStamp {
+  readonly type: 'approval.resolved';
+  readonly requestId: string;
+}
+
+/**
+ * The run's full approval-policy snapshot after a change, emitted only by
+ * the session's approval authority (`SessionHandle.setApprovalPolicy` and
+ * the bypass values `streamApprovalQueue.ts` owns): never a toggle delta, so
+ * the fold keeps latest-of-type per run.
+ */
+interface ApprovalPolicyEvent extends StageStamp {
+  readonly type: 'approval.policy';
+  readonly snapshot: ApprovalPolicySnapshot;
 }
 
 /** Mutable persisted run config changed after run.start, e.g. model switch. */
@@ -383,6 +423,9 @@ export type AgentEvent =
   | LogEvent
   | RunStartEvent
   | RunConfigEvent
+  | ApprovalRequestedEvent
+  | ApprovalResolvedEvent
+  | ApprovalPolicyEvent
   | StageStartEvent
   | StageEndEvent
   | ToolStartEvent
@@ -422,6 +465,10 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'goalPaused',
   'run.start',
   'run.config',
+  'approval.requested',
+  'approval.resolved',
+  'approval.policy',
+  'result',
   'usage',
   'context.state',
   'stage.start',
