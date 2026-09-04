@@ -232,7 +232,7 @@ TranscriptView = {
   taskGroups: TaskGroup[],                   // taskGroupProjection
   compaction: CompactionBlock[],             // compactionActivityProjection
   settledSeq: number,                        // last durable seq folded
-  settledRows: number,                       // rows whose finalizer folded
+  settledRows: number,                       // contiguous settled prefix
   // workflow arm; retained-phase filter folded in
   run: WorkflowRunModel | null,
 }
@@ -433,10 +433,14 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **`settledSeq`** is the last durable seq folded; text deltas do not
   advance it. It is a memoization key, **not** a print boundary: a durable
   `stream.text` checkpoint, a status change, or a usage event advances it
-  while the row above is still open. `settledRows` is the separate frontier
-  - how many rows have folded their finalizing event - and that is what the
-    TUI prints into append-only scrollback (12.3). Using `settledSeq` there
-    would print a row a later checkpoint or `stream.end` still changes.
+  while the row above is still open. `settledRows` is the separate frontier:
+  the **contiguous leading prefix** of rows whose finalizing event has
+  folded, not a count of them, which is what `advanceSettledPrefixIndex`
+  already computes by stopping at the first unfinished row
+  (`transcriptFold.ts:160-175`). That is what the TUI prints into
+  append-only scrollback (12.3). Using `settledSeq` would print a row a
+  later checkpoint or `stream.end` still changes; using a count would print
+  a still-streaming row 1 the moment row 2 finalized.
 - **Incremental.** One rule, keyed on what a change _names_. A durable event names the
   streams its _type_ declares - not `event.streamId`, which session-lane
   facts do not have: `setParentStream` names its `childStreamId` and its new
@@ -859,9 +863,11 @@ to be delivered.
 
 The store's half is decision 6, still unagreed, and it is now the weakest
 form yet: a **monotone commit counter** for the session, readable at any
-time. It carries no events, need not be exact, and may over-report, because
-a wake that finds no new rows costs one indexed read. It must be **the
-session's actual commit ordinal**, not an independent generation: it is
+time. It carries no events, and a wake that finds no new rows costs one
+indexed read - but it may **not** over-report: reporting 100 while the table
+is at 50 advances the shared `n > seen` filter past ordinals 51-100, and no
+wake ever arrives for them. It must be **the session's actual commit
+ordinal**, not an independent generation: it is
 merged with this process's own level and compared once against the seen
 value, so a second number space either runs ahead - filtering local ordinals
 as stale - or starts behind an existing database and filters cross-process
@@ -1210,7 +1216,8 @@ production build.
 
 ## 8. The protocol
 
-Four messages: events and responses down, two requests up. The CLI calls
+Six messages, three each way. Down: `events`, `response`, and
+`surface.action`. Up: `subscribe`, `runtime.request`, and `host.request`. The CLI calls
 the same functions in process.
 
 ### 8.1 Down: `events`
@@ -1219,6 +1226,11 @@ the same functions in process.
 EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
 ```
+
+`Subscribe` travels **up** (8.6 makes it the replacement for
+`WEBVIEW_READY`); the frames it starts travel down. It is listed here
+because the two shapes define one channel between them, not because they
+share a direction.
 
 Two shapes on this channel, not three: a resync is a `Subscribe` whose
 frames answer with `from: 0` chunks for the streaming rows (5.2, 7.4), so
@@ -1299,7 +1311,7 @@ fixing the id retired it.
   `progressHostInteractions.ts:301-312`), so a stale panel in another
   surface cannot resolve the newer retry -
   `followUp.polish { streamId, text }` - the draft
-  lives in the view's `Surface.drafts` and §8.5 does not synchronize it, so
+  lives in the view's `Surface.drafts` and §8.6 does not synchronize it, so
   polish carries its text exactly as `polishInstruction` does
 - decisions: `toolEdit`, `bash`, `plan`,
   `proposal { approve { model?, agent? } | reject | setup }` (the panel
@@ -1314,14 +1326,14 @@ fixing the id retired it.
   `approval.requested`, which `ApprovalRequest` already holds), plus
   `externalInquiry { submit { answer, sessionLinks } | drop { feedback? } }`
   - the answer and its links live only in the answering surface's
-    `Surface.inquiryDrafts` (§8.5 removes the draft round trip), and
+    `Surface.inquiryDrafts` (§8.6 removes the draft round trip), and
     `InquirySubmitActionSchema` requires both (`inquiry.ts:71-76`) - each
     naming the inquiry's **turn**
     and not only its thread: `recordOpenQuestion` reopens a thread and
     `recordAnswerForOpenTurn` writes whichever turn is open
     (`externalInquiryStorage.ts:251-321, 331-360`), so a stale panel in a
     second surface could answer or drop a turn the agent opened after it last
-    rendered. There is no `draft` arm - §8.5 removes that round trip and §9
+    rendered. There is no `draft` arm - §8.6 removes that round trip and §9
     makes `Surface.inquiryDrafts` the per-view owner, so two surfaces would
     otherwise overwrite each other's unsent text through the backend. The envelope's `requestId` is
     correlation for the response (8.4) and is minted per message; the
@@ -1369,7 +1381,7 @@ kimiCodeRoutedOnFailure }` - **no key**: the host has already stored it
   `launch.confirmTeam { token, choice }`, the second continuation, which
   resumes or abandons the prepared launch;
   `polishInstruction { text, agent, model, files }` - the launch draft lives
-  in the view's `Surface.launch` and 8.5 deliberately does not synchronize
+  in the view's `Surface.launch` and 8.6 deliberately does not synchronize
   it, so the request carries what it polishes, as today's command does
 
 Outcome is a typed value the host renders; the nine toasts hardcoded in the
@@ -1386,7 +1398,7 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 `latexdiff`, `openLabel`, `pack`, `clean`, `restoreIntoLauncher`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
 `record { start { target: StreamTabId | 'launch' } | stop }` (the start
-names its destination, which lives only in the requesting surface once §8.5
+names its destination, which lives only in the requesting surface once §8.6
 removes selection synchronization, and is what populates
 `HostSnapshot.recording.target` for every other view), `popOut`, `popBack`,
 `pickFiles { fileType, options }` (the launcher has input, context, media,
@@ -1439,7 +1451,7 @@ is one extension-global key and its six consumers are the sidebar's
 `view/title` entries, `packages/extension/package.json:649-678`, so an
 editor-tab mode change must not overwrite it - a
 notification, not a round trip: the extension host needs `texra.activeView`
-for six `view/title` menu conditions and §8.5 removes the selection round
+for six `view/title` menu conditions and §8.6 removes the selection round
 trip, so the surface tells the host what it is showing without selection
 becoming a session fact), and the launcher's file pickers. The banners and the
 onboarding cards are interactive, so their actions are arms too:
@@ -1447,7 +1459,10 @@ onboarding cards are interactive, so their actions are arms too:
 `onboarding { advance | dismiss }`,
 `openAgentDirectory` (the agent-config banner's "Open agent directory" when
 `customDirSet`: the host resolves `agentDirectories.custom()` and calls
-`revealFileInOS`, which `openSettings` cannot do),
+`revealFileInOS`, which `openSettings` cannot do), `openAgentDocs` (its
+"Read agent docs" sibling, which opens the internal `custom-agents`
+document, `mainViewActions.ts:529-543` - an internal document command, not a
+URL, so `openUrl` does not stand in for it),
 `gettingStarted { action }` (the empty state's `createSampleProject`,
 `cloneOverleaf`, `downloadArxiv`, `openWalkthrough` - distinct host
 commands in `GettingStartedActionSchema`, `mainView/state.ts:354-374`, which
@@ -1482,7 +1497,31 @@ follow-up keeps its draft and restores focus from the error arm, a file
 picker returns its paths in the outcome. In process (TUI, headless) the
 Effect's own result is the response and no message exists.
 
-### 8.5 What does not cross the bridge
+### 8.5 Down: `surface.action`
+
+```ts
+SurfaceAction = {
+  session: SessionKey,
+  action: 'selectNew' | 'select { streamId }' | 'toggleDrawer' | 'submitLaunch',
+};
+```
+
+The host initiates these, and only these. `texra.showMainView`,
+`texra.showProgressView`, `texra.toggleView`, and the run accelerator are
+invoked from the command palette, a title menu, the status bar, or a
+keybinding, and each has to change or act on state the **surface** owns -
+`MainViewProvider.switchMode` is deleted and interaction state is barred
+from `HostSnapshot` (8.1), so without this channel those retained commands
+have nothing to reach.
+
+It is an action, not state: the surface stays the single owner and decides
+what its `Surface` becomes, exactly as when the user clicks the same
+control. Anything the host could instead express as data belongs in the
+`host` snapshot, and anything a surface initiates is a request - this
+message exists only for the case where the host is the actor and the
+surface holds the state.
+
+### 8.6 What does not cross the bridge
 
 Interaction state: `SWITCH_STREAM`'s round trip and persistence, the
 external-inquiry draft, `SETTLE_STREAM_SELECTION`, `SET_PLACEMENT`. The
@@ -1551,7 +1590,7 @@ Surface = {
   drafts: Map<StreamTabId, Draft>
   // the new-task composer: the existing MainViewPersistedState, per session
   launch: LaunchSurface
-  // answers in progress; keyed by inquiry, not by stream (8.5).
+  // answers in progress; keyed by inquiry, not by stream (8.6).
   // The whole InquiryDraft (answer AND sessionLinks), not just the answer.
   inquiryDrafts: Map<InquiryId, InquiryDraft>
   // override on top of approval === 'descendant'; the stream tree
@@ -1622,7 +1661,7 @@ rebuilt into Maps at load, because webview state crosses `JSON.stringify`
 and a Map serializes to `{}`. Persisted per view and session: `selected`, `launch` (as
 today), `drafts` (text only; images and the polished and transcribed
 variants are not), `inquiryDrafts` (whole, and cleared when the inquiry
-resolves - §8.5 removes the round trip that persists them today, so nothing
+resolves - §8.6 removes the round trip that persists them today, so nothing
 else would), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
 `session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`; its `search` is not
 persisted, and neither is `Surface.search`. The two are separate because
