@@ -13,6 +13,7 @@ import {
   GettingStartedActionSchema,
   STREAM_PHASE,
   type GettingStartedAction,
+  type RunOutcome,
   type StreamLifecycleStatus,
   type StreamLogEntry,
   type TaskGroup,
@@ -42,7 +43,10 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { isInFlightPhase } from '@shared/streams/streamStatus';
+import {
+  isInFlightPhase,
+  isTerminalOutcomePhase,
+} from '@shared/streams/streamStatus';
 import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
 import {
   formatRoundStageLabel,
@@ -174,6 +178,18 @@ export class TaskGroupList extends LitElement {
    *  this bit; a terminal phase alone still has a run unwinding behind it. */
   @property({ attribute: false }) streamDurablyFinal = false;
 
+  /** The outcome an unclosed group renders as: the run's own, once nothing
+   *  can still close the group. The two properties above are the same pair
+   *  the backend resolved together (`StreamMetadata.status` /
+   *  `statusDurablyFinal`), so a durably final status is always one of the
+   *  three outcomes — and it is the one the host-exit drain would write into
+   *  that group's `GROUP_END`. */
+  private get runDurableOutcome(): RunOutcome | undefined {
+    return this.streamDurablyFinal && isTerminalOutcomePhase(this.streamStatus)
+      ? this.streamStatus
+      : undefined;
+  }
+
   /** The run's workflow display structure, computed by the state selector;
    *  null when this stream declares no workflow. */
   @property({ attribute: false }) runModel: WorkflowRunModel | null = null;
@@ -261,11 +277,15 @@ export class TaskGroupList extends LitElement {
     const groupsChanged = changedProperties.has('groups');
     const rowsChanged = changedProperties.has('rows');
 
-    // The painted status is a fold of the group and the run's durability, so
-    // a change in either is a change in what the chime's memory holds: a run
-    // that becomes durably final repaints its open groups as cancelled without
-    // any group row changing.
-    if (groupsChanged || changedProperties.has('streamDurablyFinal')) {
+    // The painted status is a fold of the group and the run's durable
+    // outcome, so a change in any of the three is a change in what the
+    // chime's memory holds: a run that becomes durably final repaints its
+    // open groups as its outcome without any group row changing.
+    if (
+      groupsChanged ||
+      changedProperties.has('streamDurablyFinal') ||
+      changedProperties.has('streamStatus')
+    ) {
       this.checkForCompletedRuns();
     }
     if (changedProperties.has('runModel')) {
@@ -310,10 +330,10 @@ export class TaskGroupList extends LitElement {
     const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
       // The status the row PAINTS, not the raw one: a group the run never
-      // closed reads as cancelled once the stream reaches a terminal outcome,
-      // and the chime's memory has to agree with the pixels or the next paint
-      // sees a transition that never happened.
-      const status = taskGroupDisplayStatus(group, this.streamDurablyFinal);
+      // closed reads as the run's own outcome once nothing can still close
+      // it, and the chime's memory has to agree with the pixels or the next
+      // paint sees a transition that never happened.
+      const status = taskGroupDisplayStatus(group, this.runDurableOutcome);
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = !this.isToolUse && group.kind === 'round';
       const wasRunning = prev === STREAM_PHASE.RUNNING;
@@ -616,7 +636,7 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
-    const status = taskGroupDisplayStatus(group, this.streamDurablyFinal);
+    const status = taskGroupDisplayStatus(group, this.runDurableOutcome);
     const statusIcon = terminalStatusIcon(status);
     const phase = this.phaseModels.get(group.id);
     const title =
@@ -724,7 +744,7 @@ export class TaskGroupList extends LitElement {
           id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
-            [`is-${taskGroupDisplayStatus(group, this.streamDurablyFinal)}`]: true,
+            [`is-${taskGroupDisplayStatus(group, this.runDurableOutcome)}`]: true,
           })}
         >
           ${this.renderGroupHeader(node)}

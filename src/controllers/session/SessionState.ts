@@ -25,6 +25,7 @@ import {
   type ActiveChildInfo,
   type ContextStateData,
   type ConversationProgress,
+  type RunOutcome,
   type StreamStage,
   type ExecutionId,
   type RunOutcome,
@@ -567,11 +568,13 @@ export class SessionState {
   }
 
   /**
-   * Whether this stream's run is durably final: it reached a terminal outcome
-   * and nothing anywhere can still move it. The one fact that licenses a
-   * reader to repaint an unclosed task group or an unsettled call card as
-   * interrupted, shared by every host so the CLI and the progress view never
-   * decide it differently.
+   * The outcome this stream's run durably settled on, or `undefined` while
+   * anything can still move it. The one fact that licenses a reader to
+   * repaint an unclosed task group or an unsettled call card as interrupted,
+   * shared by every host so the CLI and the progress view never decide it
+   * differently — and, for a group, the value the host-exit drain would have
+   * written into its `GROUP_END`, so what a reader paints before settlement
+   * is what it reads back after.
    *
    * Two ways to be final, both of which need the terminal outcome first — a
    * live run publishes CANCELLED the instant a user stops it, while its
@@ -585,15 +588,22 @@ export class SessionState {
    *   hold is excluded by its `detail`, and a launch reservation cannot reach
    *   here at all — a reserved entry reports RUNNING, never an outcome.
    */
-  streamDurablyFinal(stream: StreamTabId): boolean {
+  streamDurableOutcome(stream: StreamTabId): RunOutcome | undefined {
     const resolved = this.resolveStreamPhase(stream);
-    if (!isTerminalOutcomePhase(resolved.state?.phase)) return false;
-    if (resolved.origin === 'derived') return true;
-    return (
-      resolved.origin === 'live' &&
+    const phase = resolved.state?.phase;
+    if (!isTerminalOutcomePhase(phase)) return undefined;
+    if (resolved.origin === 'derived') return phase;
+    return resolved.origin === 'live' &&
       resolved.detail === undefined &&
       !this.hasLiveStreamExecution(stream)
-    );
+      ? phase
+      : undefined;
+  }
+
+  /** {@link streamDurableOutcome} as the bit alone, for the readers that only
+   *  need to know that nothing can move the run any more. */
+  streamDurablyFinal(stream: StreamTabId): boolean {
+    return this.streamDurableOutcome(stream) !== undefined;
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).

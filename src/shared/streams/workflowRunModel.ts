@@ -176,10 +176,12 @@ interface WorkflowRunModelInput {
    *  plan-only phase is its own skipped-empty-phase suppression. */
   readonly streamPhase: StreamLifecycleStatus | undefined;
   /** Whether the run is durably final: a terminal outcome with no producer
-   *  left anywhere (`SessionState.resolveStreamPhase` origin `derived`) — the
-   *  same fact `taskGroupDisplayStatus` reads for an unclosed task group. A
-   *  terminal phase alone will not do: a user stop publishes CANCELLED while
-   *  the run is still unwinding in this process and its cards are still being
+   *  left anywhere (`SessionState.streamDurableOutcome`) — the same fact
+   *  `taskGroupDisplayStatus` reads for an unclosed task group, as the bit
+   *  alone, since an unsettled card is repainted with the producer's own
+   *  interrupted vocabulary rather than with the run's outcome. A terminal
+   *  phase alone will not do: a user stop publishes CANCELLED while the run
+   *  is still unwinding in this process and its cards are still being
    *  settled, and a foreign-owned run has ended here without ending at all. */
   readonly runDurablyFinal: boolean;
   /** Live progress by child stream, for the cards that opened those streams. */

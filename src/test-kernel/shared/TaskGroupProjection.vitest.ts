@@ -131,7 +131,7 @@ describe('task-group StreamLog projection', () => {
     expect(taskGroups[0]?.endTime).toBe(250);
   });
 
-  it('paints a group the run never closed as cancelled, durably final runs only', () => {
+  it("paints a group the run never closed as the run's own durable outcome", () => {
     const [group] = projectTaskGroupsFromStreamLog([
       entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
         text: 'Run: auditor',
@@ -139,11 +139,19 @@ describe('task-group StreamLog projection', () => {
       }),
     ]);
 
-    // A run nothing can still settle: no producer is left to write GROUP_END.
-    expect(taskGroupDisplayStatus(group!, true)).toBe(STREAM_PHASE.CANCELLED);
+    // A run nothing can still settle: no producer is left to write GROUP_END,
+    // so the group paints as the outcome the exit drain would have written.
+    expect(taskGroupDisplayStatus(group!, RUN_OUTCOME.CANCELLED)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
+    expect(taskGroupDisplayStatus(group!, RUN_OUTCOME.COMPLETED)).toBe(
+      STREAM_PHASE.COMPLETED,
+    );
     // Anything else — still running, unwinding from a stop, owned by another
     // process — leaves the transcript's own status standing.
-    expect(taskGroupDisplayStatus(group!, false)).toBe(STREAM_PHASE.RUNNING);
+    expect(taskGroupDisplayStatus(group!, undefined)).toBe(
+      STREAM_PHASE.RUNNING,
+    );
   });
 
   it('ignores ordinary log rows', () => {

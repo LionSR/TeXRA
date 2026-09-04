@@ -95,7 +95,7 @@ import {
   childRosters as childRostersSignal,
   parentStream as parentStreamSignal,
   sessionStateRevision,
-  sessionStreamDurablyFinal,
+  sessionStreamDurableOutcome,
   streamMetadataFor,
   streamStateFor,
   streamUnavailableDetailFor,
@@ -375,7 +375,7 @@ export function App(props: AppProps): React.JSX.Element {
   // the phase turns terminal at a stop, while the run is still unwinding.
   const workflowRootDurablyFinal =
     workflowPopupStreamId !== undefined &&
-    sessionStreamDurablyFinal(workflowPopupStreamId);
+    sessionStreamDurableOutcome(workflowPopupStreamId) !== undefined;
   // Each child's live progress is read once here off the session's own
   // record of that child (status machine, execution state, usage) and joined
   // to its card by the model; the popup paints the join and reads no stream.
