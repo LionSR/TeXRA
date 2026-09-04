@@ -787,7 +787,7 @@ export class SessionState {
     if (resolved.origin === 'derived') return phase;
     return resolved.origin === 'live' &&
       resolved.detail === undefined &&
-      !this.hasLiveStreamExecution(stream)
+      this.session.executions.getAgentHandleByStream(stream) === undefined
       ? phase
       : undefined;
   }

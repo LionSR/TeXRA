@@ -545,6 +545,10 @@ export class SessionFactApplier {
       case 'removeStream':
         this.fold(fact.payload.streamId, { type: 'removeStream' });
         return;
+      case 'streamHoldChanged':
+        // A read-only hold is process-local display state; the fold has no
+        // arm for it.
+        return;
       default:
         return assertNever(fact, 'Unhandled session fact for the fold');
     }

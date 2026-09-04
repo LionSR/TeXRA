@@ -76,7 +76,6 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
-  workflowRunSettled,
 } from '@shared/streams/streamStatus';
 import {
   streamInterruptedMessage,
@@ -527,7 +526,12 @@ function withRunModel(view: SessionView, stream: StreamView): StreamView {
     rows: transcript.rows,
     workflowAttemptId: indexes.workflowAttemptId,
     plan: indexes.plan,
-    runSettled: workflowRunSettled(stream.status),
+    streamPhase: stream.status,
+    // Main's `SessionState.streamDurableOutcome` in the fold's vocabulary: a
+    // terminal outcome with no live owner left to settle its cards.
+    runDurablyFinal:
+      isTerminalOutcomePhase(stream.status) &&
+      !(stream.ownerId !== null && view.liveOwners.includes(stream.ownerId)),
     childProgress,
   });
   return { ...stream, transcript: replaceTranscript(transcript, { run }) };

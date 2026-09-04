@@ -420,7 +420,10 @@ describe('sessionFold', () => {
         rows: root.transcript.rows,
         workflowAttemptId: undefined,
         plan: undefined,
-        runSettled: true,
+        streamPhase: root.status,
+        // No liveness input in this scenario: the owner is not live, so the
+        // ended run is durably final.
+        runDurablyFinal: true,
         childProgress,
       }),
     );
