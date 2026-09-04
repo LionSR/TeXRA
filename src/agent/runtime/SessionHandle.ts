@@ -48,7 +48,6 @@ import { createLog } from '@logger/logUtils';
 import { DisposableStore } from '@platform/disposable';
 import {
   processWorkspaceRoots,
-  registerSessionRoots,
   type WorkspaceRoots,
 } from '@platform/workspaceRoots';
 import {
@@ -224,7 +223,6 @@ export class SessionHandle {
     this.teardown.add(() => {
       liveSessions.delete(this);
     });
-    this.teardown.add(registerSessionRoots(this.roots));
     this.teardown.add(() => {
       for (const detach of [...this.resultListenerDetachers]) detach();
     });
