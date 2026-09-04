@@ -413,36 +413,47 @@ describe('runResumeExecution', () => {
 
     await expect(run(cliContext())).resolves.toBe(1);
 
+    // The run is refused as state that could not be loaded, and the fact that
+    // decided it stays in the message: this arm covers an unreadable lease as
+    // well as the malformed checkpoint a listing row can advertise.
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not read the state of execution ${EXECUTION_ID}: lease unreadable (lease disk offline)`,
+      "This run's saved state could not be loaded, so it cannot be continued. " +
+        'Delete it from history and start a new agent task. ' +
+        '(lease unreadable (lease disk offline))',
     );
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
   // The checkpoint this seeds is readable, so the empty retrieval is the two
-  // readers disagreeing, not a finished run: the refusal is worded from the
-  // lease-aware classification, which still sees a checkpoint.
-  it('reports empty workflow retrieval against a live checkpoint as not resumable', async () => {
+  // readers disagreeing, not a finished run. The lease-aware classification
+  // decides that first and still sees a checkpoint; a history listing
+  // advertises a row from that file alone, so what the user is told is that
+  // the saved state could not be loaded, never that the run finished.
+  it('separates an unusable checkpoint from a run that finished', async () => {
     await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run cannot accept messages right now. Resume it, or start a new agent task.',
+      "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports resume-state load failures as operational errors', async () => {
+  // Retrieval failing over a checkpoint that is still on disk is the same
+  // cohort a listing advertised, whatever failed inside it, so it earns the
+  // same refusal instead of an internal retrieval message. The cause is
+  // logged, not printed.
+  it('refuses a checkpoint whose retrieval fails as unusable state', async () => {
     await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
 
-    await expect(run(cliContext())).resolves.toBe(1);
+    await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not load session ${EXECUTION_ID}: KV timeout`,
+      "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
     );
   });
 });

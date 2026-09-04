@@ -11,7 +11,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -35,7 +34,7 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
-  readCliResumeDataForDetails: vi.fn(),
+  readCliResumedModel: vi.fn(),
   assembleTrace: vi.fn(),
 }));
 
@@ -62,15 +61,15 @@ vi.mock('@agent/storage', async () => {
   };
 });
 
-// `isCliListingResumable` stays real: it is the listing rule under test, and
-// it decides from the listing row's own facts without touching storage.
+// `isCliRunResumable` stays real: it is the rule under test on both surfaces,
+// and it decides from the row's own facts without touching storage.
 vi.mock('@cli/runtime/toolUseResumeData', async () => {
   const actual = await vi.importActual<
     typeof import('@cli/runtime/toolUseResumeData')
   >('@cli/runtime/toolUseResumeData');
   return {
     ...actual,
-    readCliResumeDataForDetails: mocks.readCliResumeDataForDetails,
+    readCliResumedModel: mocks.readCliResumedModel,
   };
 });
 
@@ -285,7 +284,7 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.readCliResumeDataForDetails.mockResolvedValue(null);
+    mocks.readCliResumedModel.mockResolvedValue(undefined);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
@@ -307,7 +306,7 @@ describe('CLI history runtime', () => {
     ]);
     // The listing reads no resume data at all: `resumable` comes from the
     // checkpoint stat the listing already carries.
-    expect(mocks.readCliResumeDataForDetails).not.toHaveBeenCalled();
+    expect(mocks.readCliResumedModel).not.toHaveBeenCalled();
   });
 
   it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
@@ -575,11 +574,7 @@ describe('CLI history runtime', () => {
       agentCategory: 'toolUse',
     });
     mocks.readConfig.mockResolvedValue(toolUseConfig);
-    mocks.readCliResumeDataForDetails.mockResolvedValue(
-      createToolUseResumeData({
-        agentConfig: { ...toolUseConfig, model: 'gpt55' },
-      }),
-    );
+    mocks.readCliResumedModel.mockResolvedValue('gpt55');
 
     const details = await readCliHistoryDetails('a1' as ExecutionId);
     const text = formatCliHistoryDetailsText(details!);

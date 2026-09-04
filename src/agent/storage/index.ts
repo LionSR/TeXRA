@@ -46,6 +46,9 @@ export {
   isUserVisibleExecution,
 } from './executionListing';
 export { deriveResumability, type ResumabilityDecision } from './resumability';
+/** The KV key of a run's checkpoint: hosts `stat` it to answer "is there
+ *  something to continue" without parsing the record. */
+export { flowKey } from '@agent/node/persistedFlow';
 export { formatConversationMessage } from './conversationFormat';
 export {
   ExecutionLeaseActiveError,

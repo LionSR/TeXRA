@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
-import type { AgentExecutionListingEntry } from '@agent/storage';
 import type { AgentConfig } from '@agent/runtime';
 import { flowKey } from '@agent/node/persistedFlow';
-import { isCliListingResumable } from '@cli/runtime/toolUseResumeData';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  isCliRunResumable,
+  type CliRunResumabilityFacts,
+} from '@cli/runtime/toolUseResumeData';
+import {
+  RUN_OUTCOME,
+  type ExecutionId,
+  type StreamTabId,
+} from '@shared/schemas';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { StorageFS } from '@utils/files/storageFS';
 
@@ -17,21 +23,26 @@ const config = {
   model: 'deepseekT',
 } as AgentConfig;
 
-function listingEntry(
+/** A failed workflow row: the one shape whose checkpoint is still read. */
+function listingFacts(
   executionId: ExecutionId,
-  overrides: Partial<AgentExecutionListingEntry> = {},
-): AgentExecutionListingEntry {
+  overrides: Partial<CliRunResumabilityFacts> = {},
+): CliRunResumabilityFacts {
   return {
-    kind: 'run',
-    identity: { kind: 'agent', agent: config.agent },
     id: executionId,
-    timestamp: '2026-05-18T08:00:00.000Z',
-    record: config,
     checkpointPresent: true,
     streamId: `${config.agent}@run#${executionId}` as StreamTabId,
+    agentCategory: config.agentCategory,
+    outcome: RUN_OUTCOME.FAILED,
     ...overrides,
   };
 }
+
+const TERMINAL_REJECTION = {
+  currentRound: 1,
+  totalRounds: 2,
+  unresolvedCompileRejection: true,
+};
 
 async function writeFlowRecord(
   executionId: ExecutionId,
@@ -59,41 +70,39 @@ describe('CLI listing resumability', () => {
     async (description, overrides) => {
       const executionId =
         `gate-${description.replaceAll(' ', '-')}` as ExecutionId;
-      // A terminal rejection is on disk, so a `true` answer could only come
-      // from reading it — the two free facts must decide first.
-      await writeFlowRecord(executionId, {
-        currentRound: 1,
-        totalRounds: 2,
-        unresolvedCompileRejection: true,
-      });
+      // A continuable record is on disk, so reading it would answer `true`.
+      // Only the two free facts can produce the `false` asserted below.
+      await writeFlowRecord(executionId, { currentRound: 0, totalRounds: 4 });
 
       await expect(
-        isCliListingResumable(listingEntry(executionId, overrides)),
+        isCliRunResumable(listingFacts(executionId, overrides)),
       ).resolves.toBe(false);
     },
   );
 
-  it('advertises a checkpointed, stamped row without parsing its checkpoint', async () => {
-    const executionId = 'toolUse-checkpointed' as ExecutionId;
-
-    await expect(
-      isCliListingResumable(
-        listingEntry(executionId, {
-          record: { ...config, agentCategory: 'toolUse' } as AgentConfig,
-        }),
-      ),
-    ).resolves.toBe(true);
-  });
-
   it.each([
     [
-      'the unresolved rejection marker',
-      {
-        currentRound: 1,
-        totalRounds: 2,
-        unresolvedCompileRejection: true,
-      },
+      'a tool-use row',
+      { agentCategory: 'toolUse' as AgentConfig['agentCategory'] },
     ],
+    ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
+  ])(
+    'advertises %s without parsing its checkpoint',
+    async (description, overrides) => {
+      const executionId =
+        `free-${description.replaceAll(' ', '-')}` as ExecutionId;
+      // A terminal rejection is on disk, so a parse would answer `false`.
+      // Only the short-circuit can produce the `true` asserted below.
+      await writeFlowRecord(executionId, TERMINAL_REJECTION);
+
+      await expect(
+        isCliRunResumable(listingFacts(executionId, overrides)),
+      ).resolves.toBe(true);
+    },
+  );
+
+  it.each([
+    ['the unresolved rejection marker', TERMINAL_REJECTION],
     [
       'legacy compile failure context',
       {
@@ -109,9 +118,9 @@ describe('CLI listing resumability', () => {
         `workflow-terminal-${description.replaceAll(' ', '-')}` as ExecutionId;
       await writeFlowRecord(executionId, shared);
 
-      await expect(
-        isCliListingResumable(listingEntry(executionId)),
-      ).resolves.toBe(false);
+      await expect(isCliRunResumable(listingFacts(executionId))).resolves.toBe(
+        false,
+      );
     },
   );
 });

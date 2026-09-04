@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   attachSessionSignalsAdapter: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
+  probeResumeRefusal: vi.fn(),
   lookupStreamExecutionId: vi.fn(),
   syncStreamLog: vi.fn(),
   notify: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('@agent/storage', () => ({
 
 vi.mock('@agent/runtime/resumeRun', () => ({
   resumeRun: mocks.resumeRun,
+  probeResumeRefusal: mocks.probeResumeRefusal,
   lookupStreamExecutionId: mocks.lookupStreamExecutionId,
 }));
 
@@ -124,7 +126,10 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
 }));
 
-import type { FollowUpRecoveryLease } from '@agent/followUp';
+import {
+  describeFollowUpFailure,
+  type FollowUpRecoveryLease,
+} from '@agent/followUp';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -555,6 +560,7 @@ describe('createChatSessionController', () => {
     mocks.createTuiHostInteractions.mockReturnValue({});
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
+    mocks.probeResumeRefusal.mockResolvedValue(undefined);
     mocks.lookupStreamExecutionId.mockResolvedValue('exec-1');
     installResumeExecutionStore();
     rootStreamId.set(undefined);
@@ -1168,6 +1174,29 @@ describe('createChatSessionController', () => {
       cliMultiAgentPresetId: 'physicist',
       delegationAgentScope: config.delegationAgentScope,
     });
+  });
+
+  // A history row is advertised from its checkpoint file alone, so a run whose
+  // saved state cannot be loaded is offered and refused. The refusal has to
+  // reach the chat the user is looking at: clearing the transcript and
+  // switching the session onto the dead stream first would answer in a window
+  // that no longer holds their conversation.
+  it('refuses an unloadable checkpoint without clearing the chat or switching streams', async () => {
+    const session = makeSession();
+    mocks.probeResumeRefusal.mockResolvedValueOnce('unusable_checkpoint');
+    const ctrl = createChatSessionController(makeInit({ session }));
+
+    await ctrl.resume('exec-resume' as ExecutionId);
+
+    expect(mocks.appendLocalErrorTranscript).toHaveBeenCalledWith(
+      describeFollowUpFailure('unusable_checkpoint'),
+    );
+    expect(mocks.clearLocalTranscript).not.toHaveBeenCalled();
+    expect(session.streamId).toBeUndefined();
+    expect(session.executionId).toBeUndefined();
+    expect(rootStreamId.get()).toBeUndefined();
+    expect(mocks.resumeRun).not.toHaveBeenCalled();
+    expect(session.runCompleted).toBe(true);
   });
 
   it('treats a manually resumed subagent returning to WAITING as a successful turn', async () => {

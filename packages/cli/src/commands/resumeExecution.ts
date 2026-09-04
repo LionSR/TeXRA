@@ -86,8 +86,11 @@ export async function runResumeExecution(
       writeTextStderr(`Execution ${id} is already running in this process.`);
       return CliExitCode.Usage;
     case 'unclassified':
+      // A history row is advertised from its checkpoint file alone, so a run
+      // whose saved state cannot be read lands here. It gets the same words
+      // the chat's open path gives that cohort, with the fact that decided it.
       writeTextStderr(
-        `Could not read the state of execution ${id}: ${classification.cause}`,
+        `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`,
       );
       return CliExitCode.AgentError;
     case 'finished':

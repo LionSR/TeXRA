@@ -20,6 +20,7 @@ import {
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { flowKey } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -30,6 +31,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   isWaitingFlowResult,
@@ -153,11 +155,69 @@ export async function resumeStream(
 
 export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
 
-const logger = createLog('ResumeRun');
+const log = createLog('ResumeRun');
 
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 /** A workflow run carries no follow-up batch, so nothing awaits delivery. */
 const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
+
+/**
+ * Retrieval yielded no resume state: say whether the checkpoint file is still
+ * on disk. `unusable_checkpoint` when it is — history listings advertise a row
+ * from that file alone (one `stat`, never a parse), so this cohort must meet a
+ * refusal worded as unusable state, never as a run that finished. `undefined`
+ * when the file is gone, leaving the caller to word a finished run or rethrow
+ * the storage failure it caught.
+ */
+async function unusableCheckpointReason(
+  executionId: ExecutionId,
+  cause?: unknown,
+): Promise<'unusable_checkpoint' | undefined> {
+  let present: boolean;
+  try {
+    present = await getExecutionStore(executionId).exists(flowKey(executionId));
+  } catch (error) {
+    // The stat itself failing is evidence of nothing; keep the caller's own
+    // error rather than replacing it with this one.
+    log.warn(
+      `Could not stat the checkpoint of ${executionId}: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+    return undefined;
+  }
+  if (!present) return undefined;
+  log.warn(
+    `Refusing to resume ${executionId}: its checkpoint holds no resumable state${
+      cause === undefined ? '.' : `: ${toErrorMessage(cause)}`
+    }`,
+  );
+  return 'unusable_checkpoint';
+}
+
+/**
+ * Why this run cannot be continued, answered before a host mutates anything to
+ * open it, or `undefined` when its persisted state loads. A history listing
+ * advertises a row from its checkpoint file alone, so the CLI chat asks here
+ * first and keeps the user's transcript and focused stream where they are when
+ * the answer is a refusal. A failure with no checkpoint left on disk is not a
+ * refusal at all and still throws.
+ */
+export async function probeResumeRefusal(
+  executionId: ExecutionId,
+  config: AgentConfig,
+  streamId: StreamTabId,
+): Promise<FollowUpFailureReason | undefined> {
+  try {
+    if (await retrieveSessionResumeData(streamId, executionId, config)) {
+      return undefined;
+    }
+  } catch (error) {
+    const reason = await unusableCheckpointReason(executionId, error);
+    if (!reason) throw error;
+    return reason;
+  }
+  return (await unusableCheckpointReason(executionId)) ?? 'finished';
+}
 
 export async function resumeRun(
   executionId: ExecutionId,
@@ -247,7 +307,12 @@ async function resumeRunWithRecoveryProvenance(
     });
   } catch (error) {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
-    throw error;
+    // A checkpoint that is on disk but cannot be turned into resume state (a
+    // malformed envelope, a spent cursor) throws here. That is a refusal to
+    // word for the row that advertised it, not an unexpected storage failure.
+    const reason = await unusableCheckpointReason(executionId, error);
+    if (!reason) throw error;
+    return { failed: reason };
   }
   if (
     isCancellationRequested() ||
@@ -260,20 +325,27 @@ async function resumeRunWithRecoveryProvenance(
   }
   if (!resume) {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
-    // Nothing came back, which is two facts in one `null`: the checkpoint is
-    // gone, or the record could not be read — a torn read of the rewrite the
-    // process that owns this run is making right now parses as absent. Only
-    // the lease separates them, so this refusal is decided by `classifyRun`
-    // and recorded through the same mapping the follow-up path uses: a run
-    // held elsewhere refreshes the hold instead of dropping it and being
-    // reported finished, and an unreadable one moves nothing.
-    return {
-      failed: recordRunRefusal(
-        streamId,
-        session,
-        await classifyRun(executionId),
-      ),
-    };
+    // Nothing came back, which is several facts in one `null`: the checkpoint
+    // is gone, the record could not be read — a torn read of the rewrite the
+    // process that owns this run is making right now parses as absent — or the
+    // file is there and holds no state this category can resume. Ownership is
+    // what the lease alone settles, so the refusal is decided first by
+    // `classifyRun` and recorded through the same mapping the follow-up path
+    // uses: a run held elsewhere refreshes the hold instead of dropping it and
+    // being reported finished.
+    const classification = await classifyRun(executionId);
+    const failed = recordRunRefusal(streamId, session, classification);
+    if (
+      classification.kind === 'held_elsewhere' ||
+      classification.kind === 'owned_here'
+    ) {
+      return { failed };
+    }
+    // The durable facts are read and nobody holds the run, so what is left is
+    // the checkpoint file: history listings advertise a row from that file
+    // alone (one `stat`, never a parse), so a present file must meet a refusal
+    // worded as unusable state, never as a run that finished.
+    return { failed: (await unusableCheckpointReason(executionId)) ?? failed };
   }
   // The run is about to be opened for write, its checkpoint just re-read. A
   // hold recorded by an earlier refusal describes facts this
@@ -336,7 +408,7 @@ function refusalFor(
     session.status.markUnavailableOrLog(
       streamId,
       streamHeldMessage(error.owner),
-      logger,
+      log,
     );
     return { failed: 'owned_elsewhere' };
   }

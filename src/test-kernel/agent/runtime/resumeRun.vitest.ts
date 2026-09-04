@@ -86,6 +86,7 @@ describe('resumeRun tool-use queue ownership', () => {
     getExecutionStoreMock.mockReset().mockReturnValue({
       readConfig: async () => snapshot().agentConfig,
       readMeta: async () => ({ streamId: STREAM }),
+      exists: async () => false,
     });
     retrieveSessionResumeDataMock.mockReset().mockResolvedValue(snapshot());
     classifyRunMock.mockReset().mockResolvedValue({ kind: 'finished' });
@@ -308,6 +309,7 @@ describe('resumeRun tool-use queue ownership', () => {
         agentCategory: AgentCategory.Workflow,
       }),
       readMeta: async () => ({ streamId: STREAM }),
+      exists: async () => false,
     });
     retrieveSessionResumeDataMock.mockResolvedValueOnce(null);
 
@@ -348,4 +350,39 @@ describe('resumeRun tool-use queue ownership', () => {
     ).resolves.toEqual({ failed: 'owned_elsewhere' });
     expect(session.status.holdState(STREAM)).toContain('4321');
   });
+
+  // History listings advertise a row from the checkpoint file alone, so a file
+  // that yields no resume state is refused as unusable state — telling that
+  // user the run "has finished", or throwing retrieval's internal wording at
+  // them, are the two ways this used to go wrong.
+  it.each([
+    [
+      'retrieval answers empty',
+      (): void =>
+        void retrieveSessionResumeDataMock.mockResolvedValueOnce(null),
+    ],
+    [
+      'retrieval throws on malformed state',
+      (): void =>
+        void retrieveSessionResumeDataMock.mockRejectedValueOnce(
+          new Error('Unable to read resume storage: checkpoint is malformed'),
+        ),
+    ],
+  ])(
+    'refuses a checkpoint as unusable when %s',
+    async (_description, arrange) => {
+      const session = createSession();
+      getExecutionStoreMock.mockReturnValue({
+        readConfig: async () => snapshot().agentConfig,
+        readMeta: async () => ({ streamId: STREAM }),
+        exists: async () => true,
+      });
+      arrange();
+
+      await expect(
+        resumeRun(EXECUTION, { session, executeWorkflow }),
+      ).resolves.toEqual({ failed: 'unusable_checkpoint' });
+      expect(resumeToolUseFromResumeDataMock).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -12,6 +12,7 @@ import {
   describeFollowUpFailure,
   detachSubagentsOnStop,
   lookupStreamExecutionId,
+  probeResumeRefusal,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -556,6 +557,22 @@ export function createChatSessionController(
       if (!recovery) {
         restoreInterruptedRecovery(supersededRecovery);
         appendLocalErrorTranscript(describeFollowUpFailure('not_resumable'));
+        session.markRunCompleted();
+        resolveRunPromise();
+        return;
+      }
+
+      // Validate before mutating anything. A history row is advertised from
+      // its checkpoint file alone (one `stat`, no parse), so a run whose saved
+      // state cannot be loaded reaches here; refusing it after the transcript
+      // was cleared and the session switched to its dead stream would take the
+      // user's chat with it and answer in the wrong window.
+      const refusal = await probeResumeRefusal(id, config, streamId);
+      if (refusal) {
+        runtimeSession.followUps.release(recovery, 'recoverable');
+        recovery = undefined;
+        restoreInterruptedRecovery(supersededRecovery);
+        appendLocalErrorTranscript(describeFollowUpFailure(refusal));
         session.markRunCompleted();
         resolveRunPromise();
         return;

@@ -1,98 +1,101 @@
 import {
-  classifyRun,
   hasTerminalPersistedCompileRejection,
   retrieveSessionResumeData,
   type AgentConfig,
 } from '@agent/runtime';
-import {
-  getExecutionStore,
-  type AgentExecutionListingEntry,
-} from '@agent/storage';
+import { getExecutionStore } from '@agent/storage';
 import { createLog } from '@logger/logUtils';
-import { AgentCategory, type ExecutionId } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_OUTCOME,
+  type ExecutionId,
+  type RunOutcome,
+  type StreamTabId,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const logger = createLog('CliToolUseResumeData');
-type CliSessionResumeData = NonNullable<
-  Awaited<ReturnType<typeof retrieveSessionResumeData>>
->;
 
 /**
- * Whether a history listing may advertise a row as continuable, decided from
- * facts the listing already carries: a checkpoint file exists (one `stat` per
- * row in `listExecutions`) and the row has the stream id stamped on its
- * metadata at registration — the reproduction contract, without which there is
- * no persisted stream to continue.
- *
- * Ownership is deliberately not inspected here. A run another process is
- * executing right now has a checkpoint and no outcome, so it lists as
- * resumable and is refused when the user opens it; that costs one lease read
- * on the one run they picked instead of one per row.
- *
- * The one read left is the workflow compile-rejection filter, and only for a
- * workflow row the two free facts have already accepted: such a run's
- * checkpoint exists but records a rejection at its round cap, so resume
- * refuses it and the listing must not offer it. An unreadable or malformed
- * record is not advertised either — that is unknown state, not a continuable
- * run.
+ * The durable facts a run's continuability is decided from. `history list`
+ * reads them off the listing row it already has; `history show` reads the
+ * same ones for the single run it was asked about. One rule, so the frozen
+ * `status` contract cannot report two different values for one run.
  */
-export async function isCliListingResumable(
-  entry: AgentExecutionListingEntry,
+export interface CliRunResumabilityFacts {
+  readonly id: ExecutionId;
+  /** A checkpoint file exists on disk — one `stat`, never a parse. */
+  readonly checkpointPresent: boolean;
+  /**
+   * The stream stamped on metadata at registration: the reproduction
+   * contract, without which there is no persisted stream to continue.
+   */
+  readonly streamId?: StreamTabId;
+  readonly agentCategory?: AgentConfig['agentCategory'];
+  readonly outcome?: RunOutcome;
+}
+
+/**
+ * Whether the CLI may offer a run as continuable, from facts that cost a
+ * `stat` at most.
+ *
+ * Ownership is deliberately not inspected. A run another process is executing
+ * right now has a checkpoint and no outcome, so it is offered here and refused
+ * when the user opens it: one lease read on the run they picked instead of one
+ * per row. Loadability is not inspected either — a checkpoint that exists but
+ * cannot be parsed is refused at open time as `unusable_checkpoint`, which is
+ * what that cohort actually is.
+ *
+ * The one exception buys back a refusal the user would otherwise be walked
+ * into: a workflow that stopped at its round cap on an unresolved compile
+ * rejection has a checkpoint that only replays the same rejection. Reading it
+ * is a full Zod parse, so it runs only where such a rejection can have been
+ * recorded — `resolveOutcome` feeds `deriveRunOutcome` with `failed` ahead of
+ * `cancelled`, so a terminal rejection always finalizes the run FAILED. A
+ * cancelled or still-outcome-less workflow row, which is what people resume,
+ * costs one stat like every other row.
+ */
+export async function isCliRunResumable(
+  facts: CliRunResumabilityFacts,
 ): Promise<boolean> {
-  if (!entry.checkpointPresent || !entry.streamId) return false;
-  if (entry.record.agentCategory !== AgentCategory.Workflow) return true;
+  if (!facts.checkpointPresent || !facts.streamId) return false;
+  if (facts.agentCategory !== AgentCategory.Workflow) return true;
+  if (facts.outcome !== RUN_OUTCOME.FAILED) return true;
   try {
-    return !(await hasTerminalPersistedCompileRejection(entry.id));
+    return !(await hasTerminalPersistedCompileRejection(facts.id));
   } catch (error) {
     logger.warn(
-      `Not advertising workflow ${entry.id} as resumable: its persisted state is unreadable: ${toErrorMessage(error)}`,
+      `Not advertising workflow ${facts.id} as resumable: its persisted state is unreadable: ${toErrorMessage(error)}`,
       { data: error },
     );
     return false;
   }
 }
 
-async function readCliSessionResumeData(
-  id: ExecutionId,
-  config: AgentConfig,
-): Promise<CliSessionResumeData | null> {
-  // FK-first: the stream id stamped on execution metadata at registration is
-  // the reproduction contract — never re-derived from agent/model. A row
-  // without a stamped stream id has no persisted stream and is not resumable.
-  const streamId = (await getExecutionStore(id).readMeta())?.streamId;
-  if (!streamId) return null;
-  return (await retrieveSessionResumeData(streamId, id, config)) ?? null;
-}
-
 /**
- * Category-aware resume validation for the one run `history show` was asked
- * about, where a full checkpoint parse is proportionate: it answers both
- * "is there a category-valid flow record" and "what model would a resume run
- * under". Never throws — an unreadable flow record degrades to `null` rather
- * than failing the whole detail read.
+ * The model a resume of this run would actually use. A tool-use session that
+ * was switched to another model records that only inside its checkpoint, so
+ * `history show` parses it — one parse for the one run asked about — while a
+ * listing reports the model the run started under.
  *
- * It asks `classifyRun` rather than the durable-state-only
- * `deriveResumability` because it reports to a person: a run that is
- * executing right now also has a flow record and no outcome, and
- * `texra resume` would refuse it anyway.
+ * Never throws: a checkpoint that cannot be loaded has no model to report, and
+ * refusing such a run is the open path's job, not this row's.
  */
-export async function readCliResumeDataForDetails(
+export async function readCliResumedModel(
   id: ExecutionId,
   config: AgentConfig,
-): Promise<CliSessionResumeData | null> {
+): Promise<string | undefined> {
   try {
-    if ((await classifyRun(id)).kind !== 'resumable') return null;
-    if (
-      config.agentCategory === AgentCategory.Workflow &&
-      (await hasTerminalPersistedCompileRejection(id))
-    ) {
-      return null;
-    }
-    return await readCliSessionResumeData(id, config);
+    // FK-first: the stream id stamped on execution metadata at registration is
+    // the reproduction contract — never re-derived from agent/model.
+    const streamId = (await getExecutionStore(id).readMeta())?.streamId;
+    if (!streamId) return undefined;
+    const resume = await retrieveSessionResumeData(streamId, id, config);
+    return resume?.type === 'toolUse' ? resume.agentConfig.model : undefined;
   } catch (error) {
     logger.debug(
-      `Ignoring unreadable resume data for history entry ${id}: ${toErrorMessage(error)}`,
+      `No resumed model for history entry ${id}: ${toErrorMessage(error)}`,
     );
-    return null;
+    return undefined;
   }
 }
