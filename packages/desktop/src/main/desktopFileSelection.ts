@@ -11,7 +11,6 @@ import {
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
 import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
-import { workspaceRoots } from '@platform/workspaceRoots';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -42,11 +41,12 @@ interface DesktopFileSelectionDialogOptions {
 
 interface DesktopFileSelectionOptions {
   postToRenderer(message: unknown): void;
-  getWorkspacePath?: () => string | undefined;
-  showOpenFileDialog?: (
+  /** Root of the paper the adapter serves; undefined for the no-workspace session. */
+  workspacePath: string | undefined;
+  showOpenFileDialog: (
     options: DesktopFileSelectionDialogOptions,
   ) => Promise<string[] | undefined>;
-  onError?: (error: unknown) => void;
+  onError: (error: unknown) => void;
 }
 
 export interface DesktopFileSelection extends DesktopMessageHandler {
@@ -96,9 +96,6 @@ function listFiles(
  */
 export async function listDesktopWorkspaceFiles(
   fileType: ListableFileType,
-  // Not a default parameter: callers inject a getter that returns undefined to
-  // mean "no workspace", and a default would discard that and re-read the
-  // process-wide workspace instead.
   workspacePath: string | undefined,
 ): Promise<string[]> {
   const config = getFileListConfig(fileType, loadFileListSettings());
@@ -131,8 +128,7 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
 export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
-  const getWorkspacePath =
-    options.getWorkspacePath ?? (() => workspaceRoots().workspace);
+  const { workspacePath } = options;
   const onError = createDesktopErrorReporter(options.onError);
   let port: DesktopFileSelectionOptions['postToRenderer'] | undefined =
     options.postToRenderer;
@@ -155,7 +151,7 @@ export function createDesktopFileSelection(
   }
 
   function list(fileType: ListableFileType): Promise<string[]> {
-    return listDesktopWorkspaceFiles(fileType, getWorkspacePath());
+    return listDesktopWorkspaceFiles(fileType, workspacePath);
   }
 
   // The base file is listed from the input rules: base is a single-slot view
@@ -179,7 +175,6 @@ export function createDesktopFileSelection(
   }
 
   async function updateEditedFiles(baseFile?: string) {
-    const workspacePath = getWorkspacePath();
     if (!baseFile || !workspacePath) {
       postFileList('edited', []);
       return;
@@ -198,7 +193,6 @@ export function createDesktopFileSelection(
   }
 
   async function selectMultipleFiles(message: SelectMultipleFilesMessage) {
-    if (!options.showOpenFileDialog) return;
     if (!isDesktopMultiFileType(message.fileType)) {
       // The shared webview posts this for 'output' too, which the desktop has
       // no picker for. Say so rather than dropping it: handleMessage already
@@ -206,7 +200,6 @@ export function createDesktopFileSelection(
       logger.warn(`Unsupported multiple file selection: ${message.fileType}`);
       return;
     }
-    const workspacePath = getWorkspacePath();
     if (!workspacePath) return;
 
     const fileType = message.fileType;

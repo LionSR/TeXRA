@@ -33,22 +33,12 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { COMMON_COMMANDS } from '@shared/ipc';
 import { StreamLogStore } from '@transcript';
 import { readPlatformSetting } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  DESKTOP_PAPER_COMMANDS,
-  DesktopClosePaperMessageSchema,
-  DesktopSelectPaperMessageSchema,
-  type DesktopPapersMessage,
-} from '../shared/desktopPaperMessages.js';
 import { initializeDesktopProcessStores } from './desktopProcessStores.js';
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-} from './desktopIpcTypes.js';
+import type { DesktopPapersMessage } from '../shared/desktopPaperMessages.js';
 
 export interface DesktopPaper {
   /** Canonical folder path, or undefined for the no-workspace session. */
@@ -109,15 +99,6 @@ export interface DesktopPaperRegistry {
   summary(): Omit<DesktopPapersMessage, 'command'>;
   /** Fires after a paper opens or closes, or the active paper changes. */
   onChange(listener: () => void): () => void;
-  /**
-   * Renderer traffic about papers: `SELECT_PAPER` requests, and the main
-   * view's ready signal, after which the renderer needs the papers list.
-   */
-  ipc(handlers: {
-    select(root: string): void;
-    close(root: string): void;
-    postPapers(): void;
-  }): DesktopMessageHandler;
   flushArtifacts(): Promise<void>;
   /** Dispose every session, the most recently opened first. */
   dispose(): void;
@@ -448,31 +429,6 @@ export async function openDesktopPaperRegistry(
         listeners.delete(listener);
       };
     },
-    ipc: (handlers) => ({
-      handleMessage(message: DesktopCommandMessage): boolean {
-        if (message.command === COMMON_COMMANDS.WEBVIEW_READY) {
-          // A pass-through like the progress ready signal: the main view's
-          // ready message still reaches the startup handler.
-          if ((message as { view?: unknown }).view === 'main') {
-            handlers.postPapers();
-          }
-          return false;
-        }
-        if (message.command === DESKTOP_PAPER_COMMANDS.CLOSE_PAPER) {
-          const parsed = DesktopClosePaperMessageSchema.safeParse(message);
-          if (!parsed.success) return false;
-          handlers.close(parsed.data.root);
-          return true;
-        }
-        if (message.command !== DESKTOP_PAPER_COMMANDS.SELECT_PAPER) {
-          return false;
-        }
-        const parsed = DesktopSelectPaperMessageSchema.safeParse(message);
-        if (!parsed.success) return false;
-        handlers.select(parsed.data.root);
-        return true;
-      },
-    }),
     async flushArtifacts() {
       const failures: string[] = [];
       for (const paper of [fallback, ...papers.values()]) {

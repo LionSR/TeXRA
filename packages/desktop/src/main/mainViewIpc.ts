@@ -35,7 +35,7 @@ interface DesktopMainViewIpcOptions {
   progress: DesktopMessageHandler;
   onboarding: DesktopMessageHandler;
   /** Open-paper selection and the papers list the main view needs once ready. */
-  papers?: DesktopMessageHandler;
+  papers: DesktopMessageHandler;
   /**
    * Editor file I/O, terminal pty sessions, and embedded browser control.
    * Owned by the caller because the pty host and browser views outlive a single
@@ -58,7 +58,7 @@ interface DesktopMainViewIpcOptions {
    * Runs every renderer message dispatch inside the active paper's session
    * scope, so session-rooted services resolve to the paper the window shows.
    */
-  inActiveSession?: (dispatch: () => void) => void;
+  inActiveSession: (dispatch: () => void) => void;
   onAsyncError?: (error: unknown) => void;
 }
 
@@ -81,9 +81,7 @@ export function installDesktopMainViewIpc(
 
   function handleRendererMessage(message: unknown): void {
     if (!isDesktopCommandMessage(message)) return;
-    const dispatch = () => dispatchRendererMessage(message);
-    if (options.inActiveSession) options.inActiveSession(dispatch);
-    else dispatch();
+    options.inActiveSession(() => dispatchRendererMessage(message));
   }
 
   const bridge = installDesktopHostBridge(window, {
@@ -119,9 +117,9 @@ export function installDesktopMainViewIpc(
     options.settings,
     options.progress,
     options.onboarding,
-    // Filtered because these are optional; an undefined entry in the chain
+    options.papers,
+    // Filtered because workspace is optional; an undefined entry in the chain
     // would throw on the first message dispatched.
-    ...(options.papers ? [options.papers] : []),
     ...(options.workspace ? [options.workspace] : []),
     viewState,
     logs,
