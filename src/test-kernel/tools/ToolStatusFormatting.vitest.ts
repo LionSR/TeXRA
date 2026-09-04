@@ -76,8 +76,12 @@ describe('tool status formatting', () => {
       outcome: 'completed',
     };
 
+    // The status column no longer echoes the listing row's own `outcome`: it
+    // is read from the durable facts (lease, then metadata), and this fixture
+    // has no persisted run behind it. The columns under test are the `process`
+    // category and the suppressed model.
     await expect(formatListingLine(entry)).resolves.toBe(
-      '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
+      '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [unknown]  parent=fcf5150d37c6',
     );
   });
 });

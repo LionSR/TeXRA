@@ -41,6 +41,7 @@ import {
   type WorkflowExecutionSnapshot,
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
+import { isInFlightPhase } from '@shared/streams/streamStatus';
 import { warnAbandonedSlotValue } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
@@ -430,7 +431,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
     const category = executionDisplayCategory(identity, record);
-    const info = await getExecutionStatusInfo(executionId, meta?.outcome);
+    const info = await getExecutionStatusInfo(executionId);
     const lines = buildCompletedSummaryLines(
       executionId,
       record,
@@ -493,13 +494,17 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     );
   }
 
-  /** Fetch metas and format each child as a summary line. */
-  private async formatChildren(children: ChildRecord[]): Promise<string[]> {
-    const metas = await Promise.all(
-      children.map((c) => getExecutionStore(c.id).readMeta()),
-    );
-    return Promise.all(
-      children.map((child, i) => formatChildLine(child, metas[i])),
+  /**
+   * Fetch metas and format each child as a summary line. Bounded like the
+   * listing page: every child reads its own metadata and asks the durable
+   * owners about its run, so a wide fan-out is a wide burst of file I/O.
+   */
+  private formatChildren(children: ChildRecord[]): Promise<string[]> {
+    return pMap(
+      children,
+      async (child) =>
+        formatChildLine(child, await getExecutionStore(child.id).readMeta()),
+      { concurrency: 16 },
     );
   }
 
@@ -736,23 +741,29 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await transcripts.readEntries(streamId);
 
     const { lines, chars } = projectProcessOutput(entries);
-    const liveness = await resolveExecutionLiveness(executionId, meta?.outcome);
-    const info = statusInfoFromLiveness(liveness, meta?.outcome);
+    const liveness = await resolveExecutionLiveness(executionId);
+    const info = statusInfoFromLiveness(liveness);
     // The footer states the same reading as the header: "no handle in this
-    // process" alone never justifies calling the command finished.
+    // process" alone never justifies calling the command finished, and a
+    // handle this process still tracks past its stream's terminal phase never
+    // justifies calling it still running.
     const retained = `this is the retained log; /executions/${executionId}/report has the result summary`;
     const footer = ((): string => {
       switch (liveness.kind) {
         case 'live':
-          return `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`;
+          return isInFlightPhase(liveness.info.status)
+            ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
+            : `[${liveness.info.status}; ${retained}]`;
         case 'unsettled':
           return `[not running in this process (${liveness.reason}); ${retained}]`;
         case 'interrupted':
           return `[interrupted before finishing; ${retained}]`;
         case 'settled':
-          return meta?.outcome
+          // Nothing here can see a detached shell that outlived its owner, so
+          // this says only what the durable facts establish.
+          return liveness.outcome
             ? `[finished: ${retained}]`
-            : `[not running anywhere, and no result was recorded; ${retained}]`;
+            : `[no TeXRA process owns this execution and no result was recorded; ${retained}]`;
       }
     })();
     const out: string[] = [

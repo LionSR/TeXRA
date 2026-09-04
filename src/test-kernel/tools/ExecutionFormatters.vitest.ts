@@ -25,6 +25,13 @@ vi.mock('@agent/storage/ExecutionKVStore', () => ({
 // Local imports
 import { getExecutionStatusInfo } from '@tools/executionFormatters';
 
+/** No handle in this process, whatever the durable facts then say. */
+function noLiveHandle(): void {
+  mocks.currentSession.mockReturnValue({
+    executions: { getHandle: () => undefined },
+  });
+}
+
 describe('getExecutionStatusInfo', () => {
   it.each<{ outcome?: RunOutcome; expected: string }>([
     { outcome: undefined, expected: 'unknown' },
@@ -32,23 +39,26 @@ describe('getExecutionStatusInfo', () => {
   ])(
     'reports $expected when the live handle is gone and nothing owns the run',
     async ({ outcome, expected }) => {
-      mocks.currentSession.mockReturnValue({
-        executions: { getHandle: () => undefined },
-      });
+      noLiveHandle();
       mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
-      // No metadata and no flow record: `classifyRun` reports `finished`.
-      mocks.read.mockResolvedValue(undefined);
+      // The persisted metadata is the only outcome source — no caller passes a
+      // snapshot in. No flow record, so `classifyRun` reports `finished`.
+      mocks.read.mockImplementation((key: string) =>
+        Promise.resolve(
+          key === 'meta'
+            ? { timestamp: '2026-05-15T23:42:06.000Z', outcome }
+            : undefined,
+        ),
+      );
 
-      const info = await getExecutionStatusInfo('exec-1', outcome);
+      const info = await getExecutionStatusInfo('exec-1');
 
       assert.strictEqual(info.status, expected);
     },
   );
 
   it('does not call a run cancelled while another process holds it', async () => {
-    mocks.currentSession.mockReturnValue({
-      executions: { getHandle: () => undefined },
-    });
+    noLiveHandle();
     mocks.inspectExecutionLease.mockResolvedValue({
       status: 'held',
       owner: { pid: 4242, hostname: 'other-host' },
@@ -58,5 +68,15 @@ describe('getExecutionStatusInfo', () => {
 
     assert.strictEqual(info.status, 'unknown');
     assert.match(info.detail ?? '', /pid 4242 on other-host/);
+  });
+
+  it('does not settle a run whose lease this process holds with no run', async () => {
+    noLiveHandle();
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
+
+    const info = await getExecutionStatusInfo('exec-1');
+
+    assert.strictEqual(info.status, 'unknown');
+    assert.match(info.detail ?? '', /no live run/);
   });
 });

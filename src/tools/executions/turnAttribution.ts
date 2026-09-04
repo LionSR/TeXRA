@@ -32,29 +32,24 @@ function turnFate(token: string, liveness: ExecutionLiveness): string {
  * accepted but never persisted a result (#9531): without it, the single
  * latest-value slots would silently present the previous turn as current.
  *
- * Reads "still running" only while something alive is running the execution —
- * a handle in this process, or another TeXRA process holding its lease. A
- * missing `meta.outcome` is not liveness: a run whose owner crashed leaves
- * exactly that, and it reads as interrupted. Returns null when the slots
- * reflect the latest accepted turn (or the execution has no turn identity at
- * all).
+ * Reads "still running" only while this process is running the execution. A
+ * run another TeXRA process holds — or one whose ownership cannot be read at
+ * all — renders that fact instead, because this process cannot see how far
+ * such a turn got. A missing `meta.outcome` is not liveness: a run whose owner
+ * crashed leaves exactly that, and it reads as interrupted. Returns null when
+ * the slots reflect the latest accepted turn (or the execution has no turn
+ * identity at all).
  */
 export async function turnAttributionNote(
   store: ExecutionKVStore,
 ): Promise<string | null> {
-  const [turnState, meta] = await Promise.all([
-    store.readTurnState(),
-    store.readMeta(),
-  ]);
+  const turnState = await store.readTurnState();
   const active = turnState?.activeTurn;
   const completed = turnState?.lastCompletedTurn?.token;
   if (!active || active.token === completed) {
     return null;
   }
-  const liveness = await resolveExecutionLiveness(
-    store.getExecutionId(),
-    meta?.outcome,
-  );
+  const liveness = await resolveExecutionLiveness(store.getExecutionId());
   const fate = turnFate(active.token, liveness);
   const showing = completed
     ? `showing the latest completed turn (${completed}).`

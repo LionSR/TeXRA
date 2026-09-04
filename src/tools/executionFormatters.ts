@@ -25,7 +25,6 @@ import type {
   ExecutionId,
   ExecutionMeta,
   RunIdentity,
-  RunOutcome,
   TodoItem,
 } from '@shared/schemas';
 import { runIdentityName, RUN_OUTCOME, STATUS_DISPLAY } from '@shared/schemas';
@@ -133,19 +132,19 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
 /**
  * The runtime status for an execution ID, from `resolveExecutionLiveness`:
  * a live handle's phase, else the fact that forbids a terminal reading, else
- * `cancelled` for an interrupted run, else the persisted outcome.
+ * `cancelled` for an interrupted run, else the outcome the classifier read.
+ *
+ * The outcome is never passed in: a caller's snapshot can be older than the
+ * facts the classifier just read, and two surfaces reading the same run must
+ * not disagree about how it ended.
  *
  * A run nothing alive owns and nothing terminalized reads `unknown`, never a
  * terminal outcome invented from the absence of a handle in this process.
  */
 export async function getExecutionStatusInfo(
   executionId: string,
-  outcome?: RunOutcome,
 ): Promise<ExecutionStatusInfo> {
-  return statusInfoFromLiveness(
-    await resolveExecutionLiveness(executionId, outcome),
-    outcome,
-  );
+  return statusInfoFromLiveness(await resolveExecutionLiveness(executionId));
 }
 
 /**
@@ -154,7 +153,6 @@ export async function getExecutionStatusInfo(
  */
 export function statusInfoFromLiveness(
   liveness: ExecutionLiveness,
-  outcome?: RunOutcome,
 ): ExecutionStatusInfo {
   switch (liveness.kind) {
     case 'live':
@@ -168,7 +166,7 @@ export function statusInfoFromLiveness(
         detail: 'interrupted; a resume checkpoint remains',
       };
     case 'settled':
-      return { status: outcome ?? 'unknown', elapsed: null };
+      return { status: liveness.outcome ?? 'unknown', elapsed: null };
   }
 }
 
@@ -177,7 +175,7 @@ export async function formatListingLine(
   entry: ExecutionListingEntry,
 ): Promise<string> {
   const ts = formatTimestamp(entry.timestamp);
-  const info = await getExecutionStatusInfo(entry.id, entry.outcome);
+  const info = await getExecutionStatusInfo(entry.id);
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;
@@ -237,7 +235,7 @@ export async function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
 ): Promise<string> {
-  const info = await getExecutionStatusInfo(child.id, childMeta?.outcome);
+  const info = await getExecutionStatusInfo(child.id);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
