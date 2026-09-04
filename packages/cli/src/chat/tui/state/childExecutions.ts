@@ -21,7 +21,6 @@ import {
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 import type { StreamSlice } from './cliState';
 
@@ -105,19 +104,15 @@ export async function hydrateFocusedStreamRunFacts(
   await bound.state.hydrateRunFacts(streamId);
   invalidateChildStreams();
 /**
- * Whether a stream's run is durably final: it reached a terminal outcome and
- * no producer is left anywhere for it (`resolveStreamPhase` origin
- * `derived`). The phase alone is not that fact — a user stop publishes
- * CANCELLED while the run is still unwinding here, with its task groups and
- * cards still to settle — so this is what licenses a renderer to paint an
- * unclosed group or an unsettled card as interrupted.
+ * Whether a stream's run is durably final, through the session's one rule
+ * ({@link SessionState.streamDurablyFinal}): it reached a terminal outcome and
+ * nothing anywhere can still move it. The phase alone is not that fact — a
+ * user stop publishes CANCELLED while the run is still unwinding here, with
+ * its task groups and cards still to settle — so this is what licenses a
+ * renderer to paint an unclosed group or an unsettled card as interrupted.
  */
 export function sessionStreamDurablyFinal(streamId: StreamTabId): boolean {
-  const resolved = BOUND.get()?.state.resolveStreamPhase(streamId);
-  return (
-    resolved?.origin === 'derived' &&
-    isTerminalOutcomePhase(resolved.state?.phase)
-  );
+  return BOUND.get()?.state.streamDurablyFinal(streamId) === true;
 }
 
 /** Canonical reason a stream is unavailable in this session: held by another

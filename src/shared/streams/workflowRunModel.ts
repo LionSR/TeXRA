@@ -16,6 +16,7 @@ import {
   WORKFLOW_CALL_STATUS,
   WORKFLOW_TASK_STATUS_LABEL,
   WorkflowPlanMarkerSchema,
+  interruptedWorkflowCall,
   isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,
   type StreamLifecycleStatus,
@@ -313,17 +314,21 @@ function latestWorkflowAttemptId(
 }
 
 /**
- * One `running` card as a run nothing can still settle leaves it. The status
- * and every piece of copy derived from it are re-read through the shared
- * formatters, so a repainted card cannot drift from one its producer settled
- * itself, and the card, its status word, the phase strip and the tally are
- * one reading rather than four.
+ * One unsettled card as a run nothing can still settle leaves it, in the
+ * producer's own vocabulary: `interruptedWorkflowCall` is the same function
+ * `StreamLogStore.endRunningGroupsForStreams` settles the persisted row with,
+ * so a card repainted here and one the write side already settled read
+ * identically — a launched call as `failed` with the one interrupted-call
+ * error, an unlaunched one as `skipped`/`not-reached`.
+ *
+ * The status and every piece of copy derived from it are re-read through the
+ * shared formatters, so the card, its status word, the phase strip and the
+ * tally are one reading rather than four. A card its producer already settled
+ * is returned untouched.
  */
 function interruptedTaskRow(row: WorkflowTaskRow): WorkflowTaskRow {
-  const call: WorkflowCallProgress = {
-    ...row.call,
-    status: WORKFLOW_CALL_STATUS.CANCELLED,
-  };
+  if (isTerminalWorkflowCallProgress(row.call)) return row;
+  const call: WorkflowCallProgress = interruptedWorkflowCall(row.call);
   return {
     ...row,
     call,
@@ -485,12 +490,10 @@ export function workflowRunModel(
       continue;
     }
     // The one repaint, made here so both collections hold the same row: a
-    // call the run left `running` with nothing alive to settle it paints as
-    // cancelled rather than as a call that never stops.
-    const row =
-      input.runDurablyFinal && card.call.status === WORKFLOW_CALL_STATUS.RUNNING
-        ? interruptedTaskRow(card)
-        : card;
+    // call the run left unsettled with nothing alive to settle it reads as
+    // its producer would have settled it, rather than as a call that never
+    // stops or one still waiting for a slot that will never come.
+    const row = input.runDurablyFinal ? interruptedTaskRow(card) : card;
     tasks.push(row);
     if (phase) {
       phase.tasks.push(row);

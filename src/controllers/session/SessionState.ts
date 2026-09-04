@@ -35,6 +35,7 @@ import {
   STREAM_PHASE,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   streamHeldMessage,
   streamUnreadableMessage,
@@ -563,6 +564,36 @@ export class SessionState {
    */
   getStreamPhaseState(stream: StreamTabId): StreamPhaseState | undefined {
     return this.resolveStreamPhase(stream).state;
+  }
+
+  /**
+   * Whether this stream's run is durably final: it reached a terminal outcome
+   * and nothing anywhere can still move it. The one fact that licenses a
+   * reader to repaint an unclosed task group or an unsettled call card as
+   * interrupted, shared by every host so the CLI and the progress view never
+   * decide it differently.
+   *
+   * Two ways to be final, both of which need the terminal outcome first — a
+   * live run publishes CANCELLED the instant a user stops it, while its
+   * stages are still writing their `GROUP_END` rows:
+   * - `derived`: no producer exists anywhere, so the durable facts are the
+   *   whole story ({@link resolveStreamPhase}).
+   * - `live` with nothing left in this process to write: the phase entry is
+   *   this process's own, but `finalizeRunTerminal` untracks the execution
+   *   BEFORE it stores the terminal phase, so a run that left a group open
+   *   (a throwing `stage.end()`) keeps answering `live` forever otherwise. A
+   *   hold is excluded by its `detail`, and a launch reservation cannot reach
+   *   here at all — a reserved entry reports RUNNING, never an outcome.
+   */
+  streamDurablyFinal(stream: StreamTabId): boolean {
+    const resolved = this.resolveStreamPhase(stream);
+    if (!isTerminalOutcomePhase(resolved.state?.phase)) return false;
+    if (resolved.origin === 'derived') return true;
+    return (
+      resolved.origin === 'live' &&
+      resolved.detail === undefined &&
+      !this.hasLiveStreamExecution(stream)
+    );
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).

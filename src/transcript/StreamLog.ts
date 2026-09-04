@@ -5,7 +5,7 @@ import {
   isTerminalWorkflowCallProgress,
   type StreamLogEntry,
   type StreamLogTextDelta,
-  type WorkflowCallProgress,
+  type WorkflowCallLiveProgress,
 } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 
@@ -238,7 +238,7 @@ export function isRunningStreamingTextEntry(entry: StreamLogEntry): boolean {
  */
 export function nonterminalWorkflowCall(
   entry: StreamLogEntry,
-): WorkflowCallProgress | undefined {
+): WorkflowCallLiveProgress | undefined {
   if (
     entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
     entry.messageType !== MESSAGE_TYPES.WORKFLOW_TASK

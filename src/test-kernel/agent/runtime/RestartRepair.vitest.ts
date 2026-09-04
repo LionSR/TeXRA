@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
+import type { FinalizeExecutionInput } from '@agent/storage/executionLifecycle';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import type {
   RunClassification,
@@ -85,7 +86,10 @@ function classifyAs(classification: RunClassification) {
 }
 
 function createDurableFinalizer() {
-  return vi.fn(async () => ({ ok: true as const }));
+  return vi.fn(async (input: FinalizeExecutionInput) => ({
+    ok: true as const,
+    outcome: input.outcome,
+  }));
 }
 
 /** Group closer that only reports closures for the expected outcome. */

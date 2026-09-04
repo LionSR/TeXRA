@@ -38,7 +38,6 @@ import type {
 import { STREAM_LIFECYCLE_UNAVAILABLE } from '@shared/schemas';
 import { buildStreamContentRender } from '@shared/streams/streamContentSync';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
-import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   assertNever,
   createFlushableDebounce,
@@ -464,14 +463,14 @@ export class LitSessionRenderer implements SessionRendererPort {
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,
-      // A terminal outcome nothing can still move: `derived` means no
-      // producer is left anywhere, which an outcome published by a live run
-      // mid-teardown (a user stop) is not. The view repaints an unclosed task
-      // group or an unsettled card only on this bit.
+      // A terminal outcome nothing can still move, through the session's one
+      // rule: an outcome published by a live run mid-teardown (a user stop) is
+      // not one. The view repaints an unclosed task group or an unsettled card
+      // only on this bit, and a phase this caller is still applying is not
+      // final by definition.
       statusDurablyFinal:
         phaseOverride === undefined &&
-        resolved.origin === 'derived' &&
-        isTerminalOutcomePhase(resolved.state?.phase),
+        this.state.streamDurablyFinal(streamInfo.name),
       statusDetail,
       // The unavailable sentinel travels alone: a hold keeps the phase the
       // stream had, and shipping that phase's substate with the sentinel

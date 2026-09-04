@@ -721,12 +721,14 @@ export function forEachLiveSession(
  * desktop app or VS Code mid-run) or a tool-use flow parked at its WAIT node.
  *
  * Each such execution gets the same durable settlement the CLI has always
- * given its own: the CANCELLED outcome, its transcript's running groups
- * closed as cancelled, its flow record preserved so `deriveResumability` can
- * still offer the checkpoint, and its lease record deleted rather than left
- * for a later launch to prove dead. The outcome and the group close are both
- * written inside the lease-fenced post-drain window, so the run's durable
- * state and its transcript settle under one claim.
+ * given its own: the CANCELLED outcome, its transcript's running groups closed
+ * as whatever outcome that write left standing (the driver's own when it
+ * reached its terminal write first, so the transcript never closes on an
+ * outcome the header contradicts), its flow record preserved so
+ * `deriveResumability` can still offer the checkpoint, and its lease record
+ * deleted rather than left for a later launch to prove dead. The outcome and
+ * the group close are both written inside the lease-fenced post-drain window,
+ * so the run's durable state and its transcript settle under one claim.
  *
  * Bounded by the caller's phase deadline — a host that cannot exit because a
  * release is slow would be worse than the unsettled record. The budget is
@@ -790,10 +792,14 @@ export async function settleLiveSessionExecutions(
           );
           return;
         }
+        // The outcome that actually stands on disk, which is the driver's own
+        // when it won the race above: closing this run's groups as CANCELLED
+        // there would contradict the COMPLETED (or FAILED) result the header
+        // reports.
         const closed = await session.transcripts.endRunningGroupsForStreams(
           [streamId],
           Date.now(),
-          RUN_OUTCOME.CANCELLED,
+          finalization.outcome,
         );
         if (closed.length > 0) await session.transcripts.flush();
       });

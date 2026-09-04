@@ -261,7 +261,11 @@ export class TaskGroupList extends LitElement {
     const groupsChanged = changedProperties.has('groups');
     const rowsChanged = changedProperties.has('rows');
 
-    if (groupsChanged) {
+    // The painted status is a fold of the group and the run's durability, so
+    // a change in either is a change in what the chime's memory holds: a run
+    // that becomes durably final repaints its open groups as cancelled without
+    // any group row changing.
+    if (groupsChanged || changedProperties.has('streamDurablyFinal')) {
       this.checkForCompletedRuns();
     }
     if (changedProperties.has('runModel')) {

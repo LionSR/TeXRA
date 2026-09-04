@@ -206,6 +206,33 @@ describe('workflow run model', () => {
     });
   });
 
+  it("settles an interrupted run's cards in the producer's vocabulary", () => {
+    // The write side (`StreamLogStore.endRunningGroupsForStreams`) rewrites a
+    // launched call as `failed` and an unlaunched one as `skipped`/
+    // `not-reached`. The read-side repaint must say the same thing, or the
+    // same run reads differently before and after its transcript is settled.
+    const model = modelOf(
+      ['Map'],
+      [
+        { id: 'launched', phase: 'Map', status: 'running' },
+        { id: 'never-reached', phase: 'Map', status: 'queued' },
+        { id: 'done', phase: 'Map', status: 'completed' },
+      ],
+      { runDurablyFinal: true },
+    );
+
+    expect(model.tasks.map((row) => row.call)).toMatchObject([
+      {
+        id: 'launched',
+        status: 'failed',
+        error: 'The previous host stopped before this call completed.',
+      },
+      { id: 'never-reached', status: 'skipped', reason: 'not-reached' },
+      { id: 'done', status: 'completed' },
+    ]);
+    expect(model.tally).toMatchObject({ done: 3, total: 3, running: 0 });
+  });
+
   it('uses a new plan boundary before its calls or tagged phases arrive', () => {
     const stale = {
       ...phaseGroup('Old', 0, 2),
