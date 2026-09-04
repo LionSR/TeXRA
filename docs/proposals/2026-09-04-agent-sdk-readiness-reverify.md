@@ -17,11 +17,16 @@
 
 **The standing verdict holds: the codebase is well-aligned with an Agent-SDK
 shape, and no structural refactor is warranted.** The pass-through wrappers and
-convenience barrels the standing question hunts for are not present; single-caller
-factories are down to the same one tracked, justified survivor (`createRunScope`,
-a one-line immutability-freeze — one production caller at
-`AgentLaunchContext.ts:470`, the other 12 `createRunScope(` call sites all
-under `src/test-kernel/`). This is the **eighth consecutive** green pass (`-08-19`
+convenience barrels the standing question hunts for are not present; the one
+**trivial** single-caller factory the standing question tracks remains the same
+justified survivor (`createRunScope`, a one-line immutability-freeze — one
+production caller at `AgentLaunchContext.ts:470`, the other 12 `createRunScope(`
+call sites all under `src/test-kernel/`). Other factories with a single
+production caller do exist — e.g. `createToolPolicy` (`AgentLaunchContext.ts:522`),
+`createOutputState` (`runReflectionFlow.ts:157`), `createRunContext`
+(`AgentLaunchContext.ts:138`) — but each carries real initialization logic and so
+clears the AGENTS.md factory bar (real logic / captured context); they are not
+the trivial-pass-through category this claim tracks. This is the **eighth consecutive** green pass (`-08-19`
 through `-09-04`). The `d418d45..4579625` interval is 23 commits (§1) —
 dominated by refactor (9) and docs (6), **net −141 lines** (3,272 ins /
 3,413 del), and it added **no** new abstraction to the core: the interval's one
@@ -136,7 +141,8 @@ the `ChildRunStrategy`/`ChildRunPorts` signatures untouched (§1), unlike the
 prior interval's `AbortSignal` refinement. The same sweep did make one _adjacent_
 surface change on the child-stream boundary, and it is a **reduction**: `733b8a4`
 removed the exported `ChildRunOutcome` union from `childRunLoop.ts` (zero hits
-repo-wide at HEAD; it was deep-imported only by
+under `src/` and `packages/` at HEAD — older proposal docs still mention the
+name; it was deep-imported only by
 `src/tools/delegation/childStream.ts`) and tightened `ChildStreamPort.finalize`
 from `options?: { outcome?: ChildRunOutcome; … }` to
 `options: { outcome: RunOutcome; error?: unknown; … }` — dropping a cross-module
