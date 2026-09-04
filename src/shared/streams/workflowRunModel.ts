@@ -13,9 +13,12 @@
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  WORKFLOW_CALL_STATUS,
   WORKFLOW_TASK_STATUS_LABEL,
   WorkflowPlanMarkerSchema,
   isTerminalWorkflowCallProgress,
+  isTerminalWorkflowCallStatus,
+  type StreamLifecycleStatus,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -26,6 +29,10 @@ import {
 } from '@shared/schemas';
 import type { TranscriptRow, WorkflowTaskRow } from '@shared/transcript';
 import { compareBySeqNo, usableSequence } from '@shared/streams/streamOrdering';
+import {
+  isTerminalOutcomePhase,
+  workflowRunSettled,
+} from '@shared/streams/streamStatus';
 import {
   TOKENS_GENERATED,
   workflowPhaseHeadingOfGroup,
@@ -162,11 +169,16 @@ interface WorkflowRunModelInput {
   readonly workflowAttemptId?: string;
   /** The newest attempt's declared plan, if the transcript recorded a valid one. */
   readonly plan: WorkflowDeclaredPlan | WorkflowPlanMarker | undefined;
-  /** True once the run has ended: plan-only phases it never reached are then
-   *  nothing to show (the projection's settle sweep has housed every declared
-   *  card under a stage, so an empty plan-only phase is its own
-   *  skipped-empty-phase suppression). */
-  readonly runSettled: boolean;
+  /** The stream's resolved lifecycle phase — the run's own settlement fact,
+   *  read once here instead of pre-digested by each host. Two readings come
+   *  off it: `workflowRunSettled` (the run has ended, so plan-only phases it
+   *  never reached are nothing to show — the projection's settle sweep has
+   *  housed every declared card under a stage, making an empty plan-only
+   *  phase its own skipped-empty-phase suppression), and, for the status
+   *  cells, whether the run reached a terminal OUTCOME. Only the stricter
+   *  reading may repaint a live-looking card: a stream held by another
+   *  process has ended here without ending at all. */
+  readonly streamPhase: StreamLifecycleStatus | undefined;
   /** Live progress by child stream, for the cards that opened those streams. */
   readonly childProgress: ReadonlyMap<StreamTabId, ChildRunProgress>;
 }
@@ -302,16 +314,20 @@ function phaseLogicalIdentity(phase: MutablePhase): string {
   return `${phase.heading.phaseLabel}\u0000${phase.heading.phaseIndex ?? 'unknown'}`;
 }
 
+/** Counts over the statuses the cells PAINT, so a tally can never say
+ *  "1 running" beside a strip that shows the call as cancelled. */
 function tallyOf(
-  tasks: readonly WorkflowTaskRow[],
+  statuses: readonly WorkflowCallProgress['status'][],
   declared: number,
 ): WorkflowTally {
   return {
-    done: tasks.filter((row) => isTerminalWorkflowCallProgress(row.call))
+    done: statuses.filter(isTerminalWorkflowCallStatus).length,
+    total: statuses.length,
+    running: statuses.filter(
+      (status) => status === WORKFLOW_CALL_STATUS.RUNNING,
+    ).length,
+    failed: statuses.filter((status) => status === WORKFLOW_CALL_STATUS.FAILED)
       .length,
-    total: tasks.length,
-    running: tasks.filter((row) => row.call.status === 'running').length,
-    failed: tasks.filter((row) => row.call.status === 'failed').length,
     declared,
   };
 }
@@ -481,7 +497,12 @@ export function workflowRunModel(
   );
   const ordered = [
     ...(input.plan
-      ? unionWithDeclaredPlan(opened, input.plan, tasks, input.runSettled)
+      ? unionWithDeclaredPlan(
+          opened,
+          input.plan,
+          tasks,
+          workflowRunSettled(input.streamPhase),
+        )
       : opened),
   ];
   if (unphased) ordered.push(unphased);
@@ -505,11 +526,26 @@ export function workflowRunModel(
     (sum, phase) => sum + phase.declaredTasks.length,
     0,
   );
-  const phaseModels = ordered.map((phase) => ({
-    ...phase,
-    tally: tallyOf(phase.tasks, phase.declaredTasks.length),
-    cells: phase.tasks.map((row) => row.call.status),
-  }));
+  // A call left `running` on a run that reached a terminal outcome has no
+  // producer left to settle it — the same fact `taskGroupDisplayStatus` reads
+  // for an unclosed task group — so it paints as cancelled rather than as a
+  // call that never stops. Derived once here and fed to both the cells and
+  // the tallies, which are two views of the same statuses.
+  const runInterrupted = isTerminalOutcomePhase(input.streamPhase);
+  const displayStatusOf = (
+    row: WorkflowTaskRow,
+  ): WorkflowCallProgress['status'] =>
+    runInterrupted && row.call.status === WORKFLOW_CALL_STATUS.RUNNING
+      ? WORKFLOW_CALL_STATUS.CANCELLED
+      : row.call.status;
+  const phaseModels = ordered.map((phase) => {
+    const cells = phase.tasks.map(displayStatusOf);
+    return {
+      ...phase,
+      tally: tallyOf(cells, phase.declaredTasks.length),
+      cells,
+    };
+  });
   return {
     phases: phaseModels,
     tasks,
@@ -517,7 +553,7 @@ export function workflowRunModel(
       unphased === undefined
         ? undefined
         : phaseModels[ordered.indexOf(unphased)],
-    tally: tallyOf(tasks, declaredTotal),
+    tally: tallyOf(tasks.map(displayStatusOf), declaredTotal),
     childStreamOf,
     liveOf,
   };

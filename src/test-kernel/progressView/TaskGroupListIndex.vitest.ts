@@ -164,7 +164,7 @@ function renderList(
           rows,
           workflowAttemptId,
           plan: workflowPlan,
-          runSettled: false,
+          streamPhase: undefined,
           childProgress: childProgress ?? new Map(),
         })
       : null;

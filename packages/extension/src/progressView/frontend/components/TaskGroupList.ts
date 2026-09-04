@@ -43,6 +43,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { isInFlightPhase } from '@shared/streams/streamStatus';
+import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
 import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
@@ -299,18 +300,22 @@ export class TaskGroupList extends LitElement {
   private checkForCompletedRuns(): void {
     const nextStatuses = new Map<string, string>();
     for (const group of this.groups) {
+      // The status the row PAINTS, not the raw one: a group the run never
+      // closed reads as cancelled once the stream reaches a terminal outcome,
+      // and the chime's memory has to agree with the pixels or the next paint
+      // sees a transition that never happened.
+      const status = taskGroupDisplayStatus(group, this.streamStatus);
       const prev = this.previousStatuses.get(group.id);
       const isRunGroup = !this.isToolUse && group.kind === 'round';
       const wasRunning = prev === STREAM_PHASE.RUNNING;
       const isNowComplete =
-        group.status === STREAM_PHASE.COMPLETED ||
-        group.status === STREAM_PHASE.CANCELLED;
+        status === STREAM_PHASE.COMPLETED || status === STREAM_PHASE.CANCELLED;
 
       if (isRunGroup && wasRunning && isNowComplete) {
         playCompletionSound();
       }
 
-      nextStatuses.set(group.id, group.status);
+      nextStatuses.set(group.id, status);
     }
     this.previousStatuses = nextStatuses;
   }
@@ -602,7 +607,8 @@ export class TaskGroupList extends LitElement {
       ? formatDuration(group.endTime - group.startTime)
       : '';
 
-    const statusIcon = terminalStatusIcon(group.status);
+    const status = taskGroupDisplayStatus(group, this.streamStatus);
+    const statusIcon = terminalStatusIcon(status);
     const phase = this.phaseModels.get(group.id);
     const title =
       group.kind === 'round' && group.index !== undefined
@@ -614,7 +620,7 @@ export class TaskGroupList extends LitElement {
     return html`
       <span class="group-status-icon">
         ${waIcon(statusIcon, {
-          label: formatStreamStatusLabel(group.status),
+          label: formatStreamStatusLabel(status),
         })}
       </span>
       <bdi class="group-title">${title}</bdi>
@@ -709,7 +715,7 @@ export class TaskGroupList extends LitElement {
           id="${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}"
           class=${classMap({
             'log-group-header': true,
-            [`is-${group.status}`]: true,
+            [`is-${taskGroupDisplayStatus(group, this.streamStatus)}`]: true,
           })}
         >
           ${this.renderGroupHeader(node)}

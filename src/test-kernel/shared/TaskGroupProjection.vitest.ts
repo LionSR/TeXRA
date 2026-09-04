@@ -3,12 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   LOG_LEVELS,
   RUN_OUTCOME,
+  STREAM_LIFECYCLE_UNAVAILABLE,
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
   STREAM_PHASE,
   type StreamLogEntry,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/streams/taskGroupProjection';
+import {
+  taskGroupDisplayStatus,
+  upsertTaskGroupFromStreamLog,
+} from '@shared/streams/taskGroupProjection';
 import { projectTaskGroupsFromStreamLog } from '@test/support/transcriptRowFixtures';
 
 interface GroupEntryOverrides {
@@ -126,6 +130,31 @@ describe('task-group StreamLog projection', () => {
     expect(taskGroups).toHaveLength(1);
     expect(taskGroups[0]?.status).toBe(RUN_OUTCOME.FAILED);
     expect(taskGroups[0]?.endTime).toBe(250);
+  });
+
+  it('paints a group the run never closed as cancelled, terminal phases only', () => {
+    const [group] = projectTaskGroupsFromStreamLog([
+      entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
+        text: 'Run: auditor',
+        data: { status: STREAM_PHASE.RUNNING, kind: 'run' },
+      }),
+    ]);
+
+    // A run that ended: nothing is left to write the GROUP_END.
+    expect(taskGroupDisplayStatus(group!, STREAM_PHASE.FAILED)).toBe(
+      STREAM_PHASE.CANCELLED,
+    );
+    // Still running here, or running in another process (unavailable), or
+    // not yet known: the transcript's own status stands.
+    expect(taskGroupDisplayStatus(group!, STREAM_PHASE.RUNNING)).toBe(
+      STREAM_PHASE.RUNNING,
+    );
+    expect(taskGroupDisplayStatus(group!, STREAM_LIFECYCLE_UNAVAILABLE)).toBe(
+      STREAM_PHASE.RUNNING,
+    );
+    expect(taskGroupDisplayStatus(group!, undefined)).toBe(
+      STREAM_PHASE.RUNNING,
+    );
   });
 
   it('ignores ordinary log rows', () => {

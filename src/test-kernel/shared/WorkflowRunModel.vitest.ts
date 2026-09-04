@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  STREAM_PHASE,
+  type StreamLifecycleStatus,
   type StreamLogEntry,
   type StreamTabId,
   type TaskGroup,
@@ -77,7 +79,7 @@ function modelOf(
   tasks: readonly TaskSpec[],
   options: {
     plan?: WorkflowPlanMarker;
-    runSettled?: boolean;
+    streamPhase?: StreamLifecycleStatus;
     childProgress?: ReadonlyMap<StreamTabId, ChildRunProgress>;
   } = {},
 ): WorkflowRunModel {
@@ -93,7 +95,7 @@ function modelOf(
       ),
     ),
     plan: options.plan,
-    runSettled: options.runSettled ?? false,
+    streamPhase: options.streamPhase,
     childProgress: options.childProgress ?? new Map(),
   });
 }
@@ -179,7 +181,7 @@ describe('workflow run model', () => {
       // the transcript authority regardless of that input arrangement.
       rows: [resumedUngrouped, resumedPhase, old],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      runSettled: false,
+      streamPhase: undefined,
       childProgress: new Map(),
     });
 
@@ -220,7 +222,7 @@ describe('workflow run model', () => {
       taskGroups: [stale, current],
       rows: [staleUntaggedCard],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      runSettled: false,
+      streamPhase: undefined,
       childProgress: new Map(),
     });
 
@@ -246,7 +248,7 @@ describe('workflow run model', () => {
       taskGroups: [oldMap, currentMap],
       rows: [],
       plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
-      runSettled: false,
+      streamPhase: undefined,
       childProgress: new Map(),
     });
 
@@ -279,7 +281,7 @@ describe('workflow run model', () => {
       taskGroups: [oldMap, currentReview],
       rows: [oldCard],
       plan: undefined,
-      runSettled: false,
+      streamPhase: undefined,
       childProgress: new Map(),
     });
 
@@ -306,7 +308,7 @@ describe('workflow run model', () => {
       // child. Mixed-generation rows fall back to timestamps, not input order.
       rows: [resumedRoot, oldChild],
       plan: undefined,
-      runSettled: false,
+      streamPhase: undefined,
       childProgress: new Map(),
     });
 
@@ -337,7 +339,7 @@ describe('workflow run model', () => {
       // seqNo/timestamp sorting. Attempt selection must not depend on that sort.
       rows: [currentLegacyRoot, currentChild, oldChild],
       plan: undefined,
-      runSettled: false,
+      streamPhase: undefined,
       childProgress: new Map(),
     });
 
@@ -459,7 +461,9 @@ describe('workflow run model', () => {
     // Once the run has settled, a plan-only phase it never reached and that
     // holds no declared task is gone; one still holding declared tasks stays.
     expect(
-      summarize(modelOf(['Map'], tasks, { plan, runSettled: true })),
+      summarize(
+        modelOf(['Map'], tasks, { plan, streamPhase: STREAM_PHASE.COMPLETED }),
+      ),
     ).toEqual([
       ['Map', true, 1, ['extract']],
       ['Reduce', false, 0, ['merge']],
@@ -531,7 +535,7 @@ describe('workflow run model', () => {
         taskGroups: [closed],
         rows: [taskRow({ id: 'v', phase: 'Verify' })],
         plan: undefined,
-        runSettled: true,
+        streamPhase: STREAM_PHASE.COMPLETED,
         childProgress: new Map(),
       }).phases[0]?.heading,
     ).toStrictEqual({ phaseLabel: 'Verify', phaseIndex: 0, phaseTotal: 1 });

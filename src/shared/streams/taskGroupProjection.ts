@@ -10,10 +10,12 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   STREAM_PHASE,
   type EndGroupStatus,
+  type StreamLifecycleStatus,
   type StreamLogEntry,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 
 /**
  * Normalize the two status vocabularies that can occur on a GROUP_END row.
@@ -41,6 +43,34 @@ function taskGroupEndStatus(
     return STREAM_PHASE.COMPLETED;
   }
   return value;
+}
+
+/**
+ * The status a task group RENDERS as, given its stream's resolved phase.
+ *
+ * A group is closed by the `GROUP_END` row its producer writes, and the host
+ * exit drain closes whatever is still open in the same lease-fenced window
+ * that writes the run's outcome (`settleLiveSessionExecutions`). A group left
+ * `running` on a stream whose phase has reached a terminal outcome therefore
+ * has no producer left anywhere: the process died before it could write the
+ * `GROUP_END`, or the drain ran out of its exit deadline. Painting it as
+ * `running` forever is the lie; `cancelled` — the value both the drain and a
+ * user stop record — is what actually happened to it.
+ *
+ * Display only: nothing here is written back to the log. `StreamLogStore`
+ * owns the persisted normalization (`normalizeGroupStatusEntry`), and the
+ * resolved phase is the caller's (`SessionState.resolveStreamPhase` on the
+ * terminal, `StreamMetadata.status` on the wire), so a stream held by another
+ * process — which has no terminal phase — keeps painting its live groups.
+ */
+export function taskGroupDisplayStatus(
+  group: Pick<TaskGroup, 'status'>,
+  streamPhase: StreamLifecycleStatus | undefined,
+): TaskGroupStatus {
+  if (group.status !== STREAM_PHASE.RUNNING) return group.status;
+  return isTerminalOutcomePhase(streamPhase)
+    ? STREAM_PHASE.CANCELLED
+    : group.status;
 }
 
 /**

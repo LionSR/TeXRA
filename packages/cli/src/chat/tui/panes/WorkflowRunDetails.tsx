@@ -32,6 +32,7 @@ import {
   type CompileFailure,
   type OutputFileInfo,
   type ReadonlyRoundIndexed,
+  type StreamLifecycleStatus,
   type TaskGroup,
   type TaskGroupStatus,
 } from '@shared/schemas';
@@ -39,6 +40,7 @@ import {
   formatRoundStageLabel,
   formatStreamStatusLabel,
 } from '@shared/streams/streamStatusDisplay';
+import { taskGroupDisplayStatus } from '@shared/streams/taskGroupProjection';
 import { filterNotNullish, formatCompactDuration } from '@utils/core';
 
 type WorkflowRunDetailTone =
@@ -53,6 +55,10 @@ interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
+  /** The stream's resolved lifecycle phase, so a group the run never closed
+   *  paints as interrupted instead of running forever. Absent means unknown,
+   *  which paints each group exactly as the transcript recorded it. */
+  readonly streamPhase?: StreamLifecycleStatus;
   readonly outputFilesByRound: ReadonlyRoundIndexed<OutputFileInfo>;
   readonly missingOutputsByRound: ReadonlyRoundIndexed<string>;
   readonly compileFailuresByRound: ReadonlyRoundIndexed<CompileFailure>;
@@ -84,8 +90,12 @@ const LINE_COLORS = {
   error: COLOR_ERROR,
 } as const satisfies Record<WorkflowRunDetailTone, string | undefined>;
 
-function taskGroupLine(group: TaskGroup, label: string): WorkflowRunDetailLine {
-  const appearance = TASK_GROUP_APPEARANCE[group.status];
+function taskGroupLine(
+  group: TaskGroup,
+  label: string,
+  status: TaskGroupStatus,
+): WorkflowRunDetailLine {
+  const appearance = TASK_GROUP_APPEARANCE[status];
   const duration =
     group.endTime !== undefined
       ? ` · ${formatCompactDuration(group.endTime - group.startTime)}`
@@ -97,7 +107,7 @@ function taskGroupLine(group: TaskGroup, label: string): WorkflowRunDetailLine {
     // WORKFLOW_TASK_STATUS_LABEL words a workflow *call* ('Finished',
     // 'Saved result'), which is a different thing that happens to share four
     // key names with this one.
-    text: `${appearance.marker} ${safeTerminalText(label)} ${formatStreamStatusLabel(group.status)}${duration}`,
+    text: `${appearance.marker} ${safeTerminalText(label)} ${formatStreamStatusLabel(status)}${duration}`,
     tone: appearance.tone,
     role: 'lifecycle',
   };
@@ -121,6 +131,10 @@ function workflowRunDetailGroups(
   if (!facts) return [];
 
   const groups: WorkflowRunDetailGroup[] = [];
+  // One reading of every group's status, so the marker, the label and the
+  // ordering priority cannot disagree about an unclosed group.
+  const displayStatus = (group: TaskGroup): TaskGroupStatus =>
+    taskGroupDisplayStatus(group, facts.streamPhase);
   const roundGroups = new Map<number, TaskGroup>();
   const rounds = new Set<number>();
   for (const group of facts.taskGroups) {
@@ -140,9 +154,10 @@ function workflowRunDetailGroups(
         taskGroupLine(
           group,
           group.name || (group.kind === 'run' ? 'Workflow' : group.id),
+          displayStatus(group),
         ),
       ],
-      priority: lifecyclePriority(group.status, false, false) + 1,
+      priority: lifecyclePriority(displayStatus(group), false, false) + 1,
       planned: false,
     });
   }
@@ -170,6 +185,7 @@ function workflowRunDetailGroups(
         taskGroupLine(
           group,
           formatRoundStageLabel({ index: round, total: group.total }),
+          displayStatus(group),
         ),
       );
     } else {
@@ -233,7 +249,7 @@ function workflowRunDetailGroups(
       key: `round:${round}`,
       lines,
       priority: lifecyclePriority(
-        group?.status,
+        group && displayStatus(group),
         group !== undefined && round === currentRound,
         planned,
       ),

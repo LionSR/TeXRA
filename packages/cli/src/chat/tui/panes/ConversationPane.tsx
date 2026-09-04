@@ -141,10 +141,11 @@ export function ConversationPane(
   const artifacts =
     activeStreamId && slice ? readStreamArtifacts(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
+  const streamPhase = streamPhaseFor(activeStreamId)?.phase;
   const displayEntries = pendingTranscriptEntries(
     entries,
     slice?.finalizedFrontier ?? 0,
-    slice && streamPhaseFor(activeStreamId)?.phase,
+    slice && streamPhase,
   );
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
@@ -167,6 +168,9 @@ export function ConversationPane(
   const workflowFacts = slice
     ? {
         taskGroups: slice.taskGroups,
+        // The one resolved phase this pane already reads: a group the run
+        // never closed paints as interrupted once the run is terminal.
+        streamPhase,
         outputFilesByRound: artifacts?.outputFilesByRound ?? {},
         missingOutputsByRound: artifacts?.missingOutputsByRound ?? {},
         compileFailuresByRound: artifacts?.compileFailuresByRound ?? {},

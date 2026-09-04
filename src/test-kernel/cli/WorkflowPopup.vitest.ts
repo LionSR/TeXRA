@@ -63,7 +63,7 @@ async function renderPopup(
     taskGroups: retained.taskGroups,
     rows: retained.rows,
     plan: retained.plan,
-    runSettled: false,
+    streamPhase: undefined,
     childProgress: new Map(),
   });
   const { ink, React } = await loadInk();

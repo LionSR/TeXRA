@@ -27,10 +27,7 @@ import {
   type StreamTabInfo,
   type TaskGroup,
 } from '@shared/schemas';
-import {
-  isTerminalOutcomePhase,
-  workflowRunSettled,
-} from '@shared/streams/streamStatus';
+import { isTerminalOutcomePhase } from '@shared/streams/streamStatus';
 import {
   workflowRunModel,
   type ChildRunProgress,
@@ -361,10 +358,11 @@ const activeTaskGroups$ = new Signal.Computed(
   () => activeStreamState$.get()?.taskGroups ?? EMPTY_TASK_GROUPS,
 );
 
-/** Whether the active run has ended — the model's only status-derived input,
- *  split out so unrelated status transitions don't rebuild the model. */
-const activeRunSettled$ = new Signal.Computed(() =>
-  workflowRunSettled(activeStreamState$.get()?.status),
+/** The active run's lifecycle phase — the model's only status input, split
+ *  out so unrelated state transitions don't rebuild the model. The model
+ *  reads both the settled and the terminal-outcome fact off it. */
+const activeRunPhase$ = new Signal.Computed(
+  () => activeStreamState$.get()?.status,
 );
 
 /**
@@ -387,7 +385,7 @@ const activeRunModel$ = new Signal.Computed((): WorkflowRunModel | null => {
     rows: streamLogs.rows,
     workflowAttemptId: streamLogs.workflowAttemptId,
     plan: streamLogs.workflowPlan,
-    runSettled: activeRunSettled$.get(),
+    streamPhase: activeRunPhase$.get(),
     childProgress: activeChildProgress$.get(),
   });
 });
