@@ -1,0 +1,775 @@
+# The persistence substrate: one event table, one cutover (2026-09-03)
+
+> **Status:** survey + decision proposal, revised the same day after reading
+> OpenCode's V2 session core. Grounded on `main` at `1fbcaa0108`. Companion to
+> `2026-09-03-startup-repair-is-the-wrong-shape.md`, which owns the lifecycle
+> side (what boot may do, where terminal facts are written, ownership as a
+> lock on open-for-write) and defers the storage engine as its S7. This
+> document owns S7: what the store is, how the two competing PRDs resolve,
+> and how the migration is run without a dual system. Peer codebases were
+> read from source on 2026-09-03 (Claude Code readable snapshot; Codex and
+> OpenCode cloned at HEAD). Every claim carries a `path:line`; re-open before
+> acting.
+
+## 0. Why this exists
+
+Two facts sat side by side on 2026-09-03:
+
+1. `texra chat` takes 48 to 112 s to show a prompt in a workspace with ~4,100
+   execution directories (measured in the companion proposal §1). The
+   companion diagnoses the pass that spends the time. This document is about
+   why every such pass is expensive in the first place: existence is "a
+   directory exists", listing is "open every meta", resumability is "parse a
+   600 KB checkpoint", and every write is a whole-file rewrite.
+2. The repo holds two merged PRDs that each claim to supersede the other on
+   exactly this question, neither has a line of code behind it, and no open
+   issue tracks the work (§3). Every persistence PR since 2026-08-17 has been
+   lifecycle work on the unchanged substrate.
+
+The peer tools that were in the same shape have moved: OpenCode cut over from
+JSON-per-record files to one SQLite database in 2026-02 and is now building a
+durable event log inside it; Codex kept append-only JSONL as the source of
+truth and added a SQLite mirror for metadata and paging; Claude Code never had
+a rewrite path to leave (§4). None of the three rewrites a growing document,
+persists streaming deltas, or opens transcript bodies to list sessions. TeXRA
+does all three.
+
+## 1. The substrate today
+
+Every persisted artifact goes through `KVStore` (`src/common/storage/KVStore.ts`):
+`encodeURIComponent(key).json`, read is `JSON.parse` of the whole file (:61),
+write is `StorageFS.writeAtomic` (:72) → `platform().fs.writeFileAtomic` →
+`write-file-atomic`. The `appendFile` port exists (`src/platform/interfaces.ts:123`)
+but its only production caller is desktop app logging. **There is no append
+path and no event journal anywhere in the run/session persistence system.**
+`SessionEventHub` (`src/agent/runtime/SessionEventHub.ts`, 177 LoC) is an
+in-memory multicast; durability comes only from three projections of it.
+
+| Artifact                                    | Layout                                                                              | Write shape                                                                                            | Owner                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Transcript `streamLogs/<id>.json`           | one JSON array of `StreamLogEntry` per stream                                       | whole array re-serialized every 300 ms while streaming (`StreamLogStore.ts:43,1229`)                   | `StreamLogStore.ts` (1,491 LoC) via `TexraTranscriptRecorder` (905)                                        |
+| Summary `streamLogSummaries/<id>.json`      | derived listing row                                                                 | rewritten per batch and per meta change; mtime-vs-log staleness (`StreamSummaryCacheStore.ts:280-303`) | `StreamSummaryCacheStore.ts` (363)                                                                         |
+| Sidecars `streamData/<id>/*.json`           | six files: meta, outputFiles, missingOutputs, compileFailures, usageStats, workPlan | each file rewritten whole per mutation (`StreamSnapshotStore.ts:914,942,1361,1633`)                    | `StreamSnapshotStore.ts` (2,119), `SidecarWriteCoordinator.ts` (191), `StagedDeletionCoordinator.ts` (665) |
+| Execution KV `executions/<id>/*.json`       | meta, config, report, result-meta, turn-state, child-\*, todos, workspace-files     | `meta.json` read-modify-write per outcome/description (`executionLifecycle.ts:79-83,267`)              | `ExecutionKVStore.ts` (422), `executionListing.ts` (442)                                                   |
+| Checkpoint `executions/<id>/flow_<id>.json` | envelope + full provider-native `shared.messages`                                   | whole record rewritten per node transition (`persistedFlow.ts:505-509`)                                | `persistedFlow.ts` (531)                                                                                   |
+| Lease `executionLeases/<id>/<token>.json`   | v3 claim, written once with `O_EXCL`; v2 shadow still written                       | append-once (the only one); shadow retires 2026-11-24 (`executionLease.ts:538-541`)                    | `executionLease.ts` (848)                                                                                  |
+
+Two structural facts follow from the table.
+
+**Run content is stored twice, in two shapes.** The rendered log
+(`StreamLogEntry[]`, what the UI shows) and the model-visible conversation
+(`shared.messages` in the checkpoint, what resume needs) are written by
+different owners from the same live events. Seven transcript-like
+representations exist in total (trace `AgentEvent`; persisted entries;
+summary; sidecar snapshot; `TranscriptRow` projection, `projectTranscriptRow.ts`
+588 LoC; checkpoint conversation; reconstructed conversation in
+`completedRunArchive.ts:326`), and the extension webview keeps both `entries`
+and `rows` for the active stream (`store.ts:27-64`), a third in-process copy.
+
+**Every question about history is a directory walk plus a full parse.**
+`listExecutionStreamReferences` is a readdir plus one stat per execution plus
+one meta read per checkpointed execution (`executionListing.ts:166`), and is
+called up to four times per launch (the scan inside `runRestartRepair`,
+`SessionHandle.ts:329`; the `readExecutionStreamIndex` fallback at :389;
+`SessionStores.ts:783,872`). `deriveResumability` reads meta and the full
+checkpoint to check a two-field cursor (`resumability.ts:60-119`). Startup per
+seeded stream is one readdir plus up to eight sidecar and execution reads
+(`StreamSnapshotStore.ts:850`, `streamSnapshotRead.ts:206`,
+`StreamSnapshotStore.ts:1878`).
+
+## 2. Footprint on one developer machine (2026-09-03)
+
+| Bucket                    | Total  | `executions/` | `streamLogs/` | `streamData/` | dirs                      |
+| ------------------------- | ------ | ------------- | ------------- | ------------- | ------------------------- |
+| all 478 workspace buckets | 8.5 GB |               |               |               |                           |
+| TNLean                    | 5.2 GB | 3.0 GB        | 2.1 GB        | 44 MB         | 4,148 exec, 3,789 streams |
+| MIPStarRE                 | 1.5 GB |               |               |               | 1,277 exec                |
+| coauthor                  | 1.1 GB |               |               |               | 1,196 exec                |
+
+In TNLean, 3,125 executions still hold a `flow_<id>.json`; 17 of those exceed
+2 MB. `streamData/` is small because it holds only the six sidecar files; the
+transcript bodies are the 2.1 GB in `streamLogs/`. Raw read plus `JSON.parse`
+of all 3,125 checkpoints is about 7 s (companion §1), which bounds what a
+one-shot importer costs.
+
+Generations coexist on disk because retirement has been per-feature, not
+per-substrate: 151 buckets have `streamLogs` + `streamLogSummaries`, 138 have
+`streamData`, 96 have `executionLeases` next to 92 with the retired
+`executionLocks`, 5 hold `streamData.deleting` leftovers, and
+`global-storage/` carries two orphaned `write-file-atomic` temp files from
+July. None of this is corrupt; all of it is a cost the next reader pays, and
+it is what per-store migration produces. This proposal does one migration.
+
+Of the 4,610 stream sidecars measured on 2026-08-08, zero carried the current
+`identity` shape (they predate #9705/#9755), so the whole history hydrates with
+`identity === undefined`. That cohort is what the importer meets.
+
+## 3. The decision record, and where it contradicts itself
+
+| Date       | Document / ruling                                                        | Said about the substrate                                                                                                                                                                                                                         | Status                                                                                             |
+| ---------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| 2026-02-22 | #2748 creates `StreamLogStore`                                           | per-stream JSON array, whole-file rewrite, from day one                                                                                                                                                                                          | live                                                                                               |
+| 2026-06-06 | #5441 creates `StreamSnapshotStore`                                      | six sidecar files per stream                                                                                                                                                                                                                     | live                                                                                               |
+| 2026-07-03 | `2026-07-03-session-scoped-runtime-architecture.md` A6 (:296-299,805)    | formats stay separate; ownership unifies                                                                                                                                                                                                         | shipped (#9234, #11334)                                                                            |
+| 2026-08-11 | `docs/prds/2026-08-11-transcript-memory-architecture.md` (#9952)         | keep the substrate; fix residency, deltas, bounded startup; explicitly rejects sidecar collapse and an event-log rewrite of `PersistedFlow` (:414-439)                                                                                           | shipped in full (#9965-#10572)                                                                     |
+| 2026-08-16 | `docs/prds/2026-08-16-sqlite-workspace-state.md`                         | one `node:sqlite` DB per workspace, transcript entries as rows, eight-stage migration; "supersedes the JSONL prescription in #10773" (:12); §8 "no Effect or any framework buy-in"                                                               | merged as a doc; **zero code**; Stage 0 spike never run                                            |
+| 2026-08-17 | #10773 family closed (#10774, #10817, #10819, #10820, #10841, #10842-45) | JSONL journal work closed as "divergent from the settled single Stream-tab authority direction"                                                                                                                                                  | closed                                                                                             |
+| 2026-08-18 | `docs/prds/2026-08-18-session-event-journal.md` (#10849)                 | append-only `streamJournals/<id>.jsonl` as SSOT, fold-derived sidecars; "the SQLite PRD stays parked" (:45-49)                                                                                                                                   | "draft for owner ratification"; all eight follow-ups (#10878-#10885) closed NOT_PLANNED; zero code |
+| 2026-08-20 | maintainer comment on #10773                                             | "Prescription superseded by the now-merged storage PRD [SQLite] … transcript entries become rows"                                                                                                                                                | most recent ruling                                                                                 |
+| 2026-08-23 | `2026-08-23-single-owner-sessions.md` §6 (:521-536)                      | a journal "helps partly"; the checkpoint cannot be a fold of an admission-redacted journal (thinking signatures, `previous_response_id`); the checkpoint, not the transcript, is the largest write amplifier (p50 547 KB per outer-node rewrite) | shipped (seven PRs) on the old substrate                                                           |
+| 2026-09-02 | two round-2 surveys                                                      | treat the SQLite PRD as the superseding storage decision; withdraw in-place persistence bound as "a storage-engine concern"                                                                                                                      | recorded                                                                                           |
+
+Contradictions nobody has closed:
+
+- The journal PRD and the SQLite PRD each say the other is parked or
+  superseded, and neither has recorded the 2026-08-20 ruling in its own
+  status line. The journal PRD's own ratification protocol (:22-27) requires
+  a rulings-ledger entry; none exists. §5 below shows the two are not
+  alternatives, which is why the standoff never resolved.
+- The memory PRD refuses collapsing the six sidecar files (cross-host data
+  loss under version skew, :414-418); the SQLite PRD §1 lists the six-file
+  seed chain as a defect to remove. Both are "current".
+- The 2026-07-03 A6 ruling (formats stay separate) is contradicted by the
+  SQLite PRD's single schema. Not reconciled in either doc.
+- The SQLite PRD §8 forbids Effect; `effect@4.0.0-rc.112` is already a root
+  and `packages/agent` dependency with one production user
+  (`src/auth/oauth`) and an AGENTS.md section ("Effect Best Practices").
+- The summary cache the journal PRD retires (§3.3) is doing more work than
+  before: #11762 now mirrors cumulative usage into it.
+
+No open issue tracks: the SQLite Stage 0 spike; the journal PRD's
+disposition; the sidecar-collapse contradiction; the checkpoint amplifier; the
+Effect ruling. The only open persistence issues are compatibility retirements
+and two rulings requests (#11014, #11731, #11771, #10753).
+
+## 4. What the peers do, from source
+
+| Property                      | Claude Code                                                        | Codex (`codex-rs`)                                                 | OpenCode V1 (shipped)                         | OpenCode V2 (in tree, not yet the served path)                                                                                  | TeXRA                                                            |
+| ----------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Content SSOT                  | per-session JSONL, append-only                                     | per-rollout JSONL, append-only, never rewritten                    | `message` and `part` rows in one SQLite DB    | `event` table keyed `(aggregate_id, seq)`; every other table is a projection                                                    | per-stream JSON array + separate checkpoint blob, both rewritten |
+| What a record is              | model message with `parentUuid` chain + last-wins metadata entries | `RolloutLine{timestamp, ordinal, item}`                            | part rows with JSON `data`, whole-part upsert | versioned typed event with JSON `data`; 28 durable of 32 types                                                                  | rendered `StreamLogEntry` separate from model messages           |
+| Streaming deltas persisted    | no                                                                 | no (`rollout/src/policy.rs:141-204`)                               | no (`PartDelta` not durable)                  | no (`text.delta`, `reasoning.delta`, `tool.input.delta`, `compaction.delta` live-only, `session-event.ts:448-511`)              | yes, via 300 ms whole-array rewrite                              |
+| Mutation of past content      | append a tombstone/boundary                                        | append `ThreadRolledBack`; revert = new immutable file + pointer   | `INSERT … ON CONFLICT DO UPDATE` on one row   | projector `UPDATE` inside the event's own `BEGIN IMMEDIATE` (`packages/core/src/event.ts:237-352`)                              | rewrite the whole stream file                                    |
+| Listing                       | readdir + stat, then 64 KB head/tail scrape, first 50              | FS head scan read-repairing a SQLite `threads` mirror              | one indexed SQL query                         | one indexed SQL query; `session_message.seq` = event seq (`session/sql.ts:133`)                                                 | readdir + one meta read per execution, 3 to 4 times per launch   |
+| Resume                        | one file, byte-level skip of dead branches                         | reverse JSONL scan from EOF                                        | page by `(time_created, id)`                  | messages from the latest compaction; `session_context_epoch` holds the system baseline and its seq (`session/history.ts:24-53`) | parse the full checkpoint                                        |
+| Ownership / replay            | pid file, skip not lock                                            | OS file lock per thread on open-for-write                          | in-process                                    | `event_sequence.owner_id` fence; replay dies on divergence or gap (`event.ts:254-302`)                                          | per-execution lease inspected for all runs at boot               |
+| Boot work over history        | none                                                               | none after backfill flag = complete                                | schema migrations only                        | schema migrations only                                                                                                          | restart repair + two orphan sweeps, O(history)                   |
+| Size of the persistence layer | one ~5k-line `sessionStorage.ts` plus helpers                      | ~50k LoC Rust across `rollout`, `history`, `state`, `thread-store` | ~6.7k LoC + 872 LoC migrations                | event core ~600 LoC + projector ~450 + reducer ~400                                                                             | ~11k LoC across the modules in §1 plus hosts' projections        |
+
+Three lessons from the migrations themselves:
+
+- **OpenCode V1** (#10597, 2026-02-14): hard cutover, one-shot importer at
+  first start with a progress bar and 1,000-row batches,
+  `onConflictDoNothing` idempotency, no dual-write. The importer was deleted
+  3.5 months later (#30461). Two follow-up PRs (#14326 WAL concern, #16884
+  "make migration truly one-time") show the cutover itself was rocky.
+- **OpenCode V2** shows what the database is for once it exists. Publishing a
+  durable event opens one `BEGIN IMMEDIATE` transaction, runs every
+  registered projector for that type, then inserts the event row
+  (`event.ts:237-352`); a projection can never drift from the log. The same
+  reducer serves the SQLite projector and in-memory replay through a small
+  adapter (`session/message-updater.ts:10-17`). Compaction is a durable
+  `compaction.ended` event that projects one hidden message; the full
+  transcript stays. V2 runs beside V1 as a separate HttpApi, the TUI still
+  speaks V1, and two June migrations wiped the V2 tables outright, so it is a
+  design in progress, not a shipped path. Its structure is nevertheless the
+  one that reconciles TeXRA's two PRDs (§5).
+- **Codex** kept JSONL as truth and paid for it with a mirror that must be
+  read-repaired on every listing, a leased backfill with a completion flag,
+  and a second projection database. That is the dual-system cost of not
+  choosing one engine.
+
+The deepest divergence is not the engine. Codex and Claude Code persist the
+model-visible items and derive the UI at read time; OpenCode V2 persists
+lifecycle events and projects both; TeXRA persists a rendered log and,
+separately, the model messages. This proposal gives both a `seq` in one
+engine (§6 Stage 3, Stage 5) so a later merge is possible, and does not merge
+them now (§9).
+
+## 5. Verdict: the journal is a table, and the table is the only store
+
+The whole-file-rewrite primitive is the root defect, exactly as #10773 and the
+SQLite PRD diagnose. It makes the 300 ms transcript rewrite, the per-node
+checkpoint rewrite, the six-file sidecar chain, the mtime summary heuristic,
+the staged-deletion coordinator, and the O(history) boot passes all necessary.
+Each of those is a semantics layer paying rent for a missing primitive; none
+can be deleted while the primitive stays.
+
+The two PRDs were never alternatives. The journal PRD is right about
+semantics: an append-only, ordered, replayable record of what happened is the
+correct source of truth, and everything the UI or the launcher reads should
+be a fold of it. The SQLite PRD is right about the engine: one database per
+workspace, indexed access, one transaction, cascade on delete. A JSONL file
+cannot give the second; a database with mutable rows and no log cannot give
+the first. OpenCode V2 shows the two together: the event table is the journal.
+
+The first revision of this document then kept OpenCode's projection tables.
+The owner asked why. The honest answer is that TeXRA does not need them:
+
+- Hydrating a stream for display is one indexed read of its events plus the
+  fold the transcript recorder already runs live. Same cost order as parsing
+  today's JSON array, only for the stream being opened.
+- Stream state (usage, work plan, outputs, compile failures) is already a fold
+  over the same events in `StreamSnapshotStore.attachSessionEvents`.
+- Listing facts (identity, description, outcome, parent edge, resumable) are
+  each "the latest event of type T for this stream", an indexed lookup, not a
+  scan.
+- Resume is a fold too, once the model-visible message is itself a durable
+  event (§6.1 D4). That is what Codex persists; it is the one choice that also
+  ends TeXRA storing run content twice.
+
+A persisted projection is a second copy with a lifecycle, a rebuild rule, and
+a way to drift. A column holding `outcome` or `resumable` is remembered status,
+which the owner's rule and the companion's D7 forbid. So:
+
+**Recommendation.** Two tables per workspace database, `event` and
+`event_sequence`, and nothing else persisted. Every surface, the launcher list
+and the resume picker included, is an in-memory fold or an indexed query over
+events. A derived row is added only after a measured query is too slow and an
+index has been tried first. Record the journal PRD as absorbed, the SQLite PRD
+as amended (§3.2 "entries as rows" becomes "events as rows, entries as a
+fold"; §8 Effect non-goal reversed per §7), and ship it as one cutover (§8).
+
+## 6. Target: two tables, folds everywhere
+
+### 6.1 The contract (jointly owned with the view-state PRD)
+
+This section is the only shared contract between the substrate program and
+`docs/prds/2026-09-03-prd-one-fold-three-renderers.md`. The PRD references
+it; it does not restate it. Changes land here first.
+
+**C1. Persisted schema.** Two tables, nothing else app-owned on disk except the
+two permanent settings files (`state.json`, `config.json`).
+
+```
+event
+  commit        INTEGER PRIMARY KEY AUTOINCREMENT   -- database-wide total order, never reused
+  aggregate_id  TEXT NOT NULL                       -- a StreamTabId, or the session aggregate
+  seq           INTEGER NOT NULL                    -- per-aggregate, dense from 1
+  type          TEXT NOT NULL                       -- versioned, e.g. "run.start.1"
+  owner_id      TEXT NOT NULL                       -- pid + processStart of the writer, derived at insert
+  at            INTEGER NOT NULL                    -- wall clock ms, informational only
+  data          TEXT NOT NULL                       -- Zod-validated JSON payload
+  UNIQUE (aggregate_id, seq)
+  INDEX (aggregate_id, type, seq)                   -- latest-of-type per stream
+  INDEX (type, commit)                              -- listing tier across streams
+
+event_sequence
+  aggregate_id  TEXT PRIMARY KEY
+  seq           INTEGER NOT NULL                    -- last assigned
+  owner_id      TEXT                                -- current sequence writer, NULL when none
+  parent_id     TEXT                                -- owning aggregate, set at creation (C9); NULL for roots
+  closed        INTEGER NOT NULL DEFAULT 0          -- 1 after the aggregate's tombstone (C9)
+  INDEX (parent_id)
+```
+
+`commit` is the session-wide ordinal the PRD needs for its cursor; SQLite's
+`AUTOINCREMENT` gives it monotone and non-reusing for free. `seq` is the
+per-stream ordinal the transcript fold and `settledSeq` use. Both exist on
+every row; neither is derived from the other.
+
+**C2. Aggregates.** An aggregate is a unit of independent lifecycle, and
+**every fact lives on the aggregate of its logical target**, so a
+latest-of-type lookup never has to disambiguate targets and no key column
+exists. Aggregate ids: a stream id for run-scoped trace `AgentEvent`s and for
+the stream's own lifecycle facts (`stream.removed`, the queued-follow-ups
+snapshot); an execution id for what the model sees, the byte-exact flow rows
+of `2026-09-04-agent-runtime-on-effect.md` §2.1 (`model.message`,
+`model.compaction`, `tool.intent`, `tool.result`, `flow.snapshot`); which of
+a run's two aggregates each flow row lives on is decided in that §2.1, which
+places `flow.step` on the stream aggregate so the listing tier reads a run's
+latest step through the stream's own index; an inquiry thread id for that thread's facts; one fixed session aggregate id for
+**singleton** session facts only (the goal). A fact that can have more than
+one live instance never goes on the session aggregate, because after two
+deletions a latest-of-type read would see only the newer tombstone. The
+execution-to-stream edge is on `run.start`. A stream exists iff its
+`event_sequence` row exists; `run.start` is `seq` 1 and creates it in the same
+transaction.
+
+**C3. Durable event set.** Durable: every run-scoped `AgentEvent` except text,
+thinking, and tool-input deltas; `approval.requested`,
+`approval.resolved`, `approval.policy` (snapshot); `run.start` at the
+reservation commit point carrying `identity` (nullish only for imported legacy
+streams), `worktree` (nullish), and explicit `category` and `isRemote` fields,
+because `RunIdentity` deliberately does not encode `AgentCategory`, a process
+or workflow-script stream has no agent to derive from, and remoteness is a
+registry lookup the fold must never perform; the flow rows in C2 (D4); the
+session facts in C2. Live-only, never persisted: deltas, focus and selection,
+anything the PRD's `Surface` owns. `setActiveStream` no longer exists.
+
+Redaction has three owners and they are not interchangeable.
+
+- **Trace rows on the stream aggregate, error payloads, and approval payloads
+  are secret-scrubbed at the publish boundary, before the row is written**,
+  the way `TexraTranscriptRecorder` scrubs them today (`redactSecrets`,
+  `src/logger/redaction.ts:5-14`). A secret in one of those rows would be on
+  disk for the retention window and in every export.
+- **D4 rows on the execution aggregate are byte-exact and never scrubbed.**
+  Anthropic thinking blocks must go back to the provider byte-identical or
+  signature verification fails on replay (`src/agent/modelHandlers/anthropic/modelHandlerAnthropic.ts:1372`),
+  and a tool input or result the model already reasoned over must not diverge
+  on resume. Today's checkpoint is unredacted for the same reason (single-owner
+  §6); exposure is unchanged, and retention (C9) shortens it from "forever"
+  under D8 to the retention window. These rows are not nulled on COMPLETED:
+  D8 keeps completed runs resumable, and after the fold collapse they are the
+  only copy of the conversation.
+- **Every transport framer to a renderer process, and every export, applies
+  display redaction and truncation** to what it forwards. The in-process hub
+  is trusted; nothing outside the process ever receives a byte-exact D4
+  payload. **Display truncation and bounding are otherwise the fold's**, and
+  only those.
+
+One residue to name plainly. Until the view-state PRD collapses the fold
+(events straight to `TranscriptRow`), message text is durable twice: in the
+redacted trace `message` rows on the stream aggregate that the transcript fold
+consumes, and in `model.message`. That is today's duplication moved into one
+table with one lifecycle; the collapse deletes the trace copy and the display
+fold then reads `model.message` with redaction applied at fold time. The
+collapse is a named step, not an open end.
+
+**C4. Text durability.** There are no partial-text checkpoints. The completed
+message event is the only writer of message text; streaming text lives in
+memory until then. Kill -9 loses the in-flight message, which is what all four
+peers accept and what the SQLite PRD's acceptance already allowed. This
+rejects the PRD's `stream.text` offset checkpoints: they are a second writer
+for one datum with a render-time `max()` to reconcile.
+
+**C5. Owner id.** `owner_id` names a process: pid plus process start time. The
+`Database` layer derives it at insert; no caller passes it, so it cannot be
+forged or forgotten. It is stamped on `event_sequence` (who may append) and on
+every event row (who did). Liveness is `kill(pid, 0)` plus the start-time
+check, probed per distinct owner, never per run; there are a handful of owners
+in any workspace.
+
+**C6. Write path.** `publish(event)`: if durable, under one `Semaphore.make(1)`
+per database, `BEGIN IMMEDIATE`, read `event_sequence`, assign `seq`, `INSERT`
+both rows, `COMMIT`; then `PubSub.publish` to the in-process hub. Live-only
+events skip the first step. The write is in the publish path, never in a
+subscriber. The hub is unbounded; no subscriber fiber ever awaits a remote;
+backpressure lives at each transport framer.
+
+**C7. Read path.** Three queries and one level, nothing else:
+
+- `all(fromCommit)`: every event with `commit > fromCommit` in commit order.
+  The live tail for surfaces that watch a whole session, and the frozen
+  NDJSON projection, which needs every row including transcript rows of
+  unsubscribed streams.
+- `listing()`: the cold listing hydrate of C8, one indexed query: the
+  latest-of-type row per aggregate over `(aggregate_id, type, seq)` for the
+  listing fact types, plus the outstanding-approval set, **returned in
+  `commit` order**. SQL row order is otherwise undefined, and a deleted
+  stream's listing rows are its `run.start` and its `stream.removed`; folded
+  in the wrong order the tombstone would land first and the later
+  `run.start` would recreate the stream. It never returns transcript rows.
+  Explicit rather than an overload of `all(0)`.
+- `aggregate(aggregateId, fromSeq)`: one aggregate's events from `seq`. The
+  transcript tier, cold hydration, and resume. A transcript subscriber names
+  aggregates, not streams: the stream aggregate plus its execution aggregate
+  (via the `run.start` edge), each with its own `fromSeq`.
+- `PRAGMA data_version`: changes when another connection commits. It is
+  connection-local and does not move for the connection's own commits, so it
+  is a wake trigger only, never a level in the `commit` number space.
+  Cross-process wake is a cheap poll of it followed by `all(cursor)`;
+  in-process wake is the hub. There is no other cross-process signal, and
+  none is needed.
+
+Cold hydration opens the hub subscription first, then reads
+`aggregate(id, 0)` for each aggregate it names, then
+`Stream.concat(replay, live)` with duplicates dropped by `seq` per aggregate.
+A surface's cursor is a `commit` value; an aggregate's settled boundary is a
+`seq` value.
+
+**C8. Two-tier residency.** Listing facts are latest-of-type lookups over the
+`(aggregate_id, type, seq)` index, or a `GROUP BY` over `(type, commit)` for
+the whole session; they never fold transcripts. One listing fact is a set,
+not a latest: outstanding approvals are every `approval.requested` on the
+aggregate without a matching `approval.resolved`, keyed by request id, over
+the same index, because a stream with two outstanding requests would lose the
+older one the moment the newer resolves. Transcript rows fold only for
+aggregates a surface has subscribed to via `aggregate(id, fromSeq)`, and the
+fold drops that tier when the last subscriber leaves. This is the rule that
+keeps #9952 from returning.
+
+**C9. Existence, deletion, retention.** `run.start` creates. Every aggregate
+records its **owning lifecycle**, and only that, in `event_sequence.parent_id`
+when it is created: an execution's parent is its stream (from the `run.start`
+edge); an inquiry aggregate's parent is the stream that opened it; a child
+stream's `parent_id` is NULL, because a child stream is its own lifecycle
+that survives its parent's deletion (the fold re-roots it and
+`detachActiveChildren` lets it run on), and the parent-child edge stays on
+`run.start`'s `parentStreamId` payload as today. One semantic for the column,
+no exception clause. `stream.removed` is the last row on the stream's own
+aggregate and, in the same transaction, sets `event_sequence.closed = 1` on
+that aggregate **and on every dependent reachable through `parent_id`**, one
+recursive `UPDATE`, so nothing the removed run owns stays writable and
+retention can never orphan a dependent.
+The publisher's fence checks only the target aggregate's own `closed` flag in
+the write transaction it already holds, so an append for a removed aggregate
+is refused in O(1). Physical removal is retention only: one
+`DELETE FROM event_sequence WHERE closed = 1 AND ...` cascades the rows of a
+closed stream together with its closed dependents. Retention is a setting
+with a default, not "until retention"; the value is owner decision 6.
+
+**C10. Nothing derived is persisted, with one named exception.** No summary
+table, no projection table, no status column, no `run_state` summary on an
+executions row. The exception is the fold snapshot stored as an event:
+`flow.snapshot` on the execution aggregate, written at turn or round end,
+before WAITING, and whenever bytes appended since the last snapshot exceed its
+size (the runtime proposal's byte-amortized rule). It is a base point for the
+resume fold, in the same table with the same lifecycle as the rows it
+summarizes, rebuildable from them, and never queried by the listing tier.
+Codex's `Compacted.replacement_history` is the precedent. If any other query
+is measured too slow, add an index; if an index does not fix it, and only
+then, a derived row with a rebuild rule, recorded here as a contract change.
+
+**D4 (owner-ratification marker; the names are owned by the runtime doc).**
+The model-visible conversation and the resume state are durable rows using
+the vocabulary of `2026-09-04-agent-runtime-on-effect.md` §2.1, which owns
+those names and decides each row's aggregate:
+`model.message` carries each provider-native message as appended, including
+thinking signatures and provider ids; `model.compaction` the full replacement
+array when a handler rewrites history; `tool.intent` and `tool.result` the
+barrier dispatch and each settled call; `flow.step` the round and turn
+boundaries; `flow.snapshot` the family's full Zod state under the C10 rule.
+Resume is `foldRunState`: the latest `flow.snapshot` plus the rows since it,
+at most one turn or one round. This is what makes the checkpoint a fold and
+ends the double storage of run content. It is the one item in this contract
+the owner has not yet ratified.
+
+### 6.2 Stages
+
+Stages are lanes on one branch and ship in one release (§8).
+
+| Stage | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Deletes in the same release                                                                                                                                                              | Companion step |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| 0     | Spike: `node:sqlite` on the CLI floor (raise `engines.node` to `>=22.13.0`, `packages/cli/package.json:37`), Electron 44 (`packages/desktop/package.json:33`), VS Code 1.125 extension host; WAL with two hosts on one bucket; kill -9 mid-transaction; `PRAGMA data_version` across processes. OpenCode's `packages/effect-sqlite-node` (MIT, ~200 LoC) is the starting client                                                                                                                              | nothing                                                                                                                                                                                  |                |
+| 1     | C1 schema and indexes; Effect `Database` layer parameterized by `WorkspaceRoots`; the C6 publisher behind `SessionEventHub`; the architecture test that fails any persistence write outside the database or the documents/export allowlist, and its sibling that fails a raw read of the four byte-exact row types outside `RunLedger` and the fold (or, better, a `Database` layer that only exposes those rows through `RunLedger`, so the query is unconstructible elsewhere and the test is unnecessary) | nothing                                                                                                                                                                                  |                |
+| 2     | Listing tier: launcher history, resume picker, sessions rail, and the executions tool answered by C7/C8 indexed queries                                                                                                                                                                                                                                                                                                                                                                                      | `streamLogSummaries/`, the mtime heuristic, `executionListing.ts` directory walks, `readExecutionStreamIndex`, `listExecutions` scans, the PR2 background hydration pass                 | S4, S5         |
+| 3     | C3 durable event set; transcript fold on hydrate reusing the recorder's live fold; `StreamLog` in-memory contract and `store-public-surface-baseline.json` unchanged                                                                                                                                                                                                                                                                                                                                         | the 300 ms whole-array rewrite, `writeStream`/`hydrateStream`/`parsePersistedEntries`, `preservedRawEntries`, `seqNo` renumbering, the 50 KiB truncation and `toolOutput/` spill         |                |
+| 4     | Stream-state fold on hydrate (usage per round, work plan, outputs, missing outputs, compile failures) from the same events `attachSessionEvents` folds live today                                                                                                                                                                                                                                                                                                                                            | six sidecar files, `SidecarWriteCoordinator`, `StagedDeletionCoordinator`, `streamData.deleting`, `streamSnapshotRead.ts`, `streamDataPaths.ts`, `DiskState`, `probeRunPhase`/`runFacts` |                |
+| 5     | D4, delivered by `2026-09-04-agent-runtime-on-effect.md` as lane D: the flow rows of C2, `RunLedger`, `foldRunState`; resume as a fold; `deriveResumability` becomes "a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8"; the importer converts each `flow_<id>.json` into the execution's first `flow.snapshot`, bytes unchanged; both flow families and the workflow-script journal convert in one PR, no interim checkpoint column                      | per-node whole-record rewrite in `persistedFlow.ts:505-509`, `resumability.ts` full parse, `flow_<id>.json`, `src/agent/node/`, `completedRunArchive`'s conversation reconstruction      | S7             |
+| 6     | C5 and C9: owner id derived at insert, `INSERT` uniqueness as the claim, `stream.removed` tombstones, retention as one statement                                                                                                                                                                                                                                                                                                                                                                             | `executionLeases/`, the v2 shadow, `readClaims` readdir, orphan sweeps, `executionLocks` remnants, `child-*.json` edge files                                                             | S3, S6         |
+| 7     | Retire the importer, `*.pre-sqlite-backup` handling, and their fixture tests: no earlier than 90 days and two shipped releases after the cutover release                                                                                                                                                                                                                                                                                                                                                     | the importer                                                                                                                                                                             |                |
+
+Rules restated because they are the parts migrations get wrong:
+
+- **Never persist a delta** (C4).
+- **Nothing derived is persisted** (C10). Folds are rebuilt from events on
+  every hydrate; there is no rebuild step because there is nothing to rebuild.
+- **Boot does no history work.** After Stage 2 every list is a query; the
+  companion's S1 removes repair and sweeps from `waitUntilReady` and Stage 2
+  removes their reason to exist.
+- **The frozen surfaces stay frozen** for the cutover. `StreamLogStore` and
+  `StreamSnapshotStore` keep their public Promise-based surfaces and the
+  `StreamLog` delta contract; the engine changes behind them. Collapsing the
+  two-step fold (events to entries to rows) into one is the view-state PRD's
+  step after the merge.
+
+### 6.3 Elimination ledger
+
+The owner's standing rule is cut before add. Sizes are `wc -l` at
+`1fbcaa0108`; post-cutover sizes are estimates, deletions are not.
+
+**Gone (concept and code both disappear):**
+
+| Element                                                                                                           | Today        | Why it no longer needs to exist                                                                                |
+| ----------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `StreamSummaryCacheStore` + `streamLogSummaries/` + mtime staleness                                               | 363          | listing is an indexed query (C7, C8)                                                                           |
+| `StagedDeletionCoordinator` + `streamData.deleting/`                                                              | 665          | deletion is one cascade (C9)                                                                                   |
+| `SidecarWriteCoordinator`                                                                                         | 191          | the per-file mutex is what a transaction is                                                                    |
+| `streamSnapshotRead.ts`, `streamDataPaths.ts`, the six sidecar files, `DiskState`                                 | 353+         | stream state is a fold on hydrate (Stage 4)                                                                    |
+| `executionListing.ts` directory walks, `readExecutionStreamIndex`, PR2's background hydration                     | 442+         | one query                                                                                                      |
+| `restartRepair.ts`, `runClassification.ts` (companion S1 to S3)                                                   | 451          | boot does no history work; phase is a fold                                                                     |
+| `resumability.ts` full-checkpoint parse                                                                           | 120          | a `flow.snapshot` exists and no live owner holds the lease, outcome-independent per single-owner D8 (D4)       |
+| `SessionStores.ts` orphan sweeps                                                                                  | ~500 of 1019 | orphans cannot exist under cascade                                                                             |
+| File leases: `executionLeases/`, v3 claims, v2 shadow, `readClaims`                                               | ~600 of 848  | `event_sequence.owner_id` + `INSERT` uniqueness (C5); the shadow dies now because hosts ship the same version  |
+| `child-<id>.json` edge files (6,664 in TNLean) + `childRunPersistence.ts`                                         | 19 + 48      | the parent edge is on `run.start`                                                                              |
+| 50 KiB entry truncation + `toolOutput/<entryId>.txt` spill (`runTrace.ts:68-98`, `spillArtifacts.ts`)             | ~110         | a row holds the payload                                                                                        |
+| Whole-record checkpoint rewrite, `flow_<id>.json`                                                                 | ~300 of 531  | `model.message` rows + byte-amortized `flow.snapshot` (D4)                                                     |
+| `completedRunArchive.streamLogEntriesToConversation`                                                              | ~100 of 343  | the conversation is `model.message`; read it                                                                   |
+| `ExecutionMeta` `schemaVersion` prefault arms, `meta.json` read-modify-write, `executionLifecycle` outcome writes | ~400         | outcome is a `run.end` event                                                                                   |
+| The 0.40.x continuation UUID compatibility writer (#11731)                                                        | small        | same-version hosts                                                                                             |
+| Five parent-edge copies per stream (stream-lifetime survey §2.D)                                                  | scattered    | one field on `run.start`                                                                                       |
+| Run content stored twice; seven transcript-like representations                                                   | n/a          | one durable set; folds: entries, `TranscriptRow`, stream state, resume conversation; `TraceDocument` as export |
+
+**Folded (the concept survives in a smaller form):**
+
+| Element                                            | Today | After (estimate) | Becomes                                                                                       |
+| -------------------------------------------------- | ----- | ---------------- | --------------------------------------------------------------------------------------------- |
+| `StreamSnapshotStore`                              | 2,119 | ~300             | the stream-state fold plus its in-memory `StreamRecord`; all file I/O, seeding, provenance go |
+| `StreamLogStore`                                   | 1,491 | ~500             | residency leases and delta emission (frozen UI contract); every persistence path goes         |
+| `TexraTranscriptRecorder`                          | 905   | ~450             | the one entries fold, run live and on hydrate                                                 |
+| `ExecutionKVStore` + `executionLifecycle`          | 761   | ~100             | typed accessors over C7 queries                                                               |
+| `executionLease.ts` + `leaseOwnerLiveness`         | 946   | ~120             | owner-id derivation and one liveness probe                                                    |
+| `SessionResumeRetrieval` + CLI `toolUseResumeData` | 293   | ~80              | one `stream()` read and the resume fold                                                       |
+| `KVStore` + `StorageFS`                            | 113   | 113              | kept for `state.json` and `config.json` only                                                  |
+
+**Kept, deliberately:** `StreamLog` and `StreamLogDelta` (594, the UI contract
+during the cutover), `TranscriptRow` and the host folds (UI), `TraceDocument`
+and the trace-viewer schema (export format), `conversationFormat.ts` (display
+formatting), the Zod schemas for every payload stored as `data`.
+
+Net: roughly 12.5k lines in scope; roughly 1.7k survive folded, plus about
+1.5k new (schema, `Database` layer, publisher, importer). The reduction is
+near 9k lines and, more to the point, seven mechanisms (summary cache, staged
+deletion, sidecar mutex, directory scans, repair, spill, projection rebuild)
+that existed only to compensate for the missing primitive.
+
+## 7. Effect at the substrate and the fold
+
+The owner wants Effect. The repo already has it: `effect@4.0.0-rc.112` in the
+root and `packages/agent`, the `@effect/language-service` plugin, and an
+AGENTS.md section, with one production module (`src/auth/oauth`). OpenCode is
+on the same major (`4.0.0-beta.83`) and shows a shape worth copying exactly:
+
+- **Effect owns services, storage, and the event core; renderers never see
+  it.** OpenCode's core is 233 of 316 files in Effect; its TUI is 6 of 152,
+  desktop 2 of 110, web app 5 of 364. One `ManagedRuntime` over the layer
+  graph is the boundary (`packages/opencode/src/effect/app-runtime.ts:57-134`).
+- **The storage layer is where it pays.** `db.transaction(fn, { behavior:
+"immediate" })` with savepoints for nesting and the connection carried in
+  fiber context (`effect-drizzle-sqlite/src/effect-sqlite/session.ts:118-200`);
+  services as `Context.Service` classes with `Layer.effect`; errors as
+  `Schema.TaggedErrorClass`; named spans via `Effect.fn`. This is exactly the
+  code that the cutover would otherwise hand-roll as promise plumbing and
+  `p-queue` mutexes.
+- **Directly reusable:** `packages/effect-sqlite-node` (MIT) is an Effect
+  `SqlClient` over `node:sqlite` selected by a `#sqlite` import condition; the
+  vendored Drizzle adapter is about 3.4k lines. Copy, do not depend: OpenCode
+  publishes neither.
+
+Scope in this program:
+
+- Stages 1 to 6 are written in Effect: `Database` layer, `SqlClient`, Drizzle
+  schema, the C6 publisher, the C7 read path, and the hydrate folds.
+- One `ManagedRuntime` per process; the storage layer lives in it behind the
+  frozen store surfaces, so callers in `SessionHandle`, the hosts, and the
+  tools keep calling Promise methods. **Renderer components stay Effect-free**:
+  Ink and Lit components never import `effect` and read view state through
+  one signal bridge. The processes themselves are not the boundary; the
+  companion view-state proposal
+  (`2026-09-03-one-view-state-three-renderers.md` §12) runs the same session
+  fold Layer in every process that shows a session, webview and Electron
+  renderer included, because an Effect fold in Node beside a hand-rolled one
+  in the browser would be the dual system this program removes.
+- Two touch points with that proposal: `SessionEventHub` becomes the PubSub
+  that the C6 publisher feeds, and the `Database` layer is parameterized by
+  its `WorkspaceRoots` layer (one database per session root, never the
+  process singleton).
+- **Publisher invariants.** The durable write is in the publish path, before
+  fan-out, never in a subscriber: `publish(event)` = if durable, assign `seq`
+  and `INSERT` under `BEGIN IMMEDIATE`, then `PubSub.publish`; seq assignment,
+  insert, and publish run under one `Semaphore.make(1)` so seq order and
+  insert order cannot diverge. The PubSub is unbounded: a bounded one parks
+  the publisher on the slowest subscriber and would stall the write path on a
+  stalled webview, and sliding or dropping loses durable events. No subscriber
+  fiber ever awaits a remote; backpressure lives at each transport framer
+  (`groupedWithin` then `Stream.buffer`; overflow tears the subscription down
+  and resubscribes through `events(streamId, fromSeq)`). Cold hydration opens
+  the live subscription before the replay read, then `Stream.concat(replay,
+live)`, or there is a gap.
+- **Zod stays the only data schema; Effect Schema is not used at all.** Event
+  payloads are Zod-validated at the boundary and stored as JSON `data`. Errors
+  are `Data.TaggedError` (verified present in `effect@4.0.0-rc.112`): it gives
+  `_tag`, yieldability, and `catchTag` without Schema; `Schema.TaggedError` is
+  already renamed on Effect main so the pinned name breaks on the next bump;
+  and Schema alone measures about 188 KB minified (56 KB gzipped) in every
+  webview bundle. Error payloads cross host bridges as plain tagged objects
+  under the Zod union. The zod-native campaign, structured output, and the
+  `shared/schemas` ratchets depend on Zod; moving them is a separate campaign
+  with its own accounting, not a rider on this one.
+- **Two v4 vocabulary traps** (verified against the pinned package):
+  `Layer.scoped` does not exist, `Layer.effect` strips `Scope`; and Effect
+  code must never call the ALS-backed `currentSession()`, because the
+  scheduler interleaves fibers; `WorkspaceRoots` is read from `Context`.
+- The agent runtime, model handlers, and flows are not migrated to Effect in
+  this release. Two cutovers at once is the long pain again.
+
+The SQLite PRD §8 non-goal is reversed to this scoped form; the reversal is
+recorded there and in §10.
+
+## 8. Process: one cutover, no dual system
+
+The owner's constraint is that the migration be efficient and never run two
+systems. The SQLite PRD as written violates the second: eight stages, each its
+own PR family, its own importer, its own `*.pre-sqlite-backup` directory, its
+own verification pass, and its own 90-day retirement clock. That is seven
+cutovers and up to seven simultaneous legacy readers. OpenCode V1 did one
+cutover and deleted the importer; Codex did none and carries read-repair
+forever. This proposal does one.
+
+**Invariant.** On `main`, at every commit, each datum has exactly one writer
+and one reader. Before the cutover merge that is the file store; after it,
+the database. There is no commit on `main` where both exist for the same
+datum.
+
+**How the branch avoids a dual state while being built in parallel.** The
+store public surfaces are frozen and ratcheted, so each lane replaces the
+engine behind one surface and is verified by the existing callers and
+architecture tests. Lanes never touch each other's files; one integration
+worktree runs typecheck, lint, the ratchets, and the importer fixture.
+Concurrency cap is three worktrees; lane agents commit and report SHAs
+(house rules in `AGENTS.md` and the recorded workflow lessons).
+
+| Lane | Owns                                                                                                       | Depends on |
+| ---- | ---------------------------------------------------------------------------------------------------------- | ---------- |
+| A    | Stage 0 spike, then Stage 1: schema, Effect storage layer, runtime boundary, architecture test             | nothing    |
+| B    | Stage 3 behind `StreamLogStore` + `TexraTranscriptRecorder`                                                | A          |
+| C    | Stage 2 + Stage 4 behind `StreamSnapshotStore` and the summary tier                                        | A          |
+| D    | Stage 5 + Stage 6 behind `ExecutionKVStore`, `persistedFlow`, `executionLease`, `resumability`             | A          |
+| E    | The importer (one, covering every store), the deletion sweep of file machinery, `WORKSPACE_STORAGE_LAYOUT` | B, C, D    |
+
+**The importer.** One function, run when a bucket is opened and any legacy
+app-state file exists. It has one job: turn files into events. Per stream, in
+the order of the `streamLogs/` listing (the registration authority today,
+`StreamLogStore.has()` :485): a synthesized `run.start` from `meta.json` and
+the sidecar descriptor (identity nullish where none exists); one
+`legacy.entry` event per persisted `StreamLogEntry`, in file order; sidecar
+facts as their corresponding events stamped with file timestamps; the
+checkpoint as the execution's first `flow.snapshot` (whole `shared`, bytes
+unchanged, per the runtime proposal §3); the execution outcome as `run.end`.
+Leases are dropped: a lease older than the process that wrote it is dead by
+definition under single-owner.
+
+**The cutover is file-level, not a directory rename** (SQLite PRD Stage 5
+rules this). `executions/<id>/` holds user-facing generated artifacts beside
+the app JSON (`output.xml`, workflow outputs that `listRunGeneratedFiles` and
+`/executions/{id}/files` resolve at the execution path), and those stay
+exactly where they are. The importer moves only the app-state files it has
+imported (`meta`, `config`, `report`, `result-meta`, `turn-state`,
+`child-*`, `todos`, `workspace-files`, `flow_<id>`, `toolOutput/`) into a
+mirror under `pre-sqlite-backup/`, then **re-runs the import over the moved
+files**: inserts are keyed and idempotent, so the second pass folds exactly
+the writes that landed between the first read and the move, which closes the
+read-then-move race without a mirror. `streamLogs/`, `streamData/`,
+`streamLogSummaries/`, and `executionLeases/` are app state throughout and
+move as whole directories. Progress is one line per thousand rows; the
+measured 7 s parse cost for 3,125 checkpoints (companion §1) bounds the worst
+bucket at low minutes, once.
+
+Checkpoints are imported eagerly, not lazily. A lazy path would leave
+`flow_<id>.json` as a live read arm for months, which is a dual system. The
+cost is one pass over 3.0 GB in the largest bucket; the payoff is that after
+the importer runs there is exactly one shape of resume data.
+
+**Version skew.** A hard cutover means all three hosts ship the same version.
+A user with the new CLI and an older extension on the same workspace has the
+extension writing files while the CLI reads rows. The importer handles this
+without a mirror: it runs on every open while any legacy app-state file exists,
+so a stale host's writes are folded the next time a current host opens the
+bucket. The changelog says older hosts on a migrated workspace will not see
+new runs until updated. This is the one honest cost of short pain and it is
+accepted.
+
+**Deletion is in the cutover, not after it.** The release that adds the
+database removes everything in the §6.3 "Gone" table, and
+`WORKSPACE_STORAGE_LAYOUT` shrinks to `{ texra.db, texra.db-wal, texra.db-shm,
+original, memories, state.json, config.json, _workspace.json, pasted,
+recordings }` plus the per-execution artifacts area, which is user documents,
+not app state. If those deletions are not in the cutover PR the pain
+was not short, it was deferred.
+
+**Acceptance, before merge, on a copy of the TNLean bucket:**
+
+- import completes once, in low minutes, and a second open imports nothing;
+- `texra chat` shows the prompt in under two seconds with 4,148 executions
+  present;
+- kill -9 during streaming loses at most the current chunk window and the
+  next open needs no repair pass;
+- deleting a stream is one transaction and no state holder observes a
+  half-deleted stream;
+- all ratchets green; no store public-surface change.
+
+**Ordering against `main`.** The companion's S1 to S3 land on `main` first, as
+pure deletions of boot work; they shrink the cutover and give users the
+48-second fix now. The cutover branch is cut after them. Nothing else touches
+`src/transcript/`, `src/agent/storage/`, or `persistedFlow.ts` on `main`
+while the branch is open, or the merge pays for it twice.
+
+**Effort.** Stage 0 is half a day. Lanes A to E are one to two focused weeks
+with the parallel-agent workflow, judged against OpenCode's +5.8k/-0.9k over
+61 files for a simpler data model. The deletion list is about 11k lines.
+
+## 9. Deliberately not proposed
+
+- An append-only JSONL journal beside the files, or beside the database. The
+  event table is the journal (§5).
+- Persisted projection tables, a summary table, or a status column. They are a
+  second copy with a lifecycle; C10 says when one may ever be added.
+- Partial-text checkpoints (`stream.text`). One writer per datum (C4).
+- A cache or index in front of the existing directories. It keeps the
+  O(history) scan and adds invalidation.
+- Lazy checkpoint import. It is a live legacy read arm, which is a dual system
+  by another name (§8).
+- Collapsing the two-step fold (events to entries to `TranscriptRow`) inside
+  the cutover. It touches every renderer in three hosts; it is the view-state
+  PRD's move after the merge, and by then it is a pure refactor of two
+  functions with zero storage impact.
+- Migrating the agent runtime, flows, or model handlers to Effect in this
+  release, or moving schemas from Zod to Effect Schema (§7).
+- Any new lint rule beyond the one architecture test. The rule is one
+  sentence: all app-owned durable state lives in the database.
+- Publishing this document. `proposals/**` is excluded by
+  `docs/.vitepress/publicDocs.js:42`.
+
+## 10. Decisions requested from the owner
+
+1. Ratify the target in §5 and the contract in §6.1: two tables, folds
+   everywhere, nothing derived persisted. Mark
+   `2026-08-18-session-event-journal.md` absorbed and
+   `2026-08-16-sqlite-workspace-state.md` amended (§3.2, §5 staging, §8 Effect)
+   in their status lines, each with a pointer here.
+2. Ratify D4: the runtime proposal's flow rows (`model.message`,
+   `model.compaction`, `tool.intent`, `tool.result`, `flow.step`,
+   `flow.snapshot`) are the resume representation, so resume is a fold and run
+   content is stored once. Naming is owned there; the snapshot exception is
+   owned here (C10).
+3. Rule the sidecar-collapse contradiction (memory PRD :414-418 versus SQLite
+   PRD §1): this proposal folds the six files on hydrate and carries the
+   version-skew risk through the re-run-on-open importer instead.
+4. Confirm the process in §8: one cutover release, one importer, eager
+   checkpoint import, deletions in the same release, same-version hosts.
+5. Confirm the Effect scope in §7: substrate and fold, renderer components
+   Effect-free, Zod the only data schema.
+6. Set the retention default (C9). Proposed: 90 days for streams with a
+   terminal outcome, never for streams without one, as a setting.
+7. Answer the SQLite PRD's open question 2 (are `memories/` documents or
+   rows). This proposal assumes documents, so they stay files.
+8. File one tracking issue for the program; none exists today.
+
+## 11. Verified
+
+Read first-hand at `1fbcaa0108`: `src/common/storage/KVStore.ts`,
+`src/common/storage/storageLayout.ts`, `src/transcript/StreamLogStore.ts`
+(:43, :315-320, :474-485, :1229), `src/transcript/StreamSummaryCacheStore.ts`
+(:280-303), `src/agent/storage/resumability.ts`, `src/agent/storage/executionListing.ts`,
+`src/agent/runtime/SessionHandle.ts` (:271-335, :389), `src/agent/runtime/restartRepair.ts`,
+`src/platform/interfaces.ts:123`, `packages/cli/package.json:37`,
+`packages/desktop/package.json:33`, root `package.json:63,132`, `AGENTS.md:690-720`.
+Docs read in full: `docs/prds/2026-08-11-transcript-memory-architecture.md`,
+`docs/prds/2026-08-16-sqlite-workspace-state.md`,
+`docs/prds/2026-08-18-session-event-journal.md`,
+`docs/proposals/2026-08-23-single-owner-sessions.md`,
+`docs/proposals/2026-09-02-simplification-survey-stream-memory-round2.md`,
+`docs/proposals/2026-09-02-stream-lifetime-and-cancellation-simplification.md`,
+`docs/proposals/2026-09-03-startup-repair-is-the-wrong-shape.md`. GitHub state
+and closing comments checked on #9945, #9947, #10773, #10809, #10820, #10841,
+#10878-#10885, #11014, #11731, #11771, #10753. On-disk counts from
+`~/.texra/workspace-storage/` on 2026-09-03 with `ls`, `du`, `find`, and a
+Python parse of one transcript and one checkpoint. Peer sources: Claude Code
+readable snapshot (`src/utils/sessionStorage.ts`, `src/types/logs.ts`,
+`src/services/compact/compact.ts`); Codex at `728cb12fe57` (2026-09-03;
+`codex-rs/rollout/src/{recorder,policy,list,model_context,reverse_jsonl_scanner}.rs`,
+`codex-rs/state/src/{lib,sqlite,extract}.rs`, `codex-rs/thread-store/`);
+OpenCode at `f12e14cf` (2026-09-03; `specs/v2/session.md`,
+`specs/v2/schema-changelog.md`, `packages/core/src/event.ts`,
+`packages/core/src/event/sql.ts`, `packages/core/src/session/{sql,projector,message-updater,context-epoch,history,input}.ts`,
+`packages/core/src/database/{database,migration,sqlite.bun,sqlite.node}.ts`,
+`packages/effect-sqlite-node/src/index.ts`, `packages/effect-drizzle-sqlite/`,
+`packages/opencode/src/effect/app-runtime.ts`; PRs #10597, #13874, #30461,
+#14326, #16884), built with `bun install` and run from source; its
+`opencode-local.db` schema dumped with `sqlite3 .schema` to confirm the
+`event`, `event_sequence`, `session_message`, `session_input`, and
+`session_context_epoch` tables. Delegated sweeps produced the inventories;
+every line reference used in §1, §3, §4, and §6 was re-read here before
+citation.
