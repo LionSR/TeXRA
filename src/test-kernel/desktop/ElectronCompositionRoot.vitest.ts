@@ -201,13 +201,6 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
-  it('uses the home directory as the no-workspace skill discovery fallback', async () => {
-    const source = await readDesktopPlatformIndex();
-
-    expect(source).toContain("cwd: workspacePath ?? app.getPath('home'),");
-    expect(source).not.toContain('cwd: workspacePath ?? userDataPath,');
-  });
-
   it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {
     const { resolveDesktopDataRoot } = await loadSourceModule(
       '@desktop/main/platform/paths',

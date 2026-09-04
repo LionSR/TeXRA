@@ -325,11 +325,36 @@ body[data-desktop-platform='darwin'] .task-sidebar-brand {
   line-height: 1;
 }
 
+.task-project-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+}
+
 .task-project-row {
   display: block;
   width: 100%;
   margin-top: 4px;
   color: var(--wa-color-text-normal);
+}
+
+.task-project-item .task-project-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: 0;
+}
+
+/* Shown while the row is hovered or the control itself has focus. */
+.task-project-close {
+  flex: 0 0 auto;
+  opacity: 0;
+  color: var(--wa-color-text-quiet);
+}
+
+.task-project-item:hover .task-project-close,
+.task-project-item:focus-within .task-project-close {
+  opacity: 1;
 }
 
 .task-project-row::part(base) {

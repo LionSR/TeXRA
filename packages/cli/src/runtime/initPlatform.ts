@@ -389,7 +389,6 @@ export async function initCliPlatform(
 
   initializeNodeRuntimeSkills({
     host: 'cli',
-    cwd: context.cwd,
     resourcesPath: context.resourcesPath,
     skillSourceOptions: context.skillSourceOptions,
   });

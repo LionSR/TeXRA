@@ -32,8 +32,9 @@ refresh after a deliberate UI change:
 
 ## Workspace folder
 
-Each launch passes `--texra-workspace-path <tmpdir>` so the app doesn't pop the
-"open folder" dialog. Pass `workspacePath` to `launchTexraApp()` if a
+Each launch seeds a temp folder into the profile's remembered papers
+(`texra.desktop.openPapers` in `state/global.json`) so the app shows a paper
+instead of the empty state. Pass `workspacePath` to `launchTexraApp()` if a
 specific layout is required.
 
 ## Cross-package imports

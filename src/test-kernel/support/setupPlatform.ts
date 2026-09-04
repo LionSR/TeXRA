@@ -5,7 +5,7 @@
  * workspace roots) before every test file (see `setupFakePlatform.ts`), so
  * most suites need nothing else. Suites that need custom options/overrides (a
  * seeded workspace, a real `nodeFilesystem`, stubbed secrets, etc.) should
- * call `setupPlatform(...)` once — at module scope or inside a `describe` —
+ * call `setupPlatform(...)` once, at module scope or inside a `describe`,
  * instead of hand-wiring `initPlatform(...)` in a `beforeAll`/`beforeEach`.
  * It installs the requested platform before each test in the current suite
  * and restores the suite-default fake platform afterward, so overrides never
@@ -44,7 +44,7 @@ export function createFakeHost(
 
 /**
  * Installs a fake host right now. `initPlatform` is restricted to composition
- * roots by lint, so this is the one place test helpers reach for it — suites
+ * roots by lint, so this is the one place test helpers reach for it; suites
  * needing an ad hoc, one-off install (rather than the standard per-test
  * `setupPlatform` wiring below) call this instead.
  *
@@ -72,7 +72,7 @@ export async function installPlatform(
 /**
  * Installs a fake host for every test in the current suite.
  *
- * Pass `FakePlatformOptions`/`FakeHostOverrides` for the common case — a
+ * Pass `FakePlatformOptions`/`FakeHostOverrides` for the common case: a
  * fresh fake host is built for every test. Pass a builder function instead
  * when the host must be computed per test (a real `nodeFilesystem`, a
  * per-test temp dir, captured state from an earlier step, etc.).

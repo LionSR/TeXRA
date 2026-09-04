@@ -7,8 +7,16 @@ import {
   runInSession,
   withRunContext,
 } from '@agent/runtime/RunContext';
-import { currentSession, defaultSession } from '@agent/runtime/SessionHandle';
+import {
+  currentSession,
+  defaultSession,
+  settleLiveSessionExecutions,
+} from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import {
+  acquireFreshExecutionLease,
+  ownsExecutionLease,
+} from '@agent/storage/executionLease';
 import { platform } from '@platform/platform';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -28,11 +36,29 @@ import { createTestLaunchContext } from './launchContextTestUtils';
 
 const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn().mockResolvedValue({ ok: true }),
+  /** Storage root each host-exit terminal write resolved, by execution id. */
+  settledUnder: new Map<string, string>(),
 }));
 
 vi.mock('@agent/storage', () => ({
   finalizeRun: storageMocks.finalizeRun,
 }));
+
+vi.mock('@agent/storage/executionLifecycle', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@agent/storage/executionLifecycle')>();
+  const { workspaceRoots } = await import('@platform/workspaceRoots');
+  return {
+    ...actual,
+    finalizeRun: vi.fn(async (input: { executionId: string }) => {
+      storageMocks.settledUnder.set(
+        input.executionId,
+        workspaceRoots().storage,
+      );
+      return { ok: true };
+    }),
+  };
+});
 
 describe('session isolation', () => {
   it('currentSession() resolves the active run context session, default otherwise', () => {
@@ -84,6 +110,53 @@ describe('session isolation', () => {
       expect(platform().storage.getStoragePath()).toBe(
         '/workspace/.texra/storage',
       );
+    } finally {
+      sessionA.dispose();
+      sessionB.dispose();
+    }
+  });
+
+  it('the host-exit drain settles each session under its own root, outside any scope', async () => {
+    const sessionA = createTestSession({
+      roots: createFakeWorkspaceRoots({
+        workspacePath: '/papers/a',
+        storagePath: '/storage/a',
+      }),
+    });
+    const sessionB = createTestSession({
+      roots: createFakeWorkspaceRoots({
+        workspacePath: '/papers/b',
+        storagePath: '/storage/b',
+      }),
+    });
+    const live = [
+      [sessionA, 'exec:drain-a' as ExecutionId],
+      [sessionB, 'exec:drain-b' as ExecutionId],
+    ] as const;
+    try {
+      for (const [session, executionId] of live) {
+        await runInSession(session, async () => {
+          await acquireFreshExecutionLease(executionId);
+          session.executions.track(
+            testExecutionHandle({
+              executionId,
+              parentStreamId: `stream:${executionId}` as StreamTabId,
+              agent: 'assistant',
+            }),
+          );
+        });
+      }
+      // A quit handler runs in no session scope; the process roots answer
+      // there, and neither paper's lease is keyed under them.
+      expect(ownsExecutionLease('exec:drain-a' as ExecutionId)).toBe(false);
+      await settleLiveSessionExecutions(new AbortController().signal);
+      expect(storageMocks.settledUnder.get('exec:drain-a')).toBe('/storage/a');
+      expect(storageMocks.settledUnder.get('exec:drain-b')).toBe('/storage/b');
+      for (const [session, executionId] of live) {
+        expect(
+          runInSession(session, () => ownsExecutionLease(executionId)),
+        ).toBe(false);
+      }
     } finally {
       sessionA.dispose();
       sessionB.dispose();

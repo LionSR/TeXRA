@@ -340,7 +340,8 @@ describe('desktop agent directory bootstrap', () => {
 
   it('registers runtime skills through the shared Node host defaults', async () => {
     const { resourcesPath } = await createHarness();
-    const projectPath = join(dirname(resourcesPath), 'project');
+    // Project sources resolve from the process workspace the harness installed.
+    const projectPath = join(dirname(resourcesPath), 'workspace');
     await Promise.all([
       writeSkill(join(resourcesPath, 'skills'), 'bundled-skill', {
         name: 'bundled-skill',
@@ -366,7 +367,6 @@ describe('desktop agent directory bootstrap', () => {
 
     initializeNodeRuntimeSkills({
       host: 'desktop',
-      cwd: projectPath,
       resourcesPath,
       skillSourceOptions: {
         includeInterop: true,

@@ -60,6 +60,7 @@ function createIpc(
     ptyHost: createPtyHost(),
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
+    getWorkspacePath: () => workspacePath,
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);

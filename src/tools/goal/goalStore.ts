@@ -60,7 +60,7 @@ function emitGoalStateChanged(
 }
 
 function readRaw(streamId: StreamTabId): Goal | null {
-  // tryWorkspaceRoots — bootstrap-tolerant: read-only paths called before
+  // tryWorkspaceRoots is bootstrap-tolerant: read-only paths called before
   // the roots are installed (e.g. early-stream syncs in some tests) return
   // null rather than throwing. Write paths still use workspaceRoots() which
   // does throw, surfacing the misuse.

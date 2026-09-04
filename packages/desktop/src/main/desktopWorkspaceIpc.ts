@@ -49,6 +49,12 @@ interface DesktopWorkspaceIpcOptions {
    * differs from the renderer's own coordinates under display zoom.
    */
   toWindowBounds(bounds: DesktopBrowserBounds): DesktopBrowserBounds;
+  /**
+   * Root of the paper this window shows. App-signal listeners run in the
+   * emitter's context, which for a run in another open paper is that paper's
+   * session; the window's own paper is what a re-list decision compares to.
+   */
+  getWorkspacePath(): string | undefined;
   getEnvironmentSummary?(): Promise<DesktopEnvironmentSummary>;
   onAsyncError?(error: unknown): void;
 }
@@ -181,7 +187,7 @@ export function createDesktopWorkspaceIpc(
   const unsubscribeFilesWritten = appSignals.on(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
-      const root = WorkspaceFS.getPath();
+      const root = options.getWorkspacePath();
       if (!root) return;
       if (!absolutePaths.some((path) => isPathWithin(root, path))) return;
       renderer.postToRenderer({

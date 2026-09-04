@@ -40,7 +40,7 @@ export function initProcessWorkspaceRoots(roots: WorkspaceRoots): void {
 function requireProcessRoots(): WorkspaceRoots {
   if (!processRoots) {
     throw new Error(
-      'Workspace roots not initialized — call initProcessWorkspaceRoots() before using workspace-scoped services.',
+      'Workspace roots not initialized: call initProcessWorkspaceRoots() before using workspace-scoped services.',
     );
   }
   return processRoots;

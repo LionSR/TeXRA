@@ -699,6 +699,8 @@ function shellTemplate(): TemplateResult {
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             onSelectPaper: (root) =>
               postMessage(DESKTOP_PAPER_COMMANDS.SELECT_PAPER, { root }),
+            onClosePaper: (root) =>
+              postMessage(DESKTOP_PAPER_COMMANDS.CLOSE_PAPER, { root }),
             onOpenTerminal: () => workbench.openKind('terminal'),
             onOpenBrowser: () => workbench.openKind('browser'),
             onOpenSettings: () => workbench.openKind('settings'),

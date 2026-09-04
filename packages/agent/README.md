@@ -85,14 +85,14 @@ files.
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/agent`         | `runAgent`, `AgentRun`, `defineTool`, `MapToolRegistry`, and the `AgentEvent` / `ITool` / `AgentFlowResult` types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                      |
-| `@texra-ai/agent/node`    | `nodePlatform(options)` — a ready-made Node `Platform` with its workspace roots                                   |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                    |
 
 ## The platform
 
 Every run needs a `Platform`: the process-wide host port bundle (global state,
 filesystem, storage, secrets, logging) plus the `WorkspaceRoots` of the folder
 the runs work in (workspace path, its storage path, config, and workspace
-state). `nodePlatform()` supplies both — process-local config and state,
+state). `nodePlatform()` supplies both: process-local config and state,
 TeXRA's ordinary storage layout, and environment-variable secrets (so provider
 API keys are read from `process.env`; nothing is persisted).
 

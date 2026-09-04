@@ -8,6 +8,8 @@ import {
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { readPlatformSetting } from '@utils/config/platformSettings';
+import { WorkspaceFS } from '@utils/files/workspaceFS';
+import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
   discoverSkillSources,
@@ -17,7 +19,16 @@ import {
   type SourcedSkill,
 } from './loadSkills';
 
-let runtimeSkillSources: readonly SkillSource[] = [];
+/**
+ * Builds the skill sources for one workspace folder. Project and interop
+ * sources live under the folder, so they are resolved per call from the
+ * calling session's workspace rather than fixed once per process: a desktop
+ * with several papers open discovers each run's project skills in that run's
+ * own folder.
+ */
+type RuntimeSkillSourceResolver = (cwd: string) => readonly SkillSource[];
+
+let resolveRuntimeSkillSources: RuntimeSkillSourceResolver = () => [];
 let runtimeSkillHost: SettingHost = 'vscode';
 
 export interface RuntimeSkillCatalogResult {
@@ -31,17 +42,29 @@ interface DisabledSkills {
   readonly scopes: readonly ActiveSkillSourceScope[];
 }
 
+/**
+ * Install the runtime skill sources: a resolver from the workspace folder, or
+ * a fixed list for sources that do not depend on the folder.
+ */
 export function setRuntimeSkillSources(
-  sources: readonly SkillSource[],
+  sources: readonly SkillSource[] | RuntimeSkillSourceResolver,
   host: SettingHost = 'vscode',
 ): void {
-  runtimeSkillSources = [...sources];
+  resolveRuntimeSkillSources =
+    typeof sources === 'function' ? sources : () => sources;
   runtimeSkillHost = host;
+}
+
+/** The sources for the calling session's workspace, or the home folder without one. */
+function runtimeSkillSources(): readonly SkillSource[] {
+  return resolveRuntimeSkillSources(
+    WorkspaceFS.getPath() ?? safeHomedir() ?? '/nonexistent',
+  );
 }
 
 /** Discover the complete runtime source registry for settings displays. */
 function discoverRuntimeSkills() {
-  return discoverSkillSources(runtimeSkillSources);
+  return discoverSkillSources(runtimeSkillSources());
 }
 
 function isSkillDisabled(
@@ -144,11 +167,12 @@ export function formatRuntimeSkillActivation({
 }
 
 export async function loadRuntimeSkillCatalog(): Promise<RuntimeSkillCatalogResult> {
-  if (runtimeSkillSources.length === 0) {
+  const sources = runtimeSkillSources();
+  if (sources.length === 0) {
     return { catalog: '', skills: [], issues: [] };
   }
 
-  const result = await loadEnabledRuntimeSkills();
+  const result = filterDiscoveredSkills(await discoverSkillSources(sources));
   // Discovery already orders by source precedence and then skill directory.
   // Bound that accepted set once here, before either prompt or event projection.
   const accepted = result.skills.slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);

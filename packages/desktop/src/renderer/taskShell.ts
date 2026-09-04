@@ -44,6 +44,7 @@ interface TaskSidebarCallbacks {
   onToggleFiles(): void;
   onOpenFolder(): void;
   onSelectPaper(root: string): void;
+  onClosePaper(root: string): void;
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
@@ -78,7 +79,8 @@ function sidebarAction(options: {
 /**
  * One row per open paper. The active row toggles its file tree and carries
  * the same active styling as a rail stream; any other row asks the window to
- * show that paper.
+ * show that paper. The close control beside the row is the one place a paper
+ * is closed from.
  */
 function paperRow(
   paper: DesktopPaperSummary,
@@ -91,31 +93,44 @@ function paperRow(
     disclosureIcon = model.filesExpanded ? 'chevron-down' : 'chevron-right';
   }
   return html`
-    <wa-button
-      type="button"
-      class="task-project-row btn-ghost ${active ? 'is-active' : ''}"
-      appearance="plain"
-      size="s"
-      title=${paper.root}
-      aria-current=${active ? 'true' : nothing}
-      @click=${
-        active
-          ? callbacks.onToggleFiles
-          : () => callbacks.onSelectPaper(paper.root)
-      }
-    >
-      <span class="task-project-mark icon-surface is-size-m">
-        ${workspaceInitials(paper.root)}
-      </span>
-      <span class="task-project-copy">
-        <strong>${paper.name}</strong>
-        <small>${active ? 'Local workspace' : 'Open paper'}</small>
-      </span>
-      ${waIcon(disclosureIcon, {
-        className: 'task-project-chevron',
-        slot: 'end',
-      })}
-    </wa-button>
+    <div class="task-project-item">
+      <wa-button
+        type="button"
+        class="task-project-row btn-ghost ${active ? 'is-active' : ''}"
+        appearance="plain"
+        size="s"
+        title=${paper.root}
+        aria-current=${active ? 'true' : nothing}
+        @click=${
+          active
+            ? callbacks.onToggleFiles
+            : () => callbacks.onSelectPaper(paper.root)
+        }
+      >
+        <span class="task-project-mark icon-surface is-size-m">
+          ${workspaceInitials(paper.root)}
+        </span>
+        <span class="task-project-copy">
+          <strong>${paper.name}</strong>
+          <small>${active ? 'Local workspace' : 'Open paper'}</small>
+        </span>
+        ${waIcon(disclosureIcon, {
+          className: 'task-project-chevron',
+          slot: 'end',
+        })}
+      </wa-button>
+      <wa-button
+        type="button"
+        class="task-project-close icon-button is-size-s"
+        appearance="plain"
+        size="s"
+        title="Close ${paper.name}"
+        aria-label="Close ${paper.name}"
+        @click=${() => callbacks.onClosePaper(paper.root)}
+      >
+        ${waIcon('xmark')}
+      </wa-button>
+    </div>
     ${
       active
         ? html`

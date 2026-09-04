@@ -66,7 +66,11 @@ import type { StreamLogStore } from '@transcript/StreamLogStore';
 import { StreamSnapshotStore } from '@transcript/StreamSnapshotStore';
 import { throwAggregated } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getRunContextSession, tryUseRunContext } from './RunContext';
+import {
+  getRunContextSession,
+  runInSession,
+  tryUseRunContext,
+} from './RunContext';
 import { ExecutionRegistry } from './executionRegistry';
 import { StreamStatusMachine } from './StreamStatusService';
 import { SessionHostInteractions } from './HostInteractions';
@@ -752,33 +756,40 @@ export async function settleLiveSessionExecutions(
       );
       continue;
     }
-    // Skips both a run whose driver already settled it and one this process
-    // never owned (a run another TeXRA process holds).
-    if (!ownsExecutionLease(executionId)) continue;
-    try {
-      await session.releaseExecutionLease(executionId, async () => {
-        const finalization = await finalizeRun({
-          executionId,
-          outcome: RUN_OUTCOME.CANCELLED,
-          flowRecord: 'preserve',
-          // A driver that reached its own terminal write between the
-          // registry read above and this one owns the result: this drain
-          // records what the exit interrupted, never what already finished.
-          keepExistingOutcome: true,
+    // A host quit handler runs outside any run scope, and the lease key and
+    // the terminal write both resolve through the owning session's storage
+    // root, so the drain enters each session before asking who owns what: a
+    // desktop with several papers open would otherwise look every paper's
+    // lease up under the no-workspace root and skip them all.
+    await runInSession(session, async () => {
+      // Skips both a run whose driver already settled it and one this process
+      // never owned (a run another TeXRA process holds).
+      if (!ownsExecutionLease(executionId)) return;
+      try {
+        await session.releaseExecutionLease(executionId, async () => {
+          const finalization = await finalizeRun({
+            executionId,
+            outcome: RUN_OUTCOME.CANCELLED,
+            flowRecord: 'preserve',
+            // A driver that reached its own terminal write between the
+            // registry read above and this one owns the result: this drain
+            // records what the exit interrupted, never what already finished.
+            keepExistingOutcome: true,
+          });
+          if (!finalization.ok) {
+            throw new Error(
+              `Failed to persist the CANCELLED outcome for execution ${executionId}`,
+              { cause: finalization.error },
+            );
+          }
         });
-        if (!finalization.ok) {
-          throw new Error(
-            `Failed to persist the CANCELLED outcome for execution ${executionId}`,
-            { cause: finalization.error },
-          );
-        }
-      });
-    } catch (error) {
-      logger.warn(
-        `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
-        { data: error },
-      );
-    }
+      } catch (error) {
+        logger.warn(
+          `Failed to settle execution ${executionId} at host exit; a later launch classifies it from its checkpoint`,
+          { data: error },
+        );
+      }
+    });
   }
 }
 

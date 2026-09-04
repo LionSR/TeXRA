@@ -143,12 +143,7 @@ async function launchDesktopDev(): Promise<LauncherHarness> {
   // arguments, env, and stdio, never the binary's location.
   process.env.ELECTRON_OVERRIDE_DIST_PATH = '/test/electron-dist';
   process.env.npm_execpath = '/test/pnpm.cjs';
-  process.argv = [
-    process.execPath,
-    'scripts/dev.mjs',
-    '--texra-workspace-path',
-    '/tmp/paper',
-  ];
+  process.argv = [process.execPath, 'scripts/dev.mjs', '--inspect-brk', '9229'];
 
   await import(
     `${moduleFileUrl(repoPath('packages/desktop/scripts/dev.mjs'))}?test=${Date.now()}`
@@ -181,10 +176,7 @@ describe('desktop development launcher', () => {
     ]);
 
     const electronCall = calls[4];
-    expect(electronCall?.args.slice(1)).toEqual([
-      '--texra-workspace-path',
-      '/tmp/paper',
-    ]);
+    expect(electronCall?.args.slice(1)).toEqual(['--inspect-brk', '9229']);
     expect(electronCall?.options.env).toMatchObject({
       ELECTRON_RENDERER_URL: `http://127.0.0.1:${port}`,
       NODE_ENV: 'development',

@@ -119,7 +119,6 @@ export interface NodeAgentDirectoryBootstrapOptions {
 
 export interface NodeRuntimeSkillOptions {
   readonly host: SettingHost;
-  readonly cwd: string;
   readonly resourcesPath: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
@@ -174,14 +173,14 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
 export function initializeNodeRuntimeSkills(
   options: NodeRuntimeSkillOptions,
 ): void {
+  // The workspace folder is not fixed here: project and interop sources are
+  // resolved from the calling session's workspace at discovery time.
   setRuntimeSkillSources(
-    defaultSkillSources(
-      {
-        cwd: options.cwd,
-        resourcesPath: options.resourcesPath,
-      },
-      options.skillSourceOptions,
-    ),
+    (cwd) =>
+      defaultSkillSources(
+        { cwd, resourcesPath: options.resourcesPath },
+        options.skillSourceOptions,
+      ),
     options.host,
   );
 }

@@ -34,7 +34,6 @@ import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { platform } from '@platform/platform';
 import { DisposableStore } from '@platform/disposable';
-import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   AgentCategory,
@@ -317,9 +316,11 @@ function createWindow(options: {
     if (paper) void runInSession(paper.session, () => paperResources.dispose());
     else paperResources.dispose();
   });
-  // The root the renderer asked to switch to; lands once the renderer has
-  // reloaded (a dirty editor can veto the reload and clear it).
+  // The paper switch the renderer asked for (show another root, or close the
+  // shown one); lands once the renderer has reloaded (a dirty editor can veto
+  // the reload and clear it).
   let pendingPaperActivation: string | undefined;
+  let pendingPaperClose: string | undefined;
   const ipcRef: {
     current?: ReturnType<typeof installDesktopMainViewIpc>;
   } = {};
@@ -575,6 +576,22 @@ function createWindow(options: {
     if (root === activePaper().root) return;
     if (!options.papers.list().some((paper) => paper.root === root)) return;
     pendingPaperActivation = root;
+    window.webContents.reload();
+  };
+
+  /**
+   * Close an open paper. A paper the window is not showing closes at once;
+   * the shown one closes through the same reload as a switch, so a dirty
+   * editor can keep it open, and the registry moves the window to the paper
+   * shown before it.
+   */
+  const closePaper = (root: string) => {
+    if (!options.papers.list().some((paper) => paper.root === root)) return;
+    if (root !== activePaper().root) {
+      void options.papers.close(root).catch(reportAsyncError);
+      return;
+    }
+    pendingPaperClose = root;
     window.webContents.reload();
   };
 
@@ -1176,6 +1193,7 @@ function createWindow(options: {
           height: Math.round(bounds.height * zoom),
         };
       },
+      getWorkspacePath: () => activePaper().root,
       getEnvironmentSummary,
       onAsyncError: reportAsyncError,
     },
@@ -1207,11 +1225,17 @@ function createWindow(options: {
     isFatalShutdownRequested: isFatalDesktopShutdownRequested,
     clearPendingPaperActivation: () => {
       pendingPaperActivation = undefined;
+      pendingPaperClose = undefined;
     },
     commitPendingPaperActivation: () => {
       const root = pendingPaperActivation;
+      const closing = pendingPaperClose;
       pendingPaperActivation = undefined;
+      pendingPaperClose = undefined;
       if (root !== undefined) options.papers.activate(root);
+      if (closing !== undefined) {
+        void options.papers.close(closing).catch(reportAsyncError);
+      }
     },
     clearContinueQuitAfterWindowClose: () => {
       continueQuitAfterWindowClose = undefined;
@@ -1231,7 +1255,11 @@ function createWindow(options: {
     },
     progress: progressIpc,
     onboarding: onboardingIpc,
-    papers: options.papers.ipc({ select: selectPaper, postPapers }),
+    papers: options.papers.ipc({
+      select: selectPaper,
+      close: closePaper,
+      postPapers,
+    }),
     globalState: platform().globalState,
     inActiveSession: (dispatch) => {
       void runInSession(activePaper().session, dispatch);
@@ -1343,45 +1371,34 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // the same process-session shutdown used by an ordinary application
       // exit. Once this block completes, the lifecycle owns that cleanup.
       try {
+        const warn = (message: string) => console.warn(`[desktop] ${message}`);
         papers = await openDesktopPaperRegistry({
           dataRoot: platformInit.dataRoot,
           processRoots: platformInit.processRoots,
           globalState: platform().globalState,
-          attachSession: (session) => {
-            agentResumeHandler.add(processResumeOwner.attach({ session }));
-          },
-          warn: (message) => console.warn(`[desktop] ${message}`),
+          attachSession: (session) =>
+            agentResumeHandler.add(processResumeOwner.attach({ session })),
+          warn,
         });
         processResources.add(() => papers.dispose());
-        // Reopen the folder named on the command line and every folder left
-        // open last time; a folder that no longer opens is reported and
-        // dropped from the window, never from the remembered list's peers.
-        const launchRoot = platformInit.workspacePath;
-        const rememberedRoots = await readRememberedDesktopPapers(
+        // Reopen every folder left open last time and show the one shown
+        // last. A folder that is gone or no longer opens is reported once the
+        // window exists; the others open regardless.
+        const remembered = await readRememberedDesktopPapers(
           platform().globalState,
+          warn,
         );
-        for (const root of new Set([
-          ...(launchRoot ? [launchRoot] : []),
-          ...rememberedRoots,
-        ])) {
+        const unopenedPapers = remembered.missing.map(
+          (root) => `${root} (folder not found; forgotten)`,
+        );
+        for (const root of remembered.roots) {
           try {
             await papers.open(root);
           } catch (error) {
-            console.error(
-              `[desktop] Could not open paper ${root}: ${toErrorMessage(error)}`,
-            );
+            unopenedPapers.push(`${root}: ${toErrorMessage(error)}`);
           }
         }
-        papers.activate(launchRoot ?? papers.list()[0]?.root);
-        // Project skills follow the paper the window shows.
-        const syncRuntimeSkills = () =>
-          initializeNodeRuntimeSkills({
-            host: 'desktop',
-            cwd: papers.active().root ?? app.getPath('home'),
-            resourcesPath: platformInit.resourcesPath,
-          });
-        syncRuntimeSkills();
-        papers.onChange(syncRuntimeSkills);
+        papers.activate(papers.list().at(-1)?.root);
         // Ask the renderer to close before draining process services. A dirty
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this
@@ -1396,7 +1413,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         });
 
         void initializeDesktopCrashReporting({
-          sensitivePaths: [
+          sensitivePaths: () => [
             ...papers.list().map((paper) => paper.root),
             app.getPath('userData'),
             platformInit.dataRoot,
@@ -1422,6 +1439,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         reopenMainWindow();
         for (const paper of [papers.active(), ...papers.list()]) {
           warnIfEphemeral(paper);
+        }
+        if (unopenedPapers.length > 0) {
+          void showDesktopWarningDialog(
+            `Some papers could not be reopened:\n${unopenedPapers.join('\n')}`,
+          ).catch((error: unknown) => console.error(error));
         }
 
         app.on('activate', () => {

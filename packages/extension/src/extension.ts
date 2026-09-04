@@ -519,7 +519,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // out: VS Code drives Lean through its own integration.)
   initializeNodeRuntimeSkills({
     host: 'vscode',
-    cwd: workspaceRoot,
     resourcesPath: path.join(context.extensionPath, 'resources'),
   });
   await StorageFS.ensureDir(RUNS_STORAGE_DIR);

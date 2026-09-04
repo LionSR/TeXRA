@@ -33,15 +33,9 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
-import {
-  resolveDesktopDataRoot,
-  resolveResourcesPath,
-  resolveWorkspacePath,
-} from './paths.js';
+import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
 import { showDesktopWarningDialog } from './warningDialog.js';
 export interface ElectronPlatformInitResult {
-  /** The folder named on the command line, opened as a paper at launch. */
-  workspacePath: string | undefined;
   /**
    * The no-workspace roots: what the window shows before a folder is open,
    * and what every paper's roots are built beside.
@@ -75,7 +69,6 @@ export async function initializeElectronPlatform(
   const globalStateStore = await JsonStore.open(
     join(userDataPath, 'state', 'global.json'),
   );
-  const workspacePath = resolveWorkspacePath();
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
@@ -159,11 +152,8 @@ export async function initializeElectronPlatform(
   // the extension; one call registers every row of the prompt table, so
   // desktop cannot wire one prompt and forget another the way it once did.
   initializeBundledPrompts(resourcesPath);
-  initializeNodeRuntimeSkills({
-    host: 'desktop',
-    cwd: workspacePath ?? app.getPath('home'),
-    resourcesPath,
-  });
+  // Project skills follow each paper's session; only the bundle is fixed.
+  initializeNodeRuntimeSkills({ host: 'desktop', resourcesPath });
 
   await bootstrapNodeAgentDirectories({
     channel: 'desktop',
@@ -173,7 +163,6 @@ export async function initializeElectronPlatform(
   });
 
   return {
-    workspacePath,
     processRoots,
     lifecycle,
     dataRoot,
