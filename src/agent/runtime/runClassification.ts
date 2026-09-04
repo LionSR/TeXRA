@@ -8,8 +8,8 @@
  *
  * - `held_elsewhere`: its execution lease is held by an owner that is alive
  *   or cannot be proven dead (another TeXRA process). Shown read-only.
- * - `owned_here`: its lease is held by this very process. Never a restart
- *   candidate; the caller treats reaching it as an invariant violation.
+ * - `owned_here`: its lease is held by this very process, yet no live flow
+ *   context exists for it: a registry/lease disagreement. Shown read-only.
  * - `resumable`: a checkpoint (flow record) exists and nobody alive holds the
  *   lease. Continued only through the explicit Resume affordance.
  * - `finished`: no checkpoint. Its persisted outcome, when present, is the

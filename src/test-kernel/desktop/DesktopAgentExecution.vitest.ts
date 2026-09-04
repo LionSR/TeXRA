@@ -3511,10 +3511,10 @@ describe('DesktopProgressBridge', () => {
       const leaseReleased = createDeferred();
       const executionListing = await import('@agent/storage/executionListing');
       const waitForRelease = vi
-        .spyOn(executionListing, 'readExecutionStreamIndex')
+        .spyOn(executionListing, 'listExecutionStreamReferences')
         .mockImplementation(async () => {
           await leaseReleased.promise;
-          return { byStream: new Map(), unreadable: new Map() };
+          return { references: [], unreadable: new Map() };
         });
 
       try {
@@ -3661,7 +3661,7 @@ describe('DesktopProgressBridge', () => {
       const executionListing = await import('@agent/storage/executionListing');
       vi.spyOn(
         executionListing,
-        'readExecutionStreamIndex',
+        'listExecutionStreamReferences',
       ).mockImplementationOnce(async () => {
         deletionStarted.resolve();
         await deletionGate.promise;

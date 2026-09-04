@@ -3,7 +3,7 @@ import {
   classifyRun,
   type RunClassification,
 } from '@agent/runtime/runClassification';
-import { readExecutionStreamIndex } from '@agent/storage/executionListing';
+import { listExecutionStreamReferences } from '@agent/storage/executionListing';
 import {
   currentSession,
   type SessionHandle,
@@ -198,7 +198,9 @@ export async function lookupStreamExecutionId(
 ): Promise<ExecutionId | undefined> {
   return (
     session.snapshots.getRunMetadata(streamId, { quiet: true }).executionId ??
-    (await readExecutionStreamIndex()).byStream.get(streamId)
+    (await listExecutionStreamReferences()).references.find(
+      (reference) => reference.streamId === streamId,
+    )?.executionId
   );
 }
 
@@ -244,7 +246,7 @@ export function recordRunRefusal(
     case 'owned_here':
       // A lease this process holds for a stream with no live flow context is
       // a registry/lease disagreement, not a free run: it stays read-only
-      // with the same diagnostic restart repair writes for it.
+      // with a diagnostic naming that disagreement.
       session.status.markUnavailableOrLog(
         streamId,
         streamUnreadableMessage('lease owned by this process with no live run'),
