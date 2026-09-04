@@ -142,6 +142,7 @@ describe('execution listing normalization', () => {
         timestamp: '2026-07-15T10:00:00.000Z',
         identity: { kind: 'agent', agent: 'assistant' },
         record: agentConfig,
+        checkpointPresent: false,
       },
     ]);
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(1);
@@ -188,6 +189,7 @@ describe('execution listing normalization', () => {
       kind: 'incomplete',
       id: incompleteId,
       timestamp: '2026-07-15T07:00:00.000Z',
+      checkpointPresent: false,
     });
     expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
   });
