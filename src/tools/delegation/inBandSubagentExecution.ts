@@ -261,7 +261,7 @@ async function inspectStableAttempt(
     // A completed manifest proves only that the child turn settled. Recovery
     // additionally requires the marker written after the child artifact drain
     // and before its lease record is deleted. Lease absence is not an
-    // attestation: restart repair may already have removed an
+    // attestation: a later lease claim may already have removed an
     // abandoned lease from a failed drain. This ambiguity deliberately stays
     // irreconcilable rather than risking repeated side-effectful work.
     throw new SubagentReconciliationError(

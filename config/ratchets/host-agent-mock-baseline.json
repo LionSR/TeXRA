@@ -114,11 +114,6 @@
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
       "form": "doMock",
-      "specifier": "@agent/runtime/restartRepair"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecution.vitest.ts",
-      "form": "doMock",
       "specifier": "@agent/runtime/runAgent"
     },
     {
@@ -130,11 +125,6 @@
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
       "form": "doMock",
       "specifier": "@agent/runtime/executeAgent"
-    },
-    {
-      "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",
-      "form": "doMock",
-      "specifier": "@agent/runtime/restartRepair"
     },
     {
       "file": "src/test-kernel/desktop/DesktopAgentExecutionFactory.vitest.ts",

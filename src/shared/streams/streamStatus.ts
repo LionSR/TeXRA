@@ -65,7 +65,6 @@ export const STREAM_TRANSITION_CAUSE = {
   WAIT: 'wait',
   RESUME: 'resume',
   USER_STOP: 'user-stop',
-  RESTART_REPAIR: 'restart-repair',
 } as const;
 
 export type StreamTransitionCause =
@@ -160,12 +159,5 @@ export function canTransitionStreamPhase(
           from === STREAM_PHASE.RUNNING) &&
         to === STREAM_PHASE.RUNNING
       );
-    case STREAM_TRANSITION_CAUSE.RESTART_REPAIR:
-      // Repair settles a stream on a persisted outcome or records an
-      // interruption as CANCELLED; it never restores a live phase it did not
-      // observe and never infers FAILED.
-      if (from === undefined) return isTerminalOutcomePhase(to);
-      if (from === to) return true;
-      return from === STREAM_PHASE.RUNNING && to === STREAM_PHASE.CANCELLED;
   }
 }

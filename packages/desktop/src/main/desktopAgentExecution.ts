@@ -399,8 +399,8 @@ export class DesktopProgressBridge {
     this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
     this.backend.setupEventListeners();
     if (this.disposed) return;
-    // Canonical state and restart repair are complete before any window-owned
-    // adapter can receive a replay. Subscribe first because attachment
+    // Canonical state is complete before any window-owned adapter can
+    // receive a replay. Subscribe first because attachment
     // synchronously redispatches pending approvals and their visibility facts.
     const detachHostInteractions = this.session.interactions.use(
       this.hostInteractions,
@@ -419,8 +419,8 @@ export class DesktopProgressBridge {
     await this.options.sessionStores.waitForPendingStreamDeletions();
     if (this.disposed) return;
     // No metadata refresh loop: `getStreamMetadata` overlays the
-    // always-resident summary mirror at read time, so canonical state
-    // accepted during restart repair is already visible (#9947).
+    // always-resident summary mirror at read time, so canonical state is
+    // already visible (#9947).
     //
     // Child activity is live presentation state rather than durable history.
     // Seed it only after attaching the presentation and every live-event

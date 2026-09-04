@@ -43,12 +43,11 @@ const validFlowRecord = {
 const sessions: SessionHandle[] = [];
 
 /**
- * A session whose restart repair never runs: `deferred` holds it until
- * `waitUntilReady`, which these tests deliberately never call, so every phase
- * below is derived at read time and not something repair wrote.
+ * A session with no boot pass of any kind, which is the only shape there is:
+ * every phase below is derived at read time.
  */
 function openUnrepairedHandle(transcripts: StreamLogStore): SessionHandle {
-  const session = new SessionHandle({ transcripts, restartRepair: 'deferred' });
+  const session = new SessionHandle({ transcripts });
   sessions.push(session);
   return session;
 }

@@ -368,7 +368,11 @@ describe('CLI conversation transcript', () => {
       const dispose = attachStatusPipeline();
 
       try {
-        defaultSession().status.transition(streamId, outcome, 'restart-repair');
+        defaultSession().status.transitionToTerminal(
+          streamId,
+          outcome,
+          'lifecycle',
+        );
 
         const slice = streams.get().get(streamId);
         expect(slice?.entries.map((item) => item.id)).toEqual(['a1']);

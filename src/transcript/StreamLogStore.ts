@@ -436,8 +436,7 @@ export class StreamLogStore {
    * degradation is loud: the cause is logged here and recorded in
    * `mode.reason`, which callers render through
    * {@link ephemeralTranscriptWarning}. A non-persistent store also disables
-   * resume — `SessionHandle` skips restart repair and nothing was persisted
-   * to resume from.
+   * resume — nothing was persisted to resume from.
    */
   static async openOrEphemeral(
     open: () => Promise<StreamLogStore> = () => StreamLogStore.open(),
