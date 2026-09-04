@@ -16,11 +16,17 @@ landed, most of them itself already the follow-through on the prior survey
 and on other simplification work:
 
 - `refactor: resolve post-merge consolidation follow-ups` (#11814) — fixed
-  all four issues the 2026-09-03 entry filed (#11809 workspace-adapter
-  duplication, #11810/#11811 desktop/extension resume-skeleton and
-  workspace-adapter dedup, #11812 `scheduleViewerDisplay`'s hand-rolled
-  sleep). Verified directly: all four issues are `state: closed`,
-  `state_reason: completed`, closed by #11814's merge.
+  three of the four issues the 2026-09-03 entry filed via its `Fixes #...`
+  merge: #11810 (the byte-identical desktop/extension workspace-adapter
+  duplication), #11811 (the desktop/extension resume-skeleton dedup), and
+  #11812 (`scheduleViewerDisplay`'s hand-rolled sleep). The fourth, #11809
+  (`fetchWithTimeout` reimplementing `AbortSignal.timeout`), was resolved
+  earlier and separately by #11804 — #11814's own body says so explicitly
+  ("#11809 was already resolved by #11804 and has been closed separately")
+  — and was closed directly by the repo owner at `2026-09-03T08:50:05Z`,
+  about 32 minutes before #11814 merged. Verified directly via the GitHub
+  API: all four issues are `state: closed`, `state_reason: completed`;
+  #11810/#11811/#11812 list #11814 as their closing PR, #11809 lists none.
 - `refactor: land the tail of the recorded audits — 44 verified findings in
 nine batches` (#11804) — a large (337 files touched across the two-commit
   window) consolidation sweep in its own right, landing much of the backlog
@@ -128,8 +134,10 @@ No candidate in either lens (duplication to consolidate, hand-rolled code a
 native method or `p-queue` already covers) clears the bar the many prior
 full-repo and targeted rounds set. All four issues the immediately preceding
 survey (`2026-09-03-consolidation-and-native-methods-survey.md`) filed —
-#11809, #11810, #11811, #11812 — are verified closed, fixed by #11814 within
-hours of filing. The 23-commit window between surveys carried substantial
+#11809, #11810, #11811, #11812 — are verified closed: #11810, #11811, and
+#11812 fixed by #11814 within hours of filing, and #11809 resolved earlier
+and separately by #11804 per #11814's own body. The 23-commit window between
+surveys carried substantial
 additional consolidation work of the same kind this routine watches for
 (#11804's 44-finding sweep, plus six more targeted `refactor:` PRs), which is
 itself evidence the surface is being actively worked, not neglected.
