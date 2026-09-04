@@ -168,6 +168,8 @@ SessionView = {
   order: StreamTabId[],
   // the last session commit ordinal folded (7.1)
   cursor: CommitOrdinal,
+  // tombstoned ids: what tells "gone" from "not folded yet" (5.2)
+  closed: StreamTabId[],
   // live text at SESSION scope, so it can arrive before its stream (5.2)
   inflight: Map<`${StreamTabId}/${RowId}`, string>,
   // paper-level aggregate; the desktop rail badge reads it and derives nothing
@@ -230,6 +232,7 @@ TranscriptView = {
   taskGroups: TaskGroup[],                   // taskGroupProjection
   compaction: CompactionBlock[],             // compactionActivityProjection
   settledSeq: number,                        // last durable seq folded
+  settledRows: number,                       // rows whose finalizer folded
   // workflow arm; retained-phase filter folded in
   run: WorkflowRunModel | null,
 }
@@ -428,7 +431,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `usage`.
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
 - **`settledSeq`** is the last durable seq folded; text deltas do not
-  advance it.
+  advance it. It is a memoization key, **not** a print boundary: a durable
+  `stream.text` checkpoint, a status change, or a usage event advances it
+  while the row above is still open. `settledRows` is the separate frontier
+  - how many rows have folded their finalizing event - and that is what the
+    TUI prints into append-only scrollback (12.3). Using `settledSeq` there
+    would print a row a later checkpoint or `stream.end` still changes.
 - **Incremental.** One rule, keyed on what a change _names_. A durable event names the
   streams its _type_ declares - not `event.streamId`, which session-lane
   facts do not have: `setParentStream` names its `childStreamId` and its new
@@ -563,16 +571,23 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
   already folded is discarded rather than reopening its `inflight` entry, and
-  `removeStream` clears every session-level entry keyed by its stream -
+  `removeStream` records the id in `closed` and clears every session-level
+  entry keyed by its stream -
   `inflight`, the stream's pending `approvals`, its `queuedFollowUps`, its
   `policy` entry, and its `inquiries`. Not only the text: a pending
   `approval.requested` with no `approval.resolved` would otherwise fold back
   into `approvals` on every replay as an actionable decision for a stream
   that can never exist again. A chunk that
-  arrives afterwards - the two arms are asynchronous, so one can - names a
-  stream the view does not have and is dropped, which is unambiguous now
-  that an id is never reused; without the clear, an entry for a stream that
-  can never render or finalize would sit in the session map forever. That makes the merge order of the three arms (7.2)
+  arrives afterwards - the two arms are asynchronous, so one can - is
+  dropped **because its stream is in `closed`**, not because the view lacks
+  it: a chunk for an id the view has never seen is early, not late, and
+  §5.2 requires keeping it (its stream's `run.start` has not folded yet).
+  Dropping on absence alone would lose valid opening text and put the next
+  delta at `from > length`. `closed` is what tells the two apart, it is
+  bounded by deletions, an id is never reused (decision 9) so it never
+  needs revisiting, and retention prunes it with the rows. Without the
+  clear, an entry for a stream that can never render or finalize would sit
+  in the session map forever. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
   an early one is overwritten when its event lands. Without the rule the
   same two inputs give two different rows in two processes.
@@ -1286,24 +1301,33 @@ fixing the id retired it.
   `followUp.polish { streamId, text }` - the draft
   lives in the view's `Surface.drafts` and §8.5 does not synchronize it, so
   polish carries its text exactly as `polishInstruction` does
-- decisions: `toolEdit`, `bash`, `proposal`, `plan`, and
+- decisions: `toolEdit`, `bash`, `plan`,
+  `proposal { approve { model?, agent? } | reject | setup }` (the panel
+  lets the user approve with a different model or agent, which
+  `AgentProposalActionMessageSchema` carries on its approve branch,
+  `progressView/inbound.ts:167-173`, and the stored approval cannot
+  reconstruct), and
   `userQuestion { action, answers | feedback }` - the answer map lives only
   in the answering surface, and `UserQuestionActionMessageSchema` requires
   it on submit (feedback on reject or skip), so the approval record cannot
   reconstruct it. Each carries the `approvalId` of the request it answers (the runtime's id from
   `approval.requested`, which `ApprovalRequest` already holds), plus
-  `externalInquiry { submit | drop }`, each naming the inquiry's **turn**
-  and not only its thread: `recordOpenQuestion` reopens a thread and
-  `recordAnswerForOpenTurn` writes whichever turn is open
-  (`externalInquiryStorage.ts:251-321, 331-360`), so a stale panel in a
-  second surface could answer or drop a turn the agent opened after it last
-  rendered. There is no `draft` arm - §8.5 removes that round trip and §9
-  makes `Surface.inquiryDrafts` the per-view owner, so two surfaces would
-  otherwise overwrite each other's unsent text through the backend. The envelope's `requestId` is
-  correlation for the response (8.4) and is minted per message; the
-  `approvalId` is domain identity and names which pending decision is being
-  resolved. One cannot serve as the other: two surfaces answering the same
-  approval send two `requestId`s for one `approvalId`.
+  `externalInquiry { submit { answer, sessionLinks } | drop { feedback? } }`
+  - the answer and its links live only in the answering surface's
+    `Surface.inquiryDrafts` (§8.5 removes the draft round trip), and
+    `InquirySubmitActionSchema` requires both (`inquiry.ts:71-76`) - each
+    naming the inquiry's **turn**
+    and not only its thread: `recordOpenQuestion` reopens a thread and
+    `recordAnswerForOpenTurn` writes whichever turn is open
+    (`externalInquiryStorage.ts:251-321, 331-360`), so a stale panel in a
+    second surface could answer or drop a turn the agent opened after it last
+    rendered. There is no `draft` arm - §8.5 removes that round trip and §9
+    makes `Surface.inquiryDrafts` the per-view owner, so two surfaces would
+    otherwise overwrite each other's unsent text through the backend. The envelope's `requestId` is
+    correlation for the response (8.4) and is minted per message; the
+    `approvalId` is domain identity and names which pending decision is being
+    resolved. One cannot serve as the other: two surfaces answering the same
+    approval send two `requestId`s for one `approvalId`.
 - policy: `setPolicy { target, change }` - the field-level mutation, not a
   snapshot. It still replaces three toggles and two enable commands with one
   runtime transaction instead of the read, set, drop sequence at
@@ -1384,7 +1408,15 @@ process-global root), `refreshCommits` (the retained `latexdiffs-section`
 and launcher controls
 post `REFRESH_COMMITS` and `REFRESH_ALL_FILES` today, `MainApp.ts:621-625`;
 each re-derives its part of the `host` snapshot, which is otherwise pushed
-only when the host notices a change), `openSettings`,
+only when the host notices a change), `openSettings { section, sessionType? }` (the Agent, Team, and Model items
+route to three different commands today - `texra.showAgents`,
+`texra.showMultiAgent`, `texra.showModels` (`commonSlice.ts:51-60`) - and
+agent settings additionally carry the tool-use session type, none of which a
+bare arm can express),
+`showMessage { level, text }` (retained controllers notify before any
+request exists - `pasteHandler.ts:28-35` posts `SHOW_INFORMATION_MESSAGE`
+when decoding fails, before `savePastedImage` is reachable - so without it
+that failure is silent, which the silent-degradation rule forbids),
 `openDashboard` (the retained "Open dashboard" action, `texra.showDashboard`
 today), `openUrl`, `openPaper` (the desktop rail's "Add paper…": the native
 directory picker, the session graph, and the new key returned as the
@@ -1894,7 +1926,13 @@ a component.
   `renderer/messageRoutes.ts:180-190`, which is a continuous byte stream, not
   a session event and not a request outcome - §8.1 and §8.4 carry neither.
   What lane 4 replaces is the **session** dispatcher; the terminal, PDF, and
-  browser transports stay as they are, and the PRD does not claim otherwise.
+  browser transports stay. They do not stay _unchanged_: each start message
+  becomes session-keyed. `DesktopTerminalStartMessageSchema` carries only an
+  id and geometry (`desktopWorkspaceMessages.ts:121-127`) and the one
+  `DesktopPtyHost` is built with the process startup `workspacePath`
+  (`main/index.ts:1079-1081`), so once §11 removes that root a terminal
+  opened on paper B would still spawn in A, reading and writing the wrong
+  paper. The transport is auxiliary; the cwd is not.
 
 - **Workbench** (right pane, existing): PDF as a new tab kind (the PDF is a
   dialog overlay today, `pdfOverlay.ts`), editor, terminal (defaults to the
@@ -1909,7 +1947,7 @@ a component.
 
 Same fields: the child list is `order` and `childIds` with `group`,
 `rollup`, and `tone`; the workflow popup is `transcript.run`; the
-transcript is `rows` with `settledSeq` as the static boundary; Alt+1..9 is
+transcript is `rows` with `settledRows` as the static boundary; Alt+1..9 is
 Surface state.
 
 ### 12.4 Surface mapping
