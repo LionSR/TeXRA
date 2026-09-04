@@ -16,7 +16,7 @@ import {
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
-import type { ConfigProvider, StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import {
   runWithWorkspaceRoots,
   type WorkspaceRoots,
@@ -92,10 +92,6 @@ export interface DesktopPaperRegistry {
    * other papers' runs are untouched.
    */
   close(root: string): Promise<void>;
-  /** Workspace state of whichever paper is active at call time. */
-  readonly activeWorkspaceState: StateStore;
-  /** Config of whichever paper is active at call time. */
-  readonly activeConfig: ConfigProvider;
   summary(): Omit<DesktopPapersMessage, 'command'>;
   /** Fires after a paper opens or closes, or the active paper changes. */
   onChange(listener: () => void): () => void;
@@ -295,7 +291,6 @@ export async function openDesktopPaperRegistry(
   const openPapers = () => [...papers.values()];
   const active = (): DesktopPaper =>
     (activeRoot === undefined ? undefined : papers.get(activeRoot)) ?? fallback;
-  const activeRoots = () => active().roots;
 
   async function openPaper(root: string): Promise<DesktopPaper> {
     // Remembered before anything is built: a list that cannot be written is
@@ -402,19 +397,6 @@ export async function openDesktopPaperRegistry(
       })().finally(() => closing.delete(root));
       closing.set(root, closed);
       return closed;
-    },
-    activeWorkspaceState: {
-      get: <T>(key: string, defaultValue?: T) =>
-        activeRoots().workspaceState.get<T>(key, defaultValue),
-      update: (key, value) => activeRoots().workspaceState.update(key, value),
-    },
-    activeConfig: {
-      get: <T>(key: string, defaultValue?: T) =>
-        activeRoots().config.get<T>(key, defaultValue),
-      update: (key, value, target) =>
-        activeRoots().config.update(key, value, target),
-      inspect: (key) => activeRoots().config.inspect(key),
-      isExplicitlySet: (key) => activeRoots().config.isExplicitlySet(key),
     },
     summary: () => ({
       papers: openPapers().map(({ root = '' }) => ({

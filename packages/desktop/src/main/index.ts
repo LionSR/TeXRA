@@ -747,188 +747,7 @@ function createWindow(options: {
     }
     return agentExecutionLoad;
   };
-  const agentSettingsController = new DefaultDesktopAgentSettingsController({
-    workspaceState: options.papers.activeWorkspaceState,
-    globalState: platform().globalState,
-    registry: {
-      loadAgents,
-      refreshAgents: refresh,
-      loadAgentOptionsData: computeAgentOptionsData,
-      getAgents: getAgentsByCategory,
-      getVisibleAgents,
-    },
-    directory: {
-      getCustomAgentDirectory: () => platform().agentDirectories.custom(),
-      getSourceDirectory: (source: AgentSource) => {
-        switch (source) {
-          case 'custom':
-            return platform().agentDirectories.custom();
-          case 'builtInWorkflow':
-            return platform().agentDirectories.builtIn();
-          case 'builtInToolUse':
-            return platform().agentDirectories.builtInToolUse();
-          // No local directory: remote agents live in Supabase, inline ones
-          // were supplied as values and were never written to disk.
-          case 'remote':
-          case 'inline':
-            return Promise.resolve(undefined);
-        }
-      },
-      selectCustomAgentDirectory: async () => {
-        const result = await dialog.showOpenDialog(window, {
-          title: 'Select Custom Agents Folder',
-          defaultPath: folderPickerDefaultPath(),
-          properties: ['openDirectory', 'createDirectory'],
-        });
-        return result.canceled ? undefined : result.filePaths[0];
-      },
-      openPath: previewHost.openPath,
-      revealPath: async (filePath) => shell.showItemInFolder(filePath),
-    },
-    renderer: {
-      postToRenderer: postToRendererIfAlive,
-    },
-    prompts: {
-      promptText: (input) => promptController.request(input),
-      confirm: ({ title, message }) =>
-        confirmDialog({ title, message, confirmLabel: 'Continue' }),
-      chooseTeamAvailability: presentTeamAvailabilityPrompt,
-    },
-    remoteCatalog: {
-      canAccess: () => SupabaseClient.isAuthenticated(),
-      signIn: signInForRemoteAgentCatalog,
-    },
-    notifications: { showInfoMessage, showErrorMessage },
-    resourcesPath: options.resourcesPath,
-  });
   const subscriptionUsage = new SubscriptionUsageService();
-  const credentialSettingsController =
-    new DefaultDesktopCredentialSettingsController({
-      workspaceState: options.papers.activeWorkspaceState,
-      globalState: platform().globalState,
-      config: options.papers.activeConfig,
-      secrets: platform().secrets,
-      renderer: {
-        postToRenderer: postToRendererIfAlive,
-      },
-      prompt: {
-        input: (input) =>
-          promptController.request({
-            title: input.prompt ?? 'Set API key',
-            prompt: input.prompt ?? 'Enter API key',
-            password: input.password,
-          }),
-        confirm: (message, promptOptions) =>
-          confirmDialog({
-            message,
-            detail: promptOptions?.detail,
-            confirmLabel: promptOptions?.confirmLabel,
-          }),
-      },
-      externalOpener: {
-        openExternal: previewHost.openExternal,
-        openSubscriptionSignInUrl: (url) =>
-          previewHost.openExternal(url, { reportFailure: false }),
-        presentSubscriptionSignInUrl: async (url, productName) => {
-          const result = await dialog.showMessageBox(window, {
-            type: 'info',
-            message: `Signing in with ${productName}`,
-            detail:
-              `Opened your default browser. Using a different browser for ${productName}? ` +
-              'Open this link there instead:\n\n' +
-              `${url}`,
-            buttons: ['Copy Sign-in Link', 'Close'],
-            defaultId: 0,
-            cancelId: 1,
-          });
-          if (result.response === 0) {
-            clipboard.writeText(url);
-          }
-        },
-        presentSubscriptionDeviceCode: async (prompt, productName) => {
-          // The code is copied up front: the dialog closes on any button, so
-          // the user must not have to keep it open to read the code back.
-          clipboard.writeText(prompt.userCode);
-          const result = await dialog.showMessageBox(window, {
-            type: 'info',
-            message: `Sign in with ${productName}`,
-            detail:
-              `No browser could take the sign-in callback, so ${productName} ` +
-              'is signing in with a one-time code instead.\n\n' +
-              `1. Open ${prompt.verificationUrl}\n` +
-              `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
-              'TeXRA is waiting for you to approve it.',
-            buttons: ['Open Verification Page', 'Close'],
-            defaultId: 0,
-            cancelId: 1,
-          });
-          if (result.response === 0) {
-            await previewHost.openExternal(
-              prompt.verificationUrlComplete ?? prompt.verificationUrl,
-            );
-          }
-        },
-      },
-      notifications: { showInfoMessage, showWarningMessage, showErrorMessage },
-      auth: {
-        signIn,
-        signOut: () => desktopAuth.signOut(),
-      },
-      subscriptionUsage,
-      onCredentialChanged: async () => {
-        await onboardingIpcRef.current?.refreshOnboardingFunnel();
-      },
-      // Credential operations already show their specific failure dialog. Keep
-      // the shared callback log-only so one failure never opens a second,
-      // generic desktop-operation dialog.
-      onError: reportBackgroundError,
-    });
-  const toolingSettingsController = new DefaultDesktopToolingSettingsController(
-    {
-      onError: reportAsyncError,
-      workspaceState: options.papers.activeWorkspaceState,
-      globalState: platform().globalState,
-      renderer: {
-        postToRenderer: postToRendererIfAlive,
-      },
-      dashboard: {
-        buildItems: async (cachedResults) => {
-          const { buildToolDashboardItems } =
-            await import('@controllers/settingsView/ToolDashboardData');
-          return buildToolDashboardItems('desktop', cachedResults);
-        },
-        getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
-        refreshAvailability: refreshToolAvailability,
-        planTerminalAction: async (toolId, kind) => {
-          const { planToolTerminalAction } =
-            await import('@controllers/settingsView/ToolDashboardData');
-          return planToolTerminalAction({ toolId, commandKind: kind });
-        },
-      },
-      navigation: { openExternal: previewHost.openExternal },
-      commands: {
-        run: async (command: string) => {
-          postToRendererIfAlive({
-            command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
-            initialCommand: command,
-          });
-        },
-      },
-      latexToolingController: new LatexToolingController({
-        checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-        findPath: (tool) => BinaryResolver.findPath(tool),
-        detectPackageManager,
-        getPlatform: () => normalizePlatform(process.platform),
-        // Extension hosting is deliberately unavailable in TeXRA Desktop.
-        isLatexWorkshopInstalled: () => false,
-        getRecommendedStatus: () => ({
-          outDir: true,
-          autoRevealExclude: true,
-        }),
-        onDetectionError: reportBackgroundError,
-      }),
-    },
-  );
   const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
     showErrorMessage,
@@ -969,10 +788,11 @@ function createWindow(options: {
     });
   };
   /**
-   * Bind the window to the paper it shows. The settings surface subscribes to
+   * Bind the window to the paper it shows. The settings controllers read the
+   * paper's workspace state and config, the settings surface subscribes to
    * the paper's session (goal facts, approval policy), the title follows its
    * activity, the file lists scan its root, and the progress bridge is built
-   * lazily for it; all four are released when the window switches papers.
+   * lazily for it; all of them are released when the window switches papers.
    */
   const attachActivePaper = () => {
     const paper = activePaper();
@@ -987,6 +807,191 @@ function createWindow(options: {
     paperResources.add(
       installDesktopWindowTitle(window, paper.session, paper.root),
     );
+    const agentSettingsController = new DefaultDesktopAgentSettingsController({
+      workspaceState: paper.roots.workspaceState,
+      globalState: platform().globalState,
+      registry: {
+        loadAgents,
+        refreshAgents: refresh,
+        loadAgentOptionsData: computeAgentOptionsData,
+        getAgents: getAgentsByCategory,
+        getVisibleAgents,
+      },
+      directory: {
+        getCustomAgentDirectory: () => platform().agentDirectories.custom(),
+        getSourceDirectory: (source: AgentSource) => {
+          switch (source) {
+            case 'custom':
+              return platform().agentDirectories.custom();
+            case 'builtInWorkflow':
+              return platform().agentDirectories.builtIn();
+            case 'builtInToolUse':
+              return platform().agentDirectories.builtInToolUse();
+            // No local directory: remote agents live in Supabase, inline ones
+            // were supplied as values and were never written to disk.
+            case 'remote':
+            case 'inline':
+              return Promise.resolve(undefined);
+          }
+        },
+        selectCustomAgentDirectory: async () => {
+          const result = await dialog.showOpenDialog(window, {
+            title: 'Select Custom Agents Folder',
+            defaultPath: folderPickerDefaultPath(),
+            properties: ['openDirectory', 'createDirectory'],
+          });
+          return result.canceled ? undefined : result.filePaths[0];
+        },
+        openPath: previewHost.openPath,
+        revealPath: async (filePath) => shell.showItemInFolder(filePath),
+      },
+      renderer: {
+        postToRenderer: postToRendererIfAlive,
+      },
+      prompts: {
+        promptText: (input) => promptController.request(input),
+        confirm: ({ title, message }) =>
+          confirmDialog({ title, message, confirmLabel: 'Continue' }),
+        chooseTeamAvailability: presentTeamAvailabilityPrompt,
+      },
+      remoteCatalog: {
+        canAccess: () => SupabaseClient.isAuthenticated(),
+        signIn: signInForRemoteAgentCatalog,
+      },
+      notifications: { showInfoMessage, showErrorMessage },
+      resourcesPath: options.resourcesPath,
+    });
+    const credentialSettingsController =
+      new DefaultDesktopCredentialSettingsController({
+        workspaceState: paper.roots.workspaceState,
+        globalState: platform().globalState,
+        config: paper.roots.config,
+        secrets: platform().secrets,
+        renderer: {
+          postToRenderer: postToRendererIfAlive,
+        },
+        prompt: {
+          input: (input) =>
+            promptController.request({
+              title: input.prompt ?? 'Set API key',
+              prompt: input.prompt ?? 'Enter API key',
+              password: input.password,
+            }),
+          confirm: (message, promptOptions) =>
+            confirmDialog({
+              message,
+              detail: promptOptions?.detail,
+              confirmLabel: promptOptions?.confirmLabel,
+            }),
+        },
+        externalOpener: {
+          openExternal: previewHost.openExternal,
+          openSubscriptionSignInUrl: (url) =>
+            previewHost.openExternal(url, { reportFailure: false }),
+          presentSubscriptionSignInUrl: async (url, productName) => {
+            const result = await dialog.showMessageBox(window, {
+              type: 'info',
+              message: `Signing in with ${productName}`,
+              detail:
+                `Opened your default browser. Using a different browser for ${productName}? ` +
+                'Open this link there instead:\n\n' +
+                `${url}`,
+              buttons: ['Copy Sign-in Link', 'Close'],
+              defaultId: 0,
+              cancelId: 1,
+            });
+            if (result.response === 0) {
+              clipboard.writeText(url);
+            }
+          },
+          presentSubscriptionDeviceCode: async (prompt, productName) => {
+            // The code is copied up front: the dialog closes on any button, so
+            // the user must not have to keep it open to read the code back.
+            clipboard.writeText(prompt.userCode);
+            const result = await dialog.showMessageBox(window, {
+              type: 'info',
+              message: `Sign in with ${productName}`,
+              detail:
+                `No browser could take the sign-in callback, so ${productName} ` +
+                'is signing in with a one-time code instead.\n\n' +
+                `1. Open ${prompt.verificationUrl}\n` +
+                `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
+                'TeXRA is waiting for you to approve it.',
+              buttons: ['Open Verification Page', 'Close'],
+              defaultId: 0,
+              cancelId: 1,
+            });
+            if (result.response === 0) {
+              await previewHost.openExternal(
+                prompt.verificationUrlComplete ?? prompt.verificationUrl,
+              );
+            }
+          },
+        },
+        notifications: {
+          showInfoMessage,
+          showWarningMessage,
+          showErrorMessage,
+        },
+        auth: {
+          signIn,
+          signOut: () => desktopAuth.signOut(),
+        },
+        subscriptionUsage,
+        onCredentialChanged: async () => {
+          await onboardingIpcRef.current?.refreshOnboardingFunnel();
+        },
+        // Credential operations already show their specific failure dialog. Keep
+        // the shared callback log-only so one failure never opens a second,
+        // generic desktop-operation dialog.
+        onError: reportBackgroundError,
+      });
+    const toolingSettingsController =
+      new DefaultDesktopToolingSettingsController({
+        onError: reportAsyncError,
+        workspaceState: paper.roots.workspaceState,
+        globalState: platform().globalState,
+        renderer: {
+          postToRenderer: postToRendererIfAlive,
+        },
+        dashboard: {
+          buildItems: async (cachedResults) => {
+            const { buildToolDashboardItems } =
+              await import('@controllers/settingsView/ToolDashboardData');
+            return buildToolDashboardItems('desktop', cachedResults);
+          },
+          getCachedCheckResults: async () => getLastCheckResults() ?? undefined,
+          refreshAvailability: refreshToolAvailability,
+          planTerminalAction: async (toolId, kind) => {
+            const { planToolTerminalAction } =
+              await import('@controllers/settingsView/ToolDashboardData');
+            return planToolTerminalAction({ toolId, commandKind: kind });
+          },
+        },
+        navigation: { openExternal: previewHost.openExternal },
+        commands: {
+          run: async (command: string) => {
+            postToRendererIfAlive({
+              command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+              initialCommand: command,
+            });
+          },
+        },
+        latexToolingController: new LatexToolingController({
+          checkToolInstalled: (tool) => checkToolInstalled(tool, false),
+          findPath: (tool) => BinaryResolver.findPath(tool),
+          detectPackageManager,
+          getPlatform: () => normalizePlatform(process.platform),
+          // Extension hosting is deliberately unavailable in TeXRA Desktop.
+          isLatexWorkshopInstalled: () => false,
+          getRecommendedStatus: () => ({
+            outDir: true,
+            autoRevealExclude: true,
+          }),
+          onDetectionError: reportBackgroundError,
+        }),
+      });
+    paperResources.add(() => toolingSettingsController.dispose());
     const settingsIpc = createDesktopSettingsIpc({
       postToRenderer: postToRendererIfAlive,
       agentSettingsController,
@@ -1039,7 +1044,6 @@ function createWindow(options: {
       postPapers();
     }),
   );
-  windowResources.add(() => toolingSettingsController.dispose());
   const progressIpc = createDesktopProgressIpc({
     source: {
       get: () => agentExecution,
