@@ -180,7 +180,7 @@ SessionView = {
   inquiries: InquiryThread[],
   // this process's local truth: a fold input, never durable, never persisted
   // wire type (8.1): arrays, never Maps - see the note under 5.1
-  local: { self: OwnerId, heldBy: OwnerId[],
+  local: { self: OwnerId[], heldBy: OwnerId[],
            unreadable: { streamId: StreamTabId, detail: string }[] },
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
@@ -260,7 +260,11 @@ reader (`executionLease.ts`, a pid probe on the lease owner) emits an
 `LocalRuntimeState` snapshot - the owner ids whose lease this process may
 not touch, and the streams it could not read (see "Unavailable" below) - on
 every change and on every subscribe, and the fold keeps the latest snapshot
-in `local`. `heldBy` is the lease's own predicate, not "alive": a lease is
+in `local`. `self` is a **set**: `claimLease` mints a fresh UUID per claim
+(`executionLease.ts:519-525`), so a process running two executions holds two
+owner tokens, and a single-token `self` would classify its own second stream
+as foreign and disable its controls. `heldBy` is the lease's own
+predicate, not "alive": a lease is
 `held` when its owner is alive **or unprovable**, and nothing automatic
 reaps an unprovable one - only an explicit deletion does
 (`executionLease.ts:38-41, 164-172`). Defining it as known-alive would label
@@ -341,12 +345,17 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   field would let one stream's goal event overwrite another's.
 - **`approval`** is `'own'` when the stream itself is waiting, `'descendant'`
   when any descendant is. Expansion is forced - **over a collapsed
-  override**, which arriving at `'descendant'` clears for the path - by a
+  override** - by a
   pending approval and equally by an interrupted descendant, the two states
   that need the user (see `rollup`). The fold projects that condition as
   `forceExpanded` on every stream on the path, so a host expands by reading
   one named field instead of walking descendants for approvals and
-  interrupted runs itself. An override applied on top would let a parent the
+  interrupted runs itself. The fold cannot clear the collapsed override -
+  `Surface.expanded` is the renderer's - so the **surface** drops its
+  override for a path when `forceExpanded` turns true. Without that the
+  override merely sleeps: the moment the approval resolves and
+  `forceExpanded` goes false, the parent snaps shut again on a path the user
+  has just been working in. An override applied on top would let a parent the
   user collapsed earlier stay closed when a child later asks for a decision
   or loses its owner, and since `rollup` deliberately carries neither count
   there would be nothing else on screen to show it - a blocked or resumable
@@ -396,7 +405,7 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   process is now _derivable_: `ownerId` is not this process and is in
   `local.heldBy`. Either way the stream is **read-only here**, and the
   fold says so in one field: `readOnly` is true when `ownerId` is in
-  `local.heldBy` and is not `local.self`, or when the stream is in
+  `local.heldBy` and **not** in `local.self`, or when the stream is in
   `local.unreadable`. The held test matters: once the previous owner exits,
   its lease is reclaimable, so the stream is `interrupted` **and
   actionable** - marking every foreign `ownerId` read-only would hide the
@@ -1313,7 +1322,11 @@ fixing the id retired it.
   `followUp.polish { streamId, text }` - the draft
   lives in the view's `Surface.drafts` and §8.6 does not synchronize it, so
   polish carries its text exactly as `polishInstruction` does
-- decisions: `toolEdit`, `bash`, `plan`,
+- decisions: `toolEdit { action, feedback? }`, `bash { action, feedback? }`,
+  `plan { action }` (including `approve_and_goal`) - discriminated payloads,
+  because an arm has to say **which** decision was made and carry its
+  rejection feedback; the schemas already distinguish these variants
+  (`progressView/inbound.ts:145-162, 187-193`),
   `proposal { approve { model?, agent? } | reject | setup }` (the panel
   lets the user approve with a different model or agent, which
   `AgentProposalActionMessageSchema` carries on its approve branch,
@@ -1502,7 +1515,11 @@ Effect's own result is the response and no message exists.
 ```ts
 SurfaceAction = {
   session: SessionKey,
-  action: 'selectNew' | 'select { streamId }' | 'toggleDrawer' | 'submitLaunch',
+  action:
+    | { kind: 'selectNew' }
+    | { kind: 'select'; streamId: StreamTabId }   // revealStream(streamId)
+    | { kind: 'toggleDrawer' }
+    | { kind: 'submitLaunch' },
 };
 ```
 
@@ -1921,8 +1938,10 @@ a component.
   parents,
   the path expanded for `forceExpanded` - a pending approval or an
   interrupted descendant, either of which outranks a collapsed override -
-  and the Surface's override elsewhere, a header with search, new, and close, and a footer with Open
-  sessions in editor. Width `min(320px, 100% - 40px)`.
+  and the Surface's override elsewhere, a header with search and close - **not** a New task
+  control, which the main header already carries (one home per action;
+  a second button in the drawer is the duplicate that drifts) - and a
+  footer with Open sessions in editor. Width `min(320px, 100% - 40px)`.
 - **Dispatch card (E2)**: the existing `background-tasks-panel` moved to the
   dispatching row, listing each child's `StreamView` (status, last row,
   elapsed) with its own children indented, and a rollup pill in the summary.
