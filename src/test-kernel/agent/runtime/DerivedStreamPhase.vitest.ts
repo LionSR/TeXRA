@@ -121,6 +121,7 @@ describe('SessionState.resolveStreamPhase', () => {
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
 
     // The persisted outcome is the display fact, and CANCELLED is what every
     // downstream table already renders with Resume enabled.
@@ -167,6 +168,7 @@ describe('SessionState.resolveStreamPhase', () => {
     try {
       const state = openUnrepairedSession(transcripts);
       await state.snapshots.preload([stream]);
+      await state.hydrateRunFacts(stream);
 
       // A checkpoint plus no outcome is also what a crash looks like; the
       // live lease is what keeps this out of the terminal arm.
@@ -198,12 +200,44 @@ describe('SessionState.resolveStreamPhase', () => {
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
 
     // A failed authority read is not "nothing ran": it renders read-only with
     // the cause, so the failure cannot degrade into a quiet `ready`.
     expect(state.resolveStreamPhase(stream)).toEqual({
       origin: 'derived',
       detail: streamUnreadableMessage('meta.json is unreadable'),
+    });
+  });
+
+  it('shows a finished run whose config.json is malformed as unavailable', async () => {
+    const executionId = 'ffff6666' as ExecutionId;
+    const stream = `badconfig#${executionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    await seedSidecarFk(stream, executionId);
+    const executionStore = getExecutionStore(executionId);
+    // A valid row with a terminal outcome, beside a run record that cannot be
+    // parsed. The sidecar preload reads both and calls that authority
+    // unreadable, so the phase probe must not answer COMPLETED off the half
+    // it can still read. (`writeMeta` creates the execution directory.)
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+    await StorageFS.write(
+      `executions/${executionId}/config.json`,
+      '{ not json',
+    );
+
+    const state = openUnrepairedSession(transcripts);
+    await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
+
+    expect(state.resolveStreamPhase(stream)).toEqual({
+      origin: 'derived',
+      // The cause is the JSON parser's, so only the sentence around it is
+      // this rule's own.
+      detail: expect.stringContaining("Could not read this run's state"),
     });
   });
 
@@ -224,6 +258,7 @@ describe('SessionState.resolveStreamPhase', () => {
 
     const state = openUnrepairedSession(transcripts);
     await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
 
     expect(state.resolveStreamPhase(stream)).toEqual({
       state: { phase: STREAM_PHASE.COMPLETED },

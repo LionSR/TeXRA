@@ -719,6 +719,11 @@ export class SessionFactApplier {
   }
 
   private handleRunConfig(streamId: StreamTabId): void {
+    // A run is taking this stream over, so whatever a previous row open read
+    // about the last run — its outcome, checkpoint, and lease — is not this
+    // run's. The live phase answers while the run is in flight; the next row
+    // open reads the durable tuple again.
+    this.state.clearRunFacts(streamId);
     // No explicit refresh: `getStreamMetadata` overlays the summary mirror —
     // already updated synchronously by the snapshot store's projection of
     // this same fact — at read time (#9947).
@@ -834,9 +839,9 @@ export class SessionFactApplier {
    *
    * The single owner of that rule, so every moment it can become true — the
    * run ends while nothing presents it, a host stops presenting a stream no
-   * run owns, and a background hydration warms a record for a tab nobody
-   * opened — asks the same question. The rule is re-read after the store's
-   * drain: a relaunch or a fresh presentation during it keeps the record.
+   * run owns, and an activation abandons a record it warmed — asks the same
+   * question. The rule is re-read after the store's drain: a relaunch or a
+   * fresh presentation during it keeps the record.
    */
   retireSidecarIfFinishedChild(streamId: StreamTabId): void {
     if (!this.isRetiredSidecarCandidate(streamId)) return;
@@ -859,12 +864,12 @@ export class SessionFactApplier {
     // left are equally nobody's to write, and their records are equally pure
     // accumulators; keying on the outcome alone left each of those resident
     // for the life of the process, the cost bounded residency exists to bound
-    // (#9947). The run facts survive the release, so the phase stays
-    // answerable afterwards.
+    // (#9947). The run facts live on the session, not the record, so the
+    // phase stays answerable after the release.
     //
     // Two origins keep the record. `live` is a producer in this process.
-    // `pending` is a stream that has never hydrated, whose record may be the
-    // only home of a live fact — releasing that loses it rather than parking
+    // `pending` is a row nobody has opened, whose record may be the only home
+    // of a live fact — releasing that loses it rather than parking
     // it. `none` is the one answer that is ambiguous about which of the two
     // it is: it is also what a run reads as between its `run.config` and its
     // first status, so a record naming an execution the hydration did not

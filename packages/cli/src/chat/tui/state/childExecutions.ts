@@ -92,6 +92,19 @@ export function sessionStreamPhase(
   return BOUND.get()?.state.getStreamPhaseState(streamId);
 }
 
+/** Read the durable run facts for the stream the user just focused, then
+ *  repaint the readers that render its phase. The CLI's one caller of the
+ *  session's row-open hydration — nothing here walks the roster, so a stream
+ *  the user has not focused renders from its always-resident summary. */
+export async function hydrateFocusedStreamRunFacts(
+  streamId: StreamTabId,
+): Promise<void> {
+  const bound = BOUND.get();
+  if (!bound) return;
+  await bound.state.hydrateRunFacts(streamId);
+  invalidateChildStreams();
+}
+
 /** Canonical reason a stream is unavailable in this session: held by another
  *  process, or its run state could not be read. Same rule as the phase, so a
  *  foreign owner locks the composer without waiting for a refused send. */

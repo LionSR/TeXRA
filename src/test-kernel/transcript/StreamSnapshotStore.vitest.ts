@@ -200,10 +200,9 @@ function injectDuringExecutionConfigHydration(
 }
 
 /**
- * Replace the execution row read (`meta.json`) that BOTH the metadata
- * hydration and the phase probe make; every other read passes through. The
- * store parses that raw row itself (core schema only), so there is no typed
- * accessor left to stub.
+ * Replace the execution row read (`meta.json`) the metadata hydration makes;
+ * every other read passes through. The store parses that raw row itself (core
+ * schema only), so there is no typed accessor left to stub.
  */
 function mockExecutionMetaRead(
   executionId: ExecutionId,
