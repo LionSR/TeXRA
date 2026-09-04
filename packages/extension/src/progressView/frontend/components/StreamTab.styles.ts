@@ -199,7 +199,11 @@ export const streamTabStyles = css`
       var(--wa-color-brand-fill-quiet) 85%,
       transparent
     );
-    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
+    /* brand-on-quiet is the foreground paired with the quiet fill above in
+       both hosts. list-active-fg is not: it is authored to sit on the loud
+       --wa-color-list-active-bg accent (white in light themes), which made
+       the selected row white-on-near-white in light mode. */
+    color: var(--wa-color-brand-on-quiet, var(--wa-color-text-normal));
   }
 
   /*
@@ -208,7 +212,7 @@ export const streamTabStyles = css`
    * (.last-active, .model) and codicon glyphs.
    */
   .tab-container.is-active * {
-    color: var(--wa-color-list-active-fg, var(--wa-color-text-normal));
+    color: var(--wa-color-brand-on-quiet, var(--wa-color-text-normal));
   }
 
   /* Selection is the primary row state. Keep the lifecycle rail present, but
