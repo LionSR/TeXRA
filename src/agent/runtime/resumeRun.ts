@@ -343,6 +343,23 @@ async function resumeRunWithRecoveryProvenance(
     );
     return { failed: 'unusable_checkpoint' };
   }
+  // Both branches below launch only when the checkpoint's category and the
+  // queue lease agree; a disagreement refuses, so no host rearranges for it.
+  const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
+  // One lease read per open, taken before the hold below is touched: a read
+  // that fails leaves the earlier refusal's hold standing, since this attempt
+  // learned nothing that disproves it. The hook is where a host rearranges
+  // itself onto the resumed run, so a row another TeXRA process is live on
+  // must refuse before that, not after the launch's own acquire raises
+  // `ExecutionLeaseActiveError` onto a cleared window. The acquire still
+  // settles the race this read cannot see.
+  const lease =
+    willLaunch && options.onResumeResolved
+      ? await inspectExecutionLease(executionId).catch((error: unknown) => {
+          if (queueLease) session.followUps.release(queueLease, 'recoverable');
+          throw error;
+        })
+      : undefined;
   // The run is about to be opened for write, its checkpoint just re-read. A
   // hold recorded by an earlier refusal describes facts this
   // attempt has now re-read, so it goes, and the phase it retained goes with
@@ -351,30 +368,16 @@ async function resumeRunWithRecoveryProvenance(
   // refused below writes the current reason; one that acquires leaves the
   // phase it lands on.
   session.status.clearHold(streamId, { discardRetainedPhase: true });
-  // Both branches below launch only when the checkpoint's category and the
-  // queue lease agree; a disagreement refuses, so no host rearranges for it.
-  const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
-  if (willLaunch && options.onResumeResolved) {
-    // One lease read per open, taken here because the hook is where a host
-    // rearranges itself onto the resumed run: a row another TeXRA process is
-    // live on must refuse before that, not after the launch's own acquire
-    // raises `ExecutionLeaseActiveError` onto a cleared window. The acquire
-    // still settles the race this read cannot see.
-    const lease = await inspectExecutionLease(executionId).catch(
-      (error: unknown) => {
-        if (queueLease) session.followUps.release(queueLease, 'recoverable');
-        throw error;
-      },
+  if (lease?.status === 'held') {
+    if (queueLease) session.followUps.release(queueLease, 'recoverable');
+    session.status.markUnavailableOrLog(
+      streamId,
+      streamHeldMessage(lease.owner),
+      log,
     );
-    if (lease.status === 'held') {
-      if (queueLease) session.followUps.release(queueLease, 'recoverable');
-      session.status.markUnavailableOrLog(
-        streamId,
-        streamHeldMessage(lease.owner),
-        log,
-      );
-      return { failed: 'owned_elsewhere' };
-    }
+    return { failed: 'owned_elsewhere' };
+  }
+  if (willLaunch && options.onResumeResolved) {
     try {
       await options.onResumeResolved();
     } catch (error) {
