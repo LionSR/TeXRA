@@ -24,6 +24,7 @@ import {
 } from '../shared/desktopTaskShell';
 import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import type { createEditorPane } from './editorPane';
+import type { createPdfPane } from './pdfPane';
 import type { createTerminalPane } from './terminalPane';
 import type { createReviewPane } from './reviewPane';
 
@@ -31,6 +32,7 @@ interface WorkbenchControllerDeps {
   editorPane: ReturnType<typeof createEditorPane>;
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
+  pdfPane: ReturnType<typeof createPdfPane>;
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopTaskShellState;
@@ -58,6 +60,7 @@ export function createWorkbenchController({
   editorPane,
   terminalPane,
   reviewPane,
+  pdfPane,
   settingsView,
   logsPane,
   getState,
@@ -248,6 +251,8 @@ export function createWorkbenchController({
         return workbenchSurfaceTemplate(settingsView);
       case 'logs':
         return workbenchSurfaceTemplate(logsPane);
+      case 'pdf':
+        return workbenchSurfaceTemplate(pdfPane.frameFor(tab));
     }
   }
 
@@ -261,6 +266,7 @@ export function createWorkbenchController({
       pendingTerminalCommands.delete(tabId);
       terminalPane.dispose(tabId);
     }
+    if (tab?.kind === 'pdf') pdfPane.dispose(tabId);
     updateShell(closeWorkbenchTab(getState(), tabId));
   }
 

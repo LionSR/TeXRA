@@ -63,6 +63,13 @@ export const WORKBENCH_KIND_META = {
     label: 'Logs',
     singleton: true,
   },
+  /** One compiled PDF per tab, keyed by its path (the tab's `target`). */
+  pdf: {
+    defaultPlacement: 'right',
+    icon: 'file-pdf',
+    label: 'PDF',
+    singleton: false,
+  },
 } as const satisfies Record<string, WorkbenchKindMeta>;
 
 export type WorkbenchKind = keyof typeof WORKBENCH_KIND_META;
@@ -163,7 +170,7 @@ function tabId(kind: WorkbenchKind, target?: string): string {
 }
 
 function titleFor(kind: WorkbenchKind, target?: string): string {
-  return kind === 'editor' && target
+  return (kind === 'editor' || kind === 'pdf') && target
     ? getBasename(target)
     : WORKBENCH_KIND_META[kind].label;
 }

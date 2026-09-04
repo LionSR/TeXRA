@@ -109,8 +109,9 @@ import {
   DESKTOP_PAPER_COMMANDS,
   type DesktopPaperSummary,
 } from '../shared/desktopPaperMessages';
+import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
-import { createPdfOverlay } from './pdfOverlay';
+import { createPdfPane } from './pdfPane';
 import { createReviewPane } from './reviewPane';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
@@ -352,7 +353,7 @@ const terminalPane = createTerminalPane({
 });
 
 const reviewPane = createReviewPane();
-const pdfOverlay = createPdfOverlay(appRoot);
+const pdfPane = createPdfPane();
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
 );
@@ -368,6 +369,7 @@ const workbench = createWorkbenchController({
   editorPane,
   terminalPane,
   reviewPane,
+  pdfPane,
   settingsView,
   logsPane,
   getState: () => shellState,
@@ -1014,8 +1016,27 @@ const MESSAGE_ROUTES = createMessageRoutes({
   },
   disposeReviewTab: () => workbench.disposeWorkbenchTab('workbench:review'),
   pdf: {
-    open: (message) => pdfOverlay.open(message),
-    close: () => pdfOverlay.close(),
+    open: (message) => {
+      // The schema parsed the shape; the path is still checked once here,
+      // before it becomes an iframe `src`, so a main-process post cannot
+      // turn the tab into a generic browsing surface.
+      if (!isSafeAbsolutePdfPath(message.pdfPath)) {
+        console.error('[desktop] rejected unsafe PDF path', message.pdfPath);
+        return;
+      }
+      updateShell(
+        openWorkbenchTab(shellState, {
+          kind: 'pdf',
+          target: message.pdfPath,
+          title: message.title,
+        }),
+      );
+    },
+    close: () => {
+      for (const tab of shellState.workbenchTabs) {
+        if (tab.kind === 'pdf') workbench.disposeWorkbenchTab(tab.id);
+      }
+    },
   },
   prompt: { open: (message) => promptOverlay.open(message) },
   terminal: {
