@@ -12,18 +12,24 @@
  * 2. a persisted `meta.outcome` — the run recorded how it ended, which is its
  *    own durable fact and outranks a lease this process is merely slow to
  *    release (#8093);
- * 3. no checkpoint on disk — nothing is left to continue and nothing recorded
+ * 3. a lease a live foreign owner holds, or one this process holds with no run
+ *    behind it — nothing terminal may be claimed, and the reason is shown;
+ * 4. no checkpoint on disk — nothing is left to continue and nothing recorded
  *    an outcome, so the reading is settled with none ("unknown");
- * 4. a checkpoint whose lease a live foreign owner holds, or whose lease this
- *    process holds with no run behind it — nothing terminal may be claimed,
- *    and the reason is shown;
  * 5. a checkpoint nobody holds — the run was interrupted (a crash, or a host
  *    that quit).
  *
+ * Ownership is asked before the checkpoint because a checkpoint is an agent
+ * run's artifact. A background shell and a workflow-script container hold an
+ * execution lease for their whole lifetime and never write `flow_<id>.json`,
+ * so statting first would read a live run another TeXRA process owns as
+ * settled with no outcome.
+ *
  * The cost is the point: the /executions listing walks this once per row, so
  * it must stay at one metadata read (skipped entirely when the caller already
- * holds the row), one `exists` stat, and — only for a run that still has a
- * checkpoint — one lease read.
+ * holds the row) and, for a row with no recorded outcome, one lease read plus
+ * — only when that lease is free — one `exists` stat. A row that recorded its
+ * outcome pays neither.
  *
  * Checkpoint *validity* is therefore deliberately not re-derived here.
  * `deriveResumability` parses the record and is stricter than a stat (a spent
@@ -111,9 +117,6 @@ export async function resolveExecutionLiveness(
     if (meta?.outcome !== undefined) {
       return { kind: 'settled', outcome: meta.outcome };
     }
-    if (!(await store.exists(flowKey(executionId)))) {
-      return { kind: 'settled' };
-    }
     const lease = await inspectExecutionLease(executionId);
     if (lease.status === 'held') {
       return { kind: 'unsettled', reason: heldElsewhereReason(lease.owner) };
@@ -124,9 +127,11 @@ export async function resolveExecutionLiveness(
       );
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }
-    // A checkpoint with no outcome and no live owner is a run that stopped
-    // without finishing.
-    return { kind: 'interrupted' };
+    // Nobody owns the run: a checkpoint left behind is one that stopped
+    // without finishing, and none at all leaves nothing to continue.
+    return (await store.exists(flowKey(executionId)))
+      ? { kind: 'interrupted' }
+      : { kind: 'settled' };
   } catch (error) {
     const cause = toErrorMessage(error);
     log.warn(

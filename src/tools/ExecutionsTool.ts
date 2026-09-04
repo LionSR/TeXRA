@@ -742,7 +742,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await transcripts.readEntries(streamId);
 
     const { lines, chars } = projectProcessOutput(entries);
-    const liveness = await resolveExecutionLiveness(executionId, meta);
+    // No snapshot: `meta` was read before the transcript, and a command that
+    // finished during that read must not be judged against the row as it
+    // looked beforehand. One read of one execution can afford a fresh one.
+    const liveness = await resolveExecutionLiveness(executionId);
     const info = statusInfoFromLiveness(liveness);
     // The footer states the same reading as the header: "no handle in this
     // process" alone never justifies calling the command finished, and a

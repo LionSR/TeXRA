@@ -48,6 +48,9 @@ describe('getExecutionStatusInfo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     noLiveHandle();
+    // Unowned unless a case says otherwise: every outcome-less row reads the
+    // lease before it decides anything from the checkpoint.
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
   });
 
   it.each<{ outcome?: RunOutcome; expected: string }>([
@@ -79,15 +82,31 @@ describe('getExecutionStatusInfo', () => {
     assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 0);
   });
 
-  it('costs one stat and no lease read for a settled row', async () => {
+  it('costs one lease read and one stat for a settled row', async () => {
     persisted({}, 'no-checkpoint');
 
     const info = await getExecutionStatusInfo('exec-1', {});
 
     assert.strictEqual(info.status, 'unknown');
     assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
+    assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 1);
     assert.strictEqual(mocks.exists.mock.calls.length, 1);
-    assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 0);
+  });
+
+  it('reports a checkpointless run a live foreign owner holds as held', async () => {
+    // A background shell holds its execution lease for its whole lifetime and
+    // never writes a flow record, so the checkpoint stat cannot decide it.
+    persisted({}, 'no-checkpoint');
+    mocks.inspectExecutionLease.mockResolvedValue({
+      status: 'held',
+      owner: { pid: 5150, hostname: 'other-host' },
+    });
+
+    const info = await getExecutionStatusInfo('exec-1', {});
+
+    assert.strictEqual(info.status, 'unknown');
+    assert.match(info.detail ?? '', /pid 5150 on other-host/);
+    assert.strictEqual(mocks.exists.mock.calls.length, 0);
   });
 
   it('calls a checkpointed run nobody owns interrupted', async () => {
