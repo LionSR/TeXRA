@@ -161,6 +161,8 @@ SessionView = {
   streams: Map<StreamTabId, StreamView>,
   // top-level ids, streamOrdering rule
   order: StreamTabId[],
+  // consumed frontier per lane; survives a stream's tombstone (7.1)
+  cursor: SessionCursor,
   // each carries streamId and requestId
   approvals: ApprovalRequest[],
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
@@ -174,8 +176,8 @@ SessionView = {
 StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamView])
   // common
   id: StreamTabId
-  // the run currently on this stream; a resume mints a new one, latest wins
-  executionId: ExecutionId                   // immutable; from run.start
+  // from run.start; a resume keeps it, only a new incarnation changes it
+  executionId: ExecutionId
   identity: RunIdentity | null              // null only for legacy imports
   // launch facts from the run.start payload, never derived (5.2)
   isRemote: boolean
@@ -212,6 +214,7 @@ TranscriptView = {
   taskGroups: TaskGroup[],                   // taskGroupProjection
   compaction: CompactionBlock[],             // compactionActivityProjection
   settledSeq: number,                        // last durable seq folded
+  inflight: Map<RowId, string>,              // live text, order-free (5.2)
   // workflow arm; retained-phase filter folded in
   run: WorkflowRunModel | null,
 }
@@ -257,14 +260,25 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   new incarnation, which today needs `_streamIncarnations` plus a
   compare-on-remove so a fresh run invalidates a queued delete
   (`SessionState.ts:133-148`). Ordering the lifecycle by seq deletes both:
-  the seq order _is_ the incarnation order, so there is no generation
-  counter to keep and no queued-delete race to lose. A new `run.start`
+  the seq order is the commit order. Commit order alone is not enough: a
+  delete queued against incarnation N can land after N+1's `run.start` and
+  would then erase the fresh run. So the tombstone names its target -
+  `removeStream` carries the `executionId` it deletes, and the fold ignores
+  one whose target is not the current incarnation. `executionId` is
+  immutable within an incarnation (below), so it already _is_ that
+  incarnation's identity; this turns today's in-memory compare-on-remove
+  into a field on a durable, replayable event rather than a side map only
+  the emitting process can consult. A new `run.start`
   resets the stream's arm to empty - a fresh incarnation inherits no rows,
   no usage, and no approvals - and `executionId` is immutable within an
   incarnation, not across them. Physical removal is retention's business and
-  takes a stream's rows only together with its tombstone. `seq` is per stream, the `(stream_id, seq)` key of
-  the event table; insert order across streams under the publish permit
-  (7.1) is the session order a replay uses. Every stream kind gets one:
+  takes a stream's rows only together with its tombstone. `seq` is per **lane**, the `(lane, seq)` key of
+  the event table. A lane is a stream id, or the one session lane for facts
+  that name no stream - `inquiryThreadUpdated` with a null `parentStreamId`
+  is the case that forces this, and a sentinel stream id would be the same
+  thing wearing a disguise. Insert order across lanes under the publish
+  permit (7.1) is the session order a replay uses, and `SessionCursor` maps
+  lane to seq. Every stream kind gets one:
   agent, process (`bash@tool`), workflow script, through `RunIdentity.kind`.
 - **Category, remote-ness, and owner** are launch facts on the `run.start`
   payload (section 6, item 6). `RunIdentity` deliberately does not encode
@@ -304,7 +318,12 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   a waiting descendant expands the path, so a collapsed parent never hides
   one.
 - **`ancestors`** walks `parentId`; an evicted parent contributes its last
-  known label.
+  known label. A child whose `parentId` names a stream the view does not
+  have - a tombstoned parent, most often - is **top-level**: it joins
+  `order` and shows no ancestors. Deleting a parent therefore cannot hide
+  its children, and needs no detach transaction: `onChildrenDetached` emits
+  `setParentStream` today only because deletion was physical, and under a
+  tombstone the fold re-roots them by rule instead of by event.
 - **`order`** and `childIds` use `streamOrdering` (newest creation first,
   ties by name).
 - **`executionId`** comes from `run.start` and never changes. There is one
@@ -390,17 +409,21 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   and thinking streams do not. Lane 1 makes it mandatory: `stream.end`
   carries the joined text it already computed, and the `phaseOnly` guard
   stays as-is because a phase-only stream has no text to carry.
-- **A chunk never precedes its row.** The producer appends a row's creating
-  event before streaming any text for it - the append is under the publish
-  permit and returns before the emitter streams - and within one frame the
-  `events` array folds before the `chunks` array (8.1), which is a total
-  order the framer already has. So no chunk can arrive for a row that does
-  not exist, and the fold needs no chunk buffer: a buffer would need an
-  eviction policy for chunks whose row never comes, which is a second
-  failure mode in place of an ordering the producers already own.
+- **In-flight text is its own map, so order does not matter.** Chunks
+  accumulate in `inflight: Map<RowId, string>` keyed by row, independent of
+  whether that row's durable event has folded yet; a row renders by joining
+  its durable fields with its in-flight entry, and the entry is dropped when
+  the row's finalizing event lands. A chunk arriving before its creating
+  event is therefore not a problem to order around - it simply has nowhere
+  to render until the row appears, and then it is already there. Ordering the
+  two arms is not available anyway: the producer can append before it
+  streams, but the fold's two inputs are separate streams and the table drain
+  is asynchronous, so emission order is not delivery order. A consumer-side
+  buffer would need an eviction policy for chunks whose row never arrives;
+  keying the text by row needs neither.
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
-  durable events will settle, so a chunk for a row whose finalizing event
-  has already folded is discarded. That makes the merge order of the three arms (7.2)
+  durable events will settle, so a chunk for a row whose finalizing event has
+  already folded is discarded rather than reopening its `inflight` entry. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
   an early one is overwritten when its event lands. Without the rule the
   same two inputs give two different rows in two processes.
@@ -614,13 +637,17 @@ That is why this process's half is a counter rather than a `PubSub`.
 The store's half is decision 6, still unagreed, and it is now the weakest
 form yet: a **monotone commit counter** for the session, readable at any
 time. It carries no events, need not be exact, and may over-report, because
-a wake that finds no new rows costs one indexed read. It must, however, be
-genuinely non-decreasing for the life of the database: the max rowid of the
-event table qualifies, and a **WAL frame count does not**, because a
-checkpoint resets it and a checkpoint plus a commit between two polls can
-leave the observed level unchanged. A store that can offer no such level
-must instead wake unconditionally on a timer; a level that can go backwards
-is worse than a poll, because it looks reliable. Without it a process that only reads goes stale whenever another
+a wake that finds no new rows costs one indexed read. The one property it
+must have is that it **never decreases and never reuses a value**, for the
+life of the database. Two plausible implementations fail that, and both are
+named here because both look right: a WAL frame count is reset by a
+checkpoint, and `MAX(rowid)` falls when retention deletes the highest row
+and, without `AUTOINCREMENT`, reuses the value afterwards. In either case a
+poller waiting for a level above the one it read misses everything
+committed in between. So it is a separately persisted generation or an
+explicitly non-reusing sequence - and a store that can offer neither wakes
+unconditionally on a timer instead. A level that can go backwards is worse
+than a poll, because it looks reliable. Without it a process that only reads goes stale whenever another
 process owns the run, since a seq gap is only visible once a _later_ row for
 the same stream arrives locally.
 
@@ -635,9 +662,15 @@ stall the durable write path; with a payload-free wake there is nothing to
 lose by coalescing anyway. Backpressure lives at each transport framer
 (7.4).
 
-`SessionCursor` is the per-stream `settledSeq` map the view already holds,
-so `all(cursorOf(view))` is both the initial subscribe and the resubscribe;
-a stream absent from the cursor reads from its `run.start`.
+`SessionCursor` is a field of the view (`cursor`): the frontier the fold has
+actually consumed per lane, not a projection of the visible streams. The
+distinction is load-bearing. Deriving it from `view.streams` would drop a
+tombstoned stream's frontier the moment its `removeStream` folded, and every
+later wake would re-read that lane from its first row - resurrecting the
+stream and its approvals in the intermediate states `Stream.scan` publishes,
+and rescanning its whole history each time. A lane's frontier outlives the
+visibility of what it carried. `all(view.cursor)` is both the initial
+subscribe and the resubscribe.
 `events(streamId, fromSeq)` stays for single-stream readers (the trace
 viewer, the NDJSON subscription) and is a per-stream durable read, never
 `readAll` behind a filter: a filter would make every single-stream reader
@@ -652,11 +685,11 @@ resolves `DurableWrite`. `transportLayer` runs in a webview, where there is
 no database and no publisher: it decodes the `EventsFrame`s of 8.1 through
 `SessionFrames`, the one service a webview's process layer provides. Three
 of its fields are the three fold arms - `events`, `chunks`, `local` (7.2) -
-and the fourth is `catalogs`, which is not a fold arm at all: the decoder
-publishes it into a `Catalogs` service (a `SubscriptionRef` the launcher's
-pickers read as a signal), because an option list is host data, not session
-state (8.1, 9). Without that fourth field the frame would carry catalogs
-with nowhere to put them. A webview that reaches for `publish` is a defect, not a
+and the fourth is `host`, which is not a fold arm at all: the decoder
+publishes it into a `HostState` service (a `SubscriptionRef` the shell's
+components read as a signal), because it is host data, not session state
+(8.1, 9). Without that fourth field the frame would carry the snapshot with
+nowhere to put it. A webview that reaches for `publish` is a defect, not a
 silent no-op: it issues a `runtime.request` (8.2) instead.
 
 `SessionFrames` takes no `SessionKey`, because it _is_ one session's frames.
@@ -920,7 +953,7 @@ the same functions in process.
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, catalogs: Catalogs | null }
+EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
 ```
 
@@ -933,15 +966,18 @@ so a frame needs no per-stream range.
 The two nullable fields are host-owned transient snapshots, sent on every
 change and on every subscribe, and they are the only two. `local` is this
 process's runtime snapshot - live owner ids and unreadable streams (5.2);
-a surface that has never received one folds with `local` empty. `catalogs` is the launcher's option lists -
-models, agents, teams, workspace roots - which are neither the user's
-choice (`Surface`, 9) nor a fact about a run (`SessionView`), but do change
-while a webview is open, as a new agent file or an added workspace root.
-That rules out both alternatives: a one-shot request at startup goes stale,
-and a request arm would need a push channel anyway. `local` already
-established the shape, so `catalogs` is a second field on it, not a fourth
-message. This is what feeds the pickers once lane 4 deletes the
-option-posting commands.
+a surface that has never received one folds with `local` empty. `host` is
+everything the shell renders but does not own: the launcher's option lists
+(models, agents, teams, workspace roots), the five banners, and the
+onboarding funnel state. None of it is the user's choice (`Surface`, 9) or a
+fact about a run (`SessionView`), and all of it changes while a webview is
+open - a new agent file, an added workspace root, a credential that starts
+failing. That rules out both alternatives: a one-shot request at startup
+goes stale, and a request arm would need a push channel anyway. `local`
+already established the shape, so this is a second field on an existing
+message rather than one field per kind of host state - which is what feeds
+the pickers, the banners, and the empty state once lane 4 deletes
+`SET_BANNER`, `SET_ONBOARDING_FUNNEL`, and the option-posting commands.
 
 `SessionKey` is the workspace root that keys the `LayerMap` (7.3), and it
 is on every message in both directions. One desktop renderer has N papers
@@ -961,8 +997,14 @@ One Zod union, one handler. Every request carries a `session` and a
   `restoreState`
 - follow-up: `send { streamId, text, images }`, `retry`, `cancelRetry`,
   `polish`
-- decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`,
-  `externalInquiry { draft | submit | drop }`
+- decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
+  carrying the `approvalId` of the request it answers (the runtime's id from
+  `approval.requested`, which `ApprovalRequest` already holds), plus
+  `externalInquiry { draft | submit | drop }`. The envelope's `requestId` is
+  correlation for the response (8.4) and is minted per message; the
+  `approvalId` is domain identity and names which pending decision is being
+  resolved. One cannot serve as the other: two surfaces answering the same
+  approval send two `requestId`s for one `approvalId`.
 - policy: `setPolicy { streamId, change }` - the field-level mutation, not a
   snapshot. It still replaces three toggles and two enable commands with one
   runtime transaction instead of the read, set, drop sequence at
@@ -991,7 +1033,8 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 `latexdiff`, `openLabel`, `pack`, `clean`, `restoreIntoLauncher`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
 `record { start | stop }`, `popOut`, `popBack`, `pickFiles`, `openSettings`,
-`openUrl`, and the launcher's file pickers. The own-API-key retry is a host
+`openDashboard` (the retained "Open dashboard" action, `texra.showDashboard`
+today), `openUrl`, and the launcher's file pickers. The own-API-key retry is a host
 credential flow whose completion issues a `runtime.request`.
 
 ### 8.4 Down: `response`
@@ -1059,12 +1102,18 @@ that one record, which is what makes them survive a paper switch and a
 remount instead of resetting through the tracked-signal registry. Two
 things that look adjacent are deliberately _not_ Surface: the option
 catalogs (`modelOptions$`, `agentOptions$`, `teamOptions$`,
-`workspaceRootOptions$`) are host-provided data, not the user's choices,
-and arrive as the frame's `catalogs` snapshot (8.1); the banners are
-request outcomes and host state. The test is whether a
+`workspaceRootOptions$`) are host-provided data, not the user's choices, and
+the banners and the onboarding funnel are host state: all of them arrive as
+the frame's `host` snapshot (8.1). The test is whether a
 second surface on the same session may hold a different value: a selection
-may, a catalog may not. Two surfaces on one session may select
-different streams. Launch returns
+may, a catalog may not. `selected` is a _preference_, not a pointer the renderer trusts: what a
+surface shows is `selected` if the view still has that stream, else the
+first of `order`, resolved at read. A deletion by this surface or the other
+one therefore cannot leave a conversation pointed at a stream that no longer
+exists, and a persisted selection restored after a deletion is harmlessly
+stale rather than invalid - which is why no reconciliation effect watches
+the view to clear it. Two surfaces on one session may select different
+streams. Launch returns
 the stream id (`onBeforeActivation` already hands it out,
 `AgentLaunchContext.ts:93`) and the launching surface selects it. "Reply to
 parent instead" moves the draft to the parent. Persisted per view through
@@ -1146,7 +1195,11 @@ line, and its `setTaskState` line carries a whole `AgentConfig` through
 would put `TaskState` fields in `SessionView` that no renderer shows, and
 would then make the projection diff two views to recover the event that
 produced a line. It stays a per-event projection and reads
-`SessionEvents.all()` directly. That is the division: the fold is what
+`SessionEvents.all(cursor)` directly, attaching at the durable high-water
+cursor captured when it subscribes - not the empty cursor, which on a
+resumed session would re-emit the whole history before the current run's
+records and break the byte-identical guarantee. The cursor parameter already
+expresses "from here on"; no live-only mode is needed. That is the division: the fold is what
 _renders_, the event stream is what _serializes_, and the projection is the
 one place internal vocabulary is translated to the frozen wire - including
 the `setActiveStream` line, which survives the deletion of the fact
@@ -1533,10 +1586,11 @@ As tests:
    exposes `commits`, a **non-decreasing commit generation** for the session,
    readable at any time (7.1). It carries no events, need not be exact, and
    may over-report. It is a level rather than a notification precisely so it
-   cannot be missed - which requires that it never go backwards: the event
-   table's max rowid qualifies, a WAL frame count does not (checkpoints
-   reset it). A store that cannot offer one wakes unconditionally on a
-   timer instead. Without it a process that only reads
+   cannot be missed, which requires that it **never decrease and never reuse
+   a value**: a persisted generation or a non-reusing sequence - not a WAL
+   frame count (a checkpoint resets it) and not `MAX(rowid)` (retention
+   lowers it, and without `AUTOINCREMENT` the value is reused). A store that
+   can offer neither wakes unconditionally on a timer instead. Without it a process that only reads
    goes stale whenever another process owns the run.
 7. `WorkspaceProvider` leaves `platform()` rather than being re-pointed at
    a session (section 11). It has one implementation and its body is two
@@ -1571,7 +1625,7 @@ is `tapCause`, not `tapErrorCause`; and rc.112 exports no `catch` or
 `Stream.mergeAll(streams, { concurrency })` and `Effect.die` are present.
 
 Not verified, to confirm at lane start: the shape the persistence cutover
-gives `commits` (a max rowid, another persisted generation, or an
+gives `commits` (a persisted generation, a non-reusing sequence, or an
 unconditional timer; decision 6); whether
 `TranscriptIndex` can be deleted without a render regression; net lines
 after each lane; the render cost of the memoized run model at fan-out
@@ -1620,7 +1674,7 @@ src/shared/signals.ts                    + toSignal(runtime, changes, initial)
 src/shared/copy/streamStatus.ts          one status label table with tone; one terminal-state vocabulary
 src/controllers/session/SessionEvents.ts     Context.Service; durableLayer (publish under one permit, all(cursor), events(streamId, fromSeq)) and transportLayer
 src/controllers/session/sessionSources.ts    LocalRuntimeSource, TextChunkSource; a runtime and a webview layer each
-src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Response, TextChunk; SessionFrames service shape (per session)
+src/shared/session/sessionFrames.ts          Zod EventsFrame, Subscribe, Response, TextChunk, LocalRuntimeState, HostSnapshot; SessionFrames (per session)
 src/controllers/session/SessionView.ts       Context.Service; ref + changes; fold fiber forkScoped
 src/controllers/session/WorkspaceRoots.ts    Context.Service; Layer.succeed per session
 src/controllers/session/SessionRequests.ts   request(): Effect<Outcome, RequestError>; ownership scope
