@@ -464,7 +464,11 @@ export class LitSessionRenderer implements SessionRendererPort {
       category: streamInfo.agentCategory,
       status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,
       statusDetail,
-      substate: status?.substate,
+      // The unavailable sentinel travels alone: a hold keeps the phase the
+      // stream had, and shipping that phase's substate with the sentinel
+      // would light the active-run controls on a run this process cannot act
+      // on.
+      substate: statusDetail ? undefined : status?.substate,
       runStartedAt: status?.runStartedAt,
       userFollowUpSupport: streamInfo.userFollowUpSupport,
       lastTimestamp: this.state.streamLogs.getTimestampRange(streamInfo.name)

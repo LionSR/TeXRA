@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearStoreCache, getExecutionStore } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionState } from '@controllers/session/SessionState';
@@ -46,10 +47,14 @@ const sessions: SessionHandle[] = [];
  * `waitUntilReady`, which these tests deliberately never call, so every phase
  * below is derived at read time and not something repair wrote.
  */
-function openUnrepairedSession(transcripts: StreamLogStore): SessionState {
+function openUnrepairedHandle(transcripts: StreamLogStore): SessionHandle {
   const session = new SessionHandle({ transcripts, restartRepair: 'deferred' });
   sessions.push(session);
-  return new SessionState(session);
+  return session;
+}
+
+function openUnrepairedSession(transcripts: StreamLogStore): SessionState {
+  return new SessionState(openUnrepairedHandle(transcripts));
 }
 
 function appendRunningGroup(
@@ -224,5 +229,60 @@ describe('SessionState.resolveStreamPhase', () => {
       state: { phase: STREAM_PHASE.COMPLETED },
       origin: 'derived',
     });
+  });
+});
+
+describe('holds written when a run is opened for write', () => {
+  it('holds a foreign-owned run read-only while its owner is live', async () => {
+    const foreign = await startForeignInstance();
+    const executionId = 'eeee5555' as ExecutionId;
+    const stream = `held#${executionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    appendRunningGroup(transcripts, stream);
+    await transcripts.flush();
+    await seedSidecarFk(stream, executionId);
+    const executionStore = getExecutionStore(executionId);
+    // The authored execution→stream edge: the refusal resolves the run from
+    // it without any sidecar hydration, so the hold below is the only
+    // producer of the held fact here.
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      streamId: stream,
+    });
+    await executionStore.write(flowKey(executionId), validFlowRecord);
+    await writeForeignLease(executionId, undefined, foreign.owner);
+
+    try {
+      const session = openUnrepairedHandle(transcripts);
+      // The hold has to publish: a fact a user action produces while hosts
+      // are attached cannot wait for an unrelated metadata sync to repaint.
+      const heldFacts: StreamTabId[] = [];
+      session.events.subscribeSessionFacts((fact) => {
+        if (fact.type === 'streamHoldChanged') {
+          heldFacts.push(fact.payload.streamId);
+        }
+      });
+
+      await expect(
+        submitFollowUp(stream, 'are you there?', { session }),
+      ).resolves.toEqual({ status: 'failed', reason: 'owned_elsewhere' });
+
+      expect(heldFacts).toEqual([stream]);
+
+      // The refusal is worded once and kept: no phase, nothing written to
+      // disk, the transcript left open, and the tab read-only with the cause.
+      expect(session.status.holdState(stream)).toBe(
+        streamHeldMessage(foreign.owner),
+      );
+      expect(session.status.get(stream)).toBeUndefined();
+      expect(new SessionState(session).resolveStreamPhase(stream)).toEqual({
+        origin: 'live',
+        detail: streamHeldMessage(foreign.owner),
+      });
+      expect((await executionStore.readMeta())?.outcome).toBeUndefined();
+      expect(transcripts.get(stream)?.getRange(0)).toHaveLength(1);
+    } finally {
+      await foreign.shutdown();
+    }
   });
 });

@@ -58,11 +58,11 @@ type StreamEntry =
     }
   | {
       /**
-       * Restart classification could not settle on a phase (held by another
-       * process, or the run state unreadable). RUNNING/WAITING mean a live
-       * flow in this process, and this process never adopts anyone else's
-       * run, so a hold with no prior phase remains unclassified until the next
-       * full metadata sync publishes it.
+       * Classification could not settle on a phase (held by another process,
+       * or the run state unreadable). RUNNING/WAITING mean a live flow in this
+       * process, and this process never adopts anyone else's run, so a hold
+       * with no prior phase has no phase to publish — the `streamHoldChanged`
+       * fact carries the change instead, and hosts re-read the resolved phase.
        */
       readonly kind: 'hold';
       readonly detail: string;
@@ -149,6 +149,8 @@ export class StreamStatusMachine {
       substate: STREAM_SUBSTATE.STARTING,
       runStartedAt,
     });
+    // A reservation that replaces a hold also drops that hold's detail.
+    if (entry?.kind === 'hold') this.publishHoldChanged(stream);
     return true;
   }
 
@@ -186,6 +188,7 @@ export class StreamStatusMachine {
   ): boolean {
     const entry = this.streams.get(stream);
     const fromReservation = entry?.kind === 'reserved';
+    const overwritesHold = entry?.kind === 'hold';
     let previousState: StreamPhaseState | undefined;
     if (fromReservation) previousState = entry.rollbackTo;
     else if (entry) previousState = effectiveState(entry);
@@ -200,9 +203,13 @@ export class StreamStatusMachine {
     // The table decides whether a transition is permitted, but not whether a
     // permitted transition changes state. A steady RUNNING resume with no
     // substate to clear must stay silent, while a real substate clear still
-    // writes and publishes from this single status owner.
+    // writes and publishes from this single status owner. A hold is never
+    // such a no-op: even when the phase it retained equals `to`, the entry is
+    // still a hold, so it has to convert through the write-and-publish path
+    // below or the stream stays read-only while this reports success.
     if (
       !fromReservation &&
+      !overwritesHold &&
       from === to &&
       previousState?.substate === options.substate
     ) {
@@ -233,6 +240,9 @@ export class StreamStatusMachine {
       ...(previousPhase ? { previousPhase } : {}),
       ...(runStartedAt !== undefined ? { runStartedAt } : {}),
     });
+    // A phase that replaces a hold also drops that hold's detail, and the
+    // status fact above carries no detail of its own.
+    if (overwritesHold) this.publishHoldChanged(stream);
     return true;
   }
 
@@ -297,34 +307,68 @@ export class StreamStatusMachine {
    * not `reserved`, so `releaseIfReserved` becomes a no-op and a failed
    * launch's rollback never runs, while the RUNNING the hold inherits from
    * `effectiveState` blocks every later `tryAcquire`. Holds lived in a side
-   * map before they became an entry arm and could not do this. The caller
-   * logs the refusal so the skipped hold is not silent.
+   * map before they became an entry arm and could not do this.
+   * {@link markUnavailableOrLog} is how every caller that has a logger asks,
+   * so the skipped hold is not silent.
+   *
+   * A written hold publishes, exactly like a transition does: it is a fact a
+   * user action can produce while hosts are attached, so nothing may wait for
+   * an unrelated metadata sync to repaint the tab.
    */
   markUnavailable(stream: StreamTabId, detail: string): boolean {
     const entry = this.streams.get(stream);
     if (entry?.kind === 'reserved') return false;
     const state = entry ? effectiveState(entry) : undefined;
+    if (entry?.kind === 'hold' && entry.detail === detail) return true;
     this.streams.set(stream, {
       kind: 'hold',
       detail,
       ...(state ? { state } : {}),
     });
+    this.publishHoldChanged(stream);
     return true;
   }
 
   /**
-   * Drop a hold. Restart repair calls this when a classification resolves
-   * without writing a phase; a `transition` that does write replaces the hold
-   * with the phase it lands on.
+   * `markUnavailable`, plus the one thing every caller does when it refuses:
+   * say in the log that the live reservation was kept instead, so a skipped
+   * hold is never silent and the sentence is not copied at three call sites.
    */
-  clearHold(stream: StreamTabId): void {
+  markUnavailableOrLog(
+    stream: StreamTabId,
+    detail: string,
+    logger: { debug(message: string): void } | undefined,
+  ): void {
+    if (this.markUnavailable(stream, detail)) return;
+    logger?.debug(
+      `Kept the live reservation on stream ${stream} instead of marking it unavailable: ${detail}`,
+    );
+  }
+
+  /**
+   * Drop a hold, restoring the phase it retained. Restart repair calls this
+   * when a classification resolves without writing a phase; a `transition`
+   * that does write replaces the hold with the phase it lands on.
+   *
+   * `discardRetainedPhase` drops that retained phase with the hold. A hold
+   * written after a failed tool-use resume carries the WAITING its rollback
+   * left, and a caller that has just re-read the run and found it finished or
+   * merely resumable has disproved that phase: restoring it would show a live
+   * run this process does not have. A caller that learned nothing new about
+   * the phase keeps the default.
+   */
+  clearHold(
+    stream: StreamTabId,
+    options: { discardRetainedPhase?: boolean } = {},
+  ): void {
     const entry = this.streams.get(stream);
     if (entry?.kind !== 'hold') return;
-    if (entry.state) {
+    if (entry.state && !options.discardRetainedPhase) {
       this.streams.set(stream, { kind: 'phase', state: entry.state });
-      return;
+    } else {
+      this.streams.delete(stream);
     }
-    this.streams.delete(stream);
+    this.publishHoldChanged(stream);
   }
 
   /** The detail recorded by `markUnavailable`, if the stream has no phase here. */
@@ -353,6 +397,18 @@ export class StreamStatusMachine {
 
   isInFlight(stream: StreamTabId): boolean {
     return isInFlightPhase(this.get(stream));
+  }
+
+  /**
+   * Announce that this stream's hold was recorded or dropped. A hold has no
+   * phase, so it cannot ride the `status` fact; hosts react by re-reading the
+   * stream's resolved phase, which is where the hold's detail is rendered.
+   */
+  private publishHoldChanged(stream: StreamTabId): void {
+    this.eventHub.emit({
+      scope: 'session',
+      event: { type: 'streamHoldChanged', payload: { streamId: stream } },
+    });
   }
 
   private publishStatus(

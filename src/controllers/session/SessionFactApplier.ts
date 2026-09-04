@@ -127,6 +127,7 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
     case 'followUpSent':
     case 'setActiveStream':
     case 'updateStreamDescription':
+    case 'streamHoldChanged':
       return fact.payload.streamId ? [fact.payload.streamId] : [];
     default:
       return assertNever(fact, 'Unhandled session fact stream identity');
@@ -358,6 +359,8 @@ export class SessionFactApplier {
               fact.substate,
               fact.runStartedAt,
             );
+          case 'streamHoldChanged':
+            return this.handleStreamHoldChanged(fact.payload.streamId);
           case 'setParentStream':
             return this.handleSetParentStream(fact.payload);
           case 'removeStream': {
@@ -704,6 +707,17 @@ export class SessionFactApplier {
     });
   }
 
+  /**
+   * A read-only hold was recorded on this stream or dropped from it. The hold
+   * carries no phase of its own, so the whole change is in what
+   * `resolveStreamPhase` now answers: push the stream's metadata, which is the
+   * only wire carrying `statusDetail` and the `unavailable` sentinel derived
+   * from it.
+   */
+  private handleStreamHoldChanged(streamId: StreamTabId): void {
+    if (this.renderer.isAvailable()) this.pushStreamMetadata(streamId);
+  }
+
   private handleRunConfig(streamId: StreamTabId): void {
     // No explicit refresh: `getStreamMetadata` overlays the summary mirror —
     // already updated synchronously by the snapshot store's projection of
@@ -965,13 +979,25 @@ export class SessionFactApplier {
       // The status being applied has not necessarily reached the status
       // machine yet (hosts and tests also call this method directly), so it
       // travels with the push instead of being re-read.
-      this.pushStreamMetadata(streamId, {
-        phaseOverride: {
-          phase: status,
-          ...(substate ? { substate } : {}),
-          ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-        },
-      });
+      //
+      // Unless a hold was recorded while this handler was suspended in the
+      // rehydrate await above: this status is then the older fact, and its
+      // override would paint a live phase over the read-only detail the
+      // refusal wrote (an override suppresses `statusDetail`). Push without
+      // it and let the renderer read the resolved phase, hold included.
+      const held = this.state.streamStatus.holdState(streamId) !== undefined;
+      this.pushStreamMetadata(
+        streamId,
+        held
+          ? undefined
+          : {
+              phaseOverride: {
+                phase: status,
+                ...(substate ? { substate } : {}),
+                ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+              },
+            },
+      );
     } else {
       const lastTimestamp =
         this.state.streamLogs.getTimestampRange(streamId).last;
