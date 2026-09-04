@@ -1194,6 +1194,19 @@ in the Promise tier only.
 
 ### 7.4 Transport framing
 
+**Redaction is the framer's contract obligation (C3, 2026-09-04).** Trace
+rows on the stream aggregate, error payloads, and approval payloads are
+secret-scrubbed at publish time before the row is written. The flow rows on
+the execution aggregate (D4: `model.message`, `tool.result`, ...) are
+byte-exact and never scrubbed, because Anthropic signature verification and
+a resumed context need the original bytes. Therefore every framer that
+feeds a renderer process (webview, Electron renderer) and every export
+applies display redaction and truncation, and no webview or export ever
+receives a byte-exact flow payload; only the in-process hub is trusted.
+Until the display fold reads `model.message` directly, message text is
+durable twice (the redacted trace row and the flow row); that collapse
+deletes the trace copy and moves redaction to fold time.
+
 Down, per subscriber: `all(cursor)` then `Stream.groupedWithin(n, "16
 millis")` then `Stream.buffer({ capacity, strategy: 'suspend' })` for
 durable events, which must not drop; suspension parks the framer, never the
