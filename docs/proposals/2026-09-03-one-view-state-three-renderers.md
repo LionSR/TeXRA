@@ -274,9 +274,13 @@ and 6; the PRD's section 6 is the one count of event changes (eight):
    cutover, which is today's behavior for a pending approval.
 7. Liveness is probed per distinct owner process (pid plus process start),
    never one lease per run; `liveOwners` is a fold input computed that way.
-8. Session-scoped facts (queued follow-ups, inquiries) have no stream id;
-   the event key is `(aggregate_id, seq)` and they use one session
-   aggregate, which `SessionView` reads directly.
+8. Every fact lives on the aggregate of its logical target (contract C2);
+   the event key is `(aggregate_id, seq)`. The queued-follow-ups snapshot
+   and `stream.removed` carry `streamId`
+   (`src/shared/schemas/progressEvents.ts:133-139`) and ride the stream's
+   own aggregate; an inquiry thread's facts ride an aggregate whose id is
+   the thread id; the one session aggregate carries singleton facts only.
+   `SessionView` reads each field from the aggregate its type declares.
 9. Residency is two-tier: listing facts come from latest-of-type indexed
    queries, transcript rows fold only for subscribed streams, in the runtime
    as much as in a webview.
