@@ -728,7 +728,12 @@ export function forEachLiveSession(
  * `deriveResumability` can still offer the checkpoint, and its lease record
  * deleted rather than left for a later launch to prove dead. The outcome and
  * the group close are both written inside the lease-fenced post-drain window,
- * so the run's durable state and its transcript settle under one claim.
+ * so the run's durable state and its transcript settle under one claim. That
+ * pairing assumes the outcome write is the one that resolves the race: if this
+ * drain writes CANCELLED first and an in-flight driver's `finalizeRunTerminal`
+ * then overwrites the header with COMPLETED or FAILED, the groups below are
+ * already closed as CANCELLED and stay that way — the documented case is the
+ * driver reaching the meta-lock first, which `keepExistingOutcome` handles.
  *
  * Bounded by the caller's phase deadline — a host that cannot exit because a
  * release is slow would be worse than the unsettled record. The budget is

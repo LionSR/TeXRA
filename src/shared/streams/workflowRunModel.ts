@@ -35,6 +35,7 @@ import {
   TOKENS_GENERATED,
   formatWorkflowCallLine,
   formatWorkflowCallMetadataParts,
+  workflowCallDetail,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
   type WorkflowTally,
@@ -324,19 +325,21 @@ function latestWorkflowAttemptId(
  * error, an unlaunched one as `skipped`/`not-reached`.
  *
  * The status and every piece of copy derived from it are re-read through the
- * shared formatters, so the card, its status word, the phase strip and the
- * tally are one reading rather than four. A card its producer already settled
- * is returned untouched.
+ * shared formatters, so the card, its status word, its explanatory line, the
+ * phase strip and the tally are one reading rather than five. A card its
+ * producer already settled is returned untouched.
  */
 function interruptedTaskRow(row: WorkflowTaskRow): WorkflowTaskRow {
   if (isTerminalWorkflowCallProgress(row.call)) return row;
   const call: WorkflowCallProgress = interruptedWorkflowCall(row.call);
+  const detail = workflowCallDetail(call);
   return {
     ...row,
     call,
     line: formatWorkflowCallLine(call),
     statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
     metadataParts: formatWorkflowCallMetadataParts(call),
+    ...(detail ? { detail } : {}),
   };
 }
 

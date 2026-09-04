@@ -230,6 +230,20 @@ describe('workflow run model', () => {
       { id: 'never-reached', status: 'skipped', reason: 'not-reached' },
       { id: 'done', status: 'completed' },
     ]);
+    // The card's explanatory line is repainted too: the progress view reads it
+    // off the row, not off the call, so dropping it would leave the repainted
+    // card silent where the settled one explains itself.
+    expect(model.tasks.map((row) => row.detail)).toStrictEqual([
+      {
+        kind: 'error',
+        text: 'The previous host stopped before this call completed.',
+      },
+      {
+        kind: 'note',
+        text: 'The workflow ended before this call was reached.',
+      },
+      undefined,
+    ]);
     expect(model.tally).toMatchObject({ done: 3, total: 3, running: 0 });
   });
 
