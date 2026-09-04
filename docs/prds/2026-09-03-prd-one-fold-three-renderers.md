@@ -613,8 +613,11 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    byte-identical (10.3). The focus request is `Surface.select` and travels
    with the surface, never as an event. The
    frozen NDJSON wire keeps its `setActiveStream` line - the CLI projection
-   emits it from `run.start`, which is what the line meant to an external
-   reader (10.3). Deleting the internal fact does not touch the contract.
+   emits it from `run.activate` (item 9) and from nothing else. Not from
+   `run.start`: a resume mints no start, so that mapping would drop the line
+   on a resumed run, and a first launch emits both events, so keeping both
+   mappings would emit it twice. Deleting the internal fact does not touch
+   the contract.
 6. **`category`**, **`isRemote`**, and **`ownerId`** are fields on the
    `run.start` payload; `ownerId` is on every durable event. `category` is
    on **every** run, not only agent runs: it is the discriminant of
@@ -1240,7 +1243,9 @@ fixing the id retired it.
   New-task state and fail when that one stream is concurrently removed while
   the rest still need deleting
 - follow-up: `followUp.send { streamId, text, images }`, `followUp.retry`,
-  `followUp.cancelRetry`, `followUp.polish`
+  `followUp.cancelRetry`, `followUp.polish { streamId, text }` - the draft
+  lives in the view's `Surface.drafts` and §8.5 does not synchronize it, so
+  polish carries its text exactly as `polishInstruction` does
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
   carrying the `approvalId` of the request it answers (the runtime's id from
   `approval.requested`, which `ApprovalRequest` already holds), plus
@@ -1265,6 +1270,13 @@ fixing the id retired it.
   every other arm, since an execution is 1:1 with its stream (5.2); the
   handler resolves that execution's interaction scope (7.6) from it, and one
   session can have several workflows running
+- credentials: `useOwnApiKey { streamId, retryId, provider, model, reason,
+kimiCodeRoutedOnFailure, key }` - one transaction: switch routing, trigger
+  that pending retry, compensate on failure.
+  `kimiCodeRoutedOnFailure` is carried because
+  `ProgressApiKeyRetryController.shouldDisableRuntime` needs it to disable
+  the Kimi Code preference; without it a Moonshot key can retry straight
+  back onto the exhausted coding endpoint
 - misc: `runCompileFixer { streamId }`, `exportTranscript { streamId }` -
   both are stream-scoped in the handlers today, so both name their stream
 - launch: `execute { selection }` - the raw launch selection from
@@ -1272,9 +1284,14 @@ fixing the id retired it.
   to resolve the authoritative team plan and can need a partial-continue,
   cancel, or sign-in decision (`executionHandlers.ts:65-81`), neither of
   which a webview can do. The runtime prepares
-  (`prepareMainViewExecutionLaunch`) and asks through a `host.request`
-  `confirmTeamLaunch { unavailable, needsAuth }` whose outcome resumes or
-  abandons the launch;
+  (`prepareMainViewExecutionLaunch`) and, when the plan needs a decision,
+  returns a `needsConfirmation { token, unavailable, needsAuth }` **outcome**
+  rather than reaching upward: §8.3 is for requests a surface mints and §8.4
+  routes each response to its sender, so a runtime-initiated `host.request`
+  has no way back into the suspended handler. The surface renders the
+  prompt (signing in through the host if asked) and issues
+  `launch.confirmTeam { token, choice }`, the second continuation, which
+  resumes or abandons the prepared launch;
   `polishInstruction { text, agent, model, files }` - the launch draft lives
   in the view's `Surface.launch` and 8.5 deliberately does not synchronize
   it, so the request carries what it polishes, as today's command does
@@ -1292,7 +1309,11 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 `openSpillArtifact`, `openTaskStorage`, `compare`, `accept`, `merge`,
 `latexdiff`, `openLabel`, `pack`, `clean`, `restoreIntoLauncher`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
-`record { start | stop }`, `popOut`, `popBack`, `pickFiles`, `openSettings`,
+`record { start { target: StreamTabId | 'launch' } | stop }` (the start
+names its destination, which lives only in the requesting surface once §8.5
+removes selection synchronization, and is what populates
+`HostSnapshot.recording.target` for every other view), `popOut`, `popBack`,
+`pickFiles`, `openSettings`,
 `openDashboard` (the retained "Open dashboard" action, `texra.showDashboard`
 today), `openUrl`, `openPaper` (the desktop rail's "Add paper…": the native
 directory picker, the session graph, and the new key returned as the
@@ -1300,11 +1321,13 @@ outcome for `Shell.open` - without it that action is inert once
 `desktopWorkspaceRelaunch` is deleted), `savePastedImage { base64, mediaType, fileName }` (returning the stored
 filename, which `InstructionManager.handleClipboardImage` does today through
 `savePastedImageBase64`; §12.4 retains image paste and lane 4 deletes the
-message registry it rides), `useOwnApiKey { streamId, retryId, provider,
-model, reason }` (the quota panel's recovery: the host prompts and changes
-routing, then its outcome carries the retry the surface re-issues as a
-`runtime.request`, which is what `ProgressApiKeyRetryController.useOwnApiKey`
-does in one step today), `setActiveView { mode }` (**from the sidebar bridge only**: `texra.activeView`
+message registry it rides), `promptForApiKey { provider }` (the quota
+panel's recovery: the host prompts and returns the key, and nothing else -
+the routing switch and the retry belong together in the runtime, because
+`ProgressApiKeyRetryController.commitOwnApiKeyRouting` rechecks the pending
+id, changes routing, triggers the retry, and compensates a failure inside
+one serialized section; splitting them across a response boundary can leave
+global provider preferences changed with no retry started), `setActiveView { mode }` (**from the sidebar bridge only**: `texra.activeView`
 is one extension-global key and its six consumers are the sidebar's
 `view/title` entries, `packages/extension/package.json:649-678`, so an
 editor-tab mode change must not overwrite it - a
@@ -1318,8 +1341,9 @@ onboarding cards are interactive, so their actions are arms too:
 (`mainView/inbound.ts:184-200`). `openSettings` and `openUrl` cannot perform
 a recheck, a dismissal, or a funnel transition, so without these the
 retained controls go inert the moment lane 4 deletes the command
-registries. The own-API-key retry is a host
-credential flow whose completion issues a `runtime.request`.
+registries. The own-API-key retry is a host credential
+prompt whose outcome the surface passes to the `useOwnApiKey`
+`runtime.request` (8.2), which owns the routing switch and the retry.
 
 ### 8.4 Down: `response`
 
