@@ -1,5 +1,6 @@
 import {
   getExecutionStore,
+  readExecutionMetaCore,
   SessionStores,
   type DeleteAllStreamsResult,
   type DeleteStreamResult,
@@ -31,7 +32,6 @@ import {
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
-  ExecutionMetaCoreSchema,
   STREAM_PHASE,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
@@ -385,11 +385,13 @@ export class SessionState {
 
   /**
    * Read what this stream's last run turned out to be, for the row the user
-   * just opened. Three small reads against that row's execution: the
+   * just opened. Four small reads against that row's execution: the
    * read-only lease inspection (a dead claim reports as absent and is
    * unlinked by the next claim, never by this call), one `exists` stat for
-   * the flow checkpoint (never a parse of the often ~600 KB record), and a
-   * core-schema parse of the execution row for the outcome.
+   * the flow checkpoint (never a parse of the often ~600 KB record), a
+   * core-schema parse of the execution row for the outcome, and the run
+   * record — the same pair of authority reads the sidecar preload makes, so
+   * a row the preload found unreadable can never look healthy here.
    *
    * Called from the row-open paths only, one stream at a time — never over a
    * roster. That is the whole point: an unopened row renders from the
@@ -436,9 +438,14 @@ export class SessionState {
       // Core-only, and strict on the core: a malformed row is an unreadable
       // authority, but a malformed OPTIONAL `workflow` projection must not
       // cost a valid outcome beside it.
-      const raw = await store.read('meta');
-      const meta =
-        raw === undefined ? undefined : ExecutionMetaCoreSchema.parse(raw);
+      const meta = await readExecutionMetaCore(store);
+      // The same config read the sidecar preload makes, and the reason it is
+      // here: that preload catches an unreadable `config.json` into its own
+      // authority failure, so without this read the row would come back with a
+      // healthy tuple and render as completed/cancelled off a run whose
+      // authority is half unreadable. Last, so the lease → checkpoint →
+      // outcome ordering above is untouched.
+      await store.readConfig();
       return {
         checkpointPresent,
         lease,

@@ -19,7 +19,7 @@
 import pMap from 'p-map';
 import { z } from 'zod';
 
-import { getExecutionStore, type ExecutionKVStore } from '@agent/storage';
+import { getExecutionStore, readExecutionMetaCore } from '@agent/storage';
 import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionEventHub } from '@agent/runtime/SessionEventHub';
@@ -31,7 +31,6 @@ import {
   cloneRoundIndexed,
   EMPTY_ROUND_INDEXED,
   emptyUsageStats,
-  ExecutionMetaCoreSchema,
   isEmptyUsage,
   OutputFileInfoListSchema,
   PersistedWorkPlanSchema,
@@ -43,7 +42,6 @@ import {
   TokenUsageStatsParsingBaseSchema,
   type CompileFailure,
   type ExecutionId,
-  type ExecutionMeta,
   type ExtendedTokenUsageStats,
   type OutputFileInfo,
   type RunIdentity,
@@ -172,23 +170,6 @@ interface HydratedRunState {
   identity?: RunIdentity;
   userFollowUpSupport?: UserFollowUpSupport;
   description?: string;
-}
-
-/**
- * The execution row's CORE fields, parsed strictly, without the optional
- * `workflow` projection. Every fact this store hydrates from the row —
- * identity, follow-up support, description — lives in the core schema, so a
- * malformed projection must not cost them: `readMetaStrict` throws on one
- * (which would strand a valid historical run on "unavailable"), and
- * `readMeta` swallows a malformed CORE row as absence (which would render a
- * corrupt execution as a healthy, sendable stream). Same raw read, same
- * schema, same "malformed core is unreadable" rule as `deriveResumability`.
- */
-async function readMetaCore(
-  store: ExecutionKVStore,
-): Promise<ExecutionMeta | null> {
-  const raw = await store.read('meta');
-  return raw === undefined ? null : ExecutionMetaCoreSchema.parse(raw);
 }
 
 function withoutSummaryMetaFields(
@@ -1918,12 +1899,12 @@ export class StreamSnapshotStore {
       let config: AgentConfig | null = null;
       try {
         const store = getExecutionStore(executionId);
-        // Core-only, and strict on the core (see {@link readMetaCore}): a
-        // malformed row is an unreadable authority, but a malformed OPTIONAL
-        // `workflow` projection is not — the identity and description below
-        // parsed either way.
+        // Core-only, and strict on the core (see {@link
+        // readExecutionMetaCore}): a malformed row is an unreadable authority,
+        // but a malformed OPTIONAL `workflow` projection is not — the identity
+        // and description below parsed either way.
         const [execMeta, execConfig] = await Promise.all([
-          readMetaCore(store),
+          readExecutionMetaCore(store),
           store.readConfig(),
         ]);
         // Identity comes only from the stamped execution row; a row without

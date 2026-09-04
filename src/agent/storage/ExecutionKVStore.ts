@@ -398,6 +398,29 @@ function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
   return [...normalized].sort(byString);
 }
 
+/**
+ * The execution row's CORE fields, parsed strictly, without the optional
+ * `workflow` projection.
+ *
+ * The one read for callers that display what a past run turned out to be —
+ * the sidecar hydration and the row-open phase probe. Every fact they take
+ * from the row (outcome, identity, follow-up support, description) lives in
+ * the core schema, so a malformed projection must not cost them:
+ * {@link ExecutionKVStore.readMetaStrict} throws on one (which would strand a
+ * valid historical run on "unavailable"), and {@link ExecutionKVStore.readMeta}
+ * swallows a malformed CORE row as absence (which would render a corrupt
+ * execution as a healthy, sendable stream). Same raw read, same schema, same
+ * "malformed core is unreadable" rule as `deriveResumability`.
+ *
+ * Throws on an unreadable row or a malformed core; `null` means absent.
+ */
+export async function readExecutionMetaCore(
+  store: ExecutionKVStore,
+): Promise<ExecutionMeta | null> {
+  const raw = await store.read(KEYS.META);
+  return raw === undefined ? null : ExecutionMetaCoreSchema.parse(raw);
+}
+
 // ============================================================================
 // Factory
 // ============================================================================

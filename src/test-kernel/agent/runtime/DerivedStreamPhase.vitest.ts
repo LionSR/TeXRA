@@ -210,6 +210,37 @@ describe('SessionState.resolveStreamPhase', () => {
     });
   });
 
+  it('shows a finished run whose config.json is malformed as unavailable', async () => {
+    const executionId = 'ffff6666' as ExecutionId;
+    const stream = `badconfig#${executionId}` as StreamTabId;
+    const transcripts = await StreamLogStore.open();
+    await seedSidecarFk(stream, executionId);
+    const executionStore = getExecutionStore(executionId);
+    // A valid row with a terminal outcome, beside a run record that cannot be
+    // parsed. The sidecar preload reads both and calls that authority
+    // unreadable, so the phase probe must not answer COMPLETED off the half
+    // it can still read. (`writeMeta` creates the execution directory.)
+    await executionStore.writeMeta({
+      timestamp: META_TIMESTAMP,
+      outcome: RUN_OUTCOME.COMPLETED,
+    });
+    await StorageFS.write(
+      `executions/${executionId}/config.json`,
+      '{ not json',
+    );
+
+    const state = openUnrepairedSession(transcripts);
+    await state.snapshots.preload([stream]);
+    await state.hydrateRunFacts(stream);
+
+    expect(state.resolveStreamPhase(stream)).toEqual({
+      origin: 'derived',
+      // The cause is the JSON parser's, so only the sentence around it is
+      // this rule's own.
+      detail: expect.stringContaining("Could not read this run's state"),
+    });
+  });
+
   it('keeps a completed outcome when only the optional workflow projection is malformed', async () => {
     const executionId = 'eeee5555' as ExecutionId;
     const stream = `projection#${executionId}` as StreamTabId;
