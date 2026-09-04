@@ -43,8 +43,11 @@ scanned three times per launch (repair scan, `readExecutionStreamIndex` in
 the orphan sweep, `listExecutionStreamReferences` again in
 `sweepOrphanedExecutions`) and every checkpoint is parsed twice (repair
 phase 1, repair phase 2). The bare `texra` launcher adds a fourth scan
-(`listExecutions`) and a third parse per visible history row (`classifyRun`
-in the Resume picker) before the pickers appear.
+(`listExecutions`) and two more parses per visible history row before the
+pickers appear: `classifyRun` in the Resume picker, then, for every row it
+passes, `readCliSessionResumeData` (`retrieveSessionResumeData` →
+`deriveResumability`) re-reading the same checkpoint. Both are listing
+cost proportional to checkpoint size, and S1 removes both.
 
 The extension and desktop hosts run the same pass (`extension.ts:499`,
 `desktop/src/main/index.ts:1341`).
@@ -60,11 +63,16 @@ the whole
 history and only grows. In the measured workspace 1,985 checkpointed runs
 already carry a persisted outcome; repair re-proves them every launch.
 
-The 2026-08-23 proposal already rules the right shape (D3 "classify once,
-mutate nothing", D7 "stream status is derived, never remembered"). The code
-has not caught up: phase 2 still mutates (closes transcript groups, records
-CANCELLED, assigns in-memory phases) for every candidate, under a lock, one
-at a time.
+The 2026-08-23 proposal rules the right principle (D3 "classify once,
+mutate nothing", D7 "stream status is derived, never remembered") but still
+places the classification at startup: D3 has each host classify "each
+unfinished stream in the bucket once" when it starts, and D7 computes the
+derived facts "once from disk at load". This proposal supersedes those two
+clauses. Under S1 no host reads history at startup, and under S3 the lease
+is inspected when a row is opened; the principle stands, the moment moves
+from load to open. The code has not caught up with even the principle:
+phase 2 still mutates (closes transcript groups, records CANCELLED, assigns
+in-memory phases) for every candidate, under a lock, one at a time.
 
 ## 3. What the four references do instead
 
@@ -123,9 +131,18 @@ No write. Today the tuple is read from `meta.json` plus one `stat` of
 `flow_<id>.json`; the companion's Stage 2 `executions` row carries the same
 columns, so it swaps the source without changing the function.
 
-S1 also deletes the listing-time checkpoint parse. The launcher's history
-row and the resume picker advertise "checkpoint present" from one `stat`,
-never `classifyRun` (`packages/cli/src/runtime/toolUseResumeData.ts:45`).
+S1 also deletes the listing-time checkpoint parses. The launcher's history
+row and the resume picker advertise "checkpoint present" from one `stat`
+plus the stamped stream id, never `classifyRun` or
+`readCliSessionResumeData` (`isCliRunResumable` in
+`packages/cli/src/runtime/toolUseResumeData.ts`). One exclusion is kept
+because deleting it would walk the user into a refusal: a workflow that
+stopped at its round cap on an unresolved compile rejection has a
+checkpoint that only replays that rejection, and
+`hasTerminalPersistedCompileRejection` still keeps it out of the picker.
+That read is a parse, so it runs only for workflow rows whose outcome is
+FAILED or missing (the only outcomes the marker can sit under); CANCELLED
+and COMPLETED workflow rows and every tool-use row cost the `stat` alone.
 Two consequences are deliberate. A `stat` proves existence, not
 readability, so the resume path stays the only parser and refuses loudly
 on a malformed or legacy no-cursor record (`persistedFlow.ts:423`) instead
@@ -166,7 +183,13 @@ with their owning execution at delete time (OpenCode's cascade; the
 companion's Stage 4 makes it a row cascade), and run retention as a
 deferred, marker-gated background job (Claude Code's `cleanupPeriodDays`).
 Orphans then cannot accrue, and the sweep has nothing to do. Retention is
-the only mechanism that ever removes the legacy cohort in §6.
+bounded by eligibility, not by age alone. It may remove ephemeral shells,
+orphaned records (an execution whose stream is gone, or a stream with no
+execution), and the stream-less legacy cohort in §6, which can never be
+resumed; it is the only mechanism that ever removes that cohort. A
+cancelled, failed, or crashed run with a stamped stream keeps its
+checkpoint until the user deletes the stream: the §2 preservation contract
+is not subject to a TTL.
 
 **S7. Append, don't rewrite.** Owned by the companion (its Stage 5:
 `shared.messages` as appended message rows plus one small envelope row,
@@ -186,9 +209,14 @@ toward it rather than away from it.
   backfill, and no importer may synthesize an outcome for them; S6
   retention is the only thing that ever removes them.
 - Envelope extraction for existing checkpoints is the companion's Stage 5
-  importer, which runs eagerly at cutover (on every open while a legacy
-  directory exists, then renames it to `*.pre-sqlite-backup`). No lazy
-  read arm and no boot-time backfill outside that importer. If any other
+  importer, which runs eagerly at cutover (on every open while legacy
+  app-state files exist, then moves the files it imported to the
+  `*.pre-sqlite-backup` tree). The cutover is file-level, never a directory
+  rename: generated artifacts beside `flow_<id>.json` are run documents
+  that `listRunGeneratedFiles` and `/executions/{id}/files` resolve at the
+  execution path, and they stay there (the storage PRD's Stage 5 rule,
+  `docs/prds/2026-08-16-sqlite-workspace-state.md`). No lazy read arm and
+  no boot-time backfill outside that importer. If any other
   whole-history pass is ever added it must be one-shot, leased,
   watermarked, and flagged complete, as Codex does.
 
