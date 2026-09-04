@@ -269,6 +269,12 @@ export class SessionStores {
    */
   deleteAdjacentStreamState(stream: StreamTabId): Promise<void> {
     return this.enqueueDeletion(async () => {
+      // Same recovery as `deleteStream`: a history delete can reach a stream
+      // with staged residue before the deferred sweep has reconciled it.
+      await this.reconcileStagedDeletions(
+        new Set(this.streamLogs.keys()),
+        new Set([stream]),
+      );
       const hadCanonicalStream = this.streamLogs.has(stream);
       await this.deleteStreamSidecars(stream);
       if (hadCanonicalStream) await this.notifyDeleted(stream);
