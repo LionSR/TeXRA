@@ -178,7 +178,7 @@ SessionView = {
   inquiries: InquiryThread[],
   // this process's local truth: a fold input, never durable, never persisted
   // wire type (8.1): arrays, never Maps - see the note under 5.1
-  local: { self: OwnerId, liveOwners: OwnerId[],
+  local: { self: OwnerId, heldBy: OwnerId[],
            unreadable: { streamId: StreamTabId, detail: string }[] },
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
@@ -254,10 +254,16 @@ The fold's input is `FoldInput = SessionEvent | TextChunk | LocalRuntimeState`.
 Every fact below derives from the durable events of section 6 except owner
 liveness, which is process state and not an event: the runtime's lease
 reader (`executionLease.ts`, a pid probe on the lease owner) emits an
-`LocalRuntimeState` snapshot - the owner ids whose process is alive, and
-the streams this process could not read (see "Unavailable" below) - on
+`LocalRuntimeState` snapshot - the owner ids whose lease this process may
+not touch, and the streams it could not read (see "Unavailable" below) - on
 every change and on every subscribe, and the fold keeps the latest snapshot
-in `local`. The snapshot is transient like a text chunk: never durable,
+in `local`. `heldBy` is the lease's own predicate, not "alive": a lease is
+`held` when its owner is alive **or unprovable**, and nothing automatic
+reaps an unprovable one - only an explicit deletion does
+(`executionLease.ts:38-41, 164-172`). Defining it as known-alive would label
+a stream on another host `interrupted` and offer a Resume that cannot
+acquire the lease. The snapshot is transient like a text chunk: never
+durable,
 never a seq. A replay with no snapshot folds with `local` empty, so
 every pending approval reads as interrupted until the runtime says
 otherwise, which is the safe direction. Agreed with the substrate owner on
@@ -305,7 +311,7 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   every durable event and `StreamView.ownerId` is the latest one, so a
   resume in another process moves ownership without a new fact kind.
 - **`group === 'interrupted'`** iff the stream is non-terminal and
-  `stream.ownerId` is not in `local.liveOwners` - whether or not an approval
+  `stream.ownerId` is not in `local.heldBy` - whether or not an approval
   is pending. Owner loss is the whole condition: a process that crashes
   mid-generation commits no terminal status, so conditioning this on a
   pending approval (as an earlier draft did) would leave every ownerless run
@@ -313,14 +319,14 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   later restart. A pending approval is then simply the case where the loss is
   most visible, not a separate rule.
 - **`group === 'waiting'`** iff an `approval.requested` exists without its
-  `approval.resolved` AND `stream.ownerId` is in `local.liveOwners`. Without a
+  `approval.resolved` AND `stream.ownerId` is in `local.heldBy`. Without a
   live owner it is `'interrupted'` by the rule above, never `'waiting'`,
   because nothing is listening for the answer; `'interrupted'` is the fourth
   arm of the union (5.1) and the group a host offers `resume` on. Resume appends `approval.resolved` (cause: interrupted) for every
   unresolved request on the stream **before** it starts, on the same path
   that clears the previous run's terminal state
   (`clearTerminalExecutionState`, `executeAgent.ts:541`). Without that, the
-  resumed owner reappears in `local.liveOwners` and the orphaned request
+  resumed owner reappears in `local.heldBy` and the orphaned request
   folds the stream back to `waiting` for an answer no runtime is listening
   for - and, because resume keeps the stream and the execution id, nothing
   later retires it. Compensating at the boundary is the same shape as the
@@ -385,9 +391,13 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **Unavailable.** Two conditions read as unavailable today and they are
   not the same kind of fact. A stream whose lease is held by another live
   process is now _derivable_: `ownerId` is not this process and is in
-  `local.liveOwners`. Either way the stream is **read-only here**, and the
-  fold says so in one field: `readOnly` is true when `ownerId` is not
-  `local.self`, or when the stream is in `local.unreadable`. Without it a
+  `local.heldBy`. Either way the stream is **read-only here**, and the
+  fold says so in one field: `readOnly` is true when `ownerId` is in
+  `local.heldBy` and is not `local.self`, or when the stream is in
+  `local.unreadable`. The held test matters: once the previous owner exits,
+  its lease is reclaimable, so the stream is `interrupted` **and
+  actionable** - marking every foreign `ownerId` read-only would hide the
+  Resume on exactly the runs a restart is meant to recover. Without it a
   second process renders the ordinary approval panel for a decision only
   the owning process can deliver, and every action comes back `NotOwner`
   (7.6) - an invitation to act that cannot work. A stream whose run state
@@ -442,7 +452,7 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `ancestors` above). That walk is O(subtree) and happens only when a parent
   appears or is tombstoned. A `LocalRuntimeState` snapshot names the symmetric
   difference against the previous one: the streams whose `ownerId` entered or
-  left `liveOwners`, and those entering or leaving `unreadable` - so an owner
+  left `heldBy`, and those entering or leaving `unreadable` - so an owner
   exiting recomputes exactly the streams it owned, not the view. A
   `TextChunk` names its row's stream. For each named stream the fold
   recomputes its arm, then
@@ -1276,8 +1286,11 @@ fixing the id retired it.
   `followUp.polish { streamId, text }` - the draft
   lives in the view's `Surface.drafts` and §8.5 does not synchronize it, so
   polish carries its text exactly as `polishInstruction` does
-- decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
-  carrying the `approvalId` of the request it answers (the runtime's id from
+- decisions: `toolEdit`, `bash`, `proposal`, `plan`, and
+  `userQuestion { action, answers | feedback }` - the answer map lives only
+  in the answering surface, and `UserQuestionActionMessageSchema` requires
+  it on submit (feedback on reject or skip), so the approval record cannot
+  reconstruct it. Each carries the `approvalId` of the request it answers (the runtime's id from
   `approval.requested`, which `ApprovalRequest` already holds), plus
   `externalInquiry { submit | drop }`, each naming the inquiry's **turn**
   and not only its thread: `recordOpenQuestion` reopens a thread and
@@ -1352,7 +1365,11 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 names its destination, which lives only in the requesting surface once §8.5
 removes selection synchronization, and is what populates
 `HostSnapshot.recording.target` for every other view), `popOut`, `popBack`,
-`pickFiles`,
+`pickFiles { fileType, options }` (the launcher has input, context, media,
+base, and edited pickers; `fileType` chooses the dialog and names the
+`Surface.launch` field the paths return to, and `options` carries the
+picker-specific context the inbound schemas pass today - `currentFile`,
+`baseFile`, `preserveBaseFile`),
 `attachDroppedFiles { paths, category }` (returning the accepted
 selections: `fileDropHandler.ts:181-194` sends `ATTACH_DROPPED_FILES` today
 and `FileManager.ts:240-266` resolves, validates, and categorizes the paths
@@ -1396,6 +1413,9 @@ becoming a session fact), and the launcher's file pickers. The banners and the
 onboarding cards are interactive, so their actions are arms too:
 `recheckDependencies`, `dismissBanner { id }`, `signIn`,
 `onboarding { advance | dismiss }`,
+`openAgentDirectory` (the agent-config banner's "Open agent directory" when
+`customDirSet`: the host resolves `agentDirectories.custom()` and calls
+`revealFileInOS`, which `openSettings` cannot do),
 `gettingStarted { action }` (the empty state's `createSampleProject`,
 `cloneOverleaf`, `downloadArxiv`, `openWalkthrough` - distinct host
 commands in `GettingStartedActionSchema`, `mainView/state.ts:354-374`, which
