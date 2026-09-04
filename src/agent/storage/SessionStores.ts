@@ -217,15 +217,23 @@ export class SessionStores {
       stream,
       options?.expectedIncarnation,
       async () => {
-        // Staged residue from a crash makes `stageDeleteStream` throw until it
-        // is reconciled, and the sweep that used to reconcile everything at
-        // bring-up now runs after the UI is up — a user (or the sweep itself)
-        // can reach this stream first. Recover just this stream's residue
-        // here; the reconciliation stays logged.
-        await this.reconcileStagedDeletions(
-          new Set(this.streamLogs.keys()),
-          new Set([stream]),
-        );
+        if (!this.hasResidentStreamState(stream)) {
+          // Nothing this instance knows about is left to delete: some other
+          // owner — the leftover sweep, another host — already committed this
+          // stream's deletion. Every presentation that projects the resulting
+          // `removeStream` fact routes back through here, and without this the
+          // repeat costs a staged-deletion rescan plus a full walk of the
+          // executions directory, once per shell per presentation, to delete
+          // nothing. Report the deletion as committed so the caller still does
+          // its presentation-only removal.
+          if (options?.shouldDelete?.() === false) return 'superseded';
+          // The goal entry is keyed by stream alone and outlives both stores,
+          // so it is the one durable footprint a never-registered stream can
+          // still own. Forgetting it is a single in-memory key check when it
+          // holds nothing.
+          await this.forgetGoalEntry(stream);
+          return 'deleted';
+        }
         let executionId: ExecutionId | undefined;
         try {
           executionId = await this.executionIdForStream(stream);
@@ -237,13 +245,24 @@ export class SessionStores {
           return 'failed';
         }
         const deletion = (): Promise<DeleteStreamResult> =>
-          this.enqueueDeletion(() =>
-            this.deleteStreamAndNotify(
+          this.enqueueDeletion(async () => {
+            // Staged residue from a crash makes `stageDeleteStream` throw
+            // until it is reconciled, and the sweep that used to reconcile
+            // everything at bring-up now runs after the UI is up — a user (or
+            // the sweep itself) can reach this stream first. Recover just this
+            // stream's residue here, on the deletion queue, so this scoped
+            // reconcile is serialized against the unscoped one the orphan
+            // sweep runs instead of racing it. The reconciliation stays logged.
+            await this.reconcileStagedDeletions(
+              new Set(this.streamLogs.keys()),
+              new Set([stream]),
+            );
+            return this.deleteStreamAndNotify(
               stream,
               executionId,
               options?.shouldDelete,
-            ),
-          );
+            );
+          });
         if (!executionId || !this.executions) return deletion();
         try {
           return await this.executions.runExecutionStep(executionId, deletion);
@@ -477,6 +496,26 @@ export class SessionStores {
         ? { kind: 'streams-deleted', error }
         : { kind: 'retained', error };
     }
+  }
+
+  /**
+   * Whether this instance still holds state a deletion could act on: a
+   * transcript index entry, or a resident sidecar record — which is also the
+   * only in-memory source of the stream's execution edge. Both reads are
+   * in-memory, so this is the cheap admission for the repeat deletions a
+   * republished removal fact produces.
+   *
+   * False is not a claim that nothing is on disk, only that nothing this
+   * instance knows about is: staged residue no index entry refers to any more
+   * belongs to the orphan sweep, which enumerates `listStagedDeletions`.
+   */
+  private hasResidentStreamState(stream: StreamTabId): boolean {
+    return (
+      this.streamLogs.has(stream) ||
+      this.snapshots.hasProvenance(stream) ||
+      this.snapshots.getRunMetadata(stream, { quiet: true }).executionId !==
+        undefined
+    );
   }
 
   /**
@@ -845,7 +884,13 @@ export class SessionStores {
       );
       return { streams: [], executionIds: [] };
     }
-    await this.reconcileStagedDeletions(liveStreams);
+    // On the deletion queue for the same reason `deleteStream`'s scoped
+    // reconcile is: the two reconcile the same staged directories, and only
+    // the queue keeps this unscoped pass from running against a stream a
+    // deletion is staging right now.
+    await this.enqueueDeletion(() =>
+      this.reconcileStagedDeletions(liveStreams),
+    );
     const [persistedStreams, stagedDeletions] = await Promise.all([
       this.snapshots.listPersistedStreams(),
       this.snapshots.listStagedDeletions(),
@@ -888,6 +933,14 @@ export class SessionStores {
         if (this.streamLogs.has(stream)) return;
         const shouldDelete = (): boolean => !this.streamLogs.has(stream);
         try {
+          // This instance's summary index only knows the streams it opened
+          // with. Another host can register one after that, and its transcript
+          // lives in the shared authoritative store alone — deleting this
+          // stream's sidecars and execution would erase live state. Only the
+          // durable index may admit the irreversible delete, exactly as
+          // `sweepOrphanedExecutions` does; the cached index above stays the
+          // prefilter, and this costs one authoritative read per candidate.
+          if (await this.streamLogs.hasAuthoritativeStream(stream)) return;
           const executionId = byStream.get(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
@@ -1054,15 +1107,19 @@ export class SessionStores {
     if (shouldDelete?.() === false) {
       throw new StreamDeletionSupersededError(stream);
     }
-    if (this.goalEntries) {
-      try {
-        await this.goalEntries.forget(stream);
-      } catch (error) {
-        log.warn(
-          `Stream ${stream} was deleted, but goal cleanup was incomplete: ${toErrorMessage(error)}`,
-          { data: error },
-        );
-      }
+    await this.forgetGoalEntry(stream);
+  }
+
+  /** Drop a deleted stream's goal entry; a failure is loud, never fatal. */
+  private async forgetGoalEntry(stream: StreamTabId): Promise<void> {
+    if (!this.goalEntries) return;
+    try {
+      await this.goalEntries.forget(stream);
+    } catch (error) {
+      log.warn(
+        `Stream ${stream} was deleted, but goal cleanup was incomplete: ${toErrorMessage(error)}`,
+        { data: error },
+      );
     }
   }
 

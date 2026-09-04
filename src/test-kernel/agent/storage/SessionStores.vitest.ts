@@ -698,6 +698,34 @@ describe('SessionStores orphan sweep', () => {
     );
   });
 
+  it('preserves an orphaned stream another host registered after this store opens', async () => {
+    const stream = 'other-host-orphan' as StreamTabId;
+    const streamLogsA = await StreamLogStore.open();
+    const streamLogsB = await StreamLogStore.open();
+    const snapshots = new StreamSnapshotStore();
+    vi.spyOn(snapshots, 'listPersistedStreams').mockResolvedValue([stream]);
+    vi.spyOn(snapshots, 'listStagedDeletions').mockResolvedValue([]);
+    const stageDeleteStream = vi.spyOn(snapshots, 'stageDeleteStream');
+    const stores = new SessionStores({
+      streamLogs: streamLogsA,
+      snapshots,
+      listExecutionStreamReferences: async () => emptyListing(),
+    });
+
+    // Store A's cached index predates the registration, so only the shared
+    // authoritative store can say the transcript exists.
+    streamLogsB.ensureStream(stream);
+    await streamLogsB.flush();
+
+    const result = await stores.sweepOrphanedStreams(
+      new Set(streamLogsA.keys()),
+    );
+
+    expect(result.streams).toEqual([]);
+    expect(stageDeleteStream).not.toHaveBeenCalled();
+    await streamLogsB.delete(stream);
+  });
+
   it('removes an execution whose stream lost its sidecar FK before deletion', async () => {
     const executionId = 'f9891001' as ExecutionId;
     const stream = 'missing-fk-stream' as StreamTabId;
