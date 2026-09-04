@@ -59,7 +59,7 @@ type CliRunFactEvent = Extract<
 
 /**
  * Project session facts onto the frozen NDJSON progress-event vocabulary.
- * `followUpSent` is intentionally session-local.
+ * `followUpSent` and `streamHoldChanged` are intentionally session-local.
  */
 function projectCliSessionFact(
   fact: SessionFact,
@@ -72,6 +72,10 @@ function projectCliSessionFact(
     case 'updateQueuedFollowUps':
       return { event: 'updateQueuedFollowUps', payload: fact.payload };
     case 'followUpSent':
+      return undefined;
+    // A read-only hold is a session-local display fact; the frozen NDJSON
+    // vocabulary carries no record for it.
+    case 'streamHoldChanged':
       return undefined;
     case 'setActiveStream':
       return { event: 'setActiveStream', payload: fact.payload };

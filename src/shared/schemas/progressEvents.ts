@@ -49,6 +49,15 @@ export interface RemoveStreamPayload {
   streamId: StreamTabId;
 }
 
+/**
+ * A stream's read-only hold was recorded or dropped. The hold itself lives on
+ * the status machine and carries no phase, so the fact names only the stream:
+ * hosts re-read the resolved phase (and its `statusDetail`) for it.
+ */
+export interface StreamHoldChangedPayload {
+  streamId: StreamTabId;
+}
+
 type UpdateStreamStatusMessage = z.infer<
   typeof UpdateStreamStatusMessageSchema
 >;

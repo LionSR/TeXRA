@@ -127,6 +127,7 @@ function sessionFactStreamIds(fact: SessionFact): StreamTabId[] {
     case 'followUpSent':
     case 'setActiveStream':
     case 'updateStreamDescription':
+    case 'streamHoldChanged':
       return fact.payload.streamId ? [fact.payload.streamId] : [];
     default:
       return assertNever(fact, 'Unhandled session fact stream identity');
@@ -358,6 +359,8 @@ export class SessionFactApplier {
               fact.substate,
               fact.runStartedAt,
             );
+          case 'streamHoldChanged':
+            return this.handleStreamHoldChanged(fact.payload.streamId);
           case 'setParentStream':
             return this.handleSetParentStream(fact.payload);
           case 'removeStream': {
@@ -702,6 +705,17 @@ export class SessionFactApplier {
       status: goal?.status,
       objective: goal?.objective,
     });
+  }
+
+  /**
+   * A read-only hold was recorded on this stream or dropped from it. The hold
+   * carries no phase of its own, so the whole change is in what
+   * `resolveStreamPhase` now answers: push the stream's metadata, which is the
+   * only wire carrying `statusDetail` and the `unavailable` sentinel derived
+   * from it.
+   */
+  private handleStreamHoldChanged(streamId: StreamTabId): void {
+    if (this.renderer.isAvailable()) this.pushStreamMetadata(streamId);
   }
 
   private handleRunConfig(streamId: StreamTabId): void {

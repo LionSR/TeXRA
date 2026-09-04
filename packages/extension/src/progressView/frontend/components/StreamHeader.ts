@@ -102,11 +102,19 @@ const TERMINAL_STATE_BUTTONS = [
 
 /**
  * Buttons enabled while the run is unavailable here (held by another TeXRA
- * process, or its saved state unreadable): the read-only verbs only. Stop,
- * resume, re-run, restore, archive, diff, pack, and clean all act on a run
- * this process does not own. Removing the run is the tab's Delete.
+ * process, or its saved state unreadable): the read-only verbs, plus resume.
+ * Stop, re-run, restore, archive, diff, pack, and clean all act on a run this
+ * process does not own. Removing the run is the tab's Delete.
+ *
+ * Resume is here because the unavailable reading is a snapshot of a fact that
+ * can go stale — the other process exits, the unreadable file becomes
+ * readable — and resuming is the one action that re-reads it. The lease, not
+ * this table, is what keeps the attempt safe: a run another live process still
+ * holds refuses at the lease and re-words the same reading. Without it the tab
+ * is read-only for the rest of this process's life on a run nobody owns.
  */
 const UNAVAILABLE_STATE_BUTTONS = [
+  ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,

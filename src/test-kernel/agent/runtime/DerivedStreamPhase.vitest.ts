@@ -254,10 +254,20 @@ describe('holds written when a run is opened for write', () => {
 
     try {
       const session = openUnrepairedHandle(transcripts);
+      // The hold has to publish: a fact a user action produces while hosts
+      // are attached cannot wait for an unrelated metadata sync to repaint.
+      const heldFacts: StreamTabId[] = [];
+      session.events.subscribeSessionFacts((fact) => {
+        if (fact.type === 'streamHoldChanged') {
+          heldFacts.push(fact.payload.streamId);
+        }
+      });
 
       await expect(
         submitFollowUp(stream, 'are you there?', { session }),
       ).resolves.toEqual({ status: 'failed', reason: 'owned_elsewhere' });
+
+      expect(heldFacts).toEqual([stream]);
 
       // The refusal is worded once and kept: no phase, nothing written to
       // disk, the transcript left open, and the tab read-only with the cause.

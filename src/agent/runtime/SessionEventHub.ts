@@ -7,6 +7,7 @@ import type {
   RemoveStreamPayload,
   SetActiveStreamPayload,
   SetParentStreamPayload,
+  StreamHoldChangedPayload,
   StreamTabId,
   UpdateQueuedFollowUpsPayload,
   UpdateStreamDescriptionPayload,
@@ -53,6 +54,16 @@ export type SessionFact =
   | {
       readonly type: 'removeStream';
       readonly payload: RemoveStreamPayload;
+    }
+  | {
+      /**
+       * A read-only hold was recorded on a stream, or dropped from it. A hold
+       * carries no phase, so it cannot ride the `status` arm; without this
+       * fact the write would be invisible to every host until an unrelated
+       * metadata sync happened to republish the stream.
+       */
+      readonly type: 'streamHoldChanged';
+      readonly payload: StreamHoldChangedPayload;
     };
 
 export type SessionEvent =

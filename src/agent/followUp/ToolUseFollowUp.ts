@@ -9,10 +9,7 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import {
-  streamHeldMessage,
-  streamUnreadableMessage,
-} from '@shared/streams/streamStatusDisplay';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
@@ -197,11 +194,22 @@ export async function lookupStreamExecutionId(
  * facts: who holds the run, and whether a checkpoint is left. Read only on
  * the failure path; an unreadable fact is `not_resumable`.
  *
- * A refusal the user can see again is also recorded on the stream: the two
- * classifications that mean "this run cannot be opened here, and not because
- * it ended" become the stream's read-only detail, so the tab keeps saying why
- * after the toast is gone. Only the one run the user acted on is inspected,
- * and nothing is written to disk.
+ * A refusal the user can see again is also recorded on the stream: the one
+ * classification that means "this run is being executed elsewhere" becomes the
+ * stream's read-only detail, so the tab keeps saying why after the toast is
+ * gone. Every other classification read the run's state successfully, so it
+ * DROPS any hold an earlier refusal left — a stream whose run is readable and
+ * unowned must not stay read-only on a fact that has since changed.
+ *
+ * An `unclassified` run deliberately records nothing: `classifyRun` reports it
+ * for any failed read, including a transient one (EMFILE, a partial read
+ * racing another process's atomic rewrite), and a hold is sticky, so a blip
+ * would leave the tab permanently read-only. The unreadable display fact has
+ * its own producer in the run tuple's `authorityFailure`, which every later
+ * hydration re-reads.
+ *
+ * Only the one run the user acted on is inspected, and nothing is written to
+ * disk.
  */
 async function classifyRefusal(
   streamId: StreamTabId,
@@ -228,16 +236,13 @@ async function classifyRefusal(
       );
       return 'owned_elsewhere';
     case 'finished':
+      session.status.clearHold(streamId);
       return 'finished';
-    case 'unclassified':
-      holdRefusedStream(
-        session,
-        streamId,
-        streamUnreadableMessage(classification.cause),
-      );
-      return 'not_resumable';
     case 'resumable':
     case 'owned_here':
+      session.status.clearHold(streamId);
+      return 'not_resumable';
+    case 'unclassified':
       return 'not_resumable';
   }
 }
