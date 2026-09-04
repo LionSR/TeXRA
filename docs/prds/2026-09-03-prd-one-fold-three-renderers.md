@@ -8,10 +8,10 @@ updated: 2026-09-03
 **Status:** Proposed; requires owner ratification of the nine decisions in
 section 17 before lane 2 starts. Decision 9 is the one to read first: it
 rules that a `StreamTabId` names a run and is never reused, which is what
-lets twelve of the thirteen incarnation fences earlier drafts had
-accumulated be deleted rather than maintained. Its cost is a visible
-behaviour change for relaunched workflows, stated in full there; reverting
-is mechanical if the owner weighs that differently. Lane 1 may start on ratification of
+lets all thirteen incarnation fences earlier drafts had accumulated be
+deleted rather than maintained. Its cost is that a relaunched workflow
+appears as a new row instead of reusing its tab, stated in full there;
+reverting is mechanical if the owner weighs that differently. Lane 1 may start on ratification of
 decision 1 alone; lane 6 also needs decision 7, which is what it
 implements.
 
@@ -351,8 +351,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   known label. A bare id suffices because ids are never reused (decision 9):
   a relaunched deterministic parent is a different stream and cannot adopt
   the previous run's children. A child whose `parentId` names a stream the
-  view does not have - a tombstoned parent, most often - is **top-level**: it joins
-  `order` and shows no ancestors. Deleting a parent therefore cannot hide
+  view does not have - a tombstoned parent, most often - is **top-level**: the fold sets its
+  `parentId` to null, so it joins `order`, shows no ancestors, and the
+  composer's "reply to parent instead" (12.1) cannot address a stream that
+  no longer exists. Leaving the link dangling would keep that action
+  pointing at a permanently unavailable target. Deleting a parent therefore cannot hide
   its children, and needs no detach transaction: `onChildrenDetached` emits
   `setParentStream` today only because deletion was physical, and under a
   tombstone the fold re-roots them by rule instead of by event.
@@ -362,12 +365,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   null outside active phases and `lastTimestamp` moves with every event, so
   neither can place a re-rooted child among existing siblings without
   replaying history.
-- **`executionId`** comes from `run.start` and never changes for the
-  stream, but it is **not** 1:1 with the stream id across launches: a
-  workflow's is derived from its checkpoint
-  (`WorkflowScriptTool.ts:345-353`), so a relaunch after a deletion has a
-  fresh stream id and the same execution id. A resume keeps it rather than
-  minting one: `executeAgent` passes `resume.executionId`
+- **`executionId`** comes from `run.start`, is 1:1 with the stream id, and
+  never changes. A workflow's resume anchor is its `checkpointId`, also on
+  the `run.start` payload, not its execution id (decision 9). A resume keeps
+  the execution id rather than minting one: `executeAgent` passes
+  `resume.executionId`
   straight back into `buildAgentLaunchContext` (`executeAgent.ts:541-549`),
   because the checkpoint, the lease, and every execution-scoped store live
   under it. The fold carries it only because `RunIdentity` deliberately does
@@ -809,9 +811,14 @@ to be delivered.
 The store's half is decision 6, still unagreed, and it is now the weakest
 form yet: a **monotone commit counter** for the session, readable at any
 time. It carries no events, need not be exact, and may over-report, because
-a wake that finds no new rows costs one indexed read. The one property it
-must have is that it **never decreases and never reuses a value**, for the
-life of the database. Two plausible implementations fail that, and both are
+a wake that finds no new rows costs one indexed read. It must be **the
+session's actual commit ordinal**, not an independent generation: it is
+merged with this process's own level and compared once against the seen
+value, so a second number space either runs ahead - filtering local ordinals
+as stale - or starts behind an existing database and filters cross-process
+wakes until it catches up. Within that, the property to hold is that the
+ordinal **never decreases and never reuses a value**, for the life of the
+database. Two plausible implementations fail that, and both are
 named here because both look right: a WAL frame count is reset by a
 checkpoint, and `MAX(rowid)` falls when retention deletes the highest row
 and, without `AUTOINCREMENT`, reuses the value afterwards. In either case a
@@ -1252,18 +1259,22 @@ fixing the id retired it.
   change and emits the resulting full snapshot as `approval.policy` (section
   6, item 2), which keeps "never a toggle delta" true of the _event_ while
   the _request_ stays a mutation.
-- workflow: `workflow.skip { streamId, executionId, callIndex }`,
-  `workflow.retry { streamId, executionId, callIndex }`,
-  `workflow.kill { streamId, executionId, detachActiveChildren }` - each
-  names both, because a checkpoint-derived execution id can outlive the
-  stream that carried it (5.2): the stream id says which relaunch, the
-  execution id addresses the checkpoint anchor. This is the only place a
-  bare stream id is not enough. Each names its
-  execution because the handler has to select that execution's interaction
-  scope (7.6) and one session can have several workflows running
+- workflow: `workflow.skip { streamId, callIndex }`,
+  `workflow.retry { streamId, callIndex }`,
+  `workflow.kill { streamId, detachActiveChildren }` - bare stream ids like
+  every other arm, since an execution is 1:1 with its stream (5.2); the
+  handler resolves that execution's interaction scope (7.6) from it, and one
+  session can have several workflows running
 - misc: `runCompileFixer { streamId }`, `exportTranscript { streamId }` -
   both are stream-scoped in the handlers today, so both name their stream
-- launch: `execute { validatedRequest }`,
+- launch: `execute { selection }` - the raw launch selection from
+  `Surface.launch`, not a request the browser validated: a team launch has
+  to resolve the authoritative team plan and can need a partial-continue,
+  cancel, or sign-in decision (`executionHandlers.ts:65-81`), neither of
+  which a webview can do. The runtime prepares
+  (`prepareMainViewExecutionLaunch`) and asks through a `host.request`
+  `confirmTeamLaunch { unavailable, needsAuth }` whose outcome resumes or
+  abandons the launch;
   `polishInstruction { text, agent, model, files }` - the launch draft lives
   in the view's `Surface.launch` and 8.5 deliberately does not synchronize
   it, so the request carries what it polishes, as today's command does
@@ -1293,7 +1304,10 @@ message registry it rides), `useOwnApiKey { streamId, retryId, provider,
 model, reason }` (the quota panel's recovery: the host prompts and changes
 routing, then its outcome carries the retry the surface re-issues as a
 `runtime.request`, which is what `ProgressApiKeyRetryController.useOwnApiKey`
-does in one step today), `setActiveView { mode }` (a
+does in one step today), `setActiveView { mode }` (**from the sidebar bridge only**: `texra.activeView`
+is one extension-global key and its six consumers are the sidebar's
+`view/title` entries, `packages/extension/package.json:649-678`, so an
+editor-tab mode change must not overwrite it - a
 notification, not a round trip: the extension host needs `texra.activeView`
 for six `view/title` menu conditions and §8.5 removes the selection round
 trip, so the surface tells the host what it is showing without selection
@@ -1408,6 +1422,7 @@ Surface = {
   phase: Map<StreamTabId, PhaseId>
   scroll: Map<StreamTabId, number>
   drawerOpen: boolean
+  toolsSheetOpen: boolean                // the header's Tools bottom sheet
   workbench: WorkbenchLayout                               // desktop only
 }
 ```
@@ -1759,34 +1774,34 @@ Surface state.
 Every surface the current New view, Sessions view, editor tab, and host
 commands render, and its home. "Same" means the component is unchanged.
 
-| Today                                                                                                                                                            | Home                                                                                                |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| New / Sessions tabs                                                                                                                                              | Removed; New is the "+" action and the empty state; Sessions is the drawer or the docked list       |
-| Open dashboard, Open sessions in editor, Back to sidebar                                                                                                         | Gear in the header; the others in the overflow and the drawer footer                                |
-| Loading skeleton, onboarding cards                                                                                                                               | Empty-state body while the funnel is pending; same components                                       |
-| API key, agent config, dependency, getting-started, login banners                                                                                                | Above the composer in the empty state; a thin strip above the follow-up in a session; same          |
-| Interactive / Workflow, Agent / Team radios                                                                                                                      | Composer chips with menus                                                                           |
-| Session hint callout                                                                                                                                             | Under the composer; same                                                                            |
-| Polish, dictation, image paste, file drop                                                                                                                        | Composer, both states; same controllers                                                             |
-| Working directory select                                                                                                                                         | Composer chip, only with two or more roots                                                          |
-| Agent, team, model selects and their settings gears                                                                                                              | Chips; gear becomes a "…settings" menu item                                                         |
-| Run agent (Cmd+Alt+E)                                                                                                                                            | Send; accelerator stays                                                                             |
-| Debug Pack output, Delete output files                                                                                                                           | Overflow, debug section                                                                             |
-| Input, Context, Media groups and their menus                                                                                                                     | "Context and attachments" disclosure; wand and wrench items also in Tools; same `file-select-group` |
-| LaTeXDiffs section                                                                                                                                               | Tools sheet, any state, real component                                                              |
-| Empty states, getting-started buttons                                                                                                                            | The one empty state                                                                                 |
-| Rail rows, tree, expand, delete                                                                                                                                  | Drawer or docked list; same `stream-tabs` plus groups and rollups                                   |
-| Stream header and its toolbar (stop, fresh run, resume, setup in main view, task storage, export, copy context, latexdiff, clean, pack; bypass toggles; compact) | Same; "Setup in main view" becomes "Edit as new task"; toggles become `setPolicy`                   |
-| Tasks, Plan, Background tasks, Command panels                                                                                                                    | Same; Background tasks becomes the dispatch card                                                    |
-| Transcript rows, inline copy, compaction, terminal output, chime                                                                                                 | Same                                                                                                |
-| Request panels, approve split button                                                                                                                             | Same; the run board's rows link here                                                                |
-| Latexdiff results, generated files with per-file verbs                                                                                                           | Same                                                                                                |
-| Follow-up composer, queued messages                                                                                                                              | Same, plus the "goes to" line                                                                       |
-| Usage footer                                                                                                                                                     | Same                                                                                                |
-| view/title menus                                                                                                                                                 | Keyed on the re-derived context key; New Session is the "+" command                                 |
-| Show Launcher, Show Progress, Toggle, Open in editor tab                                                                                                         | New task; focus conversation; toggle drawer; unchanged                                              |
-| Status bar item                                                                                                                                                  | Unchanged                                                                                           |
-| Desktop-only hero, disclosure, composer dock, Run mode select, always-open follow-up                                                                             | The shared empty state and composer on both hosts                                                   |
+| Today                                                                                                                                                                                                                                                                         | Home                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| New / Sessions tabs                                                                                                                                                                                                                                                           | Removed; New is the "+" action and the empty state; Sessions is the drawer or the docked list       |
+| Open dashboard, Open sessions in editor, Back to sidebar                                                                                                                                                                                                                      | Gear in the header; the others in the overflow and the drawer footer                                |
+| Loading skeleton, onboarding cards                                                                                                                                                                                                                                            | Empty-state body while the funnel is pending; same components                                       |
+| API key, agent config, dependency, getting-started, login banners                                                                                                                                                                                                             | Above the composer in the empty state; a thin strip above the follow-up in a session; same          |
+| Interactive / Workflow, Agent / Team radios                                                                                                                                                                                                                                   | Composer chips with menus                                                                           |
+| Session hint callout                                                                                                                                                                                                                                                          | Under the composer; same                                                                            |
+| Polish, dictation, image paste, file drop                                                                                                                                                                                                                                     | Composer, both states; same controllers                                                             |
+| Working directory select                                                                                                                                                                                                                                                      | Composer chip, only with two or more roots                                                          |
+| Agent, team, model selects and their settings gears                                                                                                                                                                                                                           | Chips; gear becomes a "…settings" menu item                                                         |
+| Run agent (Cmd+Alt+E)                                                                                                                                                                                                                                                         | Send; accelerator stays                                                                             |
+| Debug Pack output, Delete output files                                                                                                                                                                                                                                        | Overflow, debug section                                                                             |
+| Input, Context, Media groups and their menus                                                                                                                                                                                                                                  | "Context and attachments" disclosure; wand and wrench items also in Tools; same `file-select-group` |
+| LaTeXDiffs section                                                                                                                                                                                                                                                            | Tools sheet, any state, real component                                                              |
+| Empty states, getting-started buttons                                                                                                                                                                                                                                         | The one empty state                                                                                 |
+| Rail rows, tree, expand, delete                                                                                                                                                                                                                                               | Drawer or docked list; same `stream-tabs` plus groups and rollups                                   |
+| Stream header and its toolbar (stop, fresh run, resume, setup in main view, task storage, export, copy context, latexdiff, clean, pack; bypass toggles; compact)                                                                                                              | Same; "Setup in main view" becomes "Edit as new task"; toggles become `setPolicy`                   |
+| Tasks, Plan, Background tasks, Command panels                                                                                                                                                                                                                                 | Same; Background tasks becomes the dispatch card                                                    |
+| Transcript rows, inline copy, compaction, terminal output; the completion chime moves to the host (one per process, not one per subscriber - `TaskGroupList.ts:299-311` plays it from a renderer transition hook today, so two open views would chime twice for one workflow) | Same                                                                                                |
+| Request panels, approve split button                                                                                                                                                                                                                                          | Same; the run board's rows link here                                                                |
+| Latexdiff results, generated files with per-file verbs                                                                                                                                                                                                                        | Same                                                                                                |
+| Follow-up composer, queued messages                                                                                                                                                                                                                                           | Same, plus the "goes to" line                                                                       |
+| Usage footer                                                                                                                                                                                                                                                                  | Same                                                                                                |
+| view/title menus                                                                                                                                                                                                                                                              | Keyed on the re-derived context key; New Session is the "+" command                                 |
+| Show Launcher, Show Progress, Toggle, Open in editor tab                                                                                                                                                                                                                      | New task; focus conversation; toggle drawer; unchanged                                              |
+| Status bar item                                                                                                                                                                                                                                                               | Unchanged                                                                                           |
+| Desktop-only hero, disclosure, composer dock, Run mode select, always-open follow-up                                                                                                                                                                                          | The shared empty state and composer on both hosts                                                   |
 
 ## 13. Ledger collapses outside the critical path
 
@@ -1863,7 +1878,10 @@ activation handling.
   importable from the browser bundle); `fold` over a recorded event log of a
   fan-out session reproduces today's `stream-tabs` rows, `background-tasks`
   rows, and `workflowRunModel` output; the presentation-boundary test
-  rejects draft and recording names in `sessionView.ts`; every stream kind
+  rejects draft and recording names in `sessionView.ts` and the durable
+  session-fact schemas - **not** every shared schema, or it would reject
+  `HostSnapshot.recording`, which is process state and belongs on the wire
+  (8.1, 9); every stream kind
   has a `run.start`; a launch that fails after reservation folds to failed;
   the same log with an empty `local` folds every pending approval to
   interrupted, never waiting.
@@ -2005,29 +2023,30 @@ As tests:
    A tombstone becomes final; `run.start` is seq 1 of its stream;
    `StreamKey` is a `StreamTabId` again; `target` is a bare id.
 
-   **The cost is larger than an earlier draft of this decision claimed, and
-   it is the one input that could change the answer.** A workflow's
-   execution id is deliberately derived from its checkpoint, and its stream
-   id is derived from _that_:
-   `runExecutionId = deriveExecutionId({ checkpointId })` then
+   **The anchor moves down one level, and that is the whole of the cost.**
+   A workflow derives its execution id from its checkpoint and its stream id
+   from that - `runExecutionId = deriveExecutionId({ checkpointId })`, then
    `runStreamId = getStreamTabId(STREAM_PREFIX, { executionId })`
-   (`WorkflowScriptTool.ts:345-353`), so a relaunch re-roots registration,
-   stream, and grandchildren on one stable anchor and resume replays
-   completed calls (#8712). Minting a fresh stream id keeps the anchor for
-   the _execution_ - the checkpoint identity is untouched, so resume still
-   replays - but the **stream** no longer re-roots: a relaunched workflow
-   appears as a new row rather than reusing its old tab. When the old row
-   was deleted that is what the user asked for; when it was not, it is a
-   visible behaviour change, and it is the thing to weigh against thirteen
-   fences.
+   (`WorkflowScriptTool.ts:345-353`) - so a relaunch re-roots registration,
+   stream, and grandchildren, and resume replays completed calls (#8712).
+   The stable thing in that chain is the **checkpoint id**; deriving the
+   other two from it conflated "which checkpoint" with "which run".
 
-   Two consequences follow and are already written into the document.
-   `executionId` is **not** redundant with the stream id and is not 1:1 with
-   it: a relaunched workflow has a fresh stream id and the same
-   checkpoint-derived execution id. So the workflow arms name both
-   (`{ streamId, executionId }`, 8.2) - the stream id says which relaunch,
-   the execution id addresses the checkpoint anchor - and that is the one
-   place a bare id is not enough.
+   So both ids mint per launch and `checkpointId` becomes the resume anchor:
+   it rides the `run.start` payload, a relaunch finds its checkpoint by it,
+   and replay is unchanged. Reusing the execution id instead - what an
+   earlier draft of this decision proposed - is not merely redundant but
+   unsafe: two live rows would share one execution id, and deletion resolves
+   a stream to its execution and deletes that execution's state
+   (`SessionStores.ts:409-412, 447`), so deleting the older row would take
+   the newer row's checkpoint with it.
+
+   With both ids per launch, `executionId` is 1:1 with the stream id, the
+   workflow arms take a bare `streamId`, and all thirteen fences go. What
+   changes visibly is that a relaunched workflow appears as a new row rather
+   than reusing its old tab - which is what the user asked for when the old
+   row was deleted, and a behaviour change when it was not. That is the
+   thing to weigh.
 
    **If the owner disagrees, reverting is mechanical** - re-pair each id with
    an `executionId` at the thirteen sites, whose individual arguments are in
