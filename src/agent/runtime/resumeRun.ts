@@ -18,9 +18,13 @@ import {
   type FollowUpFailureReason,
 } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
+import {
+  ExecutionLeaseActiveError,
+  inspectExecutionLease,
+} from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
-import { flowKey } from '@agent/node/persistedFlow';
+import { checkpointExists } from '@agent/storage/resumability';
+import { PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
@@ -107,7 +111,8 @@ export interface ResumeRunOptions extends Pick<
    * (clearing a transcript, switching the focused stream) does it here rather
    * than reading the same checkpoint first to decide whether it may: a
    * history listing advertises a row from its checkpoint file alone (one
-   * `stat`, never a parse), so an unusable checkpoint refuses above this hook
+   * `stat`, never a parse) and inspects no lease per row, so both an unusable
+   * checkpoint and a run another TeXRA process holds refuse above this hook
    * with the user's window untouched. A rejection propagates to the caller; a
    * stop requested while it runs is honored, because
    * {@link isCancellationRequested} is re-read once it returns.
@@ -176,36 +181,24 @@ const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
 
 /**
- * Retrieval yielded no resume state: say whether the checkpoint file is still
- * on disk. `unusable_checkpoint` when it is — history listings advertise a row
- * from that file alone (one `stat`, never a parse), so this cohort must meet a
- * refusal worded as unusable state, never as a run that finished. `undefined`
- * when the file is gone, leaving the caller to word a finished run or rethrow
- * the storage failure it caught.
+ * Positive evidence that the checkpoint itself is what failed, walking the
+ * cause chain the retrieval boundary wraps its failures in. `persistedFlow`
+ * throws this for a record that cannot be resumed (malformed, spent, an
+ * unsupported format); its `read-failed` reason is a transient storage
+ * failure, which is not evidence about the record. Every other failure on the
+ * resume path — a rejected snapshot preload, a KV or metadata read, a lease
+ * read — stays the operational error the host words with its cause.
  */
-async function unusableCheckpointReason(
-  executionId: ExecutionId,
-  cause?: unknown,
-): Promise<'unusable_checkpoint' | undefined> {
-  let present: boolean;
-  try {
-    present = await getExecutionStore(executionId).exists(flowKey(executionId));
-  } catch (error) {
-    // The stat itself failing is evidence of nothing; keep the caller's own
-    // error rather than replacing it with this one.
-    log.warn(
-      `Could not stat the checkpoint of ${executionId}: ${toErrorMessage(error)}`,
-      { data: error },
-    );
-    return undefined;
+function namesUnusableCheckpoint(error: unknown): boolean {
+  for (let current = error, depth = 0; depth < 8; depth++) {
+    if (current instanceof PersistedFlowStateError) {
+      return current.reason !== 'read-failed';
+    }
+    if (!(current instanceof Error) || current.cause === undefined)
+      return false;
+    current = current.cause;
   }
-  if (!present) return undefined;
-  log.warn(
-    `Refusing to resume ${executionId}: its checkpoint holds no resumable state${
-      cause === undefined ? '.' : `: ${toErrorMessage(cause)}`
-    }`,
-  );
-  return 'unusable_checkpoint';
+  return false;
 }
 
 export async function resumeRun(
@@ -297,11 +290,15 @@ async function resumeRunWithRecoveryProvenance(
   } catch (error) {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     // A checkpoint that is on disk but cannot be turned into resume state (a
-    // malformed envelope, a spent cursor) throws here. That is a refusal to
-    // word for the row that advertised it, not an unexpected storage failure.
-    const reason = await unusableCheckpointReason(executionId, error);
-    if (!reason) throw error;
-    return { failed: reason };
+    // malformed envelope, an unsupported record) throws here. That is a
+    // refusal to word for the row that advertised it; anything else that
+    // failed on the way is the storage error it has always been.
+    if (!namesUnusableCheckpoint(error)) throw error;
+    log.warn(
+      `Refusing to resume ${executionId}: its checkpoint holds no resumable state: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+    return { failed: 'unusable_checkpoint' };
   }
   if (
     isCancellationRequested() ||
@@ -330,11 +327,21 @@ async function resumeRunWithRecoveryProvenance(
     ) {
       return { failed };
     }
-    // The durable facts are read and nobody holds the run, so what is left is
-    // the checkpoint file: history listings advertise a row from that file
-    // alone (one `stat`, never a parse), so a present file must meet a refusal
-    // worded as unusable state, never as a run that finished.
-    return { failed: (await unusableCheckpointReason(executionId)) ?? failed };
+    // Nobody holds it, so the checkpoint file is what is left to word from.
+    // History listings advertise a row from that file alone (one `stat`,
+    // never a parse), so a record this category rejected and a malformed one
+    // both meet a refusal worded as unusable state rather than as a run that
+    // finished. Only `checkpoint-malformed` names the file itself; every
+    // other fault is a read that says nothing about it.
+    const unusable =
+      classification.kind === 'unclassified'
+        ? classification.fault === 'checkpoint-malformed'
+        : await checkpointExists(executionId);
+    if (!unusable) return { failed };
+    log.warn(
+      `Refusing to resume ${executionId}: its checkpoint holds no resumable state.`,
+    );
+    return { failed: 'unusable_checkpoint' };
   }
   // The run is about to be opened for write, its checkpoint just re-read. A
   // hold recorded by an earlier refusal describes facts this
@@ -348,6 +355,26 @@ async function resumeRunWithRecoveryProvenance(
   // queue lease agree; a disagreement refuses, so no host rearranges for it.
   const willLaunch = (resume.type === 'toolUse') === (queueLease !== undefined);
   if (willLaunch && options.onResumeResolved) {
+    // One lease read per open, taken here because the hook is where a host
+    // rearranges itself onto the resumed run: a row another TeXRA process is
+    // live on must refuse before that, not after the launch's own acquire
+    // raises `ExecutionLeaseActiveError` onto a cleared window. The acquire
+    // still settles the race this read cannot see.
+    const lease = await inspectExecutionLease(executionId).catch(
+      (error: unknown) => {
+        if (queueLease) session.followUps.release(queueLease, 'recoverable');
+        throw error;
+      },
+    );
+    if (lease.status === 'held') {
+      if (queueLease) session.followUps.release(queueLease, 'recoverable');
+      session.status.markUnavailableOrLog(
+        streamId,
+        streamHeldMessage(lease.owner),
+        log,
+      );
+      return { failed: 'owned_elsewhere' };
+    }
     try {
       await options.onResumeResolved();
     } catch (error) {

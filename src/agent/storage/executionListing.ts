@@ -32,6 +32,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
+import { checkpointExists } from './resumability';
 import {
   inspectExecutionLease,
   runWithInactiveExecutionLease,
@@ -259,10 +260,13 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     async (id): Promise<ExecutionListingEntry | null> => {
       try {
         const store = getExecutionStore(id);
+        // The checkpoint probe answers "no" and warns when the `stat` itself
+        // fails: a row whose meta and record are readable still belongs in
+        // history, and the open path re-reads the file anyway.
         const [meta, record, checkpointPresent] = await Promise.all([
           store.readMeta(),
           store.readRunRecord(),
-          store.exists(flowKey(id)),
+          checkpointExists(id),
         ]);
 
         if (!meta) return null;

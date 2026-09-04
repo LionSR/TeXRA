@@ -4,9 +4,9 @@ import * as path from 'node:path';
 import pMap from 'p-map';
 
 import {
+  checkpointExists,
   deleteAllExecutions,
   deleteExecution,
-  flowKey,
   getExecutionStore,
   isUserVisibleExecution,
   listExecutions,
@@ -191,21 +191,26 @@ export async function readCliHistoryDetails(
     readCompletedRunConversation(id),
     store.readWorkspaceFiles(),
     listRunGeneratedFiles(id),
-    store.exists(flowKey(id)),
+    checkpointExists(id),
   ]);
   const conversation = conversationResult.conversation;
   const hasTranscriptEvidence =
     hasCompletedRunConversationEvidence(conversationResult);
   // The same rule the listing applies, from the same facts: `status` is a
   // frozen contract, so `history show` must not answer it differently from
-  // `history list` for the run in the row the caller just read.
-  const resumable = await isCliRunResumable({
-    id,
-    checkpointPresent,
-    streamId: meta?.streamId,
-    agentCategory: config?.agentCategory,
-    outcome: meta?.outcome,
-  });
+  // `history list` for the run in the row the caller just read. A run whose
+  // config is missing or malformed has no category to resume under and no
+  // config for a host to adopt, so it is not offered — the listing never
+  // reaches this rule for such a row, which lists as incomplete.
+  const resumable =
+    config !== null &&
+    (await isCliRunResumable({
+      id,
+      checkpointPresent,
+      streamId: meta?.streamId,
+      agentCategory: config.agentCategory,
+      outcome: meta?.outcome,
+    }));
   const currentModel = config
     ? await readCliResumedModel(id, config)
     : undefined;

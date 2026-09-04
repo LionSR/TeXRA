@@ -24,7 +24,10 @@
  */
 import { inspectExecutionLease } from '@agent/storage/executionLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
-import { deriveResumability } from '@agent/storage/resumability';
+import {
+  deriveResumability,
+  type ResumabilityFault,
+} from '@agent/storage/resumability';
 import { createLog } from '@logger/logUtils';
 import type { ExecutionId, RunOutcome } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -36,7 +39,17 @@ export type RunClassification =
   | { readonly kind: 'owned_here' }
   | { readonly kind: 'resumable'; readonly outcome?: RunOutcome }
   | { readonly kind: 'finished'; readonly outcome?: RunOutcome }
-  | { readonly kind: 'unclassified'; readonly cause: string };
+  | {
+      readonly kind: 'unclassified';
+      readonly cause: string;
+      /**
+       * Which durable fact was unreadable, when a fact-level probe named one.
+       * A caller words a run's refusal from this, never from `cause`, which is
+       * display text. Absent when the classification failed above the facts
+       * (an unreadable stream index, a lease lock that could not be taken).
+       */
+      readonly fault?: ResumabilityFault | 'lease-unreadable';
+    };
 
 /** What the durable facts alone decide, ownership already settled. */
 export type RunFactsClassification = Exclude<
@@ -60,7 +73,7 @@ export async function classifyRunFacts(
     return { kind: 'finished', outcome: facts.outcome };
   }
   log.warn(`Cannot classify ${executionId}: ${facts.cause}`);
-  return { kind: 'unclassified', cause: facts.cause };
+  return { kind: 'unclassified', cause: facts.cause, fault: facts.fault };
 }
 
 /** Classify one execution. Never throws: an unreadable fact is `unclassified`. */
@@ -76,7 +89,7 @@ export async function classifyRun(
   } catch (error) {
     const cause = `lease unreadable (${toErrorMessage(error)})`;
     log.warn(`Cannot classify ${executionId}: ${cause}`, { data: error });
-    return { kind: 'unclassified', cause };
+    return { kind: 'unclassified', cause, fault: 'lease-unreadable' };
   }
   return classifyRunFacts(executionId);
 }

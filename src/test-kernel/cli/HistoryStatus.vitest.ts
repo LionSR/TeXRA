@@ -194,4 +194,17 @@ describe('CLI history status formatting', () => {
       'Flow record: present',
     );
   });
+
+  // A checkpoint alone is not enough: without a config there is no category
+  // to resume under and nothing for a host to adopt, so the row says so.
+  it('does not offer a run whose config is missing as resumable', async () => {
+    const id = 'checkpoint-without-config' as ExecutionId;
+    await seedFlowRecord(id, TOOL_USE_CONFIG, 'orchestrator', {});
+    await getExecutionStore(id).delete('config');
+
+    const details = await readCliHistoryDetails(id);
+
+    expect(details?.hasFlowRecord).toBe(true);
+    expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
+  });
 });

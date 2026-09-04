@@ -87,10 +87,14 @@ export async function runResumeExecution(
       return CliExitCode.Usage;
     case 'unclassified':
       // A history row is advertised from its checkpoint file alone, so a run
-      // whose saved state cannot be read lands here. It gets the same words
-      // the chat's open path gives that cohort, with the fact that decided it.
+      // whose checkpoint is corrupt lands here and gets the same words the
+      // chat's open path gives that cohort, with the fact that decided it.
+      // A lease or metadata read that failed says nothing about the
+      // checkpoint, so it stays the operational fact it is.
       writeTextStderr(
-        `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`,
+        classification.fault === 'checkpoint-malformed'
+          ? `${describeFollowUpFailure('unusable_checkpoint')} (${classification.cause})`
+          : `Could not read the state of execution ${id}: ${classification.cause}`,
       );
       return CliExitCode.AgentError;
     case 'finished':
