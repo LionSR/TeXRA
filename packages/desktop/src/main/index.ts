@@ -63,7 +63,10 @@ import {
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
-import { createDesktopFileSelection } from './desktopFileSelection.js';
+import {
+  createDesktopFileSelection,
+  type DesktopFileSelection,
+} from './desktopFileSelection.js';
 import {
   openDesktopPaperRegistry,
   readRememberedDesktopPapers,
@@ -343,6 +346,9 @@ function createWindow(options: {
   });
   const settingsIpcRef: {
     current?: DesktopSettingsIpc;
+  } = {};
+  const fileSelectionRef: {
+    current?: DesktopFileSelection;
   } = {};
   const onboardingIpcRef: {
     current?: DesktopOnboardingIpc;
@@ -736,21 +742,6 @@ function createWindow(options: {
     }
     return agentExecutionLoad;
   };
-  const fileSelection = createDesktopFileSelection({
-    postToRenderer: postToRendererIfAlive,
-    showOpenFileDialog: async (options) => {
-      const result = await dialog.showOpenDialog(window, {
-        title: options.title,
-        defaultPath: options.defaultPath,
-        filters: options.filters,
-        properties: options.allowMultiple
-          ? ['openFile', 'multiSelections']
-          : ['openFile'],
-      });
-      return result.canceled ? undefined : result.filePaths;
-    },
-    onError: reportAsyncError,
-  });
   const agentSettingsController = new DefaultDesktopAgentSettingsController({
     workspaceState: options.papers.activeWorkspaceState,
     globalState: platform().globalState,
@@ -975,8 +966,8 @@ function createWindow(options: {
   /**
    * Bind the window to the paper it shows. The settings surface subscribes to
    * the paper's session (goal facts, approval policy), the title follows its
-   * activity, and the progress bridge is built lazily for it; all three are
-   * released when the window switches papers.
+   * activity, the file lists scan its root, and the progress bridge is built
+   * lazily for it; all four are released when the window switches papers.
    */
   const attachActivePaper = () => {
     const paper = activePaper();
@@ -1012,6 +1003,32 @@ function createWindow(options: {
         settingsIpcRef.current = undefined;
       }
       settingsIpc.dispose();
+    });
+    // The file lists belong to the paper: a scan the previous paper started
+    // finishes against its own disposed adapter instead of posting into the
+    // renderer document this paper has since loaded.
+    const fileSelection = createDesktopFileSelection({
+      postToRenderer: postToRendererIfAlive,
+      getWorkspacePath: () => paper.root,
+      showOpenFileDialog: async (options) => {
+        const result = await dialog.showOpenDialog(window, {
+          title: options.title,
+          defaultPath: options.defaultPath,
+          filters: options.filters,
+          properties: options.allowMultiple
+            ? ['openFile', 'multiSelections']
+            : ['openFile'],
+        });
+        return result.canceled ? undefined : result.filePaths;
+      },
+      onError: reportAsyncError,
+    });
+    fileSelectionRef.current = fileSelection;
+    paperResources.add(() => {
+      if (fileSelectionRef.current === fileSelection) {
+        fileSelectionRef.current = undefined;
+      }
+      fileSelection.dispose();
     });
     paperResources.add(releaseAgentExecution);
   };
@@ -1062,6 +1079,15 @@ function createWindow(options: {
       // one-shot; on a resolution failure it throws so that guard resets and a
       // later "Run Setup" click can retry.
       kickoffSetup: async () => {
+        // The paper the user started setup in, taken before the first await:
+        // the run and its presentation belong to it even when the window
+        // moves to another paper while the model resolves and agents load.
+        const paper = activePaper();
+        // Initialize the presentation subscription before launch so a fast
+        // terminal result is eligible for replay. This await ends before the
+        // process-owned run begins and therefore cannot retain the window for
+        // the duration of the run.
+        await getAgentExecution();
         const { buildDesktopSetupExecuteMessage } =
           await import('@controllers/onboarding/setupLaunch');
         const message = await buildDesktopSetupExecuteMessage();
@@ -1082,16 +1108,9 @@ function createWindow(options: {
           await showErrorMessage(preparation.message);
           throw new Error(preparation.message);
         }
-        // Initialize the presentation subscription before launch so a fast
-        // terminal result is eligible for replay. This await ends before the
-        // process-owned run begins and therefore cannot retain the window for
-        // the duration of the run.
-        await getAgentExecution();
         return launchDesktopAgent(
           { kind: 'fresh', ...preparation.request },
-          {
-            session: activePaper().session,
-          },
+          { session: paper.session },
         );
       },
       signInWithChatGpt: () => requireSettingsIpc().signInChatGpt(),
@@ -1247,7 +1266,10 @@ function createWindow(options: {
       const execution = await getAgentExecution();
       void execution.handleExecute(message).catch(reportAsyncError);
     },
-    fileSelection,
+    fileSelection: {
+      handleMessage: (message) =>
+        fileSelectionRef.current?.handleMessage(message) ?? false,
+    },
     prompt: promptController,
     settings: {
       handleMessage: (message) =>

@@ -49,7 +49,14 @@ interface DesktopFileSelectionOptions {
   onError?: (error: unknown) => void;
 }
 
-export type DesktopFileSelection = DesktopMessageHandler;
+export interface DesktopFileSelection extends DesktopMessageHandler {
+  /**
+   * Close the adapter's renderer port. A scan still running for this paper
+   * finishes against a closed port, so its lists never reach the renderer
+   * document of the paper the window has since moved to.
+   */
+  dispose(): void;
+}
 
 // Only base/edited use single-file SET commands; input/context/media
 // route through SELECT_MULTIPLE_FILES.
@@ -117,12 +124,19 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   );
 }
 
+/**
+ * The file lists and pickers of one paper: the adapter lives as long as the
+ * window shows that paper, and `dispose` closes its renderer port.
+ */
 export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
   const getWorkspacePath =
     options.getWorkspacePath ?? (() => workspaceRoots().workspace);
   const onError = createDesktopErrorReporter(options.onError);
+  let port: DesktopFileSelectionOptions['postToRenderer'] | undefined =
+    options.postToRenderer;
+  const post = (message: unknown) => port?.(message);
 
   function runAsync(work: Promise<void>): void {
     void work.catch(onError);
@@ -133,7 +147,7 @@ export function createDesktopFileSelection(
     files: string[],
     preserveBaseFile = false,
   ) {
-    options.postToRenderer({
+    post({
       command: SET_COMMAND_BY_FILE_TYPE[fileType],
       files,
       ...(preserveBaseFile && { preserveBaseFile: true }),
@@ -157,7 +171,7 @@ export function createDesktopFileSelection(
   async function refreshDiskBackedDropdowns() {
     const inputFiles = await list('input');
     postFileList('base', inputFiles, true);
-    options.postToRenderer({
+    post({
       command: MAIN_VIEW_COMMANDS.SET_BANNER,
       banner: 'gettingStarted',
       visible: inputFiles.length === 0,
@@ -217,7 +231,7 @@ export function createDesktopFileSelection(
       ],
     });
     if (!selectedFiles) return;
-    options.postToRenderer({
+    post({
       command: MULTI_SET_COMMAND_BY_FILE_TYPE[fileType],
       files: selectedFiles.map((file) =>
         toWorkspaceRelative(workspacePath, file),
@@ -253,5 +267,10 @@ export function createDesktopFileSelection(
     return parsed.success && dispatch(parsed.data);
   }
 
-  return { handleMessage };
+  return {
+    handleMessage,
+    dispose() {
+      port = undefined;
+    },
+  };
 }

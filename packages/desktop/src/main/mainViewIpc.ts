@@ -25,10 +25,10 @@ import {
 import { createDesktopViewStateIpc } from './desktopViewStateIpc.js';
 import type { BrowserWindow } from 'electron';
 import type { DesktopPromptIpc } from './desktopPromptController.js';
-import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopMainViewIpcOptions {
-  fileSelection: DesktopFileSelection;
+  /** The paper-scoped file lists and pickers, reached through the window's current one. */
+  fileSelection: DesktopMessageHandler;
   prompt: DesktopPromptIpc;
   /** The paper-scoped settings surface, reached through the window's current one. */
   settings: DesktopMessageHandler;

@@ -65,16 +65,6 @@ export interface DesktopPaper {
  */
 const DESKTOP_OPEN_PAPERS_STATE_KEY = 'texra.desktop.openPapers';
 
-/**
- * A registry entry: the paper, and once `close` has started, the close in
- * progress. The entry stays in the registry until that close has disposed the
- * session, so a concurrent `open` of the same folder waits for it instead of
- * building a second session over the same storage.
- */
-interface PaperEntry extends DesktopPaper {
-  closing?: Promise<void>;
-}
-
 interface DesktopPaperRegistryOptions {
   /** Desktop data root (`~/.texra` in production, the e2e profile otherwise). */
   readonly dataRoot: string;
@@ -117,7 +107,7 @@ export interface DesktopPaperRegistry {
   /** Config of whichever paper is active at call time. */
   readonly activeConfig: ConfigProvider;
   summary(): Omit<DesktopPapersMessage, 'command'>;
-  /** Fires after a paper opens or the active paper changes. */
+  /** Fires after a paper opens or closes, or the active paper changes. */
   onChange(listener: () => void): () => void;
   /**
    * Renderer traffic about papers: `SELECT_PAPER` requests, and the main
@@ -301,8 +291,15 @@ async function openPaperSession(
 export async function openDesktopPaperRegistry(
   options: DesktopPaperRegistryOptions,
 ): Promise<DesktopPaperRegistry> {
-  const papers = new Map<string, PaperEntry>();
+  /** The open papers by canonical root; a closing paper has already left. */
+  const papers = new Map<string, DesktopPaper>();
   const opening = new Map<string, Promise<DesktopPaper>>();
+  /**
+   * Closes in progress by root, until the close has disposed the session, so
+   * a concurrent `open` of the same folder waits for it instead of building
+   * a second session over the same storage.
+   */
+  const closing = new Map<string, Promise<void>>();
   const listeners = new Set<() => void>();
   let activeRoot: string | undefined;
   const fallback = await openPaperSession(
@@ -314,16 +311,9 @@ export async function openDesktopPaperRegistry(
   const notify = () => {
     for (const listener of [...listeners]) listener();
   };
-  /** The paper open at `root`: registered and not closing. */
-  const openPaperAt = (root: string): DesktopPaper | undefined => {
-    const entry = papers.get(root);
-    return entry?.closing ? undefined : entry;
-  };
-  const openPapers = () =>
-    [...papers.values()].filter((entry) => !entry.closing);
+  const openPapers = () => [...papers.values()];
   const active = (): DesktopPaper =>
-    (activeRoot === undefined ? undefined : openPaperAt(activeRoot)) ??
-    fallback;
+    (activeRoot === undefined ? undefined : papers.get(activeRoot)) ?? fallback;
   const activeRoots = () => active().roots;
 
   async function openPaper(root: string): Promise<DesktopPaper> {
@@ -368,7 +358,7 @@ export async function openDesktopPaperRegistry(
   };
 
   const activate = (root: string | undefined) => {
-    const next = root !== undefined && openPaperAt(root) ? root : undefined;
+    const next = root !== undefined && papers.has(root) ? root : undefined;
     if (next !== undefined) rememberActive(next);
     if (next === activeRoot) return;
     activeRoot = next;
@@ -379,14 +369,14 @@ export async function openDesktopPaperRegistry(
     open(rootInput) {
       const root = canonicalizeWorkspacePath(rootInput);
       const existing = papers.get(root);
-      if (existing && !existing.closing) return Promise.resolve(existing);
+      if (existing) return Promise.resolve(existing);
       let pending = opening.get(root);
       if (!pending) {
         // A folder still closing reopens once its old session is gone, so
         // the two never share transcript and storage paths.
-        const closing = existing?.closing;
+        const closed = closing.get(root);
         pending = (
-          closing ? closing.then(() => openPaper(root)) : openPaper(root)
+          closed ? closed.then(() => openPaper(root)) : openPaper(root)
         ).finally(() => opening.delete(root));
         opening.set(root, pending);
       }
@@ -396,29 +386,31 @@ export async function openDesktopPaperRegistry(
     active,
     activate,
     close(root) {
-      const entry = papers.get(root);
-      if (!entry) return Promise.resolve();
-      if (entry.closing) return entry.closing;
-      entry.closing = (async () => {
-        // The window moves off the paper before its session goes: the paper
-        // the user showed most recently before this one, else the
-        // no-workspace session. `activate` notifies, and listeners release
-        // their bindings to the closed paper inside its still-live session
-        // scope.
-        if (activeRoot === root) {
-          activate(
-            readRememberedPapers(options.globalState, options.warn).findLast(
-              (candidate) => openPaperAt(candidate) !== undefined,
-            ) ?? openPapers().at(-1)?.root,
-          );
-        } else {
-          notify();
-        }
+      const inProgress = closing.get(root);
+      if (inProgress) return inProgress;
+      const paper = papers.get(root);
+      if (!paper) return Promise.resolve();
+      // The paper leaves the registry before anything else: `list` and
+      // `active` no longer show it, so the successor chosen below is another
+      // paper (or the no-workspace session), never this one. The window moves
+      // off the paper before its session goes: `activate` notifies, and
+      // listeners release their bindings to the closed paper inside its
+      // still-live session scope.
+      papers.delete(root);
+      if (activeRoot === root) {
+        activate(
+          readRememberedPapers(options.globalState, options.warn).findLast(
+            (candidate) => papers.has(candidate),
+          ) ?? openPapers().at(-1)?.root,
+        );
+      } else {
+        notify();
+      }
+      const closed = (async () => {
         try {
-          await stopPaperExecutions(entry.session);
-          entry.dispose();
+          await stopPaperExecutions(paper.session);
+          paper.dispose();
         } finally {
-          papers.delete(root);
           await writeRememberedPapers(
             options.globalState,
             readRememberedPapers(options.globalState, options.warn).filter(
@@ -426,8 +418,9 @@ export async function openDesktopPaperRegistry(
             ),
           );
         }
-      })();
-      return entry.closing;
+      })().finally(() => closing.delete(root));
+      closing.set(root, closed);
+      return closed;
     },
     activeWorkspaceState: {
       get: <T>(key: string, defaultValue?: T) =>
