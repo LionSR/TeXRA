@@ -165,6 +165,8 @@ SessionView = {
   order: StreamTabId[],
   // the last session commit ordinal folded (7.1)
   cursor: CommitOrdinal,
+  // paper-level aggregate; the desktop rail badge reads it and derives nothing
+  rollup: { running: number, waiting: number, interrupted: number },
   // each carries streamId and requestId
   approvals: ApprovalRequest[],
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
@@ -192,6 +194,8 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   worktree: WorktreeInfo | null              // from run.start payload
   status: StreamStatus, substate: StreamSubstate | null, statusDetail: string | null
   statusLabel: string, tone: Tone            // G4; one table
+  // immutable; the commit ordinal of this incarnation's run.start
+  createdAt: CommitOrdinal
   runStartedAt: number | null, lastTimestamp: number | null
   conversationProgress: ConversationProgress
   stage: StreamStage | null
@@ -348,7 +352,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `setParentStream` today only because deletion was physical, and under a
   tombstone the fold re-roots them by rule instead of by event.
 - **`order`** and `childIds` use `streamOrdering` (newest creation first,
-  ties by name).
+  ties by name), keyed on `createdAt` - the commit ordinal of the stream's
+  `run.start`, which is immutable and already monotone. `runStartedAt` goes
+  null outside active phases and `lastTimestamp` moves with every event, so
+  neither can place a re-rooted child among existing siblings without
+  replaying history.
 - **`executionId`** comes from `run.start` and never changes. There is one
   `run.start` per stream by the existence rule above, and a resume keeps the
   id rather than minting one: `executeAgent` passes `resume.executionId`
@@ -411,7 +419,10 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   stream and the named set is bounded by what actually changed, never a
   whole-view pass. `transcript.run` is memoized on
   `(streamId, settledSeq, childRevision)`, where `childRevision` is bumped
-  on the ancestor walk whenever a descendant's arm changes. `settledSeq`
+  on the ancestor walk only when a field `childProgress` consumes changes -
+  status, call count, usage - never on a text chunk. Bumping it on any arm
+  change would rebuild every ancestor's run model per token in a workflow
+  with streaming descendants, which is the opposite of memoizing it. `settledSeq`
   alone is not enough: `workflowRunModel` consumes `childProgress` to build
   `liveOf`, so a child's status, call count, or usage changing leaves the
   parent's model stale until an unrelated parent event arrives - and the
@@ -457,10 +468,18 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `stream.end` loses the entire partial response, since chunks never left
   the dead process - and that is a **regression** against today, where
   `StreamLogStore` recovers and settles unterminated streaming entries from
-  persisted chunk text. A checkpoint folds exactly like a `from: 0` chunk
-  for its row, except that it is durable and so advances `settledSeq`. The
-  cost is bounded by the interval, which is why it is coarse; the recovery
-  window is one interval of text, not all of it.
+  persisted chunk text. The cost is bounded by the interval, which is why it
+  is coarse; the recovery window is one interval of text, not all of it.
+
+  A checkpoint is **not** a `from: 0` chunk. It advances a separate durable
+  prefix (`settledText` per row) and can only ever lengthen it, while
+  `inflight` holds what the live path has beyond that; a row renders the
+  longer of the two. Treating a checkpoint as a chunk would let one captured
+  at offset 80 arrive after the live path reached 100 - the table drain is
+  asynchronous - truncating the row and then meeting the next delta at
+  `from > length`. Neither side can shorten the other, so the rendered text
+  is monotone whatever order the two arms arrive in.
+
 - **In-flight text is its own map, so order does not matter.** Chunks
   accumulate in `inflight: Map<RowId, string>` keyed by row, independent of
   whether that row's durable event has folded yet; a row renders by joining
@@ -575,6 +594,13 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    "something changed, go look" is not a fact, and every remaining session
    fact is audited against it.
 
+8. **`stream.text`**, a coarse durable checkpoint carrying a row's text so
+   far, and the full text on the finalizing event (5.2, "Text is
+   checkpointed"). Deltas stay transient; without the checkpoint an owner
+   crash between the chunks and `stream.end` loses the whole partial
+   response, which `StreamLogStore` recovers today. The interval is a
+   tuning parameter, not a contract.
+
 The importer emits `run.start` for every legacy stream with `identity`
 nullish where the descriptor has none, and normalizes every other old
 `StreamLogEntry` row into the events above (5.2, "Legacy"). No
@@ -681,7 +707,10 @@ back in order by a dedupe, and the interleaving is real - this process can
 read another's seq N, commit N+1, and deliver N+1 before the feed delivers
 N, folding a stale snapshot over a fresh one. So the hub now carries no
 payload at all: it is a wake, saying only that the table moved, and every
-subscriber reads forward from its own cursor in `(stream_id, seq)` order.
+subscriber reads forward from its own cursor in session **commit order**,
+every lane interleaved - not per lane, which would let an interleaved
+session-lane tombstone or terminal status fold ahead of its run-lane
+predecessor.
 One source cannot duplicate, so `dedupeBySeq` is gone; one source cannot
 reorder, so no reorder buffer exists; and there is no replay-then-tail
 seam, so the "subscribe before you read" invariant and its scoped queue are
@@ -972,7 +1001,9 @@ class Unavailable extends Data.TaggedError('Unavailable')<{
 }> {}
 class Rejected extends Data.TaggedError('Rejected')<{ reason: string }> {}
 class Invalid extends Data.TaggedError('Invalid')<{ issues: string[] }> {}
-type RequestError = NotOwner | Unavailable | Rejected | Invalid;
+// defects reach the surface as this, never as silence
+class Internal extends Data.TaggedError('Internal')<{ ref: string }> {}
+type RequestError = NotOwner | Unavailable | Rejected | Invalid | Internal;
 
 // src/controllers/session/SessionRequests.ts
 // Effect.fn('SessionRequests.request')
@@ -986,7 +1017,12 @@ so nothing outside a scope can call them. Failures are matched with
 `catchTag` and `catchTags`; unexpected causes `orDie` with one
 `tapCause` log at the boundary (`tapErrorCause` does not exist in rc.112,
 and `orDie` moves the failure into the defect channel, which is what
-`tapCause` sees). A request naming a stream that is gone is
+`tapCause` sees). The bridge then inspects the fiber's exit and posts
+`Internal { ref }` for a defect, where `ref` is the log correlation id: §8.4
+promises exactly one response per request, and a dying fiber that posts
+nothing leaves the admission latch, the draft, and focus restoration pending
+forever - the same failure this section rejects for a stale stream. `orDie`
+decides what is _logged as a defect_, not whether the caller hears back. A request naming a stream that is gone is
 `Unavailable`, not a defect: with two surfaces on one session, one can send
 `stop` or `resume` from a view that has not yet folded the other's
 `removeStream`, and calling that a defect would bypass the response path
@@ -1062,8 +1098,9 @@ everything the shell renders but does not own: the launcher's option lists
 (models, agents, teams, workspace roots), the document and Git catalogs the
 file-select group and the LaTeXDiff controls need (file lists, the current
 and open files, whether the root is a Git repository, recent commits -
-`fileOptions$` and `isGitRepo$` today), the five banners, and the onboarding
-funnel state. None of it is the user's choice (`Surface`, 9) or a
+`fileOptions$` and `isGitRepo$` today), the five banners, the onboarding funnel
+state, and the debug-mode flag (`GET_DEBUG_MODE` today), which gates the
+Pack and Delete-output controls §12 retains. None of it is the user's choice (`Surface`, 9) or a
 fact about a run (`SessionView`), and all of it changes while a webview is
 open - a new agent file, an added workspace root, a credential that starts
 failing. That rules out both alternatives: a one-shot request at startup
@@ -1219,7 +1256,8 @@ Surface = {
   // which paper this surface is for; the LayerMap key (7.3)
   session: SessionKey
   selected: StreamTabId | null
-  drafts: Map<StreamTabId, Draft>
+  // keyed by incarnation: a reused id must not inherit the old run's reply
+  drafts: Map<StreamKey, Draft>          // StreamKey = { streamId, executionId }
   // the new-task composer: the existing MainViewPersistedState, per session
   launch: LaunchSurface
   // answers in progress; keyed by inquiry, not by stream (8.5).
@@ -1525,7 +1563,8 @@ a component.
 
 - **Rail** (288 px, the existing `taskShell.css` classes): brand, New task,
   Search, then a Papers section with one collapsible row per open paper
-  (initials mark, name, one-line subtitle, running count badge) and its own
+  (initials mark, name, one-line subtitle, a badge from the paper-level
+  `SessionView.rollup`) and its own
   `stream-tabs` nested beneath, then "Add paper…", then the existing footer
   (Terminal, Browser, Logs, Settings). Each paper is one `SessionView` from
   the `LayerMap`.
@@ -1629,16 +1668,16 @@ Critical path: lane 1, then lane 2, then lane 4, then lane 8. At most three
 worktree lanes open. Each host switches in one pull request. Deletions ship
 with their replacement.
 
-| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
-| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all seven event changes of section 6, item 7 included (goal and queued follow-ups carry snapshots, not invalidation hints - the browser fold cannot reconstruct them otherwise), **each landing with its matching change to the frozen NDJSON projection in the same PR**: `sessionProgressSubscription.ts` ignores `run.start` and forwards the goal and follow-up payloads verbatim today, so deleting `setActiveStream` and reshaping those payloads without it would drop a public line and leak new fields into the frozen wire for as long as lane 5 took to land; local runtime state as a fold input; compensation and tombstone gates re-keyed | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
-| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
-| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
-| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
-| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
-| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
-| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
-| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
+| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
+| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all eight event changes of section 6, items 7 and 8 included (goal and queued follow-ups carry snapshots, not invalidation hints - the browser fold cannot reconstruct them otherwise), **each landing with its matching change to the frozen NDJSON projection in the same PR**: `sessionProgressSubscription.ts` ignores `run.start` and forwards the goal and follow-up payloads verbatim today, so deleting `setActiveStream` and reshaping those payloads without it would drop a public line and leak new fields into the frozen wire for as long as lane 5 took to land; local runtime state as a fold input; compensation and tombstone gates re-keyed | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
+| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
+| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
+| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
+| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
+| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
+| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
+| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
 
 ### Acceptance per lane
 
@@ -1676,7 +1715,12 @@ By construction:
 - `HostInteractions` already has one implementation (`HostInteractions.ts:403`);
   hosts attach through `interactions.use()`. Lanes 3 and 4 delete the
   decision mappers that were the dual. No pin needed.
-- `SessionRendererPort` is deleted by lane 2. No pin needed.
+- `SessionRendererPort` is deleted by the **last** host lane to switch
+  (lane 5 on the current order), not by lane 2. `sessionSignalsAdapter.ts`,
+  `LitSessionRenderer.ts`, and `runProgressRenderer.ts` still implement or
+  consume it until lanes 3, 4, and 5 respectively, so deleting it in lane 2
+  would break the lane that is supposed to be independently mergeable. No
+  pin needed either way.
 - Workflow skip, retry, and kill exist only as methods on the
   `ExecutionInteractionScope` returned by `ownership.open()`.
 - `@lit/context`: both providers deleted in lane 4; an eslint
@@ -1767,9 +1811,11 @@ As tests:
    (`claimStreamIdentity`, `SessionState.ts:487-501`), so a stream id names
    a name and not a run, and every reference to one is ambiguous until it is
    paired with an `executionId`. This document now carries that fence in
-   the tombstone (5.2), the `parent` link (5.1), and - after a further
-   review round found the same race behind `stop`, `compact`, `resume`, and
-   the follow-up and policy arms - **every stream-scoped request** (8.2).
+   the tombstone (5.2), the `parent` link (5.1), **every stream-scoped request** (8.2, after a
+   further round found the same race behind `stop`, `compact`, `resume`, and
+   the follow-up and policy arms), and the conversation drafts a surface
+   holds (9), which would otherwise offer a deleted run's unfinished reply
+   as the next run's draft.
    Each fence is individually correct, and each arrived as its own review
    finding rather than falling out of the design, which is the usual sign
    that the patch is being applied where the defect is not.
@@ -1788,7 +1834,7 @@ As tests:
    from lane 1, not a rewrite of it.
 
 Already agreed with the persistence owner and recorded in the companion
-proposal (in flight in another branch, see Lineage): the seven event changes
+proposal (in flight in another branch, see Lineage): the eight event changes
 of section 6; Effect Schema nowhere; the publisher
 invariants of 7.1; `WorkspaceRoots` as the `Database` layer's parameter;
 the two v4 traps.
