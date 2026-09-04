@@ -19,6 +19,7 @@ import {
 import type { FollowUpRecoveryLease } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { ExecutionLeaseActiveError } from '@agent/storage/executionLease';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   AgentCategory,
@@ -27,6 +28,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
+import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
 
 import {
   isWaitingFlowResult,
@@ -149,6 +151,8 @@ export async function resumeStream(
 
 export { lookupStreamExecutionId } from '@agent/followUp/ToolUseFollowUp';
 
+const logger = createLog('ResumeRun');
+
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 /** A workflow run carries no follow-up batch, so nothing awaits delivery. */
 const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
@@ -256,6 +260,11 @@ async function resumeRunWithRecoveryProvenance(
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     return { failed: 'finished' };
   }
+  // The run is about to be opened for write. A hold recorded by an earlier
+  // refusal on this stream describes facts this attempt is re-reading, so it
+  // goes now: an attempt that is refused again writes the current reason
+  // below, and one that acquires leaves the phase it lands on.
+  session.status.clearHold(streamId);
   if (resume.type === 'toolUse' && queueLease) {
     return resumeQueuedToolUse(session, resume, queueLease, options);
   }
@@ -267,7 +276,7 @@ async function resumeRunWithRecoveryProvenance(
         resume.modelHandlerCompatibilityKey,
       );
     } catch (error) {
-      return refusalFor(error) ?? Promise.reject(error);
+      return refusalFor(error, session, streamId) ?? Promise.reject(error);
     }
     return WORKFLOW_STARTED;
   }
@@ -290,9 +299,28 @@ function releaseUnstartedRecovery(
   session.followUps.release(current, 'recoverable');
 }
 
-/** The two expected launch failures a host words; anything else rejects. */
-function refusalFor(error: unknown): ResumeRunResult | undefined {
+/**
+ * The two expected launch failures a host words; anything else rejects.
+ *
+ * A refusal is also the one moment this process learns, for the run the user
+ * just asked to open, that another live TeXRA process holds it. That fact is
+ * recorded on the stream so every surface renders it read-only with the same
+ * copy until this stream is opened successfully — after the boot-time repair
+ * pass is gone, an open-for-write and a sidecar hydration are the only two
+ * producers of it.
+ */
+function refusalFor(
+  error: unknown,
+  session: SessionHandle,
+  streamId: StreamTabId,
+): ResumeRunResult | undefined {
   if (error instanceof ExecutionLeaseActiveError) {
+    const detail = streamHeldMessage(error.owner);
+    if (!session.status.markUnavailable(streamId, detail)) {
+      logger.debug(
+        `Kept the live reservation on stream ${streamId} instead of marking it unavailable: ${detail}`,
+      );
+    }
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {
@@ -410,7 +438,10 @@ async function resumeQueuedToolUse(
   }
 
   if (resumeError) {
-    return refusalFor(resumeError.error) ?? Promise.reject(resumeError.error);
+    return (
+      refusalFor(resumeError.error, session, streamId) ??
+      Promise.reject(resumeError.error)
+    );
   }
   // Cancellation at flow attachment means the run was never reached; a replay
   // means it ran and returned with the batch back on the stream queue.

@@ -15,15 +15,8 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import {
-  streamHeldMessage,
-  streamUnreadableMessage,
-} from '@shared/streams/streamStatusDisplay';
-import {
-  startForeignInstance,
-  writeForeignLease,
-  writeOrphanedLease,
-} from '@test/support/executionLeaseFixtures';
+import { streamUnreadableMessage } from '@shared/streams/streamStatusDisplay';
+import { writeOrphanedLease } from '@test/support/executionLeaseFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import {
   appendTranscriptEntry,
@@ -490,35 +483,9 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(reusedStreamId)).toBe(STREAM_PHASE.RUNNING);
   });
 
-  it('holds a foreign-owned run read-only while its owner is live', async () => {
-    const foreign = await startForeignInstance();
-    const heldExecutionId = '9355abcd' as ExecutionId;
-    const heldStreamId = `held#${heldExecutionId}` as StreamTabId;
-    const transcripts = await StreamLogStore.open();
-    appendRunningGroup(transcripts, heldStreamId, 'held-running-group');
-    await transcripts.flush();
-    await seedSidecarFk(heldStreamId, heldExecutionId);
-    const executionStore = getExecutionStore(heldExecutionId);
-    await executionStore.writeMeta({ timestamp: META_TIMESTAMP });
-    await executionStore.write(flowKey(heldExecutionId), validFlowRecord);
-    await writeForeignLease(heldExecutionId, undefined, foreign.owner);
-
-    const session = openDeferredSession(transcripts);
-
-    try {
-      await session.waitUntilReady();
-      // Live foreign owner: held, no phase, nothing written, transcript open.
-      expect(session.status.holdState(heldStreamId)).toBe(
-        streamHeldMessage(foreign.owner),
-      );
-      expect(session.status.get(heldStreamId)).toBeUndefined();
-      expect((await executionStore.readMeta())?.outcome).toBeUndefined();
-      expect(transcripts.get(heldStreamId)?.getRange(0)).toHaveLength(1);
-    } finally {
-      await foreign.shutdown();
-      session.dispose();
-    }
-  });
+  // The held-foreign-owner case now belongs to the open-for-write refusal
+  // that records it (`DerivedStreamPhase.vitest.ts`): the boot pass is no
+  // longer the producer of that display fact.
 
   it('surfaces a repair write failure at the readiness boundary', async () => {
     const transcripts = await StreamLogStore.open();

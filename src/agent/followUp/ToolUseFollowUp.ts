@@ -9,6 +9,10 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
@@ -192,6 +196,12 @@ export async function lookupStreamExecutionId(
  * Word the refusal of a stream with no live flow here from the persisted
  * facts: who holds the run, and whether a checkpoint is left. Read only on
  * the failure path; an unreadable fact is `not_resumable`.
+ *
+ * A refusal the user can see again is also recorded on the stream: the two
+ * classifications that mean "this run cannot be opened here, and not because
+ * it ended" become the stream's read-only detail, so the tab keeps saying why
+ * after the toast is gone. Only the one run the user acted on is inspected,
+ * and nothing is written to disk.
  */
 async function classifyRefusal(
   streamId: StreamTabId,
@@ -211,14 +221,41 @@ async function classifyRefusal(
   const classification = await classifyRun(executionId);
   switch (classification.kind) {
     case 'held_elsewhere':
+      holdRefusedStream(
+        session,
+        streamId,
+        streamHeldMessage(classification.owner),
+      );
       return 'owned_elsewhere';
     case 'finished':
       return 'finished';
+    case 'unclassified':
+      holdRefusedStream(
+        session,
+        streamId,
+        streamUnreadableMessage(classification.cause),
+      );
+      return 'not_resumable';
     case 'resumable':
     case 'owned_here':
-    case 'unclassified':
       return 'not_resumable';
   }
+}
+
+/**
+ * Record why this stream stays read-only. A live reservation in this process
+ * supersedes the refusal that produced `detail` (the run is being opened here
+ * right now), so the skipped hold is logged rather than forced.
+ */
+function holdRefusedStream(
+  session: SessionHandle,
+  streamId: StreamTabId,
+  detail: string,
+): void {
+  if (session.status.markUnavailable(streamId, detail)) return;
+  logger.debug(
+    `Kept the live reservation on stream ${streamId} instead of marking it unavailable: ${detail}`,
+  );
 }
 
 export async function submitFollowUp(
