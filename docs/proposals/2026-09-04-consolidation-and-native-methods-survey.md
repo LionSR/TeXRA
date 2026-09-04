@@ -95,10 +95,13 @@ re-deriving the many prior full-repo rounds' conclusions from scratch.
     completion callback against a 100ms fallback timeout, with an explicit
     comment ("Whichever lands first wins"). Same species.
 
-  All three fit the pattern the 2026-09-03 entry names for
-  `lifecycleHost.ts:70`: "the delay only starts once [an external condition],
-  giving [something] one [window] to settle... not a fixed wait from now."
-  None is a plain-sleep candidate.
+  All three are callback-versus-deadline races — the timer starts
+  immediately on promise construction and races an external completion
+  callback, not the `lifecycleHost.ts:71` shape (there the zero-delay timer
+  isn't scheduled until the abort signal fires, a deferred-start pattern
+  these three don't share). Different mechanism, same conclusion: none is a
+  plain-sleep candidate, because each one's timeout is a bounded fallback
+  for an event that can also settle it early, not an unconditional delay.
 
 - **`JSON.parse(JSON.stringify(` / `JSON.stringify(JSON.parse(`:** the one
   hit remains the already-adjudicated `src/agent/workflowScript/parseScript.ts:126`
@@ -125,11 +128,14 @@ re-deriving the many prior full-repo rounds' conclusions from scratch.
 - **New manual attempt-counter loops in the diff:** none.
 - **New spread-copy-then-iterate patterns in the diff:** none.
 - **Manual promise-chain accumulation (`chain = chain.then(...)`,
-  `p-queue` territory):** the one `.then(` assignment in the diff window,
-  `src/platform/defaults/lifecycleHost.ts:59`, is a single settlement-tracking
-  callback (`tracked = pending.then(onSettle, onError)`) raced against a
-  deadline via `Promise.race`, not a growing hand-rolled queue — bounded to
-  one attachment per call, no chain accumulates. Not a candidate.
+  `p-queue` territory):** zero new `.then(` assignments in the diff window
+  (verified: no commit between `d418d45` and `HEAD` touches
+  `lifecycleHost.ts`, and no other file adds one). The one repo-wide hit,
+  `src/platform/defaults/lifecycleHost.ts:59`, predates this window and is a
+  single settlement-tracking callback (`tracked = pending.then(onSettle,
+onError)`) raced against a deadline via `Promise.race`, not a growing
+  hand-rolled queue — bounded to one attachment per call, no chain
+  accumulates. Not a candidate.
 
 ## 3. Verdict
 
