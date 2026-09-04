@@ -1,13 +1,14 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { describe, it, vi } from 'vitest';
+import { beforeEach, describe, it, vi } from 'vitest';
 
 import type { RunOutcome } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
   inspectExecutionLease: vi.fn(),
-  read: vi.fn(),
+  readMeta: vi.fn(),
+  exists: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
@@ -19,7 +20,7 @@ vi.mock('@agent/storage/executionLease', () => ({
 }));
 
 vi.mock('@agent/storage/ExecutionKVStore', () => ({
-  getExecutionStore: () => ({ read: mocks.read }),
+  getExecutionStore: () => ({ readMeta: mocks.readMeta, exists: mocks.exists }),
 }));
 
 // Local imports
@@ -32,29 +33,30 @@ function noLiveHandle(): void {
   });
 }
 
-/** Persisted facts: the given metadata and no checkpoint. */
-function persistedMeta(meta: { outcome?: RunOutcome } | undefined): void {
-  mocks.read.mockImplementation((key: string) =>
-    Promise.resolve(
-      key === 'meta' && meta
-        ? { timestamp: '2026-05-15T23:42:06.000Z', ...meta }
-        : undefined,
-    ),
+/** Persisted facts: the given metadata row, and whether a checkpoint is on disk. */
+function persisted(
+  meta: { outcome?: RunOutcome } | null,
+  checkpoint: 'checkpoint' | 'no-checkpoint',
+): void {
+  mocks.readMeta.mockResolvedValue(
+    meta && { timestamp: '2026-05-15T23:42:06.000Z', ...meta },
   );
+  mocks.exists.mockResolvedValue(checkpoint === 'checkpoint');
 }
 
 describe('getExecutionStatusInfo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    noLiveHandle();
+  });
+
   it.each<{ outcome?: RunOutcome; expected: string }>([
     { outcome: undefined, expected: 'unknown' },
     { outcome: 'cancelled', expected: 'cancelled' },
   ])(
     'reports $expected when the live handle is gone and nothing owns the run',
     async ({ outcome, expected }) => {
-      noLiveHandle();
-      mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
-      // The persisted metadata is the only outcome source — no caller passes a
-      // snapshot in. No flow record, so `classifyRun` reports `finished`.
-      persistedMeta({ outcome });
+      persisted({ outcome }, 'no-checkpoint');
 
       const info = await getExecutionStatusInfo('exec-1');
 
@@ -62,9 +64,44 @@ describe('getExecutionStatusInfo', () => {
     },
   );
 
+  it('reads no checkpoint and no lease for a row that recorded its outcome', async () => {
+    // The listing's whole budget: one metadata row (here the caller's own),
+    // and nothing else for a run that already said how it ended.
+    persisted(null, 'no-checkpoint');
+
+    const info = await getExecutionStatusInfo('exec-1', {
+      outcome: 'completed',
+    });
+
+    assert.strictEqual(info.status, 'completed');
+    assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
+    assert.strictEqual(mocks.exists.mock.calls.length, 0);
+    assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 0);
+  });
+
+  it('costs one stat and no lease read for a settled row', async () => {
+    persisted({}, 'no-checkpoint');
+
+    const info = await getExecutionStatusInfo('exec-1', {});
+
+    assert.strictEqual(info.status, 'unknown');
+    assert.strictEqual(mocks.readMeta.mock.calls.length, 0);
+    assert.strictEqual(mocks.exists.mock.calls.length, 1);
+    assert.strictEqual(mocks.inspectExecutionLease.mock.calls.length, 0);
+  });
+
+  it('calls a checkpointed run nobody owns interrupted', async () => {
+    persisted({}, 'checkpoint');
+    mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
+
+    const info = await getExecutionStatusInfo('exec-1');
+
+    assert.strictEqual(info.status, 'cancelled');
+    assert.match(info.detail ?? '', /interrupted/);
+  });
+
   it('does not call a run cancelled while another process holds it', async () => {
-    noLiveHandle();
-    persistedMeta(undefined);
+    persisted({}, 'checkpoint');
     mocks.inspectExecutionLease.mockResolvedValue({
       status: 'held',
       owner: { pid: 4242, hostname: 'other-host' },
@@ -77,9 +114,8 @@ describe('getExecutionStatusInfo', () => {
   });
 
   it('does not settle a run whose lease this process holds with no run', async () => {
-    noLiveHandle();
     // Nothing durable behind the lease: no outcome ever written.
-    persistedMeta({});
+    persisted({}, 'checkpoint');
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
 
     const info = await getExecutionStatusInfo('exec-1');
@@ -92,12 +128,21 @@ describe('getExecutionStatusInfo', () => {
     // A finished child untracks its handle and writes the outcome long before
     // its loop releases the execution lease (#8093), and the parent reads the
     // run inside exactly that window.
-    noLiveHandle();
-    persistedMeta({ outcome: 'completed' });
+    persisted({ outcome: 'completed' }, 'checkpoint');
     mocks.inspectExecutionLease.mockResolvedValue({ status: 'owned' });
 
     const info = await getExecutionStatusInfo('exec-1');
 
     assert.strictEqual(info.status, 'completed');
+  });
+
+  it('reports an unreadable lease rather than a terminal reading', async () => {
+    persisted({}, 'checkpoint');
+    mocks.inspectExecutionLease.mockRejectedValue(new Error('lease corrupt'));
+
+    const info = await getExecutionStatusInfo('exec-1');
+
+    assert.strictEqual(info.status, 'unknown');
+    assert.match(info.detail ?? '', /cannot read \(lease corrupt\)/);
   });
 });

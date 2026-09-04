@@ -5,43 +5,48 @@
  * launched, one another TeXRA process owns, and one whose owner crashed all
  * look identical from the registry, so a missing handle (or a missing
  * `meta.outcome`) can never on its own justify telling a model that a run
- * finished — or that it is still running. The order below asks the durable
- * owners first and only falls back to the persisted reading once nothing
- * alive claims the run:
+ * finished — or that it is still running. The ladder below asks the cheapest
+ * durable fact that can decide the question, and stops there:
  *
  * 1. a handle in this process — the registry's phase is the live truth;
- * 2. `classifyRun` names a live foreign owner, names this process's own lease
- *    with no run behind it and no outcome written, or cannot read the run's
- *    facts at all — nothing terminal may be claimed, and the reason is shown;
- * 3. `classifyRun` finds a resumable checkpoint and read no outcome — the run
- *    was interrupted (a crash, or a host that quit);
- * 4. otherwise the outcome `classifyRun` read, or "unknown" when there is none.
+ * 2. a persisted `meta.outcome` — the run recorded how it ended, which is its
+ *    own durable fact and outranks a lease this process is merely slow to
+ *    release (#8093);
+ * 3. no checkpoint on disk — nothing is left to continue and nothing recorded
+ *    an outcome, so the reading is settled with none ("unknown");
+ * 4. a checkpoint whose lease a live foreign owner holds, or whose lease this
+ *    process holds with no run behind it — nothing terminal may be claimed,
+ *    and the reason is shown;
+ * 5. a checkpoint nobody holds — the run was interrupted (a crash, or a host
+ *    that quit).
  *
- * The terminal readings (3 and 4) come from the classifier's own fresh read of
- * the durable facts, never from an outcome snapshot the caller took earlier,
- * and each re-checks the lease once before it is returned (see
- * {@link leaseTakenSince}).
+ * The cost is the point: the /executions listing walks this once per row, so
+ * it must stay at one metadata read (skipped entirely when the caller already
+ * holds the row), one `exists` stat, and — only for a run that still has a
+ * checkpoint — one lease read.
  *
- * Ownership and checkpoint validity are not re-derived here: `classifyRun`
- * is the one classifier of those durable facts, and it is deliberately
- * stricter than a file-presence stat — a spent cursor, a malformed record,
- * or one written by a newer TeXRA is `unclassified`, never a checkpoint to
- * promise the caller.
+ * Checkpoint *validity* is therefore deliberately not re-derived here.
+ * `deriveResumability` parses the record and is stricter than a stat (a spent
+ * cursor, a malformed record, or one written by a newer TeXRA is not a
+ * checkpoint to promise anyone), but parsing 200 flow records to fill a status
+ * column is exactly the cost this surface must not pay. A malformed checkpoint
+ * consequently reads as interrupted here; the single-run paths that would act
+ * on one (resume, restart repair) parse it and refuse loudly.
  */
 
+import { flowKey } from '@agent/node/persistedFlow';
 import { currentSession } from '@agent/runtime/SessionHandle';
 import type { ExecutionStatusInfo } from '@agent/runtime/ExecutionHandle';
-import {
-  classifyRun,
-  classifyRunFacts,
-} from '@agent/runtime/runClassification';
-import {
-  inspectExecutionLease,
-  type ExecutionLeasePresence,
-} from '@agent/storage/executionLease';
+import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
+import { inspectExecutionLease } from '@agent/storage/executionLease';
 import type { LeaseOwnerRecord } from '@agent/storage/leaseOwnerLiveness';
 import { createLog } from '@logger/logUtils';
-import type { ExecutionId, RunOutcome, StreamPhase } from '@shared/schemas';
+import type {
+  ExecutionId,
+  ExecutionMeta,
+  RunOutcome,
+  StreamPhase,
+} from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('ExecutionLiveness');
@@ -49,8 +54,8 @@ const log = createLog('ExecutionLiveness');
 /**
  * What may be said about a run right now. `unsettled` carries a mid-sentence
  * clause naming the fact that forbids a terminal reading, so each surface can
- * word it in its own voice. `settled` carries the outcome the classifier read,
- * so every surface renders the same durable value.
+ * word it in its own voice. `settled` carries the recorded outcome, so every
+ * surface renders the same durable value.
  */
 export type ExecutionLiveness =
   | { readonly kind: 'live'; readonly info: LiveExecutionStatusInfo }
@@ -65,6 +70,17 @@ export type ExecutionLiveness =
  */
 type LiveExecutionStatusInfo = ExecutionStatusInfo & { status: StreamPhase };
 
+/**
+ * The execution's metadata row as a caller that just read it holds it: `null`
+ * when the read found none. `undefined` (the argument omitted) means the
+ * caller has none and this module reads it, so "row present without an
+ * outcome" never costs a second read.
+ *
+ * Only a row read for this same request may be passed: an older snapshot would
+ * let two surfaces disagree about how one run ended.
+ */
+export type KnownExecutionMeta = Pick<ExecutionMeta, 'outcome'> | null;
+
 /** `executionHeldMessage`'s copy, as a clause a sentence can continue with. */
 function heldElsewhereReason(owner: LeaseOwnerRecord): string {
   return `held by another TeXRA process (pid ${owner.pid} on ${owner.hostname})`;
@@ -77,94 +93,49 @@ function heldElsewhereReason(owner: LeaseOwnerRecord): string {
  */
 const OWNED_HERE_REASON = "held by this process's lease with no live run";
 
-function unreadableReason(cause: string): string {
-  return `in a state this process cannot read (${cause})`;
-}
-
-/** The unsettled arm a non-free lease forces, or undefined when it is free. */
-function unsettledFromLease(
-  lease: ExecutionLeasePresence,
-): ExecutionLiveness | undefined {
-  if (lease.status === 'held') {
-    return { kind: 'unsettled', reason: heldElsewhereReason(lease.owner) };
-  }
-  if (lease.status === 'owned') {
-    return { kind: 'unsettled', reason: OWNED_HERE_REASON };
-  }
-  return undefined;
-}
-
-/**
- * Whether an owner took the lease while the classification was being read.
- *
- * `classifyRun` reads the lease, then the metadata, then the checkpoint; a
- * process that started (or resumed) the run across those awaits would leave a
- * terminal reading that is already stale. Costs one extra lease read per row
- * that reaches a terminal claim — the listing's other rows never pay it.
- */
-async function leaseTakenSince(
-  executionId: ExecutionId,
-): Promise<ExecutionLiveness | undefined> {
-  try {
-    return unsettledFromLease(await inspectExecutionLease(executionId));
-  } catch (error) {
-    const cause = `lease unreadable (${toErrorMessage(error)})`;
-    log.warn(`Cannot re-check the lease for ${executionId}: ${cause}`, {
-      data: error,
-    });
-    return { kind: 'unsettled', reason: unreadableReason(cause) };
-  }
-}
-
 export async function resolveExecutionLiveness(
   executionId: ExecutionId,
+  knownMeta?: KnownExecutionMeta,
 ): Promise<ExecutionLiveness> {
   const { executions } = currentSession();
   const handle = executions.getHandle(executionId);
   if (handle) return { kind: 'live', info: executions.getStatus(handle) };
 
-  // `classifyRun` never throws: an unreadable lease, metadata, or checkpoint
-  // arrives as `unclassified` with its cause.
-  const classification = await classifyRun(executionId);
-  switch (classification.kind) {
-    case 'held_elsewhere':
-      return {
-        kind: 'unsettled',
-        reason: heldElsewhereReason(classification.owner),
-      };
-    case 'owned_here': {
-      // The lease outlives the run it guarded: `finalizeRunTerminal` writes
-      // the outcome and untracks the handle, while the child loop releases
-      // the lease only after the wake it hands the parent returns — a window
-      // that can span the resumed parent's whole turn (#8093), i.e. exactly
-      // the turn in which the parent is told the run finished and reads its
-      // output. An outcome already on disk is the run's own fact, not the
-      // lease's, so it still settles; only a lease with nothing durable
-      // behind it is the registry/lease leak this arm reports.
-      const facts = await classifyRunFacts(executionId);
-      if (facts.kind !== 'unclassified' && facts.outcome !== undefined) {
-        return { kind: 'settled', outcome: facts.outcome };
-      }
+  const store = getExecutionStore(executionId);
+  try {
+    const meta = knownMeta === undefined ? await store.readMeta() : knownMeta;
+    // A recorded outcome is the run's own fact, not the lease's: a finished
+    // child untracks its handle and writes the outcome long before its loop
+    // releases the execution lease, and the parent reads the run inside
+    // exactly that window (#8093).
+    if (meta?.outcome !== undefined) {
+      return { kind: 'settled', outcome: meta.outcome };
+    }
+    if (!(await store.exists(flowKey(executionId)))) {
+      return { kind: 'settled' };
+    }
+    const lease = await inspectExecutionLease(executionId);
+    if (lease.status === 'held') {
+      return { kind: 'unsettled', reason: heldElsewhereReason(lease.owner) };
+    }
+    if (lease.status === 'owned') {
       log.warn(
         `Execution ${executionId} holds this process's lease with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
       );
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }
-    case 'unclassified':
-      return {
-        kind: 'unsettled',
-        reason: unreadableReason(classification.cause),
-      };
-    case 'resumable':
-    case 'finished': {
-      const taken = await leaseTakenSince(executionId);
-      if (taken) return taken;
-      // A valid checkpoint with no outcome and no live owner is a run that
-      // stopped without finishing.
-      return classification.kind === 'resumable' &&
-        classification.outcome === undefined
-        ? { kind: 'interrupted' }
-        : { kind: 'settled', outcome: classification.outcome };
-    }
+    // A checkpoint with no outcome and no live owner is a run that stopped
+    // without finishing.
+    return { kind: 'interrupted' };
+  } catch (error) {
+    const cause = toErrorMessage(error);
+    log.warn(
+      `Cannot read the durable facts for execution ${executionId}: ${cause}`,
+      { data: error },
+    );
+    return {
+      kind: 'unsettled',
+      reason: `in a state this process cannot read (${cause})`,
+    };
   }
 }

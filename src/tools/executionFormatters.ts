@@ -33,6 +33,7 @@ import { formatTimestamp } from '@utils/text/stringUtils';
 import {
   resolveExecutionLiveness,
   type ExecutionLiveness,
+  type KnownExecutionMeta,
 } from './executions/executionLiveness';
 
 /**
@@ -131,20 +132,25 @@ export function formatStatusInfo(info: ExecutionStatusInfo): string {
 
 /**
  * The runtime status for an execution ID, from `resolveExecutionLiveness`:
- * a live handle's phase, else the fact that forbids a terminal reading, else
- * `cancelled` for an interrupted run, else the outcome the classifier read.
+ * a live handle's phase, else the recorded outcome, else the fact that forbids
+ * a terminal reading, else `cancelled` for an interrupted run.
  *
- * The outcome is never passed in: a caller's snapshot can be older than the
- * facts the classifier just read, and two surfaces reading the same run must
- * not disagree about how it ended.
+ * `knownMeta` is the metadata row the caller just read for this same request
+ * (`null` when it read one and found none), so a listing row does not pay a
+ * second read of the file it was built from. Omitting it means "I have no
+ * row", and the liveness resolver reads one. Never pass an older snapshot: two
+ * surfaces reading the same run must not disagree about how it ended.
  *
  * A run nothing alive owns and nothing terminalized reads `unknown`, never a
  * terminal outcome invented from the absence of a handle in this process.
  */
 export async function getExecutionStatusInfo(
-  executionId: string,
+  executionId: ExecutionId,
+  knownMeta?: KnownExecutionMeta,
 ): Promise<ExecutionStatusInfo> {
-  return statusInfoFromLiveness(await resolveExecutionLiveness(executionId));
+  return statusInfoFromLiveness(
+    await resolveExecutionLiveness(executionId, knownMeta),
+  );
 }
 
 /**
@@ -175,7 +181,11 @@ export async function formatListingLine(
   entry: ExecutionListingEntry,
 ): Promise<string> {
   const ts = formatTimestamp(entry.timestamp);
-  const info = await getExecutionStatusInfo(entry.id);
+  // The row was built from this execution's metadata, outcome included, so the
+  // status reading reuses it instead of reading the same file again.
+  const info = await getExecutionStatusInfo(entry.id, {
+    outcome: entry.outcome,
+  });
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;
@@ -235,7 +245,7 @@ export async function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
 ): Promise<string> {
-  const info = await getExecutionStatusInfo(child.id);
+  const info = await getExecutionStatusInfo(child.id, childMeta ?? null);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;

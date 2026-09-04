@@ -335,9 +335,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       offset,
       limit,
     );
-    // One page, not one directory: each line asks the durable owners about
-    // its run (a lease read, and a checkpoint stat when nothing terminalized
-    // it), so the fan-out is bounded rather than 200 wide.
+    // One page, not one directory: each line asks the durable facts about its
+    // run (a checkpoint stat, and a lease read only for a run that still has a
+    // checkpoint), so the fan-out is bounded rather than 200 wide.
     const lines = await pMap(page, (entry) => formatListingLine(entry), {
       concurrency: 16,
     });
@@ -431,7 +431,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
     const category = executionDisplayCategory(identity, record);
-    const info = await getExecutionStatusInfo(executionId);
+    const info = await getExecutionStatusInfo(executionId, meta);
     const lines = buildCompletedSummaryLines(
       executionId,
       record,
@@ -496,8 +496,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
 
   /**
    * Fetch metas and format each child as a summary line. Bounded like the
-   * listing page: every child reads its own metadata and asks the durable
-   * owners about its run, so a wide fan-out is a wide burst of file I/O.
+   * listing page: every child reads its own metadata and, when that leaves the
+   * run unsettled, stats its checkpoint, so a wide fan-out is a wide burst of
+   * file I/O.
    */
   private formatChildren(children: ChildRecord[]): Promise<string[]> {
     return pMap(
@@ -741,7 +742,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await transcripts.readEntries(streamId);
 
     const { lines, chars } = projectProcessOutput(entries);
-    const liveness = await resolveExecutionLiveness(executionId);
+    const liveness = await resolveExecutionLiveness(executionId, meta);
     const info = statusInfoFromLiveness(liveness);
     // The footer states the same reading as the header: "no handle in this
     // process" alone never justifies calling the command finished, and a
