@@ -356,9 +356,14 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   composer's "reply to parent instead" (12.1) cannot address a stream that
   no longer exists. Leaving the link dangling would keep that action
   pointing at a permanently unavailable target. Deleting a parent therefore cannot hide
-  its children, and needs no detach transaction: `onChildrenDetached` emits
-  `setParentStream` today only because deletion was physical, and under a
-  tombstone the fold re-roots them by rule instead of by event.
+  its children **in the view**. The runtime side of detachment stays: the
+  deletion path still calls `session.executions.detachActiveChildren(parent)`
+  (`createSessionStores.ts:30-44`), which performs `activation.detach()`,
+  `handle.detach()`, and approval detachment
+  (`executionRegistry.ts:580-603`) - live handles and approval ownership do
+  not re-root by rule. What the fold's rule replaces is only the durable
+  `setParentStream` **event** that path emits afterwards to project the
+  edge, which a tombstone now makes unnecessary.
 - **`order`** and `childIds` use `streamOrdering` (newest creation first,
   ties by name), keyed on `createdAt` - the commit ordinal of the stream's
   `run.start`, which is immutable and already monotone. `runStartedAt` goes
@@ -1242,8 +1247,15 @@ fixing the id retired it.
   takes no argument), so requiring a stream would make it unavailable from
   New-task state and fail when that one stream is concurrently removed while
   the rest still need deleting
-- follow-up: `followUp.send { streamId, text, images }`, `followUp.retry`,
-  `followUp.cancelRetry`, `followUp.polish { streamId, text }` - the draft
+- follow-up: `followUp.send { streamId, text, images }`,
+  `followUp.retry { streamId, retryId, feedback? }`,
+  `followUp.cancelRetry { streamId, retryId }` - the pending retry id is
+  domain identity, not the envelope's freshly minted correlation id, and the
+  handler checks it before settling
+  (`ProgressViewCommandHandlers.ts:563-576`,
+  `progressHostInteractions.ts:301-312`), so a stale panel in another
+  surface cannot resolve the newer retry -
+  `followUp.polish { streamId, text }` - the draft
   lives in the view's `Surface.drafts` and §8.5 does not synchronize it, so
   polish carries its text exactly as `polishInstruction` does
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
@@ -1271,8 +1283,10 @@ fixing the id retired it.
   handler resolves that execution's interaction scope (7.6) from it, and one
   session can have several workflows running
 - credentials: `useOwnApiKey { streamId, retryId, provider, model, reason,
-kimiCodeRoutedOnFailure, key }` - one transaction: switch routing, trigger
-  that pending retry, compensate on failure.
+kimiCodeRoutedOnFailure }` - **no key**: the host has already stored it
+  (8.3) and the runtime reads it from the secret store, so the credential
+  never enters a surface or its message path. One transaction: switch
+  routing, trigger that pending retry, compensate on failure.
   `kimiCodeRoutedOnFailure` is carried because
   `ProgressApiKeyRetryController.shouldDisableRuntime` needs it to disable
   the Kimi Code preference; without it a Moonshot key can retry straight
@@ -1313,7 +1327,15 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports: `openFile`,
 names its destination, which lives only in the requesting surface once §8.5
 removes selection synchronization, and is what populates
 `HostSnapshot.recording.target` for every other view), `popOut`, `popBack`,
-`pickFiles`, `openSettings`,
+`pickFiles`,
+`attachDroppedFiles { paths, category }` (returning the accepted
+selections: `fileDropHandler.ts:181-194` sends `ATTACH_DROPPED_FILES` today
+and `FileManager.ts:240-266` resolves, validates, and categorizes the paths
+host-side - a picker is no substitute for a drop), `refreshFiles` and
+`refreshCommits` (the retained `latexdiffs-section` and launcher controls
+post `REFRESH_COMMITS` and `REFRESH_ALL_FILES` today, `MainApp.ts:621-625`;
+each re-derives its part of the `host` snapshot, which is otherwise pushed
+only when the host notices a change), `openSettings`,
 `openDashboard` (the retained "Open dashboard" action, `texra.showDashboard`
 today), `openUrl`, `openPaper` (the desktop rail's "Add paper…": the native
 directory picker, the session graph, and the new key returned as the
@@ -1321,9 +1343,13 @@ outcome for `Shell.open` - without it that action is inert once
 `desktopWorkspaceRelaunch` is deleted), `savePastedImage { base64, mediaType, fileName }` (returning the stored
 filename, which `InstructionManager.handleClipboardImage` does today through
 `savePastedImageBase64`; §12.4 retains image paste and lane 4 deletes the
-message registry it rides), `promptForApiKey { provider }` (the quota
-panel's recovery: the host prompts and returns the key, and nothing else -
-the routing switch and the retry belong together in the runtime, because
+message registry it rides), `storeApiKey { provider }` (the quota
+panel's recovery: the host prompts **and persists to the secret store**,
+returning only success and the provider - never the key itself. A raw
+credential must not cross into the webview bundle or its message path, and
+today it does not: `ProgressApiKeyRetryController` keeps it host-side
+through `readKey`/`promptForApiKey` (`:56-65, 186-211`). The routing switch
+and the retry belong together in the runtime, because
 `ProgressApiKeyRetryController.commitOwnApiKeyRouting` rechecks the pending
 id, changes routing, triggers the retry, and compensates a failure inside
 one serialized section; splitting them across a response boundary can leave
@@ -1342,8 +1368,9 @@ onboarding cards are interactive, so their actions are arms too:
 a recheck, a dismissal, or a funnel transition, so without these the
 retained controls go inert the moment lane 4 deletes the command
 registries. The own-API-key retry is a host credential
-prompt whose outcome the surface passes to the `useOwnApiKey`
-`runtime.request` (8.2), which owns the routing switch and the retry.
+prompt that stores the key host-side and reports only that it did; the
+surface then issues `useOwnApiKey` (8.2), which owns the routing switch and
+the retry and reads the credential from the secret store.
 
 ### 8.4 Down: `response`
 
@@ -1381,6 +1408,7 @@ Shell = {
   active: SessionKey                   // which paper the view is showing
   open: SessionKey[]                   // rail order, user-arranged
   collapsed: SessionKey[]              // rail rows the user folded shut
+  search: string                       // the rail's search, across papers
 }
 ```
 
@@ -1447,6 +1475,7 @@ Surface = {
   scroll: Map<StreamTabId, number>
   drawerOpen: boolean
   toolsSheetOpen: boolean                // the header's Tools bottom sheet
+  search: string                         // the drawer's filter, per session
   workbench: WorkbenchLayout                               // desktop only
 }
 ```
@@ -1504,7 +1533,13 @@ today), `drafts` (text only; images and the polished and transcribed
 variants are not), `inquiryDrafts` (whole, and cleared when the inquiry
 resolves - §8.5 removes the round trip that persists them today, so nothing
 else would), `expanded`, `groups`, `scroll`, `drawerOpen`, `workbench`. Not persisted:
-`session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`.
+`session` (it is the key) and `focusedRow`; `Shell` persists `active`, `open`, and `collapsed`; its `search` is not
+persisted, and neither is `Surface.search`. The two are separate because
+they scope differently: the drawer filters one session's streams and so
+belongs to that session's `Surface`, while the desktop rail searches across
+open papers and no per-session record can hold it. Both are declared rather
+than left to the components, which G3 forbids and which would reset them on
+a remount or a paper switch.
 
 Deleted: the `setActiveStream` fact, `ProgressPresentationState`, the
 `StreamState.ui` block (`streamState.ts:175-184`), the pending-approval
@@ -1962,7 +1997,11 @@ As tests:
 
 - `sessionPresentationBoundary.vitest.ts` extended to fail on `followUpText`,
   `recording`, `polishedText`, `transcribedText`, `shouldFocusFollowUp` in
-  any shared schema.
+  `sessionView.ts` and the durable session-fact schemas - **not** in every
+  shared schema, which would reject `HostSnapshot.recording` (§9), a
+  process-fact that belongs on the wire and lives in the shared
+  `sessionFrames.ts` by Appendix B. The rule is about what may become
+  session state.
 - Transitionally, one renderer-port implementation per host until lane 2
   lands.
 - An architecture test that fails when a host package computes topology,
