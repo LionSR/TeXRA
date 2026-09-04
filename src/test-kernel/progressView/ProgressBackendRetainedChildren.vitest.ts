@@ -202,7 +202,14 @@ describe('retained finished children', () => {
     );
     await backend.applyStreamStatus(childStreamId, STREAM_PHASE.COMPLETED);
 
-    const badges = metadataPushes(messages);
+    // A terminal transition also pushes the child's own metadata (that push
+    // is what carries `statusDurablyFinal` to the view), so the parent badge
+    // is no longer the last metadata message — select it by stream instead.
+    const badges = metadataPushes(messages).filter(
+      (message) =>
+        message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA &&
+        message.streamInfo.name === PARENT,
+    );
     expect(badges.at(-1)).toMatchObject({
       streamInfo: { name: PARENT },
       streamState: {

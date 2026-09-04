@@ -754,7 +754,7 @@ export async function settleLiveSessionExecutions(
   for (const { session, executionId } of pending) {
     if (signal.aborted) {
       logger.warn(
-        `Host exit deadline passed before this drain reached execution ${executionId}; settling one execution costs an outcome write and a transcript flush, which the exit deadline budgets for, so a run left here means the budget ran out. If it was still unsettled it keeps its open transcript groups and renders as running until a later launch settles it`,
+        `Host exit deadline passed before this drain reached execution ${executionId}; settling one execution costs an outcome write and a transcript flush, which the exit deadline budgets for, so a run left here means the budget ran out. If it was still unsettled it keeps its open transcript groups, which a later launch renders as interrupted from the derived outcome until a later settlement persists the close`,
       );
       continue;
     }
