@@ -125,12 +125,10 @@ export function resolveCodexSubscriptionProfile({
       streaming: 'forced',
       webSocket: 'global-toggle',
       supportsTokenCounting: false,
-      // The backend forces `store: false` (see `storesResponsesServerSide`
-      // below), so OpenAI's stateful `/responses/compact` endpoint has
-      // nothing to act on. Manual compaction is still supported end-to-end
-      // via `ModelHandlerOpenAIResponse`'s client-side summarize-and-resend
-      // fallback, which the handler picks automatically whenever
-      // `storesResponsesServerSide` is false (#7213).
+      // This profile uses the client-side summarize-and-resend fallback
+      // (#7213). The public API's /responses/compact endpoint is stateless;
+      // store:false alone does not establish whether the separate ChatGPT
+      // subscription backend supports that endpoint.
       supportsManualCompaction: true,
       supportsResponseChaining: false,
       storesResponsesServerSide: false,

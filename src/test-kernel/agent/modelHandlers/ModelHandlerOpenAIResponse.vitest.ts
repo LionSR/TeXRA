@@ -38,6 +38,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import type {
+  ResponseCreateParamsBase,
   ResponseInputItem,
   ResponseUsage,
 } from 'openai/resources/responses/responses';
@@ -424,6 +425,42 @@ describe('ModelHandlerOpenAIResponse.createMediaContent', () => {
 });
 
 describe('ModelHandlerOpenAIResponse.createResponse', () => {
+  it.each([
+    [ReasoningEffort.NONE, 'low'],
+    [ReasoningEffort.MINIMAL, 'low'],
+    [ReasoningEffort.MEDIUM, 'medium'],
+    [ReasoningEffort.MAX, 'max'],
+  ])(
+    'sends supported Astra request parameters for %s effort',
+    async (effort, expected) => {
+      const handler = createHandler({
+        ...MODEL_CONFIGS.gpt6,
+        capabilities: {
+          ...MODEL_CONFIGS.gpt6.capabilities,
+          reasoningEffort: effort,
+        },
+      });
+      const { client, requests } = createCapturingClient('resp-astra');
+
+      await handler.createResponse({
+        client,
+        messages: createMessages(1),
+        temperature: 0.7,
+      });
+
+      const request = requests[0] as ResponseCreateParamsBase | undefined;
+      assert.equal(request?.model, 'gpt-6-astra');
+      assert.equal(request?.reasoning?.effort, expected);
+      assert.equal(request?.temperature, undefined);
+      assert.equal(request?.top_p, undefined);
+      assert.equal(request?.top_logprobs, undefined);
+      assert.equal(
+        request?.include?.includes('message.output_text.logprobs'),
+        false,
+      );
+    },
+  );
+
   it('uses the client route instead of mutable OpenRouter configuration during an attempt', async () => {
     const handler = createHandlerOf(ResponseRouteProbe, {
       openRouterOnly: true,
