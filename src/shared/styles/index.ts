@@ -1,3 +1,12 @@
+// Public door onto the shared Lit style sheets the webview frontends compose
+// into their components — the common view chrome, design tokens, and the
+// handful of widely-reused component sheets below. This is a documented
+// exception to "no convenience barrels": components pull `commonViewStyles`
+// and friends from here instead of naming each sheet's file, because nearly
+// every view composes the same handful of sheets. A module stays out of this
+// barrel (and gets a direct import instead) when it has few consumers or is
+// reached indirectly through another export — see the two call-outs below.
+
 // Core styles
 export {
   commonViewStyles,
