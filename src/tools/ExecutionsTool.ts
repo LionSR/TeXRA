@@ -70,6 +70,7 @@ import {
   formatTodoHeader,
   formatTodoSection,
   getExecutionStatusInfo,
+  statusInfoFromLiveness,
   executionDisplayCategory,
   shouldSuppressAutoDeliveredSubagentReport,
   type ExecutionDisplayCategory,
@@ -83,6 +84,7 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
+import { resolveExecutionLiveness } from './executions/executionLiveness';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -708,8 +710,8 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     executionId: ExecutionId,
     viewRange?: [number, number],
   ): Promise<ToolResult> {
-    // A tracked handle is also the liveness fact: the shared terminal
-    // finalizer untracks it, so its presence means the command is still up.
+    // The handle names the live child stream; liveness itself is resolved
+    // below, from facts that outlive this process.
     const handle = currentSession().executions.getHandle(executionId);
     const meta = await getExecutionStore(executionId).readMeta();
     if (!meta && !handle) {
@@ -734,10 +736,25 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await transcripts.readEntries(streamId);
 
     const { lines, chars } = projectProcessOutput(entries);
-    const info = await getExecutionStatusInfo(executionId, meta?.outcome);
-    const footer = handle
-      ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
-      : `[finished: this is the retained log; /executions/${executionId}/report has the result summary]`;
+    const liveness = await resolveExecutionLiveness(executionId, meta?.outcome);
+    const info = statusInfoFromLiveness(liveness, meta?.outcome);
+    // The footer states the same reading as the header: "no handle in this
+    // process" alone never justifies calling the command finished.
+    const retained = `this is the retained log; /executions/${executionId}/report has the result summary`;
+    const footer = ((): string => {
+      switch (liveness.kind) {
+        case 'live':
+          return `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`;
+        case 'unsettled':
+          return `[not running in this process (${liveness.reason}); ${retained}]`;
+        case 'interrupted':
+          return `[interrupted before finishing; ${retained}]`;
+        case 'settled':
+          return meta?.outcome
+            ? `[finished: ${retained}]`
+            : `[not running anywhere, and no result was recorded; ${retained}]`;
+      }
+    })();
     const out: string[] = [
       `Output for ${executionId} (process, ${formatStatusInfo(info)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
     ];

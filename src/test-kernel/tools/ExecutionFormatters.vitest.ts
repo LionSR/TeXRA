@@ -7,7 +7,7 @@ import type { RunOutcome } from '@shared/schemas';
 const mocks = vi.hoisted(() => ({
   currentSession: vi.fn(),
   inspectExecutionLease: vi.fn(),
-  exists: vi.fn(),
+  read: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/SessionHandle', () => ({
@@ -19,7 +19,7 @@ vi.mock('@agent/storage/executionLease', () => ({
 }));
 
 vi.mock('@agent/storage/ExecutionKVStore', () => ({
-  getExecutionStore: () => ({ exists: mocks.exists }),
+  getExecutionStore: () => ({ read: mocks.read }),
 }));
 
 // Local imports
@@ -36,7 +36,8 @@ describe('getExecutionStatusInfo', () => {
         executions: { getHandle: () => undefined },
       });
       mocks.inspectExecutionLease.mockResolvedValue({ status: 'free' });
-      mocks.exists.mockResolvedValue(false);
+      // No metadata and no flow record: `classifyRun` reports `finished`.
+      mocks.read.mockResolvedValue(undefined);
 
       const info = await getExecutionStatusInfo('exec-1', outcome);
 

@@ -31,7 +31,10 @@ import type {
 import { runIdentityName, RUN_OUTCOME, STATUS_DISPLAY } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
 
-import { resolveExecutionLiveness } from './executions/executionLiveness';
+import {
+  resolveExecutionLiveness,
+  type ExecutionLiveness,
+} from './executions/executionLiveness';
 
 /**
  * The display category of a run: an agent run shows its execution mode
@@ -139,7 +142,20 @@ export async function getExecutionStatusInfo(
   executionId: string,
   outcome?: RunOutcome,
 ): Promise<ExecutionStatusInfo> {
-  const liveness = await resolveExecutionLiveness(executionId, outcome);
+  return statusInfoFromLiveness(
+    await resolveExecutionLiveness(executionId, outcome),
+    outcome,
+  );
+}
+
+/**
+ * The same reading for a caller that already resolved the liveness and needs
+ * the arm itself (to word a footer, say) as well as the status line.
+ */
+export function statusInfoFromLiveness(
+  liveness: ExecutionLiveness,
+  outcome?: RunOutcome,
+): ExecutionStatusInfo {
   switch (liveness.kind) {
     case 'live':
       return liveness.info;
