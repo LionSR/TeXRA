@@ -5,8 +5,10 @@ updated: 2026-09-03
 
 # PRD: One fold, three renderers
 
-**Status:** Proposed; requires owner ratification of the eight decisions in
-section 17 before lane 2 starts. Lane 1 may start on ratification of
+**Status:** Proposed; requires owner ratification of the nine decisions in
+section 17 before lane 2 starts. Decision 9 (may a `StreamTabId` be reused
+across incarnations) is the one the owner should read first: it decides
+whether four fences in this document exist at all. Lane 1 may start on ratification of
 decision 1 alone; lane 6 also needs decision 7, which is what it
 implements.
 
@@ -194,7 +196,8 @@ StreamView = discriminatedUnion('category', [ToolUseStreamView, WorkflowStreamVi
   conversationProgress: ConversationProgress
   stage: StreamStage | null
   followUpSupport: UserFollowUpSupport
-  parentId: StreamTabId | null
+  // the parent's incarnation, not just its id (5.2, "Existence")
+  parent: { streamId: StreamTabId, executionId: ExecutionId } | null
   // root first; evicted parent keeps its last label
   ancestors: { id: StreamTabId, label: string }[]
   childIds: StreamTabId[]                    // streamOrdering rule
@@ -250,8 +253,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 
 - **Existence** is decided by the **latest** lifecycle event for the stream,
   not by the presence of one: `run.start` and `removeStream` are two arms of
-  one lifecycle, and the stream exists iff the later of them by seq is a
-  `run.start`. Deletion is a durable tombstone rather than a physical row
+  one lifecycle, and the stream exists iff the later of them **by commit
+  ordinal** is a `run.start`. By ordinal and not by `seq`: `run.start` is
+  run-lane and `removeStream` is a session-lane fact, so their per-lane
+  sequence numbers are not comparable and a later tombstone could carry the
+  lower number. Deletion is a durable tombstone rather than a physical row
   removal - the `delete` and `deleteAll` requests (8.2) append
   `removeStream`, which replays and reaches every process through the one
   ordered read of 7.1 - and a relaunch on the same id supersedes it by
@@ -321,14 +327,22 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   stream id, and concurrent streams hold independent goals; one session
   field would let one stream's goal event overwrite another's.
 - **`approval`** is `'own'` when the stream itself is waiting, `'descendant'`
-  when any descendant is; hosts expand the path by default for
-  `'descendant'` and add only their own override on top.
+  when any descendant is. Approval-driven expansion **wins over a collapsed
+  override**, and arriving at `'descendant'` clears that override for the
+  path: an override applied on top would let a parent the user collapsed
+  earlier stay closed when a child later asks for a decision, and since
+  `rollup` deliberately carries no waiting count there would be nothing else
+  on screen to show it - a blocked run with no visible request. The override
+  governs only a path with no pending approval below it.
 - **`rollup`** counts descendants by status; it has no waiting count because
   a waiting descendant expands the path, so a collapsed parent never hides
   one.
-- **`ancestors`** walks `parentId`; an evicted parent contributes its last
-  known label. A child whose `parentId` names a stream the view does not
-  have - a tombstoned parent, most often - is **top-level**: it joins
+- **`ancestors`** walks `parent`; an evicted parent contributes its last
+  known label. The link names the parent's `executionId` as well as its id,
+  or a relaunched deterministic parent would silently adopt the previous
+  incarnation's children: the id exists again, so a bare `parentId` would
+  re-nest streams that belong to a run that no longer exists. A child whose
+  `parent` names an incarnation the view does not have - a tombstoned parent, most often - is **top-level**: it joins
   `order` and shows no ancestors. Deleting a parent therefore cannot hide
   its children, and needs no detach transaction: `onChildrenDetached` emits
   `setParentStream` today only because deletion was physical, and under a
@@ -378,9 +392,9 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   exiting recomputes exactly the streams it owned, not the view. A
   `TextChunk` names its row's stream. For each named stream the fold
   recomputes its arm, then
-  walks `parentId` to the root updating each ancestor's `childIds`,
+  walks `parent` to the root updating each ancestor's `childIds`,
   `rollup`, `approval`, and `group`, then `order` when a top-level stream
-  appeared or changed status. An event that _changes_ `parentId` walks two
+  appeared or changed status. An event that _changes_ `parent` walks two
   chains, the old and the new: detach is a real runtime transition
   (`onChildrenDetached` emits `setParentStream` with a null parent,
   `createSessionStores.ts:30-44`), so a child's parent genuinely moves and
@@ -388,7 +402,13 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   its `rollup` forever. The old parent needs no extra bookkeeping: the fold
   holds it in the view until the event applies. Cost is O(depth) per named
   stream and the named set is bounded by what actually changed, never a
-  whole-view pass. `transcript.run` is memoized on `(streamId, settledSeq)`.
+  whole-view pass. `transcript.run` is memoized on
+  `(streamId, settledSeq, childRevision)`, where `childRevision` is bumped
+  on the ancestor walk whenever a descendant's arm changes. `settledSeq`
+  alone is not enough: `workflowRunModel` consumes `childProgress` to build
+  `liveOf`, so a child's status, call count, or usage changing leaves the
+  parent's model stale until an unrelated parent event arrives - and the
+  walk that has to bump it is already visiting every ancestor.
   Recomputing `workflowRunModel` over a whole transcript per event would be
   quadratic.
 - **Legacy.** The fold has no legacy arm and no event carries a
@@ -470,12 +490,15 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    only on the `HostInteractions` port, so a pending approval does not
    survive a restart.
 2. **`approval.policy`**, run-scoped, carrying the full policy snapshot
-   after a change **and once at the reservation commit**, emitted by the
-   single policy authority (`src/shared/approvalPolicy.ts`, pinned by
-   `approvalPolicyAuthorityRatchet.vitest.ts`). Without the run-start
-   emission a never-edited run has no entry under the latest-of-type rule
-   (5.2) and its bypass controls would be blank until the user first
-   changed one. Never a toggle delta. Deletes
+   after a change, emitted by the single policy authority
+   (`src/shared/approvalPolicy.ts`, pinned by
+   `approvalPolicyAuthorityRatchet.vitest.ts`). The **initial** snapshot is a
+   field on the `run.start` payload rather than a separate event at the
+   reservation commit: without it a never-edited run has no entry under the
+   latest-of-type rule (5.2) and its bypass controls read blank, and emitting
+   it as its own event would need an ordering rule against `run.start`, which
+   resets the incarnation's state. On the payload it is atomic by
+   construction. The authority still owns the value in both cases. Never a toggle delta. Deletes
    `UPDATE_BYPASS` and the five bypass mirrors.
 3. **`run.start` moves to the reservation commit point** (where
    `AgentLaunchContext.ts:412-421` emits `setActiveStream` today) and is the
@@ -557,8 +580,10 @@ class SessionEvents extends Context.Service<
       streamId: StreamTabId,
       fromSeq: number,
     ) => Stream.Stream<SessionEvent>;
-    // every stream: replay from the per-stream cursor, then the tail
+    // everything committed above `cursor`, in commit order, then the tail
     readonly all: (cursor: SessionCursor) => Stream.Stream<SessionEvent>;
+    // the session's current commit ordinal: how a live-only reader attaches
+    readonly now: Effect.Effect<SessionCursor>;
   }
 >()('@texra/session/SessionEvents') {
   // runtime processes: the durable table is the source of truth
@@ -1050,11 +1075,13 @@ in the same discriminated union, which Zod would have rejected and a reader
 would have misread first.
 
 - stream: `stream.stop`, `stream.delete { streamId, executionId }`,
-  `stream.deleteAll`, `stream.compact`, `stream.resume`, `stream.runNew`,
-  `stream.restoreState`. `stream.delete` carries the `executionId` the
-  surface saw, not one resolved at dispatch: a delete that waits in the
-  bridge while a deterministic stream relaunches would otherwise tombstone
-  the new incarnation and defeat the fence in 5.2.
+  `stream.deleteAll { targets: { streamId, executionId }[] }`,
+  `stream.compact`, `stream.resume`, `stream.runNew`, `stream.restoreState`.
+  Both delete arms name the incarnations the surface saw, never ones
+  resolved at dispatch: a delete that waits in the bridge while a
+  deterministic stream relaunches would otherwise tombstone the new
+  incarnation and defeat the fence in 5.2. `deleteAll` enumerating at
+  dispatch time is the same race with a wider blast radius.
 - follow-up: `followUp.send { streamId, text, images }`, `followUp.retry`,
   `followUp.cancelRetry`, `followUp.polish`
 - decisions: `toolEdit`, `bash`, `proposal`, `plan`, `userQuestion`, each
@@ -1162,8 +1189,9 @@ Surface = {
   drafts: Map<StreamTabId, Draft>
   // the new-task composer: the existing MainViewPersistedState, per session
   launch: LaunchSurface
-  // answers in progress; keyed by inquiry, not by stream (8.5)
-  inquiryDrafts: Map<InquiryId, string>
+  // answers in progress; keyed by inquiry, not by stream (8.5).
+  // The whole InquiryDraft (answer AND sessionLinks), not just the answer.
+  inquiryDrafts: Map<InquiryId, InquiryDraft>
   recording: boolean
   // override on top of approval === 'descendant'
   expanded: Map<StreamTabId, 'expanded' | 'collapsed'>
@@ -1200,7 +1228,10 @@ the frame's `host` snapshot (8.1). The test is whether a
 second surface on the same session may hold a different value: a selection
 may, a catalog may not. `selected` is a _preference_, not a pointer the renderer trusts: what a
 surface shows is `selected` if the view still has that stream, else the
-first of `order`, resolved at read. A deletion by this surface or the other
+first of `order`, resolved at read. The fallback applies only to a
+**non-null** id that has disappeared. An explicit `null` is the New-task
+state and resolves to itself, or the header's New task action and the
+drawer's "+" could never open the launcher once a session had any stream. A deletion by this surface or the other
 one therefore cannot leave a conversation pointed at a stream that no longer
 exists, and a persisted selection restored after a deletion is harmlessly
 stale rather than invalid - which is why no reconciliation effect watches
@@ -1287,8 +1318,9 @@ line, and its `setTaskState` line carries a whole `AgentConfig` through
 would put `TaskState` fields in `SessionView` that no renderer shows, and
 would then make the projection diff two views to recover the event that
 produced a line. It stays a per-event projection and reads
-`SessionEvents.all(cursor)` directly, attaching at the durable high-water
-cursor captured when it subscribes - not the empty cursor, which on a
+`SessionEvents.all(cursor)` directly, attaching at `SessionEvents.now`, the
+session's current commit ordinal, captured when it subscribes (§7.1 exposes
+it for exactly this reader, which by design never reads `SessionView`) - not the empty cursor, which on a
 resumed session would re-emit the whole history before the current run's
 records and break the byte-identical guarantee. The cursor parameter already
 expresses "from here on"; no live-only mode is needed. That is the division: the fold is what
@@ -1403,8 +1435,12 @@ a component.
   width with per-segment eviction fallback.
 - **Empty state (New)**: the desktop hero branch of `MainApp.render`
   ("What are you working on?" with the paper name in the subtitle), the
-  "Context and attachments" disclosure hosting the real `file-select-group`
-  (still inside `<main-app>` so it keeps `fileStateContext`), an "Active
+  "Context and attachments" disclosure hosting the real `file-select-group`,
+  which takes its selections from `Surface.launch` and its option lists from
+  the `host` snapshot (8.1) as ordinary properties - not from
+  `fileStateContext`, which lane 4 deletes along with the rest of
+  `@lit/context`; that swap is part of lane 4, not a later cleanup, or the
+  component renders with no state. An "Active
   now" strip that is `stream-tabs` filtered to `group !== 'recent'`, and
   the launch composer. Onboarding cards replace the hero while the funnel is
   pending; the five banners sit above the composer.
@@ -1414,7 +1450,7 @@ a component.
   roots; each chip's menu carries its "…settings" item; polish, dictation,
   attach, send. Compact: the follow-up line with the same trailing controls.
   Above it, "Goes to X · reply to parent instead" from `Surface.selected`,
-  `parentId`, and `followUpSupport`. Chips collapse into one popover below
+  `parent`, and `followUpSupport`. Chips collapse into one popover below
   440 px (the existing container query).
 - **Drawer** (sidebar) or **docked list** (editor tab, at or above 720 px):
   the real `stream-tabs` with top-level rows in one section per `group`
@@ -1558,16 +1594,16 @@ Critical path: lane 1, then lane 2, then lane 4, then lane 8. At most three
 worktree lanes open. Each host switches in one pull request. Deletions ship
 with their replacement.
 
-| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                              | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
-| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all seven event changes of section 6, item 7 included (goal and queued follow-ups carry snapshots, not invalidation hints - the browser fold cannot reconstruct them otherwise); local runtime state as a fold input; compensation and tombstone gates re-keyed | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
-| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                       | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
-| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                       | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
-| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                   | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
-| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                         | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
-| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                           | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
-| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                  | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
-| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                           | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
+| Lane                    | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Depends on                                                                                                                      | Parallel with | Touches                                                                                             |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------- |
+| 1 Foundation            | `sessionView.ts`, `sessionFold.ts` (pure, incremental), `runtimeRequest.ts`, `requestErrors.ts`, the pure-fold test; all seven event changes of section 6, item 7 included (goal and queued follow-ups carry snapshots, not invalidation hints - the browser fold cannot reconstruct them otherwise), **each landing with its matching change to the frozen NDJSON projection in the same PR**: `sessionProgressSubscription.ts` ignores `run.start` and forwards the goal and follow-up payloads verbatim today, so deleting `setActiveStream` and reshaping those payloads without it would drop a public line and leak new fields into the frozen wire for as long as lane 5 took to land; local runtime state as a fold input; compensation and tombstone gates re-keyed | nothing; in-memory; stays out of `src/transcript` stores, `src/agent/storage`, `persistedFlow` while the cutover branch is open | 6, 7          | `src/shared/session`, `src/agent/trace/events.ts`, `AgentLaunchContext.ts`, `SessionFactApplier.ts` |
+| 2 Effect services       | `SessionEvents` with `all(cursor)` and the uninterruptible publish, `SessionViewService`, `WorkspaceRoots`, `sessionLayer` through `LayerMap`, `toSignal`, `SessionRequests`, the process runtime at each entry, `loopbackLogin` migrated, `it.effect` suites with `TestClock`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 1                                                                                                                               | 6, 7          | `src/controllers/session`, `SessionEventHub.ts`, `src/shared/signals.ts`, host entries              |
+| 3 TUI                   | section 10.1, one pull request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 2                                                                                                                               | 4, 5          | `packages/cli`                                                                                      |
+| 4 Extension and desktop | section 10.2, one pull request; measure the bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2                                                                                                                               | 3, 5          | `packages/extension`, `packages/desktop`, `src/controllers/progressView`                            |
+| 5 Headless and SDK      | section 10.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 2                                                                                                                               | 3, 4          | `packages/cli/src/runtime`, `packages/agent`                                                        |
+| 6 Session roots         | section 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | none; coordinate with the cutover                                                                                               | 1, 2          | `SessionHandle.ts`, `storageFS.ts`, `workspaceFS.ts`, `packages/desktop/src/main`                   |
+| 7 Ledger collapses      | section 13, disjoint ones as filler                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | none                                                                                                                            | 1, 2, 6       | files lanes 3 and 4 do not touch                                                                    |
+| 8 Shell                 | section 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | 4, 6                                                                                                                            |               | `packages/extension` frontends, `packages/desktop/src/renderer`                                     |
 
 ### Acceptance per lane
 
@@ -1690,6 +1726,29 @@ As tests:
    wrapper around one.
 8. The frozen NDJSON wire is a projection of the event stream, not a reader
    of `SessionView` (10.3). The fold renders; the event stream serializes.
+9. **Whether a `StreamTabId` may be reused across incarnations - the one
+   question in this PRD I would put back to the owner rather than answer.**
+   A deleted deterministic workflow stream is reclaimed today
+   (`claimStreamIdentity`, `SessionState.ts:487-501`), so a stream id names
+   a name and not a run, and every reference to one is ambiguous until it is
+   paired with an `executionId`. This document now carries that fence in
+   four places: the tombstone (5.2), `stream.delete` and `stream.deleteAll`
+   (8.2), and the `parent` link (5.1). Each is individually correct and each
+   arrived as a separate review finding, which is the usual sign that the
+   patch is being applied where the defect is not.
+
+   The alternative is to mint a fresh `StreamTabId` per launch and let the
+   deterministic name be a label. Then all four fences disappear, along with
+   `_streamIncarnations`, `_removedStreams`' generation compare, and the
+   reset-on-`run.start` rule; a tombstone becomes final, and `run.start` is
+   genuinely seq 1 of its stream. The cost is that whatever resolves a
+   workflow attachment by deterministic id must resolve it by
+   `(parent, callIndex)` instead - which the fold already answers through
+   `childIds` and `transcript.run`.
+
+   Nothing else in this PRD depends on the answer: the fences are written so
+   the document is coherent either way, and adopting fresh ids is a deletion
+   from lane 1, not a rewrite of it.
 
 Already agreed with the persistence owner and recorded in the companion
 proposal (in flight in another branch, see Lineage): the seven event changes
