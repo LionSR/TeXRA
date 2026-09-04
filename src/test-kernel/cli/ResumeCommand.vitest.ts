@@ -362,7 +362,7 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports a row without a stamped stream id as finished', async () => {
+  it('names stream stamping when a row has no stream id', async () => {
     await seedExecution({
       config: TOOL_USE_CONFIG,
       meta: META_WITHOUT_STREAM_ID,
@@ -371,7 +371,7 @@ describe('runResumeExecution', () => {
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
+      `Execution ${EXECUTION_ID} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });

@@ -35,7 +35,7 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
-  readCliResumeDataForListing: vi.fn(),
+  readCliResumeDataForDetails: vi.fn(),
   assembleTrace: vi.fn(),
 }));
 
@@ -62,9 +62,17 @@ vi.mock('@agent/storage', async () => {
   };
 });
 
-vi.mock('@cli/runtime/toolUseResumeData', () => ({
-  readCliResumeDataForListing: mocks.readCliResumeDataForListing,
-}));
+// `isCliListingResumable` stays real: it is the listing rule under test, and
+// it decides from the listing row's own facts without touching storage.
+vi.mock('@cli/runtime/toolUseResumeData', async () => {
+  const actual = await vi.importActual<
+    typeof import('@cli/runtime/toolUseResumeData')
+  >('@cli/runtime/toolUseResumeData');
+  return {
+    ...actual,
+    readCliResumeDataForDetails: mocks.readCliResumeDataForDetails,
+  };
+});
 
 vi.mock('@transcript', async () => {
   const actual =
@@ -234,14 +242,12 @@ function mockBulkDelete(deleted: string[]): void {
   });
 }
 
-// An interrupted tool-use run whose resume data carries `agentConfig`, so the
-// history list labels it as resumable.
-function mockResumableToolUseListing(agentConfig: unknown): void {
-  mocks.readCliResumeDataForListing.mockResolvedValue({
-    type: 'toolUse',
-    agentConfig,
-  });
-}
+// The durable facts that make a listing row resumable: a checkpoint on disk
+// and the stream id stamped at registration.
+const RESUMABLE_ROW_FACTS = {
+  checkpointPresent: true,
+  streamId: 'correct@run#resumable' as StreamTabId,
+};
 
 // A fresh temp directory to point --assets-dir at.
 async function makeAssetsDestDir(prefix: string): Promise<string> {
@@ -279,7 +285,7 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
-    mocks.readCliResumeDataForListing.mockResolvedValue(null);
+    mocks.readCliResumeDataForDetails.mockResolvedValue(null);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
@@ -299,7 +305,9 @@ describe('CLI history runtime', () => {
         entry: entries[0],
       },
     ]);
-    expect(mocks.readCliResumeDataForListing).toHaveBeenCalledTimes(1);
+    // The listing reads no resume data at all: `resumable` comes from the
+    // checkpoint stat the listing already carries.
+    expect(mocks.readCliResumeDataForDetails).not.toHaveBeenCalled();
   });
 
   it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
@@ -403,9 +411,9 @@ describe('CLI history runtime', () => {
         timestamp: '2026-05-18T10:00:00.000Z',
         record: teamConfig,
         outcome: 'cancelled',
+        ...RESUMABLE_ROW_FACTS,
       }),
     ]);
-    mockResumableToolUseListing(teamConfig);
 
     const entries = await listCliHistoryEntries();
 
@@ -425,9 +433,9 @@ describe('CLI history runtime', () => {
         record: chatConfig,
         outcome: 'cancelled',
         description: 'Sketch a proof outline',
+        ...RESUMABLE_ROW_FACTS,
       }),
     ]);
-    mockResumableToolUseListing(chatConfig);
 
     const entries = await listCliHistoryEntries();
 
@@ -567,7 +575,7 @@ describe('CLI history runtime', () => {
       agentCategory: 'toolUse',
     });
     mocks.readConfig.mockResolvedValue(toolUseConfig);
-    mocks.readCliResumeDataForListing.mockResolvedValue(
+    mocks.readCliResumeDataForDetails.mockResolvedValue(
       createToolUseResumeData({
         agentConfig: { ...toolUseConfig, model: 'gpt55' },
       }),

@@ -74,6 +74,7 @@ describe('tool status formatting', () => {
         agentCategory: 'toolUse',
       }),
       outcome: 'completed',
+      checkpointPresent: false,
     };
 
     expect(formatListingLine(entry)).toBe(

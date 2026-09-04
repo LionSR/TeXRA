@@ -45,7 +45,10 @@ import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from './cliContext';
-import { readCliResumeDataForListing } from './toolUseResumeData';
+import {
+  isCliListingResumable,
+  readCliResumeDataForDetails,
+} from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -80,8 +83,11 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /**
-   * Whether a checkpoint exists and nobody alive owns the run. Independent of
-   * `status`, which stays a frozen contract: a failed run can be resumable.
+   * Whether the durable facts say this run can be continued: a checkpoint
+   * exists and the row carries the stream id stamped at registration.
+   * Ownership is settled when the run is opened, not per listed row, so a run
+   * live in another process still lists here and refuses on open. Independent
+   * of `status`, which stays a frozen contract: a failed run can be resumable.
    */
   readonly resumable: boolean;
   readonly inputBasename: string;
@@ -153,9 +159,10 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   const entries = await listExecutions();
-  // Every row costs a resumability probe plus an optional resume-data read.
-  // One at a time makes a long history crawl; all at once opens one file
-  // handle burst per run, so keep it bounded. `pMap` preserves input order.
+  // A row's resumability comes from the checkpoint `stat` the listing already
+  // did; only a candidate workflow row still reads its persisted state. That
+  // read is bounded here so a history full of workflow runs cannot open one
+  // file handle burst per run. `pMap` preserves input order.
   return pMap(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
     concurrency: HISTORY_ENTRY_CONCURRENCY,
   });
@@ -188,7 +195,7 @@ export async function readCliHistoryDetails(
   const hasTranscriptEvidence =
     hasCompletedRunConversationEvidence(conversationResult);
   const resumeData = config
-    ? await readCliResumeDataForListing(id, config)
+    ? await readCliResumeDataForDetails(id, config)
     : null;
   const conversationPreview = createConversationPreview(conversation);
   const fullConversation = options.includeFullConversation
@@ -532,20 +539,17 @@ async function toCliHistoryEntry(
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumeData = await readCliResumeDataForListing(entry.id, config);
+  const resumable = await isCliListingResumable(entry);
   return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    model:
-      resumeData?.type === 'toolUse'
-        ? resumeData.agentConfig.model
-        : config.model,
-    status: resolveHistoryRunStatus({
-      resumable: resumeData !== null,
-      outcome: entry.outcome,
-    }),
-    resumable: resumeData !== null,
+    // The model the run started under. A run resumed under a different model
+    // records that only inside its checkpoint, which a listing no longer
+    // parses; `history show` still reports the resumed model.
+    model: config.model,
+    status: resolveHistoryRunStatus({ resumable, outcome: entry.outcome }),
+    resumable,
     inputBasename,
     category: config.agentCategory,
     description: entry.description,

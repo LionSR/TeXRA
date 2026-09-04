@@ -4,7 +4,10 @@ import {
   retrieveSessionResumeData,
   type AgentConfig,
 } from '@agent/runtime';
-import { getExecutionStore } from '@agent/storage';
+import {
+  getExecutionStore,
+  type AgentExecutionListingEntry,
+} from '@agent/storage';
 import { createLog } from '@logger/logUtils';
 import { AgentCategory, type ExecutionId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -13,6 +16,41 @@ const logger = createLog('CliToolUseResumeData');
 type CliSessionResumeData = NonNullable<
   Awaited<ReturnType<typeof retrieveSessionResumeData>>
 >;
+
+/**
+ * Whether a history listing may advertise a row as continuable, decided from
+ * facts the listing already carries: a checkpoint file exists (one `stat` per
+ * row in `listExecutions`) and the row has the stream id stamped on its
+ * metadata at registration — the reproduction contract, without which there is
+ * no persisted stream to continue.
+ *
+ * Ownership is deliberately not inspected here. A run another process is
+ * executing right now has a checkpoint and no outcome, so it lists as
+ * resumable and is refused when the user opens it; that costs one lease read
+ * on the one run they picked instead of one per row.
+ *
+ * The one read left is the workflow compile-rejection filter, and only for a
+ * workflow row the two free facts have already accepted: such a run's
+ * checkpoint exists but records a rejection at its round cap, so resume
+ * refuses it and the listing must not offer it. An unreadable or malformed
+ * record is not advertised either — that is unknown state, not a continuable
+ * run.
+ */
+export async function isCliListingResumable(
+  entry: AgentExecutionListingEntry,
+): Promise<boolean> {
+  if (!entry.checkpointPresent || !entry.streamId) return false;
+  if (entry.record.agentCategory !== AgentCategory.Workflow) return true;
+  try {
+    return !(await hasTerminalPersistedCompileRejection(entry.id));
+  } catch (error) {
+    logger.warn(
+      `Not advertising workflow ${entry.id} as resumable: its persisted state is unreadable: ${toErrorMessage(error)}`,
+      { data: error },
+    );
+    return false;
+  }
+}
 
 async function readCliSessionResumeData(
   id: ExecutionId,
@@ -27,17 +65,18 @@ async function readCliSessionResumeData(
 }
 
 /**
- * Category-aware, listing-safe resume validation. History listings enrich
- * many entries at once, so one unreadable flow record must not abort the whole
- * listing: degrade to `null` on retrieval failure. The returned value is the
- * same category-specific state accepted by the active resume path.
+ * Category-aware resume validation for the one run `history show` was asked
+ * about, where a full checkpoint parse is proportionate: it answers both
+ * "is there a category-valid flow record" and "what model would a resume run
+ * under". Never throws — an unreadable flow record degrades to `null` rather
+ * than failing the whole detail read.
  *
- * Listings advertise resumability to a person, so they ask `classifyRun`
- * rather than the durable-state-only `deriveResumability`: a run that is
+ * It asks `classifyRun` rather than the durable-state-only
+ * `deriveResumability` because it reports to a person: a run that is
  * executing right now also has a flow record and no outcome, and
  * `texra resume` would refuse it anyway.
  */
-export async function readCliResumeDataForListing(
+export async function readCliResumeDataForDetails(
   id: ExecutionId,
   config: AgentConfig,
 ): Promise<CliSessionResumeData | null> {
