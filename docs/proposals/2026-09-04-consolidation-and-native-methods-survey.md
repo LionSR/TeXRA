@@ -28,9 +28,11 @@ and on other simplification work:
   API: all four issues are `state: closed`, `state_reason: completed`;
   #11810/#11811/#11812 list #11814 as their closing PR, #11809 lists none.
 - `refactor: land the tail of the recorded audits — 44 verified findings in
-nine batches` (#11804) — a large (337 files touched across the two-commit
-  window) consolidation sweep in its own right, landing much of the backlog
-  prior survey rounds had been citing.
+nine batches` (#11804) — a single commit (`733b8a4`, 122 files changed,
+  +909/-1340) landing much of the backlog prior survey rounds had been
+  citing; the 337-file, +2389/-3313 figure in §1 below is the whole
+  `d418d45..HEAD` 23-commit window scoped to `src`/`packages/*/src`, not
+  this one commit.
 - `refactor(session): give the startup stream sweep one owner per host, not
 a flag` (#11808), `refactor(desktop): make DesktopAgentExecution.runExecution
 private` (#11802), `refactor(storage): delete the taskRuns absolute-path
