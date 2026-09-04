@@ -284,6 +284,20 @@ export class SessionHandle {
   }
 
   /**
+   * Streams whose transcript summary still records unfinished output, read
+   * one stream at a time from the always-resident summaries. The store answers
+   * the per-stream question (`hasUnfinishedOutput`) and this owns the scan,
+   * which is the only shape its two callers ever needed.
+   */
+  private unfinishedStreamIds(): Set<StreamTabId> {
+    return new Set(
+      this.transcripts
+        .keys()
+        .filter((streamId) => this.transcripts.hasUnfinishedOutput(streamId)),
+    );
+  }
+
+  /**
    * The bounded set of streams seeded from their sidecars at startup: every
    * transcript-unfinished stream plus the transitive parent chain behind each
    * one, so active runs and their provenance are resident while settled
@@ -292,7 +306,7 @@ export class SessionHandle {
    */
   private computeStartupSeedSet(): ReadonlySet<StreamTabId> {
     const seed = new Set<StreamTabId>();
-    const pending = [...this.transcripts.getUnfinishedStreamIds()];
+    const pending = [...this.unfinishedStreamIds()];
     for (let streamId = pending.pop(); streamId; streamId = pending.pop()) {
       if (seed.has(streamId)) continue;
       seed.add(streamId);
@@ -318,7 +332,7 @@ export class SessionHandle {
    */
   private async runRestartRepair(): Promise<void> {
     if (this.isRepairSuperseded()) return;
-    const unfinished = new Set(this.transcripts.getUnfinishedStreamIds());
+    const unfinished = this.unfinishedStreamIds();
     const candidateSet = new Set(this.computeStartupSeedSet());
     // The scan reads the authoritative `meta.streamId` edge, so it also
     // resolves ownership for a stream whose sidecar and summary mirror never

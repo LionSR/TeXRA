@@ -524,10 +524,11 @@ export function syncStreamLog(
  * leaves its active phase, the focus subscriber when focus moves off a
  * stream, and the foreground workflow reader when it closes or changes —
  * never the render/sync path, so a terminal stream always releases rather
- * than only when a sync happens to run for it. A no-op for
- * the active stream, for a stream whose status is unknown or active, and
- * while no stream is focused (every stream then projects the full
- * transcript, exactly the states the old in-sync release also skipped).
+ * than only when a sync happens to run for it. A no-op for the active stream,
+ * for a stream in a live active phase, and while no stream is focused (every
+ * stream then projects the full transcript). An unknown phase is NOT one of
+ * them: it means no producer for that stream in this process, which is
+ * exactly what eviction is for.
  *
  * Alongside the store eviction this drops the stream's projection state:
  * the fold items and the incremental task-group/compaction memos would
@@ -550,8 +551,10 @@ export function releaseInactiveStreamTranscript(
   }
   const slice = streams.get().get(streamId);
   if (!slice) return;
-  const phase = streamPhaseFor(streamId)?.phase;
-  if (phase === undefined || isActivePhase(phase)) return;
+  // Only a live active phase keeps a transcript resident. A stream with no
+  // phase at all has no producer in this process, so its log is exactly what
+  // eviction is for.
+  if (isActivePhase(streamPhaseFor(streamId)?.phase)) return;
   // Transcript residency only. The sidecar record answers to a different
   // rule (terminal children nothing presents) and to a different set of
   // readers, so `sessionSignalsAdapter` owns its release from one

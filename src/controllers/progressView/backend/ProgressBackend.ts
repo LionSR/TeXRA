@@ -1,3 +1,5 @@
+import { setTimeout } from 'node:timers/promises';
+
 import PQueue from 'p-queue';
 
 import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
@@ -36,6 +38,13 @@ import { canUseStreamDataDir } from '@transcript/streamDataPaths';
 import { aggregateError } from '@utils/core';
 
 const log = createLog('ProgressBackend');
+
+/**
+ * How many stream sidecars the post-load hydration pass warms per turn. Small
+ * enough that one chunk's reads and its metadata pushes never hold the event
+ * loop, and matched to the snapshot store's own seed concurrency.
+ */
+const BACKGROUND_HYDRATION_CHUNK = 8;
 
 type ProgressBackendApprovalOptions = Omit<
   BuildApprovalRequestHandlerSetParams,
@@ -100,6 +109,8 @@ export class ProgressBackend {
   private activationGeneration = 0;
   private latestActivationTarget: PresentedStreamId = '';
   private readonly inFlightActivationGenerations = new Set<number>();
+  /** Cancels the post-load sidecar hydration pass; see `load`. */
+  private backgroundHydration: AbortController | undefined;
   private transcriptPresentationLease?: TranscriptPresentationLease;
   private disposed = false;
 
@@ -357,6 +368,11 @@ export class ProgressBackend {
     // has already thrown for any rejection.
     if (transcriptLeaseResult.status !== 'fulfilled')
       throw transcriptLeaseResult.reason;
+
+    // The preload just established this stream's run facts, so publish the
+    // phase they resolve to now. The background pass reaches every tab
+    // eventually, but the one the user just opened must not wait its turn.
+    this.renderer.updateStreamMetadata(stream);
 
     const previousStream = this.presentation.activeStream;
     const previousTranscriptLease = this.transcriptPresentationLease;
@@ -855,7 +871,105 @@ export class ProgressBackend {
     return this.enqueueStorageOperation(async () => {
       await this.session.waitUntilReady();
       await this.state.load();
+      this.startBackgroundStreamHydration();
     });
+  }
+
+  /**
+   * Warm the rail's sidecars behind the first paint, so each restored tab's
+   * phase converges from "not hydrated yet" to what actually happened to that
+   * run. Deliberately un-awaited: no host may wait for it, and disposal
+   * cancels it.
+   *
+   * Interim. It exists because the run tuple the phase rule needs (outcome,
+   * checkpoint, lease) currently lives one file read per stream away. Once
+   * the persistence substrate's `executions` rows carry outcome and
+   * resumability, the rail answers from the listing and this pass goes.
+   */
+  private startBackgroundStreamHydration(): void {
+    if (this.backgroundHydration || this.disposed) return;
+    const controller = new AbortController();
+    this.backgroundHydration = controller;
+    void this.hydrateStreamsInBackground(controller.signal);
+  }
+
+  private async hydrateStreamsInBackground(signal: AbortSignal): Promise<void> {
+    // Newest first: the tabs a user looks at after a restart are the ones
+    // whose run just ended.
+    const streams = this.state.selectableStreamNames();
+    for (
+      let start = 0;
+      start < streams.length;
+      start += BACKGROUND_HYDRATION_CHUNK
+    ) {
+      if (signal.aborted || this.disposed) return;
+      // The roster was captured once, so a stream can be deleted while this
+      // pass walks the chunks behind it. Re-check membership here and again
+      // after the reads: preloading a deleted stream mints a resident record
+      // for it, and pushing its metadata splices its tab back into the view.
+      const chunk = streams
+        .slice(start, start + BACKGROUND_HYDRATION_CHUNK)
+        .filter((stream) => this.isStreamOnRail(stream));
+      if (chunk.length > 0) {
+        // Through the storage queue, for the reason the queue exists: a chunk
+        // must not interleave with a deletion committing the same stream.
+        await this.enqueueStorageOperation(() =>
+          this.hydrateStreamChunk(chunk, signal),
+        );
+      }
+      // Yield between chunks so a long history never starves the UI.
+      await setTimeout(0);
+    }
+  }
+
+  /** Hydrate one chunk, publish its phases, and give the records back. */
+  private async hydrateStreamChunk(
+    chunk: readonly StreamTabId[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    // One preload per stream, all settled. A single `preload(chunk)` rejects
+    // fail-fast through `pMap`, which would release the storage queue and
+    // publish this chunk's phases while its siblings were still writing into
+    // their records. One unreadable stream must not end the pass either: the
+    // rule renders it from whatever the hydration did establish, and says why.
+    const hydrations = await Promise.allSettled(
+      chunk.map((stream) => this.state.snapshots.preload([stream])),
+    );
+    for (const [index, hydration] of hydrations.entries()) {
+      if (hydration.status === 'rejected') {
+        log.warn('Background sidecar hydration failed for a stream', {
+          data: { stream: chunk[index], error: hydration.reason },
+        });
+      }
+    }
+    if (signal.aborted || this.disposed) return;
+    for (const stream of chunk) {
+      if (!this.isStreamOnRail(stream)) continue;
+      this.renderer.updateStreamMetadata(stream);
+      // Bounded residency (#9947): the phase this push carried came from the
+      // store's run-fact map, which outlives the record, so a record this
+      // chunk warmed for a child nobody presents goes straight back through
+      // the session's one retirement rule, which asks whether any run owns
+      // the stream rather than whether one finished it: a stream held
+      // elsewhere, an unreadable one, and one with nothing durable left are
+      // as unowned as a completed one. Without that the pass would end with
+      // every hydrated child's whole sidecar resident — the exact cost the
+      // policy exists to avoid. Root streams stay, as they did before this
+      // pass existed: their resident execution id is what
+      // `lookupStreamExecutionId` resumes from.
+      this.factApplier.retireSidecarIfFinishedChild(stream);
+    }
+  }
+
+  /**
+   * Whether this stream is still on the rail — neither committed away nor
+   * behind a provisional removal barrier. The same pair `activateStream`
+   * rejects a focus request on.
+   */
+  private isStreamOnRail(stream: StreamTabId): boolean {
+    return (
+      !this.state.isStreamRemoved(stream) && this.state.streamLogs.has(stream)
+    );
   }
 
   /**
@@ -909,6 +1023,7 @@ export class ProgressBackend {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.backgroundHydration?.abort();
     for (const detach of this.detachEventListeners.splice(0)) detach();
     // Disposal is this host's last "stops presenting", and the session
     // outlives the window, so nothing else would revisit a finished child

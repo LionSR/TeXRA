@@ -199,6 +199,25 @@ function injectDuringExecutionConfigHydration(
   return injected;
 }
 
+/**
+ * Replace the execution row read (`meta.json`) that BOTH the metadata
+ * hydration and the phase probe make; every other read passes through. The
+ * store parses that raw row itself (core schema only), so there is no typed
+ * accessor left to stub.
+ */
+function mockExecutionMetaRead(
+  executionId: ExecutionId,
+  handler: (passThrough: () => Promise<string>) => Promise<string>,
+): void {
+  const originalRead = StorageFS.read.bind(StorageFS);
+  const metaPath = path.join(resolveRunStoragePath(executionId), 'meta.json');
+  vi.spyOn(StorageFS, 'read').mockImplementation(async (target: string) =>
+    target === metaPath
+      ? handler(() => originalRead(target))
+      : originalRead(target),
+  );
+}
+
 describe('StreamSnapshotStore', () => {
   setupPlatform(() => createTempDirPlatform('texra-snapshot-', tempDirs));
 
@@ -951,12 +970,12 @@ describe('StreamSnapshotStore', () => {
       description: 'Old authority label',
     });
     await writeMetaFile(STREAM, { executionId: oldExecutionId });
-    const oldMeta = await oldExecutionStore.readMeta();
     const readStarted = pDefer<void>();
-    const deferredRead = pDefer<typeof oldMeta>();
-    vi.spyOn(oldExecutionStore, 'readMeta').mockImplementation(() => {
+    const deferredRead = pDefer<void>();
+    mockExecutionMetaRead(oldExecutionId, async (passThrough) => {
       readStarted.resolve();
-      return deferredRead.promise;
+      await deferredRead.promise;
+      return passThrough();
     });
 
     const store = new StreamSnapshotStore();
@@ -969,7 +988,7 @@ describe('StreamSnapshotStore', () => {
       executionId: newExecutionId,
       identity: newIdentity,
     });
-    deferredRead.resolve(oldMeta);
+    deferredRead.resolve();
     await loading;
 
     expect(store.getRunMetadata(STREAM).identity).toEqual(newIdentity);
@@ -1032,14 +1051,14 @@ describe('StreamSnapshotStore', () => {
       description: 'Captured authority label',
     });
     await writeMetaFile(STREAM, { executionId });
-    const capturedMeta = await executionStore.readMeta();
     const readStarted = pDefer<void>();
-    const deferredRead = pDefer<typeof capturedMeta>();
-    // The description rides the seed's one execution-meta read; the live
-    // event lands while that read is still in flight.
-    vi.spyOn(executionStore, 'readMeta').mockImplementation(() => {
+    const deferredRead = pDefer<void>();
+    // The description rides the seed's execution-meta read; the live event
+    // lands while that read is still in flight.
+    mockExecutionMetaRead(executionId, async (passThrough) => {
       readStarted.resolve();
-      return deferredRead.promise;
+      await deferredRead.promise;
+      return passThrough();
     });
 
     const store = new StreamSnapshotStore();
@@ -1050,7 +1069,7 @@ describe('StreamSnapshotStore', () => {
     const flushing = store.flush();
     await readStarted.promise;
     facts.setDescription(STREAM, 'New live label');
-    deferredRead.resolve(capturedMeta);
+    deferredRead.resolve();
     await flushing;
 
     // The live event owns the field by presence; hydration does not clobber it.
@@ -2734,8 +2753,8 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
       executionId,
       parentStreamId: OTHER_STREAM,
     });
-    vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
-      new Error('transient execution read failure'),
+    mockExecutionMetaRead(executionId, () =>
+      Promise.reject(new Error('transient execution read failure')),
     );
     let mirroredMeta: Record<string, unknown> = {
       executionId,
@@ -2767,8 +2786,8 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const executionId = 'b88f88' as ExecutionId;
     await writeMetaFile(STREAM, { executionId });
-    vi.spyOn(getExecutionStore(executionId), 'readMeta').mockRejectedValueOnce(
-      new Error('transient execution read failure'),
+    mockExecutionMetaRead(executionId, () =>
+      Promise.reject(new Error('transient execution read failure')),
     );
     let mirroredMeta: Record<string, unknown> = {
       executionId: 'a77e77',

@@ -82,20 +82,23 @@ export function streamStateFor(
 }
 
 /** Lifecycle state for a stream — phase, substate, and the run-window start
- *  elapsed time is rendered from — straight off the session's status machine,
- *  the single owner that stamps all three. Renderers go through
- *  `streamPhaseFor` in `cliState`, which adds the no-slice-no-paint gate. */
+ *  elapsed time is rendered from — through the session's one read-time rule,
+ *  so a stream this process is not running answers from its durable facts
+ *  instead of not at all. Renderers go through `streamPhaseFor` in
+ *  `cliState`, which adds the no-slice-no-paint gate. */
 export function sessionStreamPhase(
   streamId: StreamTabId,
 ): StreamPhaseState | undefined {
-  return BOUND.get()?.state.streamStatus.getStreamState(streamId);
+  return BOUND.get()?.state.getStreamPhaseState(streamId);
 }
 
-/** Canonical reason a stream is unavailable in this session. */
+/** Canonical reason a stream is unavailable in this session: held by another
+ *  process, or its run state could not be read. Same rule as the phase, so a
+ *  foreign owner locks the composer without waiting for a refused send. */
 export function streamUnavailableDetailFor(
   streamId: StreamTabId,
 ): string | undefined {
-  return BOUND.get()?.state.streamStatus.holdState(streamId);
+  return BOUND.get()?.state.resolveStreamPhase(streamId).detail;
 }
 
 /** Queued follow-up messages for a stream, from the session-owned queue. */

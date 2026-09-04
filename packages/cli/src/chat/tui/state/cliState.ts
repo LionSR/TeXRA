@@ -250,9 +250,12 @@ export function cliStreamAcceptsStatus(streamId: StreamTabId): boolean {
 
 /**
  * Lifecycle state for a stream at paint: phase, substate, and the run-window
- * start elapsed time is rendered from, all read from the session's status
- * machine — the single owner that stamps them and writes its entry before
- * publishing the matching `status` fact.
+ * start elapsed time is rendered from, all read through the session's one
+ * read-time phase rule (`SessionState.resolveStreamPhase`). For a stream this
+ * process runs, that rule answers from the status machine, which stamps all
+ * three and writes its entry before publishing the matching `status` fact;
+ * for a stream it does not run, it answers from the durable facts that
+ * stream's hydration read.
  *
  * Gated on this state lifetime holding a slice for the identity, which is how
  * the removed/retired rule the deleted status mirror enforced still holds: the

@@ -138,7 +138,8 @@ type TestableBridge = {
     };
     requestEviction(streamId: StreamTabId): void;
     ensureLoaded(streamId: StreamTabId): Promise<void>;
-    getUnfinishedStreamIds(): StreamTabId[];
+    keys(): StreamTabId[];
+    hasUnfinishedOutput(streamId: StreamTabId): boolean;
     get(streamId: StreamTabId):
       | {
           getRange(fromSeq: number): Array<{
@@ -236,6 +237,13 @@ function bridgeInteractions(bridge: TestableBridge): BridgeInteractions {
 
 function bridgeStatus(bridge: TestableBridge): StreamStatusMachine {
   return bridgeSession(bridge).status;
+}
+
+/** Streams whose transcript summary still records unfinished output. */
+function unfinishedStreamIds(
+  streamLogs: TestableBridge['streamLogs'],
+): StreamTabId[] {
+  return streamLogs.keys().filter((id) => streamLogs.hasUnfinishedOutput(id));
 }
 
 /** Drive stream deletion through the same inbound command path the
@@ -1705,7 +1713,7 @@ describe('DesktopProgressBridge', () => {
       configureTranscripts: (store) => appendRunningGroup(store, streamId),
     });
 
-    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([]);
+    expect(unfinishedStreamIds(bridge.streamLogs)).toEqual([]);
     expectLastLogGroupEnd(bridge.streamLogs, streamId, RUN_OUTCOME.CANCELLED);
     expect(bridgeStatus(bridge).get(streamId)).toBe(STREAM_PHASE.CANCELLED);
   });
@@ -1745,7 +1753,7 @@ describe('DesktopProgressBridge', () => {
     expect(bridgeStatus(bridge).holdState(mappedStream)).toBe(
       streamUnreadableMessage('flow records unavailable'),
     );
-    expect(bridge.streamLogs.getUnfinishedStreamIds()).toEqual([mappedStream]);
+    expect(unfinishedStreamIds(bridge.streamLogs)).toEqual([mappedStream]);
   });
 
   it('presents a merge failure that occurs before lifecycle startup', async () => {
@@ -2137,6 +2145,10 @@ describe('DesktopProgressBridge', () => {
         messages.map((message) => (message as ProgressMessage).command),
       ).toEqual([
         PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+        // The fallback activation's own preload publishes that stream's
+        // phase before it commits, rather than waiting for the background
+        // hydration pass to reach it.
+        PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
         PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
         PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
         PROGRESS_VIEW_COMMANDS.LOG_DELTA,
@@ -2147,10 +2159,14 @@ describe('DesktopProgressBridge', () => {
       stream: 'second',
     });
     expect(messages[1]).toMatchObject({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
+      streamInfo: { name: 'first' },
+    });
+    expect(messages[2]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
       activeStream: 'first',
     });
-    expect(messages[2]).toMatchObject({
+    expect(messages[3]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
       action: 'render',
       stream: 'first',
@@ -2165,7 +2181,7 @@ describe('DesktopProgressBridge', () => {
         },
       },
     });
-    expect(messages[3]).toMatchObject({
+    expect(messages[4]).toMatchObject({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       streamId: 'first',
       entries: [expect.objectContaining({ text: 'first stream log' })],

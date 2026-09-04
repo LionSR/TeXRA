@@ -131,11 +131,11 @@ export class LitSessionRenderer implements SessionRendererPort {
   onStreamMetadataChanged(
     streamId: StreamTabId,
     options?: {
-      streamStates?: Map<StreamTabId, StreamPhaseState>;
+      phaseOverride?: StreamPhaseState;
     },
   ): void {
     if (!this.isAvailable()) return;
-    this.updateStreamMetadata(streamId, options?.streamStates);
+    this.updateStreamMetadata(streamId, options?.phaseOverride);
   }
 
   onStreamStatusChanged(
@@ -388,7 +388,7 @@ export class LitSessionRenderer implements SessionRendererPort {
   /** Push one stream's metadata patch. */
   updateStreamMetadata(
     streamId: StreamTabId,
-    streamStates?: Map<StreamTabId, StreamPhaseState>,
+    phaseOverride?: StreamPhaseState,
   ): void {
     if (!this.isAvailable()) return;
     const streamInfo = buildStreamInfo(
@@ -400,10 +400,7 @@ export class LitSessionRenderer implements SessionRendererPort {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_METADATA,
       streamInfo,
-      streamState: this.metadataFor(
-        streamInfo,
-        streamStates ?? this.state.streamStatus.getAllStreamStates(),
-      ),
+      streamState: this.metadataFor(streamInfo, phaseOverride),
     });
   }
 
@@ -421,10 +418,9 @@ export class LitSessionRenderer implements SessionRendererPort {
     if (!this.isAvailable()) return;
 
     const streams = buildStreamInfos(this.state, projectedStream);
-    const states = this.state.streamStatus.getAllStreamStates();
     const streamStates: Record<StreamTabId, StreamMetadata> = {};
     for (const streamInfo of streams) {
-      streamStates[streamInfo.name] = this.metadataFor(streamInfo, states);
+      streamStates[streamInfo.name] = this.metadataFor(streamInfo);
     }
 
     // A full refresh replaces the roster wholesale, incremental additions
@@ -445,17 +441,25 @@ export class LitSessionRenderer implements SessionRendererPort {
     });
   }
 
-  /** Immutable per-stream metadata for one already-built tab info. */
+  /**
+   * Immutable per-stream metadata for one already-built tab info.
+   *
+   * `phaseOverride` is the one phase the rule cannot see yet: the status a
+   * caller is in the middle of applying, which has not reached the status
+   * machine. Everything else — live, derived, or unknown — comes from
+   * {@link SessionState.resolveStreamPhase}.
+   */
   private metadataFor(
     streamInfo: StreamTabInfo,
-    streamStates: Map<StreamTabId, StreamPhaseState>,
+    phaseOverride?: StreamPhaseState,
   ): StreamMetadata {
     const current = this.state.getStreamState(streamInfo.name);
-    const status = streamStates.get(streamInfo.name);
+    const resolved = this.state.resolveStreamPhase(streamInfo.name);
+    const status = phaseOverride ?? resolved.state;
     // A stream held by another process, or one whose run state could not be
     // read, has no phase in this session; the wire carries the sentinel so
     // the view renders it read-only, with `statusDetail` saying why.
-    const statusDetail = this.state.streamStatus.holdState(streamInfo.name);
+    const statusDetail = phaseOverride ? undefined : resolved.detail;
     return buildStreamMetadata({
       category: streamInfo.agentCategory,
       status: statusDetail ? STREAM_LIFECYCLE_UNAVAILABLE : status?.phase,

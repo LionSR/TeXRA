@@ -4,7 +4,10 @@ import {
   type DeleteStreamResult,
 } from '@agent/storage';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
+import type {
+  StreamPhaseState,
+  StreamStatusMachine,
+} from '@agent/runtime/StreamStatusService';
 import {
   defaultSession,
   type SessionHandle,
@@ -20,8 +23,13 @@ import {
   type StreamPhase,
   type StreamTabId,
   AgentCategory,
+  STREAM_PHASE,
 } from '@shared/schemas';
 import { compareByNewestCreationTime } from '@shared/streams/streamOrdering';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import type { StreamLogStore, StreamSnapshotStore } from '@transcript';
 
 /**
@@ -102,6 +110,16 @@ export interface StreamExecutionState {
 interface EphemeralStreamState {
   metadata: StoredStreamMetadata;
   execution?: StreamExecutionState;
+}
+
+/**
+ * What {@link SessionState.resolveStreamPhase} decided about one stream, and
+ * on what evidence. See that method for the meaning of each `origin`.
+ */
+interface ResolvedStreamPhase {
+  readonly state?: StreamPhaseState;
+  readonly origin: 'live' | 'derived' | 'pending' | 'none';
+  readonly detail?: string;
 }
 
 /**
@@ -318,6 +336,98 @@ export class SessionState {
 
   setStreamDescription(stream: StreamTabId, description: string): void {
     this.updateStreamMetadata(stream, { description });
+  }
+
+  // -- Stream phase ------------------------------------------------------------
+
+  /**
+   * The one read-time rule for a stream's phase, and the only place that
+   * decides what a stream with no live flow context in this process is.
+   *
+   * `origin` says where the answer came from, and that is the second half of
+   * the contract:
+   * - `live` — this process owns a producer for the stream (a phase, a launch
+   *   reservation, or a hold). Nothing derived may override it.
+   * - `derived` — no producer exists anywhere: the lease is free and the
+   *   durable facts say what happened. Only this value licenses a reader to
+   *   treat the stream's rows as final.
+   * - `pending` — the stream's sidecar has not hydrated yet, so the tuple is
+   *   unknown rather than absent. It converges once hydration lands.
+   * - `none` — hydrated, lease free, and nothing durable is left of the run.
+   *
+   * `detail` is the human sentence for a stream that has no phase and cannot
+   * get one (held elsewhere, or unreadable); a caller renders it read-only
+   * with the `unavailable` sentinel. Pure and synchronous: every fact it
+   * reads is already resident (the status machine, the always-resident
+   * transcript summary, and the run tuple captured by this stream's own
+   * sidecar hydration). It never writes and never starts a read.
+   */
+  resolveStreamPhase(stream: StreamTabId): ResolvedStreamPhase {
+    const live = this.streamStatus.getStreamState(stream);
+    // The hold is read before the phase because `markUnavailable` keeps the
+    // phase the stream already had on the hold entry, so such an entry
+    // answers `getStreamState` too. Taking the phase first would drop the
+    // detail and offer the terminal buttons on a run this process does not
+    // own — both facts belong to the caller.
+    const hold = this.streamStatus.holdState(stream);
+    if (hold !== undefined) {
+      return { ...(live ? { state: live } : {}), origin: 'live', detail: hold };
+    }
+    if (live) return { state: live, origin: 'live' };
+
+    // The run tuple, not the record: it is small, it is written once per
+    // hydration, and it outlives the record the hydration warmed, so asking
+    // it here neither loads a sidecar nor pins one resident (#9947). Absent
+    // means this stream has never hydrated — the tuple is unknown rather than
+    // empty. The transcript summary is resident for every stream either way,
+    // so a transcript left open is enough to say the run was interrupted
+    // without reading anything.
+    const run = this.snapshots.getRunPhaseFacts(stream);
+    if (!run) {
+      return this.streamLogs.hasUnfinishedOutput(stream)
+        ? { state: { phase: STREAM_PHASE.CANCELLED }, origin: 'derived' }
+        : { origin: 'pending' };
+    }
+
+    if (run.authorityFailure !== undefined) {
+      return {
+        origin: 'derived',
+        detail: streamUnreadableMessage(run.authorityFailure),
+      };
+    }
+    // A live foreign owner is not a finished run: an inferred terminal phase
+    // here would offer Resume and Delete on a run another process is
+    // executing. A lease this process holds with no live flow context is a
+    // registry/lease disagreement — neither foreign nor ready.
+    if (run.lease?.status === 'held') {
+      return { origin: 'derived', detail: streamHeldMessage(run.lease.owner) };
+    }
+    if (run.lease?.status === 'owned') {
+      return {
+        origin: 'derived',
+        detail: streamUnreadableMessage(
+          'lease owned by this process with no live run',
+        ),
+      };
+    }
+    if (run.outcome) {
+      return { state: { phase: run.outcome }, origin: 'derived' };
+    }
+    // No outcome and nobody alive to write one: the run was interrupted. A
+    // surviving checkpoint or an unclosed transcript is the evidence, and
+    // CANCELLED is the value every downstream table already renders for it.
+    if (run.checkpointPresent || this.streamLogs.hasUnfinishedOutput(stream)) {
+      return { state: { phase: STREAM_PHASE.CANCELLED }, origin: 'derived' };
+    }
+    return { origin: 'none' };
+  }
+
+  /**
+   * {@link resolveStreamPhase}'s phase alone, for the render paths that only
+   * need what the status machine used to answer.
+   */
+  getStreamPhaseState(stream: StreamTabId): StreamPhaseState | undefined {
+    return this.resolveStreamPhase(stream).state;
   }
 
   // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
