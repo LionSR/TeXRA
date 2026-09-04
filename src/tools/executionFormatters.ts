@@ -2,8 +2,9 @@
  * The one display model for the /executions surface: the listing lines, the
  * /executions/{id} summary line sets, and the predicates both answer their
  * questions with — what a run's display category is, whether it shows a model,
- * and which sub-paths it serves. Pure formatting, no I/O, so `listExecutions`
- * and `showSummary` only fetch and delegate here.
+ * and which sub-paths it serves. Formatting only: the one exception is the
+ * status reading, which asks `resolveExecutionLiveness` for the durable
+ * ownership facts a missing in-process handle cannot supply.
  */
 
 import type { ChildRecord, ExecutionListingEntry } from '@agent/storage';
@@ -19,7 +20,6 @@ import type {
   AgentExecutionHandle,
   ExecutionStatusInfo,
 } from '@agent/runtime/ExecutionHandle';
-import { currentSession } from '@agent/runtime/SessionHandle';
 import type {
   AgentCategory,
   ExecutionId,
@@ -28,8 +28,10 @@ import type {
   RunOutcome,
   TodoItem,
 } from '@shared/schemas';
-import { runIdentityName, STATUS_DISPLAY } from '@shared/schemas';
+import { runIdentityName, RUN_OUTCOME, STATUS_DISPLAY } from '@shared/schemas';
 import { formatTimestamp } from '@utils/text/stringUtils';
+
+import { resolveExecutionLiveness } from './executions/executionLiveness';
 
 /**
  * The display category of a run: an agent run shows its execution mode
@@ -119,26 +121,47 @@ function getAvailablePaths(
 
 /** Format status info as a display string. */
 export function formatStatusInfo(info: ExecutionStatusInfo): string {
-  return info.elapsed
+  const base = info.elapsed
     ? `${info.status} (${info.elapsed} elapsed)`
     : info.status;
+  return info.detail ? `${base}: ${info.detail}` : base;
 }
 
-/** Resolve the runtime status for an execution ID: live phase, else the persisted outcome. */
-export function getExecutionStatusInfo(
+/**
+ * The runtime status for an execution ID, from `resolveExecutionLiveness`:
+ * a live handle's phase, else the fact that forbids a terminal reading, else
+ * `cancelled` for an interrupted run, else the persisted outcome.
+ *
+ * A run nothing alive owns and nothing terminalized reads `unknown`, never a
+ * terminal outcome invented from the absence of a handle in this process.
+ */
+export async function getExecutionStatusInfo(
   executionId: string,
   outcome?: RunOutcome,
-): ExecutionStatusInfo {
-  const session = currentSession();
-  const handle = session.executions.getHandle(executionId);
-  if (handle) return session.executions.getStatus(handle);
-  return { status: outcome ?? 'unknown', elapsed: null };
+): Promise<ExecutionStatusInfo> {
+  const liveness = await resolveExecutionLiveness(executionId, outcome);
+  switch (liveness.kind) {
+    case 'live':
+      return liveness.info;
+    case 'unsettled':
+      return { status: 'unknown', elapsed: null, detail: liveness.reason };
+    case 'interrupted':
+      return {
+        status: RUN_OUTCOME.CANCELLED,
+        elapsed: null,
+        detail: 'interrupted; a resume checkpoint remains',
+      };
+    case 'settled':
+      return { status: outcome ?? 'unknown', elapsed: null };
+  }
 }
 
 /** Format a listing entry as a single summary line. */
-export function formatListingLine(entry: ExecutionListingEntry): string {
+export async function formatListingLine(
+  entry: ExecutionListingEntry,
+): Promise<string> {
   const ts = formatTimestamp(entry.timestamp);
-  const info = getExecutionStatusInfo(entry.id, entry.outcome);
+  const info = await getExecutionStatusInfo(entry.id, entry.outcome);
   const { agent, model, category } = listingDisplay(entry);
   const categoryTag = category ? `  ${category}` : '';
   const modelTag = model == null ? '' : `  ${model}`;
@@ -194,11 +217,11 @@ export function shouldSuppressAutoDeliveredSubagentReport(
 }
 
 /** Format a single child execution as a summary line. */
-export function formatChildLine(
+export async function formatChildLine(
   child: ChildRecord,
   childMeta: ExecutionMeta | null | undefined,
-): string {
-  const info = getExecutionStatusInfo(child.id, childMeta?.outcome);
+): Promise<string> {
+  const info = await getExecutionStatusInfo(child.id, childMeta?.outcome);
   const ts = formatTimestamp(child.timestamp);
   const desc = childMeta?.description ? `: ${childMeta.description}` : '';
   return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;

@@ -5,6 +5,9 @@
  * executions.
  */
 
+// Third-party imports
+import pMap from 'p-map';
+
 // Local imports
 import {
   deriveResumability,
@@ -329,7 +332,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       offset,
       limit,
     );
-    const lines = page.map(formatListingLine);
+    // One page, not one directory: each line asks the durable owners about
+    // its run (a lease read, and a checkpoint stat when nothing terminalized
+    // it), so the fan-out is bounded rather than 200 wide.
+    const lines = await pMap(page, (entry) => formatListingLine(entry), {
+      concurrency: 16,
+    });
 
     return executed(
       `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${lines.join('\n')}${formatPaginationHint(end, total)}`,
@@ -420,7 +428,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       );
     }
     const category = executionDisplayCategory(identity, record);
-    const info = getExecutionStatusInfo(executionId, meta?.outcome);
+    const info = await getExecutionStatusInfo(executionId, meta?.outcome);
     const lines = buildCompletedSummaryLines(
       executionId,
       record,
@@ -488,7 +496,9 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const metas = await Promise.all(
       children.map((c) => getExecutionStore(c.id).readMeta()),
     );
-    return children.map((child, i) => formatChildLine(child, metas[i]));
+    return Promise.all(
+      children.map((child, i) => formatChildLine(child, metas[i])),
+    );
   }
 
   private handleKill(executionId: ExecutionId): ToolResult {
@@ -724,7 +734,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const entries = await transcripts.readEntries(streamId);
 
     const { lines, chars } = projectProcessOutput(entries);
-    const info = getExecutionStatusInfo(executionId, meta?.outcome);
+    const info = await getExecutionStatusInfo(executionId, meta?.outcome);
     const footer = handle
       ? `[still running: re-read for more output, or use action='wait' on /executions/${executionId} to block until it finishes]`
       : `[finished: this is the retained log; /executions/${executionId}/report has the result summary]`;

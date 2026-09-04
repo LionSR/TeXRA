@@ -60,7 +60,7 @@ describe('tool status formatting', () => {
     );
   });
 
-  it('renders bash execution history as a process without a model', () => {
+  it('renders bash execution history as a process without a model', async () => {
     const entry: ExecutionListingEntry = {
       kind: 'run',
       identity: { kind: 'process', tool: 'bash' },
@@ -76,7 +76,7 @@ describe('tool status formatting', () => {
       outcome: 'completed',
     };
 
-    expect(formatListingLine(entry)).toBe(
+    await expect(formatListingLine(entry)).resolves.toBe(
       '16c0f3f748e4  2026-05-15 23:42:06  bash  process  [completed]  parent=fcf5150d37c6',
     );
   });
