@@ -1,20 +1,25 @@
 /**
  * The session graph's durable boundary (PRD one-fold-three-renderers, 7.1
- * and 7.2, acceptance for lane 2): framing order and the live-owner waiting
- * rule.
+ * and 7.2, acceptance for lane 2): replay framing and the live-owner
+ * waiting rule.
  *
- * Framing: the fold publishes nothing before the replay marker, and a
- * mounting reader sees the listing, the aggregate history, and the local
- * snapshot folded before the first value; the tail then publishes every
- * commit in order. The waiting rule: a pending approval on a run whose owner
- * this process holds (`self`) or whose owner is alive (`heldBy`) folds to
+ * Framing: the log a graph is built over is history under the plane's
+ * anchor. The fold publishes nothing before the replay marker, so the first
+ * state a mounting reader sees already holds the listing, the aggregate
+ * history, and the local snapshot; the tail then publishes every commit in
+ * order. The waiting rule: a pending approval on a run whose owner this
+ * process holds (`self`) or whose owner is alive (`heldBy`) folds to
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 import { it } from '@effect/vitest';
 import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { ProcessIdentity, SessionEvents } from '@agent/runtime/SessionEvents';
+import {
+  ProcessIdentity,
+  SessionEventLog,
+  SessionEvents,
+} from '@agent/runtime/SessionEvents';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -31,6 +36,7 @@ import {
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const SELF = '4242:self-start';
 const OTHER = '4343:other-start';
@@ -45,25 +51,6 @@ const settle = (
   ready: (view: SessionView) => boolean,
 ) =>
   SubscriptionRef.changes(view).pipe(Stream.takeUntil(ready), Stream.runDrain);
-
-/** The graph under test: the memory plane, the fold, and the three local
- *  sources, as `sessionLayer` composes them, without the runtime bits. */
-const graph = Layer.mergeAll(SessionViewService.layer).pipe(
-  Layer.provideMerge(SessionEvents.memoryLayer),
-  Layer.provideMerge(
-    Layer.mergeAll(
-      LocalRuntimeSource.layer,
-      TextChunkSource.layer,
-      TranscriptSubscriptions.layer,
-    ),
-  ),
-  Layer.provide(
-    Layer.succeed(WorkspaceRoots)(
-      createFakeWorkspaceRoots({ storagePath: '/workspace/framing' }),
-    ),
-  ),
-  Layer.provide(ProcessIdentity.layer(SELF)),
-);
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
@@ -97,6 +84,69 @@ const requested: SessionEventDraft = {
   },
 };
 
+/** The graph under test, as `sessionLayer` composes it without the runtime
+ *  bits: the log seeded with `history` before the plane reads its anchor
+ *  (the pre-cutover importer's position), the plane, the fold, and the
+ *  three local sources. */
+const graph = (history: readonly SessionEventDraft[]) => {
+  const roots = createFakeWorkspaceRoots({ storagePath: '/workspace/framing' });
+  const seeded = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const log = yield* SessionEventLog;
+      yield* log.appendAll(history);
+    }),
+  );
+  return SessionViewService.layer.pipe(
+    Layer.provideMerge(
+      SessionEvents.layer.pipe(
+        Layer.provideMerge(
+          seeded.pipe(
+            Layer.provideMerge(
+              SessionEventLog.memoryLayer(
+                StreamLogStore.ephemeral('session events test'),
+                roots,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        LocalRuntimeSource.layer,
+        TextChunkSource.layer,
+        TranscriptSubscriptions.layer,
+      ),
+    ),
+    Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
+    Layer.provide(ProcessIdentity.layer(SELF)),
+  );
+};
+
+/** What a renderer would draw of each state: the stream's status and the
+ *  outstanding approvals, at the state's cursor. */
+function drawn(view: SessionView) {
+  return {
+    cursor: view.cursor,
+    status: view.streams.get(STREAM)?.status ?? null,
+    approvals: view.approvals.map((a) => a.requestId),
+  };
+}
+
+/** The drawn states with the stream present, consecutive repeats
+ *  collapsed: a local-snapshot replay publishes a state nothing drawn
+ *  differs in. */
+function drawnSequence(states: Iterable<ReturnType<typeof drawn>>) {
+  const seen: ReturnType<typeof drawn>[] = [];
+  for (const next of states) {
+    if (next.status === null) continue;
+    const last = seen.at(-1);
+    if (last && JSON.stringify(last) === JSON.stringify(next)) continue;
+    seen.push(next);
+  }
+  return seen;
+}
+
 describe('session events and view', () => {
   it.effect(
     'publishes nothing before the marker, then every commit in order',
@@ -104,22 +154,21 @@ describe('session events and view', () => {
       Effect.gen(function* () {
         const events = yield* SessionEvents;
         const view = yield* SessionViewService;
-        // Published before the fold fiber has drained anything: the cold
-        // reads see them, the tail does not repeat them.
-        yield* events.publish([runStart, waiting, requested]);
-        yield* settle(view.ref, (v) => v.cursor >= 3);
-        const first = yield* SubscriptionRef.get(view.ref);
-        expect(first.cursor).toBe(3);
-        expect(first.streams.get(STREAM)?.status).toBe(STREAM_PHASE.WAITING);
-        expect(first.approvals.map((a) => a.requestId)).toEqual(['req-1']);
-        // Every state the tail publishes after the marker, in commit order;
-        // `changes` is a level and replays the state it holds on subscribe.
-        const tail = yield* Effect.forkScoped(
+        // Every state the fold publishes, from before its marker until the
+        // tail has folded both live publishes, drawn as it is published: a
+        // view's stream index is shared with the views after it. `changes`
+        // replays the state it holds on subscribe: the empty view before the
+        // marker, or the marker's state when the fold got there first.
+        const states = yield* Effect.forkScoped(
           view.changes.pipe(
+            Stream.map(drawn),
             Stream.takeUntil((next) => next.cursor >= 5),
             Stream.runCollect,
           ),
         );
+        // The marker is out before the tail rows below are published, so
+        // they reach the fold as the tail and not as part of its cold read.
+        yield* settle(view.ref, (v) => v.streams.has(STREAM));
         yield* events.publish([
           {
             type: 'approval.resolved',
@@ -136,24 +185,25 @@ describe('session events and view', () => {
             cause: 'resume',
           },
         ]);
-        const seen = (yield* Fiber.join(tail)).map((next) => next.cursor);
-        const last = yield* SubscriptionRef.get(view.ref);
-        expect(seen).toEqual([3, 4, 5]);
-        expect(last.cursor).toBe(5);
-        expect(last.approvals).toEqual([]);
-        expect(last.streams.get(STREAM)?.status).toBe(STREAM_PHASE.RUNNING);
-      }).pipe(Effect.provide(graph)),
+        // The first state with the stream in it has all of the history: no
+        // state with the run started but not yet waiting, or waiting with
+        // no approval, is ever published. The anchor is the seeded log's
+        // level, so the history is under it and the tail repeats none of it.
+        expect(drawnSequence(yield* Fiber.join(states))).toEqual([
+          { cursor: 3, status: STREAM_PHASE.WAITING, approvals: ['req-1'] },
+          { cursor: 4, status: STREAM_PHASE.WAITING, approvals: [] },
+          { cursor: 5, status: STREAM_PHASE.RUNNING, approvals: [] },
+        ]);
+      }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
 
   it.effect(
     'folds a pending approval to waiting only while its owner is live',
     () =>
       Effect.gen(function* () {
-        const events = yield* SessionEvents;
         const view = yield* SessionViewService;
         const local = yield* LocalRuntimeSource;
-        yield* events.publish([runStart, waiting, requested]);
-        yield* settle(view.ref, (v) => v.cursor >= 3);
+        yield* settle(view.ref, (v) => v.streams.has(STREAM));
         // This process owns the run: it waits on the user.
         const own = yield* SubscriptionRef.get(view.ref);
         expect(own.streams.get(STREAM)?.group).toBe('waiting');
@@ -184,6 +234,6 @@ describe('session events and view', () => {
         const held = yield* SubscriptionRef.get(view.ref);
         expect(held.streams.get(STREAM)?.group).toBe('waiting');
         expect(held.streams.get(STREAM)?.readOnly).toBe(true);
-      }).pipe(Effect.provide(graph)),
+      }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
 });

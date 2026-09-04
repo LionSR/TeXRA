@@ -14,6 +14,7 @@ import {
   defaultSession,
   initializeBundledPrompts,
   initializeDefaultSession,
+  processOwnerId,
   teardownDefaultSession,
 } from '@agent/runtime';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
@@ -28,7 +29,6 @@ import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProj
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
-import { processOwnerId } from '@controllers/session/sessionSources';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';

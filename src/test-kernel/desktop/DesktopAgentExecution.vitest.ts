@@ -773,15 +773,17 @@ let activationSeq = 0;
 /** Publish a stream's existence fact the way a launch does. */
 function startStream(bridge: TestableBridge, streamId: string): void {
   activationSeq += 1;
-  emitRunEvent(bridge, streamId as StreamTabId, {
-    type: 'run.start',
-    streamId: streamId as StreamTabId,
-    executionId: `a0000${activationSeq.toString(16)}` as ExecutionId,
-    identity: { kind: 'agent', agent: streamId },
-    category: AgentCategory.Workflow,
-    isRemote: false,
-    userFollowUpSupport: 'unsupported',
-  });
+  bridgeSession(bridge).publish([
+    {
+      type: 'run.start',
+      aggregateId: streamId as StreamTabId,
+      executionId: `a0000${activationSeq.toString(16)}` as ExecutionId,
+      identity: { kind: 'agent', agent: streamId },
+      category: AgentCategory.Workflow,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
+    },
+  ]);
 }
 
 /**
@@ -966,15 +968,17 @@ describe('DesktopProgressBridge', () => {
     const initialOutput = createOutputFile({ round: 1 });
     const laterOutput = createOutputFile({ round: 2 });
     const config = workflowConfig();
-    emitRunEvent(bridge, streamId, {
-      type: 'run.start',
-      streamId,
-      executionId,
-      identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
-      category: AgentCategory.Workflow,
-      isRemote: false,
-      userFollowUpSupport: 'unsupported',
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: streamId,
+        executionId,
+        identity: { kind: 'multiAgentWorkflow', workflowName: 'proofreader' },
+        category: AgentCategory.Workflow,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, { streamId, executionId, config });
     emitRunEvent(bridge, streamId, {
       type: 'addOutputFiles',
@@ -2205,15 +2209,17 @@ describe('DesktopProgressBridge', () => {
     const bridge = await createBridge([], { runAgent });
 
     // Rerun is gated on a resolved native agent identity.
-    emitRunEvent(bridge, 'stream-new' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'stream-new' as StreamTabId,
-      executionId: 'e7ec0001' as ExecutionId,
-      identity: { kind: 'agent', agent: runConfig.agent },
-      category: AgentCategory.ToolUse,
-      isRemote: false,
-      userFollowUpSupport: 'unsupported',
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: 'stream-new' as StreamTabId,
+        executionId: 'e7ec0001' as ExecutionId,
+        identity: { kind: 'agent', agent: runConfig.agent },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, {
       streamId: 'stream-new',
       executionId: 'e7ec0001',
@@ -2507,15 +2513,17 @@ describe('DesktopProgressBridge', () => {
     const messages: unknown[] = [];
     const bridge = await createBridge(messages);
 
-    emitRunEvent(bridge, 'stream-1' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'stream-1' as StreamTabId,
-      executionId: 'ec1002' as ExecutionId,
-      identity: { kind: 'agent', agent: 'search' },
-      category: AgentCategory.ToolUse,
-      isRemote: false,
-      userFollowUpSupport: 'unsupported',
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: 'stream-1' as StreamTabId,
+        executionId: 'ec1002' as ExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1002' as ExecutionId,
@@ -2569,15 +2577,17 @@ describe('DesktopProgressBridge', () => {
     // so restoreRunConfig() returns false and the handler must surface it
     // instead of silently doing nothing (unlike the extension's
     // texra.restoreState, which shows RESTORE_MALFORMED_MESSAGE).
-    emitRunEvent(bridge, 'stream-1' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'stream-1' as StreamTabId,
-      executionId: 'ec1003' as ExecutionId,
-      identity: { kind: 'agent', agent: 'search' },
-      category: AgentCategory.ToolUse,
-      isRemote: false,
-      userFollowUpSupport: 'unsupported',
-    });
+    bridgeSession(bridge).publish([
+      {
+        type: 'run.start',
+        aggregateId: 'stream-1' as StreamTabId,
+        executionId: 'ec1003' as ExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfigFact(bridge, {
       streamId: 'stream-1',
       executionId: 'ec1003' as ExecutionId,
@@ -2851,15 +2861,17 @@ describe('DesktopProgressBridge', () => {
         text: 'Appended while replacement presentation loaded.',
       });
       owner.processSession.transcripts.ensureStream(childStreamId);
-      owner.processSession.publishRunEvent(childStreamId, {
-        type: 'run.start',
-        streamId: childStreamId,
-        executionId: childExecutionId,
-        identity: { kind: 'agent', agent: 'search' },
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        userFollowUpSupport: 'unsupported',
-      });
+      owner.processSession.publish([
+        {
+          type: 'run.start',
+          aggregateId: childStreamId,
+          executionId: childExecutionId,
+          identity: { kind: 'agent', agent: 'search' },
+          category: AgentCategory.ToolUse,
+          isRemote: false,
+          userFollowUpSupport: 'unsupported',
+        },
+      ]);
       owner.processSession.publishRunEvent(childStreamId, {
         type: 'run.config',
         streamId: childStreamId,
@@ -3536,20 +3548,22 @@ describe('DesktopProgressBridge', () => {
         ]);
 
         await vi.waitFor(() => expect(waitForRelease).toHaveBeenCalled());
-        owner.processSession.publishRunEvent(childStreamId, {
-          type: 'run.start',
-          streamId: childStreamId,
-          executionId: 'aaaa0002f10e' as ExecutionId,
-          identity: {
-            kind: 'multiAgentWorkflow',
-            workflowName: 'reclaimed-workflow',
+        owner.processSession.publish([
+          {
+            type: 'run.start',
+            aggregateId: childStreamId,
+            executionId: 'aaaa0002f10e' as ExecutionId,
+            identity: {
+              kind: 'multiAgentWorkflow',
+              workflowName: 'reclaimed-workflow',
+            },
+            category: AgentCategory.Workflow,
+            isRemote: false,
+            userFollowUpSupport: 'unsupported',
+            // No live owner: a replayed start, not a re-claim, so the
+            // pending deletion proceeds.
           },
-          category: AgentCategory.Workflow,
-          isRemote: false,
-          userFollowUpSupport: 'unsupported',
-          // No live owner: a replayed start, not a re-claim, so the
-          // pending deletion proceeds.
-        });
+        ]);
         const pendingDrain = vi.spyOn(
           owner.sessionStores,
           'waitForPendingStreamDeletions',
@@ -3957,15 +3971,17 @@ describe('DesktopProgressBridge', () => {
           agentName: 'searcher',
           category: AgentCategory.ToolUse,
         });
-        owner.processSession.publishRunEvent(childStreamId, {
-          type: 'run.start',
-          streamId: childStreamId,
-          executionId: childExecutionId,
-          identity: { kind: 'agent', agent: 'searcher' },
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-          userFollowUpSupport: 'unsupported',
-        });
+        owner.processSession.publish([
+          {
+            type: 'run.start',
+            aggregateId: childStreamId,
+            executionId: childExecutionId,
+            identity: { kind: 'agent', agent: 'searcher' },
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            userFollowUpSupport: 'unsupported',
+          },
+        ]);
         owner.processSession.publishRunEvent(childStreamId, {
           type: 'run.config',
           streamId: childStreamId,

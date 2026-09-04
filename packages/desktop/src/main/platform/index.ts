@@ -1,10 +1,9 @@
 import { join } from 'node:path';
 import { app } from 'electron';
-import { initializeBundledPrompts } from '@agent/runtime';
+import { initializeBundledPrompts, processOwnerId } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { processOwnerId } from '@controllers/session/sessionSources';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, platform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';

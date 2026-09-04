@@ -1481,61 +1481,13 @@
       "file": "src/shared/schemas/sessionEvent.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "listingTypeOf"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ownerPid"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "withEnvelope"
     },
     {
       "file": "src/shared/schemas/sessionEvent.ts",
       "category": "production-dead",
       "kind": "types",
-      "name": "AggregateId"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "FoldInput"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "LocalRuntimeState"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "SessionEvent"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
       "name": "SessionEventBody"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "TextChunk"
-    },
-    {
-      "file": "src/shared/schemas/sessionEvent.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "TranscriptSubscription"
     },
     {
       "file": "src/shared/schemas/settingsViewMessages.ts",
@@ -1580,34 +1532,10 @@
       "name": "SubscriptionUsageSnapshotSchema"
     },
     {
-      "file": "src/shared/session/sessionFold.ts",
-      "category": "production-dead",
-      "kind": "files",
-      "name": "src/shared/session/sessionFold.ts"
-    },
-    {
-      "file": "src/shared/session/sessionView.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "TranscriptView"
-    },
-    {
       "file": "src/shared/settingsView/handlers/stateSettingWrite.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "resolveStateSettingWrite"
-    },
-    {
-      "file": "src/shared/streams/streamStatusDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamInterruptedMessage"
-    },
-    {
-      "file": "src/shared/streams/streamStatusDisplay.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "streamStatusCopy"
     },
     {
       "file": "src/shared/streams/streamStatusDisplay.ts",
@@ -1632,12 +1560,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "normalizeToolUseData"
-    },
-    {
-      "file": "src/shared/transcript/transcriptText.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "appendTranscriptText"
     },
     {
       "file": "src/shared/utils/dispatcher.ts",

@@ -21,26 +21,9 @@ import { Context, Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { ProcessIdentity } from '@agent/runtime/SessionEvents';
 import type {
   LocalRuntimeState,
-  OwnerId,
   TextChunk,
   TranscriptSubscription,
 } from '@shared/schemas';
-
-/** The start-identity half of an owner id when the host could not read one:
- *  a process whose start no probe can compare is unprovable, never dead. */
-export const UNREADABLE_PROCESS_START = 'unreadable';
-
-/** This process's owner id (contract C5), from the host's start identity. */
-export function processOwnerId(processStart: string | undefined): OwnerId {
-  return `${process.pid}:${processStart ?? UNREADABLE_PROCESS_START}`;
-}
-
-/** The start identity an owner id carries, null when its host could not
- *  read one (the liveness probe then reports the owner unprovable). */
-export function ownerProcessStart(ownerId: OwnerId): string | null {
-  const start = ownerId.slice(ownerId.indexOf(':') + 1);
-  return start === UNREADABLE_PROCESS_START ? null : start;
-}
 
 export class LocalRuntimeSource extends Context.Service<
   LocalRuntimeSource,

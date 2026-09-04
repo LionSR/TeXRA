@@ -271,12 +271,6 @@ export type SessionEventDraft = DistributiveOmit<
   'seq' | 'commit' | 'ownerId' | 'at'
 >;
 
-/** The `run.start` payload the trace's `RunStartEvent` is typed from. */
-export type RunStartEventBody = Extract<
-  SessionEventBody,
-  { type: 'run.start' }
->;
-
 /**
  * Stamp the envelope on a body. The one place the two halves meet: a body is
  * a distributive omit over the union, so the spread cannot be typed back

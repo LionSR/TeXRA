@@ -297,15 +297,17 @@ describe('ProgressBackend', () => {
     expect(hasFullSync(messages)).toBe(false);
     messages.length = 0;
 
-    emitRunEvent(target, 'child' as StreamTabId, {
-      type: 'run.start',
-      streamId: 'child' as StreamTabId,
-      executionId: 'c41111' as ExecutionId,
-      identity: { kind: 'agent', agent: 'search' },
-      category: AgentCategory.ToolUse,
-      isRemote: false,
-      userFollowUpSupport: 'unsupported',
-    });
+    target.session.publish([
+      {
+        type: 'run.start',
+        aggregateId: 'child' as StreamTabId,
+        executionId: 'c41111' as ExecutionId,
+        identity: { kind: 'agent', agent: 'search' },
+        category: AgentCategory.ToolUse,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
+      },
+    ]);
     emitRunConfig(
       target,
       'child' as StreamTabId,
@@ -1168,18 +1170,20 @@ describe('ProgressBackend', () => {
     const stream = 'workflow-script#f10a11' as StreamTabId;
     const executionId = 'f10a11' as ExecutionId;
     backend.state.streamLogs.ensureStream(stream);
-    emitRunEvent(target, stream, {
-      type: 'run.start',
-      streamId: stream,
-      executionId,
-      identity: {
-        kind: 'multiAgentWorkflow',
-        workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+    target.session.publish([
+      {
+        type: 'run.start',
+        aggregateId: stream,
+        executionId,
+        identity: {
+          kind: 'multiAgentWorkflow',
+          workflowName: 'repo-cleanup-readonly-pilot-2026-07-24',
+        },
+        category: AgentCategory.Workflow,
+        isRemote: false,
+        userFollowUpSupport: 'unsupported',
       },
-      category: AgentCategory.Workflow,
-      isRemote: false,
-      userFollowUpSupport: 'unsupported',
-    });
+    ]);
     emitRunConfig(
       target,
       stream,

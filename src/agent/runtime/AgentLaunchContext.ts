@@ -431,38 +431,47 @@ async function assembleAgentLaunchContext(
   // reads verbatim (item 6) are all known here; the run's own `run.config`
   // follows once the lifecycle starts. A resume (`streamTabIdOverride`)
   // activates an existing stream and mints no `run.start` (decision 9).
-  if (!input.streamTabIdOverride) {
-    agentLogger.emit({
-      type: 'run.start',
-      streamId,
-      executionId,
-      identity: { kind: 'agent', agent: config.agent },
-      userFollowUpSupport:
-        input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+  // The existence fact and its first activation are one batch (item 8):
+  // published on the session, never as trace events, so no process failure
+  // can leave a run without its activation line.
+  const background = input.isSubagent ?? false;
+  session.publish([
+    ...(input.streamTabIdOverride
+      ? []
+      : [
+          {
+            type: 'run.start' as const,
+            aggregateId: streamId,
+            executionId,
+            identity: { kind: 'agent' as const, agent: config.agent },
+            userFollowUpSupport:
+              input.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            category: setting.agentCategory,
+            isRemote,
+            worktree: launchWorktreeInfo(config.workingDirectory),
+            ...(input.parentStreamId && input.parentStreamId !== streamId
+              ? { parentStreamId: input.parentStreamId }
+              : {}),
+            // A delegated child runs in the background whoever is watching.
+            background,
+            // The initial policy snapshot (PRD 6, item 2). A delegated
+            // child's ancestry is registered from `onStreamResolved` below,
+            // after this event; the queue publishes a fresh `approval.policy`
+            // for every value the edge changes, so the fold's latest-of-type
+            // entry ends correct.
+            approvalPolicy: session.approvalPolicySnapshotFor(streamId),
+            ...(input.checkpointId ? { checkpointId: input.checkpointId } : {}),
+          },
+        ]),
+    // Every activation, first launch and resume alike (PRD 6, item 8).
+    {
+      type: 'run.activate',
+      aggregateId: streamId,
       category: setting.agentCategory,
       isRemote,
-      worktree: launchWorktreeInfo(config.workingDirectory),
-      ...(input.parentStreamId && input.parentStreamId !== streamId
-        ? { parentStreamId: input.parentStreamId }
-        : {}),
-      // A delegated child runs in the background whoever is watching.
-      background: input.isSubagent ?? false,
-      // The initial policy snapshot (PRD 6, item 2). A delegated child's
-      // ancestry is registered from `onStreamResolved` below, after this
-      // event; the queue publishes a fresh `approval.policy` for every value
-      // the edge changes, so the fold's latest-of-type entry ends correct.
-      approvalPolicy: session.approvalPolicySnapshotFor(streamId),
-      ...(input.checkpointId ? { checkpointId: input.checkpointId } : {}),
-    });
-  }
-  // Every activation, first launch and resume alike (PRD 6, item 8).
-  agentLogger.emit({
-    type: 'run.activate',
-    streamId,
-    category: setting.agentCategory,
-    isRemote,
-    background: input.isSubagent ?? false,
-  });
+      background,
+    },
+  ]);
   onStarted(runTrace, setting.agentCategory);
   input.onStreamResolved?.(streamId);
 

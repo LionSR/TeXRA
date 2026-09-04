@@ -198,15 +198,17 @@ export function emitRunStart(
   payload: { streamId: StreamTabId; agentCategory?: AgentCategory },
 ): void {
   runStartSeq += 1;
-  target.session.publishRunEvent(payload.streamId, {
-    type: 'run.start',
-    streamId: payload.streamId,
-    executionId: `e0000${runStartSeq.toString(16)}` as ExecutionId,
-    identity: { kind: 'agent', agent: payload.streamId },
-    category: payload.agentCategory ?? AgentCategory.ToolUse,
-    isRemote: false,
-    userFollowUpSupport: 'unsupported',
-  });
+  target.session.publish([
+    {
+      type: 'run.start',
+      aggregateId: payload.streamId,
+      executionId: `e0000${runStartSeq.toString(16)}` as ExecutionId,
+      identity: { kind: 'agent', agent: payload.streamId },
+      category: payload.agentCategory ?? AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
+    },
+  ]);
 }
 
 export function emitRunConfig(

@@ -801,8 +801,6 @@ export function attachTranscriptRecorder(
           // and the transcript already reflects completion through `stage.end`.
           return;
 
-        case 'run.start':
-        case 'run.activate':
         case 'run.config':
         case 'approval.requested':
         case 'approval.resolved':

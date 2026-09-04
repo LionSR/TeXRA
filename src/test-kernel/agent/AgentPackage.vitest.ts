@@ -81,6 +81,7 @@ vi.mock('@agent/runtime', () => ({
     dispose = mocks.disposeSession;
   },
   runAgent: mocks.runValidatedAgent,
+  processOwnerId: (processStart: string) => `${process.pid}:${processStart}`,
 }));
 
 vi.mock('@tools/agentCliSessionStores', () => ({

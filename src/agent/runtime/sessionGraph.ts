@@ -25,7 +25,10 @@ import type { SessionHandle } from './SessionHandle';
 
 /** What a session holds of its graph, resolved once at construction. */
 export interface SessionGraph {
-  readonly events: SessionEventsShape;
+  /** The plane's reads. Publishing is the session's alone (`publish`
+   *  below), so nothing holding a session can append past its bookkeeping. */
+  readonly events: Omit<SessionEventsShape, 'publish'>;
+  readonly publish: SessionEventsShape['publish'];
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** This process's local truth; the status machine writes `unreadable`. */

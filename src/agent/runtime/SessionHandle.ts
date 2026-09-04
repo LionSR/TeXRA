@@ -127,11 +127,11 @@ export class SessionHandle {
   readonly executions: ExecutionRegistry;
   /**
    * The session's event plane (PRD 7.1, contract C7): what a renderer reads
-   * with `events.all(session.now())`. Publishing goes through
-   * {@link publish}, which runs the session's ordering-sensitive bookkeeping
-   * before the log moves.
+   * with `events.all(session.now())`. The reads only: publishing goes
+   * through {@link publish}, which runs the session's ordering-sensitive
+   * bookkeeping before the log moves, and nothing else can append.
    */
-  readonly events: SessionEventsShape;
+  readonly events: Omit<SessionEventsShape, 'publish'>;
   /**
    * The one handler of every request a surface issues to this session (PRD
    * 7.6, 8.2): an in-process surface runs it on the process runtime
@@ -523,8 +523,8 @@ export class SessionHandle {
   /**
    * Publish one canonical status fact from the session's status machine. The
    * runtime's ordering-sensitive consumers hear it here, in publish order and
-   * before any renderer: the recorders' status ports and the execution
-   * registry's waiters and child rosters.
+   * before the log moves and any renderer wakes: the recorders' status ports
+   * and the execution registry's waiters and child rosters.
    */
   publishStatus(event: StatusEvent): void {
     if (this.disposed) return;
@@ -535,8 +535,8 @@ export class SessionHandle {
         logger.warn('Session status port threw', { data: error });
       }
     }
-    this.publish([statusDraft(event)]);
     this.executions.handleStatus(event.streamId);
+    this.publish([statusDraft(event)]);
   }
 
   /**
@@ -560,7 +560,7 @@ export class SessionHandle {
         });
       }
     }
-    effectRuntime().runFork(this.events.publish(events));
+    effectRuntime().runFork(this.graph.publish(events));
   }
 
   /**

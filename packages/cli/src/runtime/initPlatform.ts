@@ -1,6 +1,7 @@
 // Local imports
 import {
   initializeBundledPrompts,
+  processOwnerId,
   teardownDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime';
@@ -9,7 +10,6 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
-import { processOwnerId } from '@controllers/session/sessionSources';
 import { setOutputChannelFactory } from '@logger/logUtils';
 import { refreshModelListAndLog } from '@model/modelListRefresh';
 import { initPlatform, platform, tryPlatform } from '@platform/platform';

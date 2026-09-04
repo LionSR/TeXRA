@@ -14,16 +14,15 @@ export async function initializeDesktopProcessStores(session: SessionHandle) {
   const stores = createSessionStores(session);
 
   // Every `stream.removed` from now on, in commit order: the process-owned
-  // delete for a stream no presentation claims.
+  // delete, so a stream removed while no window shows it (a child stream's
+  // auto-close) still leaves storage. A live ProgressBackend reads the same
+  // fact and deletes too; the store's per-stream deletion dedup is the one
+  // claim there is, whichever reader gets there first.
   const removals = effectRuntime().runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
         if (event.type !== 'stream.removed') return;
-        const streamId = event.aggregateId;
-        // A live ProgressBackend that read this fact first holds the claim;
-        // otherwise the store's own delete dedup is the one claim there is.
-        if (stores.hasStreamDeletionClaim(streamId)) return;
-        void stores.deleteStream(streamId).catch((error: unknown) => {
+        void stores.deleteStream(event.aggregateId).catch((error: unknown) => {
           logger.warn('Failed to delete a headless desktop stream', {
             data: toLogData(error),
           });

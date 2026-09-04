@@ -8,6 +8,7 @@
 import type { AgentEvent } from '@agent/trace';
 import { loadAgents, resolveAgent } from '@agent/index';
 import {
+  processOwnerId,
   runAgent as runValidatedAgent,
   SessionHandle as RuntimeSessionHandle,
   type AgentRunHandle as RuntimeAgentRunHandle,
@@ -26,7 +27,6 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // Local imports - config and host services
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { processOwnerId } from '@controllers/session/sessionSources';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { createLog } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
@@ -152,7 +152,7 @@ class AgentRunStream implements AgentRun {
    */
   attachHandle(handle: RuntimeAgentRunHandle): void {
     this.liveHandle = handle;
-    this.detachEvents = handle.trace?.subscribe((event) => {
+    this.detachEvents = handle.trace.subscribe((event) => {
       if (this.iteratorStarted) this.push(event);
     });
   }

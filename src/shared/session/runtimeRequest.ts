@@ -1,9 +1,9 @@
 /**
- * The runtime request protocol (PRD one-fold-three-renderers, 8.2 and 8.4):
- * one Zod union of the requests a surface issues to its session's runtime,
- * the outcomes the runtime answers with, and the response envelope a bridge
- * posts back. In process (the TUI, headless) the Effect's own result is the
- * response and no message exists.
+ * The runtime request protocol (PRD one-fold-three-renderers, 8.2): one Zod
+ * union of the requests a surface issues to its session's runtime and the
+ * outcomes the runtime answers with. In process (the TUI, headless) the
+ * Effect's own result is the response and no message exists; the envelope
+ * and response a bridge posts (8.4) arrive with that bridge.
  *
  * Arm tags are `group.action` throughout, so two groups cannot claim one
  * tag. Every stream-scoped arm names a bare `streamId`: a `StreamTabId`
@@ -30,7 +30,7 @@ const RejectionSchema = z.object({
   feedback: z.string().nullish(),
 });
 
-export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
+const RuntimeRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('stream.stop'),
     ...streamScoped,
@@ -129,19 +129,8 @@ export const RuntimeRequestSchema = z.discriminatedUnion('kind', [
 ]);
 export type RuntimeRequest = z.infer<typeof RuntimeRequestSchema>;
 
-/** Every request carries a `session` and a `requestId` minted by the
- *  surface, and is answered by one `Response` under that id. */
-export const RuntimeRequestEnvelopeSchema = z.object({
-  session: z.string().min(1),
-  requestId: z.string().min(1),
-  request: RuntimeRequestSchema,
-});
-export type RuntimeRequestEnvelope = z.infer<
-  typeof RuntimeRequestEnvelopeSchema
->;
-
 /** What the runtime answers with: a typed value the host renders. */
-export const OutcomeSchema = z.discriminatedUnion('kind', [
+const OutcomeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('done') }),
   z.object({
     kind: z.literal('followUp'),
@@ -161,25 +150,3 @@ export const OutcomeSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 export type Outcome = z.infer<typeof OutcomeSchema>;
-
-/** The request errors as they cross a bridge: plain tagged objects. */
-export const RequestErrorSchema = z.discriminatedUnion('_tag', [
-  z.object({ _tag: z.literal('NotOwner'), ...streamScoped }),
-  z.object({
-    _tag: z.literal('Unavailable'),
-    ...streamScoped,
-    reason: z.string(),
-  }),
-  z.object({ _tag: z.literal('Rejected'), reason: z.string() }),
-  z.object({ _tag: z.literal('Invalid'), issues: z.array(z.string()) }),
-]);
-
-export const ResponseSchema = z.object({
-  session: z.string().min(1),
-  requestId: z.string().min(1),
-  result: z.discriminatedUnion('ok', [
-    z.object({ ok: z.literal(true), outcome: OutcomeSchema }),
-    z.object({ ok: z.literal(false), error: RequestErrorSchema }),
-  ]),
-});
-export type Response = z.infer<typeof ResponseSchema>;

@@ -24,7 +24,6 @@ import type {
   RetryErrorInfo,
   RunIdentity,
   RunOutcome,
-  RunStartEventBody,
   StreamPhase,
   StreamSubstate,
   StreamTabId,
@@ -88,47 +87,6 @@ export interface StageStartEvent extends StageStamp {
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   readonly index?: number;
   readonly total?: number;
-}
-
-/**
- * Immutable run identity emitted at the reservation commit point, before the
- * run itself begins: the fold's existence fact (a stream exists iff its
- * `run.start` exists), typed from its `run.start` arm so the trace stays
- * assignable to the session-event vocabulary. Live emitters always know the
- * identity; the nullish arm belongs to the legacy importer alone.
- * `approvalPolicy` is the run's initial policy snapshot from the session's
- * single authority (PRD 6, item 2); later changes arrive as
- * `approval.policy`. A launch that fails after this event emits its terminal
- * `result` on the same failure path, so a started-but-never-run stream folds
- * to failed, never to a ghost.
- *
- * Once per stream (decision 9): a stream id names one run and is never
- * reused, so a resume mints no `run.start`; it emits `run.activate` alone.
- * The writing process's identity rides the envelope the publisher stamps,
- * never the event (contract C5).
- */
-interface RunStartEvent
-  extends StageStamp, Omit<RunStartEventBody, 'identity'> {
-  readonly streamId: StreamTabId;
-  readonly identity: RunIdentity;
-}
-
-/**
- * Every activation of a run, the first launch and each resume (PRD 6, item
- * 8), carrying the activation metadata the frozen NDJSON `setActiveStream`
- * line projects from. `run.start` is the creation fact and happens once;
- * activation happens many times on one stream.
- */
-interface RunActivateEvent extends StageStamp {
-  readonly type: 'run.activate';
-  readonly streamId: StreamTabId;
-  readonly category: AgentCategory;
-  /** Agent-registry remoteness, carried only by a run with a registry
-   *  entry: the frozen wire line omits it for a process, agent-CLI, or
-   *  workflow-script child, and a fold reads it from `run.start`. */
-  readonly isRemote?: boolean;
-  /** Launched in the background whoever is watching (a delegated child). */
-  readonly background: boolean;
 }
 
 /**
@@ -439,8 +397,6 @@ export interface ResultEvent extends StageStamp {
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
   | LogEvent
-  | RunStartEvent
-  | RunActivateEvent
   | RunConfigEvent
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent
@@ -482,8 +438,6 @@ export const RUN_FACT_EVENT_TYPES = Object.freeze([
   'updateMissingOutputs',
   'updateCompileFailures',
   'goalPaused',
-  'run.start',
-  'run.activate',
   'run.config',
   'approval.requested',
   'approval.resolved',

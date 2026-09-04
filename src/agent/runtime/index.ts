@@ -31,6 +31,10 @@ export {
 // session's storage when it holds several sessions in one process.
 export { runInSession } from './RunContext';
 
+// The process identity a composition root resolves for its Effect runtime
+// (`installProcessRuntime`), from the host's own start identity.
+export { processOwnerId } from './SessionEvents';
+
 // StreamStatusMachine — the per-stream lifecycle record hosts render from
 // (`SessionState.streamStatus.getStreamState`). Type only: the machine itself
 // is reached through the session, never constructed by a host.

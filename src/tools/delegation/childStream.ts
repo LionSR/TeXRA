@@ -121,43 +121,47 @@ export function createChildStream(
       runTrace.dispose();
     };
 
-    // The existence fact. A background child never takes a host's focus:
+    // The existence fact and its activation, one batch on the session (PRD
+    // one-fold-three-renderers, section 6, item 8): a child is activated
+    // exactly once, here, and the frozen NDJSON `setActiveStream` line
+    // projects from that. A background child never takes a host's focus:
     // which stream a surface shows is that surface's own selection, so the
     // fact carries no hint about it. `removeStream` permanently tombstones
     // deterministic IDs in the CLI, so every fallible setup step above ran
     // before this point; a failure here rolls back below without a fact.
-    runTrace.trace.emit({
-      type: 'run.start',
-      streamId: childStreamId,
-      executionId,
-      identity: options.run,
-      userFollowUpSupport: options.userFollowUpSupport,
-      // Launch facts the fold reads verbatim (PRD one-fold-three-renderers,
-      // section 6, item 6). Remoteness is an agent-registry fact (a
-      // `source: 'remote'` entry); a process, agent-CLI, or workflow-script
-      // child has no registry entry and is never remote.
-      category: options.config.agentCategory,
-      isRemote: false,
-      worktree: launchWorktreeInfo(options.config.workingDirectory),
-      parentStreamId,
-      background: true,
-      // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
-      // the child is registered after this event by the delegation site; the
-      // queue publishes `approval.policy` for every value the edge changes.
-      approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
-      ...(options.checkpointId ? { checkpointId: options.checkpointId } : {}),
-    });
+    session.publish([
+      {
+        type: 'run.start',
+        aggregateId: childStreamId,
+        executionId,
+        identity: options.run,
+        userFollowUpSupport: options.userFollowUpSupport,
+        // Launch facts the fold reads verbatim (item 6). Remoteness is an
+        // agent-registry fact (a `source: 'remote'` entry); a process,
+        // agent-CLI, or workflow-script child has no registry entry and is
+        // never remote.
+        category: options.config.agentCategory,
+        isRemote: false,
+        worktree: launchWorktreeInfo(options.config.workingDirectory),
+        parentStreamId,
+        background: true,
+        // The initial policy snapshot (PRD 6, item 2). Approval ancestry for
+        // the child is registered after this event by the delegation site;
+        // the queue publishes `approval.policy` for every value the edge
+        // changes.
+        approvalPolicy: session.approvalPolicySnapshotFor(childStreamId),
+        ...(options.checkpointId ? { checkpointId: options.checkpointId } : {}),
+      },
+      // No `isRemote`: the wire line never carried one for a child, which
+      // has no agent-registry entry to be remote.
+      {
+        type: 'run.activate',
+        aggregateId: childStreamId,
+        category: options.config.agentCategory,
+        background: true,
+      },
+    ]);
     started = true;
-    // The activation beside the existence fact (PRD 6, item 8): a child is
-    // activated exactly once, here, and the frozen NDJSON `setActiveStream`
-    // line projects from this. No `isRemote`: that line never carried one
-    // for a child, which has no agent-registry entry to be remote.
-    runTrace.trace.emit({
-      type: 'run.activate',
-      streamId: childStreamId,
-      category: options.config.agentCategory,
-      background: true,
-    });
     runTrace.trace.emit({
       type: 'run.config',
       streamId: childStreamId,

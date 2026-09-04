@@ -15,10 +15,10 @@
  *
  * Every publisher hands this a `SessionEventDraft`, the body plus its
  * aggregate; `seq`, `commit`, `ownerId` (the process identity, C5), and `at`
- * are stamped here and nowhere else. The run trace's durable arms translate
- * by naming fields (`runEventDraft`); the trace events with no durable arm
- * (log lines, tool patches, streaming deltas) never enter the plane. The
- * runtime's ordering-sensitive bookkeeping (the status machine's
+ * are stamped by the log and nowhere else. The run trace's durable arms
+ * translate by naming fields (`runEventDraft`); the trace events with no
+ * durable arm (log lines, tool patches, streaming deltas) never enter the
+ * plane. The runtime's ordering-sensitive bookkeeping (the status machine's
  * consumers, the snapshot store, the transcript recorders' status ports) is
  * called by `SessionHandle.publish` before the log moves, so it observes
  * every fact in publish order; renderers read `all(cursor)`.
@@ -34,6 +34,11 @@ import {
 } from 'effect';
 
 import type { AgentEvent, StatusEvent } from '@agent/trace';
+import { createLog } from '@logger/logUtils';
+import {
+  runWithWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import type {
   AggregateId,
   CommitOrdinal,
@@ -42,9 +47,29 @@ import type {
   SessionEventDraft,
   StreamTabId,
 } from '@shared/schemas';
+import type { StreamLogStore } from '@transcript/StreamLogStore';
+
+const logger = createLog('sessionEvents');
 
 /** A publisher's position in the commit space: what `all` reads from. */
 export type SessionCursor = CommitOrdinal;
+
+/** The start-identity half of an owner id when the host could not read its
+ *  own: a process whose start no probe can compare is unprovable, never
+ *  dead (`proveOwnerLiveness`). */
+const UNREADABLE_PROCESS_START = 'unreadable';
+
+/** This process's owner id (contract C5), from the host's start identity. */
+export function processOwnerId(processStart: string | undefined): OwnerId {
+  return `${process.pid}:${processStart ?? UNREADABLE_PROCESS_START}`;
+}
+
+/** The start identity an owner id carries, null when its host could not
+ *  read one (the liveness probe then reports the owner unprovable). */
+export function ownerProcessStart(ownerId: OwnerId): string | null {
+  const start = ownerId.slice(ownerId.indexOf(':') + 1);
+  return start === UNREADABLE_PROCESS_START ? null : start;
+}
 
 /**
  * The identity of this process, `${pid}:${processStart}` (contract C5): the
@@ -61,13 +86,32 @@ export class ProcessIdentity extends Context.Service<
   }
 }
 
+/**
+ * A transcript row's place in the log. The row body is the transcript
+ * store's, read when the log is read, so the log keeps no copy of any
+ * transcript and the store's bounded residency bounds both; a patch of a
+ * row is a new place for the same entry id and materializes as the entry's
+ * current value.
+ */
+interface TranscriptRef {
+  readonly type: 'transcript.ref';
+  readonly aggregateId: StreamTabId;
+  readonly entryId: string;
+  readonly seq: number;
+  readonly commit: CommitOrdinal;
+  readonly at: number;
+}
+
+type LogRow = SessionEvent | TranscriptRef;
+
 /** Every non-transcript row is a listing fact (C8); the approval pair folds
  *  to one outstanding set keyed by request id. */
-function listingRows(rows: readonly SessionEvent[]): SessionEvent[] {
+function listingRows(rows: readonly LogRow[]): SessionEvent[] {
   const latest = new Map<string, SessionEvent>();
   const outstanding = new Map<string, SessionEvent>();
   for (const row of rows) {
     switch (row.type) {
+      case 'transcript.ref':
       case 'transcript.entry':
         continue;
       case 'approval.requested':
@@ -92,9 +136,15 @@ function listingRows(rows: readonly SessionEvent[]): SessionEvent[] {
  * C6: one `Semaphore.make(1)` per log, seq assignment and the append under
  * its permit, uninterruptible, and the level set before the permit is
  * released, so seq order and commit order cannot diverge and a commit that
- * wakes nobody cannot exist. The memory layer is the pre-cutover store;
- * nothing here reaches disk, and the cutover replaces it with the SQLite
- * write path under the same shape.
+ * wakes nobody cannot exist. The writer of every row is this process (C5),
+ * stamped here from `ProcessIdentity`; no caller passes it.
+ *
+ * The memory layer is the pre-cutover store, and its transcript tier is the
+ * transcript store's: `aggregate(id, fromSeq)` reads that store's rows for
+ * the stream (the store's row `seqNo` is the aggregate seq), and the tail
+ * holds a transcript row's place only, materialized from the store when
+ * read. Nothing here reaches disk, and the cutover replaces this layer with
+ * the SQLite write path under the same shape.
  */
 export class SessionEventLog extends Context.Service<
   SessionEventLog,
@@ -102,11 +152,12 @@ export class SessionEventLog extends Context.Service<
     readonly level: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
     /** Assign each draft its aggregate seq and commit ordinal, append it
      *  under the log's permit, and move the level; returns the last ordinal.
-     *  `stamp` is the writer: the process identity for a live publish, the
-     *  historical owner (or null) for the pre-cutover importer's rows. */
+     *  `at` is the publish clock (C1, informational) unless the caller
+     *  names the moment its rows describe, as the pre-cutover history
+     *  import does. */
     readonly appendAll: (
       drafts: readonly SessionEventDraft[],
-      stamp: { readonly ownerId: OwnerId | null; readonly at: number },
+      at?: number,
     ) => Effect.Effect<CommitOrdinal>;
     readonly readAll: (
       fromCommit: SessionCursor,
@@ -118,53 +169,139 @@ export class SessionEventLog extends Context.Service<
     ) => Stream.Stream<SessionEvent>;
   }
 >()('@texra/session/SessionEventLog') {
-  static readonly memoryLayer = Layer.effect(
-    SessionEventLog,
-    Effect.gen(function* () {
-      const level = yield* SubscriptionRef.make<CommitOrdinal>(0);
-      const gate = yield* Semaphore.make(1);
-      const rows: SessionEvent[] = [];
-      const seqs = new Map<AggregateId, number>();
-      const snapshot = (
-        select: (rows: readonly SessionEvent[]) => readonly SessionEvent[],
-      ): Stream.Stream<SessionEvent> =>
-        Stream.unwrap(Effect.sync(() => Stream.fromIterable(select(rows))));
-      return {
-        level,
-        appendAll: (drafts, stamp) =>
-          gate.withPermit(
-            Effect.uninterruptible(
+  static memoryLayer(
+    transcripts: StreamLogStore,
+    roots: WorkspaceRoots,
+  ): Layer.Layer<SessionEventLog, never, ProcessIdentity> {
+    return Layer.effect(
+      SessionEventLog,
+      Effect.gen(function* () {
+        const identity = yield* ProcessIdentity;
+        const level = yield* SubscriptionRef.make<CommitOrdinal>(0);
+        const gate = yield* Semaphore.make(1);
+        const rows: LogRow[] = [];
+        const seqs = new Map<AggregateId, number>();
+        // The transcript tier's seq per stream: always above every row the
+        // store holds for it, so a history read (the store's own `seqNo`)
+        // and the tail (this counter) order under one `view.folded`
+        // threshold, and a row that reaches a reader by both is applied
+        // once more by entry id, never as a second row.
+        const transcriptSeqs = new Map<StreamTabId, number>();
+        const materialize = (row: LogRow): SessionEvent | null => {
+          if (row.type !== 'transcript.ref') return row;
+          const entry = transcripts.get(row.aggregateId)?.getById(row.entryId);
+          if (entry) {
+            return {
+              type: 'transcript.entry',
+              aggregateId: row.aggregateId,
+              seq: row.seq,
+              commit: row.commit,
+              ownerId: identity.ownerId,
+              at: row.at,
+              entry,
+            };
+          }
+          // A deleted stream's rows are behind its tombstone on the log; a
+          // stream that left residency before a reader this far behind read
+          // its rows has lost them to that reader.
+          if (transcripts.has(row.aggregateId)) {
+            logger.warn(
+              `Transcript row ${row.entryId} of stream ${row.aggregateId} left residency before commit ${row.commit} was read; the reader does not receive it`,
+            );
+          }
+          return null;
+        };
+        return {
+          level,
+          appendAll: (drafts, at = Date.now()) =>
+            gate.withPermit(
+              Effect.uninterruptible(
+                Effect.gen(function* () {
+                  for (const draft of drafts) {
+                    const commit = rows.length + 1;
+                    if (draft.type === 'transcript.entry') {
+                      const streamId = draft.aggregateId as StreamTabId;
+                      const seq =
+                        Math.max(
+                          transcriptSeqs.get(streamId) ?? 0,
+                          transcripts.get(streamId)?.head ?? 0,
+                        ) + 1;
+                      transcriptSeqs.set(streamId, seq);
+                      rows.push({
+                        type: 'transcript.ref',
+                        aggregateId: streamId,
+                        entryId: draft.entry.id,
+                        seq,
+                        commit,
+                        at,
+                      });
+                      continue;
+                    }
+                    const seq = (seqs.get(draft.aggregateId) ?? 0) + 1;
+                    seqs.set(draft.aggregateId, seq);
+                    rows.push({
+                      ...draft,
+                      seq,
+                      commit,
+                      ownerId: identity.ownerId,
+                      at,
+                    } as SessionEvent);
+                  }
+                  const last = rows.length;
+                  yield* SubscriptionRef.set(level, last);
+                  return last;
+                }),
+              ),
+            ),
+          // `commit` is the row's 1-based position, so the rows above a
+          // commit are the slice past it.
+          readAll: (fromCommit) =>
+            Stream.unwrap(
+              Effect.sync(() =>
+                Stream.fromIterable(
+                  rows.slice(fromCommit).flatMap((row) => {
+                    const event = materialize(row);
+                    return event === null ? [] : [event];
+                  }),
+                ),
+              ),
+            ),
+          readListing: () =>
+            Stream.unwrap(
+              Effect.sync(() => Stream.fromIterable(listingRows(rows))),
+            ),
+          // The transcript tier is the store's: its rows for the stream
+          // above `fromSeq`, read once without adding residency, stamped
+          // with the level they were read at. The stream's listing facts
+          // reach a reader through `listing()` and the tail.
+          readAggregate: (aggregateId, fromSeq) =>
+            Stream.unwrap(
               Effect.gen(function* () {
-                for (const draft of drafts) {
-                  const seq = (seqs.get(draft.aggregateId) ?? 0) + 1;
-                  seqs.set(draft.aggregateId, seq);
-                  rows.push({
-                    ...draft,
-                    seq,
-                    commit: rows.length + 1,
-                    ownerId: stamp.ownerId,
-                    at: stamp.at,
-                  } as SessionEvent);
-                }
-                const at = rows.length;
-                yield* SubscriptionRef.set(level, at);
-                return at;
+                const commit = yield* SubscriptionRef.get(level);
+                const entries = yield* Effect.promise(async () =>
+                  runWithWorkspaceRoots(roots, () =>
+                    transcripts.readEntries(aggregateId as StreamTabId),
+                  ),
+                );
+                return Stream.fromIterable(
+                  entries
+                    .filter((entry) => entry.seqNo > fromSeq)
+                    .map((entry): SessionEvent => ({
+                      type: 'transcript.entry',
+                      aggregateId,
+                      seq: entry.seqNo,
+                      commit,
+                      ownerId: identity.ownerId,
+                      at: entry.timestamp,
+                      entry,
+                    })),
+                );
               }),
             ),
-          ),
-        // `commit` is the row's 1-based position, so the rows above a commit
-        // are the slice past it.
-        readAll: (fromCommit) => snapshot((all) => all.slice(fromCommit)),
-        readListing: () => snapshot(listingRows),
-        readAggregate: (aggregateId, fromSeq) =>
-          snapshot((all) =>
-            all.filter(
-              (row) => row.aggregateId === aggregateId && row.seq > fromSeq,
-            ),
-          ),
-      };
-    }),
-  );
+        };
+      }),
+    );
+  }
 }
 
 export class SessionEvents extends Context.Service<
@@ -193,20 +330,16 @@ export class SessionEvents extends Context.Service<
     readonly anchor: SessionCursor;
   }
 >()('@texra/session/SessionEvents') {
+  /** The publisher and the three reads over a `SessionEventLog`; whatever
+   *  the log holds when this builds is history under the anchor. */
   static readonly layer = Layer.effect(
     SessionEvents,
     Effect.gen(function* () {
       const log = yield* SessionEventLog;
-      const identity = yield* ProcessIdentity;
-      // The writer of every live row is this process (C5); the log's permit
-      // serializes the append with the level move.
       const publish = Effect.fn('SessionEvents.publish')(function* (
         events: readonly SessionEventDraft[],
       ) {
-        yield* log.appendAll(events, {
-          ownerId: identity.ownerId,
-          at: Date.now(),
-        });
+        yield* log.appendAll(events);
       });
       // The tail anchor: read once, here, before any cold read this layer
       // serves.
@@ -214,19 +347,27 @@ export class SessionEvents extends Context.Service<
       // THE tail (C7), and the only drain: the log read forward from the
       // caller's position, once per level above what this drain delivered.
       // A level says "there is more", not "there is one more", so a burst of
-      // commits during a read collapses into one further read.
+      // commits during a read collapses into one further read. A read
+      // delivers up to the level it started at whether or not every row in
+      // between materialized, so a row the read could not deliver is not
+      // read again on every later wake.
       const all = (fromCommit: SessionCursor): Stream.Stream<SessionEvent> =>
         Stream.unwrap(
           Effect.gen(function* () {
             const at = yield* Ref.make(fromCommit);
             const forward = Stream.unwrap(
-              Ref.get(at).pipe(
-                Effect.map((cursor) =>
+              Effect.gen(function* () {
+                const cursor = yield* Ref.get(at);
+                const upTo = yield* SubscriptionRef.get(log.level);
+                return Stream.concat(
                   log
                     .readAll(cursor)
                     .pipe(Stream.tap((event) => Ref.set(at, event.commit))),
-                ),
-              ),
+                  Stream.fromEffect(
+                    Ref.update(at, (delivered) => Math.max(delivered, upTo)),
+                  ).pipe(Stream.drain),
+                );
+              }),
             );
             return SubscriptionRef.changes(log.level).pipe(
               Stream.filterEffect((level) =>
@@ -246,11 +387,6 @@ export class SessionEvents extends Context.Service<
       };
     }),
   );
-
-  /** The pre-cutover graph: the publisher over the in-memory log. */
-  static readonly memoryLayer = SessionEvents.layer.pipe(
-    Layer.provideMerge(SessionEventLog.memoryLayer),
-  );
 }
 
 export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;
@@ -264,25 +400,15 @@ export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;
  * transcript recorder turns those into transcript rows,
  * which reach the plane as `transcript.entry` from the transcript store's
  * change feed. The arms mirror the trace field for field (`sessionEvent.ts`),
- * so this names fields and never re-encodes.
+ * so this names fields and never re-encodes. The lifecycle pair, `run.start`
+ * and `run.activate`, is not a trace event: the launcher publishes it as
+ * one batch on the session (PRD 6, item 8).
  */
 export function runEventDraft(
   streamId: StreamTabId,
   event: AgentEvent,
 ): SessionEventDraft | null {
   switch (event.type) {
-    case 'run.start': {
-      const { type, streamId: _streamId, stageId: _stageId, ...body } = event;
-      return { ...body, type, aggregateId: streamId };
-    }
-    case 'run.activate':
-      return {
-        type: event.type,
-        aggregateId: streamId,
-        category: event.category,
-        isRemote: event.isRemote,
-        background: event.background,
-      };
     case 'run.config':
       return {
         type: event.type,
