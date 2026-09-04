@@ -242,6 +242,15 @@ chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
 and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
 same rule governs the persisted `Surface` (9).
 
+Two aggregates, one key shape. The event key is `(aggregate_id, seq)`.
+Run-scoped facts use the stream as their aggregate; session-scoped facts -
+`queuedFollowUps`, `inquiries`, `removeStream`, and any fact without a
+stream id - use **one session aggregate** per paper. `SessionView` reads
+its session-scoped fields from that aggregate, never from a stream, and
+the fold's `sessionScoped` arm takes a nullable stream id for exactly this
+reason. `goal` stays per stream (`GoalStore.getForStream`), so it is a
+run-scoped fact on the stream aggregate.
+
 Types that die when this lands: `StreamTabInfo`, `StreamMetadata`, both
 `StreamState` variants, `StreamExecutionState`, `SessionStreamMetadata`,
 `ActiveChildInfo`. They were four slices of one record.
@@ -281,6 +290,16 @@ never a seq. A replay with no snapshot folds with `local` empty, so
 every pending approval reads as interrupted until the runtime says
 otherwise, which is the safe direction. Agreed with the substrate owner on
 2026-09-03 (the companion proposal, in flight).
+
+**Liveness is probed per owner process, never per run.** An owner id
+names a process (pid plus process start time, the cutover's
+`event_sequence.owner_id`), and one process owns every run it launched, so
+the lease reader probes the distinct owner ids present in the session's
+tail - a handful - and never one lease per run. `local.self` and
+`local.heldBy` are therefore sets of owner-process ids, and the waiting
+group (below) reads liveness through them; a fold input computed any other
+way is wrong, not slow. This reconciles the startup-repair proposal's S3
+with the waiting rule (substrate owner, 2026-09-04).
 
 - **Existence** is decided by the **latest** lifecycle event for the stream,
   not by the presence of one: `run.start` and `removeStream` are two arms of
@@ -453,6 +472,16 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   bar's occupancy gauge - and it is cumulative-per-run, not derivable from
   `usage`.
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
+- **Residency is two-tier.** Listing facts - identity, description,
+  outcome, status, group, and the rollup inputs - come from
+  **latest-of-type indexed queries** over the event table, never from
+  folding whole transcripts. Transcript rows fold only for **subscribed**
+  streams, from the subscription's seq. Without this rule every listing is
+  a fold of all history and the residency problem of #9952 returns. The
+  rule binds the runtime's `SubscriptionRef` (7.2) exactly as it binds a
+  webview's subscription set (8.1, 9): the fold fiber in the runtime holds
+  the listing tier for every stream and the transcript tier for the streams
+  some surface has subscribed, and nothing else.
 - **`settledSeq`** is the last **session commit ordinal** folded for the
   stream, not a per-lane seq; text deltas do not advance it. Per-lane it
   would be unusable as a memoization key for exactly the reason
@@ -773,6 +802,18 @@ text }` - the same offset-addressed shape as a transient chunk, appended
    projection attached at `SessionEvents.now` cannot recover from a
    historical `run.start`.
 
+**Durability before the cutover (substrate owner, 2026-09-04).** No new
+durable fact lands on `main` before the event table exists.
+`TexraTranscriptRecorder.ts` (`:815-818`) is an exhaustive switch over
+`AgentEvent`; if `approval.requested`, `approval.resolved`, the policy
+snapshot, or any other event of this section were persisted into
+`streamLogs/` there, it would be a new legacy shape the importer has to
+read: a datum with a file writer today and an event writer later. Until the
+cutover they are live-only: the recorder maps them to no persisted entry,
+and lane 1 ships them that way. A pending approval not surviving a restart
+is today's behavior, so this is no regression; the first process that
+persists them is the cutover's `SessionEvents.publish`.
+
 The importer emits `run.start` for every legacy stream with `identity`
 nullish where the descriptor has none, and normalizes every other old
 `StreamLogEntry` row into the events above (5.2, "Legacy"). No
@@ -1070,6 +1111,13 @@ runtime and the `local` field of each frame (8.1) in a webview.
 `TextChunkSource` is the model handler's existing delta path in the runtime
 (the stream `StreamingTextAccumulator` consumes today) and the `chunks`
 field of each frame in a webview.
+
+`events.all(cursor)` is the listing tier: the latest-of-type index for
+every stream plus the session aggregate, in commit order. Transcript events
+for a stream flow only after a surface subscribes to it (8.1), and the fold
+drops a stream's transcript tier when its last subscriber leaves. That is
+the residency rule of 5.2 applied to the runtime, not only to webviews;
+one `SubscriptionRef` that folded all history would be #9952 again.
 
 All three non-durable inputs are **levels**, like the commit ordinal (7.1),
 and for the same reason: a snapshot read beside a separately armed delta
