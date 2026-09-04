@@ -168,8 +168,6 @@ SessionView = {
   order: StreamTabId[],
   // the last session commit ordinal folded (7.1)
   cursor: CommitOrdinal,
-  // tombstoned ids: what tells "gone" from "not folded yet" (5.2)
-  closed: StreamTabId[],
   // live text at SESSION scope, so it can arrive before its stream (5.2)
   inflight: Map<`${StreamTabId}/${RowId}`, string>,
   // paper-level aggregate; the desktop rail badge reads it and derives nothing
@@ -325,15 +323,21 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   every durable event and `StreamView.ownerId` is the latest one, so a
   resume in another process moves ownership without a new fact kind.
 - **`group === 'interrupted'`** iff the stream is non-terminal and
-  `stream.ownerId` is not in `local.heldBy` - whether or not an approval
-  is pending. Owner loss is the whole condition: a process that crashes
+  `stream.ownerId` is in neither `local.self` nor `local.heldBy` - whether or
+  not an approval is pending. Both sets, because the lease model calls this
+  process's own claim `owned` and only another process's `held`
+  (`executionLease.ts:164-172`): testing `heldBy` alone would fold every run
+  this process is currently executing to `interrupted`. `self` and `heldBy`
+  together are "somebody holds this"; the two stay separate only so
+  `readOnly` can ask the narrower question of _who_. Owner loss is the whole condition: a process that crashes
   mid-generation commits no terminal status, so conditioning this on a
   pending approval (as an earlier draft did) would leave every ownerless run
   reading `running` forever, with no Resume offered and no repair until some
   later restart. A pending approval is then simply the case where the loss is
   most visible, not a separate rule.
 - **`group === 'waiting'`** iff an `approval.requested` exists without its
-  `approval.resolved` AND `stream.ownerId` is in `local.heldBy`. Without a
+  `approval.resolved` AND `stream.ownerId` is in `local.self` or
+  `local.heldBy`. Without a
   live owner it is `'interrupted'` by the rule above, never `'waiting'`,
   because nothing is listening for the answer; `'interrupted'` is the fourth
   arm of the union (5.1) and the group a host offers `resume` on. Resume appends `approval.resolved` (cause: interrupted) for every
@@ -446,8 +450,13 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   bar's occupancy gauge - and it is cumulative-per-run, not derivable from
   `usage`.
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
-- **`settledSeq`** is the last durable seq folded; text deltas do not
-  advance it. It is a memoization key, **not** a print boundary: a durable
+- **`settledSeq`** is the last **session commit ordinal** folded for the
+  stream, not a per-lane seq; text deltas do not advance it. Per-lane it
+  would be unusable as a memoization key for exactly the reason
+  `transcript.run` needs the ordinal (below): a terminal status on the
+  session lane can carry a lower number than the run-lane event before it,
+  so the key moves backward or collides. It is a memoization key, **not** a
+  print boundary: a durable
   `stream.text` checkpoint, a status change, or a usage event advances it
   while the row above is still open. `settledRows` is the separate frontier:
   the **contiguous leading prefix** of rows whose finalizing event has
@@ -600,32 +609,24 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **Durable text wins.** At the other end, a chunk is a preview of a row the
   durable events will settle, so a chunk for a row whose finalizing event has
   already folded is discarded rather than reopening its `inflight` entry, and
-  `removeStream` records the id in `closed` and clears every session-level
-  entry keyed by its stream -
+  `removeStream` clears every session-level entry keyed by its stream -
   `inflight`, the stream's pending `approvals`, its `queuedFollowUps`, its
   `policy` entry, and its `inquiries`. Not only the text: a pending
   `approval.requested` with no `approval.resolved` would otherwise fold back
   into `approvals` on every replay as an actionable decision for a stream
-  that can never exist again. A chunk that
-  arrives afterwards - the two arms are asynchronous, so one can - is
-  dropped **because its stream is in `closed`**, not because the view lacks
-  it: a chunk for an id the view has never seen is early, not late, and
-  §5.2 requires keeping it (its stream's `run.start` has not folded yet).
-  Dropping on absence alone would lose valid opening text and put the next
-  delta at `from > length`. `closed` is what tells the two apart, and it is
-  bounded by a **drain boundary**, not by a clock or a lease: an id leaves
-  `closed` once the frame carrying its `removeStream` has been applied _and_
-  the transport reports no queued chunks for that stream, which the framer
-  already tracks per row (7.4). Releasing the lease is not enough - a chunk
-  emitted before the tombstone can still be sitting in the framer behind it,
-  and dropping the id first would make that chunk look early again: a
-  nonzero `from` hits the defect assertion, a `from: 0` leaves an orphan in
-  `inflight`. (Retention cannot prune `closed` either - the fold consumes
-  events, chunks, and local snapshots, and deleting rows produces none of
-  those - which is why the bound has to come from something the fold's own
-  transport can report.) Without the
-  clear, an entry for a stream that can never render or finalize would sit
-  in the session map forever. That makes the merge order of the three arms (7.2)
+  that can never exist again. A chunk that arrives
+  afterwards - the two arms are asynchronous, so one can - is **dropped at
+  the source**: the framer holds both the event stream and the per-row chunk
+  queues (7.4), so it discards queued and later chunks for a stream once it
+  has framed that stream's `removeStream`. That is the one place where
+  "already tombstoned" and "not started yet" are both observable, and it
+  keeps the fold's single rule intact - text accumulates whether or not its
+  stream exists - with no tombstone set and no exception. An earlier draft
+  put a `closed` list in the fold instead, which needed a drain boundary the
+  fold has no input to see: dropping on absence alone would discard valid
+  opening text and put the next delta at `from > length`. Without the clear,
+  an entry for a stream that can never render or finalize would sit in the
+  session map forever. That makes the merge order of the three arms (7.2)
   irrelevant by construction: a late chunk cannot mutate settled text, and
   an early one is overwritten when its event lands. Without the rule the
   same two inputs give two different rows in two processes.
@@ -1022,9 +1023,10 @@ The fold folds the replay through before the first value reaches `ref`:
 surface mounting onto an existing session render its history - deleted
 streams reappearing, resolved approvals actionable again, non-terminal runs
 briefly `interrupted` because no `local` snapshot has arrived yet - for the
-length of the replay. The layer captures the store's current ordinal, drops
-every scan value below it, and publishes from there; the tail then publishes
-incrementally as before.
+length of the replay. The runtime layer captures the store's current ordinal, drops every scan
+value below it, and publishes from there; the tail then publishes
+incrementally as before. A webview does the same against the `watermark` on
+its frames (8.1), since it has no store to ask.
 
 `Layer.effect` strips `Scope` from the requirements, so the forked fold
 fiber is owned by the layer's scope and ends on `runtime.dispose()`.
@@ -1258,7 +1260,7 @@ the same functions in process.
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null }
+EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null, watermark: CommitOrdinal }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
 ```
 
@@ -1273,7 +1275,11 @@ there is no `Resync` shape and no replacement fold arm. Every event carries
 its `lane`, its `seq`, and its session `commit` ordinal (the lane being a
 stream id or the session lane, 5.2), and every chunk carries its stream and
 its `from`/`to`, so a frame needs no per-stream range. Frames arrive in
-commit order and a subscriber advances one cursor. `streamId` stays a
+commit order and a subscriber advances one cursor. `watermark` is the
+ordinal the runtime captured when the subscription opened: replay can span
+many frames, and a webview has no database to ask, so this is how it knows
+when it has caught up and may publish its first view (7.2). Before that it
+folds and stays silent; after it, every frame publishes. `streamId` stays a
 payload field on the facts that have one, which is what lets an unparented
 `inquiryThreadUpdated` ride the session lane without the sentinel stream id
 this PRD rejects.
