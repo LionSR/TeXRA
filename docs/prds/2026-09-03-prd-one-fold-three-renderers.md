@@ -299,7 +299,17 @@ tail - a handful - and never one lease per run. `local.self` and
 `local.heldBy` are therefore sets of owner-process ids, and the waiting
 group (below) reads liveness through them; a fold input computed any other
 way is wrong, not slow. This reconciles the startup-repair proposal's S3
-with the waiting rule (substrate owner, 2026-09-04).
+with the waiting rule (substrate owner, 2026-09-04). The value is derived by
+the substrate at insert time from the process, never supplied by the
+emitter, so it cannot be forged or forgotten by a new emit site; there is
+no per-handle owner token, because the only question asked of an owner id
+is "is this owner alive" and a token could not be probed without a second
+table mapping tokens to processes. With one database per root and one
+session per paper (11) there is at most one handle per process per
+database, so a token would distinguish nothing; two handles on one root in
+one process is a guard at handle construction, not an owner-id axis. Until
+the cutover, the runtime stamps the same process identity on the envelope
+it hands the fold.
 
 - **Existence** is decided by the **latest** lifecycle event for the stream,
   not by the presence of one: `run.start` and `removeStream` are two arms of
