@@ -1,9 +1,9 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { defaultSession } from '@agent/runtime/SessionHandle';
+import { runInSession } from '@agent/runtime';
 import { MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
-import type { StateStore } from '@platform/interfaces';
+import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -17,9 +17,11 @@ import {
   FakeScopedConfigProvider,
   FakeStateStore,
 } from '@test/support/FakePlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { GoalStore } from '@tools/goal';
 
+import { disposeAfterTest } from './desktopAgentExecutionTestHarness.ts';
 import {
   commandOf,
   createStubDesktopAgentSettingsController,
@@ -53,10 +55,10 @@ type RendererMessage = Parameters<
 
 type SettingsFixtureOverrides = Omit<
   Partial<DesktopSettingsIpcOptions>,
-  'state' | 'ui'
+  'ui'
 > & {
-  globalState?: StateStore;
   workspaceState?: StateStore;
+  config?: ConfigProvider;
   ui?: Partial<DesktopSettingsIpcOptions['ui']>;
 };
 
@@ -80,6 +82,15 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
     ...settingsOverrides
   } = overrides;
   const postToRenderer = overrides.postToRenderer ?? (() => undefined);
+  // The paper's workspace state and config reach the IPC through its
+  // session's roots, as the desktop passes them.
+  const session =
+    overrides.session ??
+    disposeAfterTest(
+      createTestSession({
+        roots: { ...workspaceRoots(), config, workspaceState },
+      }),
+    );
   const settings = createDesktopSettingsIpc({
     ...settingsOverrides,
     agentSettingsController:
@@ -100,16 +111,15 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
             values: {},
           }),
       }),
-    state: { globalState, workspaceState },
-    config,
+    globalState,
     ui: createStubDesktopSettingsUiHost(ui),
-    session: overrides.session ?? defaultSession(),
+    session,
     postToRenderer,
   });
-  // The IPC subscribes to the process-global session and app-signal buses, so
-  // a fixture left undisposed would keep reacting to later tests' emits.
+  // The IPC subscribes to its session's goal facts and the process app-signal
+  // bus, so a fixture left undisposed would keep reacting to later tests' emits.
   liveSettingsIpcs.push(settings);
-  return { globalState, settings, workspaceState };
+  return { globalState, session, settings, workspaceState };
 }
 
 function createCapturedSettingsFixture(
@@ -472,9 +482,12 @@ describe('desktop settings IPC', () => {
 
     it('reposts the goal list when a run mutates a goal', async () => {
       const streamId = 'stream:desktop-settings-goal-push' as StreamTabId;
-      const { posted } = createCapturedSettingsFixture();
+      const { posted, session } = createCapturedSettingsFixture();
 
-      await GoalStore.start(streamId, 'Finish the proof');
+      // A run mutates goals inside its paper's session, as the desktop does.
+      await runInSession(session, () =>
+        GoalStore.start(streamId, 'Finish the proof'),
+      );
       await flushAsyncWork();
 
       expect(posted.at(-1)).toMatchObject({

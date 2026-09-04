@@ -85,7 +85,12 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
-import { DESKTOP_PAPER_COMMANDS } from '../shared/desktopPaperMessages.js';
+import {
+  DESKTOP_PAPER_COMMANDS,
+  DesktopClosePaperMessageSchema,
+  DesktopSelectPaperMessageSchema,
+} from '../shared/desktopPaperMessages.js';
+import { createCommandHandler } from './desktopIpcTypes.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
 import {
   attachRendererConsoleLog,
@@ -987,11 +992,7 @@ function createWindow(options: {
       agentSettingsController,
       credentialSettingsController,
       toolingSettingsController,
-      state: {
-        globalState: platform().globalState,
-        workspaceState: paper.roots.workspaceState,
-      },
-      config: paper.roots.config,
+      globalState: platform().globalState,
       ui: settingsUi,
       session: paper.session,
     });
@@ -1009,7 +1010,7 @@ function createWindow(options: {
     // renderer document this paper has since loaded.
     const fileSelection = createDesktopFileSelection({
       postToRenderer: postToRendererIfAlive,
-      getWorkspacePath: () => paper.root,
+      workspacePath: paper.root,
       showOpenFileDialog: async (options) => {
         const result = await dialog.showOpenDialog(window, {
           title: options.title,
@@ -1277,11 +1278,28 @@ function createWindow(options: {
     },
     progress: progressIpc,
     onboarding: onboardingIpc,
-    papers: options.papers.ipc({
-      select: selectPaper,
-      close: closePaper,
-      postPapers,
-    }),
+    papers: createCommandHandler(
+      {
+        // A broadcast like the progress ready signal: the main view's ready
+        // message still reaches the startup handler.
+        [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
+          when: (message) => message.view === 'main',
+          run: postPapers,
+          claim: false,
+        },
+        // safeParse, not parse: dispatch runs under `runInSession` with no
+        // catch, so a malformed message is dropped, not an unhandled rejection.
+        [DESKTOP_PAPER_COMMANDS.SELECT_PAPER]: (message) => {
+          const parsed = DesktopSelectPaperMessageSchema.safeParse(message);
+          if (parsed.success) selectPaper(parsed.data.root);
+        },
+        [DESKTOP_PAPER_COMMANDS.CLOSE_PAPER]: (message) => {
+          const parsed = DesktopClosePaperMessageSchema.safeParse(message);
+          if (parsed.success) closePaper(parsed.data.root);
+        },
+      },
+      { onAsyncError: reportAsyncError },
+    ),
     globalState: platform().globalState,
     inActiveSession: (dispatch) => {
       void runInSession(activePaper().session, dispatch);
