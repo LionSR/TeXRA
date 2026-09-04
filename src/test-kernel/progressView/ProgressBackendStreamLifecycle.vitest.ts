@@ -45,6 +45,7 @@ import {
   emitRunStart,
   emitRunConfig,
   emitRunEvent,
+  sessionEventOf,
   stubStreamControls,
   toolUseConfig,
   track,
@@ -56,10 +57,7 @@ function emitRemoveStream(
   target: RecordingTarget,
   streamId: StreamTabId,
 ): void {
-  target.session.events.emit({
-    scope: 'session',
-    event: { type: 'removeStream', payload: { streamId } },
-  });
+  target.session.publish([{ type: 'stream.removed', aggregateId: streamId }]);
 }
 
 function childRosterRow(
@@ -222,10 +220,17 @@ describe('ProgressBackend', () => {
 
     try {
       await GoalStore.start(stream, 'Complete the proof');
-      session.events.emit({
-        scope: 'session',
-        event: { type: 'goalStateChanged', payload: { streamId: stream } },
-      });
+      session.publish([
+        {
+          type: 'goalStateChanged',
+          aggregateId: stream,
+          state: {
+            active: true,
+            status: 'active',
+            objective: 'Complete the proof',
+          },
+        },
+      ]);
 
       await vi.waitFor(() =>
         expect(messages).toContainEqual({
@@ -308,11 +313,13 @@ describe('ProgressBackend', () => {
     const newestActive = { ...activeChild, agentName: 'reviewer' };
     const newestFailed = { ...failedChild, agentName: 'researcher' };
     const newestDeleted = { ...deletedChild, agentName: 'implementer' };
-    backend.applyRunFact(parent, {
-      type: 'child.activity',
-      parentStreamId: parent,
-      items: [after, newestFailed, newestDeleted, before, newestActive],
-    });
+    backend.applyChildRoster(parent, [
+      after,
+      newestFailed,
+      newestDeleted,
+      before,
+      newestActive,
+    ]);
     expect(backend.state.getStreamState(parent)?.subagents).toEqual([
       after,
       before,

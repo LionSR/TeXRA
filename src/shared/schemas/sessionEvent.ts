@@ -50,6 +50,7 @@ import { ExtendedTokenUsageStatsSchema } from './usage';
  * liveness is probed per owner, never per run (PRD 5.2). Never a lease token.
  */
 export const OwnerIdSchema = z.string().regex(/^\d+:.+$/);
+export type OwnerId = z.infer<typeof OwnerIdSchema>;
 
 /** The pid half of an owner id, the one part of a process identity a user
  *  can act on (`kill`, Activity Monitor). */
@@ -69,6 +70,7 @@ const SeqSchema = z.int().positive();
 /** The session-wide insert ordinal a replay follows; zero is "before the
  *  first commit", the cursor an empty view starts from. */
 export const CommitOrdinalSchema = z.int().nonnegative();
+export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
 /**
  * The full approval-policy snapshot after a change, emitted by the single
@@ -258,6 +260,16 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
   ? Omit<T, K>
   : never;
 export type SessionEventBody = DistributiveOmit<SessionEvent, keyof Envelope>;
+
+/**
+ * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
+ * it lives on (contract C2). The publisher stamps the rest of the envelope
+ * (`seq`, `commit`, `ownerId`, `at`) under its permit; no caller passes them.
+ */
+export type SessionEventDraft = DistributiveOmit<
+  SessionEvent,
+  'seq' | 'commit' | 'ownerId' | 'at'
+>;
 
 /** The `run.start` payload the trace's `RunStartEvent` is typed from. */
 export type RunStartEventBody = Extract<

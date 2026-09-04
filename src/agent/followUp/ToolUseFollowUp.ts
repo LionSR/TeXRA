@@ -109,10 +109,7 @@ export function notifyFollowUpSent(
   streamId: StreamTabId,
   session?: SessionHandle,
 ): void {
-  (session ?? currentSession()).events.emit({
-    scope: 'session',
-    event: { type: 'followUpSent', payload: { streamId } },
-  });
+  (session ?? currentSession()).followUps.notifySent(streamId);
 }
 
 interface PendingResume {

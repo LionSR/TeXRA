@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - stream state
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { STREAM_PHASE, type TokenUsageStats } from '@shared/schemas';
@@ -18,7 +17,10 @@ function trackerOverStatusPlane(): {
   usageByStream: Map<string, Map<string, TokenUsageStats>>;
   tracker: StatusBarUsageTracker;
 } {
-  const status = new StreamStatusMachine(new SessionEventHub());
+  const status = new StreamStatusMachine(
+    () => {},
+    () => {},
+  );
   const usageByStream = new Map<string, Map<string, TokenUsageStats>>();
   const tracker = new StatusBarUsageTracker(status, {
     getRunUsage: (stream) => usageByStream.get(stream) ?? new Map(),

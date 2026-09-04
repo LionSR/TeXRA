@@ -31,10 +31,6 @@ export {
 // session's storage when it holds several sessions in one process.
 export { runInSession } from './RunContext';
 
-// SessionEventHub
-export { SessionEventHub } from './SessionEventHub';
-export type { SessionFact } from './SessionEventHub';
-
 // StreamStatusMachine — the per-stream lifecycle record hosts render from
 // (`SessionState.streamStatus.getStreamState`). Type only: the machine itself
 // is reached through the session, never constructed by a host.

@@ -5,10 +5,7 @@ import {
 } from '@agent/storage';
 import type { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import type { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
-import {
-  defaultSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionStores } from '@controllers/session/createSessionStores';
 import { createLog } from '@logger/logUtils';
 import {
@@ -164,10 +161,7 @@ export class SessionState {
   private readonly logger: ReturnType<typeof createLog>;
   private readonly session: SessionHandle;
 
-  constructor(
-    session: SessionHandle = defaultSession(),
-    stores?: SessionStores,
-  ) {
+  constructor(session: SessionHandle, stores?: SessionStores) {
     this.logger = createLog('SessionState');
     this.session = session;
     this.streamStatus = session.status;

@@ -31,6 +31,8 @@ import {
 } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_TRANSITION_CAUSE } from '@shared/streams/streamStatus';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import {
   appendTranscriptEntry,
@@ -44,6 +46,7 @@ import {
   emitRunConfig,
   emitRunEvent,
   emitStreamDescription,
+  sessionEventOf,
   toolUseConfig,
 } from './progressBackendHarness';
 
@@ -90,10 +93,21 @@ function hasFullSync(messages: ProgressViewOutboundMessage[]): boolean {
 }
 
 /** An isolated recording backend already wired to its session events. */
+let windowCount = 0;
+
+/** A window's backend over its own paper: a session's plane is keyed by its
+ *  workspace root, so simultaneous windows get their own. */
 function createListeningBackend(): ReturnType<
   typeof createIsolatedRecordingBackend
 > {
-  const target = createIsolatedRecordingBackend();
+  windowCount += 1;
+  const target = createIsolatedRecordingBackend(
+    createTestSession({
+      roots: createFakeWorkspaceRoots({
+        storagePath: `/workspace/window-${windowCount}/.texra/storage`,
+      }),
+    }),
+  );
   target.backend.setupEventListeners();
   return target;
 }
@@ -758,14 +772,11 @@ describe('ProgressBackend', () => {
       agentCategory: AgentCategory.ToolUse,
     });
     backend.presentLaunchedStream(parentStreamId);
-    target.session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'status',
-        streamId: parentStreamId,
-        phase: STREAM_PHASE.RUNNING,
-        cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
-      },
+    target.session.publishStatus({
+      type: 'status',
+      streamId: parentStreamId,
+      phase: STREAM_PHASE.RUNNING,
+      cause: STREAM_TRANSITION_CAUSE.LIFECYCLE,
     });
     const followUpLease = target.session.followUps.claimLive(
       parentStreamId,
@@ -794,38 +805,25 @@ describe('ProgressBackend', () => {
       total: 4,
     });
 
-    emitRunEvent(target, parentStreamId, {
-      type: 'child.activity',
-      parentStreamId,
-      items: [child],
-    });
+    target.backend.applyChildRoster(parentStreamId, [child]);
 
-    target.session.events.emit({
-      scope: 'session',
-      event: {
+    target.session.publish([
+      {
         type: 'setParentStream',
-        payload: {
-          childStreamId,
-          parentStreamId,
-        },
+        aggregateId: childStreamId,
+        parentStreamId,
       },
-    });
-
-    target.session.events.emit({
-      scope: 'session',
-      event: {
+      {
         type: 'updateQueuedFollowUps',
-        payload: { streamId: parentStreamId },
+        aggregateId: parentStreamId,
+        messages: target.session.followUps.getAll(parentStreamId),
       },
-    });
-
-    target.session.events.emit({
-      scope: 'session',
-      event: {
+      {
         type: 'inquiryThreadUpdated',
-        payload: inquiryThread,
+        aggregateId: inquiryThread.threadId,
+        ...inquiryThread,
       },
-    });
+    ]);
 
     expect(backend.state.getStreamState(parentStreamId)).toMatchObject({
       stage: { kind: 'round', index: 2, total: 4 },
@@ -1022,10 +1020,13 @@ describe('ProgressBackend', () => {
       });
       backend.state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
 
-      backend.applyRunFact(stream, {
-        type: 'conversation.progress',
-        progress: { toolCallCount: 7 },
-      });
+      backend.applySessionEvent(
+        sessionEventOf({
+          type: 'conversation.progress',
+          aggregateId: stream,
+          progress: { toolCallCount: 7 },
+        }),
+      );
 
       await backend.applyStreamStatus(
         stream,
@@ -1081,12 +1082,14 @@ describe('ProgressBackend', () => {
         'setStreamStatus',
       ).mockRejectedValue(failure);
 
-      backend.applySessionFact({
-        type: 'status',
-        streamId: stream,
-        phase: STREAM_PHASE.RUNNING,
-        cause: 'lifecycle',
-      });
+      backend.applySessionEvent(
+        sessionEventOf({
+          type: 'status',
+          aggregateId: stream,
+          phase: STREAM_PHASE.RUNNING,
+          cause: 'lifecycle',
+        }),
+      );
 
       await vi.waitFor(() => {
         expect(

@@ -4,7 +4,6 @@ import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getExecutionStore } from '@agent/storage';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -281,9 +280,8 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('persists durable run facts directly from session events and ignores goalPaused', async () => {
-    const events = new SessionEventHub();
     const writer = new StreamSnapshotStore();
-    const detach = writer.attachSessionEvents(events);
+    const apply = writer.attachSessionEvents();
     const output = outputFile('paper.tex', 1);
     const failure = compileFailure('paper.tex', 1);
     const executionId = 'a1b2c3d4' as ExecutionId;
@@ -306,116 +304,64 @@ describe('StreamSnapshotStore', () => {
       description: 'session-search / kimi26T',
     });
 
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'run.start',
-        streamId: STREAM,
-        executionId,
-        identity: { kind: 'agent', agent: 'session-label' },
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-      },
+    apply({
+      type: 'run.start',
+      aggregateId: STREAM,
+      executionId,
+      identity: { kind: 'agent', agent: 'session-label' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'run.config',
-        streamId: STREAM,
-        executionId,
-        config: runConfig,
-      },
+    apply({
+      type: 'run.config',
+      aggregateId: STREAM,
+      executionId,
+      config: runConfig,
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'updateTodos',
-        streamId: STREAM,
-        todos: [TODO],
-      },
+    apply({
+      type: 'updateTodos',
+      aggregateId: STREAM,
+      todos: [TODO],
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'updatePlan',
-        streamId: STREAM,
-        plan: PLAN,
-      },
+    apply({
+      type: 'updatePlan',
+      aggregateId: STREAM,
+      plan: PLAN,
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'addOutputFiles',
-        streamId: STREAM,
-        filesByRound: { 1: [output] },
-      },
+    apply({
+      type: 'addOutputFiles',
+      aggregateId: STREAM,
+      filesByRound: { 1: [output] },
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'updateMissingOutputs',
-        streamId: STREAM,
-        filesByRound: { 1: ['paper.pdf'] },
-      },
+    apply({
+      type: 'updateMissingOutputs',
+      aggregateId: STREAM,
+      filesByRound: { 1: ['paper.pdf'] },
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'updateCompileFailures',
-        streamId: STREAM,
-        filesByRound: { 1: [failure] },
-      },
+    apply({
+      type: 'updateCompileFailures',
+      aggregateId: STREAM,
+      filesByRound: { 1: [failure] },
     });
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'usage',
-        payload: {
-          streamId: STREAM,
-          storageKey: RUN,
-          usage: extendedUsage,
-        },
-      },
+    apply({
+      type: 'usage',
+      aggregateId: STREAM,
+      storageKey: RUN,
+      usage: extendedUsage,
     });
-    events.emit({
-      scope: 'run',
-      streamId: OTHER_STREAM,
-      event: {
-        type: 'goalPaused',
-        streamId: OTHER_STREAM,
-      },
+    apply({ type: 'goalPaused', aggregateId: OTHER_STREAM });
+    apply({
+      type: 'updateStreamDescription',
+      aggregateId: STREAM,
+      description: 'session-search / kimi26T',
     });
-    events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateStreamDescription',
-        payload: {
-          streamId: STREAM,
-          description: 'session-search / kimi26T',
-        },
-      },
-    });
-    events.emit({
-      scope: 'session',
-      event: {
-        type: 'setParentStream',
-        payload: {
-          childStreamId: STREAM,
-          parentStreamId: OTHER_STREAM,
-        },
-      },
+    apply({
+      type: 'setParentStream',
+      aggregateId: STREAM,
+      parentStreamId: OTHER_STREAM,
     });
 
-    detach();
     await writer.flush();
 
     const reader = new StreamSnapshotStore();
@@ -458,9 +404,8 @@ describe('StreamSnapshotStore', () => {
   });
 
   it('keeps identity pending after run.config until run.start supplies it', async () => {
-    const events = new SessionEventHub();
     const writer = new StreamSnapshotStore();
-    const detach = writer.attachSessionEvents(events);
+    const apply = writer.attachSessionEvents();
     const executionId = 'a1b2c3d4' as ExecutionId;
     const runConfig = toolUseConfig('worker-agent');
     const workflowIdentity = {
@@ -472,33 +417,24 @@ describe('StreamSnapshotStore', () => {
       identity: workflowIdentity,
     });
 
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'run.config',
-        streamId: STREAM,
-        executionId,
-        config: runConfig,
-      },
+    apply({
+      type: 'run.config',
+      aggregateId: STREAM,
+      executionId,
+      config: runConfig,
     });
     // No synthesis from the config: identity stays pending until run.start.
     expect(writer.getRunMetadata(STREAM).identity).toBeUndefined();
 
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'run.start',
-        streamId: STREAM,
-        executionId,
-        identity: workflowIdentity,
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        userFollowUpSupport: 'unsupported',
-      },
+    apply({
+      type: 'run.start',
+      aggregateId: STREAM,
+      executionId,
+      identity: workflowIdentity,
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
-    detach();
     await writer.flush();
 
     expect(writer.getRunMetadata(STREAM).identity).toEqual(workflowIdentity);
@@ -1105,25 +1041,20 @@ describe('StreamSnapshotStore', () => {
 
   it("round-trips a current record's description through ExecutionMeta only (#9590 Stage 6)", async () => {
     await installPlatform();
-    const events = new SessionEventHub();
     const store = new StreamSnapshotStore();
-    const detach = store.attachSessionEvents(events);
+    const apply = store.attachSessionEvents();
     const executionId = 'aa55ff66' as ExecutionId;
     const runConfig = toolUseConfig();
     await getExecutionStore(executionId).writeRunRecord(runConfig);
 
-    events.emit({
-      scope: 'run',
-      streamId: STREAM,
-      event: {
-        type: 'run.start',
-        streamId: STREAM,
-        executionId,
-        identity: { kind: 'agent', agent: 'search' },
-        category: AgentCategory.ToolUse,
-        isRemote: false,
-        userFollowUpSupport: 'unsupported',
-      },
+    apply({
+      type: 'run.start',
+      aggregateId: STREAM,
+      executionId,
+      identity: { kind: 'agent', agent: 'search' },
+      category: AgentCategory.ToolUse,
+      isRemote: false,
+      userFollowUpSupport: 'unsupported',
     });
     // Emitter contract (#9590 A4): the authority write to
     // `ExecutionMeta.description` lands before the display event is emitted.
@@ -1131,15 +1062,12 @@ describe('StreamSnapshotStore', () => {
       timestamp: new Date(0).toISOString(),
       description: 'Current label',
     });
-    events.emit({
-      scope: 'session',
-      event: {
-        type: 'updateStreamDescription',
-        payload: { streamId: STREAM, description: 'Current label' },
-      },
+    apply({
+      type: 'updateStreamDescription',
+      aggregateId: STREAM,
+      description: 'Current label',
     });
     expect(store.getRunMetadata(STREAM).description).toBe('Current label');
-    detach();
     await store.flush();
 
     // Persistence boundary: the sidecar meta carries the execution FK but no
@@ -2721,7 +2649,7 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
     vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
     const store = new StreamSnapshotStore();
     const seen: { stream: string; meta: Record<string, unknown> }[] = [];
-    store.attachSessionEvents(new SessionEventHub(), {
+    store.attachSessionEvents({
       summaryMetaSink: (stream, meta) => seen.push({ stream, meta }),
     });
 
@@ -2771,7 +2699,7 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
       model: 'deepseekproT',
     };
     const store = new StreamSnapshotStore();
-    store.attachSessionEvents(new SessionEventHub(), {
+    store.attachSessionEvents({
       summaryMetaSink: (_stream, meta) => {
         mirroredMeta = meta;
       },
@@ -2803,7 +2731,7 @@ describe('StreamSnapshotStore loud unhydrated access (#9947)', () => {
       model: 'deepseekproT',
     };
     const store = new StreamSnapshotStore();
-    store.attachSessionEvents(new SessionEventHub(), {
+    store.attachSessionEvents({
       summaryMetaSink: (_stream, meta) => {
         mirroredMeta = meta;
       },

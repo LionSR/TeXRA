@@ -19,8 +19,9 @@ export type RunExecutionRequest = (
     // terminal `result` event through it via `attachRunTrace`.
     session: {
       attachRunTrace(
-        trace: {
-          subscribe(fn: (event: unknown) => void): unknown;
+        run: {
+          trace: { subscribe(fn: (event: unknown) => void): unknown };
+          handleStatus: (event: unknown) => void;
         },
         streamId: string,
       ): () => void;

@@ -13,7 +13,6 @@ import {
 import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
 import type { OutputDependencies } from '@agent/implementations/flows/reflection/output/outputState';
 import type { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type {
   AgentFileLocation,
   CompileFailure,
@@ -31,8 +30,8 @@ import {
 } from '@utils/files/fileLocation';
 import {
   createRecordingHost,
-  recordSessionEvents,
-  runEventsOfType,
+  recordTraceEvents,
+  traceEventsOfType,
   testRunScope,
   withTestRunContext,
 } from '../progressTestUtils';
@@ -111,21 +110,13 @@ function createOutputNode(
 function createRecordedRuntime(streamId: string) {
   const { events: hostEvents, host } = createRecordingHost();
   const logger = new TraceEmitter();
-  const hub = new SessionEventHub();
-  const typedStreamId = streamId as StreamTabId;
-  const recorded = recordSessionEvents(hub, { scope: 'run' });
-  const detachTrace = logger.subscribe((event) =>
-    hub.emit({ scope: 'run', streamId: typedStreamId, event }),
-  );
+  const recorded = recordTraceEvents(logger);
   return {
     events: recorded.events,
     host,
     hostEvents,
     logger,
-    dispose: () => {
-      recorded.detach();
-      detachTrace();
-    },
+    dispose: () => {},
   };
 }
 
@@ -216,7 +207,7 @@ describe('output progress events', () => {
       );
 
       expect(transition).toBe('default');
-      expect(runEventsOfType(events, 'addOutputFiles')).toMatchObject([
+      expect(traceEventsOfType(events, 'addOutputFiles')).toMatchObject([
         {
           streamId: 'stream:output-node',
           filesByRound: { 2: [fileInfo] },
@@ -471,7 +462,7 @@ describe('output progress events', () => {
         round,
       );
 
-      expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
+      expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
           streamId: 'stream:processor',
           filesByRound: { [round]: [] },
@@ -515,7 +506,7 @@ describe('output progress events', () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('no files could be extracted');
       // The missing-output signal is still emitted alongside the warning.
-      expect(runEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
+      expect(traceEventsOfType(events, 'updateMissingOutputs')).toMatchObject([
         {
           streamId: 'stream:processor',
           filesByRound: { 5: [] },

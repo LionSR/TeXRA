@@ -3,11 +3,10 @@ import pDefer from 'p-defer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { HubEvent } from '@agent/runtime/SessionEventHub';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
 import type { ProgressHostInteractionsOptions } from '@controllers/progressView/backend/progressHostInteractions';
 import { createExtensionHostInteractions } from '@progressView/extensionHostInteractions';
-import type { StreamTabId } from '@shared/schemas';
+import type { SessionEvent, StreamTabId } from '@shared/schemas';
 import { SESSION_DISPOSED_CAUSE } from '@shared/copy/interactionCancellation';
 import { createTestSession as createIsolatedTestSession } from '@test/support/sessionTestUtils';
 
@@ -15,6 +14,7 @@ import { createTestSession as createIsolatedTestSession } from '@test/support/se
 import { createRecordingApprovalHandlers } from './approvalHandlerSetHarness';
 import {
   bashApprovalRequest,
+  recordSessionEvents,
   toolEditApprovalRequest,
 } from '../agent/progressTestUtils';
 
@@ -105,12 +105,24 @@ function createInteractions(
   };
 }
 
-function recordSessionEvents(session: SessionHandle): HubEvent[] {
-  const events: HubEvent[] = [];
-  session.events.subscribe((event) => events.push(event), {
-    scope: 'session',
+/** The session-scoped facts (never a run's approval facts) published from
+ *  this call on, read synchronously from the session's plane. */
+function recordSessionFacts(session: SessionHandle): SessionEvent[] {
+  const recorded = recordSessionEvents(session);
+  return new Proxy([] as SessionEvent[], {
+    get: (_target, property, receiver) =>
+      Reflect.get(
+        recorded.events.filter(
+          (event) =>
+            event.type === 'status' ||
+            event.type === 'setParentStream' ||
+            event.type === 'stream.removed' ||
+            event.type === 'updateStreamDescription',
+        ),
+        property,
+        receiver,
+      ),
   });
-  return events;
 }
 
 /** A deferred retry preparation that rejects when its AbortSignal fires. */
@@ -286,7 +298,7 @@ describe('createExtensionHostInteractions', () => {
     const { handlers, interactions, session } = createInteractions({
       presentationSink,
     });
-    const sessionEvents = recordSessionEvents(session);
+    const sessionEvents = recordSessionFacts(session);
 
     const resultPromise = interactions.requestPlanApproval?.({
       requestId: 'plan-a',
@@ -353,7 +365,7 @@ describe('createExtensionHostInteractions', () => {
 
   it('surfaces retry requests without stealing active-stream focus (#8246)', () => {
     const session = createTestSession();
-    const sessionEvents = recordSessionEvents(session);
+    const sessionEvents = recordSessionFacts(session);
     const { handlers, interactions } = createInteractions({ session });
 
     void interactions.requestRetry?.({
@@ -696,11 +708,7 @@ describe('createExtensionHostInteractions', () => {
   it('publishes approval facts for the prepared permission the host shows', async () => {
     const session = createTestSession();
     const { handlers, interactions } = createInteractions({ session });
-    const runEvents: HubEvent[] = [];
-    session.events.subscribe((event) => runEvents.push(event), {
-      scope: 'run',
-      streamId: STREAM_A,
-    });
+    const runEvents = recordSessionEvents(session, { aggregateId: STREAM_A });
     session.interactions.use(interactions);
     const { permission } = bashApprovalRequest(
       { command: 'lake build', streamId: STREAM_A },
@@ -714,7 +722,7 @@ describe('createExtensionHostInteractions', () => {
     });
 
     // One requestId per request: the durable fact and the surface agree.
-    expect(runEvents.map((entry) => entry.event)).toEqual([
+    expect(runEvents.events).toMatchObject([
       {
         type: 'approval.requested',
         requestId: permission.requestId,
@@ -730,7 +738,7 @@ describe('createExtensionHostInteractions', () => {
       action: 'reject',
       cause: 'Run ended.',
     });
-    expect(runEvents.at(-1)?.event).toEqual({
+    expect(runEvents.events.at(-1)).toMatchObject({
       type: 'approval.resolved',
       requestId: permission.requestId,
     });
@@ -825,7 +833,7 @@ describe('createExtensionHostInteractions', () => {
       presentationSink,
       session,
     });
-    const sessionEvents = recordSessionEvents(session);
+    const sessionEvents = recordSessionFacts(session);
 
     await expect(
       interactions.openExternalInquiry?.({

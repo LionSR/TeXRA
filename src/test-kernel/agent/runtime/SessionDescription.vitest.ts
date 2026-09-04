@@ -6,11 +6,12 @@ import {
   generateSessionDescription,
   getDisplayedInstruction,
 } from '@agent/runtime/sessionDescription';
-import type { HubEvent } from '@agent/runtime/SessionEventHub';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
+
+import { recordSessionEvents } from '../progressTestUtils';
 
 const mocks = vi.hoisted(() => ({
   createHelperModelKit: vi.fn(),
@@ -92,10 +93,7 @@ describe('session description helpers', () => {
 
   it('uses the exact workflow-agent description carried by launch context', async () => {
     const session = createTestSession();
-    const events: HubEvent[] = [];
-    const detach = session.events.subscribe((event) => events.push(event), {
-      scope: 'session',
-    });
+    const recorded = recordSessionEvents(session);
     const handler = mockToolUseAnswer('Correcting derivation signs');
 
     await runDescription(
@@ -105,7 +103,6 @@ describe('session description helpers', () => {
       AgentCategory.Workflow,
       'Corrects a draft',
     );
-    detach();
 
     expect(handler.initializeMessages.mock.calls[0]?.[1]).toContain(
       '<agent-purpose>Corrects a draft</agent-purpose>',
@@ -114,16 +111,11 @@ describe('session description helpers', () => {
       'exec-workflow',
       'Correcting derivation signs',
     );
-    expect(events).toEqual([
+    expect(recorded.events).toMatchObject([
       {
-        scope: 'session',
-        event: {
-          type: 'updateStreamDescription',
-          payload: {
-            streamId: 'stream-workflow',
-            description: 'Correcting derivation signs',
-          },
-        },
+        type: 'updateStreamDescription',
+        aggregateId: 'stream-workflow',
+        description: 'Correcting derivation signs',
       },
     ]);
   });
@@ -161,29 +153,20 @@ describe('session description helpers', () => {
 
   it('keeps generating compact descriptions for tool-use runs', async () => {
     const session = createTestSession();
-    const events: HubEvent[] = [];
-    const detach = session.events.subscribe((event) => events.push(event), {
-      scope: 'session',
-    });
+    const recorded = recordSessionEvents(session);
     mockToolUseAnswer('Fixing proof typos');
 
     await runDescription('exec-tool', 'stream-tool', session);
-    detach();
 
     expect(mocks.writeSessionDescription).toHaveBeenCalledWith(
       'exec-tool',
       'Fixing proof typos',
     );
-    expect(events).toEqual([
+    expect(recorded.events).toMatchObject([
       {
-        scope: 'session',
-        event: {
-          type: 'updateStreamDescription',
-          payload: {
-            streamId: 'stream-tool',
-            description: 'Fixing proof typos',
-          },
-        },
+        type: 'updateStreamDescription',
+        aggregateId: 'stream-tool',
+        description: 'Fixing proof typos',
       },
     ]);
   });

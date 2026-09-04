@@ -1,6 +1,8 @@
 import { basename } from 'node:path';
 import { type BrowserWindow } from 'electron';
+import { Effect, Fiber, Stream } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
+import { effectRuntime } from '@platform/processRuntime';
 import { STREAM_PHASE } from '@shared/schemas';
 import {
   formatSessionTitle,
@@ -10,7 +12,7 @@ import {
 
 type DesktopTitleSession = Pick<
   SessionHandle,
-  'events' | 'executions' | 'interactions' | 'status'
+  'events' | 'executions' | 'interactions' | 'now' | 'status'
 >;
 
 type DesktopTitleWindow = Pick<
@@ -69,7 +71,13 @@ export function installDesktopWindowTitle(
   window.webContents.on('page-title-updated', preventRendererTitle);
   const disposeRegistrations =
     session.executions.addRegistrationListener(update);
-  const disposeStatus = session.events.subscribeStatus(update);
+  const status = effectRuntime().runFork(
+    Stream.runForEach(session.events.all(session.now()), (event) =>
+      Effect.sync(() => {
+        if (event.type === 'status') update();
+      }),
+    ),
+  );
   const disposePending = session.interactions.onPendingCountChange(update);
   update();
 
@@ -77,7 +85,7 @@ export function installDesktopWindowTitle(
     if (disposed) return;
     disposed = true;
     disposePending();
-    disposeStatus();
+    effectRuntime().runFork(Fiber.interrupt(status));
     disposeRegistrations();
     // Check the window before touching `.webContents`: the property getter
     // itself throws "Object has been destroyed" once the window is gone, so

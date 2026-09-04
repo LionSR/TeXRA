@@ -1,5 +1,4 @@
 import type { AgentEvent } from '@agent/trace';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   CompileFailure,
@@ -77,8 +76,8 @@ export function appendTranscriptText(
 /**
  * Snapshot-store test driver that mirrors the pre-Stage-5 projection mutator
  * signatures but delivers every mutation through the store's one public
- * mutation entry point: session/run facts emitted on an attached
- * {@link SessionEventHub}.
+ * mutation entry point: the session-event projection `attachSessionEvents`
+ * returns, called with the durable arm of each fact.
  */
 export interface SnapshotProjection {
   setRunStart(run: {
@@ -114,18 +113,23 @@ export interface SnapshotProjection {
   setParentStream(child: StreamTabId, parent: StreamTabId | null): void;
 }
 
-/** Attach a fresh hub to `store` and return fact-emitting drivers for it. */
+/** Attach `store`'s projection and return fact-emitting drivers for it. */
 export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
-  const events = new SessionEventHub();
-  store.attachSessionEvents(events);
-  const emitRun = (streamId: StreamTabId, event: AgentEvent): void => {
-    events.emit({ scope: 'run', streamId, event });
+  const project = store.attachSessionEvents();
+  // As `SessionHandle.publish` does: a projection the store rejects is logged
+  // there and the fact still lands; these suites assert what the store kept.
+  const apply: typeof project = (event) => {
+    try {
+      project(event);
+    } catch {
+      // The store's own validation refused the patch; nothing was mutated.
+    }
   };
   return {
     setRunStart: ({ streamId, executionId, identity }) => {
-      emitRun(streamId, {
+      apply({
         type: 'run.start',
-        streamId,
+        aggregateId: streamId,
         executionId,
         identity,
         category: 'toolUse',
@@ -134,53 +138,46 @@ export function snapshotFacts(store: StreamSnapshotStore): SnapshotProjection {
       });
     },
     setRunConfig: (streamId, config, executionId) => {
-      emitRun(streamId, { type: 'run.config', streamId, executionId, config });
+      apply({ type: 'run.config', aggregateId: streamId, executionId, config });
     },
     setTodos: (streamId, todos) => {
-      emitRun(streamId, { type: 'updateTodos', streamId, todos });
+      apply({ type: 'updateTodos', aggregateId: streamId, todos });
     },
     setPlan: (streamId, plan) => {
-      emitRun(streamId, { type: 'updatePlan', streamId, plan });
+      apply({ type: 'updatePlan', aggregateId: streamId, plan });
     },
     addOutputFiles: (streamId, filesByRound) => {
-      emitRun(streamId, { type: 'addOutputFiles', streamId, filesByRound });
+      apply({ type: 'addOutputFiles', aggregateId: streamId, filesByRound });
     },
     updateMissingOutputs: (streamId, filesByRound) => {
-      emitRun(streamId, {
+      apply({
         type: 'updateMissingOutputs',
-        streamId,
+        aggregateId: streamId,
         filesByRound,
       });
     },
     updateCompileFailures: (streamId, filesByRound) => {
-      emitRun(streamId, {
+      apply({
         type: 'updateCompileFailures',
-        streamId,
+        aggregateId: streamId,
         filesByRound,
       });
     },
     addUsage: (streamId, storageKey, usage) => {
-      emitRun(streamId, {
-        type: 'usage',
-        payload: { streamId, storageKey, usage },
-      });
+      apply({ type: 'usage', aggregateId: streamId, storageKey, usage });
     },
     setDescription: (streamId, description) => {
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'updateStreamDescription',
-          payload: { streamId, description },
-        },
+      apply({
+        type: 'updateStreamDescription',
+        aggregateId: streamId,
+        description,
       });
     },
     setParentStream: (child, parent) => {
-      events.emit({
-        scope: 'session',
-        event: {
-          type: 'setParentStream',
-          payload: { childStreamId: child, parentStreamId: parent },
-        },
+      apply({
+        type: 'setParentStream',
+        aggregateId: child,
+        parentStreamId: parent,
       });
     },
   };

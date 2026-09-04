@@ -5,6 +5,7 @@
  * for extracting fields from monolithic signals.
  */
 
+import { Effect, Fiber, Stream, type ManagedRuntime } from 'effect';
 import { SignalWatcher, signal, Signal } from '@lit-labs/signals';
 
 export { SignalWatcher, Signal };
@@ -97,4 +98,31 @@ export function subscribeToSignalChanges(
     disposed = true;
     watcher.unwatch(...signals);
   };
+}
+
+/**
+ * The only meeting point between Effect and the components (PRD
+ * one-fold-three-renderers, 7.5): a signal fed by a stream on the process
+ * runtime. Coalescing is here, by draining arrays and assigning the last
+ * element; `dispose` interrupts the feeding fiber.
+ */
+export function toSignal<A>(
+  runtime: ManagedRuntime.ManagedRuntime<never, never>,
+  changes: Stream.Stream<A>,
+  initial: A,
+): Signal.State<A> & { dispose: () => void } {
+  const s = signal(initial);
+  const fiber = runtime.runFork(
+    Stream.runForEachArray(changes, (values) =>
+      Effect.sync(() => {
+        const last = values.at(-1);
+        if (last !== undefined) s.set(last);
+      }),
+    ),
+  );
+  return Object.assign(s, {
+    dispose: () => {
+      runtime.runFork(Fiber.interrupt(fiber));
+    },
+  });
 }

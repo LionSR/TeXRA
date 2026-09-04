@@ -401,17 +401,15 @@ async function assembleAgentLaunchContext(
       if (traceDisposed) removeSpillFlusher();
     });
     let detachTrace: (() => void) | undefined;
-    let detachStatus: (() => void) | undefined;
     try {
-      detachTrace = session.attachRunTrace(rawRunTrace.trace, streamId);
-      // Status is a session fact, not an AgentEvent: bridge the hub's canonical
-      // status rail into the recorder's transcript-boundary port.
-      detachStatus = session.events.subscribeStatus(rawRunTrace.handleStatus);
+      // The trace's durable arms and the recorder's status port, one
+      // attachment: status is a session fact, not an AgentEvent, and the
+      // recorder hears it through the session in transcript order.
+      detachTrace = session.attachRunTrace(rawRunTrace, streamId);
       attachment.detach = () => {
         // Keep the flusher through the execution lease's post-dispose drain.
         // Its next successful flush removes it from the session.
         traceDisposed = true;
-        detachStatus?.();
         detachTrace?.();
       };
     } catch (error) {

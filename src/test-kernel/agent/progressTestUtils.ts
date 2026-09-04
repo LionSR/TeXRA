@@ -1,5 +1,7 @@
+import { Stream } from 'effect';
+
 // Local imports
-import type { AgentEvent } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
 import { AgentRunStateSnapshotSchema } from '@agent/core/state/AgentState';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
@@ -18,22 +20,18 @@ import {
 } from '@agent/runtime/HostInteractions';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { createRunScope, type RunScope } from '@agent/runtime/RunScope';
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import {
-  SessionEventHub,
-  type HubEvent,
-  type SessionEventSubscriptionFilter,
-  type SessionFact,
-} from '@agent/runtime/SessionEventHub';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { StreamStatusMachine } from '@agent/runtime/StreamStatusService';
 import { createSessionApprovals } from '@agent/runtime/streamApprovalQueue';
 import type { HostBashApprovalRequest } from '@agent/runtime/HostInteractions';
+import { effectRuntime } from '@platform/processRuntime';
 import type {
+  ActiveChildInfo,
   ExecutionId,
   ProgressPermissionKind,
+  SessionEvent,
   StreamTabId,
 } from '@shared/schemas';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import {
   prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
@@ -67,42 +65,107 @@ export interface RecordingHostDecisions {
   ): boolean;
 }
 
+type SessionEventReader = Pick<SessionHandle, 'events' | 'now'>;
+
+/**
+ * The session's log above `fromCommit`, read synchronously: the memory log
+ * completes at once, and `now()` bounds the read so the tail never blocks.
+ */
+function readSessionEvents(
+  session: SessionEventReader,
+  fromCommit = 0,
+): SessionEvent[] {
+  const count = session.now() - fromCommit;
+  if (count <= 0) return [];
+  return effectRuntime().runSync(
+    Stream.runCollect(Stream.take(session.events.all(fromCommit), count)),
+  );
+}
+
+/**
+ * Everything the session publishes from this call on, as a synchronous view
+ * over its log: `events` reads the log at access time, so an assertion right
+ * after a publish sees it. `aggregateId` narrows to one stream's facts.
+ */
 export function recordSessionEvents(
-  hub: SessionEventHub,
-  filter: SessionEventSubscriptionFilter = {},
+  session: SessionEventReader,
+  filter: { readonly aggregateId?: string } = {},
+): { readonly events: SessionEvent[] } {
+  const start = session.now();
+  return {
+    get events() {
+      const events = readSessionEvents(session, start);
+      return filter.aggregateId === undefined
+        ? events
+        : events.filter((event) => event.aggregateId === filter.aggregateId);
+    },
+  };
+}
+
+/** Every child roster a registry tells its listeners from this call on. */
+export function recordChildRosters(
+  registry: Pick<SessionHandle['executions'], 'onChildActivity'>,
 ): {
-  readonly events: HubEvent[];
-  readonly detach: () => void;
+  readonly rosters: Array<{
+    readonly parentStreamId: StreamTabId;
+    readonly items: readonly ActiveChildInfo[];
+  }>;
 } {
-  const events: HubEvent[] = [];
-  const detach = hub.subscribe((event) => events.push(event), filter);
-  return { events, detach };
+  const rosters: Array<{
+    readonly parentStreamId: StreamTabId;
+    readonly items: readonly ActiveChildInfo[];
+  }> = [];
+  registry.onChildActivity((parentStreamId, items) => {
+    rosters.push({ parentStreamId, items });
+  });
+  return { rosters };
 }
 
-export function sessionFactsOfType<T extends SessionFact['type']>(
-  events: readonly HubEvent[],
-  type: T,
-): Array<Extract<SessionFact, { type: T }>> {
-  const facts: Array<Extract<SessionFact, { type: T }>> = [];
-  for (const entry of events) {
-    if (entry.scope !== 'session' || entry.event.type !== type) continue;
-    facts.push(entry.event as Extract<SessionFact, { type: T }>);
-  }
-  return facts;
+/** Every stream whose follow-up queue reports input sent from this call on. */
+export function recordFollowUpsSent(
+  session: Pick<SessionHandle, 'followUps'>,
+): { readonly sent: StreamTabId[] } {
+  const sent: StreamTabId[] = [];
+  session.followUps.onSent((streamId) => sent.push(streamId));
+  return { sent };
 }
 
-export type PayloadSessionFact = Exclude<SessionFact, { type: 'status' }>;
+/** Every event a run trace emits from this call on. */
+export function recordTraceEvents(trace: AgentTrace): {
+  readonly events: AgentEvent[];
+} {
+  const events: AgentEvent[] = [];
+  trace.subscribe((event) => events.push(event));
+  return { events };
+}
 
-export function sessionFactPayloads<T extends PayloadSessionFact['type']>(
-  events: readonly HubEvent[],
+export function traceEventsOfType<T extends AgentEvent['type']>(
+  events: readonly AgentEvent[],
   type: T,
-): unknown[] {
-  const payloads: unknown[] = [];
-  for (const entry of events) {
-    if (entry.scope !== 'session' || entry.event.type !== type) continue;
-    payloads.push(entry.event.payload);
-  }
-  return payloads;
+): Array<Extract<AgentEvent, { type: T }>> {
+  return events.filter(
+    (event): event is Extract<AgentEvent, { type: T }> => event.type === type,
+  );
+}
+
+/**
+ * Let every reader of a session's plane (`events.all`, the fold fiber)
+ * deliver what was published before this call: the readers run on the
+ * process runtime's scheduler, which drains on a macrotask.
+ */
+export async function settleSessionEvents(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+/** The events (or drafts) of one arm. */
+export function eventsOfType<
+  E extends { readonly type: string },
+  T extends E['type'],
+>(events: readonly E[], type: T): Array<Extract<E, { type: T }>> {
+  return events.filter(
+    (event): event is Extract<E, { type: T }> => event.type === type,
+  );
 }
 
 /**
@@ -141,16 +204,6 @@ export function reflectionFlowShared(
     endTurn: false,
     ...overrides,
   };
-}
-
-export function runEventsOfType<T extends AgentEvent['type']>(
-  events: readonly HubEvent[],
-  type: T,
-): Extract<AgentEvent, { type: T }>[] {
-  return events.flatMap((entry) => {
-    if (entry.scope !== 'run' || entry.event.type !== type) return [];
-    return [entry.event as Extract<AgentEvent, { type: T }>];
-  });
 }
 
 interface RecordingHostOptions {
@@ -391,11 +444,13 @@ export function createRecordingHost(options: RecordingHostOptions = {}): {
 }
 
 /**
- * Minimal session stand-in exposing the session owners used by node tests.
- * This is enough for run-scoped code that resolves
- * `currentSession().interactions` (plan approvals, proposals, retries) or
- * `currentSession().approvals` (bypass state, queues) to reach isolated
- * instances.
+ * An isolated session for node tests, with the given host interactions
+ * attached: run-scoped code that resolves `currentSession().interactions`
+ * (plan approvals, proposals, retries) or `currentSession().approvals`
+ * (bypass state, queues) reaches this session's owners. A session's facts are
+ * read back with {@link recordSessionEvents}. Passing another session's
+ * `SessionHostInteractions` makes it this session's owner too, so a
+ * recording host can be shared across the sessions of one test.
  */
 export function sessionWithInteractions(
   interactions:
@@ -403,40 +458,22 @@ export function sessionWithInteractions(
     | SessionHostInteractions
     | Pick<SessionHostInteractions, 'emit'>
     | undefined,
-  eventHub?: SessionEventHub,
 ): SessionHandle {
-  // Like production SessionHandle, the stub carries a real event hub and
-  // co-constructs the status machine on that same hub — emit sites resolve
-  // `session.events` directly, and status facts publish on the hub the
-  // session's listeners read (SessionHandleInit documents why an injected
-  // machine is forbidden). Tests that record status facts pass the hub in.
-  // The interaction owner is constructed with the stub it belongs to, as
-  // production constructs it with the session.
-  const events = eventHub ?? new SessionEventHub();
-  const session = {
-    events,
-    modelRetries: new ModelRetryGate(),
-    status: new StreamStatusMachine(events),
-    transcripts: { ensureLoaded: async () => {} },
-    followUps: { terminalize: () => false },
-    publishRunEvent: (streamId: StreamTabId, event: AgentEvent) =>
-      events.emit({ scope: 'run', streamId, event }),
-  } as unknown as SessionHandle;
-  const owner =
-    interactions instanceof SessionHostInteractions
-      ? interactions
-      : new SessionHostInteractions(session);
-  if (interactions && !(interactions instanceof SessionHostInteractions)) {
-    owner.use(
+  const session = createTestSession();
+  if (interactions instanceof SessionHostInteractions) {
+    Object.assign(session, {
+      interactions,
+      approvals: createSessionApprovals(interactions),
+    });
+    return session;
+  }
+  if (interactions) {
+    session.interactions.use(
       'cancel' in interactions
         ? interactions
         : { ...interactions, cancel: () => {} },
     );
   }
-  Object.assign(session, {
-    interactions: owner,
-    approvals: createSessionApprovals(owner),
-  });
   return session;
 }
 

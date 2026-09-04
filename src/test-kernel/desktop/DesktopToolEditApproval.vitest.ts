@@ -204,6 +204,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
     import('@platform/defaults/nodeFilesystem'),
   ]);
   await installPlatform({ workspacePath }, { fs: nodeFilesystem });
+  await import('@test/support/sessionGraphTestSetup');
 
   const [
     { requestToolEditApproval },

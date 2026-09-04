@@ -8,6 +8,8 @@ import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSe
 import { STREAM_PHASE, type ExecutionId } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
+import { settleSessionEvents } from '../agent/progressTestUtils';
+
 function subscribeOverTestSession() {
   const session = createTestSession();
   const tracker = new StatusBarUsageTracker(session.status, session.snapshots);
@@ -22,33 +24,32 @@ function subscribeOverTestSession() {
 }
 
 function emitUsage(session: SessionHandle): void {
-  session.events.emit({
-    scope: 'run',
-    streamId: 'stream-a',
-    event: {
-      type: 'usage',
-      payload: {
-        streamId: 'stream-a',
-        storageKey: 'run-a' as ExecutionId,
-        usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
-      },
+  session.publishRunEvent('stream-a', {
+    type: 'usage',
+    payload: {
+      streamId: 'stream-a',
+      storageKey: 'run-a' as ExecutionId,
+      usage: { inputTokens: 10, outputTokens: 20, cost: 0.01 },
     },
   });
 }
 
 describe('subscribeStatusBarSessionEvents', () => {
-  it('tracks stream status changes from the session status plane', () => {
+  it('tracks stream status changes from the session status plane', async () => {
     const { session, tracker, onStatusChanged, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
     session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
+    await settleSessionEvents();
 
     expect(tracker.activeStreamCount).toBe(1);
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
     expect(onUsageChanged).not.toHaveBeenCalled();
 
     dispose();
+    await settleSessionEvents();
     session.status.transition('stream-a', STREAM_PHASE.COMPLETED, 'lifecycle');
+    await settleSessionEvents();
     // Disposal stops the status-bar refresh, not the underlying fact: the
     // count is read live from the session status plane, so it still follows
     // the terminal transition.
@@ -56,13 +57,14 @@ describe('subscribeStatusBarSessionEvents', () => {
     expect(onStatusChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('projects run usage the session snapshot store accumulated', () => {
+  it('projects run usage the session snapshot store accumulated', async () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
     session.status.transition('stream-a', STREAM_PHASE.RUNNING, 'lifecycle');
     emitUsage(session);
     emitUsage(session);
+    await settleSessionEvents();
 
     // The snapshot store subscribed at session construction is the one
     // accumulator; the tracker's total is its per-run sum for the stream.
@@ -74,11 +76,12 @@ describe('subscribeStatusBarSessionEvents', () => {
     dispose();
   });
 
-  it('skips the refresh for usage on streams not in flight', () => {
+  it('skips the refresh for usage on streams not in flight', async () => {
     const { session, tracker, onUsageChanged, dispose } =
       subscribeOverTestSession();
 
     emitUsage(session);
+    await settleSessionEvents();
 
     expect(tracker.totalUsage.inputTokens).toBe(0);
     expect(tracker.totalUsage.outputTokens).toBe(0);

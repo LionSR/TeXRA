@@ -1,12 +1,13 @@
-import { describeFollowUpFailure, defaultSession } from '@agent/runtime';
+import { describeFollowUpFailure } from '@agent/runtime';
 import { resumeStream, type ResumeRunOptions } from '@agent/runtime/resumeRun';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
 import type { StreamTabId } from '@shared/schemas';
 
 /** Resume a host-owned stream and present an ordinary refusal consistently. */
 export async function resumeStreamWithRefusalNotice(
   streamId: StreamTabId,
-  options: ResumeRunOptions,
+  options: ResumeRunOptions & { readonly session: SessionHandle },
   onRefused?: (failure: FollowUpFailureReason) => void,
 ): Promise<boolean> {
   const result = await resumeStream(streamId, options);
@@ -14,7 +15,7 @@ export async function resumeStreamWithRefusalNotice(
   if (options.isCancellationRequested?.() === true) return false;
 
   onRefused?.(result.failed);
-  const session = options.session ?? defaultSession();
+  const { session } = options;
   await session.interactions.emit(
     'requestShowInstruction',
     {

@@ -157,13 +157,14 @@ async function launchToolUseRun(
         shared.onProgress?.(update);
       },
       onFollowUpConsumed: () => {
-        ctx.runScope.session.events.emit({
-          scope: 'session',
-          event: {
+        const { session, streamId } = ctx.runScope;
+        session.publish([
+          {
             type: 'updateQueuedFollowUps',
-            payload: { streamId: ctx.runScope.streamId },
+            aggregateId: streamId,
+            messages: session.followUps.getAll(streamId),
           },
-        });
+        ]);
         shared.onFollowUpConsumed?.();
       },
       onFlowRecordDisposition: (disposition) =>

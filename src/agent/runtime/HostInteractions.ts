@@ -671,6 +671,30 @@ export class SessionHostInteractions implements HostInteractions {
     this.activeAttachment?.interactions.setApprovalBypassState?.(update);
   }
 
+  /**
+   * Settle the pending request `requestId` (the id its `approval.requested`
+   * carries) with a decision any surface reached through `runtime.request`
+   * (PRD one-fold-three-renderers, 8.2). The pending set is the one owner of
+   * outstanding requests, so a decision from a second surface lands on the
+   * same request the first one shows. Returns false when no request of that
+   * kind is pending under the id: it settled already, or was never made.
+   */
+  settleRequest<K extends SettledInteractionKind>(
+    kind: K,
+    requestId: string,
+    result: HostInteractionResultByKind[K],
+  ): boolean {
+    for (const pending of this.pending) {
+      if (pending.kind !== kind || pending.fact?.requestId !== requestId) {
+        continue;
+      }
+      if (!this.deletePending(pending)) return false;
+      pending.settle(result);
+      return true;
+    }
+    return false;
+  }
+
   cancel(selector: HostInteractionCancelSelector = {}): void {
     const matching = [...this.pending].filter((pending) =>
       matchesCancelSelector(pending, selector),

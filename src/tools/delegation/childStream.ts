@@ -111,16 +111,12 @@ export function createChildStream(
     if (traceDisposed) removeSpillFlusher();
   });
   let detachSessionTrace: (() => void) | undefined;
-  let detachStatus: (() => void) | undefined;
   let started = false;
   try {
-    detachSessionTrace = session.attachRunTrace(runTrace.trace, childStreamId);
-    // Status is a session fact, not an AgentEvent: bridge the hub's canonical
-    // status rail into the recorder's transcript-boundary port.
-    detachStatus = session.events.subscribeStatus(runTrace.handleStatus);
+    // The trace's durable arms and the recorder's status port, one attachment.
+    detachSessionTrace = session.attachRunTrace(runTrace, childStreamId);
     const disposeTrace = () => {
       traceDisposed = true;
-      detachStatus?.();
       detachSessionTrace?.();
       runTrace.dispose();
     };
@@ -171,16 +167,13 @@ export function createChildStream(
     // Display-only fan-out: the durable copy is `ExecutionMeta.description`,
     // written by `registerExecution` before this stream exists (#9590 Stage 6).
     const description = childStreamDescription(options.description);
-    session.events.emit({
-      scope: 'session',
-      event: {
+    session.publish([
+      {
         type: 'updateStreamDescription',
-        payload: {
-          streamId: childStreamId,
-          description,
-        },
+        aggregateId: childStreamId,
+        description,
       },
-    });
+    ]);
 
     const handle = new AgentExecutionHandle(
       {
@@ -258,7 +251,6 @@ export function createChildStream(
         });
       },
       () => removeSpillFlusher(),
-      () => detachStatus?.(),
       () => detachSessionTrace?.(),
       () => runTrace.dispose(),
     ];
@@ -378,12 +370,8 @@ async function finalizeChildStream(
   disposeTrace();
 
   if (options.autoClose) {
-    session.events.emit({
-      scope: 'session',
-      event: {
-        type: 'removeStream',
-        payload: { streamId: handle.childStreamId },
-      },
-    });
+    session.publish([
+      { type: 'stream.removed', aggregateId: handle.childStreamId },
+    ]);
   }
 }

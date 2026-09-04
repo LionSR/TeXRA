@@ -1,6 +1,7 @@
+import { Effect, Fiber, Stream } from 'effect';
+
 import PQueue from 'p-queue';
 
-import { RUN_FACT_EVENT_TYPES } from '@agent/trace';
 import type { DeleteStreamResult, SessionStores } from '@agent/storage';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import type { HostApprovalBypassStateUpdate } from '@agent/runtime/HostInteractions';
@@ -22,8 +23,13 @@ import {
   type BuildApprovalRequestHandlerSetParams,
 } from '@controllers/progressView/backend/progressBackendUiConfig';
 import { createLog } from '@logger/logUtils';
+import { effectRuntime } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
-import type { ProgressViewOutboundMessage, StreamTabId } from '@shared/schemas';
+import type {
+  ActiveChildInfo,
+  ProgressViewOutboundMessage,
+  StreamTabId,
+} from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { RETRY_REQUEST_CLEARED_CAUSE } from '@shared/copy/interactionCancellation';
 import { isInFlightPhase } from '@shared/streams/streamStatus';
@@ -415,21 +421,16 @@ export class ProgressBackend {
   }
 
   /**
-   * Admit one session fact through the applier.
+   * Admit one session event through the applier.
    *
-   * Public so tests and rare host seeds can inject a fact directly;
-   * production reaches it through the hub subscription in
+   * Public so tests and rare host seeds can inject an event directly;
+   * production reaches it through the plane reader in
    * {@link setupEventListeners}.
    */
-  applySessionFact(
-    fact: Parameters<SessionFactApplier['handleSessionFact']>[0],
+  applySessionEvent(
+    event: Parameters<SessionFactApplier['apply']>[0],
   ): boolean {
-    return this.factApplier.handleSessionFact(fact);
-  }
-
-  /** Inject a run fact (tests / rare host seeds). Prefer the hub in production. */
-  applyRunFact(...args: Parameters<SessionFactApplier['handleRunFact']>): void {
-    this.factApplier.handleRunFact(...args);
+    return this.factApplier.apply(event);
   }
 
   /**
@@ -864,24 +865,46 @@ export class ProgressBackend {
   }
 
   /**
-   * Attach this backend's session-fact listeners. {@link dispose} detaches
-   * them, so a fact emitted afterwards reaches no handler and callers need no
+   * Attach this backend's reader of the session's event plane, from now on
+   * (PRD one-fold-three-renderers, 7.1): every event in commit order, applied
+   * to canonical state and the renderer. {@link dispose} interrupts it, so an
+   * event published afterwards reaches no handler and callers need no
    * subscription handle of their own. Attaching after disposal is a no-op:
    * a host can close its window while its presentation is still being built.
    */
   setupEventListeners(): void {
     if (this.disposed) return;
-    this.detachEventListeners.push(
-      this.session.events.subscribeSessionFacts((fact) => {
-        this.applySessionFact(fact);
-      }),
-      this.session.events.subscribeRunFacts(
-        (runFact) => {
-          this.factApplier.handleRunFact(runFact.streamId, runFact.event);
-        },
-        { types: RUN_FACT_EVENT_TYPES },
+    const { session } = this;
+    const reader = effectRuntime().runFork(
+      Stream.runForEach(session.events.all(session.now()), (event) =>
+        Effect.sync(() => {
+          this.factApplier.apply(event);
+        }),
       ),
     );
+    this.detachEventListeners.push(() => {
+      effectRuntime().runFork(Fiber.interrupt(reader));
+    });
+    // The live child roster is presentation state the registry holds, never
+    // a plane row: listen, then seed every parent's current roster, after the
+    // plane reader so the first renderer output cannot precede either.
+    this.detachEventListeners.push(
+      session.executions.onChildActivity((parent, items) =>
+        this.applyChildRoster(parent, items),
+      ),
+    );
+    for (const streamId of this.state.streamLogs.keys()) {
+      const subagents = session.executions.getActiveChildren(streamId);
+      if (subagents.length > 0) this.applyChildRoster(streamId, subagents);
+    }
+  }
+
+  /** Apply one parent's live child roster, as the registry reports it. */
+  applyChildRoster(
+    parentStreamId: StreamTabId,
+    items: readonly ActiveChildInfo[],
+  ): void {
+    this.factApplier.applyChildRoster(parentStreamId, [...items]);
   }
 
   /** The backend's single teardown: no host holds a second disposal handle. */

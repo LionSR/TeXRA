@@ -42,6 +42,7 @@ import {
   STREAM_PHASE,
   AgentCategory,
   type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { testModelCell } from '../modelCellTestUtils';
@@ -425,10 +426,17 @@ describe('AgentLaunchContext', () => {
     const session = createTestSession({
       responseTextProcessing,
     });
-    const detachEvents = session.events.subscribe(() => undefined);
-    const detachStatus = session.events.subscribeStatus(({ phase }) => {
-      if (phase === STREAM_PHASE.FAILED) order.push('terminal');
-    });
+    // The recorder-style status port hears the terminal fact in publish
+    // order, before any renderer wakes.
+    const detachStatus = session.attachRunTrace(
+      {
+        trace: noopTrace,
+        handleStatus: ({ phase }) => {
+          if (phase === STREAM_PHASE.FAILED) order.push('terminal');
+        },
+      },
+      'stream:launch-context-order' as StreamTabId,
+    );
     const stage = noopTrace.openStage('Run');
     const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
       order.push('stage');
@@ -496,7 +504,6 @@ describe('AgentLaunchContext', () => {
         'handler',
       ]);
     } finally {
-      detachEvents();
       detachStatus();
       session.dispose();
     }

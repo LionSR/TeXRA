@@ -58,10 +58,11 @@ import {
   type ExecutionId,
   type StreamTabId,
   AgentCategory,
+  type SessionEvent,
 } from '@shared/schemas';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createToolUseResumeData } from '@test/support/toolUseResumeTestUtils';
-import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
+import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 
 const LAUNCH_FAILURE = new Error('stop after stream activation');
 const MODEL_HANDLER_KEY = 'ModelHandlerOpenAIResponse' as const;
@@ -76,10 +77,9 @@ interface StartedLaunch {
   readonly session: ReturnType<typeof createTestSession>;
   /** The creation fact; absent on a resume, which activates an existing
    *  stream and mints no `run.start` (decision 9). */
-  readonly start:
-    ReturnType<typeof runEventsOfType<'run.start'>>[number] | undefined;
-  readonly activate: ReturnType<typeof runEventsOfType<'run.activate'>>[number];
-  readonly result: ReturnType<typeof runEventsOfType<'result'>>[number];
+  readonly start: Extract<SessionEvent, { type: 'run.start' }> | undefined;
+  readonly activate: Extract<SessionEvent, { type: 'run.activate' }>;
+  readonly result: Extract<SessionEvent, { type: 'result' }>;
 }
 
 /**
@@ -92,7 +92,7 @@ async function captureStartedLaunch(
   options: { readonly resumed?: boolean } = {},
 ): Promise<StartedLaunch> {
   const session = createTestSession();
-  const recordedSession = recordSessionEvents(session.events);
+  const recordedSession = recordSessionEvents(session);
   const trace = new TraceEmitter();
   const handler = {
     capabilities: { supportsVision: false, supportsNativeAudio: false },
@@ -120,11 +120,11 @@ async function captureStartedLaunch(
 
   try {
     await expect(run(session)).rejects.toBe(LAUNCH_FAILURE);
-    const starts = runEventsOfType(recordedSession.events, 'run.start');
+    const starts = eventsOfType(recordedSession.events, 'run.start');
     expect(starts).toHaveLength(options.resumed ? 0 : 1);
-    const activations = runEventsOfType(recordedSession.events, 'run.activate');
+    const activations = eventsOfType(recordedSession.events, 'run.activate');
     expect(activations).toHaveLength(1);
-    const results = runEventsOfType(recordedSession.events, 'result');
+    const results = eventsOfType(recordedSession.events, 'result');
     expect(results).toHaveLength(1);
     return {
       session,
@@ -133,7 +133,6 @@ async function captureStartedLaunch(
       result: results[0],
     };
   } finally {
-    recordedSession.detach();
     session.dispose();
   }
 }
@@ -152,10 +151,10 @@ function expectStartedThenFailed(
   if (!start) throw new Error('a fresh launch emits run.start');
   expect(start).toMatchObject({
     identity: { kind: 'agent', agent: 'chat' },
-    agentCategory: AgentCategory.ToolUse,
+    category: AgentCategory.ToolUse,
     isRemote: false,
     background: isSubagent,
-    approvalPolicy: launch.session.approvalPolicySnapshotFor(start.streamId),
+    approvalPolicy: launch.session.approvalPolicySnapshotFor(start.aggregateId),
   });
   expectActivatedThenFailed(launch, isSubagent);
   expect(launch.result).toMatchObject({ executionId: start.executionId });
@@ -174,10 +173,10 @@ function expectActivatedThenFailed(
   });
   expect(launch.result).toMatchObject({
     outcome: RUN_OUTCOME.FAILED,
-    streamId: launch.activate.streamId,
+    aggregateId: launch.activate.aggregateId,
     isSubagent,
   });
-  expect(launch.session.status.get(launch.activate.streamId)).toBe(
+  expect(launch.session.status.get(launch.activate.aggregateId)).toBe(
     STREAM_PHASE.FAILED,
   );
 }
@@ -218,7 +217,7 @@ describe('native agent launch activation', () => {
 
       expectStartedThenFailed(launch, isSubagent === true);
       expect(launch.start).not.toHaveProperty('parentStreamId');
-      expect(launch.activate.streamId).toBe(launch.start?.streamId);
+      expect(launch.activate.aggregateId).toBe(launch.start?.aggregateId);
     },
   );
 
@@ -248,7 +247,7 @@ describe('native agent launch activation', () => {
       // fact, one activation on the same failure path.
       expectActivatedThenFailed(launch, isSubagent);
       expect(launch.start).toBeUndefined();
-      expect(launch.activate.streamId).toBe(streamId);
+      expect(launch.activate.aggregateId).toBe(streamId);
     },
   );
 });

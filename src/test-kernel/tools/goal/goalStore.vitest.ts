@@ -10,8 +10,10 @@ import {
 import type { StateStore } from '@platform/interfaces';
 import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { GoalStore, subscribeGoalStateChanges } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
@@ -81,6 +83,13 @@ class BlockingFirstIndexWriteState implements StateStore {
 }
 
 /** Records every goal-state change delivered to one session. */
+/** The roots of one paper: a session's plane is keyed by its storage root. */
+function paperRoots(name: string) {
+  return createFakeWorkspaceRoots({
+    storagePath: `/workspace/${name}/.texra/storage`,
+  });
+}
+
 function collectGoalChanges(session: SessionHandle): {
   seen: unknown[];
   clear: () => void;
@@ -151,8 +160,10 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
   });
 
   it('routes explicit-session forget notifications only to the passed session', async () => {
-    const runSession = createTestSession();
-    const explicitSession = createTestSession();
+    const runSession = createTestSession({ roots: paperRoots('run') });
+    const explicitSession = createTestSession({
+      roots: paperRoots('explicit'),
+    });
     const run = collectGoalChanges(runSession);
     const explicit = collectGoalChanges(explicitSession);
     const fallback = collectGoalChanges(defaultSession());
@@ -161,6 +172,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
       await inSession(runSession, () =>
         GoalStore.start(STREAM_A, 'objective one'),
       );
+      await settleSessionEvents();
       run.clear();
       explicit.clear();
       fallback.clear();
@@ -168,6 +180,7 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
       await inSession(runSession, () =>
         GoalStore.forget(STREAM_A, explicitSession),
       );
+      await settleSessionEvents();
 
       expect(run.seen).toEqual([]);
       expect(explicit.seen).toEqual([{ streamId: STREAM_A }]);
@@ -252,36 +265,35 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
 describe('subscribeGoalStateChanges', () => {
   setupPlatform();
 
-  it('delivers only goal changes from the supplied session', () => {
-    const sessionA = createTestSession();
-    const sessionB = createTestSession();
+  it('delivers only goal changes from the supplied session', async () => {
+    // Two papers: a session's plane is its workspace root's.
+    const sessionA = createTestSession({ roots: paperRoots('a') });
+    const sessionB = createTestSession({ roots: paperRoots('b') });
     const { seen, detach } = collectGoalChanges(sessionA);
 
     try {
-      sessionB.events.emit({
-        scope: 'session',
-        event: {
+      sessionB.publish([
+        {
           type: 'goalStateChanged',
-          payload: { streamId: 'other-session' as StreamTabId },
+          aggregateId: 'other-session' as StreamTabId,
+          state: { active: false },
         },
-      });
-      sessionA.events.emit({
-        scope: 'session',
-        event: {
+      ]);
+      sessionA.publish([
+        {
           type: 'updateStreamDescription',
-          payload: {
-            streamId: 'same-session' as StreamTabId,
-            description: 'not a goal change',
-          },
+          aggregateId: 'same-session' as StreamTabId,
+          description: 'not a goal change',
         },
-      });
-      sessionA.events.emit({
-        scope: 'session',
-        event: {
+      ]);
+      sessionA.publish([
+        {
           type: 'goalStateChanged',
-          payload: { streamId: 'same-session' as StreamTabId },
+          aggregateId: 'same-session' as StreamTabId,
+          state: { active: false },
         },
-      });
+      ]);
+      await settleSessionEvents();
 
       expect(seen).toEqual([{ streamId: 'same-session' }]);
     } finally {
@@ -292,8 +304,8 @@ describe('subscribeGoalStateChanges', () => {
   });
 
   it('routes start, status, and edit notifications through the current run session only', async () => {
-    const runSession = createTestSession();
-    const otherSession = createTestSession();
+    const runSession = createTestSession({ roots: paperRoots('run') });
+    const otherSession = createTestSession({ roots: paperRoots('other') });
     const run = collectGoalChanges(runSession);
     const other = collectGoalChanges(otherSession);
     const fallback = collectGoalChanges(defaultSession());
@@ -307,6 +319,7 @@ describe('subscribeGoalStateChanges', () => {
           'prove the sharp estimate',
         );
       });
+      await settleSessionEvents();
 
       expect(run.seen).toEqual([
         { streamId: SUBSCRIPTION_STREAM },

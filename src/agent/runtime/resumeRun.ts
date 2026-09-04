@@ -490,10 +490,13 @@ async function resumeQueuedToolUse(
   let resumeError: { error: unknown } | undefined;
   let runResult: AgentRuntimeFlowResult | undefined;
   const notifyQueued = (): void => {
-    session.events.emit({
-      scope: 'session',
-      event: { type: 'updateQueuedFollowUps', payload: { streamId } },
-    });
+    session.publish([
+      {
+        type: 'updateQueuedFollowUps',
+        aggregateId: streamId,
+        messages: session.followUps.getAll(streamId),
+      },
+    ]);
   };
   const restoreFollowUps = (): void => {
     if (followUpsRestored) return;

@@ -52,7 +52,10 @@ function runAgentEmittingResult(result: {
 }): RunExecutionRequest {
   return vi.fn(async (_request, options) => {
     const trace = makeFakeTrace();
-    options.session.attachRunTrace(trace, result.streamId);
+    options.session.attachRunTrace(
+      { trace, handleStatus: () => {} },
+      result.streamId,
+    );
     trace.emit({
       type: 'result',
       outcome: result.outcome,
@@ -89,8 +92,6 @@ async function createExecution(options: {
   }) => void;
 }): Promise<DesktopExecution> {
   vi.resetModules();
-  const { installPlatform } = await import('@test/support/setupPlatform');
-  await installPlatform();
   mocks.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData: vi.fn(async () => null),
   }));
@@ -132,6 +133,11 @@ async function createExecution(options: {
     prepareMainViewExecutionRequest: options.prepareMainViewExecutionRequest,
     prepareMainViewTeamExecutionRequest: vi.fn(),
   }));
+  // After the mocks: the session graph family is built over the modules the
+  // execution's production code will import.
+  const { installPlatform } = await import('@test/support/setupPlatform');
+  await installPlatform();
+  await import('@test/support/sessionGraphTestSetup');
   const { createDesktopAgentExecution } = await loadSourceModule(
     '@desktop/main/desktopAgentExecution',
   );

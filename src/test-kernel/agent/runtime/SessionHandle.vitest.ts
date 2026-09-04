@@ -217,7 +217,8 @@ describe('SessionHandle', () => {
       expect(fresh.executions).not.toBe(fallback.executions);
       expect(fresh.interactions).not.toBe(fallback.interactions);
       expect(fresh.status).not.toBe(fallback.status);
-      expect(fresh.events).not.toBe(fallback.events);
+      // `events` is the root's plane (`Sessions`, keyed by workspace root),
+      // shared by every session on one root by design.
       expect(fresh.transcripts).not.toBe(fallback.transcripts);
       expect(fresh.snapshots).not.toBe(fallback.snapshots);
       expect(fresh.followUps).not.toBe(fallback.followUps);

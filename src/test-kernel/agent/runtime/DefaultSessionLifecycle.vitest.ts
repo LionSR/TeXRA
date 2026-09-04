@@ -48,6 +48,7 @@ async function importSessionRuntime() {
   // construction; reinstall the suite default into it.
   const { installPlatform } = await import('@test/support/setupPlatform');
   await installPlatform();
+  await import('@test/support/sessionGraphTestSetup');
   const sessionModule = await import('@agent/runtime/SessionHandle');
   const { StreamLogStore } = await import('@transcript');
   return { ...sessionModule, StreamLogStore };

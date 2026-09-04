@@ -32,16 +32,15 @@ export function createSessionStores(session: SessionHandle): SessionStores {
       // activations included, which `getActiveChildren` cannot see. This hook
       // only projects the durable children it left behind.
       const detached = new Set(session.executions.detachActiveChildren(parent));
-      for (const child of children) {
-        if (detached.has(child)) continue;
-        session.events.emit({
-          scope: 'session',
-          event: {
-            type: 'setParentStream',
-            payload: { childStreamId: child, parentStreamId: null },
-          },
-        });
-      }
+      session.publish(
+        children
+          .filter((child) => !detached.has(child))
+          .map((child) => ({
+            type: 'setParentStream' as const,
+            aggregateId: child,
+            parentStreamId: null,
+          })),
+      );
     },
   });
 }

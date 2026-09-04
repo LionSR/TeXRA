@@ -237,7 +237,7 @@ interface UsageEvent extends StageStamp {
 /**
  * Stream lifecycle phase change emitted by the session-owned status machine.
  * Not an {@link AgentEvent} arm: status travels only as a canonical session
- * fact on the `SessionEventHub` rail. The type stays here because the trace
+ * fact on the session's event plane (`SessionHandle.publishStatus`). The type stays here because the trace
  * package owns the event vocabulary the fact reuses.
  */
 export interface StatusEvent extends StageStamp {

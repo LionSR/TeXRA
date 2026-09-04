@@ -418,27 +418,12 @@ export class DesktopProgressBridge {
     if (this.disposed) return;
     // No metadata refresh loop: `getStreamMetadata` overlays the
     // always-resident summary mirror at read time, so canonical state is
-    // already visible (#9947).
-    //
-    // Child activity is live presentation state rather than durable history.
-    // Seed it only after attaching the presentation and every live-event
-    // subscription, so the first renderer output cannot precede either.
+    // already visible (#9947). The live child rosters are seeded by the
+    // backend's `setupEventListeners`, after every live subscription.
     for (const streamId of this.streamLogs.keys()) {
       const category = this.state.getStreamMetadata(streamId).agentCategory;
       if (category) {
         this.state.getOrCreateStreamState(streamId, category);
-      }
-      const subagents = this.session.executions.getActiveChildren(streamId);
-      if (subagents.length > 0) {
-        this.session.events.emit({
-          scope: 'run',
-          streamId,
-          event: {
-            type: 'child.activity',
-            parentStreamId: streamId,
-            items: subagents,
-          },
-        });
       }
     }
     this.presentationReady = true;

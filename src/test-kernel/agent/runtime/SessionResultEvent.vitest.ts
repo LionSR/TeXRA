@@ -106,14 +106,20 @@ describe('terminal result event', () => {
 
   it('emits exactly one completed result even if terminal stream-status cleanup throws', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
-    // A status subscriber that throws on the terminal (COMPLETED) transition,
-    // not the initial RUNNING one. The hub isolates subscribers, so the run's
+    // A status port that throws on the terminal (COMPLETED) transition, not
+    // the initial RUNNING one. The session isolates its ports, so the run's
     // completed result remains the sole terminal result.
-    const off = ctx.runScope.session.events.subscribeStatus(({ phase }) => {
-      if (phase === STREAM_PHASE.COMPLETED) {
-        throw new Error('status subscriber boom');
-      }
-    });
+    const off = ctx.runScope.session.attachRunTrace(
+      {
+        trace: new TraceEmitter(),
+        handleStatus: ({ phase }) => {
+          if (phase === STREAM_PHASE.COMPLETED) {
+            throw new Error('status subscriber boom');
+          }
+        },
+      },
+      ctx.runScope.streamId,
+    );
     try {
       await expect(
         runFlowWithLifecycle(ctx, async () => completedRun(ctx)),
@@ -212,11 +218,17 @@ describe('terminal result event', () => {
 
   it('emits the failed result before terminal error status subscribers run', async () => {
     const { ctx, streamStatus, results } = setupResultCase();
-    const off = ctx.runScope.session.events.subscribeStatus(({ phase }) => {
-      if (phase === STREAM_PHASE.FAILED) {
-        throw new Error('status subscriber boom');
-      }
-    });
+    const off = ctx.runScope.session.attachRunTrace(
+      {
+        trace: new TraceEmitter(),
+        handleStatus: ({ phase }) => {
+          if (phase === STREAM_PHASE.FAILED) {
+            throw new Error('status subscriber boom');
+          }
+        },
+      },
+      ctx.runScope.streamId,
+    );
     try {
       await expect(runFlowWithLifecycle(ctx, explodedRun)).rejects.toThrow(
         'model exploded',
@@ -320,7 +332,10 @@ describe('terminal result event', () => {
     const session = createTestSession();
     const onResult = vi.fn();
     const { logger, ctx, streamStatus } = setupResultCase();
-    const detach = session.attachRunTrace(logger, ctx.runScope.streamId);
+    const detach = session.attachRunTrace(
+      { trace: logger, handleStatus: () => {} },
+      ctx.runScope.streamId,
+    );
     session.onResult(onResult);
     try {
       await runFlowWithLifecycle(ctx, async () => completedRun(ctx), {

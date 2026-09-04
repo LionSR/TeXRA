@@ -8,7 +8,6 @@ import {
 import { recordNormalizedUsage } from '@agent/core/usage/RunUsageAccumulator';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { RunModelHandler } from '@agent/runtime/ModelCell';
-import { SessionEventHub } from '@agent/runtime/SessionEventHub';
 import {
   AgentCategory,
   type ExecutionId,
@@ -18,7 +17,7 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local file imports
 import { testModelCell } from '../modelCellTestUtils';
-import { recordSessionEvents, runEventsOfType } from '../progressTestUtils';
+import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
 import { testModelInfo } from '../runtime/launchContextTestUtils';
 
 // One restore after each test covers every vi.spyOn in this file.
@@ -30,13 +29,9 @@ type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();
-  const hub = new SessionEventHub();
   const executionId = 'usage-last-totals' as ExecutionId;
   const streamId = 'stream:usage-last-totals' as StreamTabId;
-  const recorded = recordSessionEvents(hub, { scope: 'run' });
-  const detachTrace = logger.subscribe((event) =>
-    hub.emit({ scope: 'run', streamId, event }),
-  );
+  const recorded = recordTraceEvents(logger);
   const modelCell = testModelCell({ ...testModelInfo, dispose: vi.fn() });
   const monitor = new UsageMonitor(
     modelCell,
@@ -48,10 +43,7 @@ function createMonitorWithEvents() {
     modelCell,
     logger,
     events: recorded.events,
-    dispose: () => {
-      recorded.detach();
-      detachTrace();
-    },
+    dispose: () => {},
   };
 }
 
@@ -95,7 +87,7 @@ describe('UsageMonitor', () => {
 
       await monitor.recordUsage(state);
 
-      const usageEvent = runEventsOfType(events, 'usage').at(0);
+      const usageEvent = traceEventsOfType(events, 'usage').at(0);
       expect(usageEvent?.payload).toMatchObject({
         usage: {
           usageRoute: 'chatgpt-subscription',
@@ -125,7 +117,7 @@ describe('UsageMonitor', () => {
       expect(state.usageAccumulator.latestUsage).toBeNull();
       await monitor.recordUsage(state);
 
-      expect(runEventsOfType(events, 'usage')).toHaveLength(1);
+      expect(traceEventsOfType(events, 'usage')).toHaveLength(1);
       expect(log).toHaveBeenCalledTimes(1);
       expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
       expect(state.usageAccumulator.totals).toMatchObject({

@@ -1390,6 +1390,8 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             agentResumeHandler.dispose();
             processResources.dispose();
           },
+          // Last: every paper's session has released its graph above.
+          () => platformInit.runtime.dispose(),
         ],
       });
 

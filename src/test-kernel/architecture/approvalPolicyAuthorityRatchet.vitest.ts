@@ -34,6 +34,9 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
  */
 const SEED_CALL_ALLOWLIST = new Set([
   'src/agent/runtime/SessionHandle.ts',
+  // The `policy.set` request arm (PRD one-fold-three-renderers, 8.2): a
+  // surface's field-level mutation, applied by the authority.
+  'src/controllers/session/SessionRequests.ts',
   'packages/cli/src/runtime/runExecution.ts',
   'packages/cli/src/runtime/approvalAdapter.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',

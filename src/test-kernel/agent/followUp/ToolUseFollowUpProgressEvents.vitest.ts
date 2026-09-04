@@ -18,18 +18,27 @@ import {
   seedStreamStatusForTest,
 } from '@test/support/streamStatusTestUtils';
 import { testExecutionHandle } from '@test/support/executionHandleFixtures';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
-import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
+import {
+  createRecordingHost,
+  recordFollowUpsSent,
+  recordSessionEvents,
+} from '../progressTestUtils';
 
 const streamId = 'stream:follow-up' as StreamTabId;
 
-function followUpSentEvent(stream: StreamTabId) {
-  return {
-    scope: 'session',
-    event: { type: 'followUpSent', payload: { streamId: stream } },
-  };
+let paperCount = 0;
+
+/** The roots of one paper: a session's plane is keyed by its storage root,
+ *  so sessions that must not hear each other get their own. */
+function paperRoots() {
+  paperCount += 1;
+  return createFakeWorkspaceRoots({
+    storagePath: `/workspace/paper-${paperCount}/.texra/storage`,
+  });
 }
 
 describe('tool-use follow-up progress events', () => {
@@ -55,7 +64,7 @@ describe('tool-use follow-up progress events', () => {
   });
 
   function trackSession(): SessionHandle {
-    const session = createTestSession();
+    const session = createTestSession({ roots: paperRoots() });
     sessions.add(session);
     return session;
   }
@@ -90,7 +99,7 @@ describe('tool-use follow-up progress events', () => {
   it('publishes sent follow-up events through the owning session fact hub', async () => {
     const run = createRecordingHost();
     const session = trackSession();
-    const recorded = recordSessionEvents(session.events);
+    const sent = recordFollowUpsSent(session);
     const lease = session.followUps.claimLive(streamId, 'flow')!;
 
     trackToolUseFlow({ session });
@@ -98,13 +107,12 @@ describe('tool-use follow-up progress events', () => {
     const result = await submitFollowUp(streamId, 'please continue', {
       session,
     });
-    recorded.detach();
 
     expect(result).toEqual({ status: 'sent' });
     expect(session.followUps.queue(lease).drainItems()).toMatchObject([
       { text: 'please continue', origin: 'user' },
     ]);
-    expect(recorded.events).toEqual([followUpSentEvent(streamId)]);
+    expect(sent.sent).toEqual([streamId]);
     expect(run.events).toEqual([]);
   });
 
@@ -112,41 +120,32 @@ describe('tool-use follow-up progress events', () => {
     const run = createRecordingHost();
     const explicitSession = trackSession();
     const activeSession = trackSession();
-    const explicit = recordSessionEvents(explicitSession.events);
-    const active = recordSessionEvents(activeSession.events);
+    const explicit = recordFollowUpsSent(explicitSession);
+    const active = recordFollowUpsSent(activeSession);
 
-    try {
-      withRunContext(
-        createRunContext({
-          session: activeSession,
-        }),
-        () => notifyFollowUpSent(streamId, explicitSession),
-      );
+    withRunContext(
+      createRunContext({
+        session: activeSession,
+      }),
+      () => notifyFollowUpSent(streamId, explicitSession),
+    );
 
-      expect(explicit.events).toEqual([followUpSentEvent(streamId)]);
-      expect(active.events).toEqual([]);
-      expect(run.events).toEqual([]);
-    } finally {
-      explicit.detach();
-      active.detach();
-    }
+    expect(explicit.sent).toEqual([streamId]);
+    expect(active.sent).toEqual([]);
+    expect(run.events).toEqual([]);
   });
 
   it("routes follow-up sent notifications through the active run's current session", () => {
     const run = createRecordingHost();
     const session = trackSession();
-    const recorded = recordSessionEvents(session.events);
+    const sent = recordFollowUpsSent(session);
 
-    try {
-      withRunContext(createRunContext({ session }), () =>
-        notifyFollowUpSent(streamId),
-      );
+    withRunContext(createRunContext({ session }), () =>
+      notifyFollowUpSent(streamId),
+    );
 
-      expect(recorded.events).toEqual([followUpSentEvent(streamId)]);
-      expect(run.events).toEqual([]);
-    } finally {
-      recorded.detach();
-    }
+    expect(sent.sent).toEqual([streamId]);
+    expect(run.events).toEqual([]);
   });
 
   it('aborts a blocking wait when the owning session emits followUpSent', () => {
@@ -195,20 +194,16 @@ describe('tool-use follow-up progress events', () => {
 
   it('does not emit a follow-up sent fact when no follow-up reaches a live session', async () => {
     const session = trackSession();
-    const recorded = recordSessionEvents(session.events);
+    const recorded = recordSessionEvents(session);
 
-    try {
-      const result = await submitFollowUp(
-        'stream:no-follow-up-session' as StreamTabId,
-        'cannot deliver',
-        { session },
-      );
+    const result = await submitFollowUp(
+      'stream:no-follow-up-session' as StreamTabId,
+      'cannot deliver',
+      { session },
+    );
 
-      expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
-      expect(recorded.events).toEqual([]);
-    } finally {
-      recorded.detach();
-    }
+    expect(result).toEqual({ status: 'failed', reason: 'not_resumable' });
+    expect(recorded.events).toEqual([]);
   });
 
   it('queues follow-ups for resuming streams through registry admission', async () => {

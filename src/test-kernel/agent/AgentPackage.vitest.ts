@@ -14,14 +14,8 @@ import {
   vi,
 } from 'vitest';
 
-interface RunEventEnvelope {
-  readonly scope: string;
-  readonly streamId: string;
-  readonly event: unknown;
-}
-
 interface RunAgentOptions {
-  readonly onStreamResolved?: (streamId: string) => void;
+  readonly onRun?: (handle: unknown) => void | Promise<void>;
 }
 
 const mocks = vi.hoisted(() => ({
@@ -33,13 +27,13 @@ const mocks = vi.hoisted(() => ({
   interruptClaudeAgentSessions: vi.fn(),
   interruptCodexThreads: vi.fn(),
   killBackgroundProcesses: vi.fn(),
-  eventListener: undefined as ((event: RunEventEnvelope) => void) | undefined,
+  eventListener: undefined as ((event: unknown) => void) | undefined,
   initNodeAgentRuntime: vi.fn(),
   initPlatform: vi.fn(),
   initProcessWorkspaceRoots: vi.fn(),
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
-  subscribe: vi.fn((listener: (event: RunEventEnvelope) => void) => {
+  subscribe: vi.fn((listener: (event: unknown) => void) => {
     mocks.eventListener = listener;
     return mocks.detachEvents;
   }),
@@ -79,7 +73,6 @@ vi.mock('@agent/index', () => ({
 // so the suite mocks that one door instead of each runtime module by path.
 vi.mock('@agent/runtime', () => ({
   SessionHandle: class {
-    readonly events = { subscribe: mocks.subscribe };
     readonly executions = {
       killBackgroundProcesses: mocks.killBackgroundProcesses,
     };
@@ -125,7 +118,13 @@ import {
 } from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
 
-const PLATFORM = { lifecycle: {}, roots: {} } as unknown as AgentPlatform;
+const PLATFORM = {
+  lifecycle: { onShutdown: vi.fn() },
+  roots: {},
+  processes: { selfIdentity: async () => 'test-start' },
+} as unknown as AgentPlatform;
+/** The run's handle as `onRun` hands it over: its trace is the event source. */
+const HANDLE = { trace: { subscribe: mocks.subscribe } };
 const RESULT = { outcome: 'COMPLETED' } as never;
 const EVENT = { type: 'run.start' } as never;
 const INPUT = {
@@ -147,7 +146,7 @@ describe('agent package run lifecycle', () => {
     mocks.loadAgents.mockResolvedValue(undefined);
     mocks.runValidatedAgent.mockImplementation(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream:package');
+        await options.onRun?.(HANDLE);
         return RESULT;
       },
     );
@@ -169,23 +168,18 @@ describe('agent package run lifecycle', () => {
     expect(mocks.initNodeAgentRuntime).toHaveBeenCalledTimes(1);
   });
 
-  it('attaches a run-event subscriber before starting the runtime', async () => {
+  it("subscribes to the run's own trace when its handle arrives", async () => {
     await runAgent(INPUT).result;
 
-    const [subscribeOrder] = mocks.subscribe.mock.invocationCallOrder;
-    const [runOrder] = mocks.runValidatedAgent.mock.invocationCallOrder;
-    expect(subscribeOrder).toBeLessThan(runOrder);
+    expect(mocks.subscribe).toHaveBeenCalledOnce();
+    expect(mocks.subscribe).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it('discards trace events when the caller only awaits the result', async () => {
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream:package');
-        mocks.eventListener?.({
-          scope: 'run',
-          streamId: 'stream:package',
-          event: EVENT,
-        });
+        await options.onRun?.(HANDLE);
+        mocks.eventListener?.(EVENT);
         return RESULT;
       },
     );
@@ -302,7 +296,7 @@ describe('agent package run lifecycle', () => {
     let finishRun: ((result: typeof RESULT) => void) | undefined;
     mocks.runValidatedAgent.mockImplementationOnce(
       async (_input: unknown, options: RunAgentOptions) => {
-        options.onStreamResolved?.('stream:package');
+        await options.onRun?.(HANDLE);
         return await new Promise<typeof RESULT>((resolve) => {
           finishRun = resolve;
         });
@@ -313,11 +307,7 @@ describe('agent package run lifecycle', () => {
     const iterator = run[Symbol.asyncIterator]();
     const nextEvent = iterator.next();
     await vi.waitFor(() => expect(mocks.subscribe).toHaveBeenCalledOnce());
-    mocks.eventListener?.({
-      scope: 'run',
-      streamId: 'stream:package',
-      event: EVENT,
-    });
+    mocks.eventListener?.(EVENT);
 
     await expect(nextEvent).resolves.toEqual({ done: false, value: EVENT });
     await iterator.return?.();
