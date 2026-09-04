@@ -256,15 +256,21 @@ async function resumeRunWithRecoveryProvenance(
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     return REFUSED;
   }
+  // The run has just been re-read for write. A hold recorded by an earlier
+  // refusal describes facts this attempt has now re-read, so it goes here,
+  // before the refusals below and not after them: a tab whose foreign owner
+  // has since exited and whose checkpoint is gone must render its terminal
+  // state rather than stay read-only on the reason it was refused last time.
+  // The phase such a hold retained goes with it — a failed tool-use resume
+  // rolls the stream back to WAITING before the hold is written, and this
+  // read has just disproved that WAITING. An attempt that is refused again
+  // writes the current reason below; one that acquires leaves the phase it
+  // lands on.
+  session.status.clearHold(streamId, { discardRetainedPhase: true });
   if (!resume) {
     if (queueLease) session.followUps.release(queueLease, 'recoverable');
     return { failed: 'finished' };
   }
-  // The run is about to be opened for write. A hold recorded by an earlier
-  // refusal on this stream describes facts this attempt is re-reading, so it
-  // goes now: an attempt that is refused again writes the current reason
-  // below, and one that acquires leaves the phase it lands on.
-  session.status.clearHold(streamId);
   if (resume.type === 'toolUse' && queueLease) {
     return resumeQueuedToolUse(session, resume, queueLease, options);
   }
@@ -315,12 +321,11 @@ function refusalFor(
   streamId: StreamTabId,
 ): ResumeRunResult | undefined {
   if (error instanceof ExecutionLeaseActiveError) {
-    const detail = streamHeldMessage(error.owner);
-    if (!session.status.markUnavailable(streamId, detail)) {
-      logger.debug(
-        `Kept the live reservation on stream ${streamId} instead of marking it unavailable: ${detail}`,
-      );
-    }
+    session.status.markUnavailableOrLog(
+      streamId,
+      streamHeldMessage(error.owner),
+      logger,
+    );
     return { failed: 'owned_elsewhere' };
   }
   if (error instanceof ResumeSessionUnavailableError) {

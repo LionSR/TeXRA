@@ -483,9 +483,10 @@ describe('SessionHandle restart repair', () => {
     expect(session.status.get(reusedStreamId)).toBe(STREAM_PHASE.RUNNING);
   });
 
-  // The held-foreign-owner case now belongs to the open-for-write refusal
-  // that records it (`DerivedStreamPhase.vitest.ts`): the boot pass is no
-  // longer the producer of that display fact.
+  // The held-foreign-owner case moved to the open-for-write refusal that also
+  // records it (`DerivedStreamPhase.vitest.ts`), ahead of PR6 deleting this
+  // boot pass — which is still a producer of that display fact at this
+  // commit, just no longer the only one.
 
   it('surfaces a repair write failure at the readiness boundary', async () => {
     const transcripts = await StreamLogStore.open();

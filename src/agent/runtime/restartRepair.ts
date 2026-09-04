@@ -237,11 +237,7 @@ export async function repairRestartedStreams(
         );
         break;
     }
-    if (!options.streamStatus.markUnavailable(streamId, detail)) {
-      options.logger?.debug(
-        `Kept the live reservation on stream ${streamId} instead of marking it unavailable: ${detail}`,
-      );
-    }
+    options.streamStatus.markUnavailableOrLog(streamId, detail, options.logger);
     return true;
   };
 

@@ -9,7 +9,10 @@ import { createLog } from '@logger/logUtils';
 import { platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { streamHeldMessage } from '@shared/streams/streamStatusDisplay';
+import {
+  streamHeldMessage,
+  streamUnreadableMessage,
+} from '@shared/streams/streamStatusDisplay';
 import type { FollowUpQueueInput } from './FollowUpQueue';
 import type { FollowUpRecoveryLease } from './ToolUseFollowUpQueueManager';
 
@@ -194,12 +197,15 @@ export async function lookupStreamExecutionId(
  * facts: who holds the run, and whether a checkpoint is left. Read only on
  * the failure path; an unreadable fact is `not_resumable`.
  *
- * A refusal the user can see again is also recorded on the stream: the one
- * classification that means "this run is being executed elsewhere" becomes the
- * stream's read-only detail, so the tab keeps saying why after the toast is
- * gone. Every other classification read the run's state successfully, so it
- * DROPS any hold an earlier refusal left — a stream whose run is readable and
- * unowned must not stay read-only on a fact that has since changed.
+ * A refusal the user can see again is also recorded on the stream: the two
+ * classifications that mean "no flow here can execute this run" — another
+ * process holds it, or this process holds a lease with no live run behind it
+ * — become the stream's read-only detail, so the tab keeps saying why after
+ * the toast is gone. A classification that read the run's state and found it
+ * free (`finished`, `resumable`) DROPS any hold an earlier refusal left, and
+ * with it the phase that hold retained: a stream whose run is readable and
+ * unowned must neither stay read-only nor show the WAITING a failed resume
+ * rolled back to, on facts that have since changed.
  *
  * An `unclassified` run deliberately records nothing: `classifyRun` reports it
  * for any failed read, including a transient one (EMFILE, a partial read
@@ -229,38 +235,31 @@ async function classifyRefusal(
   const classification = await classifyRun(executionId);
   switch (classification.kind) {
     case 'held_elsewhere':
-      holdRefusedStream(
-        session,
+      session.status.markUnavailableOrLog(
         streamId,
         streamHeldMessage(classification.owner),
+        logger,
       );
       return 'owned_elsewhere';
+    case 'owned_here':
+      // A lease this process holds for a stream with no live flow context is
+      // a registry/lease disagreement, not a free run: it stays read-only
+      // with the same diagnostic restart repair writes for it.
+      session.status.markUnavailableOrLog(
+        streamId,
+        streamUnreadableMessage('lease owned by this process with no live run'),
+        logger,
+      );
+      return 'not_resumable';
     case 'finished':
-      session.status.clearHold(streamId);
+      session.status.clearHold(streamId, { discardRetainedPhase: true });
       return 'finished';
     case 'resumable':
-    case 'owned_here':
-      session.status.clearHold(streamId);
+      session.status.clearHold(streamId, { discardRetainedPhase: true });
       return 'not_resumable';
     case 'unclassified':
       return 'not_resumable';
   }
-}
-
-/**
- * Record why this stream stays read-only. A live reservation in this process
- * supersedes the refusal that produced `detail` (the run is being opened here
- * right now), so the skipped hold is logged rather than forced.
- */
-function holdRefusedStream(
-  session: SessionHandle,
-  streamId: StreamTabId,
-  detail: string,
-): void {
-  if (session.status.markUnavailable(streamId, detail)) return;
-  logger.debug(
-    `Kept the live reservation on stream ${streamId} instead of marking it unavailable: ${detail}`,
-  );
 }
 
 export async function submitFollowUp(

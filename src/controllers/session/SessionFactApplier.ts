@@ -979,13 +979,25 @@ export class SessionFactApplier {
       // The status being applied has not necessarily reached the status
       // machine yet (hosts and tests also call this method directly), so it
       // travels with the push instead of being re-read.
-      this.pushStreamMetadata(streamId, {
-        phaseOverride: {
-          phase: status,
-          ...(substate ? { substate } : {}),
-          ...(runStartedAt !== undefined ? { runStartedAt } : {}),
-        },
-      });
+      //
+      // Unless a hold was recorded while this handler was suspended in the
+      // rehydrate await above: this status is then the older fact, and its
+      // override would paint a live phase over the read-only detail the
+      // refusal wrote (an override suppresses `statusDetail`). Push without
+      // it and let the renderer read the resolved phase, hold included.
+      const held = this.state.streamStatus.holdState(streamId) !== undefined;
+      this.pushStreamMetadata(
+        streamId,
+        held
+          ? undefined
+          : {
+              phaseOverride: {
+                phase: status,
+                ...(substate ? { substate } : {}),
+                ...(runStartedAt !== undefined ? { runStartedAt } : {}),
+              },
+            },
+      );
     } else {
       const lastTimestamp =
         this.state.streamLogs.getTimestampRange(streamId).last;
