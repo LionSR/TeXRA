@@ -416,10 +416,16 @@ export class SessionState {
     // the sidecar first (every row-open path does) has already backfilled it
     // for a legacy row whose summary predates the mirror.
     const executionId = this.getStreamMetadata(stream).executionId;
+    // The incarnation is the one fact every legitimate re-claim bumps,
+    // including a deterministic re-run that reuses the same execution id and
+    // a `claimStreamIdentity` that drops a tombstone without touching the
+    // mirror; the execution-id comparison alone would miss both.
+    const incarnation = this.incarnationOf(stream);
     const facts = await this.readRunFacts(executionId);
-    // Re-checked after the reads: a deletion or a fresh execution during them
-    // makes this tuple somebody else's.
+    // Re-checked after the reads: a deletion, a re-claim, or a fresh
+    // execution during them makes this tuple somebody else's.
     if (this.isStreamRemoved(stream)) return;
+    if (this.incarnationOf(stream) !== incarnation) return;
     if (this.getStreamMetadata(stream).executionId !== executionId) return;
     // Published even when it is empty: the entry's existence is what says
     // this row has been read, and an empty tuple is the honest answer for a
