@@ -166,7 +166,8 @@ SessionView = {
   policy: Map<StreamTabId, ApprovalPolicySnapshot>,  // latest-of-type per run
   inquiries: InquiryThread[],
   // this process's local truth: a fold input, never durable, never persisted
-  local: { self: OwnerId, liveOwners: OwnerId[], unreadable: Map<StreamTabId, string> },
+  // wire type (8.1): arrays, never Maps - see the note under 5.1
+  local: { self: OwnerId, liveOwners: OwnerId[], unreadable: { streamId: StreamTabId, detail: string }[] },
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
 
@@ -215,6 +216,11 @@ TranscriptView = {
   run: WorkflowRunModel | null,
 }
 ```
+
+`SessionView` holds `Map`s because it never crosses a bridge - only events,
+chunks, and `local` do (8.1). Every type that _is_ on the wire uses arrays
+and records, so nothing depends on a `Map` surviving `JSON.stringify`; the
+same rule governs the persisted `Surface` (9).
 
 Types that die when this lands: `StreamTabInfo`, `StreamMetadata`, both
 `StreamState` variants, `StreamExecutionState`, `SessionStreamMetadata`,
@@ -332,7 +338,13 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
 - **`policy`** is latest-of-type over the approval-policy snapshot events.
 - **`settledSeq`** is the last durable seq folded; text deltas do not
   advance it.
-- **Incremental.** An event recomputes the arm for `event.streamId`, then
+- **Incremental.** One rule, keyed on what a change _names_. A durable event
+  names `event.streamId`. A `LocalRuntimeState` snapshot names the symmetric
+  difference against the previous one: the streams whose `ownerId` entered or
+  left `liveOwners`, and those entering or leaving `unreadable` - so an owner
+  exiting recomputes exactly the streams it owned, not the view. A
+  `TextChunk` names its row's stream. For each named stream the fold
+  recomputes its arm, then
   walks `parentId` to the root updating each ancestor's `childIds`,
   `rollup`, `approval`, and `group`, then `order` when a top-level stream
   appeared or changed status. An event that _changes_ `parentId` walks two
@@ -341,8 +353,9 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   `createSessionStores.ts:30-44`), so a child's parent genuinely moves and
   the abandoned branch would otherwise keep the child in its `childIds` and
   its `rollup` forever. The old parent needs no extra bookkeeping: the fold
-  holds it in the view until the event applies. Cost is the same: O(depth) work per event, never a whole-view
-  pass. `transcript.run` is memoized on `(streamId, settledSeq)`.
+  holds it in the view until the event applies. Cost is O(depth) per named
+  stream and the named set is bounded by what actually changed, never a
+  whole-view pass. `transcript.run` is memoized on `(streamId, settledSeq)`.
   Recomputing `workflowRunModel` over a whole transcript per event would be
   quadratic.
 - **Legacy.** The fold has no legacy arm and no event carries a
@@ -420,9 +433,12 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    only on the `HostInteractions` port, so a pending approval does not
    survive a restart.
 2. **`approval.policy`**, run-scoped, carrying the full policy snapshot
-   after a change, emitted by the single policy authority
-   (`src/shared/approvalPolicy.ts`, pinned by
-   `approvalPolicyAuthorityRatchet.vitest.ts`). Never a toggle delta. Deletes
+   after a change **and once at the reservation commit**, emitted by the
+   single policy authority (`src/shared/approvalPolicy.ts`, pinned by
+   `approvalPolicyAuthorityRatchet.vitest.ts`). Without the run-start
+   emission a never-edited run has no entry under the latest-of-type rule
+   (5.2) and its bypass controls would be blank until the user first
+   changed one. Never a toggle delta. Deletes
    `UPDATE_BYPASS` and the five bypass mirrors.
 3. **`run.start` moves to the reservation commit point** (where
    `AgentLaunchContext.ts:412-421` emits `setActiveStream` today) and is the
@@ -598,9 +614,13 @@ That is why this process's half is a counter rather than a `PubSub`.
 The store's half is decision 6, still unagreed, and it is now the weakest
 form yet: a **monotone commit counter** for the session, readable at any
 time. It carries no events, need not be exact, and may over-report, because
-a wake that finds no new rows costs one indexed read. A WAL frame count, a
-max rowid, or a poll all satisfy it - and unlike a notify, a level cannot be
-missed. Without it a process that only reads goes stale whenever another
+a wake that finds no new rows costs one indexed read. It must, however, be
+genuinely non-decreasing for the life of the database: the max rowid of the
+event table qualifies, and a **WAL frame count does not**, because a
+checkpoint resets it and a checkpoint plus a commit between two polls can
+leave the observed level unchanged. A store that can offer no such level
+must instead wake unconditionally on a timer; a level that can go backwards
+is worse than a poll, because it looks reliable. Without it a process that only reads goes stale whenever another
 process owns the run, since a seq gap is only visible once a _later_ row for
 the same stream arrives locally.
 
@@ -1132,9 +1152,13 @@ one place internal vocabulary is translated to the frozen wire - including
 the `setActiveStream` line, which survives the deletion of the fact
 (section 6, item 5) because the projection emits it from `run.start`. `workflowPlainOutput.ts` (204 lines, its own event
 fold, terminal gate, status table, and model-label swap) renders
-`transcript.run` to text. `packages/agent` exports `SessionViewService` and
-the request union so external consumers stop re-folding raw events
-(`src/index.ts:78-150`). The trace viewer already reads the shared renderer
+`transcript.run` to text. `packages/agent` exports the pure `fold`,
+the `SessionView` and request Zod types, and an async-iterable
+`subscribeSessionView()` that owns the runtime internally - not
+`SessionViewService`. G6 puts Promises at the boundary, and exporting the
+service would make an embedder import `effect`, hold layers, and manage
+fiber scope just to read a view. The point stands either way: consumers stop
+re-folding raw events (`src/index.ts:78-150`). The trace viewer already reads the shared renderer
 and stays.
 
 ## 11. Session roots and many papers
@@ -1477,7 +1501,7 @@ As tests:
 | A late chunk mutates settled text                                                          | Durable text wins: a chunk for a row whose finalizing event has folded is discarded, so the merge order of the three arms cannot change the result (5.2)     |
 | A webview folds another paper's events                                                     | `SessionFrames` is per session; the port is demultiplexed once at decode, so the key is not a runtime value below it (7.1)                                   |
 | Owner liveness stale in a webview                                                          | Snapshot on every change and every subscribe; an empty snapshot folds to interrupted, the safe direction                                                     |
-| Replay-then-tail gap                                                                       | Subscribe the live tail before the replay read; dedupe on seq                                                                                                |
+| Replay-then-tail gap                                                                       | There is no tail to race: one cursor-driven read of the table per observed commit level, so replay and live are the same code path (7.1)                     |
 | Another process commits an event this one never sees (the hub is process-local)            | The store's `commits` wake joins the local one; both only say the table moved, and every subscriber reads forward in seq order (7.1, decision 6)             |
 | Two event sources interleave out of order                                                  | There is one source: the table. The wakes carry no payload, so nothing can arrive ahead of the read they trigger (7.1)                                       |
 | A commit lands between a read and its subscribe                                            | Both wakes are levels, not edges: a `SubscriptionRef` and a commit counter each replay their current value on subscribe (7.1)                                |
@@ -1506,10 +1530,13 @@ As tests:
    `warn`. The exported-trace reader (`TraceStreamLogEntrySchema`) is a
    permanent boundary and is unchanged.
 6. **With the persistence owner, not yet agreed:** the durable store
-   exposes `commits`, a **monotone commit counter** for the session, readable
-   at any time (7.1). It carries no events, need not be exact, and may
-   over-report; a WAL frame count, a max rowid, or a poll all satisfy it. It
-   is a level rather than a notification precisely so it cannot be missed. Without it a process that only reads
+   exposes `commits`, a **non-decreasing commit generation** for the session,
+   readable at any time (7.1). It carries no events, need not be exact, and
+   may over-report. It is a level rather than a notification precisely so it
+   cannot be missed - which requires that it never go backwards: the event
+   table's max rowid qualifies, a WAL frame count does not (checkpoints
+   reset it). A store that cannot offer one wakes unconditionally on a
+   timer instead. Without it a process that only reads
    goes stale whenever another process owns the run.
 7. `WorkspaceProvider` leaves `platform()` rather than being re-pointed at
    a session (section 11). It has one implementation and its body is two
@@ -1544,8 +1571,8 @@ is `tapCause`, not `tapErrorCause`; and rc.112 exports no `catch` or
 `Stream.mergeAll(streams, { concurrency })` and `Effect.die` are present.
 
 Not verified, to confirm at lane start: the shape the persistence cutover
-gives `commits` (a WAL frame count, a max rowid, or a poll; decision 6);
-whether
+gives `commits` (a max rowid, another persisted generation, or an
+unconditional timer; decision 6); whether
 `TranscriptIndex` can be deleted without a render regression; net lines
 after each lane; the render cost of the memoized run model at fan-out
 scale.
