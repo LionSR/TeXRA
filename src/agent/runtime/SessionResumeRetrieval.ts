@@ -10,7 +10,10 @@
  */
 
 import { deriveResumability } from '@agent/storage';
-import type { FlowRecord } from '@agent/node/persistedFlow';
+import {
+  PersistedFlowStateError,
+  type FlowRecord,
+} from '@agent/node/persistedFlow';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ReflectionFlowStateSchema } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import {
@@ -64,8 +67,15 @@ async function probeResumableFlowRecord(
   const resumability = await deriveResumability(executionId);
   if (resumability.kind === 'checkpoint') return resumability.flowRecord;
   // Unreadable storage is a failure to report, never "nothing to resume":
-  // the caller's catch re-wraps it so hosts can word the difference.
+  // the caller's catch re-wraps it so hosts can word the difference. A record
+  // that is present but malformed is the one fault that names the checkpoint
+  // itself, so it throws the typed error the resume boundary refuses as
+  // unusable saved state; a metadata or transient read failure stays an
+  // untyped operational error there.
   if (resumability.kind === 'unreadable') {
+    if (resumability.fault === 'checkpoint-malformed') {
+      throw new PersistedFlowStateError(executionId, 'unsupported-record');
+    }
     throw new Error(`Unable to read resume storage: ${resumability.cause}`);
   }
   logger.warn('Execution is not resumable', {

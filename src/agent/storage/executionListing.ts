@@ -32,6 +32,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import { getExecutionStore } from './ExecutionKVStore';
+import { checkpointExists } from './resumability';
 import {
   inspectExecutionLease,
   runWithInactiveExecutionLease,
@@ -54,6 +55,20 @@ interface ExecutionListingBase {
   outcome?: RunOutcome;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
+  /**
+   * Whether a checkpoint (persisted flow record) exists on disk — one `stat`
+   * per row, never a parse. This is what a listing needs to advertise "this
+   * run can be continued"; deciding whether the record is actually loadable
+   * belongs to the resume path, which parses it once for the one run asked
+   * for and refuses loudly.
+   */
+  checkpointPresent: boolean;
+  /**
+   * The stream stamped on metadata at registration — the reproduction
+   * contract. Absent on rows written before stamping, which have no
+   * persisted stream to continue.
+   */
+  streamId?: StreamTabId;
 }
 
 /** A native or tool-backed agent run: its record is always an AgentConfig. */
@@ -237,16 +252,21 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   const entries = await readDirOrEmpty(RUNS_STORAGE_DIR);
   const executionDirs = listExecutionDirs(entries);
 
-  // Read meta + config with bounded concurrency. Large histories should not
-  // enqueue one storage read pair per execution all at once.
+  // Read meta + config, and stat the checkpoint, with bounded concurrency.
+  // Large histories should not enqueue one storage read burst per execution
+  // all at once.
   const results = await pMap(
     executionDirs,
     async (id): Promise<ExecutionListingEntry | null> => {
       try {
         const store = getExecutionStore(id);
-        const [meta, record] = await Promise.all([
+        // The checkpoint probe answers "no" and warns when the `stat` itself
+        // fails: a row whose meta and record are readable still belongs in
+        // history, and the open path re-reads the file anyway.
+        const [meta, record, checkpointPresent] = await Promise.all([
           store.readMeta(),
           store.readRunRecord(),
+          checkpointExists(id),
         ]);
 
         if (!meta) return null;
@@ -257,6 +277,8 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           parentExecutionId: meta.parentExecutionId,
           outcome: meta.outcome,
           description: meta.description,
+          checkpointPresent,
+          streamId: meta.streamId,
         };
         const agentRecord = record && isAgentRunRecord(record) ? record : null;
         const identity = meta.identity;

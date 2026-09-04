@@ -6,7 +6,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { flowKey } from '@agent/node/persistedFlow';
+import { flowKey, PersistedFlowStateError } from '@agent/node/persistedFlow';
 import { getExecutionStore } from '@agent/storage/ExecutionKVStore';
 import {
   acquireFreshExecutionLease,
@@ -362,7 +362,7 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports a row without a stamped stream id as finished', async () => {
+  it('names stream stamping when a row has no stream id', async () => {
     await seedExecution({
       config: TOOL_USE_CONFIG,
       meta: META_WITHOUT_STREAM_ID,
@@ -371,7 +371,7 @@ describe('runResumeExecution', () => {
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run has finished. Start a new agent task to continue.',
+      `Execution ${EXECUTION_ID} predates transcript stream stamping and cannot be continued. Start a new agent task instead.`,
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
@@ -413,6 +413,8 @@ describe('runResumeExecution', () => {
 
     await expect(run(cliContext())).resolves.toBe(1);
 
+    // An unreadable lease says nothing about the checkpoint, so it keeps the
+    // operational wording rather than telling the user to delete the run.
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Could not read the state of execution ${EXECUTION_ID}: lease unreadable (lease disk offline)`,
     );
@@ -420,21 +422,25 @@ describe('runResumeExecution', () => {
   });
 
   // The checkpoint this seeds is readable, so the empty retrieval is the two
-  // readers disagreeing, not a finished run: the refusal is worded from the
-  // lease-aware classification, which still sees a checkpoint.
-  it('reports empty workflow retrieval against a live checkpoint as not resumable', async () => {
+  // readers disagreeing, not a finished run. The lease-aware classification
+  // decides that first and still sees a checkpoint; a history listing
+  // advertises a row from that file alone, so what the user is told is that
+  // the saved state could not be loaded, never that the run finished.
+  it('separates an unusable checkpoint from a run that finished', async () => {
     await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockResolvedValue(null);
 
     await expect(run(cliContext())).resolves.toBe(2);
 
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'This run cannot accept messages right now. Resume it, or start a new agent task.',
+      "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
     );
     expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
-  it('reports resume-state load failures as operational errors', async () => {
+  // A transient failure over a checkpoint that is still on disk says nothing
+  // about the record, so it stays the operational error it was.
+  it('reports a transient resume-state load failure as an operational error', async () => {
     await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
     mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
 
@@ -443,6 +449,23 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Could not load session ${EXECUTION_ID}: KV timeout`,
+    );
+  });
+
+  // The positive cohort: retrieval named the record itself, which is what a
+  // listing advertised from the file alone, so it earns the unusable-state
+  // refusal instead of an internal retrieval message.
+  it('refuses a checkpoint whose record cannot be resumed as unusable state', async () => {
+    await seedExecution({ config: WORKFLOW_CONFIG, meta: STAMPED_META });
+    mocks.retrieveSessionResumeData.mockRejectedValue(
+      new PersistedFlowStateError(EXECUTION_ID, 'unsupported-record'),
+    );
+
+    await expect(run(cliContext())).resolves.toBe(2);
+
+    expect(mocks.runChat).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
     );
   });
 });

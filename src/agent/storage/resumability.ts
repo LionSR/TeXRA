@@ -33,6 +33,20 @@ const ResumableFlowRecordSchema = PersistedFlowRecordEnvelopeSchema.refine(
 });
 
 /**
+ * Which durable fact was unreadable. Only `checkpoint-malformed` positively
+ * names the checkpoint's own content, so it is the one fault a caller may
+ * word as "this run's saved state cannot be resumed"; the rest are read
+ * failures that say nothing about the checkpoint and stay operational
+ * errors. Callers discriminate on this, never on {@link
+ * ResumabilityDecision.cause}, which is display text.
+ */
+export type ResumabilityFault =
+  | 'metadata-unreadable'
+  | 'metadata-malformed'
+  | 'checkpoint-unreadable'
+  | 'checkpoint-malformed';
+
+/**
  * What the durable run facts alone say about continuing an execution:
  * a valid checkpoint exists, nothing is left to resume, or the storage
  * itself could not be read (reported with its cause, never guessed).
@@ -44,7 +58,11 @@ export type ResumabilityDecision =
       readonly outcome?: RunOutcome;
     }
   | { readonly kind: 'none'; readonly outcome?: RunOutcome }
-  | { readonly kind: 'unreadable'; readonly cause: string };
+  | {
+      readonly kind: 'unreadable';
+      readonly cause: string;
+      readonly fault: ResumabilityFault;
+    };
 
 /**
  * Single storage-owned resumability decision.
@@ -72,6 +90,7 @@ export async function deriveResumability(
     );
     return {
       kind: 'unreadable',
+      fault: 'metadata-unreadable',
       cause: `execution metadata could not be read (${toErrorMessage(error)})`,
     };
   }
@@ -86,7 +105,11 @@ export async function deriveResumability(
         )}`,
         { data: metaResult.error },
       );
-      return { kind: 'unreadable', cause: 'execution metadata is malformed' };
+      return {
+        kind: 'unreadable',
+        fault: 'metadata-malformed',
+        cause: 'execution metadata is malformed',
+      };
     }
     meta = metaResult.data;
   }
@@ -102,6 +125,7 @@ export async function deriveResumability(
     );
     return {
       kind: 'unreadable',
+      fault: 'checkpoint-unreadable',
       cause: `checkpoint could not be read (${toErrorMessage(error)})`,
     };
   }
@@ -113,8 +137,36 @@ export async function deriveResumability(
   const flowResult = ResumableFlowRecordSchema.safeParse(rawFlowRecord);
   if (!flowResult.success) {
     // A present-but-malformed checkpoint is corruption, not an absent run.
-    return { kind: 'unreadable', cause: 'checkpoint is malformed' };
+    return {
+      kind: 'unreadable',
+      fault: 'checkpoint-malformed',
+      cause: 'checkpoint is malformed',
+    };
   }
 
   return { kind: 'checkpoint', flowRecord: flowResult.data, ...metaFields };
+}
+
+/**
+ * Whether a run's checkpoint file is on disk — one `stat`, never a parse.
+ *
+ * A probe that fails answers "no checkpoint" and says so at `warn` with the
+ * execution it belongs to: a listing must still show the row it can read from
+ * meta and record rather than dropping the run out of history, and the open
+ * path re-reads the file and refuses there if it disagrees.
+ */
+export async function checkpointExists(
+  executionId: ExecutionId,
+): Promise<boolean> {
+  try {
+    return await getExecutionStore(executionId).exists(flowKey(executionId));
+  } catch (error) {
+    log.warn(
+      `Could not stat the checkpoint of ${executionId}: ${toErrorMessage(
+        error,
+      )}`,
+      { data: error },
+    );
+    return false;
+  }
 }

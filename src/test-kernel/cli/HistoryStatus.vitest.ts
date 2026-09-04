@@ -131,20 +131,40 @@ describe('CLI history status formatting', () => {
     expect(text).not.toContain(`Status: ${EXECUTION_STATUS.COMPLETED}`);
   });
 
-  it('does not mark invalid flow records as resumable', async () => {
-    const id = 'abc123' as ExecutionId;
-    await seedFlowRecord(id, TOOL_USE_CONFIG, 'orchestrator', null);
+  // `status` is a frozen contract, so `history show` answers it from the same
+  // facts as `history list`: the checkpoint file, the stamped stream id, and
+  // the terminal-rejection filter. A record the resume path could not load is
+  // therefore still advertised here and refused, in its own words, on open —
+  // what it must never become is 'completed' (the crash-masking guard).
+  it.each([
+    [
+      'shared state that is not an object',
+      TOOL_USE_CONFIG,
+      'orchestrator',
+      null,
+    ],
+    [
+      'workflow state the category no longer accepts',
+      WORKFLOW_CONFIG,
+      'correct',
+      { currentRound: 1, totalRounds: 2, messages: [] },
+    ],
+  ])(
+    'still advertises a checkpoint with %s, and never calls it completed',
+    async (description, config, agent, shared) => {
+      const id = `unloadable-${description.split(' ')[0]}` as ExecutionId;
+      await seedFlowRecord(id, config, agent, shared);
 
-    const details = await readCliHistoryDetails(id);
+      const details = await readCliHistoryDetails(id);
 
-    expect(details?.hasFlowRecord).toBe(false);
-    // Absent terminal status without a valid flow record is reported as
-    // 'unknown', never invented as completed (crash-masking guard).
-    expect(details?.status).toBe('unknown');
-    expect(formatCliHistoryDetailsText(details!)).not.toContain(
-      'Flow record: present',
-    );
-  });
+      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
+      expect(details?.status).not.toBe(EXECUTION_STATUS.COMPLETED);
+      expect(formatCliHistoryDetailsText(details!)).toContain(
+        'Flow record: present',
+      );
+    },
+  );
 
   it('marks workflow flow records as CLI-resumable', async () => {
     const id = 'workflow-with-flow' as ExecutionId;
@@ -175,17 +195,16 @@ describe('CLI history status formatting', () => {
     );
   });
 
-  it('does not mark category-invalid workflow checkpoints as resumable', async () => {
-    const id = 'workflow-with-retired-state' as ExecutionId;
-    await seedFlowRecord(id, WORKFLOW_CONFIG, 'correct', {
-      currentRound: 1,
-      totalRounds: 2,
-      messages: [],
-    });
+  // A checkpoint alone is not enough: without a config there is no category
+  // to resume under and nothing for a host to adopt, so the row says so.
+  it('does not offer a run whose config is missing as resumable', async () => {
+    const id = 'checkpoint-without-config' as ExecutionId;
+    await seedFlowRecord(id, TOOL_USE_CONFIG, 'orchestrator', {});
+    await getExecutionStore(id).delete('config');
 
     const details = await readCliHistoryDetails(id);
 
-    expect(details?.hasFlowRecord).toBe(false);
-    expect(details?.status).toBe('unknown');
+    expect(details?.hasFlowRecord).toBe(true);
+    expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
   });
 });

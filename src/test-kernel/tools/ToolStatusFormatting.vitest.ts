@@ -74,6 +74,7 @@ describe('tool status formatting', () => {
         agentCategory: 'toolUse',
       }),
       outcome: 'completed',
+      checkpointPresent: false,
     };
 
     // The row's own `outcome` is a recorded durable fact, so the status column

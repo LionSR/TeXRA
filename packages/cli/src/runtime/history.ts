@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import pMap from 'p-map';
 
 import {
+  checkpointExists,
   deleteAllExecutions,
   deleteExecution,
   getExecutionStore,
@@ -45,7 +46,7 @@ import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from './cliContext';
-import { readCliResumeDataForListing } from './toolUseResumeData';
+import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -80,8 +81,13 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /**
-   * Whether a checkpoint exists and nobody alive owns the run. Independent of
-   * `status`, which stays a frozen contract: a failed run can be resumable.
+   * Whether the durable facts say this run can be continued: a checkpoint
+   * file exists and the row carries the stream id stamped at registration.
+   * Ownership and loadability are settled when the run is opened, not per
+   * listed row, so a run live in another process — or one whose checkpoint
+   * turns out to be unloadable — still lists here and is refused, in its own
+   * words, on open. Independent of `status`, which stays a frozen contract: a
+   * failed run can be resumable.
    */
   readonly resumable: boolean;
   readonly inputBasename: string;
@@ -101,7 +107,7 @@ interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly RunGeneratedFile[];
-  /** Whether a category-valid flow record is available for resumption. */
+  /** Whether a checkpoint file exists for this run. */
   readonly hasFlowRecord: boolean;
   readonly currentModel?: string;
 }
@@ -153,9 +159,10 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   const entries = await listExecutions();
-  // Every row costs a resumability probe plus an optional resume-data read.
-  // One at a time makes a long history crawl; all at once opens one file
-  // handle burst per run, so keep it bounded. `pMap` preserves input order.
+  // A row's resumability comes from the checkpoint `stat` the listing already
+  // did; only a failed workflow row still reads its persisted state. That read
+  // is bounded here so a history full of failed workflow runs cannot open one
+  // file handle burst per run. `pMap` preserves input order.
   return pMap(entries.filter(isUserVisibleExecution), toCliHistoryEntry, {
     concurrency: HISTORY_ENTRY_CONCURRENCY,
   });
@@ -174,6 +181,7 @@ export async function readCliHistoryDetails(
     conversationResult,
     persistedWorkspaceFilePaths,
     generatedFiles,
+    checkpointPresent,
   ] = await Promise.all([
     store.readMeta(),
     store.readConfig(),
@@ -183,13 +191,29 @@ export async function readCliHistoryDetails(
     readCompletedRunConversation(id),
     store.readWorkspaceFiles(),
     listRunGeneratedFiles(id),
+    checkpointExists(id),
   ]);
   const conversation = conversationResult.conversation;
   const hasTranscriptEvidence =
     hasCompletedRunConversationEvidence(conversationResult);
-  const resumeData = config
-    ? await readCliResumeDataForListing(id, config)
-    : null;
+  // The same rule the listing applies, from the same facts: `status` is a
+  // frozen contract, so `history show` must not answer it differently from
+  // `history list` for the run in the row the caller just read. A run whose
+  // config is missing or malformed has no category to resume under and no
+  // config for a host to adopt, so it is not offered — the listing never
+  // reaches this rule for such a row, which lists as incomplete.
+  const resumable =
+    config !== null &&
+    (await isCliRunResumable({
+      id,
+      checkpointPresent,
+      streamId: meta?.streamId,
+      agentCategory: config.agentCategory,
+      outcome: meta?.outcome,
+    }));
+  const currentModel = config
+    ? await readCliResumedModel(id, config)
+    : undefined;
   const conversationPreview = createConversationPreview(conversation);
   const fullConversation = options.includeFullConversation
     ? createConversationTranscript(conversation)
@@ -212,17 +236,14 @@ export async function readCliHistoryDetails(
     !config &&
     !conversationPreview &&
     !fullConversation &&
-    !resumeData &&
+    !checkpointPresent &&
     !hasTranscriptEvidence
   ) {
     return null;
   }
   return {
     id,
-    status: resolveHistoryRunStatus({
-      resumable: resumeData !== null,
-      outcome: meta?.outcome,
-    }),
+    status: resolveHistoryRunStatus({ resumable, outcome: meta?.outcome }),
     meta,
     config,
     result: resultMeta ? unwrapResultMeta(resultMeta) : null,
@@ -232,9 +253,8 @@ export async function readCliHistoryDetails(
       ? { conversation: fullConversation }
       : {}),
     files,
-    hasFlowRecord: resumeData !== null,
-    currentModel:
-      resumeData?.type === 'toolUse' ? resumeData.agentConfig.model : undefined,
+    hasFlowRecord: checkpointPresent,
+    currentModel,
   };
 }
 
@@ -532,20 +552,23 @@ async function toCliHistoryEntry(
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumeData = await readCliResumeDataForListing(entry.id, config);
+  const resumable = await isCliRunResumable({
+    id: entry.id,
+    checkpointPresent: entry.checkpointPresent,
+    streamId: entry.streamId,
+    agentCategory: config.agentCategory,
+    outcome: entry.outcome,
+  });
   return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    model:
-      resumeData?.type === 'toolUse'
-        ? resumeData.agentConfig.model
-        : config.model,
-    status: resolveHistoryRunStatus({
-      resumable: resumeData !== null,
-      outcome: entry.outcome,
-    }),
-    resumable: resumeData !== null,
+    // The model the run started under. A run resumed under a different model
+    // records that only inside its checkpoint, which a listing no longer
+    // parses; `history show` still reports the resumed model.
+    model: config.model,
+    status: resolveHistoryRunStatus({ resumable, outcome: entry.outcome }),
+    resumable,
     inputBasename,
     category: config.agentCategory,
     description: entry.description,

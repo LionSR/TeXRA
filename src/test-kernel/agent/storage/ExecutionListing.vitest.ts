@@ -72,6 +72,22 @@ describe('execution listing normalization', () => {
     ]);
   });
 
+  // A row is dropped only when the facts it is built from are unreadable. The
+  // checkpoint probe is not one of them: it decides an advertisement, so a
+  // failing `stat` costs the row its Resume affordance, never its place in
+  // history.
+  it('keeps a row whose checkpoint probe fails, without a checkpoint', async () => {
+    const id = 'eee556' as ExecutionId;
+    await writeExecution(id, '2026-07-15T11:00:00.000Z', config('assistant'));
+    vi.spyOn(getExecutionStore(id), 'exists').mockRejectedValue(
+      new Error('stat failed'),
+    );
+
+    expect(await listExecutions()).toEqual([
+      expect.objectContaining({ id, kind: 'run', checkpointPresent: false }),
+    ]);
+  });
+
   it('lists only readable execution metadata with an explicit stream reference', async () => {
     const referenced = 'f9892001' as ExecutionId;
     const withoutStream = 'f9892002' as ExecutionId;
@@ -142,6 +158,7 @@ describe('execution listing normalization', () => {
         timestamp: '2026-07-15T10:00:00.000Z',
         identity: { kind: 'agent', agent: 'assistant' },
         record: agentConfig,
+        checkpointPresent: false,
       },
     ]);
     expect(entries.filter(isUserVisibleExecution)).toHaveLength(1);
@@ -188,6 +205,7 @@ describe('execution listing normalization', () => {
       kind: 'incomplete',
       id: incompleteId,
       timestamp: '2026-07-15T07:00:00.000Z',
+      checkpointPresent: false,
     });
     expect(entries.filter(isUserVisibleExecution)).toEqual([entries[1]]);
   });
