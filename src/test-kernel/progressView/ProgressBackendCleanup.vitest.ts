@@ -696,7 +696,7 @@ describe('ProgressBackend cleanup', () => {
       try {
         await expect(
           backend.state.stores.sweepLeftoverStreams(),
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual([]);
 
         expect(warnSpy).toHaveBeenCalledWith(
           'SessionStores',

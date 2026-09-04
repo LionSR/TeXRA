@@ -724,12 +724,19 @@ export class SessionStores {
    * behind a live execution lane for the run's whole lifetime), and they are
    * retained by the orphan half. A caller sweeping before any run can exist
    * may leave it out.
+   *
+   * Resolves to the streams it removed from the transcript index. Running off
+   * the ready path means a presentation may already be showing them, and no
+   * host repaints a rail for a deletion the store made on its own, so the
+   * caller owns telling presentations they are gone. The orphan half is not
+   * listed: by construction it only touches persisted state no index entry
+   * refers to, which nothing renders.
    */
   async sweepLeftoverStreams(options?: {
     readonly runningStreams?: ReadonlySet<StreamTabId>;
-  }): Promise<void> {
+  }): Promise<readonly StreamTabId[]> {
     const running = options?.runningStreams ?? new Set<StreamTabId>();
-    await this.sweepEphemeralStreams(
+    const sweptShells = await this.sweepEphemeralStreams(
       new Set(
         [...this.streamLogs.keys()].filter((stream) => !running.has(stream)),
       ),
@@ -743,6 +750,7 @@ export class SessionStores {
         { data: orphans },
       );
     }
+    return sweptShells;
   }
 
   /**
@@ -775,7 +783,7 @@ export class SessionStores {
    */
   private async sweepEphemeralStreams(
     candidates: ReadonlySet<StreamTabId>,
-  ): Promise<void> {
+  ): Promise<StreamTabId[]> {
     const swept: StreamTabId[] = [];
     const retained: StreamTabId[] = [];
     for (const stream of candidates) {
@@ -810,6 +818,7 @@ export class SessionStores {
         { data: { retained } },
       );
     }
+    return swept;
   }
 
   /**
@@ -863,12 +872,22 @@ export class SessionStores {
     );
     await Promise.all(
       orphanedStreams.map(async (stream) => {
+        // `liveStreams` is a snapshot the caller took before this sweep's
+        // awaits. Off the bring-up path a stream can be registered after it —
+        // a new chat tab, a fresh background shell — and `ensureStream` puts
+        // it in the transcript index at once, so the fresh persisted listing
+        // holds a stream the stale snapshot does not and it would read as an
+        // orphan. Liveness is therefore re-read here, and again after staging
+        // through `shouldDelete`, the way `sweepOrphanedExecutions` does.
+        if (this.streamLogs.has(stream)) return;
+        const shouldDelete = (): boolean => !this.streamLogs.has(stream);
         try {
           const executionId = byStream.get(stream);
           if (executionId) {
             const outcome = await this.deleteExecutionWithStreamState(
               executionId,
-              () => this.deleteStreamSidecars(stream),
+              () => this.deleteStreamSidecars(stream, shouldDelete),
+              shouldDelete,
             );
             if (outcome.kind === 'streams-deleted') {
               sweptStreams.push(stream);
@@ -901,10 +920,13 @@ export class SessionStores {
               );
               return;
             }
-            await this.deleteStreamSidecars(stream);
+            await this.deleteStreamSidecars(stream, shouldDelete);
           }
           sweptStreams.push(stream);
         } catch (error) {
+          // A stream registered while this deletion was staging is not a
+          // failure: the guard rolled the staging back and kept it.
+          if (error instanceof StreamDeletionSupersededError) return;
           log.warn(
             `Skipping orphaned stream cleanup for ${stream}; the sweep continues.`,
             { data: error },

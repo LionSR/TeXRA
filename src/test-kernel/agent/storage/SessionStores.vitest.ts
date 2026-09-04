@@ -654,7 +654,7 @@ describe('SessionStores leftover sweep', () => {
     const warn = vi.spyOn(logUtils, 'warn').mockImplementation(() => {});
 
     // One unreadable leftover must not fail the rest of the sweep.
-    await expect(stores.sweepLeftoverStreams()).resolves.toBeUndefined();
+    await expect(stores.sweepLeftoverStreams()).resolves.toEqual([]);
 
     expect(warn).toHaveBeenCalledWith(
       'SessionStores',

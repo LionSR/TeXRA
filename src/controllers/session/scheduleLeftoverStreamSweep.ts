@@ -47,6 +47,14 @@ function runningStreams(session: SessionHandle): Set<StreamTabId> {
  * At most one sweep per session: the second caller gets a cancel that does
  * nothing rather than a second pass over the executions directory.
  *
+ * A leftover shell is a stream a presentation may already be showing (a
+ * persisted shell hydrates with no status, so no rail filter hides it), and
+ * nothing repaints a rail for a deletion the store made on its own. So each
+ * swept shell is published as the `removeStream` fact every host already
+ * projects; the deletion the fact triggers is a no-op on state the sweep has
+ * already removed, and the applier's removal barrier makes a repeat removal on
+ * the same incarnation idempotent.
+ *
  * @returns A cancel for the pending sweep. Register it on session teardown; it
  *   is a no-op once the sweep has started.
  */
@@ -59,6 +67,14 @@ export function scheduleLeftoverStreamSweep(
   const timer = setTimeout(() => {
     void createSessionStores(session)
       .sweepLeftoverStreams({ runningStreams: runningStreams(session) })
+      .then((sweptStreams) => {
+        for (const streamId of sweptStreams) {
+          session.events.emit({
+            scope: 'session',
+            event: { type: 'removeStream', payload: { streamId } },
+          });
+        }
+      })
       .catch((error: unknown) => {
         log.warn(
           `The leftover-stream sweep did not finish: ${toErrorMessage(error)}`,
