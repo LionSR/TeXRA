@@ -1373,23 +1373,24 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
   app
     .whenReady()
     .then(async () => {
-      const processResumeOwner = new DesktopProcessResumeOwner();
+      // Every resume call is run-time or user-triggered, so the registry is
+      // open by the time the owner reads it.
+      let papers!: DesktopPaperRegistry;
+      const processResumeOwner = new DesktopProcessResumeOwner({
+        sessions: () =>
+          new Set([papers.active(), ...papers.list()].map((p) => p.session)),
+      });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,
         processResumeOwner,
       );
       const { lifecycle } = platformInit;
-      // Slot for every paper's resume attachment: the BEFORE drain detaches
-      // them first (before agent shutdown), and the idempotent store makes the
-      // ON-phase repeat a no-op.
-      const agentResumeHandler = new DisposableStore();
       // Process root: session-lifetime resources register at creation and are
       // disposed LIFO in the ON phase (every paper's process stores → result
       // toast → session, most recently opened first).
       const processResources = new DisposableStore();
-      let papers!: DesktopPaperRegistry;
       registerRuntimeShutdownHandlers(lifecycle, {
-        beforeAgentShutdown: [() => agentResumeHandler.dispose()],
+        beforeAgentShutdown: [() => processResumeOwner.disable()],
         afterAgentShutdown: [() => killActiveRecording()],
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
@@ -1399,12 +1400,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // quit lifecycle drains; awaiting idle keeps the process alive until
         // the directories are actually gone.
         afterFlushArtifacts: [() => diffHostDisposeQueue.onIdle()],
-        afterExecutionSettlement: [
-          () => {
-            agentResumeHandler.dispose();
-            processResources.dispose();
-          },
-        ],
+        afterExecutionSettlement: [() => processResources.dispose()],
       });
 
       // Until the initial window is fully wired, any startup failure must run
@@ -1417,8 +1413,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           processRoots: platformInit.processRoots,
           globalConfigStore: platformInit.globalConfigStore,
           globalState: platform().globalState,
-          attachSession: (session) =>
-            agentResumeHandler.add(processResumeOwner.attach({ session })),
           warn,
         });
         processResources.add(() => papers.dispose());
