@@ -4,7 +4,7 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { scheduleDeferredSessionCleanup } from '@controllers/session/scheduleDeferredSessionCleanup';
+import { scheduleLeftoverStreamSweep } from '@controllers/session/scheduleLeftoverStreamSweep';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { ephemeralTranscriptWarning, StreamLogStore } from '@transcript';
 
@@ -50,15 +50,14 @@ function initializePersistentSession(
       responseTextProcessing,
     }),
   );
-  // Off the ready path: the cleanup reads the whole storage root, and no
-  // prompt waits for it. The TUI takes the default delay, which keeps the read
-  // off its first paint. A headless `texra run` has no paint to protect and
-  // can finish inside that delay — the unref'd timer would never fire, leaving
-  // its shells and its unclosed transcripts for a launch that may not come —
-  // so it schedules with none. Overlapping the run is safe: both steps exclude
-  // the streams this process is running, and both are idempotent if the
-  // process exits first.
-  scheduleDeferredSessionCleanup(result.session, sweep);
+  // Off the ready path: the sweep reads the whole storage root, and no prompt
+  // waits for it. The TUI takes the default delay, which keeps the read off
+  // its first paint. A headless `texra run` has no paint to protect and can
+  // finish inside that delay — the unref'd timer would never fire, leaving
+  // its shells for a launch that may not come — so it schedules with none.
+  // Overlapping the run is safe: the sweep excludes the streams this process
+  // is running, and it is idempotent if the process exits first.
+  scheduleLeftoverStreamSweep(result.session, sweep);
   return result;
 }
 

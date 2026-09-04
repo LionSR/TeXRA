@@ -6,7 +6,6 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { scheduleDeferredSessionCleanup } from '@controllers/session/scheduleDeferredSessionCleanup';
 import { SessionState } from '@controllers/session/SessionState';
 import {
   LOG_LEVELS,
@@ -322,8 +321,8 @@ describe('holds written when a run is opened for write', () => {
   });
 });
 
-describe('scheduleDeferredSessionCleanup', () => {
-  it('settles transcript output an earlier process left open, never a run a live process still owns', async () => {
+describe('the settle a row open makes', () => {
+  it('records a crashed run as cancelled and keeps its checkpoint, never touching one a live process owns', async () => {
     const foreign = await startForeignInstance();
     const crashedExecutionId = 'ffff6666' as ExecutionId;
     const heldExecutionId = 'aaaa7777' as ExecutionId;
@@ -336,26 +335,46 @@ describe('scheduleDeferredSessionCleanup', () => {
     ] as const) {
       appendRunningGroup(transcripts, stream);
       await seedSidecarFk(stream, executionId);
-      await getExecutionStore(executionId).writeMeta({
-        timestamp: META_TIMESTAMP,
-      });
+      const store = getExecutionStore(executionId);
+      await store.writeMeta({ timestamp: META_TIMESTAMP });
+      await store.write(flowKey(executionId), validFlowRecord);
     }
     await writeForeignLease(heldExecutionId, undefined, foreign.owner);
     await transcripts.flush();
 
     try {
-      const session = openUnrepairedHandle(transcripts);
-      expect(transcripts.hasUnfinishedOutput(crashed)).toBe(true);
-      scheduleDeferredSessionCleanup(session, { delayMs: 0 });
+      const state = openUnrepairedSession(transcripts);
+      await state.snapshots.preload([crashed, held]);
 
+      await state.hydrateRunFacts(crashed);
       // The group a dead owner left running is closed, so it stops rendering
       // as in-progress forever (#7276)...
-      await vi.waitFor(() =>
-        expect(transcripts.hasUnfinishedOutput(crashed)).toBe(false),
-      );
-      // ...and the transcript another live host is still writing is left
-      // exactly as its owner is writing it.
+      expect(transcripts.hasUnfinishedOutput(crashed)).toBe(false);
+      // ...the interruption becomes durable, so the outcome readers stop
+      // calling the run unknown...
+      await expect(
+        getExecutionStore(crashedExecutionId).readMeta(),
+      ).resolves.toMatchObject({ outcome: RUN_OUTCOME.CANCELLED });
+      // ...and the checkpoint the user resumes from survives the settle.
+      await expect(
+        getExecutionStore(crashedExecutionId).read(flowKey(crashedExecutionId)),
+      ).resolves.toEqual(validFlowRecord);
+      expect(state.resolveStreamPhase(crashed)).toEqual({
+        state: { phase: STREAM_PHASE.CANCELLED },
+        origin: 'derived',
+      });
+
+      await state.hydrateRunFacts(held);
+      // A live foreign owner is not a finished run: nothing is written, and
+      // the transcript is left exactly as its owner is writing it.
       expect(transcripts.hasUnfinishedOutput(held)).toBe(true);
+      expect(
+        (await getExecutionStore(heldExecutionId).readMeta())?.outcome,
+      ).toBeUndefined();
+      expect(state.resolveStreamPhase(held)).toEqual({
+        origin: 'derived',
+        detail: streamHeldMessage(foreign.owner),
+      });
     } finally {
       await foreign.shutdown();
     }
