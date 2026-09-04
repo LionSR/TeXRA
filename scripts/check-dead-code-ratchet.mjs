@@ -51,7 +51,7 @@ function runKnip({ production = false } = {}) {
     cwd: rootDir,
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
-    // Knip's vite plugin loads packages/extension/vite.config.ts for entry
+    // Knip's vite plugin loads packages/extension/vite.config.mts for entry
     // detection, and that config throws unless VITE_WEBVIEW names a webview.
     // Without this the analyzer swallowed a permanent config-load ERROR on
     // every green run, hiding any real config failure behind it. Build callers

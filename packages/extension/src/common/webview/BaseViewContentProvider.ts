@@ -42,7 +42,7 @@ export class BundledViewContentProvider {
     private readonly viewName: string,
     /**
      * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
-     * template and `dist/<viewFolder>/` its Vite output (see `vite.config.ts`,
+     * template and `dist/<viewFolder>/` its Vite output (see `vite.config.mts`,
      * which builds both paths from the same list).
      */
     private readonly viewFolder: string,

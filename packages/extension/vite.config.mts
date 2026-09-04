@@ -33,6 +33,9 @@ export default defineConfig(({ mode }) => {
       sourcemap: isDev ? 'inline' : false,
       minify: isDev ? false : 'esbuild',
       target: 'es2022',
+      // Each webview is intentionally a single bundle for the nonce-only CSP.
+      // Keep a tight budget above the largest current production bundle.
+      chunkSizeWarningLimit: 3000,
       // Disable asset inlining to ensure all fonts are emitted as files (not base64 data URIs)
       // This is required because VS Code webview CSP font-src doesn't allow data: URIs
       // Note: KaTeX_Size3-Regular.woff2 (3.6KB) would otherwise be inlined and blocked by CSP
