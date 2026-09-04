@@ -114,7 +114,7 @@ on stale headroom. No commit in this interval widened any list (all four held).
 `agent`'s 7 remains at its realistic floor, bounded by the provider-type-leak
 constraint (carried forward unchanged).
 
-## 4. Subagent boundaries — still a shipped SPI; no signature change this interval
+## 4. Subagent boundaries — still a shipped SPI; named SPI signatures unchanged, one adjacent surface reduction
 
 Re-confirmed at HEAD as a **shipped, multi-implementor SPI, not a design task**:
 `ChildRunStrategy<TTurn>` + `ChildRunPorts` (`src/agent/runtime/childRunLoop.ts`
@@ -123,10 +123,18 @@ independent production implementations, which live under `src/tools/delegation/`
 and `src/tools/`, not `src/agent/runtime/`:
 `nativeSubagentStrategy.ts`, `workflowScriptStrategy.ts`, `detachedChildRun.ts`,
 the background-bash strategy in `bash.ts`, and the shared external-CLI loop in
-`agentCliShared.ts`. The **contract did not change** in this interval —
-`childRunLoop.ts`'s net `−7` (from the `733b8a4` audit sweep) leaves the
-`ChildRunStrategy`/`ChildRunPorts` signatures untouched (§1), unlike the prior
-interval's `AbortSignal` refinement. **Only `agentCreator` remains the one
+`agentCliShared.ts`. The **two named SPI interfaces did not change** in this
+interval — `childRunLoop.ts`'s net `−7` (from the `733b8a4` audit sweep) leaves
+the `ChildRunStrategy`/`ChildRunPorts` signatures untouched (§1), unlike the
+prior interval's `AbortSignal` refinement. The same sweep did make one _adjacent_
+surface change on the child-stream boundary, and it is a **reduction**: `733b8a4`
+removed the exported `ChildRunOutcome` union from `childRunLoop.ts` (zero hits
+repo-wide at HEAD; it was deep-imported only by
+`src/tools/delegation/childStream.ts`) and tightened `ChildStreamPort.finalize`
+from `options?: { outcome?: ChildRunOutcome; … }` to
+`options: { outcome: RunOutcome; error?: unknown; … }` — dropping a cross-module
+type import and a redundant encode/decode round-trip, consistent with the
+interval's deletion trend, not a boundary widening. **Only `agentCreator` remains the one
 genuine "logical agent not yet running as one"** — a single linear
 `runAgentCreator` (`src/agent/implementations/agentCreator/agentCreatorFlow.ts:434`,
 one `export async function`), running inline in the extension host. That boundary
