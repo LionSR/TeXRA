@@ -11,9 +11,10 @@ rules that a `StreamTabId` names a run and is never reused, which is what
 lets all thirteen incarnation fences earlier drafts had accumulated be
 deleted rather than maintained. Its cost is that a relaunched workflow
 appears as a new row instead of reusing its tab, stated in full there;
-reverting is mechanical if the owner weighs that differently. Lane 1 may start on ratification of
-decision 1 alone; lane 6 also needs decision 7, which is what it
-implements.
+reverting is mechanical if the owner weighs that differently. Lane 1 needs
+decisions 1 **and 9** - it implements the identity change, so starting on
+decision 1 alone would ship an unratified one; lane 6 likewise needs
+decision 7, which is what it implements.
 
 **Decision in one sentence:** every process that shows a TeXRA session runs
 the same pure fold over the same events into one `SessionView`, the
@@ -309,8 +310,10 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   follow, and it is what `SessionCursor` is - one number, not a map. Reading
   per lane would group events by lane and let a session-lane terminal status
   replay before its run-lane `run.start`, which the reset rule above would
-  then erase. `seq` serves the per-stream reads and `settledSeq`; `commit`
-  serves every ordering and resumption question. Every stream kind gets one:
+  then erase. `seq` serves the per-stream reads; `commit` serves every
+  ordering and resumption question, `settledSeq` among them - it is a commit
+  ordinal, not a `seq`, or a session-lane fact could move it backward
+  against a run-lane one (5.2). Every stream kind gets one:
   agent, process (`bash@tool`), workflow script, through `RunIdentity.kind`.
 - **Category, remote-ness, and owner** are launch facts on the `run.start`
   payload (section 6, item 6). `RunIdentity` deliberately does not encode
@@ -732,7 +735,15 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    correction item 2 makes for the policy and item 5 makes for
    `setActiveStream`. The general rule for lane 1: an event that says
    "something changed, go look" is not a fact, and every remaining session
-   fact is audited against it.
+   fact is audited against it. `inquiryThreadUpdated` is the third case and
+   the largest: its payload is a summary (`threadId`, status, preview,
+   timestamps, a count) while the panel needs the open turn's question,
+   context, attachments, session links, and transcript - which
+   `ExternalInquiryRequestHandler.replayOpenPermissions` recovers from the
+   manifest today and lane 4 deletes. External inquiries are non-blocking,
+   so `approval.requested` does not carry them either. The event carries the
+   open turn's snapshot, normalized at the storage boundary, or a reload
+   leaves an open inquiry no surface can render or answer.
 
 8. **`stream.text`**, a durable checkpoint carrying `{ rowId, from, to,
 text }` - the same offset-addressed shape as a transient chunk, appended
@@ -780,7 +791,8 @@ older than the installed package; the installed package wins.
 class SessionEvents extends Context.Service<
   SessionEvents,
   {
-    readonly publish: (event: SessionEvent) => Effect.Effect<void>;
+    // an ordered batch, committed in one transaction (see run.start, 6.9)
+    readonly publish: (events: readonly SessionEvent[]) => Effect.Effect<void>;
     // everything committed above `cursor`, in commit order, then the tail
     readonly all: (cursor: SessionCursor) => Stream.Stream<SessionEvent>;
     // the session's current commit ordinal: how a live-only reader attaches
@@ -797,14 +809,14 @@ class SessionEvents extends Context.Service<
       const gate = yield* Semaphore.make(1);
       // provided by the persistence cutover
       const durable = yield* DurableWrite;
-      const publish = Effect.fn('SessionEvents.publish')(function* (event) {
+      const publish = Effect.fn('SessionEvents.publish')(function* (events) {
         // uninterruptible: a commit that wakes nobody is a stall every live
         // subscriber carries until something else commits
         yield* gate.withPermit(
           Effect.uninterruptible(
             Effect.gen(function* () {
               // assigns seq, INSERT under BEGIN IMMEDIATE
-              const at = yield* durable.append(event); // returns its ordinal
+              const at = yield* durable.appendAll(events); // last ordinal
               yield* SubscriptionRef.set(ticks, at);
             }),
           ),
@@ -998,8 +1010,6 @@ class SessionViewService extends Context.Service<
       const liveness = yield* LocalRuntimeSource;
       // the delta path in the runtime; the frames' chunks field in a webview
       const chunks = yield* TextChunkSource;
-      // where replay ends: the store's ordinal here, the frames' in a webview
-      const watermark = yield* events.watermark;
       // the key is the layer's, not an input: no fold arm carries one.
       // SessionKey IS the workspace root that keys the LayerMap (7.3).
       const roots = yield* WorkspaceRoots;
@@ -1013,8 +1023,8 @@ class SessionViewService extends Context.Service<
           { concurrency: 3 },
         ).pipe(
           Stream.scan(empty, fold),
-          // publish nothing until the replay boundary has folded (below)
-          Stream.filter((v) => v.cursor >= watermark),
+          // publish nothing until the replay has said it is done (below)
+          dropUntilReplayComplete,
           Stream.runForEach((v) => SubscriptionRef.set(ref, v)),
         ),
       );
@@ -1036,10 +1046,16 @@ The fold folds the replay through before the first value reaches `ref`:
 surface mounting onto an existing session render its history - deleted
 streams reappearing, resolved approvals actionable again, non-terminal runs
 briefly `interrupted` because no `local` snapshot has arrived yet - for the
-length of the replay. The runtime layer captures the store's current ordinal, drops every scan
-value below it, and publishes from there; the tail then publishes
-incrementally as before. A webview does the same against the `watermark` on
-its frames (8.1), since it has no store to ask.
+length of the replay. The replay says when it is finished rather than being inferred from an
+ordinal: `all(cursor)` emits a **replay-complete marker** after its last
+replayed row, and a frame carries the same marker (8.1). Comparing the
+view's cursor against a captured ordinal does not work, because retention
+can prune a deleted stream's rows and its tombstone while the ordinal keeps
+counting - if the surviving history ends at 10 and the pruned rows held
+11-20, nothing the subscriber folds ever reaches 20 and the view would stay
+empty until some unrelated commit arrived. The fold drops scan values until
+the marker and publishes every one after it; the tail then publishes
+incrementally as before.
 
 `Layer.effect` strips `Scope` from the requirements, so the forked fold
 fiber is owned by the layer's scope and ends on `runtime.dispose()`.
@@ -1273,7 +1289,7 @@ the same functions in process.
 ### 8.1 Down: `events`
 
 ```ts
-EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null, watermark: CommitOrdinal }
+EventsFrame = { session: SessionKey, events: SessionEvent[], chunks: TextChunk[], local: LocalRuntimeState | null, host: HostSnapshot | null, replayComplete: boolean }
 Subscribe   = { session: SessionKey, cursor: SessionCursor }     // per surface and session, every stream
 ```
 
@@ -1288,11 +1304,13 @@ there is no `Resync` shape and no replacement fold arm. Every event carries
 its `lane`, its `seq`, and its session `commit` ordinal (the lane being a
 stream id or the session lane, 5.2), and every chunk carries its stream and
 its `from`/`to`, so a frame needs no per-stream range. Frames arrive in
-commit order and a subscriber advances one cursor. `watermark` is the
-ordinal the runtime captured when the subscription opened: replay can span
-many frames, and a webview has no database to ask, so this is how it knows
-when it has caught up and may publish its first view (7.2). Before that it
-folds and stays silent; after it, every frame publishes. `streamId` stays a
+commit order and a subscriber advances one cursor. `replayComplete` marks the frame
+after which the subscription is caught up: replay spans many frames and a
+webview has no database to ask, so this is how it knows when to publish its
+first view (7.2). Before it the webview folds and stays silent; from it on,
+every frame publishes. It is a marker rather than an ordinal because
+retention can prune rows above the last surviving one, leaving an ordinal
+the subscriber would never reach. `streamId` stays a
 payload field on the facts that have one, which is what lets an unparented
 `inquiryThreadUpdated` ride the session lane without the sentinel stream id
 this PRD rejects.
@@ -1460,7 +1478,9 @@ Capabilities mapped onto `platform()` and `@hosts/*` ports:
 `openFile { path, line? }` (the line is what `LogList.ts:310-314` parses
 from a compiler link and `OpenFileMessageSchema` already carries; a bare
 capability would recreate the desktop line-dropping defect §1 counts),
-`openSpillArtifact`, `openTaskStorage`, `compare`, `accept`, `merge`,
+`openSpillArtifact`, `openTaskStorage { streamId }` (the handler calls
+`openTaskStorage(data.stream)` and the selection lives only in the
+requesting surface, §8.6), `compare`, `accept`, `merge`,
 `latexdiff`, `openLabel`, `pack`, `clean`, `restoreIntoLauncher`,
 `showDiff`, `previewProposed`, `showLatexdiff` (for a pending edit),
 `record { start { target: StreamTabId | 'launch' } | stop }` (the start
@@ -1721,8 +1741,10 @@ the banners and the onboarding funnel are host state: all of them arrive as
 the frame's `host` snapshot (8.1). The test is whether a
 second surface on the same session may hold a different value: a selection
 may, a catalog may not. `selected` is a _preference_, not a pointer the renderer trusts: what a
-surface shows is `selected` if the view still has that stream, else the
-first of `order`, resolved at read. The fallback applies only to a
+surface shows is `selected` if the view still has that stream, else
+`view.order.at(0) ?? null`, resolved at read - `null` and not `undefined`,
+so deleting the last conversation lands in the New-task state rather than
+an unrepresentable one. The fallback applies only to a
 **non-null** id that has disappeared. An explicit `null` is the New-task
 state and resolves to itself, or the header's New task action and the
 drawer's "+" could never open the launcher once a session had any stream. A deletion by this surface or the other
@@ -2275,7 +2297,7 @@ As tests:
 | Risk                                                                                       | Mitigation                                                                                                                                                   |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Effect 4 is a release candidate; names move (`Schema.TaggedError` already renamed on main) | Pin the version the substrate pinned; use `Data.TaggedError`; Appendix A is the verified vocabulary; the guides are older than the package, the package wins |
-| Quadratic fold on fan-out sessions                                                         | Incremental per stream arm, run memoized on `settledSeq`; measured against a recorded 31-call run at lane 1                                                  |
+| Quadratic fold on fan-out sessions                                                         | Incremental per stream arm, run memoized on `(commitOrdinal, childRevision)`; measured against a recorded 31-call run at lane 1                              |
 | Webview bundle growth                                                                      | 61 KB gzipped measured; Schema excluded; re-measure against a production build at lane 4                                                                     |
 | Reconnect loses in-flight text                                                             | Chunks carry `from`/`to`, so adjacent ones coalesce losslessly and text never drops; a reconnect is answered with a `from: 0` chunk per in-flight row        |
 | A late chunk mutates settled text                                                          | Durable text wins: a chunk for a row whose finalizing event has folded is discarded, so the merge order of the three arms cannot change the result (5.2)     |
