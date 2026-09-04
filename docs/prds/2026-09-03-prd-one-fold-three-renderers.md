@@ -173,7 +173,8 @@ SessionView = {
   inquiries: InquiryThread[],
   // this process's local truth: a fold input, never durable, never persisted
   // wire type (8.1): arrays, never Maps - see the note under 5.1
-  local: { self: OwnerId, liveOwners: OwnerId[], unreadable: { streamId: StreamTabId, detail: string }[] },
+  local: { self: OwnerId, liveOwners: OwnerId[],
+           unreadable: { streamId: StreamTabId, executionId: ExecutionId, detail: string }[] },
   queuedFollowUps: Map<StreamTabId, string[]>,
 }
 
@@ -331,16 +332,20 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   stream id, and concurrent streams hold independent goals; one session
   field would let one stream's goal event overwrite another's.
 - **`approval`** is `'own'` when the stream itself is waiting, `'descendant'`
-  when any descendant is. Approval-driven expansion **wins over a collapsed
-  override**, and arriving at `'descendant'` clears that override for the
-  path: an override applied on top would let a parent the user collapsed
+  when any descendant is. Expansion is forced - **over a collapsed
+  override**, which arriving at `'descendant'` clears for the path - by a
+  pending approval and equally by an interrupted descendant, the two states
+  that need the user (see `rollup`): an override applied on top would let a parent the user collapsed
   earlier stay closed when a child later asks for a decision, and since
   `rollup` deliberately carries no waiting count there would be nothing else
   on screen to show it - a blocked run with no visible request. The override
   governs only a path with no pending approval below it.
-- **`rollup`** counts descendants by status; it has no waiting count because
-  a waiting descendant expands the path, so a collapsed parent never hides
-  one.
+- **`rollup`** counts descendants by status. It has no waiting count and no
+  interrupted count, because both expand the path: the invariant is that **a
+  collapsed parent never hides a row that needs the user**, and the two
+  things that need one are a pending approval and an interrupted,
+  resumable run. Expansion is forced for either, over any collapsed override
+  (see `approval`), which is why neither needs a count to stand in for it.
 - **`ancestors`** walks `parent`; an evicted parent contributes its last
   known label. The link names the parent's `executionId` as well as its id,
   or a relaunched deterministic parent would silently adopt the previous
@@ -372,7 +377,11 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   startup (`markUnavailable` with `streamUnreadableMessage`,
   `restartRepair.ts:232-240`) is genuinely local - another process may read
   the same run fine - so it belongs to the same transient arm as liveness,
-  as `local.unreadable[streamId]`, and it supplies `statusDetail`. That is
+  as an entry in `local.unreadable`, and it supplies `statusDetail`. The
+  entry names the incarnation it observed, like every other stream
+  reference (decision 9): otherwise a hold recorded against a retired run
+  would render its relaunched successor read-only with Delete as its only
+  action. That is
   why the arm is `LocalRuntimeState` and not `OwnerLiveness`: it was always
   "what this process knows that the events cannot say", and liveness was
   only its first field. A stream in `unreadable` renders read-only with
@@ -471,14 +480,16 @@ otherwise, which is the safe direction. Agreed with the substrate owner on
   persisted chunk text. The cost is bounded by the interval, which is why it
   is coarse; the recovery window is one interval of text, not all of it.
 
-  A checkpoint is **not** a `from: 0` chunk. It advances a separate durable
-  prefix (`settledText` per row) and can only ever lengthen it, while
-  `inflight` holds what the live path has beyond that; a row renders the
-  longer of the two. Treating a checkpoint as a chunk would let one captured
-  at offset 80 arrive after the live path reached 100 - the table drain is
-  asynchronous - truncating the row and then meeting the next delta at
-  `from > length`. Neither side can shorten the other, so the rendered text
-  is monotone whatever order the two arms arrive in.
+  A checkpoint has a chunk's shape and a different destination. It splices
+  into a separate durable prefix (`settledText` per row) by the same rule,
+  while `inflight` holds what the live path has beyond that; a row renders
+  the longer of the two. Both halves matter. Durable events arrive in commit
+  order, so `settledText` only ever grows; and because the checkpoint never
+  touches `inflight`, one captured at offset 80 arriving after the live path
+  reached 100 - the table drain is asynchronous - cannot truncate the row or
+  make the next delta land at `from > length`. Neither side can shorten the
+  other, so the rendered text is monotone whatever order the two arms arrive
+  in.
 
 - **In-flight text is its own map, so order does not matter.** Chunks
   accumulate in `inflight: Map<RowId, string>` keyed by row, independent of
@@ -594,12 +605,16 @@ Agreed additions and changes (substrate owner, 2026-09-03):
    "something changed, go look" is not a fact, and every remaining session
    fact is audited against it.
 
-8. **`stream.text`**, a coarse durable checkpoint carrying a row's text so
-   far, and the full text on the finalizing event (5.2, "Text is
-   checkpointed"). Deltas stay transient; without the checkpoint an owner
-   crash between the chunks and `stream.end` loses the whole partial
-   response, which `StreamLogStore` recovers today. The interval is a
-   tuning parameter, not a contract.
+8. **`stream.text`**, a durable checkpoint carrying `{ rowId, from, to,
+text }` - the same offset-addressed shape as a transient chunk, appended
+   at a coarse interval - plus the full text on the finalizing event (5.2,
+   "Text is checkpointed"). Offset-addressed and not text-so-far: appending
+   the whole prefix every interval writes k, 2k, 3k, … and makes stored
+   bytes quadratic in the response length, where deltas are linear. Live
+   deltas stay transient; without the checkpoint an owner crash between the
+   chunks and `stream.end` loses the whole partial response, which
+   `StreamLogStore` recovers today. The interval is a tuning parameter, not
+   a contract.
 
 The importer emits `run.start` for every legacy stream with `identity`
 nullish where the descriptor has none, and normalizes every other old
@@ -1231,8 +1246,6 @@ TUI screen); `Surface` is one per view instance **and open session**:
 Shell = {
   active: SessionKey                   // which paper the view is showing
   open: SessionKey[]                   // rail order, user-arranged
-  // the recorder is one per process, so its state and destination are too
-  recording: { session: SessionKey, target: StreamTabId | 'launch' } | null
 }
 ```
 
@@ -1244,12 +1257,17 @@ second undeclared state owner G3 forbids. On the extension and the TUI it is
 degenerate - one root, `open` of length one - and it persists with the rest
 of the view's interaction state.
 
-`recording` sits here rather than on a `Surface` because the recorder is one
-per process: modelled per session, starting dictation on paper A leaves
-paper B offering Start and getting "Recording already in progress", with
-Stop reachable only by switching back. It carries its destination for the
-same reason - the transcription lands on the composer that started it, not
-on whatever is selected when the result arrives.
+Recording is deliberately _not_ here either. The recorder is one per
+process and a process can have several view instances - the sidebar and the
+editor tab at once - so a `Shell` field would leave the other view offering
+Start and getting "Recording already in progress", which is the failure that
+moved it off `Surface` in the first place. It belongs to the one owner that
+already broadcasts to every view: `HostSnapshot` (8.1), as
+`recording: { session, target: StreamKey | 'launch' } | null`. The
+destination rides with it so the transcription lands on the composer that
+started it, and it is fenced by incarnation like every other stream
+reference (5.2), or a relaunch under a reused id would receive the previous
+run's dictation.
 
 ```
 Surface = {
@@ -1257,7 +1275,7 @@ Surface = {
   session: SessionKey
   selected: StreamTabId | null
   // keyed by incarnation: a reused id must not inherit the old run's reply
-  drafts: Map<StreamKey, Draft>          // StreamKey = { streamId, executionId }
+  drafts: Map<StreamKey, Draft>
   // the new-task composer: the existing MainViewPersistedState, per session
   launch: LaunchSurface
   // answers in progress; keyed by inquiry, not by stream (8.5).
@@ -1268,7 +1286,9 @@ Surface = {
   // task groups and workflow row groups inside a transcript, per stream
   groups: Map<StreamTabId, Map<GroupKey, boolean>>
   focusedRow: RowId | null
-  // run-board tab strip; fact-only transcript.run cannot hold a selection
+  // run-board tab strip; fact-only transcript.run cannot hold a selection.
+  // Resolved at read like `selected`: a phase the model no longer has
+  // (terminal suppression, a changed attempt) falls back to the current one.
   phase: Map<StreamTabId, PhaseId>
   scroll: Map<StreamTabId, number>
   drawerOpen: boolean
@@ -1277,7 +1297,12 @@ Surface = {
 ```
 
 `Draft` is `{ text, images: PastedImage[], polished: string | null,
-transcribed: string | null }`. A desktop renderer holds one `Surface` per
+transcribed: string | null }`. `StreamKey` is the string
+`` `${streamId}@${executionId}` ``, not an object: a `Map` compares object
+keys by reference, so a key rebuilt from `StreamView` - or parsed back from
+the persisted entry array on reload - would never match the one that stored
+the draft, and the draft would read as missing exactly when persistence was
+supposed to save it. A desktop renderer holds one `Surface` per
 open paper, so a paper with no streams at all is still a distinct surface
 with its own `session` and its own composer, rather than one of many
 indistinguishable `selected: null`s.
@@ -1400,7 +1425,14 @@ expresses "from here on"; no live-only mode is needed. That is the division: the
 _renders_, the event stream is what _serializes_, and the projection is the
 one place internal vocabulary is translated to the frozen wire - including
 the `setActiveStream` line, which survives the deletion of the fact
-(section 6, item 5) because the projection emits it from `run.start`. `workflowPlainOutput.ts` (204 lines, its own event
+(section 6, item 5) because the projection emits it from the two facts that
+mark an activation: `run.start`, and a `status` transition carrying
+`substate: 'resuming'`. `run.start` alone is not enough - `AgentLaunchContext`
+emits `setActiveStream` on every activation including a resume, while a
+resume keeps its incarnation and mints no new start, so a resumed run in
+NDJSON mode would silently lose the line. Both facts are durable and both
+are live for a reader attached at `SessionEvents.now`, so no history is
+replayed to recover it. `workflowPlainOutput.ts` (204 lines, its own event
 fold, terminal gate, status table, and model-label swap) renders
 `transcript.run` to text. `packages/agent` exports the pure `fold`,
 the `SessionView` and request Zod types, and an async-iterable
@@ -1813,9 +1845,10 @@ As tests:
    paired with an `executionId`. This document now carries that fence in
    the tombstone (5.2), the `parent` link (5.1), **every stream-scoped request** (8.2, after a
    further round found the same race behind `stop`, `compact`, `resume`, and
-   the follow-up and policy arms), and the conversation drafts a surface
-   holds (9), which would otherwise offer a deleted run's unfinished reply
-   as the next run's draft.
+   the follow-up and policy arms), the conversation drafts a surface
+   holds (9), the dictation destination (8.1), and the unreadable holds in
+   `local` (5.1). Nine sites now, none of which would exist if a stream id
+   named a run.
    Each fence is individually correct, and each arrived as its own review
    finding rather than falling out of the design, which is the usual sign
    that the patch is being applied where the defect is not.
