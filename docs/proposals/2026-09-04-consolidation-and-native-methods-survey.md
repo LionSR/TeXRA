@@ -33,6 +33,11 @@ nine batches` (#11804) — a single commit (`733b8a4`, 122 files changed,
   citing; the 337-file, +2389/-3313 figure in §1 below is the whole
   `d418d45..HEAD` 23-commit window scoped to `src`/`packages/*/src`, not
   this one commit.
+- `refactor: behavior-preserving simplification sweep across production
+areas` (#11805, commit `8d16c08`, 201 files changed, +1035/-1591) — a
+  separate large sweep, distinct from #11804, combining a 50-area
+  simplification pass with a cross-area consolidation pass implementing 21
+  candidates.
 - `refactor(session): give the startup stream sweep one owner per host, not
 a flag` (#11808), `refactor(desktop): make DesktopAgentExecution.runExecution
 private` (#11802), `refactor(storage): delete the taskRuns absolute-path
@@ -74,7 +79,7 @@ re-deriving the many prior full-repo rounds' conclusions from scratch.
 ## 2. What was checked and ruled out
 
 - **`.hasOwnProperty()` direct calls:** zero repo-wide.
-- **Hand-rolled sleeps:** three new hits beyond the already-adjudicated
+- **Hand-rolled sleeps:** five hits beyond the already-adjudicated
   `lifecycleHost.ts:70`, all read in full and all the same
   race-against-an-external-event species, not a plain fixed-delay sleep:
   - `packages/desktop/src/main/desktopSupabaseAuth.ts:227-249`
@@ -94,23 +99,42 @@ re-deriving the many prior full-repo rounds' conclusions from scratch.
     (`writeTerminalText`): races `xterm.js`'s `terminal.write(text, resolve)`
     completion callback against a 100ms fallback timeout, with an explicit
     comment ("Whichever lands first wins"). Same species.
+  - `packages/cli/src/chat/tui/state/terminalCapabilities.ts:84-103`: races a
+    terminal DA1-response `onData` handler against a 250ms `onTimeout`
+    fallback that resolves with whatever partial buffer was collected,
+    `clearTimeout`ing and detaching the listener in whichever branch wins.
+    Same species — a real production hit this pass's own sweep missed, not
+    newly introduced this window.
+  - `packages/extension/src/frontend/vscode/raceWithTimeout.ts:19-41`
+    (`raceWithTimeout`): a named, documented, reusable helper whose entire
+    purpose is exactly this race — a one-shot VS Code event subscription
+    versus a timeout, `settle()` guarding against double-resolution and
+    disposing/clearing whichever branch loses. The clearest instance of the
+    species; also missed by this pass's own sweep.
 
-  All three are callback-versus-deadline races — the timer starts
+  All five are callback-versus-deadline races — the timer starts
   immediately on promise construction and races an external completion
   callback, not the `lifecycleHost.ts:71` shape (there the zero-delay timer
   isn't scheduled until the abort signal fires, a deferred-start pattern
-  these three don't share). Different mechanism, same conclusion: none is a
+  these five don't share). Different mechanism, same conclusion: none is a
   plain-sleep candidate, because each one's timeout is a bounded fallback
   for an event that can also settle it early, not an unconditional delay.
+  Two of the five (`terminalCapabilities.ts`, `raceWithTimeout.ts`) were
+  missed by this pass's own regex-driven sweep and found only once a
+  reviewer widened the search — the sweep's stated method is not
+  exhaustive for this shape, a limitation worth naming rather than
+  implying the three-hit list was complete.
 
 - **`JSON.parse(JSON.stringify(` / `JSON.stringify(JSON.parse(`:** the one
   hit remains the already-adjudicated `src/agent/workflowScript/parseScript.ts:126`
   `vm.Script` sandbox literal (a string template of injected code, not a
   clone helper). No new hits either direction.
-- **`.indexOf(...) !== -1` / `.filter(...).indexOf(`:** zero hits repo-wide
-  in production code this pass (the assignment-in-condition form the
-  2026-09-03 entry found at `src/replacement/advanced.ts:329` is unchanged
-  and still not a candidate — it needs the matched position, not membership).
+- **`.indexOf(...) !== -1` / `.filter(...).indexOf(`:** one unchanged
+  production hit repo-wide, the same assignment-in-condition form the
+  2026-09-03 entry found at `src/replacement/advanced.ts:329`
+  (`while ((startIdx = text.indexOf(env.start, startIdx)) !== -1)`), still
+  not a candidate — it needs the matched position, not membership. No new
+  hits this pass.
 - **Hand-rolled `Math.random().toString(36)` IDs:** zero in production. The
   two `Math.random()` hits found are unrelated: a jitter multiplier in a
   backoff helper (`src/utils/core/index.ts:464`) and a workflow-script
@@ -148,8 +172,9 @@ survey (`2026-09-03-consolidation-and-native-methods-survey.md`) filed —
 and separately by #11804 per #11814's own body. The 23-commit window between
 surveys carried substantial
 additional consolidation work of the same kind this routine watches for
-(#11804's 44-finding sweep, plus six more targeted `refactor:` PRs), which is
-itself evidence the surface is being actively worked, not neglected.
+(#11804's 44-finding sweep, #11805's separate 21-candidate sweep, plus six
+more targeted `refactor:` PRs), which is itself evidence the surface is
+being actively worked, not neglected.
 
 This entry exists to record that the routine ran, confirm the prior round's
 follow-ups landed, and save the next pass from re-treading the same ground;
