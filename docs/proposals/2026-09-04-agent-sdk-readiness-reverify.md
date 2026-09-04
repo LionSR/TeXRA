@@ -120,10 +120,13 @@ Re-confirmed at HEAD as a **shipped, multi-implementor SPI, not a design task**:
 `ChildRunStrategy<TTurn>` + `ChildRunPorts` (`src/agent/runtime/childRunLoop.ts`
 `:168` and `:105`) — a deep module with a narrow turn-based interface, driven by
 independent production implementations, which live under `src/tools/delegation/`
-and `src/tools/`, not `src/agent/runtime/`:
-`nativeSubagentStrategy.ts`, `workflowScriptStrategy.ts`, `detachedChildRun.ts`,
-the background-bash strategy in `bash.ts`, and the shared external-CLI loop in
-`agentCliShared.ts`. The **two named SPI interfaces did not change** in this
+and `src/tools/`, not `src/agent/runtime/`: four strategy constructors, each
+returning a `ChildRunStrategy<…>` — `nativeSubagentStrategy.ts` (`:207`),
+`workflowScriptStrategy.ts` (`:157`), the background-bash strategy in `bash.ts`
+(`:249`), and the shared external-CLI loop in `agentCliShared.ts` (`:515`).
+(`detachedChildRun.ts` is **not** a fifth implementor — it is detached-execution
+choreography that forwards a caller-supplied `strategy` to the loop, so it is
+excluded from this count.) The **two named SPI interfaces did not change** in this
 interval — `childRunLoop.ts`'s net `−7` (from the `733b8a4` audit sweep) leaves
 the `ChildRunStrategy`/`ChildRunPorts` signatures untouched (§1), unlike the
 prior interval's `AbortSignal` refinement. The same sweep did make one _adjacent_
