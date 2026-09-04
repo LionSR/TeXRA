@@ -789,13 +789,23 @@ export class SessionStores {
         [...this.streamLogs.keys()].filter((stream) => !running.has(stream)),
       ),
     );
-    const orphans = await this.sweepOrphanedStreams(
-      new Set([...this.streamLogs.keys(), ...running]),
-    );
-    if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
-      log.info(
-        `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
-        { data: orphans },
+    // The ephemeral half has already committed its deletions by now, so a
+    // failure in the orphan half must not hide them from the caller: the
+    // shells it swept still need their presentation removal published.
+    try {
+      const orphans = await this.sweepOrphanedStreams(
+        new Set([...this.streamLogs.keys(), ...running]),
+      );
+      if (orphans.streams.length > 0 || orphans.executionIds.length > 0) {
+        log.info(
+          `Removed ${orphans.streams.length} orphaned stream sidecar(s) and ${orphans.executionIds.length} execution dir(s).`,
+          { data: orphans },
+        );
+      }
+    } catch (error) {
+      log.warn(
+        `The orphaned-stream sweep did not finish: ${toErrorMessage(error)}`,
+        { data: error },
       );
     }
     return sweptShells;
@@ -1084,7 +1094,22 @@ export class SessionStores {
     // await. Only an unchanged generation may cross the transcript commit
     // point below; a superseded deletion rolls its staging back and leaves
     // the fresh incarnation untouched.
-    if (shouldDelete?.() === false || (await confirmDeletable?.()) === false) {
+    // `confirmDeletable` reads the durable store and can reject; a read that
+    // fails after staging is treated as "not deletable" so the staging is
+    // rolled back rather than left neither committed nor rolled back.
+    let confirmed = shouldDelete?.() !== false;
+    if (confirmed && confirmDeletable) {
+      try {
+        confirmed = await confirmDeletable();
+      } catch (error) {
+        log.warn(
+          `Stream ${stream} deletion could not be confirmed against the shared store; retaining it: ${toErrorMessage(error)}`,
+          { data: error },
+        );
+        confirmed = false;
+      }
+    }
+    if (!confirmed) {
       try {
         await snapshotDeletion.rollback();
       } catch (rollbackError) {
