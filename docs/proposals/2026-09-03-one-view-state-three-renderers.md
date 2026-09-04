@@ -249,8 +249,13 @@ same day:
    launch that fails after reservation reaches its terminal `status` fact
    (`STREAM_PHASE.FAILED`, `compensateActivatedFailure`) on the same
    failure path - there is no `run.end` event and the PRD adds none - so a reserved-but-never-run stream folds to failed,
-   never to a ghost; `isRemote` and `agentCategory` derive from `identity`
-   in the fold; `suppressViewSwitch` is surface state and travels with the
+   never to a ghost; `category` and `isRemote` are explicit fields on the
+   `run.start` payload and are never derived from `identity`: `RunIdentity`
+   deliberately does not encode `AgentCategory`, a process or
+   workflow-script stream has no agent to derive from, and remoteness is a
+   registry lookup a browser fold cannot make, so the launcher writes both
+   and the fold reads both (PRD section 6, item 6; contract C3);
+   `suppressViewSwitch` is surface state and travels with the
    surface, never as an event; the importer emits `run.start` for every
    legacy stream with `identity` nullish where the descriptor has none, and
    the fold already labels an identity-less stream from its id prefix.
