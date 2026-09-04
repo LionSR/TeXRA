@@ -477,8 +477,9 @@ export class ExecutionRegistry {
 
   /**
    * Kill only background OS processes (bash, codex) without touching agent
-   * stream status. Agent executions are left in RUNNING so restart recovery can
-   * restore them to WAITING (resumable) if a flow record exists.
+   * stream status. Agent executions are left in RUNNING: whether one is
+   * resumable afterwards is decided from its durable facts (a flow record on
+   * disk, and no live owner), never from a phase some later pass rewrites.
    *
    * Killing a background run's underlying OS process requires
    * `interruptBackgroundProcess()`, which only fires for a handle whose
