@@ -295,7 +295,7 @@ export async function initCliPlatform(
     // One process, one paper: the process roots are the `--cwd` workspace.
     const roots = createNodeWorkspaceRoots({
       workspacePath: context.cwd,
-      storage: stateStores.storage,
+      storage: stateStores.storage.getStoragePath(),
       config: configStores,
       workspaceState: stateStores.workspaceState,
     });

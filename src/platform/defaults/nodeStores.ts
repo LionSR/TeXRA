@@ -2,11 +2,11 @@
  * The JSON stores a Node-family host (CLI, desktop, extension) opens before
  * `initPlatform`.
  *
- * Every host resolves the same files from the same {@link StorageProvider},
- * so the derivations live here once: which store backs workspace
- * configuration (the project `.texra/config.json` when it is usable, the
- * internal workspace store otherwise), where global configuration lives, and
- * where workspace state lives.
+ * Every host resolves the same files from the same
+ * {@link WorkspaceStorageProvider}, so the derivations live here once: which
+ * store backs workspace configuration (the project `.texra/config.json` when
+ * it is usable, the internal workspace store otherwise), where global
+ * configuration lives, and where workspace state lives.
  */
 
 // Node imports
@@ -26,7 +26,8 @@ import {
   workspaceTexraConfigPath,
 } from './nodeStorage';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { StateStore, StorageProvider } from '../interfaces';
+import type { WorkspaceStorageProvider } from './workspaceStorage';
+import type { StateStore } from '../interfaces';
 
 /** File name of a state store inside a storage directory. */
 const STATE_FILE_NAME = 'state.json';
@@ -70,7 +71,7 @@ async function canCreateOrWrite(filePath: string): Promise<boolean> {
  * readable and writable — degraded, never fatal.
  */
 export async function openTexraWorkspaceConfigStore(
-  storage: StorageProvider,
+  workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
 ): Promise<JsonStore> {
@@ -94,18 +95,22 @@ export async function openTexraWorkspaceConfigStore(
     }
   }
   return JsonStore.open(
-    path.join(storage.getStoragePath(), TEXRA_CONFIG_FILE_NAME),
+    path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
   );
 }
 
 /** Open both stores backing a host's {@link JsonConfigProvider}. */
 export async function openTexraConfigStores(
-  storage: StorageProvider,
+  storage: WorkspaceStorageProvider,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
 ): Promise<JsonConfigProviderOptions> {
   const [workspace, global] = await Promise.all([
-    openTexraWorkspaceConfigStore(storage, workspaceRoot, warn),
+    openTexraWorkspaceConfigStore(
+      storage.getStoragePath(),
+      workspaceRoot,
+      warn,
+    ),
     JsonStore.open(
       path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
     ),
@@ -119,7 +124,7 @@ export async function openTexraConfigStores(
  * the path is derived once here.
  */
 export async function openNodeWorkspaceStateStore(
-  storage: StorageProvider,
+  workspaceStoragePath: string,
 ): Promise<StateStore> {
-  return JsonStore.open(path.join(storage.getStoragePath(), STATE_FILE_NAME));
+  return JsonStore.open(path.join(workspaceStoragePath, STATE_FILE_NAME));
 }

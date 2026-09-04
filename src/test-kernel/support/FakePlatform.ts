@@ -22,7 +22,7 @@ import {
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import type { Platform } from '@platform/platform';
 import type { PlatformSecrets } from '@platform/secrets';
-import { workspaceRoots, type WorkspaceRoots } from '@platform/workspaceRoots';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import {
@@ -459,11 +459,6 @@ let sharedFakeGlobalStoragePath: string | undefined;
 
 class FakeStorageProvider implements StorageProvider {
   constructor(private globalStoragePath?: string) {}
-
-  /** The session's storage root, exactly as the production platform answers. */
-  getStoragePath(): string {
-    return workspaceRoots().storage;
-  }
 
   getGlobalStoragePath(): string {
     this.globalStoragePath ??= sharedFakeGlobalStoragePath ??= mkdtempSync(

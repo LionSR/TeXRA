@@ -40,11 +40,6 @@ import type { PlatformSecrets } from './secrets';
 export interface Platform {
   readonly globalState: StateStore;
   readonly fs: FileSystemProvider;
-  /**
-   * Storage paths. The global path is process-true; `getStoragePath()` answers
-   * with the calling context's `WorkspaceRoots.storage` so the one remaining
-   * caller (the file execution lease) follows the session like `StorageFS`.
-   */
   readonly storage: StorageProvider;
   readonly fileLocks: FileLockProvider;
   readonly processes: ProcessesPort;

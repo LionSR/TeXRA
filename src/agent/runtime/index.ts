@@ -29,7 +29,7 @@ export {
 
 // RunContext: the session scope a host enters around every touch of a
 // session's storage when it holds several sessions in one process.
-export { runInSession, runInWorkspace } from './RunContext';
+export { runInSession } from './RunContext';
 
 // SessionEventHub
 export { SessionEventHub } from './SessionEventHub';

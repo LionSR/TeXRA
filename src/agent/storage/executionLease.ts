@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { workspaceRoots } from '@platform/workspaceRoots';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS } from '@utils/files/storageFS';
 import { runOnPerKeyQueue } from '@utils/core/perKeyQueue';
@@ -222,7 +222,7 @@ const ownedLeases = new Map<string, OwnedExecutionLease>();
 const maintenanceExecutions = new AsyncLocalStorage<ReadonlySet<string>>();
 
 function storageRoot(): string {
-  return platform().storage.getStoragePath();
+  return workspaceRoots().storage;
 }
 
 function ownershipKey(root: string, executionId: ExecutionId): string {

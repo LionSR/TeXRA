@@ -2,9 +2,9 @@
 import { createLog } from '@logger/logUtils';
 
 // Local imports - platform
-import type { StorageProvider } from '@platform/interfaces';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
+import type { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 const log = createLog('extension');
 
@@ -16,7 +16,7 @@ const log = createLog('extension');
  * workspace folder changes, so a live provider never has to switch stores.
  */
 export async function createExtensionTexraConfig(
-  storage: StorageProvider,
+  storage: WorkspaceStorageProvider,
   workspaceRoot: string | undefined,
 ): Promise<JsonConfigProvider> {
   const stores = await openTexraConfigStores(

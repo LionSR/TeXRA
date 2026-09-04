@@ -33,7 +33,7 @@ import { nodeProcesses } from './nodeProcesses';
 import { canonicalizeWorkspacePath } from './nodeWorkspace';
 import { NO_TOOL_AVAILABILITY_HOST } from '../interfaces';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '../languageModel';
-import { workspaceRoots, type WorkspaceRoots } from '../workspaceRoots';
+import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type {
   AgentDirectoriesPort,
@@ -58,8 +58,7 @@ import type { PlatformSecrets } from '../secrets';
  */
 export interface NodePlatformServices {
   readonly globalState: StateStore;
-  /** Global storage path source; the workspace path follows the session roots. */
-  readonly storage: Pick<StorageProvider, 'getGlobalStoragePath'>;
+  readonly storage: StorageProvider;
   readonly secrets: PlatformSecrets;
   readonly lifecycle: LifecycleHost;
   readonly agentResume: AgentResumePort;
@@ -75,8 +74,8 @@ export interface NodePlatformServices {
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {
   readonly workspacePath: string | undefined;
-  /** The storage provider opened for this workspace; its path is pinned here. */
-  readonly storage: Pick<StorageProvider, 'getStoragePath'>;
+  /** The storage root opened for this workspace (`WorkspaceStorageProvider.getStoragePath()`). */
+  readonly storage: string;
   /**
    * Config source: the workspace + global stores to build the file-backed
    * provider from, or an already-constructed provider for hosts that resolve
@@ -101,7 +100,7 @@ export function createNodeWorkspaceRoots(
       init.workspacePath == null
         ? undefined
         : canonicalizeWorkspacePath(init.workspacePath),
-    storage: init.storage.getStoragePath(),
+    storage: init.storage,
     config:
       'workspace' in init.config
         ? new JsonConfigProvider(init.config)
@@ -139,12 +138,7 @@ export function createNodePlatform(services: NodePlatformServices): Platform {
   return {
     globalState: services.globalState,
     fs: nodeFilesystem,
-    storage: {
-      getGlobalStoragePath: () => services.storage.getGlobalStoragePath(),
-      // The session's storage root, not a process-wide one: the file
-      // execution lease reads this member and must land beside `StorageFS`.
-      getStoragePath: () => workspaceRoots().storage,
-    },
+    storage: services.storage,
     fileLocks: nodeFileLocks,
     processes: nodeProcesses,
     secrets: services.secrets,

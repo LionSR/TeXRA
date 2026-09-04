@@ -84,7 +84,9 @@ export async function initializeElectronPlatform(
   // own roots (desktopPapers.ts); this pair only backs the window before a
   // folder is open.
   const storage = new WorkspaceStorageProvider(dataRoot, undefined);
-  const workspaceStateStore = await openNodeWorkspaceStateStore(storage);
+  const workspaceStateStore = await openNodeWorkspaceStateStore(
+    storage.getStoragePath(),
+  );
   const configStores = await openTexraConfigStores(
     storage,
     undefined,
@@ -113,7 +115,7 @@ export async function initializeElectronPlatform(
   );
   const processRoots = createNodeWorkspaceRoots({
     workspacePath: undefined,
-    storage,
+    storage: storage.getStoragePath(),
     config: configStores,
     workspaceState: workspaceStateStore,
   });

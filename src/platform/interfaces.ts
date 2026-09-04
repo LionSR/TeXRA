@@ -141,12 +141,10 @@ export interface FileSystemProvider {
 // ---------------------------------------------------------------------------
 
 /**
- * Platform storage path provider interface.
+ * Process-wide storage path provider. The per-workspace storage root is not
+ * here: it is `WorkspaceRoots.storage`, carried by each session.
  */
 export interface StorageProvider {
-  /** Per-workspace storage root path. */
-  getStoragePath(): string;
-
   /** Cross-workspace global storage root path. */
   getGlobalStoragePath(): string;
 }

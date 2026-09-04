@@ -4,23 +4,25 @@
  * owning `SessionHandle` rather than on the process-wide `platform()` object,
  * so one process can hold many sessions, each rooted in its own folder.
  *
- * Resolution: inside a run (or a `runInSession` scope) the roots come from the
- * ambient run context; outside any run they fall back to the process roots the
- * composition root installed with {@link initProcessWorkspaceRoots}. The
+ * Resolution: inside a roots scope ({@link runWithWorkspaceRoots}, which the
+ * agent runtime enters around every run and `runInSession` body) the roots
+ * come from that scope; outside any scope they fall back to the process roots
+ * the composition root installed with {@link initProcessWorkspaceRoots}. The
  * extension and the CLI construct exactly one session whose roots equal the
  * process roots, so the fallback is exact there; the desktop's process roots
  * are its no-workspace roots, and every touch of a paper's storage runs inside
  * that paper's session scope.
  *
  * Transition: the fallback is a second source for one datum and goes away once
- * every `StorageFS` / `WorkspaceFS` caller runs inside a session (`runInSession`
- * or `runInWorkspace`), which the persistence cutover's `Database` layer taking
- * `session.roots.storage` at one site makes checkable. No detector guards the
+ * every `StorageFS` / `WorkspaceFS` caller runs inside a roots scope
+ * (`runInSession` or `runWithWorkspaceRoots`), which the persistence
+ * cutover's `Database` layer taking `session.roots.storage` at one site makes
+ * checkable. No detector guards the
  * fallback in the meantime: on the extension and CLI it is exact, and on the
  * desktop a caller outside every session scope is a defect to fix at the
  * caller, not to diagnose here.
  */
-import { getRunContextRoots } from '@agent/runtime/RunContext';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { ConfigProvider, StateStore } from './interfaces';
 
@@ -36,6 +38,7 @@ export interface WorkspaceRoots {
 }
 
 let processRoots: WorkspaceRoots | null = null;
+const rootsScope = new AsyncLocalStorage<WorkspaceRoots>();
 
 /**
  * Install the process roots. Called by a composition root exactly once at
@@ -80,16 +83,29 @@ export function processWorkspaceRoots(): WorkspaceRoots {
   return PROCESS_ROOTS_VIEW;
 }
 
+/**
+ * Run `fn` with `roots` as the calling context's workspace roots. The agent
+ * runtime enters this scope with the session's roots around every run; a host
+ * enters it directly to touch a workspace's storage before that workspace has
+ * a session (the desktop opens a paper's transcript store this way).
+ */
+export function runWithWorkspaceRoots<T>(
+  roots: WorkspaceRoots,
+  fn: () => T | Promise<T>,
+): T | Promise<T> {
+  return rootsScope.run(roots, fn);
+}
+
 /** The roots for the calling context, or undefined before any are installed. */
 export function tryWorkspaceRoots(): WorkspaceRoots | undefined {
-  const contextRoots = getRunContextRoots();
-  if (contextRoots && contextRoots !== PROCESS_ROOTS_VIEW) return contextRoots;
+  const scopedRoots = rootsScope.getStore();
+  if (scopedRoots && scopedRoots !== PROCESS_ROOTS_VIEW) return scopedRoots;
   return processRoots ?? undefined;
 }
 
 /**
- * The roots for the calling context: the active run's session roots when
- * called inside a run, otherwise the process roots.
+ * The roots for the calling context: the enclosing scope's roots when called
+ * inside one, otherwise the process roots.
  */
 export function workspaceRoots(): WorkspaceRoots {
   return tryWorkspaceRoots() ?? requireProcessRoots();

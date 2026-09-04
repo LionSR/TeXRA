@@ -107,9 +107,7 @@ describe('session isolation', () => {
       // Outside both scopes the process roots answer, not either paper.
       expect(workspaceRoots().workspace).toBe('/workspace');
       expect(WorkspaceFS.getPath()).toBe('/workspace');
-      expect(platform().storage.getStoragePath()).toBe(
-        '/workspace/.texra/storage',
-      );
+      expect(workspaceRoots().storage).toBe('/workspace/.texra/storage');
     } finally {
       sessionA.dispose();
       sessionB.dispose();

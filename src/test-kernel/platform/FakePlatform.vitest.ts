@@ -85,8 +85,6 @@ describe('FakePlatform', () => {
   it('installs a default fake platform and roots from vitest setup', () => {
     assert.equal(workspaceRoots().workspace, '/workspace');
     assert.equal(platform().fs instanceof FakeFileSystemProvider, true);
-    // The process storage port follows the installed roots.
-    assert.equal(platform().storage.getStoragePath(), workspaceRoots().storage);
   });
 
   it('provides overridable platform services for tests', async () => {

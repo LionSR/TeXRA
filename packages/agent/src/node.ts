@@ -68,7 +68,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     }),
     roots: createNodeWorkspaceRoots({
       workspacePath: workspaceDir,
-      storage,
+      storage: storage.getStoragePath(),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),

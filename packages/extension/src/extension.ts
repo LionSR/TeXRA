@@ -355,7 +355,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     initProcessWorkspaceRoots(
       createNodeWorkspaceRoots({
         workspacePath: undefined,
-        storage,
+        storage: storage.getStoragePath(),
         config,
         workspaceState: context.workspaceState,
       }),
@@ -455,7 +455,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   initProcessWorkspaceRoots(
     createNodeWorkspaceRoots({
       workspacePath: workspaceRoot,
-      storage,
+      storage: storage.getStoragePath(),
       config,
       workspaceState,
     }),

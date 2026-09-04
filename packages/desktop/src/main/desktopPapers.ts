@@ -11,13 +11,15 @@ import {
   agentResponseTextConnector,
   attachTerminalResultToast,
   runInSession,
-  runInWorkspace,
   SessionHandle,
 } from '@agent/runtime';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { DisposableStore } from '@platform/disposable';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import {
+  runWithWorkspaceRoots,
+  type WorkspaceRoots,
+} from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import {
@@ -240,7 +242,7 @@ async function openPaperSession(
     // TUI does. The degraded session also cannot resume: nothing is
     // persisted for a later launch to pick up, and `SessionHandle` skips
     // restart repair on a non-persistent store.
-    const transcripts = await runInWorkspace(roots, () =>
+    const transcripts = await runWithWorkspaceRoots(roots, () =>
       StreamLogStore.openOrEphemeral(),
     );
     const session = new SessionHandle({
@@ -304,7 +306,10 @@ export async function openDesktopPaperRegistry(
   const activeRoots = () => active().roots;
 
   async function openPaper(root: string): Promise<DesktopPaper> {
-    const storage = new WorkspaceStorageProvider(options.dataRoot, root);
+    const storage = new WorkspaceStorageProvider(
+      options.dataRoot,
+      root,
+    ).getStoragePath();
     const [workspaceState, workspaceConfig] = await Promise.all([
       openNodeWorkspaceStateStore(storage),
       openTexraWorkspaceConfigStore(storage, root, options.warn),
