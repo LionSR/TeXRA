@@ -276,17 +276,22 @@ and 6; the PRD's section 6 is the one count of event changes (eight):
    never one lease per run; `liveOwners` is a fold input computed that way.
 8. Every fact lives on the aggregate of its logical target (contract C2);
    the event key is `(aggregate_id, seq)`. The queued-follow-ups snapshot
-   and `stream.removed` carry `streamId`
-   (`src/shared/schemas/progressEvents.ts:133-139`) and ride the stream's
-   own aggregate; an inquiry thread's facts ride an aggregate whose id is
+   (`UpdateQueuedFollowUpsPayload`, `FollowUpSentPayload`,
+   `src/shared/schemas/progressEvents.ts:133-139`) and `stream.removed`
+   (`RemoveStreamPayload`, `progressEvents.ts:48-50`) carry `streamId` and
+   ride the stream's own aggregate; an inquiry thread's facts ride an aggregate whose id is
    the thread id; the one session aggregate carries singleton facts only.
    `SessionView` reads each field from the aggregate its type declares.
 9. Residency is two-tier: listing facts come from latest-of-type indexed
-   queries, transcript rows fold only for subscribed streams, in the runtime
-   as much as in a webview.
+   queries, transcript rows fold only for subscribed aggregates (the stream
+   aggregate and, through the `run.start` edge, its execution aggregate,
+   each with its own `fromSeq`; contract C7), in the runtime as much as in a
+   webview.
 
-Legacy transcripts arrive as `legacy.entry` events; `settledSeq` is the last
-durable seq folded. The fold's entry arm stays until retention removes them.
+Legacy transcripts are normalized into the canonical events of PRD section
+6 at the import boundary (PRD decision 5): no `legacy.entry` event kind
+exists and the fold has no entry arm. `settledSeq` is the last durable seq
+folded.
 
 ## 9. What version 2 changed, and why
 
