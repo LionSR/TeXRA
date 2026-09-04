@@ -184,7 +184,8 @@ Eight consecutive passes (`-08-19` through `-09-04`) now find a green top-line
 verdict. This pass re-derived every tracked fact from fresh inspection at
 `4579625`: the node engine holds at 158 LoC, the model-handler base at 2,026
 (down 4 from a simplification, not up), `SessionHandle` and the logger stay
-clean, `createRunScope` stays the one justified single-caller survivor, and all
+clean, `createRunScope` stays the one justified survivor in the trivial
+single-caller-factory category the standing question tracks (§0), and all
 four deep-import baselines held. The 23-commit interval since the prior pass's
 snapshot (§1) is net −141, dominated by refactor and docs; its `src/agent`
 touches are deletion and consolidation with **no** new exported class or factory,
